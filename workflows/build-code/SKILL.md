@@ -21,6 +21,20 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
 is an automatic stage: the trusted runtime publishes and accepts its attempt
 without a human confirmation command.
 
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. Its repository source is the current file
+declared under the `workflows/` root by `config/workflowhub.yaml`; the target
+repository's `skills/` directory is never an entry. `stage-runtime.mjs` has no
+`--help` command. Build-code must not call `prepare`, `confirm`, or a separate
+`accept`, and must never pass `--runner-root`.
+
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-code.XXXXXX")"`.
+Every caller-owned receipt payload, test-capture input, run input, or review
+request must stay under `$TMP_DIR`, never in the target base repository or
+accepted Workspace. Product code changes belong only in the authenticated
+Workspace; canonical receipts and evidence remain owned by TaskKernel.
+
 ## Controlled revision after verification failure
 
 An accepted build-code stage is closed unless the trusted runtime issued a
@@ -45,7 +59,10 @@ Consumers always read only `accepted.json`; archives and reopen records are
 lineage evidence, never input side channels. Reusing an authorization, a source
 from a different task, a non-failure, or a non-build-code stage fails loudly.
 
-Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
+Create implementation provenance with
+`node scripts/stage-runtime.mjs receipt --stage=build-code
+--project=<project> --task=<task> --component=implementation
+--input=$TMP_DIR/implementation.json`; HEAD/tree/diff evidence is derived by the writer.
 For a normal completed build, use the smallest valid payload:
 `{"phase_completion":true}`. A structured value is allowed only as
 `{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
@@ -54,12 +71,22 @@ do not put them inside `phase_completion`. The receipt command validates this
 shape before publishing any create-only receipt or diff evidence.
 
 Create the canonical build test receipt only through:
-`node scripts/stage-runtime.mjs capture-tests --stage=build-code --project=<project> --task=<task> --input=<test-capture.json>`.
+`node scripts/stage-runtime.mjs capture-tests --stage=build-code
+--project=<project> --task=<task> --input=$TMP_DIR/test-capture.json`.
 The input contains only `command`, `receipt_ref`, and optional `output_ref`, for
 example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output_ref":"evidence/build-tests.output"}`.
 Use fresh task-relative refs for a controlled rework attempt. Do not pass
 `component=tests`, call internal receipt writers, or guess another component
 name; `capture-tests` is the single public producer for build-code test facts.
+
+After review, create `$TMP_DIR/run.json` with exactly:
+`{"receipts":{"implementation":"receipts/implementation.json","tests":"receipts/build-tests.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+Publish and automatically accept the stage with
+`node scripts/stage-runtime.mjs run --stage=build-code
+--project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+After `run` consumes the final input, let the host reclaim `$TMP_DIR` through
+its normal OS temporary lifecycle. Never treat the temporary path as a stage
+artifact, evidence ref, or handoff item.
 
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,
 conditional `diagnosing-bugs`, and conditional `review-response`.

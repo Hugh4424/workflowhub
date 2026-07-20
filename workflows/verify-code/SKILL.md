@@ -20,10 +20,26 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
 `confirm --attempt=<attempt> --decision=accepted|rejected` records the human
 decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
-Create the evidence aggregate with `stage-runtime.mjs receipt
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. Its repository source is the current file
+declared under the `workflows/` root by `config/workflowhub.yaml`; the target
+repository's `skills/` directory is never an entry. `stage-runtime.mjs` has no
+`--help` command. Verify-code must not call `prepare` and must never pass
+`--runner-root`.
+
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-verify-code.XXXXXX")"`.
+Every caller-owned test-capture payload, acceptance payload, aggregate input,
+run input, or review request must stay under `$TMP_DIR`, never in the target
+base repository or accepted Workspace. Verification keeps product code
+read-only; canonical receipts and evidence remain owned by TaskKernel.
+
+Create the evidence aggregate with `node scripts/stage-runtime.mjs receipt
 --stage=verify-code --project=<project> --task=<task>
 --component=evidence
---input=<refs-payload.json>`; every referenced hash is verified first.
+--input=$TMP_DIR/evidence-refs.json`; every referenced hash is verified first.
+That input has exactly:
+`{"refs":[{"ref":"<leaf ref returned by the runtime>","sha256":"<leaf hash returned by the runtime>"}]}`.
 
 When invoking `wh-review`, pass `materials.acceptance_evidence` as structured
 canonical roots, never as prose or Markdown path references:
@@ -121,13 +137,15 @@ idempotent. Other attempts against a closed stage remain rejected.
    command is a fail-loud lineage error; never reuse an older command. Capture
    it through the only public path:
    `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
-   --project=<project> --task=<task> --input=<test-capture.json>`.
-   The input contains only `command`, `receipt_ref`, and optional `output_ref`.
+   --project=<project> --task=<task>
+   --input=$TMP_DIR/test-capture.json`.
+   The exact input shape is
+   `{"command":"<accepted build test command>","receipt_ref":"receipts/verify-tests.json","output_ref":"evidence/verify-tests.output"}`.
 4. For every accepted AC, publish one leaf through
    `node scripts/stage-runtime.mjs publish-acceptance-evidence
    --stage=verify-code --project=<project> --task=<task>
-   --input=<acceptance-evidence.json>`. The input contains only
-   `acceptance_criterion_id`, `result`, and refs returned by canonical writers.
+   --input=$TMP_DIR/acceptance-evidence.json`. The exact input shape is
+   `{"acceptance_criterion_id":"<AC-ID>","result":"pass|fail","refs":[{"ref":"<canonical evidence ref>","sha256":"<writer-returned hash>"}]}`.
    The runtime verifies every nested current-task ref and hash, chooses the
    deterministic leaf path, and rejects duplicate publication. The caller may
    not choose an output path. Aggregate only the returned leaf refs and hashes
@@ -140,8 +158,15 @@ idempotent. Other attempts against a closed stage remain rejected.
    cleanup completion.
 6. Run independent verification review from the fresh test receipt and the
    canonical evidence aggregate.
-7. Publish an append-only verify-code pass or fail attempt with all facts and unresolved
-   items. Present the gate brief from `docs/human-brief-template.md`; record the
+7. After review, create `$TMP_DIR/run.json` with exactly:
+   `{"receipts":{"tests":"receipts/verify-tests.json","review":"<canonical review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
+   Publish the append-only pass or fail attempt with
+   `node scripts/stage-runtime.mjs run --stage=verify-code
+   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+   After `run` consumes the final input, let the host reclaim `$TMP_DIR`
+   through its normal OS temporary lifecycle. Never treat the temporary path as
+   a stage artifact, evidence ref, or handoff item. Present the gate brief from
+   `docs/human-brief-template.md`; record the
    verification-stage decision with `confirm`, and pass only its accepted ref to
    `accept`. This confirmation accepts verification facts only.
 8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the

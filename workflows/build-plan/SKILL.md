@@ -26,34 +26,44 @@ repository's `skills/` directory is never an entry.
 `stage-runtime.mjs` has no `--help` command. Build-plan must not call `prepare`
 and must never pass `--runner-root`.
 
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-plan.XXXXXX")"`.
+Every caller-owned draft, receipt payload, run input, or review request must
+stay under `$TMP_DIR`, never in the target base repository or CandidateWorkspace.
+The `artifact` commands below are the only route that copies reviewed drafts
+into the CandidateWorkspace; canonical receipts remain owned by TaskKernel.
+
 Use this complete public sequence without inventing flags or input shapes:
 
 1. Before each review, publish both exact drafts under review:
    `node scripts/stage-runtime.mjs artifact --stage=build-plan
    --project=<project> --task=<task> --name=plan.md
-   --input=<draft-plan.md>` and
+   --input=$TMP_DIR/draft-plan.md` and
    `node scripts/stage-runtime.mjs artifact --stage=build-plan
    --project=<project> --task=<task> --name=tasks.md
-   --input=<draft-tasks.md>`.
+   --input=$TMP_DIR/draft-tasks.md`.
 2. After review is finished and without changing either artifact, create each
    official receipt once:
    `node scripts/stage-runtime.mjs receipt --stage=build-plan
    --project=<project> --task=<task> --component=plan
-   --input=<plan-receipt.json>` and
+   --input=$TMP_DIR/plan-receipt.json` and
    `node scripts/stage-runtime.mjs receipt --stage=build-plan
    --project=<project> --task=<task> --component=tasks
-   --input=<tasks-receipt.json>`.
+   --input=$TMP_DIR/tasks-receipt.json`.
    Each input shape is exactly `{"content":"<exact final markdown>"}`.
-3. Create `<build-plan-run.json>` with exactly:
+3. Create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"plan":"receipts/plan.json","tasks":"receipts/tasks.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
 4. Publish the attempt:
    `node scripts/stage-runtime.mjs run --stage=build-plan
-   --project=<project> --task=<task> --input=<build-plan-run.json>`.
-5. Record the human decision using the returned attempt ref:
+   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
+   through its normal OS temporary lifecycle. Never treat the temporary path as
+   a stage artifact, evidence ref, or handoff item.
+6. Record the human decision using the returned attempt ref:
    `node scripts/stage-runtime.mjs confirm --stage=build-plan
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --decision=accepted|rejected`.
-6. Only for an accepted decision, pass the returned confirmation ref:
+7. Only for an accepted decision, pass the returned confirmation ref:
    `node scripts/stage-runtime.mjs accept --stage=build-plan
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --human-confirmation-ref=<confirmation-ref>`.

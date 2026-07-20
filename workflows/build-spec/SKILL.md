@@ -25,24 +25,34 @@ repository's `skills/` directory is never an entry.
 `stage-runtime.mjs` has no `--help` command. Build-spec must not call `prepare`,
 `confirm`, or a separate `accept`, and must never pass `--runner-root`.
 
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-spec.XXXXXX")"`.
+Every caller-owned draft, receipt payload, run input, or review request must
+stay under `$TMP_DIR`, never in the target base repository or CandidateWorkspace.
+The `artifact` command below is the only route that copies the reviewed draft
+into the CandidateWorkspace; canonical receipts remain owned by TaskKernel.
+
 Use this complete public sequence without inventing flags or input shapes:
 
 1. Before each review, publish the exact draft under review:
    `node scripts/stage-runtime.mjs artifact --stage=build-spec
    --project=<project> --task=<task> --name=spec.md
-   --input=<draft-spec.md>`.
+   --input=$TMP_DIR/draft-spec.md`.
 2. After review is finished and without changing `spec.md`, create the official
    receipt once:
    `node scripts/stage-runtime.mjs receipt --stage=build-spec
    --project=<project> --task=<task> --component=spec
-   --input=<spec-receipt.json>`.
+   --input=$TMP_DIR/spec-receipt.json`.
    The input shape is exactly
    `{"content":"<exact final spec markdown>"}`.
-3. Create `<build-spec-run.json>` with exactly:
+3. Create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"spec":"receipts/spec.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
 4. Publish and automatically accept the stage:
    `node scripts/stage-runtime.mjs run --stage=build-spec
-   --project=<project> --task=<task> --input=<build-spec-run.json>`.
+   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
+   through its normal OS temporary lifecycle. Never treat the temporary path as
+   a stage artifact, evidence ref, or handoff item.
 
 A temporary file may be authoring input, but it is never the reviewed artifact
 by itself. Do not create the official spec receipt before review is finished.
