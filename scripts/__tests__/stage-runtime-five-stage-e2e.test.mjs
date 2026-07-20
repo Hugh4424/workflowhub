@@ -51,7 +51,7 @@ describe("official five-stage CLI", () => {
     cpSync(join(projectRoot, "scripts", "stage-runtime.mjs"), join(runner, "scripts", "stage-runtime.mjs"), { force: true });
     symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
     execFileSync("git", ["add", "core", "scripts/stage-runtime.mjs"], { cwd: runner });
-    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "runner"], { cwd: runner });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner"], { cwd: runner });
     mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
     execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
@@ -62,6 +62,9 @@ describe("official five-stage CLI", () => {
     migrateTaskRunnerRoot({ taskPath: task.taskPath, projectName: "Demo", taskId: "runtime-bound", runnerRoot: realpathSync(runner), stage: "make-decision" });
     const boundRuntime = join(runner, "scripts", "stage-runtime.mjs");
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+    const unsupportedHelp = spawnSync(process.execPath, [boundRuntime, "--help"], { cwd: repo, env, encoding: "utf8" });
+    expect(unsupportedHelp.status).not.toBe(0);
+    expect(unsupportedHelp.stderr).toMatch(/usage: stage-runtime/i);
     const args = ["prepare", "--stage=make-decision", "--project=Demo", "--task=runtime-bound"];
     expect(spawnSync(process.execPath, [boundRuntime, ...args], { cwd: repo, env, encoding: "utf8" }).status).toBe(0);
     const injected = spawnSync(process.execPath, [boundRuntime, ...args, `--runner-root=${repo}`], { cwd: repo, env, encoding: "utf8" });
@@ -75,6 +78,14 @@ describe("official five-stage CLI", () => {
 
   it("runs repository-owned handlers and accepts the complete chain", () => {
     const { root, repo, task, baseline, mainStatus } = fixture();
+    const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+    const rejectBareRun = (stage, receipts) => {
+      const input = join(root, `${stage}-bare-input.json`);
+      writeFileSync(input, `${JSON.stringify(receipts)}\n`);
+      const result = spawnSync(process.execPath, [runtime, "run", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--input=${input}`], { cwd: repo, env, encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/receipts/i);
+    };
     const invoke = (stage, receipts, extra = []) => {
       const input = join(root, `${stage}-input.json`);
       writeFileSync(input, `${JSON.stringify({ receipts })}\n`);
@@ -103,12 +114,19 @@ describe("official five-stage CLI", () => {
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: decisionTree, reviewTrack: "detail" });
     invoke("make-decision", { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef });
     const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
+    const invalidSpecPrepare = spawnSync(process.execPath, [runtime, "prepare", "--stage=build-spec", "--project=Demo", "--task=official-chain"], { cwd: repo, env, encoding: "utf8" });
+    expect(invalidSpecPrepare.status).not.toBe(0);
+    expect(invalidSpecPrepare.stderr).toMatch(/prepare is only valid for make-decision/i);
 
     writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     mkdirSync(join(workspace.worktreeRoot, "specs", "official-chain"), { recursive: true });
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec\n");
     const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    rejectBareRun("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
     invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
+    const invalidPlanPrepare = spawnSync(process.execPath, [runtime, "prepare", "--stage=build-plan", "--project=Demo", "--task=official-chain"], { cwd: repo, env, encoding: "utf8" });
+    expect(invalidPlanPrepare.status).not.toBe(0);
+    expect(invalidPlanPrepare.stderr).toMatch(/prepare is only valid for make-decision/i);
 
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan\n" } });
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
@@ -129,6 +147,7 @@ describe("official five-stage CLI", () => {
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
     const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    rejectBareRun("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
     const buildPlan = invoke("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",

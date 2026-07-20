@@ -18,17 +18,34 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
 is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
 
-Write and revise the draft through the named ArtifactDir writer. The public
-entry is `node scripts/stage-runtime.mjs artifact --stage=build-spec
---project=<project> --task=<task> --name=spec.md --input=<draft-file>`.
-Run it before each review so the review snapshot contains the exact `spec.md`
-under review. A temporary file may be authoring input, but it is never the
-reviewed artifact by itself. Do not create
-the official spec receipt before review is finished. After review, create that
-receipt exactly once with `stage-runtime.mjs receipt --stage=build-spec
---project=<project> --task=<task> --component=spec
---input=<content-payload.json>`, then pass it with the canonical `wh-review`
-result or unavailable-attempt ref as `spec` and `review`.
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. Its repository source is the current file
+declared under the `workflows/` root by `config/workflowhub.yaml`; the target
+repository's `skills/` directory is never an entry.
+`stage-runtime.mjs` has no `--help` command. Build-spec must not call `prepare`,
+`confirm`, or a separate `accept`, and must never pass `--runner-root`.
+
+Use this complete public sequence without inventing flags or input shapes:
+
+1. Before each review, publish the exact draft under review:
+   `node scripts/stage-runtime.mjs artifact --stage=build-spec
+   --project=<project> --task=<task> --name=spec.md
+   --input=<draft-spec.md>`.
+2. After review is finished and without changing `spec.md`, create the official
+   receipt once:
+   `node scripts/stage-runtime.mjs receipt --stage=build-spec
+   --project=<project> --task=<task> --component=spec
+   --input=<spec-receipt.json>`.
+   The input shape is exactly
+   `{"content":"<exact final spec markdown>"}`.
+3. Create `<build-spec-run.json>` with exactly:
+   `{"receipts":{"spec":"receipts/spec.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+4. Publish and automatically accept the stage:
+   `node scripts/stage-runtime.mjs run --stage=build-spec
+   --project=<project> --task=<task> --input=<build-spec-run.json>`.
+
+A temporary file may be authoring input, but it is never the reviewed artifact
+by itself. Do not create the official spec receipt before review is finished.
 
 The accepted make-decision result is read only through `ctx.kernel`. Design
 files are accessed only through ArtifactDir. Components receive the content of

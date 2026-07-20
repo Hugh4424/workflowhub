@@ -19,15 +19,47 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
-Write and revise draft `plan.md` and `tasks.md` through their named ArtifactDir
-writers. The public entries are `stage-runtime.mjs artifact --stage=build-plan
---project=<project> --task=<task> --name=plan.md|tasks.md --input=<draft-file>`.
-Run both before each review so the review snapshot contains the exact pair under
-review. Temporary files may be authoring inputs, but are never the reviewed
-artifacts by themselves. Do not create their official receipts before review is finished. After
-review, create each final receipt exactly once through `stage-runtime.mjs
-receipt --component=plan|tasks`, then pass them with the canonical `wh-review`
-result or unavailable-attempt ref as `plan`, `tasks`, and `review`.
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. Its repository source is the current file
+declared under the `workflows/` root by `config/workflowhub.yaml`; the target
+repository's `skills/` directory is never an entry.
+`stage-runtime.mjs` has no `--help` command. Build-plan must not call `prepare`
+and must never pass `--runner-root`.
+
+Use this complete public sequence without inventing flags or input shapes:
+
+1. Before each review, publish both exact drafts under review:
+   `node scripts/stage-runtime.mjs artifact --stage=build-plan
+   --project=<project> --task=<task> --name=plan.md
+   --input=<draft-plan.md>` and
+   `node scripts/stage-runtime.mjs artifact --stage=build-plan
+   --project=<project> --task=<task> --name=tasks.md
+   --input=<draft-tasks.md>`.
+2. After review is finished and without changing either artifact, create each
+   official receipt once:
+   `node scripts/stage-runtime.mjs receipt --stage=build-plan
+   --project=<project> --task=<task> --component=plan
+   --input=<plan-receipt.json>` and
+   `node scripts/stage-runtime.mjs receipt --stage=build-plan
+   --project=<project> --task=<task> --component=tasks
+   --input=<tasks-receipt.json>`.
+   Each input shape is exactly `{"content":"<exact final markdown>"}`.
+3. Create `<build-plan-run.json>` with exactly:
+   `{"receipts":{"plan":"receipts/plan.json","tasks":"receipts/tasks.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+4. Publish the attempt:
+   `node scripts/stage-runtime.mjs run --stage=build-plan
+   --project=<project> --task=<task> --input=<build-plan-run.json>`.
+5. Record the human decision using the returned attempt ref:
+   `node scripts/stage-runtime.mjs confirm --stage=build-plan
+   --project=<project> --task=<task> --attempt=<attempt-ref>
+   --decision=accepted|rejected`.
+6. Only for an accepted decision, pass the returned confirmation ref:
+   `node scripts/stage-runtime.mjs accept --stage=build-plan
+   --project=<project> --task=<task> --attempt=<attempt-ref>
+   --human-confirmation-ref=<confirmation-ref>`.
+
+Temporary files may be authoring inputs, but are never the reviewed artifacts
+by themselves. Do not create official receipts before review is finished.
 
 Declared runtime components: `spec-research`, `spec-plan`, `spec-tasks`,
 `spec-analyze`, `wh-review`, and the review lenses declared by the manifest.
