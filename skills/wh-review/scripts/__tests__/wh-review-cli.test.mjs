@@ -23,7 +23,7 @@ async function runnerBoundFixture() {
   cpSync(realpathSync(join(import.meta.dirname, "../..")), join(runner, "skills", "wh-review"), { recursive: true, force: true });
   symlinkSync(realpathSync(join(import.meta.dirname, "../../../..", "node_modules")), join(runner, "node_modules"));
   execFileSync("git", ["add", "core", "skills/wh-review"], { cwd: runner });
-  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "runner"], { cwd: runner });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner"], { cwd: runner });
   const taskPath = join(root, "Projects", "Demo", "tasks", "task");
   const task = createTask({ storageRoot: root, taskPath, manifest: {
     schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z",

@@ -1,6 +1,6 @@
 stage: verify-code
 skills:
-  - { name: test-strategy, path: skills/test-strategy/SKILL.md, execution: independent, invocation: always, trigger: test_strategy, bundle: skills/test-strategy/skill-bundle.json }
+  - { name: test-strategy, path: skills/test-strategy/SKILL.md, execution: independent, invocation: conditional, trigger: accepted_test_routing_requires_strategy, bundle: skills/test-strategy/skill-bundle.json }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
   - { name: isolated-browser-qa, path: skills/isolated-browser-qa/SKILL.md, execution: independent, invocation: conditional, trigger: ui_acceptance, bundle: skills/isolated-browser-qa/skill-bundle.json }
   - { name: qa-only, path: skills/qa-only/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_qa_lens, bundle: skills/qa-only/skill-bundle.json }
