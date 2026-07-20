@@ -51,9 +51,8 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
 3. Re-run only the original task's build-code with the returned immutable ref:
    `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
    If a canonical component receipt already exists from the accepted build,
-   this controlled re-run may use the existing `receipt --revision=true
-   --recover=<previous-receipt-ref>` path. Normal build-code must keep using
-   create-only receipts and must not create revisions.
+   this controlled re-run uses the existing `receipt --revision=true
+   --recover=<previous-receipt-ref>` path.
 
 The new attempt carries the prior accepted record and verify failure hashes.
 The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`
@@ -66,6 +65,14 @@ Create implementation provenance with
 `node scripts/stage-runtime.mjs receipt --stage=build-code
 --project=<project> --task=<task> --component=implementation
 --input=$TMP_DIR/implementation.json`; HEAD/tree/diff evidence is derived by the writer.
+Before build-code is accepted, a same-Phase repair after a failed pre-review
+check or review finding must preserve the old receipt and publish the repaired
+snapshot with `--revision=true --recover=<latest-implementation-receipt-ref>`.
+Capture repaired tests under new receipt/output refs and pass those new refs to
+the next review and stage run. This is append-only repair of the current open
+stage; it does not require or create a verify-code reopen authorization. After
+build-code is accepted, only the controlled verification-failure path above may
+create another build-code attempt.
 For a normal completed build, use the smallest valid payload:
 `{"phase_completion":true}`. A structured value is allowed only as
 `{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.

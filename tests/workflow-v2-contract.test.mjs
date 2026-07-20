@@ -86,6 +86,14 @@ describe("five-stage v2 business contract", () => {
     expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*separate close authorization[\s\S]*Never reuse the verify-code confirmation ref/i);
   });
 
+  it("keeps pre-accept build-code repair append-only without a verify reopen", () => {
+    const skill = readStage("build-code");
+    expect(skill).toMatch(/same-Phase repair[\s\S]*--revision=true --recover=<latest-implementation-receipt-ref>/i);
+    expect(skill).toMatch(/repaired tests[\s\S]*new receipt\/output refs/i);
+    expect(skill).toMatch(/does not require or create a verify-code reopen authorization/i);
+    expect(skill).toMatch(/After[\s\S]*accepted[\s\S]*only the controlled verification-failure path/i);
+  });
+
   it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {
     const skill = readStage("make-decision");
     const positions = [

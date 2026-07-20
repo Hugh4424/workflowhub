@@ -166,8 +166,15 @@ function assertOfficialRevisionAuthorization(stage, ctx, invocation, publication
   });
   if (!hasRevision) return;
   if (stage === "build-code") {
-    if (!publication?.reopenProvenance) throw new Error("build-code revision receipt requires a controlled reopen");
-    return;
+    if (publication?.reopenProvenance) return;
+    try {
+      ctx.task.readRecord("results/build-code/accepted.json");
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      throw error;
+    }
+    ctx.kernel.readAccepted("build-code");
+    throw new Error("accepted build-code revision receipt requires a controlled reopen");
   }
   let acceptedVerify;
   try { acceptedVerify = ctx.kernel.readAccepted("verify-code"); }
