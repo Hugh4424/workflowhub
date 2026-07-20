@@ -8,13 +8,16 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. The launcher calls
+`core/stage-context.mjs` is the external runner implementation. The launcher calls
 `bootstrapStage("make-decision", ...)` before Step 1 and supplies one branded
 `StageContext`. This stage uses `ctx.task`, `ctx.kernel`, `ctx.identity`, and
 `ctx.manifest`. The official runtime additionally prepares one authenticated
 `ctx.candidateWorkspace` before product-repository work. ArtifactDir must be
 absent because no design artifact has been accepted yet.
+Consume only that launcher-supplied StageContext. Never derive task identity or
+paths from cwd, a repository, or an issue identifier. The launcher resolves all
+`scripts/`, `core/`, and `metrics/` locators from its authenticated `runner_root`;
+never search for or copy those runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=make-decision
 --project=<project> --task=<task> --input=<component-receipts.json>`. The official
@@ -26,10 +29,9 @@ a separate `accept` invocation with `--attempt` and
 returned ref to `accept`; execution never accepts its own result.
 
 The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. Its repository source is the current file
-declared under the `workflows/` root by `config/workflowhub.yaml`; the target
-repository's `skills/` directory is never an entry. `stage-runtime.mjs` has no
-`--help` command and must never receive `--runner-root`.
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry. `stage-runtime.mjs` has no `--help` command and must never
+receive `--runner-root`.
 
 Create an OS temporary directory before producing any caller-owned draft,
 receipt payload, run input, or review request:

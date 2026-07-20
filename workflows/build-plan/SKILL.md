@@ -8,10 +8,14 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only the branded StageContext from
+`core/stage-context.mjs` is the external runner implementation. Consume only the
+branded StageContext from
 `bootstrapStage("build-plan", ...)`. Read accepted results only with
 `ctx.kernel`; read and write design files only with `ctx.artifacts`.
+Never derive task identity or paths from cwd, a repository, or an issue
+identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 --project=<project> --task=<task> --input=<component-receipts.json>`. Use the
@@ -20,9 +24,8 @@ decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
 The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. Its repository source is the current file
-declared under the `workflows/` root by `config/workflowhub.yaml`; the target
-repository's `skills/` directory is never an entry.
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry.
 `stage-runtime.mjs` has no `--help` command. Build-plan must not call `prepare`
 and must never pass `--runner-root`.
 
@@ -110,8 +113,10 @@ planning step.
    a pass or invent a result.
 9. Present the plan summary and record the decision with `confirm`. Only an
    accepted confirmation may be passed to `accept`, which creates the
-   build-plan checkpoint and accepts the attempt. Use the gate ending from
-   `docs/human-brief-template.md`.
+   build-plan checkpoint and accepts the attempt. The plain-language summary
+   has exactly four items: current status; next step and owner; whether the user
+   must act; and, when action is required, the problem, a recommended option,
+   and every option's consequence and risk.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.

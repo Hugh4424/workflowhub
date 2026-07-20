@@ -8,13 +8,17 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only the branded StageContext from
+`core/stage-context.mjs` is the external runner implementation. Consume only the
+branded StageContext from
 `bootstrapStage("build-code", ...)`. All commands run with explicit
 `ctx.workspace.worktreeRoot`. This execution cwd is not an identity source.
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
 Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
 only a branded Workspace plus argv and fixes cwd to the verified worktree.
+Never derive task identity or paths from cwd, a repository, or an issue
+identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-code
@@ -22,11 +26,10 @@ is an automatic stage: the trusted runtime publishes and accepts its attempt
 without a human confirmation command.
 
 The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. Its repository source is the current file
-declared under the `workflows/` root by `config/workflowhub.yaml`; the target
-repository's `skills/` directory is never an entry. `stage-runtime.mjs` has no
-`--help` command. Build-code must not call `prepare`, `confirm`, or a separate
-`accept`, and must never pass `--runner-root`.
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry. `stage-runtime.mjs` has no `--help` command. Build-code must
+not call `prepare`, `confirm`, or a separate `accept`, and must never pass
+`--runner-root`.
 
 Create an OS temporary directory first:
 `TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-code.XXXXXX")"`.
@@ -156,9 +159,11 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    reopen accepted product scope.
 9. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
-10. Present the automatic-progress brief from `docs/human-brief-template.md`.
-   Its concise handoff points downstream to the formal artifacts and evidence
-   refs; it does not copy their full text or logs.
+10. Present a plain-language automatic-progress brief with exactly four items:
+    current status; next step and owner; whether the user must act; and, only
+    when action is required, the problem, a recommended option, and every
+    option's consequence and risk. Its concise handoff points downstream to the
+    formal artifacts and evidence refs; it does not copy their full text or logs.
    The trusted runtime immediately runs `accept --attempt=<attempt>` without a
    confirmation and advances to verify-code.
 

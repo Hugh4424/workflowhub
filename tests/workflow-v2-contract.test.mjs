@@ -17,6 +17,30 @@ describe("five-stage v2 business contract", () => {
     expect(skill).not.toMatch(/parseTaskDir|resolveTaskRecordPaths|task_tracking_root|worktree\.json/);
   });
 
+  it("keeps every Stage Skill self-contained while the launcher owns the runner", () => {
+    for (const stage of stages) {
+      const skill = readStage(stage);
+      const compact = skill.replace(/\s+/g, " ");
+      expect(compact).toMatch(/Consume only (?:that launcher-supplied|the branded|`bootstrapStage)[\s\S]{0,120}StageContext|Consume only `bootstrapStage/i);
+      expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an issue identifier/i);
+      expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`[\s\S]*authenticated `runner_root`/i);
+      expect(compact).toMatch(/never search for or copy those runner files into the target repository/i);
+      expect(skill).not.toMatch(/docs\/contracts\/task-context\.md|config\/workflowhub\.yaml/);
+    }
+    expect(readStage("verify-code")).not.toMatch(/workflows\/build-code\/SKILL\.md/);
+  });
+
+  it("keeps human briefs inline and the verify repair handoff complete", () => {
+    for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = readStage(stage);
+      const compact = skill.replace(/\s+/g, " ");
+      expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
+      expect(compact).toMatch(/recommended option[\s\S]{0,180}(?:every option's consequence and risk|consequence[\s\S]*risk)/i);
+      expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
+    }
+    expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs reopen --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable reopen\s+ref[\s\S]*upstream Code Builder/i);
+  });
+
   it("keeps three stage gates, two automatic stages, and visible quality facts", () => {
     for (const stage of ["make-decision", "build-plan", "verify-code"])
       expect(readStage(stage)).toMatch(/confirm|human|user|用户|人工/i);

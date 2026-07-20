@@ -8,11 +8,14 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only
+`core/stage-context.mjs` is the external runner implementation. Consume only
 `bootstrapStage("verify-code", ...)`. Task records use the branded TaskHandle
 and TaskKernel. Product artifacts use ArtifactDir. Test and Git commands run
 only in `ctx.workspace.worktreeRoot` supplied by the accepted decision.
+Never derive task identity or paths from cwd, a repository, or an issue
+identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
 --project=<project> --task=<task>
@@ -21,11 +24,9 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
 decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
 The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. Its repository source is the current file
-declared under the `workflows/` root by `config/workflowhub.yaml`; the target
-repository's `skills/` directory is never an entry. `stage-runtime.mjs` has no
-`--help` command. Verify-code must not call `prepare` and must never pass
-`--runner-root`.
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry. `stage-runtime.mjs` has no `--help` command. Verify-code must
+not call `prepare` and must never pass `--runner-root`.
 
 Create an OS temporary directory first:
 `TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-verify-code.XXXXXX")"`.
@@ -74,11 +75,14 @@ Declared runtime components: conditional `test-strategy`, `wh-review`, condition
 
 When an acceptance criterion fails, publish the verify-code attempt and retain
 the exact `acceptance-evidence.v1` reference whose `result` is `fail`; do not
-accept that failed verification attempt. The only repair handoff is the
-controlled build-code reopen command documented in `workflows/build-code/SKILL.md`.
-It binds this attempt and evidence hash to the old build-code acceptance, then
-permits one append-only replacement attempt. A failed verdict never authorizes
-close operations.
+accept that failed verification attempt. The only repair handoff is:
+`node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project>
+--task=<task> --verify-attempt=<failed-verify-attempt-ref>
+--failure-evidence=<failed-acceptance-evidence-ref>`. Pass the immutable reopen
+ref returned by that command to the upstream Code Builder; it uses that ref on
+the replacement build-code `run`. The command binds this attempt and evidence
+hash to the old build-code acceptance, then permits one append-only replacement
+attempt. A failed verdict never authorizes close operations.
 
 After that replacement build is accepted, run verify-code again from its new
 accepted snapshot, tests, and review. If a canonical component receipt already
@@ -165,10 +169,12 @@ idempotent. Other attempts against a closed stage remain rejected.
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
    After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
-   a stage artifact, evidence ref, or handoff item. Present the gate brief from
-   `docs/human-brief-template.md`; record the
-   verification-stage decision with `confirm`, and pass only its accepted ref to
-   `accept`. This confirmation accepts verification facts only.
+   a stage artifact, evidence ref, or handoff item. Present a plain-language gate
+   brief with exactly four items: current status; next step and owner; whether
+   the user must act; and, when action is required, the problem, a recommended
+   option, and every option's consequence and risk. Record the verification-stage
+   decision with `confirm`, and pass only its accepted ref to `accept`. This
+   confirmation accepts verification facts only.
 8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
    snapshot commit from the current canonical accepted verification facts,

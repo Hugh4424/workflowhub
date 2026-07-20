@@ -86,7 +86,6 @@ describe("build-code authenticated input preflight", () => {
 describe("build-code Coder, AC, and handoff contracts", () => {
   const skill = readFileSync(resolve("workflows/build-code/SKILL.md"), "utf8");
   const verifySkill = readFileSync(resolve("workflows/verify-code/SKILL.md"), "utf8");
-  const brief = readFileSync(resolve("docs/human-brief-template.md"), "utf8");
 
   it("gives Coder one complete Phase card without binding a second orchestration skill", () => {
     expect(skill).toMatch(/Coder[\s\S]*Phase[\s\S]*(?:goal|目标)[\s\S]*AC IDs[\s\S]*Workspace[\s\S]*(?:allowlist|allowed files|允许文件)[\s\S]*(?:non-goals|非目标)[\s\S]*(?:test commands|测试命令)[\s\S]*(?:upstream findings|上游 finding)/i);
@@ -105,7 +104,7 @@ describe("build-code Coder, AC, and handoff contracts", () => {
     }
   });
 
-  it("requires a complete AC table in existing test evidence and the human brief", () => {
+  it("requires a complete AC table in existing test evidence and the inline human brief", () => {
     expect(skill).toMatch(/each accepted AC|每(?:一|项).*AC/i);
     for (const status of ["covered", "missing", "unknown"]) expect(skill).toContain(status);
     expect(skill).toMatch(/(?:authenticated|canonical|可追溯)[^\n]*(?:refs|引用)[\s\S]*(?:test evidence|测试证据)[\s\S]*(?:human brief|大白话)/i);
@@ -130,10 +129,11 @@ describe("build-code Coder, AC, and handoff contracts", () => {
   });
 
   it("defines a concise downstream handoff without copying full artifacts or logs", () => {
-    for (const heading of ["阶段结果", "关键决定", "正式产物", "测试和审查证据", "下一阶段依赖", "未解决风险", "下一步", "可追溯记录"]) {
-      expect(brief, `missing human brief handoff field: ${heading}`).toContain(heading);
-    }
-    expect(brief).toMatch(/(?:引用|refs)[\s\S]*(?:不得|不要|禁止)[^\n]*(?:复制|粘贴)[^\n]*(?:全文|完整)/i);
+    const compact = skill.replace(/\s+/g, " ");
+    expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
+    expect(compact).toMatch(/recommended option[\s\S]{0,180}every option's consequence and risk/i);
+    expect(compact).toMatch(/formal artifacts and evidence[\s\S]*does not copy their full text or logs/i);
+    expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
     expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);
   });
 });

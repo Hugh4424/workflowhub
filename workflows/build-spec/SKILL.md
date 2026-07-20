@@ -8,10 +8,13 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only
+`core/stage-context.mjs` is the external runner implementation. Consume only
 `bootstrapStage("build-spec", ...)` output. Required capabilities:
 `ctx.task`, `ctx.kernel`, `ctx.workspace`, and `ctx.artifacts`.
+Never derive task identity or paths from cwd, a repository, or an issue
+identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-spec
@@ -19,9 +22,8 @@ is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
 
 The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. Its repository source is the current file
-declared under the `workflows/` root by `config/workflowhub.yaml`; the target
-repository's `skills/` directory is never an entry.
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry.
 `stage-runtime.mjs` has no `--help` command. Build-spec must not call `prepare`,
 `confirm`, or a separate `accept`, and must never pass `--runner-root`.
 
@@ -93,9 +95,12 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and
    provenance; never describe it as a pass or invent a result.
-9. Present the progress brief from `docs/human-brief-template.md`. The trusted
-   runtime immediately runs `accept --attempt=<attempt>` without a confirmation,
-   creates the checkpoint, and accepts the attempt.
+9. Present a plain-language progress brief with exactly these four items:
+   current status; next step and owner; whether the user must act; and, only
+   when action is required, the problem, a recommended option, and every
+   option's consequence and risk. The trusted runtime immediately runs
+   `accept --attempt=<attempt>` without a confirmation, creates the checkpoint,
+   and accepts the attempt.
    Checkpoint failure is an integrity error; quality facts never become a gate.
 
 No component may use shell location, repository discovery, or ad-hoc product
