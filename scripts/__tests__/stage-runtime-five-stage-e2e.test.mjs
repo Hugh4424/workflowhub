@@ -128,9 +128,11 @@ describe("official five-stage CLI", () => {
 
     const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
     expect(implementation.value.changed).toContain("src/feature.txt");
+    writeFileSync(join(workspace.worktreeRoot, "src", "feature.txt"), "implemented after pre-review fix\n");
+    const preAcceptImplementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true }, revisionOf: implementation.ref });
     createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf fixture-output", receiptRef: "receipts/build-tests.json", outputRef: "evidence/build-output.txt" });
-    const buildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: implementation.value.snapshot_tree });
-    const firstBuild = invoke("build-code", { implementation: "receipts/implementation.json", tests: "receipts/build-tests.json", review: buildReview.resultRef });
+    const buildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: preAcceptImplementation.value.snapshot_tree });
+    const firstBuild = invoke("build-code", { implementation: preAcceptImplementation.ref, tests: "receipts/build-tests.json", review: buildReview.resultRef });
     const firstBuildAcceptedRaw = task.readRecord("results/build-code/accepted.json");
     const firstBuildAcceptedHash = createHash("sha256").update(firstBuildAcceptedRaw).digest("hex");
 
