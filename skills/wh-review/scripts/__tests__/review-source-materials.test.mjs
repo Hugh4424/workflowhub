@@ -327,7 +327,9 @@ describe("review materials", () => {
 
   it("ships and names explicit reviewer skills for code stages", () => {
     const instructions = reviewInstructionsFor("build-code");
-    for (const skill of ["review", "test-strategy", "diagnosing-bugs"]) expect(instructions).toContain(`skills/${skill}/SKILL.md`);
+    for (const skill of ["simplicity-guard", "review"]) expect(instructions).toContain(`skills/${skill}/SKILL.md`);
+    for (const executionSkill of ["test-strategy", "diagnosing-bugs"])
+      expect(instructions).not.toContain(`skills/${executionSkill}/SKILL.md`);
     expect(instructions).not.toContain("skills/*/SKILL.md");
   });
 });

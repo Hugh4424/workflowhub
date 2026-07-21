@@ -22,7 +22,7 @@ describe("five-stage v2 business contract", () => {
       const skill = readStage(stage);
       const compact = skill.replace(/\s+/g, " ");
       expect(compact).toMatch(/Consume only (?:that launcher-supplied|the branded|`bootstrapStage)[\s\S]{0,120}StageContext|Consume only `bootstrapStage/i);
-      expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an issue identifier/i);
+      expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an (?:issue|external tracker) identifier/i);
       expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`[\s\S]*authenticated `runner_root`/i);
       expect(compact).toMatch(/never search for or copy those runner files into the target repository/i);
       expect(skill).not.toMatch(/docs\/contracts\/task-context\.md|config\/workflowhub\.yaml/);
@@ -41,6 +41,33 @@ describe("five-stage v2 business contract", () => {
     expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs reopen --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable reopen\s+ref[\s\S]*upstream Code Builder/i);
   });
 
+  it("maps host-visible interaction, component facts, and concise handoff without host coupling", () => {
+    for (const stage of stages) {
+      const skill = readStage(stage);
+      const compact = skill.replace(/\s+/g, " ");
+      expect(compact, stage).toMatch(/ask.*wait.*present.*host-visible conversation surface/i);
+      expect(compact, stage).toMatch(/Stage-owned.*always.*executed.*conditional.*trigger=false.*reason/i);
+      expect(compact, stage).toMatch(/`skill-deps\.yaml`.*formal artifacts.*`wh-review`.*refs/i);
+      expect(compact, stage).toMatch(/stage result.*formal artifact refs.*test and review evidence.*downstream dependencies.*unresolved risks.*next owner.*user action/i);
+      expect(compact, stage).toMatch(/(?:downstream|close) handoff surface.*parent progress surface/i);
+      expect(skill, stage).not.toMatch(/Multica|mention:\/\/|用户 UUID|member mention/i);
+    }
+  });
+
+  it("keeps make-decision talk and grill outcomes visible without adding confirmation gates", () => {
+    const skill = readStage("make-decision").replace(/\s+/g, " ");
+    expect(skill).toMatch(/round 1.*host-visible.*round 2.*host-visible.*round 3.*host-visible/i);
+    expect(skill).toMatch(/grill-with-docs.*completion.*changed context files.*no file changes/i);
+    expect(skill).toMatch(/only.*change direction.*wait for the user/i);
+  });
+
+  it("always scans build-spec ambiguity and invokes spec-clarify only when triggered", () => {
+    const skill = readStage("build-spec").replace(/\s+/g, " ");
+    expect(skill).toMatch(/always perform.*material ambiguity scan/i);
+    expect(skill).toMatch(/spec-clarify.*conditional.*clarification/i);
+    expect(skill).toMatch(/trigger=false.*no material ambiguity/i);
+  });
+
   it("keeps three stage gates, two automatic stages, and visible quality facts", () => {
     for (const stage of ["make-decision", "build-plan", "verify-code"])
       expect(readStage(stage)).toMatch(/confirm|human|user|用户|人工/i);
@@ -49,7 +76,7 @@ describe("five-stage v2 business contract", () => {
       expect(readStage(stage)).not.toMatch(/wait for human confirmation|human-confirmation-ref/i);
     }
     expect(readStage("make-decision")).toMatch(/Quality facts are recorded, not converted into automatic quality gates/i);
-    expect(readStage("build-code")).toMatch(/phase scope[\s\S]*continue automatically/i);
+    expect(readStage("build-code")).toMatch(/Start only the current Phase[\s\S]*Start the next Phase only after[\s\S]*gate passes/i);
     expect(readStage("verify-code")).toMatch(/Quality failures remain visible facts/i);
   });
 
@@ -99,14 +126,15 @@ describe("five-stage v2 business contract", () => {
 
   it("reviews every build-code Phase and then the final worktree", () => {
     const skill = readStage("build-code");
-    expect(skill).toMatch(/createPhaseDiffScan/);
-    expect(skill).toMatch(/current `phase_id`[\s\S]{0,24}scope\s+selector/i);
-    expect(skill).toMatch(/A Phase must pass before the next Phase may\s+start/i);
+    expect(skill).toMatch(/publish-phase-evidence/);
+    expect(skill).toMatch(/current `phase_id`/i);
+    expect(skill).toMatch(/Start the next Phase only after the current Phase gate passes/i);
     expect(skill).toMatch(/full-worktree[^\n]*`wh-review`|`wh-review`[^\n]*full-worktree/i);
-    expect(skill).toMatch(/without `phase_id`|omit `phase_id`/i);
     expect(skill).toMatch(/final review is separate from the required per-Phase\s+reviews/i);
     expect(skill).toMatch(/canonical implementation[\s\S]{0,180}tests[\s\S]{0,180}same snapshot tree/i);
-    expect(skill).toMatch(/Phase or final full-worktree review[\s\S]*same original Phase[\s\S]*revision receipt[\s\S]*fresh tests/i);
+    expect(skill).toMatch(/revise_required[\s\S]*repair the same Phase[\s\S]*fresh receipts[\s\S]*new identity/i);
+    expect(skill).toMatch(/controlled `reopen`[\s\S]*current[\s\S]*PASS Phase[\s\S]*`reopen_ref`/i);
+    expect(skill).toMatch(/does not create[\s\S]*(?:Phase registry|Phase history)/i);
     const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
     expect(handlers).toMatch(/build-code final review must be a full-worktree result/);
   });

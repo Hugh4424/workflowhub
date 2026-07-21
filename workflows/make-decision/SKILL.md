@@ -106,11 +106,14 @@ only through `wh-review`; it is not a second review runner.
    materially needed. Ask only a question whose answer can change direction or
    research authorization; otherwise continue. When a question is asked, wait
    for the user's answer. Never write or infer the user's answer on their behalf.
+   Record the round 1 outcome on the host-visible conversation surface whether
+   it asked a question or continued without one.
 3. When research is needed and authorized, invoke `anysearch` with a frozen,
    non-sensitive packet. Otherwise record the skip reason and continue.
 4. Run `talk-with-zhipeng` round 2 on the requirement plus research. Produce the
    direction baseline. This is a visible, non-blocking conversation checkpoint,
-   not a confirmation gate.
+   not a confirmation gate. Present that checkpoint on the host-visible
+   conversation surface.
 5. Run independent direction review through the `wh-review` direction track. It
    is the only provider owner and gives
    providers only the frozen blind packet: raw requirement, objective facts,
@@ -119,12 +122,14 @@ only through `wh-review`; it is not a second review runner.
    decision logs, specs, plans, code, and diffs are forbidden from this track.
 6. Run `talk-with-zhipeng` round 3 with the blind findings. Ask only about an
    unresolved finding that can still change direction; record non-blocking
-   findings and continue.
+   findings and continue. Present the round 3 finding disposition on the
+   host-visible conversation surface.
 7. Invoke the complete `grill-with-docs` skill in the authenticated
    CandidateWorkspace. Do not substitute a lite or read-only variant. It may
    inspect code and update `CONTEXT.md` or an ADR through controlled
    CandidateWorkspace capabilities. Failure to obtain a load-bearing input is a
-   real blocker; ordinary review disagreement is recorded.
+   real blocker; ordinary review disagreement is recorded. Its completion
+   summary names changed context files or explicitly says `no file changes`.
 8. Use `decision-log` to produce the structured decision draft, then run the
    `wh-review` detail track over the candidate direction and draft. `wh-review`
    remains the only component that invokes review providers.
@@ -144,6 +149,31 @@ are entry-integrity failures and stop before stage work.
 Rounds 1, 2, and 3 are three distinct invocations. They may each contain several
 one-question turns until their own material ambiguity is resolved; they must not
 be collapsed into one invocation or expanded into three confirmation gates.
+
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Ask and wait for the user only when the answer can change direction or an
+existing authorization boundary. When user action is required, present the
+problem, one recommended option with its reason, mutually exclusive choices,
+and each choice's consequence and risk. Otherwise state `user action: none`.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, formal
+artifact refs, test and review evidence, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+invoking host may project the same concise facts onto its downstream handoff
+surface and parent progress surface. If downstream reports invalid upstream
+input, return the finding and completion condition through those host-owned
+surfaces; do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability
 

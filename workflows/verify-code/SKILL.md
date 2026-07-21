@@ -227,6 +227,32 @@ idempotent. Other attempts against a closed stage remain rejected.
 Quality failures remain visible facts. Identity, lineage, hash, and capability
 failures stop before verification because continuing would inspect another task.
 
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Ask and wait for the user only at the existing verification or close decision,
+or when an answer can change accepted scope. When user action is required,
+present the problem, one recommended option with its reason, mutually exclusive
+choices, and each choice's consequence and risk. Otherwise state
+`user action: none`.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned diagnostic lenses appear only
+through their review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, formal
+artifact refs, test and review evidence, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+invoking host may project the same concise facts onto its close handoff surface
+and parent progress surface. If verification returns invalid upstream input,
+return the finding and completion condition through those host-owned surfaces;
+do not poll or invent a host-specific recovery mechanism.
+
 ## Metrics capability
 
 Use `metrics/collector.mjs` through a launcher-issued capability.

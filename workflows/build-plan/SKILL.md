@@ -75,7 +75,7 @@ Temporary files may be authoring inputs, but are never the reviewed artifacts
 by themselves. Do not create official receipts before review is finished.
 
 Declared runtime components: `spec-research`, `spec-plan`, `spec-tasks`,
-`spec-analyze`, `wh-review`, and the review lenses declared by the manifest.
+`wh-review`, and the review lenses declared by the manifest.
 `simplicity-guard` is provider-visible only inside `wh-review`; it is not a
 planning step.
 
@@ -100,8 +100,9 @@ planning step.
    the `plan.md` writer.
 5. Create the draft task list by giving `spec-tasks` frozen spec/plan content
    and the `tasks.md` writer.
-6. Run `spec-analyze`, then run the initial review over the frozen draft.
-   Components do not locate files themselves.
+6. Run the initial review over the frozen draft. `spec-analyze` is a
+   provider-visible lens loaded only by `wh-review`, not a separate planning
+   step. Components do not locate files themselves.
 7. If that review has actionable findings, revise both drafts as needed and run
    at most one revision review. There is no third review in this stage.
 8. After the review sequence finishes, without changing either artifact, create
@@ -120,6 +121,31 @@ planning step.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.
+
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Ask and wait for the user only at the existing plan decision or when an answer
+can change accepted scope. When user action is required, present the problem,
+one recommended option with its reason, mutually exclusive choices, and each
+choice's consequence and risk. Otherwise state `user action: none`.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, formal
+artifact refs, test and review evidence, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+invoking host may project the same concise facts onto its downstream handoff
+surface and parent progress surface. If downstream reports invalid upstream
+input, return the finding and completion condition through those host-owned
+surfaces; do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability
 

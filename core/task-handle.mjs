@@ -679,6 +679,42 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate only canonical wh-review attempt envelopes. */
+    listCanonicalReviewAttemptRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const attemptsRoot = resolve(reviewsRoot, "attempts");
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, attemptsRoot, "review attempts directory");
+      if (!existsSync(attemptsRoot)) return [];
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const attemptsIdentity = directorySnapshot(realTaskPath, attemptsRoot);
+      const attemptIdentities = [];
+      const refs = readdirSync(attemptsRoot, { withFileTypes: true })
+        .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry.name))
+        .map((entry) => {
+          const attemptRoot = resolve(attemptsRoot, entry.name);
+          const stat = lstatSync(attemptRoot);
+          if (!entry.isDirectory() || stat.isSymbolicLink() || !stat.isDirectory()) {
+            throw new Error(`canonical review attempt must be a real directory: ${entry.name}`);
+          }
+          const identity = directorySnapshot(realTaskPath, attemptRoot);
+          attemptIdentities.push(identity);
+          const candidate = resolve(attemptRoot, "attempt.json");
+          const candidateStat = lstatSync(candidate);
+          if (candidateStat.isSymbolicLink() || !candidateStat.isFile()) {
+            throw new Error(`canonical review attempt must be a regular non-symlink JSON file: ${entry.name}/attempt.json`);
+          }
+          return `reviews/attempts/${entry.name}/attempt.json`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      for (const identity of attemptIdentities) verifyDirectorySnapshot(identity);
+      verifyDirectorySnapshot(attemptsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     writeRecordAtomic(relativePath, data, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();

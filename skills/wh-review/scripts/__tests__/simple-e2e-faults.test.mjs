@@ -27,12 +27,17 @@ describe("simple runner fake E2E and recovery", () => {
     }
   });
 
-  it("does not poison a later run after auth/start failure", async () => {
+  it("reuses an immutable unavailable attempt for the same material", async () => {
     const { attachmentRoot, task } = fixture("wh-review-recover-");
-    const failed = { run: async () => { const error = new Error("no auth"); error.code = "AUTH"; throw error; } };
+    const calls = [];
+    const failed = { run: async () => { calls.push(true); const error = new Error("no auth"); error.code = "AUTH"; throw error; } };
+    const unexpected = { run: async () => { calls.push(true); throw new Error("provider must not be called twice"); } };
     const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
-    expect((await runReviewFixture({ ...input, providerClient: failed })).status).toBe("unavailable");
-    expect((await runReviewFixture({ ...input, providerClient: client() })).verdict).toBe("pass");
+    const first = await runReviewFixture({ ...input, providerClient: failed });
+    const second = await runReviewFixture({ ...input, providerClient: unexpected });
+    expect(first.status).toBe("unavailable");
+    expect(second).toMatchObject({ status: "unavailable", reused: true, attemptRef: first.attemptRef });
+    expect(calls).toHaveLength(1);
   });
 
   it("keeps protocol mismatch and invalid format non-semantic", async () => {

@@ -83,36 +83,36 @@ describe("build-code authenticated input preflight", () => {
   });
 });
 
-describe("build-code Coder, AC, and handoff contracts", () => {
+describe("build-code Phase execution, AC, and handoff contracts", () => {
   const skill = readFileSync(resolve("workflows/build-code/SKILL.md"), "utf8");
   const verifySkill = readFileSync(resolve("workflows/verify-code/SKILL.md"), "utf8");
 
-  it("gives Coder one complete Phase card without binding a second orchestration skill", () => {
-    expect(skill).toMatch(/Coder[\s\S]*Phase[\s\S]*(?:goal|目标)[\s\S]*AC IDs[\s\S]*Workspace[\s\S]*(?:allowlist|allowed files|允许文件)[\s\S]*(?:non-goals|非目标)[\s\S]*(?:test commands|测试命令)[\s\S]*(?:upstream findings|上游 finding)/i);
-    expect(skill).toMatch(/do not (?:create|bind)[^\n]*(?:Coder|phase) Skill|不得[^\n]*(?:新增|绑定)[^\n]*(?:Coder|Phase)[^\n]*Skill/i);
+  it("gives Phase execution one factual Phase Card without copying process rules", () => {
+    expect(skill).toMatch(/Phase Card[\s\S]*(?:goal|目标)[\s\S]*AC IDs[\s\S]*Workspace[\s\S]*(?:allowed files|允许文件)[\s\S]*(?:non-goals|非目标)[\s\S]*(?:test commands|测试命令)[\s\S]*(?:upstream findings|上游 finding)/i);
+    expect(skill).toMatch(/card must not copy execution steps, review selection rules, or[\s\S]*task-storage paths/i);
   });
 
   it("requires applicable RED to minimal GREEN, focused tests, necessary regression, and scoped diff", () => {
-    expect(skill).toMatch(/(?:when applicable|适用时)[\s\S]*RED[\s\S]*(?:minimal GREEN|最小 GREEN)[\s\S]*(?:focused tests|聚焦测试)[\s\S]*(?:necessary regression|必要回归)[\s\S]*(?:scoped diff|范围内 diff)/i);
-    expect(skill).toMatch(/Coder[\s\S]{0,300}(?:return|返回)[^\n]*(?:exact test command|精确测试命令)[^\n]*(?:raw output|原始输出)/i);
-    expect(skill).toMatch(/Code Builder[\s\S]{0,100}(?:writes|写入)[\s\S]{0,100}(?:canonical evidence refs|canonical[\s\S]{0,40}证据引用)/i);
+    for (const part of [/When applicable/, /RED/, /minimal GREEN/, /focused\s+tests/, /necessary regression/, /scoped diff/])
+      expect(skill).toMatch(part);
+    expect(skill).toMatch(/return the exact command and raw output/i);
+    expect(skill).toMatch(/Publish implementation receipts[\s\S]*real test evidence/i);
   });
 
-  it("forbids Coder from owning publication and delivery actions", () => {
-    for (const action of ["commit", "review", "accept", "merge", "push", "close"]) {
-      expect(skill, `missing Coder prohibition for ${action}`).toMatch(new RegExp(`Coder[^\\n]*(?:must not|不得)[^\\n]*${action}`, "i"));
-    }
+  it("keeps Stage publication and delivery outside Phase execution", () => {
+    expect(skill).toMatch(/Do not split or start another Phase,[\s\S]*commit, merge, push, accept the Stage, or close/i);
+    expect(skill).toMatch(/### Stage coordination/i);
+    expect(skill).toMatch(/final full-worktree `wh-review`/i);
+    expect(skill).toMatch(/publish the\s+build-code attempt/i);
   });
 
   it("requires a complete AC table in existing test evidence and the inline human brief", () => {
-    expect(skill).toMatch(/each accepted AC|每(?:一|项).*AC/i);
+    expect(skill).toMatch(/every accepted AC|each accepted AC|每(?:一|项).*AC/i);
     for (const status of ["covered", "missing", "unknown"]) expect(skill).toContain(status);
-    expect(skill).toMatch(/(?:authenticated|canonical|可追溯)[^\n]*(?:refs|引用)[\s\S]*(?:test evidence|测试证据)[\s\S]*(?:human brief|大白话)/i);
-    expect(skill).toMatch(/review baseline[\s\S]*(?:authenticated|verified) Workspace/i);
+    expect(skill).toMatch(/covered[\s\S]*authenticated canonical refs/i);
     expect(skill).toMatch(/exactly one row|恰好一行/i);
-    expect(skill).toMatch(/covered[^\n]*(?:requires|必须)[^\n]*(?:refs|引用)/i);
-    expect(skill).toMatch(/(?:missing|unknown)[^\n]*(?:无|none)[^\n]*(?:reason|原因)/i);
-    expect(skill).toMatch(/(?:omitted|遗漏)[^\n]*(?:missing|unknown)[^\n]*(?:never|不得)[^\n]*covered/i);
+    expect(skill).toMatch(/covered[\s\S]{0,80}(?:requires|必须)[\s\S]{0,80}(?:refs|引用)/i);
+    expect(skill).toMatch(/omitted AC is never covered/i);
     expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);
   });
 
@@ -132,7 +132,7 @@ describe("build-code Coder, AC, and handoff contracts", () => {
     const compact = skill.replace(/\s+/g, " ");
     expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
     expect(compact).toMatch(/recommended option[\s\S]{0,180}every option's consequence and risk/i);
-    expect(compact).toMatch(/formal artifacts and evidence[\s\S]*does not copy their full text or logs/i);
+    expect(compact).toMatch(/formal artifacts and evidence[\s\S]*without copying their full contents/i);
     expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
     expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);
   });

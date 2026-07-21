@@ -64,7 +64,7 @@ files are accessed only through ArtifactDir. Components receive the content of
 named artifacts or controlled read/write callbacks; they never receive a root,
 task identifier, or authority to derive paths.
 
-Declared runtime components: `spec-specify`, `spec-clarify`, `wh-review`, and
+Declared runtime components: `spec-specify`, conditional `spec-clarify`, `wh-review`, and
 the conditional review lenses declared by the manifest. `simplicity-guard` is
 provider-visible only inside `wh-review`; it is not a spec generation step.
 
@@ -81,8 +81,13 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
 2. Read accepted decision/scope from `ctx.kernel.readAccepted("make-decision")`.
 3. Create the draft by invoking `spec-specify` with decision material and a
    controlled writer for `spec.md`.
-4. Invoke `spec-clarify` with the current `spec.md` content and the same named
-   writer when clarification is needed.
+4. Always perform a material ambiguity scan over the current `spec.md`.
+   `spec-clarify` is conditional with trigger `clarification`: invoke it with
+   the current content and the same named writer only when an ambiguity can
+   change scope, acceptance, interfaces, data, security, or operations. Map its
+   question to the host-visible conversation surface and wait for the answer.
+   When no such ambiguity exists, record
+   `spec-clarify: trigger=false — no material ambiguity` and continue.
 5. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
 6. Run the initial review using a frozen packet built from `spec.md`, decision
@@ -105,6 +110,31 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
 
 No component may use shell location, repository discovery, or ad-hoc product
 paths. A missing named artifact fails with its ArtifactDir error.
+
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Ask and wait for the user only when the answer can change accepted scope or an
+existing authorization boundary. When user action is required, present the
+problem, one recommended option with its reason, mutually exclusive choices,
+and each choice's consequence and risk. Otherwise state `user action: none`.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, formal
+artifact refs, test and review evidence, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+invoking host may project the same concise facts onto its downstream handoff
+surface and parent progress surface. If downstream reports invalid upstream
+input, return the finding and completion condition through those host-owned
+surfaces; do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability
 

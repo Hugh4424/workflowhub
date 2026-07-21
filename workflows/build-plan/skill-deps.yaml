@@ -4,7 +4,7 @@ skills:
   - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_simplicity_lens, bundle: skills/simplicity-guard/skill-bundle.json }
   - { name: spec-plan, path: skills/spec-plan/SKILL.md, execution: inline, invocation: always, trigger: planning, bundle: skills/spec-plan/skill-bundle.json }
   - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, invocation: always, trigger: task_breakdown, bundle: skills/spec-tasks/skill-bundle.json }
-  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: independent, invocation: always, trigger: consistency_review, bundle: skills/spec-analyze/skill-bundle.json }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_consistency_lens, bundle: skills/spec-analyze/skill-bundle.json }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
   - { name: plan-eng-review, path: skills/plan-eng-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_engineering_lens, bundle: skills/plan-eng-review/skill-bundle.json }
   - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..", "..", "..");
@@ -83,6 +84,49 @@ describe("simple wh-review contracts", () => {
       expect(entry).not.toHaveProperty("continuation_policy");
       expect(entry).not.toHaveProperty("bundle_hash");
     }
+
+    const reviewerSkills = entries.flatMap((entry) => [
+      ...entry.required_skills,
+      ...(entry.optional_skills ?? []).map(({ name }) => name)
+    ]);
+    for (const skill of reviewerSkills) {
+      const contract = readFileSync(join(root, skill, "SKILL.md"), "utf8");
+      expect(contract, skill).toMatch(/\blens\b/i);
+    }
+    for (const executionSkill of ["diagnosing-bugs", "isolated-browser-qa", "test-routing-advisor", "test-strategy", "review-response"])
+      expect(reviewerSkills, executionSkill).not.toContain(executionSkill);
+
+    const projectRoot = join(root, "..");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      const deps = yaml.load(readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8"));
+      const reviewOwned = new Set(
+        stage === "make-decision"
+          ? Object.values(plan.stages[stage].tracks).flatMap((entry) => entry.required_skills)
+          : [
+              ...plan.stages[stage].required_skills,
+              ...(plan.stages[stage].optional_skills ?? []).map(({ name }) => name)
+            ]
+      );
+      for (const dependency of deps.skills.filter(({ name }) => reviewOwned.has(name))) {
+        expect(dependency.invocation, `${stage}: ${dependency.name}`).toBe("conditional");
+      }
+    }
+
+    const stageDependencies = (stage) => yaml.load(
+      readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
+    ).skills;
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
+      .toMatchObject({ invocation: "conditional", trigger: "clarification" });
+    expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
+      .toMatchObject({ invocation: "conditional", trigger: "wh_review_consistency_lens" });
+    expect(stageDependencies("build-code").find(({ name }) => name === "review"))
+      .toMatchObject({ invocation: "conditional", trigger: "wh_review_code_lens" });
+    expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
+    expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
+      .toEqual([
+        expect.objectContaining({ name: "test-strategy", invocation: "conditional" }),
+        expect.objectContaining({ name: "isolated-browser-qa", invocation: "conditional" })
+      ]);
   });
 
   it("keeps verify-code reviewer lenses available only for standalone diagnostics", () => {
@@ -169,7 +213,7 @@ describe("simple wh-review contracts", () => {
     }
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
-    expect(plan.stages["verify-code"].optional_skills).toEqual([{ name: "isolated-browser-qa", when: "ui" }]);
+    expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
   });
 
   it("wires simplicity-guard only into proposal-bearing reviews", () => {
@@ -202,7 +246,7 @@ describe("simple wh-review contracts", () => {
     for (const stage of ["build-spec", "build-plan", "build-code"]) {
       const prompt = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
       const deps = readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8");
-      expect(prompt).toMatch(/`simplicity-guard` is\s+provider-visible only inside `wh-review`/);
+      expect(prompt).toMatch(/`simplicity-guard` is\s+(?:provider-visible|visible) only inside `wh-review`/);
       expect(prompt).not.toMatch(/Apply simplicity review|simplicity review, and/);
       expect(deps).toMatch(/name: simplicity-guard[^\n]*invocation: conditional[^\n]*trigger: wh_review_simplicity_lens/);
     }

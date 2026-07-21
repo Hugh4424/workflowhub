@@ -111,6 +111,36 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("enumerates only sorted regular canonical review attempts", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const attemptsRoot = join(taskPath, "reviews", "attempts");
+    for (const id of ["z-attempt", "a-attempt"]) {
+      const attemptRoot = join(attemptsRoot, id);
+      mkdirSync(attemptRoot, { recursive: true });
+      writeFileSync(join(attemptRoot, "attempt.json"), "{}");
+    }
+    writeFileSync(join(attemptsRoot, "ignored.txt"), "{}");
+
+    expect(task.listCanonicalReviewAttemptRefs()).toEqual([
+      "reviews/attempts/a-attempt/attempt.json",
+      "reviews/attempts/z-attempt/attempt.json",
+    ]);
+  });
+
+  it("rejects symlinked canonical review attempt directories", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const attemptsRoot = join(taskPath, "reviews", "attempts");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-review-attempt-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(attemptsRoot, { recursive: true });
+    writeFileSync(join(outside, "attempt.json"), "{}");
+    symlinkSync(outside, join(attemptsRoot, "linked-attempt"));
+
+    expect(() => task.listCanonicalReviewAttemptRefs()).toThrow(/symlink|directory/i);
+  });
+
   it("creates task.json once and opens it only with matching path and identity", () => {
     const { storageRoot, taskPath } = fixture();
     const manifest = {

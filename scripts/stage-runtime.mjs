@@ -16,6 +16,7 @@ import {
   writeOfficialComponentReceipt,
 } from "../core/canonical-receipt-writer.mjs";
 import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
+import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
@@ -32,8 +33,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "publish-acceptance-evidence", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|publish-acceptance-evidence|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "publish-phase-evidence", "publish-acceptance-evidence", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|publish-phase-evidence|publish-acceptance-evidence|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -47,6 +48,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
+  if (command === "publish-phase-evidence") {
+    if (values.stage !== "build-code" || !values.input) throw new TypeError("publish-phase-evidence requires --stage=build-code --input=<phase-evidence.json>");
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-phase-evidence accepts only --stage, --project, --task, and --input");
+  }
   if (command === "publish-acceptance-evidence" && (values.stage !== "verify-code" || !values.input)) throw new TypeError("publish-acceptance-evidence requires --stage=verify-code --input=<acceptance-evidence.json>");
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
@@ -63,7 +69,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["receipt", "capture-tests", "publish-acceptance-evidence", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["receipt", "capture-tests", "publish-phase-evidence", "publish-acceptance-evidence", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -82,6 +88,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-passing") return publishOfficialVerifyPassing(context, input);
+  if (command === "publish-phase-evidence") return publishBuildCodePhaseEvidence(context, input);
   if (command === "capture-tests") {
     if (!input || typeof input !== "object" || Array.isArray(input)
       || typeof input.command !== "string"

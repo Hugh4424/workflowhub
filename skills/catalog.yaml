@@ -219,11 +219,11 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d6e0313158d641fc1e496371dfef15ff59c69ef73bf8cc0c8c21ee3efa6cde00
+    local_bundle_hash: 3e512f93465a1493d4a4d616ef8dcdf12ceea5ddcb98da9ea7f70506e0757c26
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
-    design_idea: frozen materials、attempt/result、相同 PASS 精确复用、verify-final
+    design_idea: frozen materials、attempt/result、相同审查身份精确复用、verify-final
     used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream: []
     local_changes: workflowhub 原生 V4 实现

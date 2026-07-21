@@ -15,8 +15,8 @@ branded StageContext from
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
 Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
 only a branded Workspace plus argv and fixes cwd to the verified worktree.
-Never derive task identity or paths from cwd, a repository, or an issue
-identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+Never derive task identity or paths from cwd, a repository, or an external
+tracker identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
 locators from its authenticated `runner_root`; never search for or copy those
 runner files into the target repository.
 
@@ -125,80 +125,129 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
   attempt and evidence through TaskHandle/TaskKernel.
 - Does not modify accepted design artifacts.
 
-## Procedure
+## Composable execution
 
-1. Validate context, accepted lineage, Git common directory, baseline, and
-   named artifact checkpoint hashes.
-2. Read design artifacts through ArtifactDir. Never search for substitutes.
-3. Split work into implementation phases. Show each phase scope as a progress
-   update and continue automatically. Escalate only when the requested work
-   would change the accepted plan or allowed scope.
-4. Give the Coder one complete **Coder Phase card** for each Phase, in this
-   order: goal, accepted AC IDs, authenticated Workspace root, allowed files
-   allowlist, non-goals, exact test commands, and upstream findings.
-   Do not create or bind a Coder or Phase Skill. Invoke the Coder with this
-   frozen card and no task-storage information.
-   When applicable, the Coder must produce RED, then minimal GREEN, then run
-   focused tests and necessary regression, and return a scoped diff. Code
-   Builder performs a read-only Workspace diff check against the Phase card's
-   allowed files before publishing the Phase evidence.
-   Coder must return the exact test command and raw output. Code Builder writes
-   the canonical evidence refs.
-   The card's Workspace root must be copied from the accepted make-decision
-   record. Never substitute the target repository root, current checkout, or
-   current shell directory. The Coder must return its completion evidence to
-   the Code Builder before the Phase is marked complete; a missing handoff is
-   recoverable in the same Phase and is not a product decision.
-   Coder must not commit; Coder must not review; Coder must not accept.
-   Coder must not merge; Coder must not push; Coder must not close.
-5. Run the target project's real test command in the Workspace through the
-   public `capture-tests` entry above. It records command, exit code, freshness,
-   and output reference without turning the observation into an automatic
-   quality decision.
-6. For each Coder handoff, compare the Workspace's changed paths with that
-   original Phase card's allowed files. If the diff crosses the card boundary,
-   return it to the same Phase for correction. Then run `createPhaseDiffScan`
-   from `diff-scanner.mjs` with the trusted Workspace root, Phase ID, previous
-   Phase baseline commit, immutable implementation snapshot, and the Phase
-   card's allowed files. Save the `phase-diff-scan.v1` JSON as task-relative
-   evidence and point the current `phase-result.json.diff_scan.path` at it.
-7. Before review, use the fixed table `| AC | status | refs | reason |`. Give
-   each accepted AC exactly one row with status `covered`, `missing`, or
-   `unknown`. `covered` requires authenticated canonical refs. `missing` or
-   `unknown` may use `无` for refs but must include a reason.
-   Any omitted AC is `missing` or `unknown`, never `covered`. Put the same table in
-   existing test evidence and the human brief; do not add a receipt producer or
-   schema for it. Derive the review baseline only from the authenticated Workspace;
-   never infer it from a comment or cwd. Actual Agent adherence is
-   verified by the Phase 7 Canary, not inferred from this text contract alone.
-8. Run independent Phase review with only the current `phase_id` as its scope
-   selector. `wh-review` resolves the frozen commit pair from the current diff
-   scan and regenerates the complete Phase diff. Do not pass paths, commits,
-   ranges, or a caller-built diff. A Phase must pass before the next Phase may
-   start. On `revise_required`, repair the same Phase, publish append-only
-   implementation and test evidence, regenerate that Phase's diff evidence,
-   and review it again. Do not create a replacement Phase or overwrite
-   evidence. If the independent review capability is unavailable,
-   publish the diagnostic and stop as blocked; do not turn missing capability
-   into a human confirmation prompt.
-   `simplicity-guard` is provider-visible only inside `wh-review`; the build-code
-   generator and implementation workers never invoke it. Its lens may reject
-   concrete scope creep or speculative code in the current diff, but it may not
-   reopen accepted product scope.
-9. After all Phase reviews pass, run the final full-worktree review described
-   above. Only this `subject_kind=worktree` result may be passed as the final
-   build-code review receipt; a Phase result is local Phase-gate evidence only.
-10. Publish a build-code attempt containing baseline/head commits, changed
-   files, fresh test command, test facts, review facts, and missing items.
-11. Present a plain-language automatic-progress brief with exactly four items:
-    current status; next step and owner; whether the user must act; and, only
-    when action is required, the problem, a recommended option, and every
-    option's consequence and risk. Its concise handoff points downstream to the
-    formal artifacts and evidence refs; it does not copy their full text or logs.
-   The trusted runtime immediately runs `accept --attempt=<attempt>` without a
-   confirmation and advances to verify-code.
+The contract has two composable parts: **Stage coordination** and **Phase
+execution**. A single executor runs Stage coordination, then performs each
+Phase execution in order, returning to Stage coordination after every PASS.
+Splitting the parts across host workers is optional and must not change their
+order, evidence, or authority boundaries.
 
-No task identifier, issue identifier, branch name, or shell location may select
+### Stage coordination
+
+1. Validate StageContext, accepted lineage, Git common directory, and named
+   artifact checkpoint hashes. Read design artifacts only through ArtifactDir.
+2. Split the accepted plan into ordered Phases. For each Phase, create one
+   frozen **Phase Card** containing only authenticated facts copied from
+   StageContext and accepted records: project/task/phase identity, goal,
+   accepted AC IDs, Workspace root, allowed files, baseline, non-goals,
+   applicable RED expectation, exact test commands, necessary regression
+   scope, conditional-component trigger facts, and upstream findings.
+   The card must not copy execution steps, review selection rules, or
+   task-storage paths. Never infer any card field from cwd or directory scans.
+3. Start only the current Phase. When Phase execution returns, run the Phase
+   gate against the canonical result, its formal PASS review, and the live
+   Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or
+   Workspace drift returns to the same Phase; it never advances.
+4. Start the next Phase only after the current Phase gate passes. The accepted
+   plan remains the ordering authority; the mutable `phase-result.json` is only
+   the current pointer because there is no machine-readable Phase index.
+5. After every planned Phase passes, verify each Phase ID has matching
+   canonical snapshot/material evidence and a formal PASS result, then run one
+   final full-worktree `wh-review`. Never repeat a Phase or final review when
+   its snapshot/material identity is unchanged.
+6. Create the final implementation and fresh test receipts, publish the
+   build-code attempt with `run`, and let the trusted runtime accept it
+   automatically. A Phase result is gate evidence and cannot replace the final
+   full-worktree review.
+7. If verify-code later publishes an authenticated failure, use only the
+   controlled `reopen` flow above. Preserve the prior accepted attempt and
+   rerun only the current, last affected PASS Phase before repeating the final
+   full-worktree review. Pass the immutable `reopen_ref` in every
+   `publish-phase-evidence` input for that repair. The runtime authenticates it
+   against the active accepted build and records only the ref in the new Phase
+   evidence. While that reopen remains bound to the active accepted build, each
+   changed identity may be reviewed once; accepting the revised build makes the
+   reopen stale and unusable. This does not create a Phase registry or Phase
+   history.
+
+### Phase execution
+
+1. Read the frozen Phase Card as facts. Do not split or start another Phase,
+   change accepted scope, commit, merge, push, accept the Stage, or close the
+   task.
+2. When applicable, produce RED, make the minimal GREEN change, run focused
+   tests, run the necessary regression, and inspect the scoped diff. Use
+   conditional `test-routing-advisor`, `diagnosing-bugs`, or `review-response`
+   only when its declared trigger is present.
+3. Publish implementation receipts through `receipt` and real test evidence
+   through `capture-tests`; return the exact command and raw output. Before
+   review, use `| AC | status | refs | reason |`, giving every accepted AC
+   exactly one row marked `covered`, `missing`, or `unknown`. `covered` requires
+   authenticated canonical refs; an omitted AC is never covered.
+4. Create a temporary JSON input containing only `phase_id`,
+   `implementation_receipt_ref`, `green_test_receipt_ref`, optional
+   `red_evidence_ref`, optional `previous_phase_review_ref`, and
+   `allowed_files`. Only the controlled post-accept repair above also includes
+   its authenticated `reopen_ref`. Run:
+   `node scripts/stage-runtime.mjs publish-phase-evidence --stage=build-code
+   --project=<project> --task=<task> --input=<phase-evidence.json>`.
+   The runtime derives the baseline and Workspace identity. Do not supply a
+   path, commit, range, review implementation detail, or output destination.
+   `phase_id` and `allowed_files` are declared Phase facts, not a new approval
+   registry; the independent review checks them against the accepted plan.
+5. Run one independent `wh-review` for the current `phase_id`. Then call
+   `publish-phase-evidence` again with the same facts plus
+   `review_result_ref`; this finalizes the current pointer without invoking a
+   review itself.
+   `simplicity-guard` is visible only inside `wh-review`; Stage coordination
+   and Phase execution never invoke it directly.
+6. If the verdict is `revise_required`, verify each finding against the frozen
+   evidence, repair the same Phase, capture fresh receipts, publish a changed
+   identity, and review only that new identity. Do not return between finding
+   and repair. If independent review is unavailable, preserve the diagnostic
+   and stop as blocked without turning it into a product decision.
+7. Return once, and only after the current identity has a formal PASS result
+   and all Phase-gate material is complete. Return the Phase ID, canonical
+   evidence refs, test command/output refs, review result ref, changed paths,
+   and unresolved facts; do not copy full artifacts or logs.
+
+Publishing Phase evidence does not authorize a controlled revision after an
+accepted build. That authority is validated later by the existing final
+`run --reopen=<immutable-ref>` path.
+
+After the Stage is accepted, present a plain-language automatic-progress brief
+with exactly four items: current status; next step and owner; whether the user
+must act; and, only when action is required, the problem, a recommended option,
+and every option's consequence and risk. Point to formal artifacts and evidence
+refs without copying their full contents.
+
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Ask and wait for the user only when an answer can change accepted scope or an
+existing authorization boundary. When user action is required, present the
+problem, one recommended option with its reason, mutually exclusive choices,
+and each choice's consequence and risk. Otherwise state `user action: none`.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, formal
+artifact refs, test and review evidence, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+invoking host may project the same concise facts onto its downstream handoff
+surface and parent progress surface. If downstream reports invalid upstream
+input, return the finding and completion condition through those host-owned
+surfaces; do not poll or invent a host-specific recovery mechanism.
+
+No task identifier, external tracker identifier, branch name, or shell location may select
 the project or task. Missing accepted inputs stop before implementation.
 WorkspaceRunner sets the authenticated starting cwd for repository-owned test
 and diff commands; it is not a sandbox and does not prevent an invoked command

@@ -49,8 +49,9 @@ describe("official five-stage CLI", () => {
     execFileSync("git", ["checkout", "-qb", "task/Demo/runtime-bound"], { cwd: runner });
     cpSync(join(projectRoot, "core"), join(runner, "core"), { recursive: true, force: true });
     cpSync(join(projectRoot, "scripts", "stage-runtime.mjs"), join(runner, "scripts", "stage-runtime.mjs"), { force: true });
+    cpSync(join(projectRoot, "workflows", "build-code", "phase-evidence.mjs"), join(runner, "workflows", "build-code", "phase-evidence.mjs"), { force: true });
     symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
-    execFileSync("git", ["add", "core", "scripts/stage-runtime.mjs"], { cwd: runner });
+    execFileSync("git", ["add", "core", "scripts/stage-runtime.mjs", "workflows/build-code/phase-evidence.mjs"], { cwd: runner });
     execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner"], { cwd: runner });
     mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });

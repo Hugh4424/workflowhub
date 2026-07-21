@@ -1,4 +1,5 @@
 import { afterEach } from "vitest";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -96,6 +97,104 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("reuses an unchanged canonical revise result without calling a provider", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-reuse-revise-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: revise, error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const second = await runReviewFixture(options);
+    expect(second).toMatchObject({ reused: true, verdict: "revise_required", attemptRef: first.attemptRef, resultRef: first.resultRef });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("reuses an unchanged unavailable attempt without calling a provider", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-reuse-unavailable-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const second = await runReviewFixture(options);
+    expect(second).toMatchObject({ reused: true, status: "unavailable", verdict: null, attemptRef: first.attemptRef, resultRef: null });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("fails loudly without a provider call when an unavailable attempt was changed", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-unavailable-tamper-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const attemptPath = join(root, "Projects", "Demo", "tasks", "task", first.attemptRef);
+    const attempt = JSON.parse(readFileSync(attemptPath, "utf8"));
+    attempt.attempt_id = "other-attempt";
+    writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
+
+    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("fails loudly without another provider call when unavailable output was changed", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-unavailable-output-tamper-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: "not json", error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const attempt = JSON.parse(task.readRecord(first.attemptRef));
+    const outputPath = join(root, "Projects", "Demo", "tasks", "task", attempt.provider_attempts[0].output_ref);
+    const output = JSON.parse(readFileSync(outputPath, "utf8"));
+    output.content = "changed";
+    writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
+
+    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("rejects an unavailable attempt whose provider evidence is actually semantic", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-unavailable-semantic-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: "not json", error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const attempt = JSON.parse(task.readRecord(first.attemptRef));
+    const finalProviderAttempt = attempt.provider_attempts.at(-1);
+    const outputPath = join(root, "Projects", "Demo", "tasks", "task", finalProviderAttempt.output_ref);
+    const output = JSON.parse(readFileSync(outputPath, "utf8"));
+    output.content = pass;
+    output.content_hash = createHash("sha256").update(pass).digest("hex");
+    writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
+    finalProviderAttempt.status = "completed";
+    finalProviderAttempt.error = null;
+    const attemptPath = join(root, "Projects", "Demo", "tasks", "task", first.attemptRef);
+    writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
+
+    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("serializes concurrent revise reviews and invokes the provider exactly once", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-concurrent-revise-"); const calls = [];
+    let releaseFirst; let signalStarted;
+    const firstStarted = new Promise((resolve) => { signalStarted = resolve; });
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+    const providerClient = { run: async () => {
+      calls.push(true);
+      if (calls.length === 1) { signalStarted(); await firstGate; }
+      return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: revise, error: null } };
+    } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = runReviewFixture(options);
+    await firstStarted;
+    const second = runReviewFixture({ ...options, task: openTask(task.taskPath, task.identity) });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(calls).toHaveLength(1);
+    releaseFirst();
+    const [published, reused] = await Promise.all([first, second]);
+    expect(reused).toMatchObject({ reused: true, verdict: "revise_required", attemptRef: published.attemptRef, resultRef: published.resultRef });
+    expect(calls).toHaveLength(1);
+  });
+
   it("calls providers again when material or snapshot changes", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-change-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
@@ -106,7 +205,7 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(3);
   });
 
-  it("does not reuse a pass whose canonical aggregation was changed", async () => {
+  it("fails loudly without a provider call when canonical aggregation was changed", async () => {
     const { root, attachmentRoot, task } = fixture("simple-review-reuse-tamper-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
@@ -116,16 +215,15 @@ describe("aggregation and runner", () => {
     const changed = JSON.parse(readFileSync(resultPath, "utf8"));
     changed.findings = [{ provider: "kimi", severity: "major", path: "fake", issue: "tampered", recommendation: "ignore" }];
     writeFileSync(resultPath, `${JSON.stringify(changed, null, 2)}\n`);
-    const second = await runReviewFixture(options);
-    expect(second).not.toHaveProperty("reused");
-    expect(calls).toHaveLength(2);
+    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+    expect(calls).toHaveLength(1);
   });
 
   it.each([
     ["attempt identity", ({ attempt }) => { attempt.attempt_id = "other-attempt"; }],
     ["duplicate provider", ({ result }) => { result.provider_results.push(structuredClone(result.provider_results[0])); }],
     ["provider output ownership", ({ attempt }) => { attempt.provider_attempts[0].output_ref = "reviews/attempts/other-attempt/providers/kimi.output.json"; }],
-  ])("does not reuse a pass with invalid %s", async (_label, mutate) => {
+  ])("fails loudly without a provider call for invalid %s", async (_label, mutate) => {
     const { root, attachmentRoot, task } = fixture("simple-review-reuse-invalid-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
@@ -137,9 +235,8 @@ describe("aggregation and runner", () => {
     mutate({ result, attempt });
     writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`);
     writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
-    const second = await runReviewFixture(options);
-    expect(second).not.toHaveProperty("reused");
-    expect(calls).toHaveLength(2);
+    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+    expect(calls).toHaveLength(1);
   });
 
   it("records phase subject identity in the attempt, result, and public response", async () => {
