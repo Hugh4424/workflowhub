@@ -12,14 +12,15 @@ description: Freeze the current source and stage evidence, ask independent provi
 Production callers use only:
 
 ```bash
-node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
-node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
+node skills/wh-review/scripts/wh-review-cli.mjs run "$TMP_DIR/review.json"
+node skills/wh-review/scripts/wh-review-cli.mjs verify-final "$TMP_DIR/verify-final.json"
 ```
 
-Send the input JSON over stdin. Never place a transient review-input file in
-the runner, target repository, CandidateWorkspace, or TaskHandle. If the host
-cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
-file in the same foreground command; task storage is only for canonical output.
+Write the input JSON to the stage's existing OS temporary directory and pass
+only that short file path to the CLI. Never inline the JSON in a shell command.
+Never place a transient review-input file in the runner, target repository,
+CandidateWorkspace, or TaskHandle. Delete the temporary directory through its
+normal OS lifecycle; task storage is only for canonical output.
 
 Before the first call, read this file and `stage-materials.json`; do not guess
 field names or provider aliases. A normal review input has this exact shape:
@@ -59,6 +60,14 @@ The runner supplies `review_instructions`; callers must not add it. A
 same task/stage identity.
 
 There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. Local input validation fails before an attempt exists; fix the JSON from this public contract and call once. A provider or protocol failure creates an immutable unavailable attempt; do not retry the same material with guessed fields or provider names.
+
+If the host reports a transport interruption or cancellation, keep the exact
+input file and frozen source unchanged and repeat the same short command once.
+If the first command produced an immutable unavailable attempt, preserve it;
+the one retry is a new attempt over the same complete material. After a second
+technical failure, stop with the real diagnostic. Do not change providers,
+models, runtime configuration, authentication, or platform code to make a
+review pass.
 
 ## Inputs
 

@@ -55,7 +55,7 @@
 - [ ] **T033** 运行完整测试、五阶段 E2E、close、review、Skill closure、diff check。依赖：T032。证据：全量回执。覆盖：AC-001～011。
 - [ ] **T034** 在无 Multica 环境运行核心测试和 anti-host 扫描。依赖：T033。证据：扫描/测试结果。覆盖：FR-017/AC-017/NFR-001。
 - [ ] **T035** 核对 allowlist、依赖、生产文件和新 schema/service/platform 均无扩张。依赖：T033。证据：simplicity 报告。覆盖：NFR-002/003。
-- [ ] **T036** 冻结 build-code 快照，运行 OpenCode 和 Claude Code 异源审查并人工判断 finding。依赖：T034/T035。证据：两个 review result。覆盖：全部 WorkflowHub FR/AC。
+- [ ] **T036** 冻结 build-code 快照，运行 OpenCode 和 Kimi 异源审查并人工判断 finding。依赖：T034/T035。证据：两个 review result。覆盖：全部 WorkflowHub FR/AC。
 
 ## 阶段 7：Multica 配置与 Canary
 
@@ -74,14 +74,12 @@
 - [ ] **T049** 汇总时间、run、用户评论、重复 review/test、人工救火；不建设监控服务。依赖：T048。证据：一次性 Canary 报告。覆盖：AC-019/NFR-002。
 - [ ] **T050** Canary 任一关键项失败时恢复 T041 快照、暂停推广并记录平台/WorkflowHub 归属。依赖：T044～T049。证据：回滚或成功豁免记录。覆盖：FR-019/AC-019。
 
-## 阶段 8：合并和旧任务收尾
+## 阶段 8：合并和本任务收尾
 
 - [ ] **T051** Canary 全通过后，按独立 close 授权合并并 push WorkflowHub candidate。依赖：T049 且 T050 无失败。证据：close status。覆盖：FR-019/AC-019。
-- [ ] **T052** 恢复 ZHI-184：保留有效 verify，重新核对 Git/remote 后完成 close。依赖：T051。证据：ZHI-184 close。覆盖：FR-019/AC-020。
-- [ ] **T053** 清理 ZHI-184 有效链为 done、废弃链为 cancelled、父 Issue最后 done。依赖：T052。证据：Issue 状态表。覆盖：FR-017/AC-016/020。
-- [ ] **T054** 判断 ZHI-102 runner/accepted lineage；可信则 fresh verify/必要 reopen，不可信则唯一 replacement generation。依赖：T053。证据：lineage 决策。覆盖：FR-016/019、AC-015/020。
-- [ ] **T055** 完成 ZHI-102 fresh verify、必要返工、close 和全部状态清理。依赖：T054。证据：ZHI-102 最终时间线。覆盖：FR-007/017/019、AC-007/016/020。
-- [ ] **T056** 汇总最终 FR/AC、测试、审查、配置、Canary 和两个旧任务证据，执行最终独立复核。依赖：T055。证据：最终交付包。覆盖：全部 FR/AC/NFR。
+- [ ] **T052** 归档本任务 spec、plan、tasks、测试、审查、Canary 和配置快照。依赖：T051。证据：归档目录。覆盖：FR-019/AC-020。
+- [ ] **T053** 清理本任务创建的 Canary Issue、worktree 和 branch，保留失败 TaskHandle。依赖：T052。证据：资源清单。覆盖：FR-017/019、AC-016/020。
+- [ ] **T054** 汇总最终 FR/AC、测试、审查、配置和 Canary 证据，明确 ZHI-102/ZHI-184 不在执行范围，执行最终独立复核。依赖：T053。证据：最终交付包。覆盖：全部 FR/AC/NFR。
 
 ## 依赖硬约束
 
@@ -90,7 +88,7 @@
 - T023～T026 必须串行，不能用旧 accepted/review 冒充 fresh verify。
 - T041 前只允许准备 Multica 配置草案，禁止线上覆盖。
 - T044 前必须完成 T043 回读。
-- T051 前必须完成 Canary；T052、T054 禁止并行。
+- T051 前必须完成 Canary；T052～T054 串行执行。
 - 任何新生产文件、依赖、schema、service、通用状态机或 Multica adapter 提议，必须停止当前阶段并回到 spec，不得在 build-code 顺手加入。
 
 ## 覆盖结论
@@ -99,4 +97,4 @@
 - AC：20/20 有可证伪证据任务。
 - NFR：5/5 有检查或回归任务。
 - 用户新增要求：5/5 已覆盖。
-- 两份事故审计的共同根因与 ZHI-102/ZHI-184 独有阻塞：全部映射到 T006～T055。
+- 两份事故审计的共同根因与 ZHI-102/ZHI-184 独有阻塞：作为修复来源映射到 T006～T050；旧 Issue 本身不在执行范围。

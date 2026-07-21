@@ -11,7 +11,7 @@
 - WorkflowHub 只负责宿主无关的 stage、attempt/accepted/checkpoint、review/test facts、Workspace、handoff、verify 返工和 close。
 - WorkflowHub 源码、Skill 和运行时不得包含 Multica API、Issue、mention、status、generation 或队列逻辑。
 - Multica 只通过现有 Skill、Agent/Squad instructions、Issue、stage barrier、status、mention 和 metadata 调用 WorkflowHub；不要求 WorkflowHub 依赖 Multica。
-- 先用一个外部小项目 Canary 验证。Canary 通过前，不恢复 ZHI-102、ZHI-184，也不宣称所有项目类型已实证通过。
+- 先用一个外部小项目 Canary 验证。全过程不修改 ZHI-102、ZHI-184，也不宣称所有项目类型已实证通过。
 
 ## 3. 功能要求
 
@@ -38,7 +38,7 @@
 - **FR-016 单活动 generation**：同一父 task 只能有一条活动 generation。身份可信的 runner migration/retry/reopen 复用原 generation；身份/provenance 不可信时自动建立 replacement generation并走既有方向/计划边界。新链激活后旧链立即全部 cancelled。
 - **FR-017 verify 与最终收尾**：verify accepted 后保持 `in_progress` 并显示“验证通过，交付收尾中”；close `completed/ready` 后 Code Verifier 将 verify Issue设为 done，由 stage-5 barrier 唤醒工头。工头把有效链全部设 done、废弃链设 cancelled、清除过期 metadata，确认没有非终态子 Issue，最后才把父 Issue设 done。
 - **FR-018 配置发布**：只原位更新现有工头、五个 Stage Agent、Coder、Squad 和五个 WorkflowHub Skill；不新增 Agent/Squad/Skill。覆盖前等 Agent idle并保存快照，覆盖后逐项回读 Skill ID、supporting files、绑定和 Prompt。
-- **FR-019 Canary 与恢复**：外部小项目 Canary 必须验证五阶段、两个 Phase、一次确定性 verify 返工、真实上下游 return handshake、完整 close 和最终清理。真实 Agent mention没有产生新 run时 Canary 失败、恢复线上快照并暂停推广，由 Multica 平台独立处理。Canary 通过后先恢复 ZHI-184 close，再恢复 ZHI-102；两个旧任务不得同时恢复。
+- **FR-019 Canary 验证**：外部小项目 Canary 必须验证五阶段、两个 Phase、一次确定性 verify 返工、真实上下游 return handshake、完整 close 和最终清理。真实 Agent mention没有产生新 run时 Canary 失败、恢复线上快照并暂停推广，由 Multica 平台独立处理。ZHI-102、ZHI-184 由用户自行结束，不属于本任务执行范围。
 
 ## 4. 验收标准
 
@@ -61,7 +61,7 @@
 - **AC-017**：WorkflowHub 在无 Multica 环境完成现有核心测试；源码和 Skill 闭包中不存在 Multica API/Issue/status/mention/generation 依赖。
 - **AC-018**：Multica 覆盖部署前后快照可比；五个 Skill ID与绑定保持不变，supporting files和 Prompt回读一致。
 - **AC-019**：外部 Canary 完成完整五阶段、一次返工、close和清理；记录总时间、run数、用户评论数、重复 review/test 次数和人工救火次数，但未建设监控服务。
-- **AC-020**：只有 AC-019 通过后才恢复旧任务；ZHI-184 保留已通过 verify并完成 close，随后 ZHI-102 完成 lineage判断、fresh verify或必要 replacement generation。
+- **AC-020**：本任务不恢复或修改 ZHI-102、ZHI-184；最终交付证据明确记录这项用户范围修订。
 
 ## 5. 非功能要求
 

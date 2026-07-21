@@ -6,7 +6,7 @@
 - 实施分支：`task/workflowhub/multica-flow-reliability-final`
 - 起始基线：`8c83722ff275d13294a5ad9315041dd46ac05d56`
 - accepted spec：`specs/multica-flow-reliability-final/spec.md`
-- 实施原则：先修 WorkflowHub 宿主无关缺陷，再更新 Multica 配置；外部 Canary 通过前不恢复 ZHI-102、ZHI-184。
+- 实施原则：先修 WorkflowHub 宿主无关缺陷，再更新 Multica 配置；全过程不修改 ZHI-102、ZHI-184。
 
 ## 2. 交付边界
 
@@ -54,7 +54,7 @@ WorkflowHub 全量测试 + build-code 独立审查
           ↓
 外部小项目 Canary
           ↓
-合并 WorkflowHub → 恢复 ZHI-184 → 恢复 ZHI-102
+合并 WorkflowHub → 归档本任务 → 清理本任务资源
 ```
 
 WorkflowHub 代码修复和 Multica 配置草案可以并行准备；线上部署必须等 WorkflowHub candidate 冻结。Canary 必须在部署后执行，旧任务必须在 Canary 成功后串行恢复。
@@ -198,7 +198,7 @@ WorkflowHub 代码修复和 Multica 配置草案可以并行准备；线上部�
 1. 运行所有新增定向测试、现有五阶段 E2E、close、review、Skill closure 和完整测试。
 2. 在无 Multica 环境运行 WorkflowHub 核心测试和 anti-host 扫描。
 3. 检查 diff allowlist、依赖、生产文件数量和是否出现新 schema/service/platform。
-4. 生成冻结 build-code 材料；OpenCode 和 Claude Code 审同一快照。
+4. 生成冻结 build-code 材料；OpenCode 和 Kimi 审同一快照。
 5. 人工复核 reviewer finding：只接受与 accepted spec、事故证据和 simplicity 原则一致的 finding。
 
 完成标准：
@@ -251,20 +251,18 @@ Canary：
 
 完成标准：AC-012～AC-019 全部通过。
 
-### 阶段 8：合并与旧任务恢复
+### 阶段 8：合并与本任务收尾
 
-目标：先交付稳定候选，再串行收尾旧任务。
+目标：交付稳定候选，并只清理本任务资源。
 
 动作：
 
 1. Canary 通过后，按独立 close 计划合并并 push WorkflowHub candidate。
-2. 先恢复 ZHI-184：保留已通过 verify 的事实，重新核对 candidate/target/remote 后执行 close，不重跑无关阶段。
-3. ZHI-184 完成且所有子 Issue 终态后，再恢复 ZHI-102。
-4. ZHI-102 先判断当前 runner/accepted lineage 是否可信：可信则从 fresh verify/必要 reopen 继续；不可信则创建唯一 replacement generation并取消旧链。
-5. 两个任务分别检查：无非终态子 Issue、父 Issue done、metadata 指向最终 generation、没有第三套重复 stage 链。
-6. 保存最终测试、审查、Canary、配置快照和旧任务恢复证据。
+2. 归档本任务的 spec、plan、tasks、测试、审查、Canary 和配置快照。
+3. 清理本任务创建的 Canary Issue、worktree 和 branch；保留失败 TaskHandle 作为证据。
+4. 不恢复、不修改 ZHI-102 或 ZHI-184；它们由用户自行结束。
 
-完成标准：AC-020 通过，ZHI-102、ZHI-184 都物理收尾。
+完成标准：AC-020 通过，本任务交付和资源清理完成。
 
 ## 5. 需求与问题覆盖矩阵
 
@@ -276,7 +274,7 @@ Canary：
 | 只在真实阻断找用户 | 阶段2、7 | AC-005/012 |
 | 阶段交接产物证据依赖 | 阶段3 human brief | AC-010 |
 | Coder 会TDD测试留痕 | 阶段3 Phase卡片 | AC-011 |
-| 工头最终清理子Issue | 阶段7、8 | AC-016/020 |
+| 工头最终清理子Issue | 阶段7、8 | AC-016 |
 | runner自托管和版本漂移 | 阶段1 | AC-002 |
 | accepted后不自动推进 | 阶段1 | AC-003 |
 | receipt提前冻结/EEXIST | 阶段2 | AC-004 |
@@ -304,7 +302,7 @@ Canary：
 - **Multica Prompt 变长又互相矛盾**：按角色最小差异修改，逐条映射 FR，部署前后回读。
 - **真实 mention 平台不触发**：Canary fail、回滚配置、暂停推广；不在 WorkflowHub 写兜底。
 - **Canary 假绿**：必须含两个 Phase、一次 verify 返工、一次 return handshake、一次陈旧事件和完整 close。
-- **旧任务相互干扰**：先 ZHI-184，完成后再 ZHI-102，禁止并行恢复。
+- **旧任务相互干扰**：本任务不恢复或修改 ZHI-102、ZHI-184。
 
 ## 7. 宪法与简洁性检查
 
@@ -321,7 +319,7 @@ Canary：
 - 基线与事故提交取舍表；
 - FR/AC 对应测试和结果；
 - WorkflowHub 全量测试、Skill closure、anti-host 结果；
-- OpenCode、Claude Code 对同一冻结快照的审查结果；
+- OpenCode、Kimi 对同一冻结快照的审查结果；
 - Multica 发布前后配置快照和回读结果；
 - 外部 Canary 全部 Issue/comment/run/status/close 证据；
-- ZHI-184、ZHI-102 最终恢复和状态清理证据。
+- 用户范围修订记录：ZHI-184、ZHI-102 不在本任务执行范围。

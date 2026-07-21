@@ -62,8 +62,11 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
     expect(skill).toMatch(/do not retry the same material with guessed fields or provider names/);
-    expect(skill).toMatch(/Send the input JSON over stdin/);
+    expect(skill).toMatch(/wh-review-cli\.mjs run "\$TMP_DIR\/review\.json"/);
+    expect(skill).toMatch(/Never inline the JSON in a shell command/);
     expect(skill).toMatch(/Never place a transient review-input file in/);
+    expect(skill).toMatch(/repeat the same short command once/);
+    expect(skill).toMatch(/Do not change providers,[\s\S]*platform code/);
     for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
   });
 
