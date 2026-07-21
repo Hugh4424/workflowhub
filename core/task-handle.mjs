@@ -381,8 +381,18 @@ function waitBriefly(milliseconds = 10) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
-function withRecordLockAt(taskRoot, relativePath, operation) {
+function recordLockWaitMs(options) {
+  if (options === undefined) return RECORD_LOCK_WAIT_MS;
+  assertPlainObject(options, "record lock options");
+  if (Object.keys(options).some((key) => key !== "waitMs") || !Number.isSafeInteger(options.waitMs) || options.waitMs < 0) {
+    throw new TypeError("record lock waitMs must be a non-negative safe integer");
+  }
+  return options.waitMs;
+}
+
+function withRecordLockAt(taskRoot, relativePath, operation, options) {
   if (typeof operation !== "function") throw new TypeError("record lock operation must be a function");
+  const waitMs = recordLockWaitMs(options);
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const nonce = randomUUID();
@@ -409,8 +419,9 @@ function withRecordLockAt(taskRoot, relativePath, operation) {
         }
         continue;
       }
-      if (Date.now() - started >= RECORD_LOCK_WAIT_MS) throw new Error(`timed out waiting for record lock: ${relativePath}`);
-      waitBriefly();
+      const elapsed = Date.now() - started;
+      if (elapsed >= waitMs) throw new Error(`timed out waiting for record lock: ${relativePath}`);
+      waitBriefly(Math.min(10, waitMs - elapsed));
     }
   }
   const release = () => {
@@ -686,10 +697,10 @@ function makeTaskHandle(taskPath, manifest) {
     },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical attempts/accepted records only through TaskKernel.
-    withRecordLock(relativePath, operation) {
+    withRecordLock(relativePath, operation, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();
-      const result = withRecordLockAt(realTaskPath, relativePath, operation);
+      const result = withRecordLockAt(realTaskPath, relativePath, operation, options);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return result;
     },

@@ -478,6 +478,37 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("honors an explicit bounded wait when another process owns a record lock", async () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const lockRef = "locks/cross-process-wait.lock";
+    const code = [
+      `import { openTask } from ${JSON.stringify(modulePath)};`,
+      `const task = openTask(${JSON.stringify(taskPath)}, "PaperBuilder", "paperbuilder-phase-foundation");`,
+      `await task.withRecordLock(${JSON.stringify(lockRef)}, async () => {`,
+      `  process.stdout.write("locked\\n");`,
+      `  await new Promise((resolve) => setTimeout(resolve, 250));`,
+      `});`,
+    ].join("\n");
+    const child = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "inherit"] });
+    const exited = new Promise((resolveResult, reject) => {
+      child.once("error", reject);
+      child.once("exit", (status) => status === 0 ? resolveResult() : reject(new Error(`lock holder exited ${status}`)));
+    });
+    await new Promise((resolveStarted, reject) => {
+      child.stdout.once("data", resolveStarted);
+      child.once("error", reject);
+      child.once("exit", (status) => reject(new Error(`lock holder exited before ready: ${status}`)));
+    });
+
+    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: 25 })).toThrow(/timed out waiting for record lock/);
+    let acquired = false;
+    task.withRecordLock(lockRef, () => { acquired = true; }, { waitMs: 1_000 });
+    expect(acquired).toBe(true);
+    await exited;
+    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: -1 })).toThrow(/waitMs.*non-negative safe integer/);
+  });
+
   it("publishes task creation atomically and leaves no orphan on serialization failure", () => {
     const { storageRoot, taskPath } = fixture();
     const invalid = manifest({ inputs: { cannotSerialize: 1n } });

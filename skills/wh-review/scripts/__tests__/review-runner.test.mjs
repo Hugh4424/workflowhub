@@ -7,7 +7,7 @@ import { parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
-import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
+import { createTask, createTaskKernel, openTask } from "../../../../core/task-handle.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../core/workspace.mjs";
 import { execFileSync } from "node:child_process";
 
@@ -70,6 +70,29 @@ describe("aggregation and runner", () => {
     const first = await runReviewFixture(options);
     const second = await runReviewFixture(options);
     expect(second).toMatchObject({ reused: true, attemptRef: first.attemptRef, resultRef: first.resultRef });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("serializes concurrent reviews of the same frozen material and reuses the published pass", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-concurrent-reuse-"); const calls = [];
+    let releaseFirst; let signalStarted;
+    const firstStarted = new Promise((resolve) => { signalStarted = resolve; });
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+    const providerClient = { run: async () => {
+      calls.push(true);
+      if (calls.length === 1) { signalStarted(); await firstGate; }
+      return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } };
+    } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = runReviewFixture(options);
+    await firstStarted;
+    const second = runReviewFixture({ ...options, task: openTask(task.taskPath, task.identity) });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(calls).toHaveLength(1);
+    releaseFirst();
+    const [published, reused] = await Promise.all([first, second]);
+    expect(reused).toMatchObject({ reused: true, attemptRef: published.attemptRef, resultRef: published.resultRef });
     expect(calls).toHaveLength(1);
   });
 

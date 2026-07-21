@@ -12,6 +12,39 @@ const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUAB
 const errorPriority = ["MATERIAL_INCOMPLETE", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
 const providerPrompt = "Read review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
+const REVIEW_LOCK_WAIT_MS = 5 * 60 * 1000;
+const localReviewLocks = new Map();
+
+async function withLocalReviewLock(task, lockRef, waitMs, operation) {
+  const key = JSON.stringify([task.identity.projectName, task.identity.taskId, lockRef]);
+  const previous = localReviewLocks.get(key) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  localReviewLocks.set(key, current);
+  const finish = () => {
+    release();
+    if (localReviewLocks.get(key) === current) localReviewLocks.delete(key);
+  };
+  let timeout; let acquired = false;
+  try {
+    await Promise.race([previous, new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error(`timed out waiting for record lock: ${lockRef}`)), waitMs);
+    })]);
+    acquired = true;
+    clearTimeout(timeout); timeout = undefined;
+    return await operation();
+  }
+  finally {
+    clearTimeout(timeout);
+    if (acquired) finish();
+    else void previous.then(finish);
+  }
+}
+
+function reviewLockRef({ stage, reviewTrack, snapshotTree, materialId }) {
+  const identity = JSON.stringify([stage, reviewTrack, snapshotTree, materialId]);
+  return `locks/reviews/${createHash("sha256").update(identity).digest("hex")}.lock`;
+}
 
 function sourceRecord(source) {
   return { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead };
@@ -138,38 +171,41 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   const subject = subjectRecord(source, phaseId);
   const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope) };
   const bundle = buildMaterials({ reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, reviewTrack, uiScope, materials: fixedMaterials });
-  const reused = reusablePass(taskHandle, { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
-  if (reused) return reused;
-  const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
-  const reviewed = await Promise.all(providers.map((provider) => reviewOne({ providerClient, provider, hostProvider, materials: bundle, continuationRuntimeId: previousRuntimeIds[provider] ?? null })));
-  const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
-  const providerAttempts = [];
-  for (const item of reviewed) {
-    for (let index = 0; index < item.calls.length; index += 1) {
-      const call = item.calls[index]; const isLast = index === item.calls.length - 1; const finalError = isLast ? item.final?.error ?? null : call.provider.error ?? null;
-      const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, { taskId, stage });
-      providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, output_ref: outputRef, error: finalError });
+  const lockRef = reviewLockRef({ stage, reviewTrack, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
+  return withLocalReviewLock(taskHandle, lockRef, REVIEW_LOCK_WAIT_MS, () => taskHandle.withRecordLock(lockRef, async () => {
+    const reused = reusablePass(taskHandle, { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
+    if (reused) return reused;
+    const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
+    const reviewed = await Promise.all(providers.map((provider) => reviewOne({ providerClient, provider, hostProvider, materials: bundle, continuationRuntimeId: previousRuntimeIds[provider] ?? null })));
+    const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
+    const providerAttempts = [];
+    for (const item of reviewed) {
+      for (let index = 0; index < item.calls.length; index += 1) {
+        const call = item.calls[index]; const isLast = index === item.calls.length - 1; const finalError = isLast ? item.final?.error ?? null : call.provider.error ?? null;
+        const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, { taskId, stage });
+        providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, output_ref: outputRef, error: finalError });
+      }
     }
-  }
-  const minimumReviewers = minimumReviewersFor(stage, reviewTrack); const aggregation = aggregateProviderResults(reviewed, minimumReviewers);
-  const unavailableError = primaryError(reviewed);
-  const attempt = {
-    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
-    ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
-    provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
-    error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }
-  };
-  validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
-  if (aggregation.status !== "semantic") return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
-  const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-  const findings = providerResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
-  const result = {
-    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
-    material_id: bundle.materialId, attempt_ref: refs.attemptRef, provider_results: providerResults,
-    verdict: aggregation.verdict, findings
-  };
-  validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result);
-  return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    const minimumReviewers = minimumReviewersFor(stage, reviewTrack); const aggregation = aggregateProviderResults(reviewed, minimumReviewers);
+    const unavailableError = primaryError(reviewed);
+    const attempt = {
+      version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
+      ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+      provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
+      error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }
+    };
+    validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
+    if (aggregation.status !== "semantic") return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
+    const findings = providerResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
+    const result = {
+      version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
+      material_id: bundle.materialId, attempt_ref: refs.attemptRef, provider_results: providerResults,
+      verdict: aggregation.verdict, findings
+    };
+    validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result);
+    return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+  }, { waitMs: REVIEW_LOCK_WAIT_MS }));
 }
 
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */
