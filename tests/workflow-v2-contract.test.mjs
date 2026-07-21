@@ -92,6 +92,23 @@ describe("five-stage v2 business contract", () => {
     expect(skill).toMatch(/repaired tests[\s\S]*new receipt\/output refs/i);
     expect(skill).toMatch(/does not require or create a verify-code reopen authorization/i);
     expect(skill).toMatch(/After[\s\S]*accepted[\s\S]*only the controlled verification-failure path/i);
+    expect(skill).toMatch(/<final implementation receipt ref>[\s\S]*<final fresh test receipt ref>/i);
+    expect(skill).toMatch(/normal[^\n]*default[^\n]*receipts\/implementation\.json[^\n]*receipts\/build-tests\.json/i);
+    expect(skill).toMatch(/revision[^\n]*(?:latest|newest)[^\n]*refs/i);
+  });
+
+  it("reviews every build-code Phase and then the final worktree", () => {
+    const skill = readStage("build-code");
+    expect(skill).toMatch(/createPhaseDiffScan/);
+    expect(skill).toMatch(/current `phase_id`[\s\S]{0,24}scope\s+selector/i);
+    expect(skill).toMatch(/A Phase must pass before the next Phase may\s+start/i);
+    expect(skill).toMatch(/full-worktree[^\n]*`wh-review`|`wh-review`[^\n]*full-worktree/i);
+    expect(skill).toMatch(/without `phase_id`|omit `phase_id`/i);
+    expect(skill).toMatch(/final review is separate from the required per-Phase\s+reviews/i);
+    expect(skill).toMatch(/canonical implementation[\s\S]{0,180}tests[\s\S]{0,180}same snapshot tree/i);
+    expect(skill).toMatch(/Phase or final full-worktree review[\s\S]*same original Phase[\s\S]*revision receipt[\s\S]*fresh tests/i);
+    const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
+    expect(handlers).toMatch(/build-code final review must be a full-worktree result/);
   });
 
   it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {

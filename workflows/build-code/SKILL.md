@@ -69,10 +69,14 @@ Before build-code is accepted, a same-Phase repair after a failed pre-review
 check or review finding must preserve the old receipt and publish the repaired
 snapshot with `--revision=true --recover=<latest-implementation-receipt-ref>`.
 Capture repaired tests under new receipt/output refs and pass those new refs to
-the next review and stage run. This is append-only repair of the current open
-stage; it does not require or create a verify-code reopen authorization. After
-build-code is accepted, only the controlled verification-failure path above may
-create another build-code attempt.
+the next review and stage run. If a Phase or final full-worktree review returns
+`revise_required`, repair the same original Phase that owns the finding,
+publish a revision receipt, capture fresh tests under new refs, and repeat the
+affected Phase review before the final full-worktree review. This is
+append-only repair of the current open stage; it
+does not require or create a verify-code reopen authorization. After build-code
+is accepted, only the controlled verification-failure path above may create
+another build-code attempt.
 For a normal completed build, use the smallest valid payload:
 `{"phase_completion":true}`. A structured value is allowed only as
 `{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
@@ -89,8 +93,20 @@ Use fresh task-relative refs for a controlled rework attempt. Do not pass
 `component=tests`, call internal receipt writers, or guess another component
 name; `capture-tests` is the single public producer for build-code test facts.
 
+After every Phase has passed its Phase review, and the final implementation
+receipt and fresh test receipt exist, run one final independent code review
+using those fresh tests: one full-worktree `wh-review` without `phase_id`. This
+final review is separate from the required per-Phase reviews. The review host
+freezes the authenticated Workspace itself; do not supply paths, commits,
+ranges, or a caller-built diff.
+The canonical implementation receipt, canonical tests receipt, and final review
+must all bind the same snapshot tree. A mismatch fails before the build-code
+attempt is published.
+
 After review, create `$TMP_DIR/run.json` with exactly:
-`{"receipts":{"implementation":"receipts/implementation.json","tests":"receipts/build-tests.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+`{"receipts":{"implementation":"<final implementation receipt ref>","tests":"<final fresh test receipt ref>","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+For the normal path, the default final refs are `receipts/implementation.json` and `receipts/build-tests.json`.
+For a pre-accept revision, use the latest implementation revision receipt ref and newest fresh test receipt ref produced for that repaired snapshot; never fall back to the initial refs.
 Publish and automatically accept the stage with
 `node scripts/stage-runtime.mjs run --stage=build-code
 --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
@@ -123,7 +139,9 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    Do not create or bind a Coder or Phase Skill. Invoke the Coder with this
    frozen card and no task-storage information.
    When applicable, the Coder must produce RED, then minimal GREEN, then run
-   focused tests and necessary regression, and return a scoped diff.
+   focused tests and necessary regression, and return a scoped diff. Code
+   Builder performs a read-only Workspace diff check against the Phase card's
+   allowed files before publishing the Phase evidence.
    Coder must return the exact test command and raw output. Code Builder writes
    the canonical evidence refs.
    The card's Workspace root must be copied from the accepted make-decision
@@ -137,13 +155,13 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    public `capture-tests` entry above. It records command, exit code, freshness,
    and output reference without turning the observation into an automatic
    quality decision.
-6. Run `createPhaseDiffScan` from `diff-scanner.mjs` with the trusted Workspace
-   root, phase ID, phase baseline commit, immutable implementation snapshot, and
-   the plan's allowed files. Its CLI accepts repeated
-   `--allowed-file=<repo-relative-path>` flags or one absolute
-   `--allowed-files-json=<json-array-file>` and prints JSON to stdout. Save the
-   `phase-diff-scan.v1` JSON as task-relative evidence and point the current
-   `phase-result.json.diff_scan.path` at it.
+6. For each Coder handoff, compare the Workspace's changed paths with that
+   original Phase card's allowed files. If the diff crosses the card boundary,
+   return it to the same Phase for correction. Then run `createPhaseDiffScan`
+   from `diff-scanner.mjs` with the trusted Workspace root, Phase ID, previous
+   Phase baseline commit, immutable implementation snapshot, and the Phase
+   card's allowed files. Save the `phase-diff-scan.v1` JSON as task-relative
+   evidence and point the current `phase-result.json.diff_scan.path` at it.
 7. Before review, use the fixed table `| AC | status | refs | reason |`. Give
    each accepted AC exactly one row with status `covered`, `missing`, or
    `unknown`. `covered` requires authenticated canonical refs. `missing` or
@@ -153,20 +171,26 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    schema for it. Derive the review baseline only from the authenticated Workspace;
    never infer it from a comment or cwd. Actual Agent adherence is
    verified by the Phase 7 Canary, not inferred from this text contract alone.
-8. Run independent code review with only the current `phase_id` as its scope
+8. Run independent Phase review with only the current `phase_id` as its scope
    selector. `wh-review` resolves the frozen commit pair from the current diff
-   scan and regenerates the complete phase diff. Do not pass paths, commits,
-   ranges, or a caller-built diff. Address actionable revisions in a new phase
-   attempt; do not overwrite evidence. If the independent review capability is
-   unavailable, publish the diagnostic and stop as blocked; do not turn missing
-   capability into a human confirmation prompt.
+   scan and regenerates the complete Phase diff. Do not pass paths, commits,
+   ranges, or a caller-built diff. A Phase must pass before the next Phase may
+   start. On `revise_required`, repair the same Phase, publish append-only
+   implementation and test evidence, regenerate that Phase's diff evidence,
+   and review it again. Do not create a replacement Phase or overwrite
+   evidence. If the independent review capability is unavailable,
+   publish the diagnostic and stop as blocked; do not turn missing capability
+   into a human confirmation prompt.
    `simplicity-guard` is provider-visible only inside `wh-review`; the build-code
    generator and implementation workers never invoke it. Its lens may reject
    concrete scope creep or speculative code in the current diff, but it may not
    reopen accepted product scope.
-9. Publish a build-code attempt containing baseline/head commits, changed
+9. After all Phase reviews pass, run the final full-worktree review described
+   above. Only this `subject_kind=worktree` result may be passed as the final
+   build-code review receipt; a Phase result is local Phase-gate evidence only.
+10. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
-10. Present a plain-language automatic-progress brief with exactly four items:
+11. Present a plain-language automatic-progress brief with exactly four items:
     current status; next step and owner; whether the user must act; and, only
     when action is required, the problem, a recommended option, and every
     option's consequence and risk. Its concise handoff points downstream to the

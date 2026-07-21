@@ -9,11 +9,12 @@ describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "evidence/test.txt", output_hash: sha });
-  const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree) => {
+  const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree, subjectKind = "worktree") => {
     const providerFinding = { severity: "major", path: "fixture", issue: "fixture", recommendation: "revise" };
     const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [providerFinding] };
     return { version: "wh-review-result.v1", task_id: "task", stage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
+      subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, base_tree: tree, candidate_tree: snapshotTree,
       material_id: sha, attempt_ref: `reviews/attempts/${stage}-attempt/attempt.json`,
       provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict,
       findings: verdict === "pass" ? [] : [{ provider: "fixture-provider", ...providerFinding }] };
@@ -24,6 +25,7 @@ describe("final cutover guard contracts", () => {
       const content = JSON.stringify(result.provider_results[0].output);
       values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage, review_track: null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
+        subject_kind: result.subject_kind, phase_id: result.phase_id, base_tree: result.base_tree, candidate_tree: result.candidate_tree,
         provider_attempts: [{ provider: "fixture-provider", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
       values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: attemptId,
         provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex") };
@@ -129,6 +131,7 @@ describe("final cutover guard contracts", () => {
     const unavailable = {
       version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+      subject_kind: "worktree", phase_id: null, base_tree: tree, candidate_tree: tree,
       material_id: sha, provider_attempts: [{
         provider: "fixture-provider", status: "completed", session_id: "old", runtime_id: "old", output_ref: earlierOutputRef, error: null,
       }, {
@@ -200,6 +203,20 @@ describe("final cutover guard contracts", () => {
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/attempt\/result material_id mismatch/i);
   });
 
+  it("rejects a worktree result backed by a Phase review attempt", async () => {
+    const stage = "build-code", values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    const worker = workerFor(stage, values);
+    const attempt = values[values["reviews/results/review.json"].attempt_ref];
+    attempt.subject_kind = "phase";
+    attempt.phase_id = "phase-1";
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } }))
+      .rejects.toThrow(/attempt\/result (subject_kind|phase_id) mismatch/i);
+  });
+
   it("rejects a pass result when the provider's final raw output requires revision", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage), "reviews/results/review.json": reviewReceipt(stage),
@@ -219,6 +236,16 @@ describe("final cutover guard contracts", () => {
       "reviews/results/review.json": reviewReceipt(stage),
     };
     await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } })).rejects.toThrow(/same.*snapshot|snapshot.*tree/i);
+  });
+
+  it("rejects a Phase review as the final build-code review", async () => {
+    const stage = "build-code", values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage, "pass", tree, "phase"),
+    };
+    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } }))
+      .rejects.toThrow(/final review.*full-worktree/i);
   });
 
   it("rejects verify-code when tests/review no longer match the current tree", async () => {
