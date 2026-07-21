@@ -98,4 +98,11 @@ describe("wh-review production CLI", () => {
       await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/forbidden/);
     }
   });
+
+  it("forbids caller-selected providers before opening the task", async () => {
+    const { runReviewRound } = await import(cli.href);
+    for (const field of ["providers", "provider_allowlist", "providerAllowlist"]) {
+      await expect(runReviewRound({ [field]: ["claude-code"], task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/provider.*forbidden|configured 3rd-review/i);
+    }
+  });
 });

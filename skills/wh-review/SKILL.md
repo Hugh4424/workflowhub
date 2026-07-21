@@ -22,7 +22,7 @@ cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
 file in the same foreground command; task storage is only for canonical output.
 
 Before the first call, read this file and `stage-materials.json`; do not guess
-field names or provider aliases. A normal review input has this exact shape:
+field names. A normal review input has this exact shape:
 
 ```json
 {
@@ -31,7 +31,6 @@ field names or provider aliases. A normal review input has this exact shape:
   "task_id": "task",
   "stage": "build-spec",
   "host_provider": "codex",
-  "providers": ["claude-code"],
   "materials": {
     "raw_requirement": "...",
     "approved_decision": "...",
@@ -40,9 +39,10 @@ field names or provider aliases. A normal review input has this exact shape:
 }
 ```
 
-`host_provider` is the exact current host ID. `providers` contains exact IDs
-from the configured 3rd-review provider registry and must not contain the host;
-never shorten `claude-code` to `claude` or invent names such as `gemini`.
+`host_provider` is the exact current host ID. Callers must not select providers
+or models. `wh-review` selects every enabled heterologous provider from the
+first usable tier in the host-owned 3rd-review config. Changing routing belongs
+to that config, never to a Stage prompt or review request.
 Required `materials` keys come directly from `stage-materials.json`:
 
 - make-decision/direction: `raw_requirement`, `objective_facts`;
@@ -55,14 +55,14 @@ Required `materials` keys come directly from `stage-materials.json`:
 
 The runner supplies `review_instructions`; callers must not add it. A
 `build-code` phase review also adds `phase_id`. `verify-final` replaces
-`materials`, `host_provider`, and `providers` with `result_ref` and reuses the
+`materials` and `host_provider` with `result_ref` and reuses the
 same task/stage identity.
 
 There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. Local input validation fails before an attempt exists; fix the JSON from this public contract and call once. A provider or protocol failure creates an immutable unavailable attempt; do not retry the same material with guessed fields or provider names.
 
 ## Inputs
 
-`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, frozen materials, and provider selection. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, and commit ranges are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
+`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, and frozen materials. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, commit ranges, providers, and models are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
 
 For a normal worktree review, the host captures tracked changes, deletions, modes, symlinks, and non-ignored untracked files through a temporary Git index. It captures twice and rejects a changing source. For a `build-code` phase review, the host resolves the current phase's `phase-diff-scan.v1` evidence and regenerates the complete `base_tree..candidate_tree` diff itself. Runtime files are written outside the source repository.
 

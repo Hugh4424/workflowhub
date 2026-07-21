@@ -5,7 +5,7 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
-import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
+import { loadTrustedThirdReviewConfig, selectTrustedReviewProviders } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
 import { openTask } from "../../../core/task-handle.mjs";
 
@@ -55,12 +55,16 @@ export async function runReviewRound(input) {
   for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
     if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
   }
+  for (const forbidden of ["providers", "provider_allowlist", "providerAllowlist"]) {
+    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; providers come from the configured 3rd-review tier`);
+  }
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient();
+  const hostProvider = input.host_provider ?? input.hostProvider;
   const result = await runReview({
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
     stage: input.stage, phaseId: input.phase_id ?? input.phaseId ?? null, reviewTrack: input.review_track ?? input.reviewTrack ?? null, uiScope: input.ui_scope === true,
-    materials: input.materials, hostProvider: input.host_provider ?? input.hostProvider,
-    providers: input.providers ?? input.provider_allowlist ?? input.providerAllowlist,
+    materials: input.materials, hostProvider,
+    providers: selectTrustedReviewProviders(thirdReview.config, hostProvider),
     previousRuntimeIds: input.previous_runtime_ids ?? input.previousRuntimeIds ?? {}, providerClient: client,
   });
   return {

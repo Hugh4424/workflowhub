@@ -52,13 +52,14 @@ describe("simple wh-review contracts", () => {
 
   it("documents the complete public review input instead of forcing callers to guess", () => {
     const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
-    for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "providers", "materials"]) {
+    for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
     for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "test_evidence", "acceptance_evidence", "open_exceptions"]) {
       expect(skill, material).toContain(material);
     }
-    expect(skill).toMatch(/never shorten `claude-code` to `claude`/);
+    expect(skill).toMatch(/3rd-review config/i);
+    expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
     expect(skill).toMatch(/do not retry the same material with guessed fields or provider names/);
