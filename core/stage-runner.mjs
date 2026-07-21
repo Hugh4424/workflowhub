@@ -114,6 +114,7 @@ function officialWorkerContext(ctx) {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ bytes: raw, sha256: createHash("sha256").update(raw).digest("hex") });
     },
+    ...(ctx.stage === "verify-code" ? { readAcceptedBuildCode: () => ctx.kernel.readAccepted("build-code") } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
     ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({

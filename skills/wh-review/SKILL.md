@@ -7,6 +7,11 @@ description: Freeze the current source and stage evidence, ask independent provi
 
 `wh-review` captures one source snapshot, builds one complete material bundle, asks independent providers to review only that bundle, and publishes one result. It records quality facts; the human stage boundary makes the quality decision.
 
+Before starting a provider attempt, the runner checks canonical results for the
+same task, stage, track, subject identity, snapshot tree, and material ID. An
+existing valid `pass` is returned unchanged. Changed material or source creates
+one new attempt; unchanged approved material is never reviewed twice.
+
 ## Commands
 
 Production callers use only:

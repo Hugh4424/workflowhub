@@ -97,6 +97,20 @@ describe("TaskHandle", () => {
     expect(() => task.listStageAttemptRefs("build-code")).toThrow(/identity|changed|stale/i);
   });
 
+  it("enumerates only sorted regular canonical review results", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const resultsRoot = join(taskPath, "reviews", "results");
+    mkdirSync(resultsRoot, { recursive: true });
+    writeFileSync(join(resultsRoot, "z.json"), "{}");
+    writeFileSync(join(resultsRoot, "a.json"), "{}");
+    writeFileSync(join(resultsRoot, "ignored.txt"), "{}");
+    expect(task.listCanonicalReviewResultRefs()).toEqual([
+      "reviews/results/a.json",
+      "reviews/results/z.json",
+    ]);
+  });
+
   it("creates task.json once and opens it only with matching path and identity", () => {
     const { storageRoot, taskPath } = fixture();
     const manifest = {

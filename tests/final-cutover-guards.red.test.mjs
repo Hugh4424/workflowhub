@@ -10,9 +10,10 @@ describe("final cutover guard contracts", () => {
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "evidence/test.txt", output_hash: sha });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree, subjectKind = "worktree") => {
+    const reviewStage = stage === "verify-code" ? "build-code" : stage;
     const providerFinding = { severity: "major", path: "fixture", issue: "fixture", recommendation: "revise" };
     const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [providerFinding] };
-    return { version: "wh-review-result.v1", task_id: "task", stage, review_track: null,
+    return { version: "wh-review-result.v1", task_id: "task", stage: reviewStage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
       subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, base_tree: tree, candidate_tree: snapshotTree,
       material_id: sha, attempt_ref: `reviews/attempts/${stage}-attempt/attempt.json`,
@@ -23,14 +24,14 @@ describe("final cutover guard contracts", () => {
     for (const result of Object.values(values).filter((value) => value?.version === "wh-review-result.v1")) {
       const attemptId = result.attempt_ref.split("/")[2], outputRef = `reviews/attempts/${attemptId}/providers/fixture-provider.output.json`;
       const content = JSON.stringify(result.provider_results[0].output);
-      values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage, review_track: null,
+      values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: result.stage, review_track: null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
         subject_kind: result.subject_kind, phase_id: result.phase_id, base_tree: result.base_tree, candidate_tree: result.candidate_tree,
         provider_attempts: [{ provider: "fixture-provider", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
-      values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: attemptId,
+      values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage: result.stage, attempt_id: attemptId,
         provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex") };
     }
-    return { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }), readEvidence: (ref) => ({ value: values[ref], sha256: values[`${ref}:sha256`] ?? sha }), snapshotWorkspace: () => ({ tree: currentTree }) };
+    return { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }), readEvidence: (ref) => ({ value: values[ref], sha256: values[`${ref}:sha256`] ?? sha }), snapshotWorkspace: () => ({ tree: currentTree }), readAcceptedBuildCode: () => ({ facts: { review: { result_ref: "reviews/results/review.json", result_hash: sha } } }) };
   };
 
   it.each([
@@ -115,7 +116,7 @@ describe("final cutover guard contracts", () => {
       .resolves.toMatchObject({ facts: { tests: { exit_code: 1 } } });
   });
 
-  it("records revise_required instead of turning review into a gate", async () => {
+  it("keeps a revise_required build-code review as a verify quality fact", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
@@ -124,12 +125,12 @@ describe("final cutover guard contracts", () => {
     await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).resolves.toMatchObject({ facts: { review: { verdict: "revise_required" } } });
   });
 
-  it("serializes an unavailable review attempt as a real fact without inventing pass", async () => {
+  it("keeps an unavailable build-code review as a verify quality fact without another provider call", async () => {
     const stage = "verify-code", attemptRef = "reviews/attempts/verify-unavailable/attempt.json";
     const earlierOutputRef = "reviews/attempts/verify-unavailable/providers/fixture-provider.output.json";
     const earlierContent = JSON.stringify({ verdict: "pass", summary: "superseded output", findings: [] });
     const unavailable = {
-      version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage, review_track: null,
+      version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
       subject_kind: "worktree", phase_id: null, base_tree: tree, candidate_tree: tree,
       material_id: sha, provider_attempts: [{
@@ -144,20 +145,19 @@ describe("final cutover guard contracts", () => {
       "receipts/tests.json": testsReceipt(stage),
       [attemptRef]: unavailable,
       [earlierOutputRef]: {
-        schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: "verify-unavailable",
+        schema_version: "wh-review-provider-output.v1", task_id: "task", stage: "build-code", attempt_id: "verify-unavailable",
         provider: "fixture-provider", content: earlierContent, content_hash: createHash("sha256").update(earlierContent).digest("hex"),
       },
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    const result = await officialStageHandler(stage)(workerFor(stage, values), {
+    const worker = workerFor(stage, values);
+    worker.readAcceptedBuildCode = () => ({ facts: { review: { status: "unavailable", attempt_ref: attemptRef, attempt_hash: sha, snapshot_tree: tree } } });
+    await expect(officialStageHandler(stage)(worker, {
       receipts: { tests: "receipts/tests.json", review: attemptRef, evidence: "evidence/manifest.json" },
+    })).resolves.toMatchObject({
+      facts: { review: { status: "unavailable", attempt_ref: attemptRef, attempt_hash: sha } },
+      missing_items: [expect.stringMatching(/review unavailable/i)],
     });
-    expect(result).toMatchObject({
-      facts: { review: { status: "unavailable", attempt_ref: attemptRef, attempt_hash: sha, snapshot_tree: tree, error: unavailable.error } },
-      missing_items: [expect.stringMatching(/review.*unavailable.*PROVIDER_UNAVAILABLE/i)],
-    });
-    expect(result.facts.review).not.toHaveProperty("verdict", "pass");
-    expect(() => validateStageFacts(stage, result.facts)).not.toThrow();
   });
 
   it("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {
@@ -167,14 +167,14 @@ describe("final cutover guard contracts", () => {
     const values = {
       "receipts/tests.json": testsReceipt(stage),
       [attemptRef]: {
-        version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage, review_track: null,
+        version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: "build-code", review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         material_id: sha, provider_attempts: [{
           provider: "fixture-provider", status: "completed", session_id: "session", runtime_id: "runtime", output_ref: outputRef, error: null,
         }], terminal_status: "unavailable", error: { code: "PROVIDER_UNAVAILABLE", message: "claimed unavailable" },
       },
       [outputRef]: {
-        schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: attemptId,
+        schema_version: "wh-review-provider-output.v1", task_id: "task", stage: "build-code", attempt_id: attemptId,
         provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex"),
       },
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),

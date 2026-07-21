@@ -41,6 +41,7 @@
       "required_skills": ["qa-only", "verify-change", "test-strategy"],
       "optional_skills": [{ "name": "isolated-browser-qa", "when": "ui" }],
       "review_mode": "lens-only",
+      "invocation": "standalone-diagnostic-only",
       "delivery_mode": "file_only"
     }
   }

@@ -85,13 +85,12 @@ describe("simple wh-review contracts", () => {
     }
   });
 
-  it("requires canonical reviewer skills for both code stages", () => {
+  it("keeps verify-code reviewer lenses available only for standalone diagnostics", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
-    for (const stage of ["build-code", "verify-code"]) {
-      const required = plan.stages[stage].required_skills;
-      expect(required, `${stage} must declare a reviewer lens`).not.toHaveLength(0);
-      for (const skill of required) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
-    }
+    expect(plan.stages["build-code"].required_skills).not.toHaveLength(0);
+    expect(plan.stages["verify-code"].invocation).toBe("standalone-diagnostic-only");
+    for (const stage of ["build-code", "verify-code"])
+      for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
   });
 
   it("accepts a terminal attempt and keeps unavailable outside semantic results", () => {

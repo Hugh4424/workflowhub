@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
 import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
@@ -18,6 +19,60 @@ function sourceRecord(source) {
 
 function subjectRecord(source, phaseId) {
   return { subject_kind: phaseId ? "phase" : "worktree", phase_id: phaseId ?? null, base_tree: source.baseTree, candidate_tree: source.snapshotTree };
+}
+
+function reusablePass(task, { taskId, stage, reviewTrack, subject, snapshotTree, materialId }) {
+  for (const resultRef of task.listCanonicalReviewResultRefs()) {
+    let result;
+    try {
+      result = JSON.parse(task.readRecord(resultRef));
+      validateSchema("result", result);
+    } catch { continue; }
+    if (result.verdict !== "pass" || result.task_id !== taskId || result.stage !== stage ||
+        result.review_track !== reviewTrack || result.snapshot_tree !== snapshotTree || result.material_id !== materialId ||
+        result.subject_kind !== subject.subject_kind || result.phase_id !== subject.phase_id ||
+        result.base_tree !== subject.base_tree || result.candidate_tree !== subject.candidate_tree) continue;
+    let attempt;
+    try {
+      attempt = JSON.parse(task.readRecord(result.attempt_ref));
+      validateSchema("attempt", attempt);
+    } catch { continue; }
+    const attemptMatch = result.attempt_ref.match(/^reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
+    if (!attemptMatch || attempt.attempt_id !== attemptMatch[1] || attempt.terminal_status !== "semantic" || attempt.error !== null || attempt.task_id !== result.task_id ||
+        attempt.stage !== result.stage || attempt.review_track !== result.review_track ||
+        attempt.snapshot_tree !== result.snapshot_tree || attempt.material_id !== result.material_id ||
+        attempt.subject_kind !== result.subject_kind || attempt.phase_id !== result.phase_id ||
+        attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree) continue;
+    const parsed = [];
+    const providers = new Set();
+    let chainValid = true;
+    for (const providerResult of result.provider_results) {
+      if (providers.has(providerResult.provider)) { chainValid = false; break; }
+      providers.add(providerResult.provider);
+      const providerAttempt = [...attempt.provider_attempts].reverse().find((entry) => entry.provider === providerResult.provider && entry.status === "completed" && typeof entry.output_ref === "string");
+      if (!providerAttempt) { chainValid = false; break; }
+      try {
+        const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+        if (!providerAttempt.output_ref.startsWith(outputPrefix) || !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) { chainValid = false; break; }
+        const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
+        const review = parseReviewerOutput(output.content);
+        if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== taskId || output.stage !== stage ||
+            output.attempt_id !== attempt.attempt_id || output.provider !== providerResult.provider ||
+            output.content_hash !== createHash("sha256").update(output.content).digest("hex") || !isDeepStrictEqual(review, providerResult.output)) { chainValid = false; break; }
+        parsed.push({ provider: providerResult.provider, review });
+      } catch { chainValid = false; break; }
+    }
+    const aggregation = aggregateProviderResults(parsed, minimumReviewersFor(stage, reviewTrack));
+    const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
+    const expectedFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
+    if (!chainValid || aggregation.status !== "semantic" || aggregation.verdict !== "pass" ||
+        !isDeepStrictEqual(result.provider_results, expectedProviderResults) || !isDeepStrictEqual(result.findings, expectedFindings)) continue;
+    const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
+    return { status: "semantic", verdict: "pass", attemptRef: result.attempt_ref, resultRef, snapshotTree: result.snapshot_tree,
+      materialId: result.material_id, runtimeIds, subjectKind: result.subject_kind, phaseId: result.phase_id,
+      baseTree: result.base_tree, candidateTree: result.candidate_tree, reused: true };
+  }
+  return null;
 }
 
 function failedProvider(provider, error) {
@@ -83,6 +138,8 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   const subject = subjectRecord(source, phaseId);
   const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope) };
   const bundle = buildMaterials({ reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, reviewTrack, uiScope, materials: fixedMaterials });
+  const reused = reusablePass(taskHandle, { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
+  if (reused) return reused;
   const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
   const reviewed = await Promise.all(providers.map((provider) => reviewOne({ providerClient, provider, hostProvider, materials: bundle, continuationRuntimeId: previousRuntimeIds[provider] ?? null })));
   const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));

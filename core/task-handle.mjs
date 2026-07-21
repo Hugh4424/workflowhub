@@ -641,6 +641,33 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate only canonical wh-review result records. */
+    listCanonicalReviewResultRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const resultsRoot = resolve(reviewsRoot, "results");
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, resultsRoot, "review results directory");
+      if (!existsSync(resultsRoot)) return [];
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const resultsIdentity = directorySnapshot(realTaskPath, resultsRoot);
+      const refs = readdirSync(resultsRoot, { withFileTypes: true })
+        .filter((entry) => entry.name.endsWith(".json"))
+        .map((entry) => {
+          const candidate = resolve(resultsRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile() || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(entry.name)) {
+            throw new Error(`canonical review result must be a regular non-symlink JSON file: ${entry.name}`);
+          }
+          return `reviews/results/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(resultsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     writeRecordAtomic(relativePath, data, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();

@@ -82,7 +82,7 @@ describe("five-stage v2 business contract", () => {
   it("keeps independent review, fresh tests, browser QA, and confirmed close", () => {
     expect(readStage("make-decision")).toMatch(/independent direction review/i);
     expect(readStage("build-code")).toMatch(/independent code review[\s\S]*fresh test/i);
-    expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*independent verification review/i);
+    expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*reuse[\s\S]*accepted build-code[\s\S]*final review/i);
     expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*separate close authorization[\s\S]*Never reuse the verify-code confirmation ref/i);
   });
 

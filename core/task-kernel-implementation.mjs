@@ -529,7 +529,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const failurePublication = verifyFailure.verify_failure_publication;
     if (!failurePublication || failurePublication.previous_accepted_ref !== previousVerify.accepted_ref || failurePublication.previous_accepted_hash !== previousVerify.accepted_hash || failurePublication.previous_attempt_ref !== previousVerify.accepted.attempt_ref || failurePublication.previous_attempt_hash !== String(previousVerify.accepted.integrity_hash).replace(/^sha256:/, "")) throw new Error("verify-code passing publication active build does not descend from the accepted verify result");
     if (previousVerify.facts.tests.receipt_hash === publication.test_receipt_hash) throw new Error("verify-code passing publication requires fresh test receipt content");
-    if (previousVerify.facts.review.result_hash === publication.review_result_hash) throw new Error("verify-code passing publication requires fresh independent review content");
+    if (previousVerify.facts.review.result_hash === publication.review_result_hash) throw new Error("verify-code passing publication requires the revised build's final review");
     const oldEvidence = previousVerify.facts.evidence_refs.map(readPassingEvidence);
     const oldEvidenceHashes = new Set(oldEvidence.map((entry) => entry.hash));
     if (publication.acceptance_evidence_refs.some((entry) => oldEvidenceHashes.has(entry.sha256))) throw new Error("verify-code passing publication requires fresh acceptance evidence content");
@@ -545,7 +545,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const reviewRaw = task.readRecord(publication.review_result_ref);
     if (hash(reviewRaw) !== publication.review_result_hash) throw new Error("verify-code passing review result changed before publication");
     const review = parseJson(reviewRaw, "verify-code passing review result");
-    if (review.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId || review.stage !== "verify-code" || review.verdict !== facts.review.verdict || review.snapshot_tree !== facts.review.snapshot_tree || facts.review.result_ref !== publication.review_result_ref || facts.review.result_hash !== publication.review_result_hash) throw new Error("verify-code passing review result provenance mismatch");
+    if (review.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId || review.stage !== "build-code" || review.verdict !== "pass" || review.verdict !== facts.review.verdict || review.snapshot_tree !== facts.review.snapshot_tree || facts.review.result_ref !== publication.review_result_ref || facts.review.result_hash !== publication.review_result_hash || activeBuild.facts.review.result_ref !== publication.review_result_ref || activeBuild.facts.review.result_hash !== publication.review_result_hash) throw new Error("verify-code passing review result provenance mismatch");
 
     if (JSON.stringify(facts.evidence_refs) !== JSON.stringify(publication.acceptance_evidence_refs)) throw new Error("verify-code passing acceptance evidence binding mismatch");
     const criterionIds = new Set();

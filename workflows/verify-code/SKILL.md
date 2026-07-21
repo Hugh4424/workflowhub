@@ -42,8 +42,13 @@ Create the evidence aggregate with `node scripts/stage-runtime.mjs receipt
 That input has exactly:
 `{"refs":[{"ref":"<leaf ref returned by the runtime>","sha256":"<leaf hash returned by the runtime>"}]}`.
 
-When invoking `wh-review`, pass `materials.acceptance_evidence` as structured
-canonical roots, never as prose or Markdown path references:
+Verify-code does not run a second full-tree review. It reuses the active
+accepted build-code result's canonical final full-worktree review. Pass that
+exact final review ref in the verify run input; the runtime authenticates the
+result or unavailable attempt, its provider evidence, and the current snapshot.
+`pass`, `revise_required`, and `unavailable` remain visible quality facts for
+the human verify boundary; verify-code does not invoke review providers again.
+Fresh verification evidence remains structured canonical roots:
 
 ```json
 {
@@ -56,19 +61,19 @@ canonical roots, never as prose or Markdown path references:
 ```
 
 Use only writer-returned refs and hashes; do not guess them or copy hashes from
-display text. The review bundle recursively freezes and verifies both roots and
-their referenced closure before provider delivery. Report test totals from the
+display text. The canonical evidence writer recursively verifies both roots and
+their referenced closure before publication. Report test totals from the
 canonical test output. If parameterized or unchanged tests make a static
 `test()` source count differ, explain the difference instead of treating that
 source count as executed evidence.
 
-Declared runtime components: conditional `test-strategy`, `wh-review`, conditional
-`isolated-browser-qa`, and the review lenses declared by the manifest.
+Declared runtime components: conditional `test-strategy` and conditional
+`isolated-browser-qa`.
 
 ## Inputs and outputs
 
 - Reads: accepted build-code result and the named design artifacts it cites.
-- Writes: evidence, reviews, append-only verify-code attempt, and confirmed
+- Writes: evidence, append-only verify-code attempt, and confirmed
   close operation records through controlled task capabilities.
 - Product code is read-only during verification. A required fix returns to a
   new build-code attempt.
@@ -88,8 +93,8 @@ After that replacement build is accepted, run verify-code again from its new
 accepted snapshot, tests, and review. If a canonical component receipt already
 exists from the prior accepted verification, only this controlled fresh-verify
 path may use `receipt --revision=true --recover=<previous-receipt-ref>`.
-Normal verify-code remains create-only and never reuses an old test or review
-verdict.
+Normal verify-code remains create-only for tests and acceptance evidence. It
+reuses only the active accepted build-code final review for the identical tree.
 
 If verify-code is already accepted but current Workspace evidence exposes a
 lineage failure, do not edit or bypass its accepted record. First write the new
@@ -109,8 +114,8 @@ fresh passing verification through
 --project=<project> --task=<task>
 --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
-kernel requires a new active accepted build and fresh passing test, independent
-review, and acceptance-evidence records. The active build's accepted tests and
+kernel requires a new active accepted build, fresh passing tests and acceptance
+evidence, plus that build's accepted final full-worktree review. The active build's accepted tests and
 review snapshots must match those fresh materials and the live Workspace; a
 build accepted at snapshot A cannot validate later Workspace B evidence. The
 kernel then binds their hashes plus the old
@@ -160,10 +165,12 @@ idempotent. Other attempts against a closed stage remain rejected.
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-6. Run independent verification review from the fresh test receipt and the
-   canonical evidence aggregate.
-7. After review, create `$TMP_DIR/run.json` with exactly:
-   `{"receipts":{"tests":"receipts/verify-tests.json","review":"<canonical review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
+6. Read the active accepted build-code final review ref. Do not call a review
+   provider again. The runtime rejects a Phase result, wrong task, changed
+   bytes, or a snapshot different from the fresh tests/current Workspace. Keep
+   `revise_required` or `unavailable` as quality facts for the human boundary.
+7. After evidence assembly, create `$TMP_DIR/run.json` with exactly:
+   `{"receipts":{"tests":"receipts/verify-tests.json","review":"<active accepted build-code final review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
    Publish the append-only pass or fail attempt with
    `node scripts/stage-runtime.mjs run --stage=verify-code
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.

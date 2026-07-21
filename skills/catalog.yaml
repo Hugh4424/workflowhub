@@ -219,12 +219,12 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 59d6c3f27f36ea71e1324ef952bc84418a29a32f94b06fdfa9111ee7e2de471f
+    local_bundle_hash: 6ab05df07d71b08e3a198925dc393531ab6816fd6579b0006979f77e35b7b915
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
-    design_idea: frozen materials、attempt/result、session 可失效加速、verify-final
-    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    design_idea: frozen materials、attempt/result、相同 PASS 精确复用、verify-final
+    used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream: []
     local_changes: workflowhub 原生 V4 实现
     dependency_closure: [skills/wh-review]
@@ -289,7 +289,8 @@ skills:
     status: adapted
     purpose: 用户结果、复现证据和遗漏场景验收 lens
     design_idea: report-only acceptance review
-    used_by_stages: [verify-code]
+    used_by_stages: []
+    standalone: true
     upstream: [{ <<: *gstack, path: "qa-only", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only" }]
     local_changes: 去浏览器 daemon；只消费 sealed packet
     dependency_closure: [skills/qa-only]
@@ -302,7 +303,8 @@ skills:
     status: adapted
     purpose: 验收闭环和验证证据 lens
     design_idea: 对 supplied evidence 做 report-only 检查
-    used_by_stages: [verify-code]
+    used_by_stages: []
+    standalone: true
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/verify-change", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change" }]
     local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
     dependency_closure: [skills/verify-change]
