@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { reviewSourceForWorkspace } from "../../../core/workspace.mjs";
 import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
 
 function fail(code, message) {
@@ -90,8 +91,23 @@ function capture(root, head, indexFile) {
   return text(root, ["write-tree"], { env });
 }
 
-export function captureReviewSource({ sourceRoot, targetRepoRoot, reviewDataRoot, betweenCaptures } = {}) {
-  if (!(sourceRoot && targetRepoRoot && reviewDataRoot)) throw new TypeError("sourceRoot, targetRepoRoot, and reviewDataRoot are required");
+function isAncestor(root, ancestor, descendant) {
+  try { execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: root, stdio: "ignore" }); return true; }
+  catch (error) {
+    if (error.status === 1) return false;
+    fail("SOURCE_UNAVAILABLE", error.stderr?.toString().trim() || error.message);
+  }
+}
+
+export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, baselineCommit, reviewDataRoot, betweenCaptures } = {}) {
+  if (!reviewDataRoot) throw new TypeError("reviewDataRoot is required");
+  if (workspace !== undefined) {
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined || baselineCommit !== undefined) {
+      throw new TypeError("Workspace review forbids sourceRoot, targetRepoRoot, and baselineCommit overrides");
+    }
+    ({ worktreeRoot: sourceRoot, targetRepoRoot, baselineCommit } = reviewSourceForWorkspace(workspace));
+  }
+  if (!(sourceRoot && targetRepoRoot)) throw new TypeError("sourceRoot and targetRepoRoot are required");
   const requestedSource = resolve(sourceRoot);
   const source = realpathSync(requestedSource);
   const target = realpathSync(targetRepoRoot);
@@ -105,9 +121,14 @@ export function captureReviewSource({ sourceRoot, targetRepoRoot, reviewDataRoot
 
   const targetCommit = text(target, ["rev-parse", "HEAD"]);
   const capturedHead = text(source, ["rev-parse", "HEAD"]);
-  const bases = text(source, ["merge-base", "--all", targetCommit, capturedHead]).split(/\s+/).filter(Boolean);
-  if (bases.length !== 1) fail("SOURCE_UNAVAILABLE", `expected exactly one merge-base, got ${bases.length}`);
-  const baseCommit = bases[0];
+  if (baselineCommit === undefined) {
+    const bases = text(source, ["merge-base", "--all", targetCommit, capturedHead]).split(/\s+/).filter(Boolean);
+    if (bases.length !== 1) fail("SOURCE_UNAVAILABLE", `expected exactly one merge-base, got ${bases.length}`);
+    baselineCommit = bases[0];
+  }
+  git(source, ["cat-file", "-e", `${baselineCommit}^{commit}`]);
+  if (!isAncestor(source, baselineCommit, capturedHead)) fail("SOURCE_UNAVAILABLE", "Workspace baseline commit must be an ancestor of captured HEAD");
+  const baseCommit = baselineCommit;
   const baseTree = text(source, ["rev-parse", `${baseCommit}^{tree}`]);
   const temp = mkdtempSync(resolve(data, "capture-"));
   try {

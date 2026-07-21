@@ -1,21 +1,28 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   bootstrapStage,
   prepareMakeDecisionWorkspace,
   validateMakeDecisionWorkspaceAttempt,
 } from "../core/stage-context.mjs";
-import { acceptStageAttempt, confirmStageAttempt, runOfficialStage } from "../core/stage-runner.mjs";
+import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
-import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
+import {
+  validateAcceptanceEvidence,
+  writeOfficialComponentReceipt,
+} from "../core/canonical-receipt-writer.mjs";
+import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
+import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
+const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 function parseArgs(argv) {
   const [command, ...raw] = argv;
@@ -25,8 +32,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "artifact", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "publish-acceptance-evidence", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|publish-acceptance-evidence|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -36,11 +43,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
+  if (Object.prototype.hasOwnProperty.call(values, "runner-root")) throw new TypeError("--runner-root is forbidden; stage-runtime authenticates its own repository root");
   if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
+  if (command === "publish-acceptance-evidence" && (values.stage !== "verify-code" || !values.input)) throw new TypeError("publish-acceptance-evidence requires --stage=verify-code --input=<acceptance-evidence.json>");
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
   if (command === "publish-verify-failure" && (values.stage !== "verify-code" || !values["failure-evidence"])) throw new TypeError("publish-verify-failure requires --stage=verify-code --failure-evidence=<evidence/ref.json>");
+  if (command === "publish-verify-passing" && (values.stage !== "verify-code" || !values.input)) throw new TypeError("publish-verify-passing requires --stage=verify-code --input=<component-receipts.json>");
   if (Object.prototype.hasOwnProperty.call(values, "reopen") && (command !== "run" || values.stage !== "build-code")) throw new TypeError("--reopen is only valid for build-code run");
   if (Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
   if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
@@ -50,8 +61,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     mode: "launcher",
     projectName: values.project,
     taskId: values.task,
+    runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["receipt", "run"]).has(command)
+  const input = new Set(["receipt", "capture-tests", "publish-acceptance-evidence", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -69,6 +81,47 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });
+  if (command === "publish-verify-passing") return publishOfficialVerifyPassing(context, input);
+  if (command === "capture-tests") {
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.command !== "string"
+      || typeof input.receipt_ref !== "string"
+      || (input.output_ref !== undefined && typeof input.output_ref !== "string")
+      || Object.keys(input).some((key) => !new Set(["command", "receipt_ref", "output_ref"]).has(key))) {
+      throw new TypeError("test capture input requires command, receipt_ref, and optional output_ref only");
+    }
+    const capture = values.stage === "build-code" ? captureBuildCodeTests : captureVerifyCodeTests;
+    return capture(input.command, input.receipt_ref, {
+      task: context.task,
+      workspace: context.workspace,
+      ...(input.output_ref === undefined ? {} : { outputRef: input.output_ref }),
+    });
+  }
+  if (command === "publish-acceptance-evidence") {
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.acceptance_criterion_id !== "string"
+      || !new Set(["pass", "fail"]).has(input.result)
+      || !Array.isArray(input.refs)
+      || Object.keys(input).some((key) => !new Set(["acceptance_criterion_id", "result", "refs"]).has(key))) {
+      throw new TypeError("acceptance evidence input requires acceptance_criterion_id, result, and refs only");
+    }
+    const value = validateAcceptanceEvidence({
+      schema_version: "acceptance-evidence.v1",
+      acceptance_criterion_id: input.acceptance_criterion_id,
+      result: input.result,
+      refs: input.refs,
+    });
+    for (const nested of value.refs) {
+      const raw = context.task.readRecord(nested.ref);
+      const actual = createHash("sha256").update(raw).digest("hex");
+      if (actual !== nested.sha256) throw new Error(`acceptance evidence nested ref hash mismatch: ${nested.ref}`);
+    }
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    const sha256 = createHash("sha256").update(raw).digest("hex");
+    const ref = `evidence/acceptance-${sha256}.json`;
+    context.kernel.publishCanonicalRecord(ref, raw);
+    return { evidence_ref: ref, evidence_hash: sha256, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result };
+  }
   if (values.stage === "make-decision" && command === "run") context = prepareMakeDecisionWorkspace(context);
   if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
   if (command === "receipt") {

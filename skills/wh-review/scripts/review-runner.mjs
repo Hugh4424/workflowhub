@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { realpathSync } from "node:fs";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { createTaskKernel } from "../../../core/task-kernel.mjs";
-import { assertCandidateWorkspace } from "../../../core/workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
 import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
@@ -62,7 +60,7 @@ async function reviewOne({ providerClient, provider, hostProvider, materials, co
   }
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, hostProvider, providers, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
+export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, hostProvider, providers, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (new Set(providers).size !== providers.length) throw new TypeError("providers must be unique");
@@ -75,17 +73,13 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
     sourceRoot = candidate.worktreeRoot;
     targetRepoRoot = candidate.targetRepoRoot;
   } else if (stage !== "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
-    const decision = createTaskKernel(taskHandle).readAccepted("make-decision");
-    if (realpathSync(sourceRoot) !== realpathSync(decision.facts.worktree_root)) {
-      throw new Error("review source must be the exact worktree from accepted make-decision facts");
-    }
-    if (realpathSync(targetRepoRoot) !== realpathSync(taskHandle.manifest.target_repo_root)) {
-      throw new Error("review target must match the authenticated task manifest");
-    }
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree review forbids naked source/target paths; use Workspace");
+    workspace = assertWorkspace(workspace);
+    if (phaseId) sourceRoot = workspace.worktreeRoot;
   }
   const source = phaseId
     ? capturePhaseSource({ sourceRoot, task: taskHandle, phaseId })
-    : captureSource({ sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
+    : captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
   const subject = subjectRecord(source, phaseId);
   const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope) };
   const bundle = buildMaterials({ reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, reviewTrack, uiScope, materials: fixedMaterials });
@@ -126,7 +120,7 @@ export function runReviewFixture(options) {
   return runReview({ ...options, fixtureSourceToken: FIXTURE_SOURCE_TOKEN });
 }
 
-export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, candidateWorkspace, task, attachmentRoot, taskId = null, stage = null, reviewTrack = undefined, captureSource = captureSourceDefault } = {}) {
+export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId = null, stage = null, reviewTrack = undefined, captureSource = captureSourceDefault } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (typeof resultRef !== "string" || !resultRef.startsWith("reviews/results/")) throw new Error("RESULT_REF_INVALID: canonical result ref required");
   let result;
@@ -143,8 +137,11 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, candidateWo
     const candidate = assertCandidateWorkspace(candidateWorkspace);
     sourceRoot = candidate.worktreeRoot;
     targetRepoRoot = candidate.targetRepoRoot;
+  } else if (captureSource === captureSourceDefault) {
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree verification forbids naked source/target paths; use Workspace");
+    workspace = assertWorkspace(workspace);
   }
-  const current = captureSource({ sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
+  const current = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
   const subjectMismatch = result.subject_kind === "worktree" && (current.baseTree !== result.base_tree || current.snapshotTree !== result.candidate_tree);
   if (subjectMismatch || current.snapshotTree !== result.snapshot_tree || current.targetCommit !== result.source.target_commit) { const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error; }
   return { status: "finalized", snapshotTree: current.snapshotTree };

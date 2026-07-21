@@ -8,27 +8,56 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only
+`core/stage-context.mjs` is the external runner implementation. Consume only
 `bootstrapStage("build-spec", ...)` output. Required capabilities:
 `ctx.task`, `ctx.kernel`, `ctx.workspace`, and `ctx.artifacts`.
+Never derive task identity or paths from cwd, a repository, or an issue
+identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-spec
 is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
 
-Write and revise the draft through the named ArtifactDir writer. The public
-entry is `node scripts/stage-runtime.mjs artifact --stage=build-spec
---project=<project> --task=<task> --name=spec.md --input=<draft-file>`.
-Run it before each review so the review snapshot contains the exact `spec.md`
-under review. A temporary file may be authoring input, but it is never the
-reviewed artifact by itself. Do not create
-the official spec receipt before review is finished. After review, create that
-receipt exactly once with `stage-runtime.mjs receipt --stage=build-spec
---project=<project> --task=<task> --component=spec
---input=<content-payload.json>`, then pass it with the canonical `wh-review`
-result or unavailable-attempt ref as `spec` and `review`.
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry.
+`stage-runtime.mjs` has no `--help` command. Build-spec must not call `prepare`,
+`confirm`, or a separate `accept`, and must never pass `--runner-root`.
+
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-spec.XXXXXX")"`.
+Every caller-owned draft, receipt payload, run input, or review request must
+stay under `$TMP_DIR`, never in the target base repository or CandidateWorkspace.
+The `artifact` command below is the only route that copies the reviewed draft
+into the CandidateWorkspace; canonical receipts remain owned by TaskKernel.
+
+Use this complete public sequence without inventing flags or input shapes:
+
+1. Before each review, publish the exact draft under review:
+   `node scripts/stage-runtime.mjs artifact --stage=build-spec
+   --project=<project> --task=<task> --name=spec.md
+   --input=$TMP_DIR/draft-spec.md`.
+2. After review is finished and without changing `spec.md`, create the official
+   receipt once:
+   `node scripts/stage-runtime.mjs receipt --stage=build-spec
+   --project=<project> --task=<task> --component=spec
+   --input=$TMP_DIR/spec-receipt.json`.
+   The input shape is exactly
+   `{"content":"<exact final spec markdown>"}`.
+3. Create `$TMP_DIR/run.json` with exactly:
+   `{"receipts":{"spec":"receipts/spec.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+4. Publish and automatically accept the stage:
+   `node scripts/stage-runtime.mjs run --stage=build-spec
+   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
+   through its normal OS temporary lifecycle. Never treat the temporary path as
+   a stage artifact, evidence ref, or handoff item.
+
+A temporary file may be authoring input, but it is never the reviewed artifact
+by itself. Do not create the official spec receipt before review is finished.
 
 The accepted make-decision result is read only through `ctx.kernel`. Design
 files are accessed only through ArtifactDir. Components receive the content of
@@ -66,9 +95,12 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and
    provenance; never describe it as a pass or invent a result.
-9. Present the progress brief from `docs/human-brief-template.md`. The trusted
-   runtime immediately runs `accept --attempt=<attempt>` without a confirmation,
-   creates the checkpoint, and accepts the attempt.
+9. Present a plain-language progress brief with exactly these four items:
+   current status; next step and owner; whether the user must act; and, only
+   when action is required, the problem, a recommended option, and every
+   option's consequence and risk. The trusted runtime immediately runs
+   `accept --attempt=<attempt>` without a confirmation, creates the checkpoint,
+   and accepts the attempt.
    Checkpoint failure is an integrity error; quality facts never become a gate.
 
 No component may use shell location, repository discovery, or ad-hoc product

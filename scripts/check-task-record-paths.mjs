@@ -51,6 +51,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "core/__tests__/task-kernel-publish.test.mjs",
   "core/__tests__/task-kernel-security.test.mjs",
   "core/__tests__/task-target-repo-migration.test.mjs",
+  "core/__tests__/task-runner-root-migration.test.mjs",
   "core/__tests__/workspace-manager.test.mjs",
   "core/__tests__/workspace-runner.test.mjs",
   "scripts/__tests__/ci-chain-check.test.mjs",
@@ -76,6 +77,7 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["core/task-handle.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/stage-context.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/runtime-mode.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["scripts/task-migrate-runner-root.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
 ]);
 
@@ -89,7 +91,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["core/git-checkpoint.mjs", "verified Git checkpoint authority"],
   ["core/canonical-receipt-writer.mjs", "canonical evidence authority"],
   ["core/git-worktree-snapshot.mjs", "private Git snapshot temp index"],
-  ["core/task-close.mjs", "authenticated close archive worktree authority"],
+  ["core/task-close.mjs", "confirmed plan-bound delivery close authority"],
   ["metrics/collector.mjs", "launcher-branded global metrics authority"],
   ["skills/wh-review/scripts/review-materials.mjs", "trusted attachment packet authority"],
   ["skills/wh-review/scripts/review-provider-client.mjs", "private provider transport temp files"],

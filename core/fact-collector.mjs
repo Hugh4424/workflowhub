@@ -3,7 +3,6 @@ import path from "node:path";
 import yaml from "js-yaml";
 
 import { artifactReference, assertArtifactDir } from "./artifact-dir.mjs";
-import { contentHash } from "./canonical-source.mjs";
 import { checkSkillClosure } from "./check-skill-closure.mjs";
 import {
   createArtifactRecord,
@@ -191,10 +190,15 @@ function referenceRecord(preflight, ref) {
   }
 }
 
-function artifactForReference(preflight, { kind, ref, source_ref, run_id = null, stage = null, required = true }) {
+function trustedContentHash(value) {
+  const hash = typeof value === "string" ? value.replace(/^sha256:/, "") : "";
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : null;
+}
+
+function artifactForReference(preflight, { kind, ref, source_ref, run_id = null, stage = null, required = true, content_hash = null }) {
   try {
-    const raw = referenceRecord(preflight, ref);
-    return createArtifactRecord({ record_kind: kind, id: ref, run_id, stage, status: "present", ref, required, content_hash: contentHash(String(raw)), source_ref });
+    referenceRecord(preflight, ref);
+    return createArtifactRecord({ record_kind: kind, id: ref, run_id, stage, status: "present", ref, required, content_hash: trustedContentHash(content_hash), source_ref });
   } catch (error) {
     const missing = error?.code === "ENOENT";
     return createArtifactRecord({ record_kind: kind, id: ref, run_id, stage, status: missing ? "missing" : "unknown", ref, required, source_ref, reason: missing ? "not_found" : "read_error", error: missing ? null : safeError("READ_ERROR", "READ_ERROR") });
@@ -202,14 +206,15 @@ function artifactForReference(preflight, { kind, ref, source_ref, run_id = null,
 }
 
 function addFactRefs(target, facts, sourceRef, stage, runId) {
-  const add = (kind, ref) => { if (text(ref) && safeRef(ref)) target.push({ kind, ref, source_ref: sourceRef, stage, run_id: runId }); };
-  for (const key of ["decision_ref", "spec_ref", "plan_ref", "tasks_ref"]) add("artifact", facts?.[key]);
+  const add = (kind, ref, content_hash = null) => { if (text(ref) && safeRef(ref)) target.push({ kind, ref, content_hash: trustedContentHash(content_hash), source_ref: sourceRef, stage, run_id: runId }); };
+  add("artifact", facts?.decision_ref, facts?.decision_hash);
+  for (const key of ["spec_ref", "plan_ref", "tasks_ref"]) add("artifact", facts?.[key]);
   for (const ref of facts?.changed ?? []) add("artifact", ref);
-  for (const item of [facts?.review, ...(Object.values(facts?.reviews ?? {}))]) add("review", item?.result_ref);
-  add("test", facts?.tests?.receipt_ref); add("test", facts?.tests?.output_ref);
-  for (const entry of facts?.evidence_refs ?? []) add("evidence", typeof entry === "string" ? entry : entry?.ref);
-  for (const entry of facts?.handoff_refs ?? []) add("handoff", entry?.ref ?? entry);
-  add("handoff", facts?.handoff_ref);
+  for (const item of [facts?.review, ...(Object.values(facts?.reviews ?? {}))]) add("review", item?.result_ref, item?.result_hash);
+  add("test", facts?.tests?.receipt_ref, facts?.tests?.receipt_hash); add("test", facts?.tests?.output_ref, facts?.tests?.output_hash);
+  for (const entry of facts?.evidence_refs ?? []) add("evidence", typeof entry === "string" ? entry : entry?.ref, entry?.sha256);
+  for (const entry of facts?.handoff_refs ?? []) add("handoff", entry?.ref ?? entry, entry?.sha256);
+  add("handoff", facts?.handoff_ref, facts?.handoff_hash);
 }
 
 function readAttempt(preflight, ref, stage) {
@@ -228,11 +233,15 @@ export function buildArtifactProjection(preflight) {
     const refs = new Set(preflight.task.listStageAttemptRefs(stage));
     try {
       const accepted = preflight.kernel.readAccepted(stage).accepted;
-      if (/^attempt-[0-9]{4}\.json$/.test(accepted?.attempt_ref ?? "")) refs.add(`results/${stage}/${accepted.attempt_ref}`);
+      if (/^attempt-[0-9]{4}\.json$/.test(accepted?.attempt_ref ?? "")) {
+        const ref = `results/${stage}/${accepted.attempt_ref}`;
+        refs.add(ref);
+        attempts.push({ stage, ref, content_hash: trustedContentHash(accepted.integrity_hash) });
+      }
     } catch (error) { if (error?.code && error.code !== "ENOENT") candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:accepted`, stage, status: "unknown", ref: `results/${stage}/accepted.json`, required: false, source_ref: `results/${stage}/accepted.json`, reason: "read_error", error: safeError("READ_ERROR", "READ_ERROR") })); }
-    for (const ref of [...refs].sort()) attempts.push({ stage, ref });
+    for (const ref of [...refs].sort()) if (!attempts.some((item) => item.stage === stage && item.ref === ref)) attempts.push({ stage, ref, content_hash: null });
   }
-  for (const { stage, ref } of attempts) {
+  for (const { stage, ref, content_hash } of attempts) {
     const parsed = readAttempt(preflight, ref, stage);
     if (parsed.error) {
       const missing = parsed.error?.code === "ENOENT";
@@ -240,7 +249,7 @@ export function buildArtifactProjection(preflight) {
       continue;
     }
     const runId = text(parsed.value.run_id) ? parsed.value.run_id : null;
-    candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:${path.basename(ref)}`, run_id: runId, stage, status: "present", ref, required: true, content_hash: contentHash(parsed.value), source_ref: ref }));
+    candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:${path.basename(ref)}`, run_id: runId, stage, status: "present", ref, required: true, content_hash, source_ref: ref }));
     const declared = [];
     addFactRefs(declared, parsed.value.facts, ref, stage, runId);
     for (const item of parsed.value.evidence_refs ?? []) if (plain(item)) addFactRefs(declared, { evidence_refs: [item] }, ref, stage, runId);
@@ -283,9 +292,9 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   const facts = [
     createHealthFact({ fact_id: "health:task_dir", domain: "task_dir", status: "present", observed_value: true, source_ref: "task.json" }),
     createHealthFact({ fact_id: "health:worktree", domain: "worktree", status: "present", observed_value: preflight.snapshot.tree, source_ref: "results/make-decision/accepted.json" }),
-    createHealthFact({ fact_id: "health:review", domain: "review", status: artifactRefs.some((item) => item.status === "unknown") ? "unknown" : artifactRefs.length ? "present" : "unknown", observed_value: artifactRefs.length, source_ref: artifactRefs[0]?.source_ref ?? null }),
-    createHealthFact({ fact_id: "health:verify", domain: "verify", status: verify.some((item) => item.status === "unknown") ? "unknown" : verify.length ? "present" : "unknown", observed_value: verify.length, source_ref: verify[0]?.source_ref ?? null }),
-    createHealthFact({ fact_id: "health:handoff", domain: "handoff", status: handoff.some((item) => item.status === "unknown") ? "unknown" : handoff.length ? "present" : "unknown", observed_value: handoff.length, source_ref: handoff[0]?.source_ref ?? null }),
+    createHealthFact({ fact_id: "health:review", domain: "review", status: artifactRefs.some((item) => item.status === "unknown") ? "unknown" : artifactRefs.some((item) => item.status === "missing") ? "missing" : artifactRefs.length ? "present" : "unknown", observed_value: artifactRefs.length, source_ref: artifactRefs[0]?.source_ref ?? null }),
+    createHealthFact({ fact_id: "health:verify", domain: "verify", status: verify.some((item) => item.status === "unknown") ? "unknown" : verify.some((item) => item.status === "missing") ? "missing" : verify.length ? "present" : "unknown", observed_value: verify.length, source_ref: verify[0]?.source_ref ?? null }),
+    createHealthFact({ fact_id: "health:handoff", domain: "handoff", status: handoff.some((item) => item.status === "unknown") ? "unknown" : handoff.some((item) => item.status === "missing") ? "missing" : handoff.length ? "present" : "unknown", observed_value: handoff.length, source_ref: handoff[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:transcript", domain: "transcript", status: transcriptStatus, observed_value: transcript.filter((item) => item.status === "present").length, source_ref: transcript[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:artifact_missing", domain: "artifact_missing", status: artifactStatus, observed_value: artifacts.filter((item) => item.status === "missing").length, source_ref: artifacts.find((item) => item.status !== "present")?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:skill_missing", domain: "skill_missing", status: skills.closure.ok ? "present" : "missing", observed_value: skills.closure.ok, source_ref: "skills/catalog.yaml", reason: skills.closure.ok ? null : "not_found" }),

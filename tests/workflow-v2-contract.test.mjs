@@ -17,6 +17,30 @@ describe("five-stage v2 business contract", () => {
     expect(skill).not.toMatch(/parseTaskDir|resolveTaskRecordPaths|task_tracking_root|worktree\.json/);
   });
 
+  it("keeps every Stage Skill self-contained while the launcher owns the runner", () => {
+    for (const stage of stages) {
+      const skill = readStage(stage);
+      const compact = skill.replace(/\s+/g, " ");
+      expect(compact).toMatch(/Consume only (?:that launcher-supplied|the branded|`bootstrapStage)[\s\S]{0,120}StageContext|Consume only `bootstrapStage/i);
+      expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an issue identifier/i);
+      expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`[\s\S]*authenticated `runner_root`/i);
+      expect(compact).toMatch(/never search for or copy those runner files into the target repository/i);
+      expect(skill).not.toMatch(/docs\/contracts\/task-context\.md|config\/workflowhub\.yaml/);
+    }
+    expect(readStage("verify-code")).not.toMatch(/workflows\/build-code\/SKILL\.md/);
+  });
+
+  it("keeps human briefs inline and the verify repair handoff complete", () => {
+    for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = readStage(stage);
+      const compact = skill.replace(/\s+/g, " ");
+      expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
+      expect(compact).toMatch(/recommended option[\s\S]{0,180}(?:every option's consequence and risk|consequence[\s\S]*risk)/i);
+      expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
+    }
+    expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs reopen --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable reopen\s+ref[\s\S]*upstream Code Builder/i);
+  });
+
   it("keeps three stage gates, two automatic stages, and visible quality facts", () => {
     for (const stage of ["make-decision", "build-plan", "verify-code"])
       expect(readStage(stage)).toMatch(/confirm|human|user|用户|人工/i);
@@ -60,6 +84,26 @@ describe("five-stage v2 business contract", () => {
     expect(readStage("build-code")).toMatch(/independent code review[\s\S]*fresh test/i);
     expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*independent verification review/i);
     expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*separate close authorization[\s\S]*Never reuse the verify-code confirmation ref/i);
+  });
+
+  it("keeps pre-accept build-code repair append-only without a verify reopen", () => {
+    const skill = readStage("build-code");
+    expect(skill).toMatch(/same-Phase repair[\s\S]*--revision=true --recover=<latest-implementation-receipt-ref>/i);
+    expect(skill).toMatch(/repaired tests[\s\S]*new receipt\/output refs/i);
+    expect(skill).toMatch(/does not require or create a verify-code reopen authorization/i);
+    expect(skill).toMatch(/After[\s\S]*accepted[\s\S]*only the controlled verification-failure path/i);
+    expect(skill).toMatch(/<final implementation receipt ref>[\s\S]*<final fresh test receipt ref>/i);
+    expect(skill).toMatch(/normal[^\n]*default[^\n]*receipts\/implementation\.json[^\n]*receipts\/build-tests\.json/i);
+    expect(skill).toMatch(/revision[^\n]*(?:latest|newest)[^\n]*refs/i);
+  });
+
+  it("reviews the final build-code worktree without the legacy phase evidence side channel", () => {
+    const skill = readStage("build-code");
+    expect(skill).toMatch(/full-worktree[^\n]*`wh-review`|`wh-review`[^\n]*full-worktree/i);
+    expect(skill).toMatch(/without `phase_id`|omit `phase_id`/i);
+    expect(skill).toMatch(/canonical implementation[\s\S]{0,180}tests[\s\S]{0,180}same snapshot tree/i);
+    expect(skill).toMatch(/`revise_required`[\s\S]*same original Phase[\s\S]*revision receipt[\s\S]*fresh test[\s\S]*full-worktree review/i);
+    expect(skill).not.toMatch(/createPhaseDiffScan|phase-result\.json|phase_id[^\n]*(?:scope selector|wh-review)/i);
   });
 
   it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {

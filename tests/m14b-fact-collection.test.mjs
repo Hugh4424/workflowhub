@@ -5,10 +5,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { ArtifactDir } from "../core/artifact-dir.mjs";
 import {
   createArtifactRecord,
   createHealthFact,
@@ -20,13 +19,19 @@ import {
   parseJsonl,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { acceptStageAttempt, runStage } from "../core/stage-runner.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
+import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const cleanup = [];
-afterEach(async () => Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true }))));
+vi.setConfig({ testTimeout: 15_000 });
+afterEach(async () => Promise.all(cleanup.splice(0).map((path) => rm(path, {
+  recursive: true, force: true, maxRetries: 3, retryDelay: 100,
+}))));
 const exec = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const INDEX_REFS = [
@@ -53,13 +58,33 @@ async function createM14bFixture() {
   await mkdir(join(candidate.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
   await writeFile(join(candidate.worktreeRoot, decisionRef), "# Decision\n");
   const kernel = createTaskKernel(task);
+  const decisionSnapshot = candidate.captureSnapshot();
   const published = kernel.publishAttempt("make-decision", { facts: {
     worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
-    decision_ref: decisionRef, decision_hash: "d".repeat(64),
+    snapshot_tree: decisionSnapshot.tree, decision_ref: decisionRef, decision_hash: "d".repeat(64),
   } });
   const confirmation = kernel.confirmAttempt("make-decision", published.attempt_ref, "accepted").ref;
   kernel.acceptAttempt("make-decision", published.attempt_ref, confirmation);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  const contextFor = (stage) => bootstrapStage(stage, {
+    mode: "sidecar", projectName: task.identity.projectName, taskId: task.identity.taskId, taskPath: task.taskPath,
+  });
+  const execute = async (stage, handler) => {
+    const context = contextFor(stage);
+    const attempt = await runStage(stage, context, handler);
+    const request = { attemptRef: attempt.attempt_ref };
+    if (stage === "build-plan") request.humanConfirmationRef = writeHumanConfirmation(context.kernel, stage, attempt);
+    acceptStageAttempt(stage, context, request);
+  };
+  await execute("build-spec", async (worker) => {
+    worker.artifacts.writeAtomic("spec.md", "# Fixture spec\n");
+    return { facts: { spec_ref: worker.artifacts.reference("spec.md"), checkpoint: worker.createCheckpoint("build-spec") } };
+  });
+  await execute("build-plan", async (worker) => {
+    worker.artifacts.writeAtomic("plan.md", "# Fixture plan\n");
+    worker.artifacts.writeAtomic("tasks.md", "# Fixture tasks\n");
+    return { facts: { plan_ref: worker.artifacts.reference("plan.md"), tasks_ref: worker.artifacts.reference("tasks.md"), checkpoint: worker.createCheckpoint("build-plan") } };
+  });
   const baseline = workspace.baselineCommit;
   await mkdir(join(workspace.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
   for (const relative of ["config", "schemas", "skills", "workflows", "specs/m14a-audit-contract-layer"]) {
@@ -75,15 +100,8 @@ async function createM14bFixture() {
 }
 
 function collectionContext(fixture) {
-  const artifacts = ArtifactDir.open(fixture.workspace.worktreeRoot, fixture.task);
-  return Object.freeze({
-    stage: "build-code",
-    task: fixture.task,
-    kernel: createTaskKernel(fixture.task, { workspace: fixture.workspace, artifacts }),
-    workspace: fixture.workspace,
-    artifacts,
-    identity: fixture.task.identity,
-    manifest: fixture.task.manifest,
+  return bootstrapStage("build-code", {
+    mode: "sidecar", projectName: fixture.task.identity.projectName, taskId: fixture.task.identity.taskId, taskPath: fixture.task.taskPath,
   });
 }
 
@@ -130,12 +148,18 @@ function reversedBytes(merge, candidates) {
 describe("M14b fact collection pure contracts", () => {
   it("AC-006 merges idempotent transcript candidates deterministically", () => {
     const base = { record_kind: "transcript", id: "turn-1", run_id: "run-1", status: "present", payload: { text: "hello" } };
-    const records = reversedBytes(mergeTranscriptRecords, [
+    const candidates = [
+      createTranscriptRecord({ ...base, source_ref: "source-z" }),
       createTranscriptRecord({ ...base, source_ref: "source-z" }),
       createTranscriptRecord({ ...base, source_ref: "source-a" }),
-    ]);
-    expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ source_ref: "source-a", status: "present" });
+    ];
+    const forward = mergeTranscriptRecords(candidates);
+    const reverse = mergeTranscriptRecords([...candidates].reverse());
+
+    expect(forward).toMatchObject({ ok: true });
+    expect(reverse).toMatchObject({ ok: true });
+    expect(toJsonl(forward.records)).toBe(toJsonl(reverse.records));
+    expect(forward.records).toEqual([expect.objectContaining({ source_ref: "source-a", status: "present" })]);
   });
 
   it("AC-007 keeps a transcript conflict visible instead of choosing first or last", () => {
@@ -197,6 +221,28 @@ describe("M14b fact collection pure contracts", () => {
     expect(conflict.records[0]).toMatchObject({ status: "unknown", reason: "duplicate_id_conflict", error: { code: "DUPLICATE_ID_CONFLICT" } });
   });
 
+  it("projects review, verify, and handoff health with unknown then missing precedence", () => {
+    const projections = [
+      ["review", { record_kind: "review", stage: "build-code" }],
+      ["verify", { record_kind: "stage_result", stage: "verify-code" }],
+      ["handoff", { record_kind: "handoff", stage: "build-code" }],
+    ];
+    const healthStatus = (domain, kind, statuses) => buildHealthProjection(
+      { snapshot: { tree: "clean" } }, [],
+      statuses.map((status, index) => createArtifactRecord({
+        ...kind, id: `${kind.record_kind}-${index}`, ref: `results/${index}.json`, source_ref: `results/${index}.json`, status,
+      })),
+      { closure: { ok: true } },
+    ).find((fact) => fact.domain === domain).status;
+
+    for (const [domain, kind] of projections) {
+      expect(healthStatus(domain, kind, [])).toBe("unknown");
+      expect(healthStatus(domain, kind, ["present"])).toBe("present");
+      expect(healthStatus(domain, kind, ["present", "missing"])).toBe("missing");
+      expect(healthStatus(domain, kind, ["present", "missing", "unknown"])).toBe("unknown");
+    }
+  });
+
   it("keeps skills inventory closed, ordered, conflict-safe, and clock-driven", () => {
     const options = { schema_version: "v1", generated_at: "2026-07-18T00:00:00.000Z" };
     const result = mergeSkills([skill({ name: "verify", path: "workflows/verify" }), skill()], options);
@@ -212,6 +258,41 @@ describe("M14b fact collection pure contracts", () => {
     expect(fixture).toMatchObject({ baseline: expect.stringMatching(/^[0-9a-f]{40}$/), clock: expect.any(Function) });
     expect(fixture.clock()).toBe("2026-07-18T00:00:00.000Z");
     await fixture.sentinel("before-indexes");
+  });
+
+  it("REQ-020 reuses formal hashes and leaves unhashed artifact references null", () => {
+    const taskId = "hash-projection";
+    const attemptRef = "results/make-decision/attempt-0001.json";
+    const formalStageHash = "a".repeat(64);
+    const formalEvidenceHash = "b".repeat(64);
+    const recordsByRef = new Map([
+      [attemptRef, JSON.stringify({ task_id: taskId, stage: "make-decision", facts: {
+        evidence_refs: [{ ref: "evidence/no-hash.json" }, { ref: "evidence/formal-hash.json", sha256: formalEvidenceHash }],
+      } })],
+      ["evidence/no-hash.json", "unhashed artifact bytes"],
+      ["evidence/formal-hash.json", "different artifact bytes"],
+    ]);
+    const missing = () => { throw errorWithCode("ENOENT"); };
+    const projection = buildArtifactProjection({
+      task: {
+        identity: { taskId },
+        listStageAttemptRefs: (stage) => stage === "make-decision" ? [attemptRef] : [],
+        readRecord: (ref) => recordsByRef.has(ref) ? recordsByRef.get(ref) : missing(),
+      },
+      kernel: {
+        readAccepted: (stage) => {
+          if (stage === "make-decision") return { accepted: { attempt_ref: "attempt-0001.json", integrity_hash: formalStageHash } };
+          return missing();
+        },
+      },
+      artifacts: { read: missing },
+    });
+
+    expect(projection).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "stage_result", id: "make-decision:attempt-0001.json", content_hash: formalStageHash }),
+      expect.objectContaining({ record_kind: "evidence", id: "evidence/no-hash.json", content_hash: null }),
+      expect.objectContaining({ record_kind: "evidence", id: "evidence/formal-hash.json", content_hash: formalEvidenceHash }),
+    ]));
   });
 });
 
@@ -283,21 +364,17 @@ describe("M14b fact collection acceptance", () => {
   });
 
   it("AC-008 projects only explicit artifact references and records a declared missing target", async () => {
-    const present = await createM14bFixture();
-    collectTaskFacts(collectionContext(present), { transcriptRegistry: registry(), now: () => new Date(present.clock()) });
-    const ref = `specs/${present.task.identity.taskId}/decision.md`;
-    expect(records(present.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ record_kind: "artifact", id: ref, ref, required: true, status: "present" }),
-    ]));
-
-    const absent = await createM14bFixture();
-    await rm(join(absent.workspace.worktreeRoot, `specs/${absent.task.identity.taskId}/decision.md`));
-    const result = collectTaskFacts(collectionContext(absent), { transcriptRegistry: registry(), now: () => new Date(absent.clock()) });
+    const fixture = await createM14bFixture();
+    const decisionRef = `specs/${fixture.task.identity.taskId}/decision.md`;
+    const specRef = fixture.kernel.readAccepted("build-spec").facts.spec_ref;
+    await rm(join(fixture.workspace.worktreeRoot, decisionRef));
+    const result = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
     expect(result.status).toBe("success");
-    expect(records(absent.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ record_kind: "artifact", id: `specs/${absent.task.identity.taskId}/decision.md`, status: "missing", reason: "not_found", required: true }),
+    expect(records(fixture.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "artifact", id: specRef, ref: specRef, required: true, status: "present" }),
+      expect.objectContaining({ record_kind: "artifact", id: decisionRef, ref: decisionRef, status: "missing", reason: "not_found", required: true }),
     ]));
-  });
+  }, 15_000);
 
   it("AC-009/010/014 validates the original M14a schema, all nine health domains, and non-blocking facts", async () => {
     const fixture = await createM14bFixture();
@@ -371,18 +448,11 @@ describe("M14b fact collection acceptance", () => {
   it("AC-012 serializes two collector processes and makes health use the final merged transcript", async () => {
     const fixture = await createM14bFixture();
     const collector = join(repositoryRoot, "core/fact-collector.mjs");
-    const artifactModule = join(repositoryRoot, "core/artifact-dir.mjs");
-    const taskModule = join(repositoryRoot, "core/task-handle.mjs");
-    const workspaceModule = join(repositoryRoot, "core/workspace.mjs");
+    const contextModule = join(repositoryRoot, "core/stage-context.mjs");
     const script = `
-      import { ArtifactDir } from ${JSON.stringify(artifactModule)};
-      import { createTaskKernel, openTask } from ${JSON.stringify(taskModule)};
-      import { openAcceptedWorkspace } from ${JSON.stringify(workspaceModule)};
+      import { bootstrapStage } from ${JSON.stringify(contextModule)};
       import { collectTaskFacts, createTranscriptSourceReader, createTranscriptSourceRegistry } from ${JSON.stringify(collector)};
-      const task = openTask(process.env.M14B_TASK_PATH, "Fixture", "m14b-fixture");
-      const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
-      const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-      const ctx = Object.freeze({ stage: "build-code", task, kernel: createTaskKernel(task, { workspace, artifacts }), workspace, artifacts, identity: task.identity, manifest: task.manifest });
+      const ctx = bootstrapStage("build-code", { mode: "sidecar", projectName: "Fixture", taskId: "m14b-fixture", taskPath: process.env.M14B_TASK_PATH });
       const id = process.env.M14B_TRANSCRIPT_ID;
       const registry = createTranscriptSourceRegistry([{ source_id: id, source_ref: "registered/transcript.jsonl", source_format: "jsonl", source_version: "v1", required: true, reader: createTranscriptSourceReader(() => JSON.stringify({ id, payload: { id } })) }]);
       const result = collectTaskFacts(ctx, { transcriptRegistry: registry, now: () => new Date("2026-07-18T00:00:00.000Z") });

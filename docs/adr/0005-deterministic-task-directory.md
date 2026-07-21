@@ -12,8 +12,9 @@ worktree，方便随代码追踪更新。
 本 ADR 保留 ADR 0004 的单上下文、禁止隐式推断、append-only attempt、人工阶段确认、
 close 幂等恢复和原子 cutover，同时调整目录与 artifact 权威位置。
 
-五阶段和组件共享的唯一短合同是 `docs/contracts/task-context.md`；各 SKILL 只引用它，不复制
-路径算法。
+`docs/contracts/task-context.md` 记录 runner 的完整实现合同，供维护者统一检查。每个 Stage
+SKILL 自包含面向执行者的窄公共合同：只消费 launcher 提供的 branded StageContext，不自行
+推断身份或路径，也不复制路径算法。
 
 ## 决策
 

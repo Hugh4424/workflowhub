@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
@@ -139,7 +139,7 @@ function git(cwd, args, { allowFailure = false } = {}) {
 
 function gitResult(cwd, args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim(), error: result.error ?? null };
+  return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
 }
 
 function oid(value, label) {
@@ -148,21 +148,32 @@ function oid(value, label) {
 }
 
 function repositoryPath(value, label) {
-  const segments = typeof value === "string" ? value.split("/") : [];
-  if (typeof value !== "string" || value === "" || /[\0\r\n\t]/.test(value) || isAbsolute(value) || segments.includes("..") || segments.includes(".git")) {
+  if (typeof value !== "string" || value === "" || /[\0\r\n\t]/.test(value) || isAbsolute(value) || value.split("/").includes("..")) {
     throw new TypeError(`${label} must be a repository-relative path`);
   }
   return value;
 }
 
-function ensureArchiveParent(worktree, archivePath) {
-  let cursor = resolve(worktree);
-  for (const segment of dirname(archivePath).split("/").filter((entry) => entry !== "" && entry !== ".")) {
-    cursor = join(cursor, segment);
-    if (!existsSync(cursor)) mkdirSync(cursor);
-    const stat = lstatSync(cursor);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`spec archive parent must be a real directory: ${cursor}`);
+function inside(root, candidate) {
+  const path = relative(root, candidate);
+  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
+function createArchiveParent(worktree, archivePath) {
+  const root = realpathSync(worktree);
+  const parent = dirname(resolve(root, repositoryPath(archivePath, "delivery spec_archive_path")));
+  if (!inside(root, parent)) throw new Error("spec archive parent escapes the task worktree");
+  let cursor = root;
+  for (const part of relative(root, parent).split(sep).filter(Boolean)) {
+    cursor = join(cursor, part);
+    let stat;
+    try { stat = lstatSync(cursor); }
+    catch (error) { if (error?.code === "ENOENT") break; throw error; }
+    if (stat.isSymbolicLink()) throw new Error("spec archive parent must not traverse symbolic links");
+    if (!stat.isDirectory()) throw new Error("spec archive parent ancestor must be a directory");
   }
+  mkdirSync(parent, { recursive: true });
+  if (!inside(root, realpathSync(parent))) throw new Error("spec archive parent escapes the task worktree");
 }
 
 function treeEntry(root, commit, path) {
@@ -175,13 +186,12 @@ function treeEntry(root, commit, path) {
 
 function remoteOid(root, remote, branch) {
   const result = gitResult(root, ["ls-remote", "--exit-code", remote, `refs/heads/${branch}`]);
-  if (result.error) {
-    const detail = [result.error.message, result.stderr].filter(Boolean).join(": ");
-    throw new Error(`git ls-remote failed to start: ${detail}`);
+  if (!result.ok) {
+    const exit = Number.isInteger(result.status) ? result.status : "unknown";
+    throw new Error(`git ls-remote failed (exit ${exit}): ${result.stderr || "no error output"}`);
   }
-  if (!result.ok) throw new Error(`git ls-remote failed (exit ${result.status ?? "unknown"}): ${result.stderr || result.stdout || "no output"}`);
   const value = result.stdout.split(/\s+/)[0]?.toLowerCase();
-  if (!/^[a-f0-9]{40}$/.test(value ?? "")) throw new Error(`git ls-remote returned an invalid OID: ${result.stdout || "empty output"}`);
+  if (!/^[a-f0-9]{40}$/.test(value ?? "")) throw new Error("git ls-remote returned an invalid commit OID");
   return value;
 }
 
@@ -273,6 +283,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const accepted = kernel.readAccepted("make-decision");
+  const acceptedVerify = kernel.readAccepted("verify-code");
   const input = plain(requested, "delivery close input");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
@@ -283,6 +294,9 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
+  if (taskCommit !== oid(acceptedVerify.facts.tests.snapshot_commit, "accepted verify-code snapshot_commit")) {
+    throw new Error("delivery task_commit does not match the accepted verify-code snapshot");
+  }
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
   if (!branchTip.ok) throw new Error("task branch does not exist");
   const tip = branchTip.stdout.toLowerCase();
@@ -499,7 +513,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(worktree, delivery.spec_source_path))) {
             if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
-            ensureArchiveParent(worktree, delivery.spec_archive_path);
+            createArchiveParent(worktree, delivery.spec_archive_path);
             git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
           } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
             throw new Error("partial spec archive does not match the planned directory move");

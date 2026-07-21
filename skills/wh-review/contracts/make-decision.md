@@ -33,12 +33,20 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 
 ## detail
 
+`detail` 是实现前审查，只判断已批准方向和待审验收草案；它不审查尚未发生的实现。
+
 必需材料：
 
 - 原始用户需求。
 - 已批准方向或 decision log。
 - 待审规格或验收草案。
 - `source.json`、`changes.diff`、changed-files 清单和所有未删除变更文件的当前内容。
+
+source bundle 只承载 grill 可能产生的 `CONTEXT.md` 或符合条件的 ADR
+受控修改。没有这类修改时，空的 `changes.diff` 和 changed-files 清单是合法状态；
+草案没有引用 canonical evidence 时，空的 `canonical-evidence.json` 也是合法状态。
+provider 不得因缺少生产代码、测试文件、build 证据或 runtime 证据而提出 finding，
+也不得要求在 make-decision 阶段提前实现验收草案。
 
 审查重点：方案是否忠实于批准方向，关键前提和边界是否完整，验收是否可判断，是否未经确认扩大范围。
 

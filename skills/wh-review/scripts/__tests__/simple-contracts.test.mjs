@@ -28,6 +28,10 @@ describe("simple wh-review contracts", () => {
       stage_skill_plan: "stage-skill-plan.json",
       provider_result_contract: "contracts/workflowhub-result.v1.json"
     });
+    const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
+    expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
+    expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`[^\n]*`revise_required`/);
+    expect(providerProtocol).toMatch(/`revise_required`[^\n]*至少包含一条具体 finding/);
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
     for (const file of [
       "contracts/workflowhub-result.v1.json",
@@ -166,6 +170,14 @@ describe("simple wh-review contracts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
     expect(plan.stages["verify-code"].optional_skills).toEqual([{ name: "isolated-browser-qa", when: "ui" }]);
+  });
+
+  it("keeps make-decision detail review at the pre-implementation boundary", () => {
+    const contract = readFileSync(join(root, "wh-review", "contracts", "make-decision.md"), "utf8");
+    expect(contract).toMatch(/`detail` 是实现前审查/);
+    expect(contract).toMatch(/空的 `changes\.diff` 和 changed-files 清单是合法状态/);
+    expect(contract).toMatch(/空的 `canonical-evidence\.json` 也是合法状态/);
+    expect(contract).toMatch(/不得因缺少生产代码、测试文件、build 证据或 runtime 证据而提出 finding/);
   });
 
   it("wires simplicity-guard only into proposal-bearing reviews", () => {

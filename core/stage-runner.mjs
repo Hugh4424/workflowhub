@@ -192,6 +192,20 @@ export function runOfficialStage(stage, context, invocation, publication) {
   return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)), publication);
 }
 
+/** Re-run the official verifier after a revised build without replacing the accepted verify result. */
+export async function publishOfficialVerifyPassing(context, invocation) {
+  const ctx = assertContext(context, "verify-code");
+  const handler = officialStageHandler("verify-code");
+  const input = Object.freeze(structuredClone(invocation));
+  const result = plainResult(verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)));
+  return ctx.kernel.publishVerifyPassingFromAccepted({
+    facts: result.facts,
+    evidenceRefs: result.evidence_refs ?? [],
+    missingItems: result.missing_items ?? [],
+    ...(result.reason !== undefined ? { reason: result.reason } : {}),
+  });
+}
+
 /** Persist the user's explicit decision before acceptance. */
 export function confirmStageAttempt(stage, context, { attemptRef, decision } = {}) {
   const ctx = assertContext(context, stage);

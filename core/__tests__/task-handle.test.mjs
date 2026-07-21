@@ -16,11 +16,10 @@ import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTask, inspectRunnerIdentity, openTask } from "../task-handle.mjs";
+import { createTask, openTask } from "../task-handle.mjs";
 
 const temporaryDirs = [];
 const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../task-handle.mjs");
-const runnerIdentity = inspectRunnerIdentity(resolve(dirname(modulePath), ".."));
 
 function manifest(overrides = {}) {
   return {
@@ -115,7 +114,7 @@ describe("TaskHandle", () => {
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
     });
-    const persistedManifest = { ...manifest, ...runnerIdentity };
+    const persistedManifest = manifest;
     expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(persistedManifest);
 
     const opened = openTask(
@@ -499,7 +498,7 @@ describe("TaskHandle", () => {
 
     expect(statuses.sort((a, b) => a - b)).toEqual([0, 23]);
     expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
-      { ...taskManifest, ...runnerIdentity },
+      taskManifest,
     );
   });
 });

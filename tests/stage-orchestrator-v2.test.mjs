@@ -83,6 +83,7 @@ describe("stage-runner capability unit", () => {
     expect(() => verifyContext.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: "evidence/missing-failure.json" })).toThrow(/ENOENT|no such/i);
     expect(() => task.readRecord("results/verify-code/attempt-0002.json")).toThrow();
     expect(() => verifyContext.kernel.publishAttempt("verify-code", { verify_failure_publication: {} })).toThrow(/official kernel entrypoint/i);
+    expect(() => verifyContext.kernel.publishAttempt("verify-code", { verify_passing_publication: {} })).toThrow(/official kernel entrypoint/i);
     execFileSync("git", ["commit", "--allow-empty", "-qm", "workspace drift"], { cwd: worktree });
     const driftHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: worktree, encoding: "utf8" }).trim();
     const driftTree = captureGitWorktreeSnapshot(worktree).tree;

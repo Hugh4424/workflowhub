@@ -1,5 +1,5 @@
 import { afterEach } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import { aggregateProviderResults } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../../../core/workspace.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../core/workspace.mjs";
 import { execFileSync } from "node:child_process";
 
 const materialId = "a".repeat(64);
@@ -124,6 +124,39 @@ describe("aggregation and runner", () => {
     const providerClient = { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) };
     await expect(runReview({ task, workspace: { worktreeRoot: "/wrong" }, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) })).rejects.toThrow(/Workspace|worktree|capability/i);
+  });
+  it("uses only an authentic Workspace for full worktree capture", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-workspace-");
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const candidate = prepareTaskWorkspace(task);
+    const workspace = openAcceptedWorkspace(task, { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+    const options = { task, workspace, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) },
+      captureSource: (input) => { expect(input).toMatchObject({ workspace, reviewDataRoot: attachmentRoot }); expect(input.sourceRoot).toBeUndefined(); expect(input.targetRepoRoot).toBeUndefined(); return source; },
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    await expect(runReview(options)).resolves.toMatchObject({ status: "semantic", verdict: "pass" });
+    await expect(runReview({ ...options, sourceRoot: repo })).rejects.toThrow(/naked|Workspace/i);
+  });
+  it("re-captures verify-final from the same Workspace baseline and rejects target drift", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-final-workspace-");
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const candidate = prepareTaskWorkspace(task);
+    const workspace = openAcceptedWorkspace(task, { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+    const providerClient = { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) };
+    const run = await runReview({ task, workspace, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(verifyFinal({ resultRef: run.resultRef, task, workspace, attachmentRoot, taskId: "task", stage: "verify-code", reviewTrack: null })).toMatchObject({ status: "finalized" });
+    writeFileSync(join(repo, "target-drift.txt"), "drift\n");
+    execFileSync("git", ["add", "-A"], { cwd: repo }); execFileSync("git", ["commit", "-qm", "target drift"], { cwd: repo });
+    expect(() => verifyFinal({ resultRef: run.resultRef, task, workspace, attachmentRoot })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
   });
   it("uses revise > unavailable > pass independent of completion order", () => {
     const validPass = { provider: "a", review: JSON.parse(pass) }; const validRevise = { provider: "b", review: JSON.parse(revise) };

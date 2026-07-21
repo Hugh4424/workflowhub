@@ -8,13 +8,16 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. The launcher calls
+`core/stage-context.mjs` is the external runner implementation. The launcher calls
 `bootstrapStage("make-decision", ...)` before Step 1 and supplies one branded
 `StageContext`. This stage uses `ctx.task`, `ctx.kernel`, `ctx.identity`, and
 `ctx.manifest`. The official runtime additionally prepares one authenticated
 `ctx.candidateWorkspace` before product-repository work. ArtifactDir must be
 absent because no design artifact has been accepted yet.
+Consume only that launcher-supplied StageContext. Never derive task identity or
+paths from cwd, a repository, or an issue identifier. The launcher resolves all
+`scripts/`, `core/`, and `metrics/` locators from its authenticated `runner_root`;
+never search for or copy those runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=make-decision
 --project=<project> --task=<task> --input=<component-receipts.json>`. The official
@@ -25,17 +28,49 @@ a separate `accept` invocation with `--attempt` and
 `confirm --attempt=<attempt> --decision=accepted|rejected`, then pass its
 returned ref to `accept`; execution never accepts its own result.
 
-Before any code inspection or `grill-with-docs` write, call
-`stage-runtime.mjs prepare --stage=make-decision --project=<project>
---task=<task>`. It creates or reopens the deterministic CandidateWorkspace and
-returns its authenticated root. After the decision draft is complete, create
-its receipt with `stage-runtime.mjs receipt --stage=make-decision
---project=<project> --task=<task> --component=decision
---input=<content-payload.json>`. Pass that ref plus the canonical `wh-review`
-direction and detail result refs as `decision`, `direction_review`, and
-`detail_review` in the `run` input. Missing review refs stop the official run.
-The decision payload is `{ "decision_log": "..." }`. Missing decision-log
-content stops receipt creation. Invoking-host instructions own the
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry. `stage-runtime.mjs` has no `--help` command and must never
+receive `--runner-root`.
+
+Create an OS temporary directory before producing any caller-owned draft,
+receipt payload, run input, or review request:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-make-decision.XXXXXX")"`.
+Every such file must stay under `$TMP_DIR`, never in the target base repository
+or CandidateWorkspace. Canonical records remain owned by TaskKernel. Only
+authorized product files such as `CONTEXT.md` or a qualifying ADR may be written
+to the CandidateWorkspace through its controlled capability.
+
+Use this complete public sequence without inventing flags or input shapes:
+
+1. Before code inspection or `grill-with-docs` writes, run
+   `node scripts/stage-runtime.mjs prepare --stage=make-decision
+   --project=<project> --task=<task>`. This is the only stage that uses
+   `prepare`; it creates or reopens the deterministic CandidateWorkspace.
+2. Put the decision receipt payload under `$TMP_DIR`. Its exact shape is
+   `{"decision_log":"<readable decision log>"}`. Publish it with
+   `node scripts/stage-runtime.mjs receipt --stage=make-decision
+   --project=<project> --task=<task> --component=decision
+   --input=$TMP_DIR/decision-receipt.json`.
+3. Put the run input under `$TMP_DIR` with exactly:
+   `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
+4. Publish the attempt with
+   `node scripts/stage-runtime.mjs run --stage=make-decision
+   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+5. After the last caller-owned input is consumed, let the host reclaim
+   `$TMP_DIR` through its normal OS temporary lifecycle. Never treat the
+   temporary path as a stage artifact, evidence ref, or handoff item.
+6. Record the human decision using the returned attempt ref:
+   `node scripts/stage-runtime.mjs confirm --stage=make-decision
+   --project=<project> --task=<task> --attempt=<attempt-ref>
+   --decision=accepted|rejected`.
+7. Only for an accepted decision, pass the returned confirmation ref:
+   `node scripts/stage-runtime.mjs accept --stage=make-decision
+   --project=<project> --task=<task> --attempt=<attempt-ref>
+   --human-confirmation-ref=<confirmation-ref>`.
+
+Missing review refs stop the official run. Missing decision-log content stops
+receipt creation. Invoking-host instructions own the
 conversational wait-and-resume behavior; WorkflowHub does not authenticate host
 message authors.
 
