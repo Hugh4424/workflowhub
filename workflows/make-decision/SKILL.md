@@ -127,6 +127,11 @@ only through `wh-review`; it is not a second review runner.
    hard constraints, and explicit non-goals. It invokes
    `intake-decision-review` as a pure lens. Candidate decisions, recommendations,
    decision logs, specs, plans, code, and diffs are forbidden from this track.
+   A semantic `revise_required` result is an expected input, not an infrastructure
+   failure: read its findings and continue with the next applicable convergence
+   step. Only a terminal unavailable or failed result is a review-service
+   problem. Do not rerun unrelated CLI diagnostics, repeat an unchanged review,
+   or ask the user to choose how to repair a valid review result.
 6. Run `talk-with-zhipeng` round 3 with the blind findings. Its queue covers
    contradictions, load-bearing assumptions, unresolved findings, and residual
    risks. Apply the same visible queue, one-question, wait, reorder, and
