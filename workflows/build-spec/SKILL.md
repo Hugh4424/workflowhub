@@ -79,14 +79,31 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
 
 1. Validate StageContext before invoking a component.
 2. Read accepted decision/scope from `ctx.kernel.readAccepted("make-decision")`.
-3. Create the draft by invoking `spec-specify` with decision material and a
+   Before drafting or asking a clarification, classify supplied decision
+   material into: locked upstream decisions, explicitly unresolved upstream
+   items, and newly discovered ambiguities. Preserve every locked decision's
+   wording, order, meaning, options, and recommendation; do not rename or ask it
+   again.
+3. Create the draft by invoking `spec-specify` with the classified decision material and a
    controlled writer for `spec.md`.
 4. Always perform a material ambiguity scan over the current `spec.md`.
    `spec-clarify` is conditional with trigger `clarification`: invoke it with
    the current content and the same named writer only when an ambiguity can
-   change scope, acceptance, interfaces, data, security, or operations. Map its
-   question to the host-visible conversation surface and wait for the answer.
-   When no such ambiguity exists, record
+   change scope, acceptance, interfaces, data, security, or operations. Clarify
+   only an explicitly unresolved item or a newly discovered ambiguity; filter
+   every candidate against locked decisions first. Ask one decision axis at a
+   time in dependency order. Two behaviors that can vary independently remain
+   two axes even when they concern the same field; never offer paired options
+   that decide both at once. When upstream already supplied options and a
+   recommendation, preserve them exactly rather than substituting new choices.
+   If every candidate conflicts with a locked decision, present no false choice:
+   return the contradiction and its completion condition to the upstream owner.
+   Otherwise map the single-axis question to the host-visible conversation,
+   end the current invocation, and wait for the answer. Do not publish another
+   clarification card, update the draft, or start review before a new invocation
+   receives the real reply bound to the current card. Each remaining axis
+   requires its own ask → wait → resume cycle. When no material unresolved or new
+   ambiguity exists, record
    `spec-clarify: trigger=false — no material ambiguity` and continue.
 5. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
@@ -94,13 +111,22 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    facts, and relevant evidence.
 7. If that review has actionable findings, revise the draft once and run at most one revision review.
    There is no third review in this stage.
-8. After the review sequence finishes, without changing `spec.md`, create one final create-only receipt
+8. Before the create-only receipt, reconcile the exact final `spec.md` bytes
+   against every review finding and the planned completion card. Resolve every
+   finding that alleges an internal contradiction, unresolved cross-reference,
+   missing acceptance criterion, or mismatch between claimed and written
+   coverage, even when the provider verdict is `pass`. Enumerate the actual FR
+   and AC identifiers and verify that every stated range and downstream coverage
+   claim resolves to them. If the revision review still reports such a mismatch,
+   stop before acceptance; never publish a completion card that claims more than
+   the artifact contains.
+9. After that reconciliation finishes, without changing `spec.md`, create one final create-only receipt
    from its exact content. The normal path must not use a revision receipt
    or create an official receipt from a draft. Publish the append-only stage
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and
    provenance; never describe it as a pass or invent a result.
-9. Present a plain-language progress brief with exactly these four items:
+10. Present a plain-language progress brief with exactly these four items:
    current status; next step and owner; whether the user must act; and, only
    when action is required, the problem, a recommended option, and every
    option's consequence and risk. The trusted runtime immediately runs
@@ -116,24 +142,35 @@ paths. A missing named artifact fails with its ArtifactDir error.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result.
+An `ask` is a suspension point: after one visible question, the Stage returns
+control and may resume only with the corresponding real answer. It must never
+batch multiple questions into one host turn.
 Ask and wait for the user only when the answer can change accepted scope or an
 existing authorization boundary. When user action is required, present the
 problem, one recommended option with its reason, mutually exclusive choices,
 and each choice's consequence and risk. Otherwise state `user action: none`.
 
-Before the Stage completes, report Stage-owned component facts using
-`skill-deps.yaml` as the declared baseline: every `always` component is
+Before the Stage completes, publish a completion card for every Stage-owned
+component. `skill-deps.yaml` is the only authoritative component list: every `always` component is
 `executed`; every `conditional` component is either `executed` or
-`trigger=false — <reason>`. Cross-check the list with formal artifacts and
-canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+`trigger=false — <reason>`. Formal artifacts and canonical `wh-review` refs must
+cross-check consistently against that list. 正式产物、审查引用与该清单必须交叉核对并保持一致。
+Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, formal
-artifact refs, test and review evidence, downstream dependencies, unresolved
+Publish one concise completion handoff containing the stage result, human-readable
+artifact names, test and review conclusions, downstream dependencies, unresolved
 risks, next owner, and user action. Do not copy artifacts or raw logs. The
-invoking host may project the same concise facts onto its downstream handoff
+invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
-input, return the finding and completion condition through those host-owned
+input, the host must return the finding and completion condition to the upstream owner
+through those host-owned
 surfaces; do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability

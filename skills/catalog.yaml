@@ -27,7 +27,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 264cde9e077bf9ba107034bc19abc385a1b41b33d0740cc81c92fc8b4ff11302
+    local_bundle_hash: e7669c92242aa2f7565e23042a4c36d269bf11bbd3170750f7119ea3156fe432
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
@@ -40,7 +40,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5d764d44e548091636cd8e9a0a2e44b0dce34e030aec0bb4114879409c311792
+    local_bundle_hash: 34eb3893cb50baeef08f31743c0c1be34c2774682054bee0de63674c7b4182af
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -50,7 +50,7 @@ skills:
       - { <<: *matt, path: "skills/engineering/grill-with-docs/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md" }
       - { <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }
       - { <<: *matt, path: "skills/productivity/grilling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md" }
-    local_changes: 保留四项退出合同；失败转人工，只有明确跳过才能继续
+    local_changes: 保留四项退出记录；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure: [skills/grill-with-docs]
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
   - name: intake-decision-review
@@ -82,7 +82,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 4001dcd5fa55cd7aedb2511d106b00222db61acad07b0a55a2ef16ce3db9f312
+    local_bundle_hash: 1e055ce504a23554a8f83bcfa5d05a0f3d971d496d095cb7c7606678724183ea
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -121,7 +121,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 7bdc0c3de6baf6bfb08ed0e675e469926ce1b1b857183a96f95488be0b04833f
+    local_bundle_hash: 42471019a96fd927bdd2357004cff1d6a6c19a61d825a62fbf8ac8244ebe111d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3e512f93465a1493d4a4d616ef8dcdf12ceea5ddcb98da9ea7f70506e0757c26
+    local_bundle_hash: 866b5c07830a035c3a26b3a8a4a7f8fc1a174827e8e11d2a4d25816d782fe9cd
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

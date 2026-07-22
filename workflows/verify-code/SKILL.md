@@ -191,8 +191,10 @@ idempotent. Other attempts against a closed stage remain rejected.
    snapshot parent is the current task-branch tip. The frozen plan contains exactly
    six actions: commit delivery, archive and commit the spec, merge the task
    branch from the main checkout, push the target branch, remove the task
-   worktree, and remove the merged local task branch. Show the full hashed close plan
-   for one separate close authorization bound to the plan hash.
+   worktree, and remove the merged local task branch. Show a plain-language summary
+   of the six actions, their affected targets, consequences, and risks for one
+   separate close authorization. Keep the plan hash as the internal binding and
+   do not display it in the public decision card.
    Never reuse the verify-code confirmation ref.
    For a legacy task without `runner_root`, do not edit `task.json`. First run
    `node scripts/task-migrate-runner-root.mjs --task-path=<task-path>
@@ -232,6 +234,14 @@ failures stop before verification because continuing would inspect another task.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result. The close
+card explains the six actions, affected branches or workspaces in human terms,
+and their consequences and risks; its plan hash remains an internal binding.
 Ask and wait for the user only at the existing verification or close decision,
 or when an answer can change accepted scope. When user action is required,
 present the problem, one recommended option with its reason, mutually exclusive
@@ -245,12 +255,13 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned diagnostic lenses appear only
 through their review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, formal
-artifact refs, test and review evidence, downstream dependencies, unresolved
+Publish one concise completion handoff containing the stage result, human-readable
+artifact names, test and review conclusions, downstream dependencies, unresolved
 risks, next owner, and user action. Do not copy artifacts or raw logs. The
-invoking host may project the same concise facts onto its close handoff surface
+invoking host must deliver the same concise facts to its close handoff surface
 and parent progress surface. If verification returns invalid upstream input,
-return the finding and completion condition through those host-owned surfaces;
+the host must return the finding and completion condition to the upstream owner
+through those host-owned surfaces;
 do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability

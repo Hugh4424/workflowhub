@@ -127,6 +127,12 @@ mismatched accepted provenance fails loud before planning.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result.
 Ask and wait for the user only at the existing plan decision or when an answer
 can change accepted scope. When user action is required, present the problem,
 one recommended option with its reason, mutually exclusive choices, and each
@@ -139,12 +145,13 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, formal
-artifact refs, test and review evidence, downstream dependencies, unresolved
+Publish one concise completion handoff containing the stage result, human-readable
+artifact names, test and review conclusions, downstream dependencies, unresolved
 risks, next owner, and user action. Do not copy artifacts or raw logs. The
-invoking host may project the same concise facts onto its downstream handoff
+invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
-input, return the finding and completion condition through those host-owned
+input, the host must return the finding and completion condition to the upstream owner
+through those host-owned
 surfaces; do not poll or invent a host-specific recovery mechanism.
 
 ## Metrics capability

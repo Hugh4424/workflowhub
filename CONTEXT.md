@@ -52,8 +52,23 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
 
-**generic core / Multica adapter**：
-需求保真机制的边界。generic core 只处理 canonical source bundle、ledger、coverage 与验证；Multica adapter 只读取并规范化 issue/comment 等平台对象，不计算 coverage、不裁决语义冲突。
+**调用方可见对话面（caller-visible conversation surface）**：
+调用方向用户展示问题、进度和结果，并把回答交回阶段执行者的交互边界。
+
+**决策卡（decision card）**：
+一次只承载一个决策轴，并说明推荐项、互斥选项及各自后果和风险的用户消息。
+
+**完成卡（completion card）**：
+阶段结束时汇总结果、正式产物、证据、依赖、风险、下一责任人和用户待办的简短交接。
+
+**阶段协调 / Phase 执行（Stage coordination / Phase execution）**：
+同一 `build-code` 合同中可组合的两部分，前者管理顺序和阶段边界，后者完成一个 Phase 的实现、测试、证据和审查闭环。
+
+**Phase Card**：
+阶段协调者交给 Phase 执行者的冻结事实集合，只含认证身份、目标、验收、工作区、允许范围、测试和上游 finding，不复制流程规则。
+
+**组件所有权（component ownership）**：
+一个组件在一个阶段中唯一归属于阶段执行或审查执行的责任边界。
 
 **3rd-review**：
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
@@ -96,3 +111,10 @@ verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文�
 4. 这条规矩不是"记住就行"，是每次组织给用户看的内容之前，自查一遍有没有漏网的编号/术语。
 
 **为什么要写在这里**：这条规矩之前只在全局个人偏好里出现过，但 stage-executor 实际执行时会被"结构化留痕"的习惯带跑偏（比如为了方便追溯，直接把内部字段名甩给用户）。写进 CONTEXT.md 是为了让 5 个 stage 都能读到同一份要求，不靠单次对话里记住。
+
+## 关系与边界
+
+- 一个 **决策卡**只处理一个决策轴，并通过**调用方可见对话面**完成问答。
+- 一个阶段用**完成卡**向下游交付精简事实，不用消息副本替代正式产物和证据。
+- **阶段协调**为每个 Phase 生成一张 **Phase Card**；**Phase 执行**消费它并返回正式证据。
+- 平台特有的地址、状态和派发方式属于宿主映射，不是 WorkflowHub 领域术语。

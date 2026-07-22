@@ -1,0 +1,37 @@
+{
+  "locked_decisions": [
+    {
+      "id": "delivery_mode",
+      "value": "WorkflowHub remains host-neutral and contains no Multica-specific behavior."
+    }
+  ],
+  "unresolved_items": [
+    {
+      "axis": "failure_policy",
+      "question": "When a required external review is unavailable, should the stage stop or continue?",
+      "options": ["stop", "continue"]
+    }
+  ],
+  "new_ambiguities": [
+    {
+      "raw": "Should the report be short, and should unavailable review stop delivery?",
+      "axes": ["report_length", "failure_policy"]
+    }
+  ],
+  "paired_behaviors": {
+    "raw": "Choose how blank labels and missing labels are displayed together.",
+    "axes": ["blank_label_display", "missing_label_display"],
+    "must_split": true
+  },
+  "upstream_choice": {
+    "axis": "failure_policy",
+    "recommended": "stop",
+    "options": ["stop", "continue"]
+  },
+  "conflicting_candidates": [
+    {
+      "axis": "delivery_mode",
+      "value": "Add Multica API calls to WorkflowHub core"
+    }
+  ]
+}

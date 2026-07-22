@@ -48,7 +48,7 @@ describe("five-stage v2 business contract", () => {
       expect(compact, stage).toMatch(/ask.*wait.*present.*host-visible conversation surface/i);
       expect(compact, stage).toMatch(/Stage-owned.*always.*executed.*conditional.*trigger=false.*reason/i);
       expect(compact, stage).toMatch(/`skill-deps\.yaml`.*formal artifacts.*`wh-review`.*refs/i);
-      expect(compact, stage).toMatch(/stage result.*formal artifact refs.*test and review evidence.*downstream dependencies.*unresolved risks.*next owner.*user action/i);
+      expect(compact, stage).toMatch(/stage result.*human-readable artifact names.*test and review conclusions.*downstream dependencies.*unresolved risks.*next owner.*user action/i);
       expect(compact, stage).toMatch(/(?:downstream|close) handoff surface.*parent progress surface/i);
       expect(skill, stage).not.toMatch(/Multica|mention:\/\/|用户 UUID|member mention/i);
     }
@@ -110,7 +110,10 @@ describe("five-stage v2 business contract", () => {
     expect(readStage("make-decision")).toMatch(/independent direction review/i);
     expect(readStage("build-code")).toMatch(/independent code review[\s\S]*fresh test/i);
     expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*reuse[\s\S]*accepted build-code[\s\S]*final review/i);
-    expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*separate close authorization[\s\S]*Never reuse the verify-code confirmation ref/i);
+    const verify = readStage("verify-code");
+    expect(verify).toMatch(/plain-language summary[\s\S]*six actions[\s\S]*separate close authorization/i);
+    expect(verify).toMatch(/plan hash[\s\S]*internal binding[\s\S]*do not display/i);
+    expect(verify).toMatch(/Never reuse the verify-code confirmation ref/i);
   });
 
   it("keeps pre-accept build-code repair append-only without a verify reopen", () => {

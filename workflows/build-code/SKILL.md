@@ -145,6 +145,11 @@ order, evidence, or authority boundaries.
    scope, conditional-component trigger facts, and upstream findings.
    The card must not copy execution steps, review selection rules, or
    task-storage paths. Never infer any card field from cwd or directory scans.
+   When a host exposes the Phase Card on a user-visible surface, it must lead
+   with a short plain-language Phase brief: goal, completion standard, allowed
+   change area, test result expected, and next owner. Raw Workspace paths,
+   baselines, hashes, internal IDs, and exact commands belong only in the
+   formal card record and must not appear in the user-visible description.
 3. Start only the current Phase. When Phase execution returns, run the Phase
    gate against the canonical result, its formal PASS review, and the live
    Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or
@@ -227,10 +232,23 @@ refs without copying their full contents.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result.
 Ask and wait for the user only when an answer can change accepted scope or an
 existing authorization boundary. When user action is required, present the
 problem, one recommended option with its reason, mutually exclusive choices,
 and each choice's consequence and risk. Otherwise state `user action: none`.
+An inaccessible Workspace, missing host resource mapping, checkout mismatch,
+or task identity problem is a host configuration failure, not a product
+decision. After safe local diagnosis, return its completion condition to the
+host coordinator; do not ask the user unless resolving it truly requires new
+credentials, permissions, or an irreversible external action. If a resumed
+invocation finds no state change and no action to take, publish no public
+message.
 
 Before the Stage completes, report Stage-owned component facts using
 `skill-deps.yaml` as the declared baseline: every `always` component is
@@ -239,12 +257,16 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, formal
-artifact refs, test and review evidence, downstream dependencies, unresolved
+Publish one concise completion handoff containing the stage result, human-readable
+artifact names, test and review conclusions, downstream dependencies, unresolved
 risks, next owner, and user action. Do not copy artifacts or raw logs. The
-invoking host may project the same concise facts onto its downstream handoff
+handoff must be rebuilt from the latest completed Phase results and final
+full-worktree evidence. Later facts supersede earlier provisional skips,
+risks, and findings; never reuse a stale Phase summary as the final result. The
+invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
-input, return the finding and completion condition through those host-owned
+input, the host must return the finding and completion condition to the upstream owner
+through those host-owned
 surfaces; do not poll or invent a host-specific recovery mechanism.
 
 No task identifier, external tracker identifier, branch name, or shell location may select
