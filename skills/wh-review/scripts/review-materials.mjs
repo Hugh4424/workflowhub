@@ -94,7 +94,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false) {
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
-  return `Review stage ${scope}. Read only files in this bundle. Read contracts/ and ${skillInstruction} Recompute SHA-256 for every canonical-evidence entity and its referenced output/evidence file using canonical-evidence.json before trusting it. ${blind} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} Recompute SHA-256 for every canonical-evidence entity and its referenced output/evidence file using canonical-evidence.json before trusting it. ${blind} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null) { return ruleFor(stage, track).minimum_reviewers; }

@@ -198,6 +198,10 @@ describe("review source capture", () => {
 });
 
 describe("review materials", () => {
+  it("binds the provider-visible bundle path into frozen instructions", () => {
+    expect(reviewInstructionsFor("make-decision", "direction")).toContain("bundle/review-instructions.md");
+  });
+
   it("preserves canonical receipt/output bytes and closes their manifest graph", () => {
     const f = fixture(); changeAll(f.source);
     const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
