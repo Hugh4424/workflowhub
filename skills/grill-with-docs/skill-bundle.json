@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": "grill-with-docs",
   "files": [
-    { "path": "SKILL.md", "sha256": "d1c3a2943f7d56323706e1e855eb193c12c5aeccd39f07dd345590bab5fe2c76" },
+    { "path": "SKILL.md", "sha256": "1c2a46fe9bcc57018d24b9428f80c146373dce9a18f48528bfafa15afef5646c" },
     { "path": "ADR-FORMAT.md", "sha256": "f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2" },
     { "path": "CONTEXT-FORMAT.md", "sha256": "8f6baaa3b1c91644bd7c600196b1aee781d5f525c7c345db8cdfbfb368329a05" }
   ],

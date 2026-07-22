@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
 import { readReviewResult } from "../core/review-result-consumer.mjs";
 import { validatePhaseReviewEvidence } from "../skills/wh-review/scripts/phase-review-subject.mjs";
 
@@ -129,11 +130,12 @@ function checkReview(phaseResult, scan, worktreeRoot, errors, warnings, checked,
   try {
     if (!scan) throw new Error("phase diff evidence is unavailable");
     const subject = validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id });
-    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: false });
+    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true });
     if (result.subject_kind !== "phase" || typeof result.phase_id !== "string") throw new Error("phase review identity is missing");
     if (result.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
     if (result.base_tree !== subject.baseTree || result.candidate_tree !== subject.candidateTree) throw new Error("phase review tree identity mismatch");
-    if (result.verdict !== "pass") warnings.push(`review verdict is ${result.verdict}; preserve this quality fact`);
+    const liveTree = captureGitWorktreeSnapshot(worktreeRoot).tree;
+    if (liveTree !== subject.candidateTree) throw new Error("live Workspace tree changed after Phase review");
   }
   catch (error) { errors.push(`review is not a formal result: ${error.message}`); }
 }

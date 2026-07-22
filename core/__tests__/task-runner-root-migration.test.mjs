@@ -26,6 +26,8 @@ function fixture() {
     mkdirSync(join(runner, "workflows", stage), { recursive: true });
     writeFileSync(join(runner, "workflows", stage, "SKILL.md"), `# ${stage}\n`);
   }
+  execFileSync("git", ["add", "."], { cwd: runner });
+  execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
   const task = createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0", project_name: "workflowhub", task_id: "m14b-fact-collection-g2",
     created_at: "2026-07-19T00:00:00.000Z", target_repo_root: target, issue_ids: ["ZHI-102"], inputs: {},
@@ -51,7 +53,7 @@ describe("existing task runner root migration", () => {
     expect(record).toMatchObject({
       schema_version: "task-runner-root-migration.v1", project_name: "workflowhub", task_id: "m14b-fact-collection-g2",
       previous_manifest_hash: sha256(oldRaw), new_manifest_hash: sha256(newRaw),
-      runner_identity: { runner_root: f.runner, runner_branch: "task/workflowhub/m14b-fact-collection-g2", project: "workflowhub", task: "m14b-fact-collection-g2", stage: "verify-code" },
+      runner_identity: { runner_root: f.runner, runner_oid: execFileSync("git", ["rev-parse", "HEAD"], { cwd: f.runner, encoding: "utf8" }).trim(), runner_branch: "task/workflowhub/m14b-fact-collection-g2", project: "workflowhub", task: "m14b-fact-collection-g2", stage: "verify-code" },
     });
     const replay = migrate(f);
     expect(replay.idempotent_replay).toBe(true);

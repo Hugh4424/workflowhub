@@ -17,6 +17,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 ## 审查重点
 
 - 每项原始需求和批准决策是否进入 spec。
+- 已批准决策是否先分成 locked、unresolved 和 newly discovered ambiguity；locked 内容、顺序、选项和推荐是否原样保留且未被重问。
+- 每次 clarification 是否只处理一个决策轴，并按依赖顺序处理多个轴；是否只针对 unresolved 或 new ambiguity。
+- 所有候选项与 locked 决定冲突时，是否返回上游矛盾而不是展示假选项；上游已有选项和推荐时是否保持单轴保真。
 - 成功、失败和边界场景是否清楚。
 - 验收是否客观、可判断。
 - 范围、非目标、状态和接口责任是否一致。

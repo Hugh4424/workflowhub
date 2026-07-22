@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -376,6 +376,30 @@ index 1234567..abcdefg 100644
 });
 
 describe('createPhaseDiffScan', () => {
+  it('runs a representative test-first Phase without changing HEAD or refs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'coder-phase-contract-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const run = () => spawnSync(process.execPath, ['tests/add.mjs'], { cwd: root, encoding: 'utf8' });
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'README.md'), 'base\n'); git(['add', '.']); git(['commit', '-qm', 'base']);
+      const head = git(['rev-parse', 'HEAD']);
+      const refs = git(['for-each-ref', '--format=%(refname):%(objectname)']);
+      mkdirSync(join(root, 'src')); mkdirSync(join(root, 'tests'));
+      writeFileSync(join(root, 'tests', 'add.mjs'), "import assert from 'node:assert/strict'; import { add } from '../src/add.mjs'; assert.equal(add(2, 3), 5);\n");
+      expect(run().status).not.toBe(0);
+      writeFileSync(join(root, 'src', 'add.mjs'), 'export const add = (left, right) => left + right;\n');
+      expect(run().status).toBe(0);
+      expect(run().status).toBe(0);
+      const changed = git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean).sort();
+      expect(changed).toEqual(['src/add.mjs', 'tests/add.mjs']);
+      expect(git(['rev-parse', 'HEAD'])).toBe(head);
+      expect(git(['for-each-ref', '--format=%(refname):%(objectname)'])).toBe(refs);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('produces phase-diff-scan.v1 from an immutable commit pair', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-'));
     const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();

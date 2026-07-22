@@ -39,6 +39,18 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+function validateVerifyEvidenceRoots(stage, materials) {
+  if (stage !== "verify-code") return;
+  const evidence = materials.acceptance_evidence;
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+    throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_evidence requires structured canonical roots");
+  }
+  for (const [refKey, hashKey] of [["test_receipt_ref", "test_receipt_hash"], ["evidence_ref", "evidence_hash"]]) {
+    if (typeof evidence[refKey] !== "string" || evidence[refKey].trim() === "") throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_evidence requires ${refKey}`);
+    if (typeof evidence[hashKey] !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(evidence[hashKey])) throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_evidence requires ${hashKey}`);
+  }
+}
+
 function filesUnder(root, current = root) {
   const found = [];
   for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -104,6 +116,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
   const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
+  validateVerifyEvidenceRoots(stage, materials);
 
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
@@ -170,7 +183,10 @@ function freezeCanonicalEvidence({ bundleRoot, task, materials }) {
     }
   };
   scan(materials, "materials");
-  if (discovered.length === 0) return;
+  if (discovered.length === 0) {
+    write(bundleRoot, "canonical-evidence.json", Buffer.from("[]\n"));
+    return;
+  }
   const handle = assertTaskHandle(task);
   const queue = [...discovered], records = new Map();
   while (queue.length) {

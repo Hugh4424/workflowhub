@@ -10,7 +10,7 @@
         "snapshot_tree": "Optional immutable tree captured after full grill-with-docs writes; new official attempts always include it",
         "decision_ref": "Optional task-relative canonical decision receipt; requires decision_hash",
         "decision_hash": "SHA-256 of the exact decision receipt bytes",
-        "reviews": "Direction and detail wh-review result refs consumed by new official attempts"
+        "reviews": "Direction and detail wh-review semantic result refs or provenance-bound unavailable attempt refs consumed by new official attempts"
       }
     },
     "build-spec": {
@@ -18,7 +18,7 @@
       "semantics": {
         "spec_ref": "Named spec artifact reference",
         "checkpoint": "Immutable Git checkpoint facts",
-        "review": "Task-relative wh-review result ref consumed by new official attempts"
+        "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref consumed by new official attempts"
       }
     },
     "build-plan": {
@@ -27,7 +27,7 @@
         "plan_ref": "Named plan artifact reference",
         "tasks_ref": "Named tasks artifact reference",
         "checkpoint": "Immutable Git checkpoint facts",
-        "review": "Task-relative wh-review result ref consumed by new official attempts"
+        "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref consumed by new official attempts"
       }
     },
     "build-code": {
@@ -35,7 +35,7 @@
       "semantics": {
         "changed": "List of changed artifacts from this stage",
         "tests": "Test execution conclusion (pass/fail counts)",
-        "review": "Task-relative wh-review result_ref plus its snapshot_tree. Consumers must open the formal result and must not trust a copied verdict.",
+        "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref plus its snapshot tree. Consumers must open the referenced record and must not trust a copied verdict.",
         "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records, or provenance-bound legacy commit migration records that visibly mark missing canonical phase reports"
       }
     },
@@ -44,7 +44,7 @@
       "semantics": {
         "tests": "Fresh verification command and physical result facts",
         "evidence_refs": "Task-relative evidence references",
-        "review": "Formal wh-review result reference",
+        "review": "Formal wh-review semantic result reference or provenance-bound unavailable attempt reference",
         "quality_note": "Optional human-facing quality summary; not an automatic gate"
       }
     }

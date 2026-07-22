@@ -1,5 +1,9 @@
 # Verify Code 审查合同
 
+本合同只供明确请求的独立诊断使用，不是标准 verify-code 阶段步骤。正常
+verify-code 认证并复用 active accepted build-code 的最终全树审查，不再次调用
+provider；新鲜测试和验收证据仍由 verify-code 自己生成。
+
 provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。
 
 ## 必需材料

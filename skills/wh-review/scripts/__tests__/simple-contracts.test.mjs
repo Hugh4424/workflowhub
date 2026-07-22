@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..", "..", "..");
@@ -28,6 +29,10 @@ describe("simple wh-review contracts", () => {
       stage_skill_plan: "stage-skill-plan.json",
       provider_result_contract: "contracts/workflowhub-result.v1.json"
     });
+    const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
+    expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
+    expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`[^\n]*`revise_required`/);
+    expect(providerProtocol).toMatch(/`revise_required`[^\n]*至少包含一条具体 finding/);
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
     for (const file of [
       "contracts/workflowhub-result.v1.json",
@@ -46,6 +51,24 @@ describe("simple wh-review contracts", () => {
     ]) expect(bundle.files).toContain(file);
   });
 
+  it("documents the complete public review input instead of forcing callers to guess", () => {
+    const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
+    for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
+      expect(skill, field).toContain(`\"${field}\"`);
+    }
+    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "test_evidence", "acceptance_evidence", "open_exceptions"]) {
+      expect(skill, material).toContain(material);
+    }
+    expect(skill).toMatch(/3rd-review config/i);
+    expect(skill).toMatch(/must not select providers/i);
+    expect(skill).toMatch(/`review_instructions`; callers must not add it/);
+    expect(skill).toMatch(/Local input validation fails before an attempt exists/);
+    expect(skill).toMatch(/do not retry the same material with guessed fields or provider names/);
+    expect(skill).toMatch(/Send the input JSON over stdin/);
+    expect(skill).toMatch(/Never place a transient review-input file in/);
+    for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
+  });
+
   it("keeps the stage skill plan limited to provider-visible lenses", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.version).toBe(1);
@@ -61,15 +84,57 @@ describe("simple wh-review contracts", () => {
       expect(entry).not.toHaveProperty("continuation_policy");
       expect(entry).not.toHaveProperty("bundle_hash");
     }
+
+    const reviewerSkills = entries.flatMap((entry) => [
+      ...entry.required_skills,
+      ...(entry.optional_skills ?? []).map(({ name }) => name)
+    ]);
+    for (const skill of reviewerSkills) {
+      const contract = readFileSync(join(root, skill, "SKILL.md"), "utf8");
+      expect(contract, skill).toMatch(/\blens\b/i);
+    }
+    for (const executionSkill of ["diagnosing-bugs", "isolated-browser-qa", "test-routing-advisor", "test-strategy", "review-response"])
+      expect(reviewerSkills, executionSkill).not.toContain(executionSkill);
+
+    const projectRoot = join(root, "..");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      const deps = yaml.load(readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8"));
+      const reviewOwned = new Set(
+        stage === "make-decision"
+          ? Object.values(plan.stages[stage].tracks).flatMap((entry) => entry.required_skills)
+          : [
+              ...plan.stages[stage].required_skills,
+              ...(plan.stages[stage].optional_skills ?? []).map(({ name }) => name)
+            ]
+      );
+      for (const dependency of deps.skills.filter(({ name }) => reviewOwned.has(name))) {
+        expect(dependency.invocation, `${stage}: ${dependency.name}`).toBe("conditional");
+      }
+    }
+
+    const stageDependencies = (stage) => yaml.load(
+      readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
+    ).skills;
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
+      .toMatchObject({ invocation: "conditional", trigger: "clarification" });
+    expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
+      .toMatchObject({ invocation: "conditional", trigger: "wh_review_consistency_lens" });
+    expect(stageDependencies("build-code").find(({ name }) => name === "review"))
+      .toMatchObject({ invocation: "conditional", trigger: "wh_review_code_lens" });
+    expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
+    expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
+      .toEqual([
+        expect.objectContaining({ name: "test-strategy", invocation: "conditional" }),
+        expect.objectContaining({ name: "isolated-browser-qa", invocation: "conditional" })
+      ]);
   });
 
-  it("requires canonical reviewer skills for both code stages", () => {
+  it("keeps verify-code reviewer lenses available only for standalone diagnostics", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
-    for (const stage of ["build-code", "verify-code"]) {
-      const required = plan.stages[stage].required_skills;
-      expect(required, `${stage} must declare a reviewer lens`).not.toHaveLength(0);
-      for (const skill of required) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
-    }
+    expect(plan.stages["build-code"].required_skills).not.toHaveLength(0);
+    expect(plan.stages["verify-code"].invocation).toBe("standalone-diagnostic-only");
+    for (const stage of ["build-code", "verify-code"])
+      for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
   });
 
   it("accepts a terminal attempt and keeps unavailable outside semantic results", () => {
@@ -148,7 +213,7 @@ describe("simple wh-review contracts", () => {
     }
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
-    expect(plan.stages["verify-code"].optional_skills).toEqual([{ name: "isolated-browser-qa", when: "ui" }]);
+    expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
   });
 
   it("wires simplicity-guard only into proposal-bearing reviews", () => {
@@ -181,7 +246,7 @@ describe("simple wh-review contracts", () => {
     for (const stage of ["build-spec", "build-plan", "build-code"]) {
       const prompt = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
       const deps = readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8");
-      expect(prompt).toMatch(/`simplicity-guard` is\s+provider-visible only inside `wh-review`/);
+      expect(prompt).toMatch(/`simplicity-guard` is\s+(?:provider-visible|visible) only inside `wh-review`/);
       expect(prompt).not.toMatch(/Apply simplicity review|simplicity review, and/);
       expect(deps).toMatch(/name: simplicity-guard[^\n]*invocation: conditional[^\n]*trigger: wh_review_simplicity_lens/);
     }

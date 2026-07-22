@@ -87,10 +87,10 @@ describe("Stage 1 moat skill files", () => {
 });
 
 describe("Stage 1 moat skills avoid host-specific residue", () => {
-  test("talk-with-zhipeng has no multica-agenthub, gbrain, office-hours, or host path residue", () => {
+  test("talk-with-zhipeng has no host repository, gbrain, office-hours, or host path residue", () => {
     assertNoForbiddenStrings(
       "skills/talk-with-zhipeng",
-      /multica-agenthub|gbrain|office-hours|\/Users\/|\/home\//,
+      /[a-z0-9][a-z0-9._-]*-agenthub\b|gbrain|office-hours|\/Users\/|\/home\//i,
       "host-specific residue"
     );
   });
@@ -98,7 +98,7 @@ describe("Stage 1 moat skills avoid host-specific residue", () => {
   test("grill-with-docs has no local absolute paths or host environment references", () => {
     assertNoForbiddenStrings(
       "skills/grill-with-docs",
-      /\/Users\/|\/home\/|~\/\.claude|multica-agenthub|gbrain|office-hours/,
+      /\/Users\/|\/home\/|~\/\.claude|[a-z0-9][a-z0-9._-]*-agenthub\b|gbrain|office-hours/i,
       "local absolute paths or host environment references"
     );
   });
@@ -106,7 +106,7 @@ describe("Stage 1 moat skills avoid host-specific residue", () => {
   test("intake-decision-review has no local absolute paths or host environment references", () => {
     assertNoForbiddenStrings(
       "skills/intake-decision-review",
-      /\/Users\/|\/home\/|~\/\.claude|multica-agenthub|gbrain|office-hours/,
+      /\/Users\/|\/home\/|~\/\.claude|[a-z0-9][a-z0-9._-]*-agenthub\b|gbrain|office-hours/i,
       "local absolute paths or host environment references"
     );
   });

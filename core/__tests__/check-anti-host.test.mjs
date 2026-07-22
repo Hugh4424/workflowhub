@@ -93,6 +93,16 @@ describe("check-anti-host — bad fixture exits non-zero (FR-GUARD-001)", () => 
     expect(result.code).not.toBe(0);
   });
 
+  it("class 1 catches any branded agenthub repository", () => {
+    const fixture = join(badFixtures, "__tmp_branded_agenthub__.mjs");
+    try {
+      writeFileSync(fixture, 'export const repo = "multica-agenthub";\n');
+      expect(run(checkAntiHost, ["--files", fixture]).code).not.toBe(0);
+    } finally {
+      if (existsSync(fixture)) unlinkSync(fixture);
+    }
+  });
+
   it("class 2 repo-root-climb.mjs → non-zero exit", () => {
     const fixture = join(badFixtures, "repo-root-climb.mjs");
     const result = run(checkAntiHost, ["--files", fixture]);

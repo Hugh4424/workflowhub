@@ -156,5 +156,13 @@ export function bootstrapStage(
   const workspace = openAcceptedWorkspace(taskHandle, localDecision);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
+  if (normalizedStage === "build-code") {
+    try {
+      stageKernel.readAccepted("build-spec");
+      stageKernel.readAccepted("build-plan");
+    } catch (error) {
+      throw new Error(`build-code requires current accepted spec and plan: ${error.message}`);
+    }
+  }
   return Object.freeze({ ...base, kernel: stageKernel, workspace, artifacts });
 }

@@ -55,3 +55,22 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   verifyPacketAllowlist(configPath, attachmentRoot);
   return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX };
 }
+
+/**
+ * Select the complete first usable review tier from the host-owned broker
+ * config. Workflow input has no authority to name providers or models.
+ */
+export function selectTrustedReviewProviders(configuredPath, hostProvider) {
+  if (typeof hostProvider !== "string" || hostProvider.length === 0) throw new TypeError("host_provider is required");
+  const path = regularFile(configuredPath, "3rd-review config");
+  const config = readJson(path, "3rd-review config");
+  if (!Array.isArray(config.tiers) || !config.providers || typeof config.providers !== "object" || Array.isArray(config.providers)) {
+    throw new Error("3rd-review config requires tiers and providers");
+  }
+  for (const tier of config.tiers) {
+    if (!Array.isArray(tier)) throw new Error("3rd-review config tier must be an array");
+    const selected = tier.filter((provider) => provider !== hostProvider && config.providers[provider]?.enabled === true);
+    if (selected.length > 0) return selected;
+  }
+  throw new Error("3rd-review config has no enabled heterologous provider tier");
+}

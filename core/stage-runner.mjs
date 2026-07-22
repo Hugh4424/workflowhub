@@ -114,6 +114,7 @@ function officialWorkerContext(ctx) {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ bytes: raw, sha256: createHash("sha256").update(raw).digest("hex") });
     },
+    ...(ctx.stage === "verify-code" ? { readAcceptedBuildCode: () => ctx.kernel.readAccepted("build-code") } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
     ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({
@@ -155,9 +156,38 @@ function verifyOfficialEvidence(ctx, result) {
   return result;
 }
 
+function assertOfficialRevisionAuthorization(stage, ctx, invocation, publication) {
+  if (!new Set(["build-code", "verify-code"]).has(stage)) return;
+  const refs = Object.values(invocation?.receipts ?? {});
+  const hasRevision = refs.some((ref) => {
+    if (typeof ref !== "string") return false;
+    let value;
+    try { value = JSON.parse(ctx.task.readRecord(ref)); } catch { return false; }
+    return value?.schema_version === "workflowhub-receipt.v1" && value.revision && typeof value.revision === "object";
+  });
+  if (!hasRevision) return;
+  if (stage === "build-code") {
+    if (publication?.reopenProvenance) return;
+    try {
+      ctx.task.readRecord("results/build-code/accepted.json");
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      throw error;
+    }
+    ctx.kernel.readAccepted("build-code");
+    throw new Error("accepted build-code revision receipt requires a controlled reopen");
+  }
+  let acceptedVerify;
+  try { acceptedVerify = ctx.kernel.readAccepted("verify-code"); }
+  catch { throw new Error("verify-code revision receipt requires controlled fresh verify lineage"); }
+  const activeBuild = ctx.kernel.readAccepted("build-code");
+  if (!acceptedVerify || !activeBuild.attempt.reopen_provenance) throw new Error("verify-code revision receipt requires controlled fresh verify lineage");
+}
+
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
 export function runOfficialStage(stage, context, invocation, publication) {
   const ctx = assertContext(context, stage);
+  assertOfficialRevisionAuthorization(stage, ctx, invocation, publication);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
   return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)), publication);

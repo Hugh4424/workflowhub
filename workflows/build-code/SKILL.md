@@ -8,18 +8,35 @@ version: 2.0.0
 
 ## Runtime contract
 
-Follow `docs/contracts/task-context.md`; runtime implementation is
-`core/stage-context.mjs`. Consume only the branded StageContext from
+`core/stage-context.mjs` is the external runner implementation. Consume only the
+branded StageContext from
 `bootstrapStage("build-code", ...)`. All commands run with explicit
 `ctx.workspace.worktreeRoot`. This execution cwd is not an identity source.
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
 Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
 only a branded Workspace plus argv and fixes cwd to the verified worktree.
+Never derive task identity or paths from cwd, a repository, or an external
+tracker identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
+locators from its authenticated `runner_root`; never search for or copy those
+runner files into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-code
 is an automatic stage: the trusted runtime publishes and accepts its attempt
 without a human confirmation command.
+
+The loaded Skill is the authoritative contract. Do not search the target
+repository for another Skill file. The target repository's `skills/` directory
+is never an entry. `stage-runtime.mjs` has no `--help` command. Build-code must
+not call `prepare`, `confirm`, or a separate `accept`, and must never pass
+`--runner-root`.
+
+Create an OS temporary directory first:
+`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-code.XXXXXX")"`.
+Every caller-owned receipt payload, test-capture input, run input, or review
+request must stay under `$TMP_DIR`, never in the target base repository or
+accepted Workspace. Product code changes belong only in the authenticated
+Workspace; canonical receipts and evidence remain owned by TaskKernel.
 
 ## Controlled revision after verification failure
 
@@ -33,6 +50,9 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
    `node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
 3. Re-run only the original task's build-code with the returned immutable ref:
    `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
+   If a canonical component receipt already exists from the accepted build,
+   this controlled re-run uses the existing `receipt --revision=true
+   --recover=<previous-receipt-ref>` path.
 
 The new attempt carries the prior accepted record and verify failure hashes.
 The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`
@@ -41,7 +61,58 @@ Consumers always read only `accepted.json`; archives and reopen records are
 lineage evidence, never input side channels. Reusing an authorization, a source
 from a different task, a non-failure, or a non-build-code stage fails loudly.
 
-Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
+Create implementation provenance with
+`node scripts/stage-runtime.mjs receipt --stage=build-code
+--project=<project> --task=<task> --component=implementation
+--input=$TMP_DIR/implementation.json`; HEAD/tree/diff evidence is derived by the writer.
+Before build-code is accepted, a same-Phase repair after a failed pre-review
+check or review finding must preserve the old receipt and publish the repaired
+snapshot with `--revision=true --recover=<latest-implementation-receipt-ref>`.
+Capture repaired tests under new receipt/output refs and pass those new refs to
+the next review and stage run. If a Phase or final full-worktree review returns
+`revise_required`, repair the same original Phase that owns the finding,
+publish a revision receipt, capture fresh tests under new refs, and repeat the
+affected Phase review before the final full-worktree review. This is
+append-only repair of the current open stage; it
+does not require or create a verify-code reopen authorization. After build-code
+is accepted, only the controlled verification-failure path above may create
+another build-code attempt.
+For a normal completed build, use the smallest valid payload:
+`{"phase_completion":true}`. A structured value is allowed only as
+`{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
+Keep Phase lists and the AC table in the existing test evidence and human brief;
+do not put them inside `phase_completion`. The receipt command validates this
+shape before publishing any create-only receipt or diff evidence.
+
+Create the canonical build test receipt only through:
+`node scripts/stage-runtime.mjs capture-tests --stage=build-code
+--project=<project> --task=<task> --input=$TMP_DIR/test-capture.json`.
+The input contains only `command`, `receipt_ref`, and optional `output_ref`, for
+example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output_ref":"evidence/build-tests.output"}`.
+Use fresh task-relative refs for a controlled rework attempt. Do not pass
+`component=tests`, call internal receipt writers, or guess another component
+name; `capture-tests` is the single public producer for build-code test facts.
+
+After every Phase has passed its Phase review, and the final implementation
+receipt and fresh test receipt exist, run one final independent code review
+using those fresh tests: one full-worktree `wh-review` without `phase_id`. This
+final review is separate from the required per-Phase reviews. The review host
+freezes the authenticated Workspace itself; do not supply paths, commits,
+ranges, or a caller-built diff.
+The canonical implementation receipt, canonical tests receipt, and final review
+must all bind the same snapshot tree. A mismatch fails before the build-code
+attempt is published.
+
+After review, create `$TMP_DIR/run.json` with exactly:
+`{"receipts":{"implementation":"<final implementation receipt ref>","tests":"<final fresh test receipt ref>","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+For the normal path, the default final refs are `receipts/implementation.json` and `receipts/build-tests.json`.
+For a pre-accept revision, use the latest implementation revision receipt ref and newest fresh test receipt ref produced for that repaired snapshot; never fall back to the initial refs.
+Publish and automatically accept the stage with
+`node scripts/stage-runtime.mjs run --stage=build-code
+--project=<project> --task=<task> --input=$TMP_DIR/run.json`.
+After `run` consumes the final input, let the host reclaim `$TMP_DIR` through
+its normal OS temporary lifecycle. Never treat the temporary path as a stage
+artifact, evidence ref, or handoff item.
 
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,
 conditional `diagnosing-bugs`, and conditional `review-response`.
@@ -54,44 +125,151 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
   attempt and evidence through TaskHandle/TaskKernel.
 - Does not modify accepted design artifacts.
 
-## Procedure
+## Composable execution
 
-1. Validate context, accepted lineage, Git common directory, baseline, and
-   named artifact checkpoint hashes.
-2. Read design artifacts through ArtifactDir. Never search for substitutes.
-3. Split work into implementation phases. Show each phase scope as a progress
-   update and continue automatically. Escalate only when the requested work
-   would change the accepted plan or allowed scope.
-4. Invoke coding workers with frozen phase material and the explicit workspace
-   root. Workers do not receive task storage information.
-5. Run the target project's real test command in the Workspace. Record command,
-   exit code, freshness, and output reference without turning the observation
-   into an automatic quality decision.
-6. Run `createPhaseDiffScan` from `diff-scanner.mjs` with the trusted Workspace
-   root, phase ID, phase baseline commit, immutable implementation snapshot, and
-   the plan's allowed files. Its CLI accepts repeated
-   `--allowed-file=<repo-relative-path>` flags or one absolute
-   `--allowed-files-json=<json-array-file>` and prints JSON to stdout. Save the
-   `phase-diff-scan.v1` JSON as task-relative evidence and point the current
-   `phase-result.json.diff_scan.path` at it.
-7. Run independent code review with only the current `phase_id` as its scope
-   selector. `wh-review` resolves the frozen commit pair from the current diff
-   scan and regenerates the complete phase diff. Do not pass paths, commits,
-   ranges, or a caller-built diff. Address actionable revisions in a new phase
-   attempt; do not overwrite evidence. If the independent review capability is
-   unavailable, publish the diagnostic and stop as blocked; do not turn missing
-   capability into a human confirmation prompt.
-   `simplicity-guard` is provider-visible only inside `wh-review`; the build-code
-   generator and implementation workers never invoke it. Its lens may reject
-   concrete scope creep or speculative code in the current diff, but it may not
-   reopen accepted product scope.
-8. Publish a build-code attempt containing baseline/head commits, changed
-   files, fresh test command, test facts, review facts, and missing items.
-9. Present the automatic-progress brief from `docs/human-brief-template.md`.
-   The trusted runtime immediately runs `accept --attempt=<attempt>` without a
-   confirmation and advances to verify-code.
+The contract has two composable parts: **Stage coordination** and **Phase
+execution**. A single executor runs Stage coordination, then performs each
+Phase execution in order, returning to Stage coordination after every PASS.
+Splitting the parts across host workers is optional and must not change their
+order, evidence, or authority boundaries.
 
-No task identifier, issue identifier, branch name, or shell location may select
+### Stage coordination
+
+1. Validate StageContext, accepted lineage, Git common directory, and named
+   artifact checkpoint hashes. Read design artifacts only through ArtifactDir.
+2. Split the accepted plan into ordered Phases. For each Phase, create one
+   frozen **Phase Card** containing only authenticated facts copied from
+   StageContext and accepted records: project/task/phase identity, goal,
+   accepted AC IDs, Workspace root, allowed files, baseline, non-goals,
+   applicable RED expectation, exact test commands, necessary regression
+   scope, conditional-component trigger facts, and upstream findings.
+   The card must not copy execution steps, review selection rules, or
+   task-storage paths. Never infer any card field from cwd or directory scans.
+   When a host exposes the Phase Card on a user-visible surface, it must lead
+   with a short plain-language Phase brief: goal, completion standard, allowed
+   change area, test result expected, and next owner. Raw Workspace paths,
+   baselines, hashes, internal IDs, and exact commands belong only in the
+   formal card record and must not appear in the user-visible description.
+3. Start only the current Phase. When Phase execution returns, run the Phase
+   gate against the canonical result, its formal PASS review, and the live
+   Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or
+   Workspace drift returns to the same Phase; it never advances.
+4. Start the next Phase only after the current Phase gate passes. The accepted
+   plan remains the ordering authority; the mutable `phase-result.json` is only
+   the current pointer because there is no machine-readable Phase index.
+5. After every planned Phase passes, verify each Phase ID has matching
+   canonical snapshot/material evidence and a formal PASS result, then run one
+   final full-worktree `wh-review`. Never repeat a Phase or final review when
+   its snapshot/material identity is unchanged.
+6. Create the final implementation and fresh test receipts, publish the
+   build-code attempt with `run`, and let the trusted runtime accept it
+   automatically. A Phase result is gate evidence and cannot replace the final
+   full-worktree review.
+7. If verify-code later publishes an authenticated failure, use only the
+   controlled `reopen` flow above. Preserve the prior accepted attempt and
+   rerun only the current, last affected PASS Phase before repeating the final
+   full-worktree review. Pass the immutable `reopen_ref` in every
+   `publish-phase-evidence` input for that repair. The runtime authenticates it
+   against the active accepted build and records only the ref in the new Phase
+   evidence. While that reopen remains bound to the active accepted build, each
+   changed identity may be reviewed once; accepting the revised build makes the
+   reopen stale and unusable. This does not create a Phase registry or Phase
+   history.
+
+### Phase execution
+
+1. Read the frozen Phase Card as facts. Do not split or start another Phase,
+   change accepted scope, commit, merge, push, accept the Stage, or close the
+   task.
+2. When applicable, produce RED, make the minimal GREEN change, run focused
+   tests, run the necessary regression, and inspect the scoped diff. Use
+   conditional `test-routing-advisor`, `diagnosing-bugs`, or `review-response`
+   only when its declared trigger is present.
+3. Publish implementation receipts through `receipt` and real test evidence
+   through `capture-tests`; return the exact command and raw output. Before
+   review, use `| AC | status | refs | reason |`, giving every accepted AC
+   exactly one row marked `covered`, `missing`, or `unknown`. `covered` requires
+   authenticated canonical refs; an omitted AC is never covered.
+4. Create a temporary JSON input containing only `phase_id`,
+   `implementation_receipt_ref`, `green_test_receipt_ref`, optional
+   `red_evidence_ref`, optional `previous_phase_review_ref`, and
+   `allowed_files`. Only the controlled post-accept repair above also includes
+   its authenticated `reopen_ref`. Run:
+   `node scripts/stage-runtime.mjs publish-phase-evidence --stage=build-code
+   --project=<project> --task=<task> --input=<phase-evidence.json>`.
+   The runtime derives the baseline and Workspace identity. Do not supply a
+   path, commit, range, review implementation detail, or output destination.
+   `phase_id` and `allowed_files` are declared Phase facts, not a new approval
+   registry; the independent review checks them against the accepted plan.
+5. Run one independent `wh-review` for the current `phase_id`. Then call
+   `publish-phase-evidence` again with the same facts plus
+   `review_result_ref`; this finalizes the current pointer without invoking a
+   review itself.
+   `simplicity-guard` is visible only inside `wh-review`; Stage coordination
+   and Phase execution never invoke it directly.
+6. If the verdict is `revise_required`, verify each finding against the frozen
+   evidence, repair the same Phase, capture fresh receipts, publish a changed
+   identity, and review only that new identity. Do not return between finding
+   and repair. If independent review is unavailable, preserve the diagnostic
+   and stop as blocked without turning it into a product decision.
+7. Return once, and only after the current identity has a formal PASS result
+   and all Phase-gate material is complete. Return the Phase ID, canonical
+   evidence refs, test command/output refs, review result ref, changed paths,
+   and unresolved facts; do not copy full artifacts or logs.
+
+Publishing Phase evidence does not authorize a controlled revision after an
+accepted build. That authority is validated later by the existing final
+`run --reopen=<immutable-ref>` path.
+
+After the Stage is accepted, present a plain-language automatic-progress brief
+with exactly four items: current status; next step and owner; whether the user
+must act; and, only when action is required, the problem, a recommended option,
+and every option's consequence and risk. Point to formal artifacts and evidence
+refs without copying their full contents.
+
+## Host interaction and completion handoff
+
+Procedure actions named `ask`, `wait`, or `present` must be projected onto a
+host-visible conversation surface. The invoking host owns delivery and resume;
+WorkflowHub neither identifies a host user nor derives a conversation address.
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result.
+Ask and wait for the user only when an answer can change accepted scope or an
+existing authorization boundary. When user action is required, present the
+problem, one recommended option with its reason, mutually exclusive choices,
+and each choice's consequence and risk. Otherwise state `user action: none`.
+An inaccessible Workspace, missing host resource mapping, checkout mismatch,
+or task identity problem is a host configuration failure, not a product
+decision. After safe local diagnosis, return its completion condition to the
+host coordinator; do not ask the user unless resolving it truly requires new
+credentials, permissions, or an irreversible external action. If a resumed
+invocation finds no state change and no action to take, publish no public
+message.
+
+Before the Stage completes, report Stage-owned component facts using
+`skill-deps.yaml` as the declared baseline: every `always` component is
+`executed`; every `conditional` component is either `executed` or
+`trigger=false — <reason>`. Cross-check the list with formal artifacts and
+canonical `wh-review` refs. Reviewer-owned lenses appear only through those
+review refs and are never invoked a second time by the Stage.
+
+Publish one concise completion handoff containing the stage result, human-readable
+artifact names, test and review conclusions, downstream dependencies, unresolved
+risks, next owner, and user action. Do not copy artifacts or raw logs. The
+handoff must be rebuilt from the latest completed Phase results and final
+full-worktree evidence. Later facts supersede earlier provisional skips,
+risks, and findings; never reuse a stale Phase summary as the final result. The
+invoking host must deliver the same concise facts to its downstream handoff
+surface and parent progress surface. If downstream reports invalid upstream
+input, the host must return the finding and completion condition to the upstream owner
+through those host-owned
+surfaces; do not poll or invent a host-specific recovery mechanism.
+
+No task identifier, external tracker identifier, branch name, or shell location may select
 the project or task. Missing accepted inputs stop before implementation.
 WorkspaceRunner sets the authenticated starting cwd for repository-owned test
 and diff commands; it is not a sandbox and does not prevent an invoked command

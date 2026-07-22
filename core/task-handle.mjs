@@ -80,10 +80,12 @@ function validateManifest(manifest) {
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
   const hasRunnerRoot = Object.prototype.hasOwnProperty.call(manifest, "runner_root");
+  const hasRunnerOid = Object.prototype.hasOwnProperty.call(manifest, "runner_oid");
   const hasRunnerMigration = Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration");
-  if (hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root and runner_root_migration must be present together");
+  if (hasRunnerRoot !== hasRunnerOid || hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root, runner_oid, and runner_root_migration must be present together");
   if (hasRunnerRoot) {
     if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) throw new TypeError("task manifest runner_root must be an absolute path");
+    if (!/^[a-f0-9]{40}$/.test(manifest.runner_oid ?? "")) throw new TypeError("task manifest runner_oid must be a full Git commit OID");
     assertPlainObject(manifest.runner_root_migration, "task manifest runner_root_migration");
     const migration = manifest.runner_root_migration;
     if (Object.keys(migration).some((key) => key !== "ref") || !RUNNER_ROOT_MIGRATION_REF.test(migration.ref ?? "")) {
@@ -176,9 +178,9 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
     throw new Error("runner root migration record is invalid");
   }
   const identity = record.runner_identity;
-  const identityKeys = new Set(["runner_root", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
+  const identityKeys = new Set(["runner_root", "runner_oid", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
   if (!identity || typeof identity !== "object" || Array.isArray(identity) || Object.keys(identity).some((key) => !identityKeys.has(key)) ||
-      identity.runner_root !== manifest.runner_root || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
+      identity.runner_root !== manifest.runner_root || identity.runner_oid !== manifest.runner_oid || !/^[a-f0-9]{40}$/.test(identity.runner_oid ?? "") || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
       typeof identity.stage !== "string" || identity.agents_ref !== "AGENTS.md" || identity.stage_skill_ref !== `workflows/${identity.stage}/SKILL.md`) {
     throw new Error("runner root migration identity mismatch");
   }
@@ -203,6 +205,7 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
   if (sha256(migrationManifestRaw) !== record.new_manifest_hash) throw new Error("runner root migration new manifest hash mismatch");
   const previousManifest = { ...migrationManifest };
   delete previousManifest.runner_root;
+  delete previousManifest.runner_oid;
   delete previousManifest.runner_root_migration;
   const reconstructedPreviousRaw = `${JSON.stringify(previousManifest, null, 2)}\n`;
   if (sha256(reconstructedPreviousRaw) !== record.previous_manifest_hash) throw new Error("runner root migration previous manifest hash mismatch");
@@ -378,8 +381,18 @@ function waitBriefly(milliseconds = 10) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
-function withRecordLockAt(taskRoot, relativePath, operation) {
+function recordLockWaitMs(options) {
+  if (options === undefined) return RECORD_LOCK_WAIT_MS;
+  assertPlainObject(options, "record lock options");
+  if (Object.keys(options).some((key) => key !== "waitMs") || !Number.isSafeInteger(options.waitMs) || options.waitMs < 0) {
+    throw new TypeError("record lock waitMs must be a non-negative safe integer");
+  }
+  return options.waitMs;
+}
+
+function withRecordLockAt(taskRoot, relativePath, operation, options) {
   if (typeof operation !== "function") throw new TypeError("record lock operation must be a function");
+  const waitMs = recordLockWaitMs(options);
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const nonce = randomUUID();
@@ -406,8 +419,9 @@ function withRecordLockAt(taskRoot, relativePath, operation) {
         }
         continue;
       }
-      if (Date.now() - started >= RECORD_LOCK_WAIT_MS) throw new Error(`timed out waiting for record lock: ${relativePath}`);
-      waitBriefly();
+      const elapsed = Date.now() - started;
+      if (elapsed >= waitMs) throw new Error(`timed out waiting for record lock: ${relativePath}`);
+      waitBriefly(Math.min(10, waitMs - elapsed));
     }
   }
   const release = () => {
@@ -638,6 +652,69 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate only canonical wh-review result records. */
+    listCanonicalReviewResultRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const resultsRoot = resolve(reviewsRoot, "results");
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, resultsRoot, "review results directory");
+      if (!existsSync(resultsRoot)) return [];
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const resultsIdentity = directorySnapshot(realTaskPath, resultsRoot);
+      const refs = readdirSync(resultsRoot, { withFileTypes: true })
+        .filter((entry) => entry.name.endsWith(".json"))
+        .map((entry) => {
+          const candidate = resolve(resultsRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile() || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(entry.name)) {
+            throw new Error(`canonical review result must be a regular non-symlink JSON file: ${entry.name}`);
+          }
+          return `reviews/results/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(resultsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate only canonical wh-review attempt envelopes. */
+    listCanonicalReviewAttemptRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const attemptsRoot = resolve(reviewsRoot, "attempts");
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, attemptsRoot, "review attempts directory");
+      if (!existsSync(attemptsRoot)) return [];
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const attemptsIdentity = directorySnapshot(realTaskPath, attemptsRoot);
+      const attemptIdentities = [];
+      const refs = readdirSync(attemptsRoot, { withFileTypes: true })
+        .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry.name))
+        .map((entry) => {
+          const attemptRoot = resolve(attemptsRoot, entry.name);
+          const stat = lstatSync(attemptRoot);
+          if (!entry.isDirectory() || stat.isSymbolicLink() || !stat.isDirectory()) {
+            throw new Error(`canonical review attempt must be a real directory: ${entry.name}`);
+          }
+          const identity = directorySnapshot(realTaskPath, attemptRoot);
+          attemptIdentities.push(identity);
+          const candidate = resolve(attemptRoot, "attempt.json");
+          const candidateStat = lstatSync(candidate);
+          if (candidateStat.isSymbolicLink() || !candidateStat.isFile()) {
+            throw new Error(`canonical review attempt must be a regular non-symlink JSON file: ${entry.name}/attempt.json`);
+          }
+          return `reviews/attempts/${entry.name}/attempt.json`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      for (const identity of attemptIdentities) verifyDirectorySnapshot(identity);
+      verifyDirectorySnapshot(attemptsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     writeRecordAtomic(relativePath, data, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();
@@ -656,10 +733,10 @@ function makeTaskHandle(taskPath, manifest) {
     },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical attempts/accepted records only through TaskKernel.
-    withRecordLock(relativePath, operation) {
+    withRecordLock(relativePath, operation, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();
-      const result = withRecordLockAt(realTaskPath, relativePath, operation);
+      const result = withRecordLockAt(realTaskPath, relativePath, operation, options);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return result;
     },
@@ -807,7 +884,7 @@ function makeTaskHandle(taskPath, manifest) {
 
 /** Create and atomically publish a complete task directory under a trusted storage root. */
 export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) {
-  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
+  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_oid") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
     throw new TypeError("createTask cannot set runner_root; use controlled runner migration for an existing task");
   }
   const identity = validateManifest(manifest);
@@ -909,7 +986,7 @@ export function migrateTaskRunnerRoot({ taskPath, projectName, taskId, runnerRoo
   });
   if (task.manifest.runner_root !== undefined) {
     const record = JSON.parse(task.readRecord(task.manifest.runner_root_migration.ref));
-    if (task.manifest.runner_root !== identity.runner_root || JSON.stringify(record.runner_identity) !== JSON.stringify(identity)) {
+    if (task.manifest.runner_root !== identity.runner_root || task.manifest.runner_oid !== identity.runner_oid || JSON.stringify(record.runner_identity) !== JSON.stringify(identity)) {
       throw new Error("task runner_root is already bound to a different runner identity");
     }
     return Object.freeze({
@@ -928,6 +1005,7 @@ export function migrateTaskRunnerRoot({ taskPath, projectName, taskId, runnerRoo
     const nextManifest = {
       ...task.manifest,
       runner_root: identity.runner_root,
+      runner_oid: identity.runner_oid,
       runner_root_migration: { ref: recordRef },
     };
     const nextManifestRaw = `${JSON.stringify(nextManifest, null, 2)}\n`;

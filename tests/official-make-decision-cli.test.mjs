@@ -29,15 +29,17 @@ describe("official make-decision CLI", () => {
     execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
+    const baseStatus = String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repo }));
     const head = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo })).trim();
     const taskPath = join(root, "Projects", "Demo", "tasks", "decision-task");
     const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "decision-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-    const missingDecisionLogPayload = join(root, "decision-missing-log.json"); writeFileSync(missingDecisionLogPayload, `${JSON.stringify({ content: "go" })}\n`);
-    const decisionPayload = join(root, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
+    const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
+    const missingDecisionLogPayload = join(inputRoot, "decision-missing-log.json"); writeFileSync(missingDecisionLogPayload, `${JSON.stringify({ content: "go" })}\n`);
+    const decisionPayload = join(inputRoot, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
     const snapshotTree = String(execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: repo })).trim();
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "detail" });
-    const input = join(root, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
+    const input = join(inputRoot, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
     const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
     expect(linkedWorktrees(repo)).toEqual([]);
@@ -47,7 +49,7 @@ describe("official make-decision CLI", () => {
     const decision = JSON.parse(invoke(["receipt", "--stage=make-decision", "--project=Demo", "--task=decision-task", "--component=decision", `--input=${decisionPayload}`]));
     expect(decision.receipt_ref).toBe("receipts/decision.json");
     expect(linkedWorktrees(repo)).toEqual([]);
-    const badInput = spawnSync(process.execPath, [runtime, "run", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--input=${join(root, "missing.json")}`], { cwd: repo, env, encoding: "utf8" });
+    const badInput = spawnSync(process.execPath, [runtime, "run", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--input=${join(inputRoot, "missing.json")}`], { cwd: repo, env, encoding: "utf8" });
     expect(badInput.status).not.toBe(0);
     expect(badInput.stderr).toMatch(/ENOENT|missing\.json/i);
     expect(linkedWorktrees(repo)).toEqual([]);
@@ -60,7 +62,8 @@ describe("official make-decision CLI", () => {
     });
     expect(linkedWorktrees(repo)).toEqual([worktree]);
     expect(() => task.readRecord("results/make-decision/accepted.json")).toThrow();
-    const specPayload = join(root, "spec.json"); writeFileSync(specPayload, `${JSON.stringify({ content: "# Spec\n" })}\n`);
+    const specInputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-build-spec."))); roots.push(specInputRoot);
+    const specPayload = join(specInputRoot, "spec.json"); writeFileSync(specPayload, `${JSON.stringify({ content: "# Spec\n" })}\n`);
     const beforeAccept = spawnSync(process.execPath, [runtime, "receipt", "--stage=build-spec", "--project=Demo", "--task=decision-task", "--component=spec", `--input=${specPayload}`], { cwd: repo, env, encoding: "utf8" });
     expect(beforeAccept.status).not.toBe(0);
     expect(beforeAccept.stderr).toMatch(/accepted make-decision|stage requires/i);
@@ -75,6 +78,8 @@ describe("official make-decision CLI", () => {
     expect(JSON.parse(invoke(["accept", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--attempt=${result.attempt_ref}`, `--human-confirmation-ref=${confirmation.ref}`]))).toMatchObject({ stage: "make-decision" });
     expect(linkedWorktrees(repo)).toEqual([worktree]);
     expect(JSON.parse(invoke(["receipt", "--stage=build-spec", "--project=Demo", "--task=decision-task", "--component=spec", `--input=${specPayload}`]))).toMatchObject({ receipt_ref: "receipts/spec.json" });
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repo }))).toBe(baseStatus);
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: worktree }))).toBe("");
   });
 
   it("binds full grill-with-docs writes to the published candidate snapshot", () => {
@@ -87,16 +92,17 @@ describe("official make-decision CLI", () => {
     const taskPath = join(root, "Projects", "Demo", "tasks", "grill-task");
     const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "grill-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+    const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
     const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=grill-task"]));
     const contextFile = join(prepared.worktree_root, "CONTEXT.md");
     writeFileSync(contextFile, "# Resolved domain language\n");
-    const decisionPayload = join(root, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
+    const decisionPayload = join(inputRoot, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
     const decision = JSON.parse(invoke(["receipt", "--stage=make-decision", "--project=Demo", "--task=grill-task", "--component=decision", `--input=${decisionPayload}`]));
     const snapshotTree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "detail" });
-    const input = join(root, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: decision.receipt_ref, direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
+    const input = join(inputRoot, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: decision.receipt_ref, direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
     const result = JSON.parse(invoke(["run", "--stage=make-decision", "--project=Demo", "--task=grill-task", `--input=${input}`]));
     expect(result.attempt.facts.snapshot_tree).toMatch(/^[a-f0-9]{40}$/);
     writeFileSync(contextFile, "tampered after publication\n");
@@ -107,6 +113,8 @@ describe("official make-decision CLI", () => {
     writeFileSync(contextFile, "# Resolved domain language\n");
     expect(JSON.parse(invoke(["accept", "--stage=make-decision", "--project=Demo", "--task=grill-task", `--attempt=${result.attempt_ref}`, `--human-confirmation-ref=${confirmation.ref}`]))).toMatchObject({ stage: "make-decision", acceptance_mode: "human" });
     expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain(result.attempt.facts.snapshot_tree);
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repo }))).toBe("");
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: prepared.worktree_root }))).toBe("?? CONTEXT.md\n");
   });
 
   it("rejects removed caller-owned workspace arguments explicitly", () => {

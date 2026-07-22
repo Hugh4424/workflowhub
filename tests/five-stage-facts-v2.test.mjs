@@ -29,6 +29,13 @@ describe("five-stage facts v2 schema", () => {
   it("rejects a stale or non-string build-code test command", () => {
     expect(() => validateStageFacts("build-code", { ...valid["build-code"], tests: { command: 7, exit_code: 0 } })).toThrow(/tests|command/i);
   });
+  it("accepts the documented structured phase completion", () => {
+    const phase_completion = { status: "complete", evidence_ref: "evidence/phase-summary.json" };
+    expect(validateStageFacts("build-code", { ...valid["build-code"], phase_completion }).phase_completion).toBe(phase_completion);
+  });
+  it("rejects phase details that omit the documented status and evidence ref", () => {
+    expect(() => validateStageFacts("build-code", { ...valid["build-code"], phase_completion: { phases: [], acceptance: [] } })).toThrow(/phase_completion\.status/i);
+  });
   it("rejects copied review verdicts without a formal result ref and snapshot",()=>{
     expect(()=>validateStageFacts("verify-code",{...valid["verify-code"],review:{verdict:"pass"}})).toThrow(/result_ref|hash|snapshot|review/i);
   });

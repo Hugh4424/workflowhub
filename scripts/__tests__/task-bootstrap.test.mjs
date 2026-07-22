@@ -39,6 +39,8 @@ describe("task bootstrap target repository boundary", () => {
     writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
     mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
     writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
+    execFileSync("git", ["add", "."], { cwd: runner });
+    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
     const task = createTask({ storageRoot: f.storage, manifest: {
       schema_version: "1.0.0", project_name: "workflowhub", task_id: "m14b-fact-collection-g2",
       created_at: "2026-07-19T00:00:00.000Z", target_repo_root: f.repo, issue_ids: ["ZHI-102"], inputs: {},
@@ -52,7 +54,7 @@ describe("task bootstrap target repository boundary", () => {
     const result = bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2", "runner-root": realpathSync(runner), stage: "verify-code" }, { env: {}, home: join(f.home, "missing-home") });
     expect(result).toMatchObject({
       task_path: task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2",
-      runner_identity: { runner_root: realpathSync(runner), runner_branch: "task/workflowhub/m14b-fact-collection-g2", project: "workflowhub", task: "m14b-fact-collection-g2", stage: "verify-code" },
+      runner_identity: { runner_root: realpathSync(runner), runner_oid: execFileSync("git", ["rev-parse", "HEAD"], { cwd: runner, encoding: "utf8" }).trim(), runner_branch: "task/workflowhub/m14b-fact-collection-g2", project: "workflowhub", task: "m14b-fact-collection-g2", stage: "verify-code" },
     });
     expect(readFileSync(join(task.taskPath, "task.json"), "utf8")).toBe(before);
     expect(() => bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2", "runner-root": f.repo, stage: "verify-code" })).toThrow(/AGENTS|runner identity/i);

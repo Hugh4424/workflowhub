@@ -115,6 +115,8 @@ function createRunner(f) {
   writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
   mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
   writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
+  execFileSync("git", ["add", "."], { cwd: runner });
+  execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
   return realpathSync(runner);
 }
 
@@ -344,6 +346,20 @@ describe("delivery close verifier", () => {
     advanceRemote(f);
     await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).rejects.toThrow(/remote target baseline changed/i);
     expect(git(f.repo, "rev-parse", "task/Demo/close-task")).toBe(before);
+  });
+
+  it("preserves git ls-remote failure details before the first write", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const before = git(f.repo, "rev-parse", "task/Demo/close-task");
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    git(f.repo, "remote", "set-url", "origin", join(f.root, "missing-remote.git"));
+
+    await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) }))
+      .rejects.toThrow(/git ls-remote failed \(exit \d+\):.*fatal/i);
+    expect(git(f.repo, "rev-parse", "task/Demo/close-task")).toBe(before);
+    expect(git(f.worktree, "status", "--porcelain", "--untracked-files=all")).toBe("");
   });
 
   it("stops after merge when the remote advances before push", async () => {

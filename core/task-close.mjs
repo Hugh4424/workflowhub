@@ -139,7 +139,7 @@ function git(cwd, args, { allowFailure = false } = {}) {
 
 function gitResult(cwd, args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return { ok: result.status === 0, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
+  return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
 }
 
 function oid(value, label) {
@@ -186,8 +186,13 @@ function treeEntry(root, commit, path) {
 
 function remoteOid(root, remote, branch) {
   const result = gitResult(root, ["ls-remote", "--exit-code", remote, `refs/heads/${branch}`]);
-  const value = result.ok ? result.stdout.split(/\s+/)[0]?.toLowerCase() : null;
-  return /^[a-f0-9]{40}$/.test(value ?? "") ? value : null;
+  if (!result.ok) {
+    const exit = Number.isInteger(result.status) ? result.status : "unknown";
+    throw new Error(`git ls-remote failed (exit ${exit}): ${result.stderr || "no error output"}`);
+  }
+  const value = result.stdout.split(/\s+/)[0]?.toLowerCase();
+  if (!/^[a-f0-9]{40}$/.test(value ?? "")) throw new Error("git ls-remote returned an invalid commit OID");
+  return value;
 }
 
 function branchOid(root, branch) {

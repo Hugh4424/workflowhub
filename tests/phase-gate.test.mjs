@@ -31,7 +31,8 @@ beforeEach(() => {
   outside = null;
   root = mkdtempSync(join(tmpdir(), "phase-gate-"));
   git(["init", "-q"]); git(["config", "user.name", "Test"]); git(["config", "user.email", "test@example.com"]);
-  writeFileSync(join(root, "source.txt"), "base\n"); git(["add", "source.txt"]); git(["commit", "-qm", "base"]);
+  writeFileSync(join(root, ".gitignore"), "evidence/\nreviews/\n");
+  writeFileSync(join(root, "source.txt"), "base\n"); git(["add", ".gitignore", "source.txt"]); git(["commit", "-qm", "base"]);
   baselineCommit = git(["rev-parse", "HEAD"]); baseTree = git(["rev-parse", "HEAD^{tree}"]);
   writeFileSync(join(root, "source.txt"), "candidate\n"); git(["commit", "-qam", "candidate"]);
   implementationCommit = git(["rev-parse", "HEAD"]); tree = git(["rev-parse", "HEAD^{tree}"]);
@@ -44,10 +45,10 @@ describe("phase-gate formal review result", () => {
     expect(checked.ok, checked.errors.join("; ")).toBe(true);
     expect(checked.checked).toEqual(["phase-status", "red-green-evidence", "diff-scan", "heterogeneous-review"]);
   });
-  it("records revise_required without blocking the phase", () => {
+  it("blocks revise_required instead of advancing the phase", () => {
     const checked = validatePhaseGate(fixture("revise_required"), root, { reviewDataRoot: root });
-    expect(checked.ok).toBe(true);
-    expect(checked.warnings.join(" ")).toMatch(/revise_required/);
+    expect(checked.ok).toBe(false);
+    expect(checked.errors.join(" ")).toMatch(/must be pass|revise_required/i);
   });
   it("rejects a copied verdict and a mismatched snapshot", () => {
     expect(validatePhaseGate({ ...fixture(), review: { verdict: "pass" } }, root, { reviewDataRoot: root }).ok).toBe(false);
@@ -68,6 +69,11 @@ describe("phase-gate formal review result", () => {
 
     write(reviewPath, { ...result(), candidate_tree: "d".repeat(40) });
     expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/tree.*mismatch/i);
+  });
+  it("rejects Workspace drift after the passing Phase review", () => {
+    const item = fixture();
+    writeFileSync(join(root, "drift.txt"), "drift\n");
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/Workspace tree changed/i);
   });
   it("rejects a legacy whole-workspace result for a phase", () => {
     const item = fixture();

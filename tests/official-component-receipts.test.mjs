@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
+import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { validatePhaseCompletion } from "../core/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 
 const temporary = [];
@@ -23,7 +24,39 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
-  it("publishes allowlisted content and physical implementation receipts create-only", () => {
+  it.each([true, false])("accepts boolean phase completion: %s", (value) => {
+    expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it("accepts structured phase completion with a task-relative evidence ref", () => {
+    const value = { status: "completed", evidence_ref: "evidence/phase-result.json" };
+    expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it.each([
+    null,
+    [],
+    "complete",
+    { evidence_ref: "evidence/phase-result.json" },
+    { status: "completed" },
+    { status: "completed", evidence_ref: "/tmp/phase-result.json" },
+    { status: "completed", evidence_ref: "evidence/../phase-result.json" },
+  ])("rejects invalid phase completion before publication: %j", (value) => {
+    expect(() => validatePhaseCompletion(value)).toThrow(/phase_completion|status|evidence_ref/i);
+  });
+
+  it.each([
+    ["build-spec", "spec"],
+    ["build-plan", "plan"],
+    ["build-plan", "tasks"],
+  ])("reproduces the %s/%s EEXIST accident when a draft is frozen before review", (stage, component) => {
+    const { task } = fixture();
+    const first = writeOfficialComponentReceipt({ task, stage, component, payload: { content: "draft\n" } });
+    expect(() => writeOfficialComponentReceipt({ task, stage, component, payload: { content: "revised after review\n" } })).toThrow(/exist/i);
+    expect(JSON.parse(task.readRecord(first.ref))).toMatchObject({ content: "draft\n" });
+  });
+
+  it("publishes allowlisted content and rejects implementation without accepted design", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     expect(spec.ref).toBe("receipts/spec.json");
@@ -31,12 +64,8 @@ describe("official component receipt authority", () => {
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
     writeFileSync(join(worktree, "new.txt"), "new\n");
-    const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
-    expect(implementation.value.changed).toEqual(expect.arrayContaining(["tracked.txt", "new.txt"]));
-    expect(implementation.value.snapshot_tree).toBe(captureWorkspaceSnapshot(workspace).tree);
-    const diff = readFileSync(task.recordPath(implementation.value.diff_ref), "utf8");
-    expect(diff).toContain("tracked.txt");
-    expect(diff).toContain("new.txt");
+    expect(() => writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } })).toThrow(/accepted spec and plan/i);
+    expect(() => task.readRecord("receipts/implementation.json")).toThrow();
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 

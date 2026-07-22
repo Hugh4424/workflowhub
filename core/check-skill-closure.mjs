@@ -101,8 +101,7 @@ export function checkSkillClosure(packageRoot) {
         if (!manifestNames.has(match[1])) pushError(errors, `${stage}: prompt references undeclared skill ${match[1]}`);
       }
     }
-    const formerHostRepo = new RegExp(`multica-${"agenthub"}`);
-    if (/\/Users\/[^\n]*(?:SKILL|skill|debate|gstack|superpowers)|\.claude\/skills|\.codex\/skills/.test(prompt) || formerHostRepo.test(prompt)) {
+    if (/\/Users\/[^\n]*(?:SKILL|skill|debate|gstack|superpowers)|\.claude\/skills|\.codex\/skills/.test(prompt)) {
       pushError(errors, `${stage}: forbidden external or user-local skill locator in prompt`);
     }
     if (/skills\s*\/\s*\$\{|skills\s*\+|(?:HOME|homedir|cwd)\s*[^\n]{0,40}skills/i.test(prompt)) {

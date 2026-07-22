@@ -23,5 +23,5 @@
 ## 退役后处理
 
 1. 归档 agenthub task 目录
-2. 删除 agenthub-baseline.mjs（桥用完拆，D1）
+2. 基线桥已删除（桥用完拆，D1）
 3. 保留 freeze-and-retire.md 作为退役记录

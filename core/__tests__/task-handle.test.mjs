@@ -97,6 +97,50 @@ describe("TaskHandle", () => {
     expect(() => task.listStageAttemptRefs("build-code")).toThrow(/identity|changed|stale/i);
   });
 
+  it("enumerates only sorted regular canonical review results", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const resultsRoot = join(taskPath, "reviews", "results");
+    mkdirSync(resultsRoot, { recursive: true });
+    writeFileSync(join(resultsRoot, "z.json"), "{}");
+    writeFileSync(join(resultsRoot, "a.json"), "{}");
+    writeFileSync(join(resultsRoot, "ignored.txt"), "{}");
+    expect(task.listCanonicalReviewResultRefs()).toEqual([
+      "reviews/results/a.json",
+      "reviews/results/z.json",
+    ]);
+  });
+
+  it("enumerates only sorted regular canonical review attempts", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const attemptsRoot = join(taskPath, "reviews", "attempts");
+    for (const id of ["z-attempt", "a-attempt"]) {
+      const attemptRoot = join(attemptsRoot, id);
+      mkdirSync(attemptRoot, { recursive: true });
+      writeFileSync(join(attemptRoot, "attempt.json"), "{}");
+    }
+    writeFileSync(join(attemptsRoot, "ignored.txt"), "{}");
+
+    expect(task.listCanonicalReviewAttemptRefs()).toEqual([
+      "reviews/attempts/a-attempt/attempt.json",
+      "reviews/attempts/z-attempt/attempt.json",
+    ]);
+  });
+
+  it("rejects symlinked canonical review attempt directories", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const attemptsRoot = join(taskPath, "reviews", "attempts");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-review-attempt-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(attemptsRoot, { recursive: true });
+    writeFileSync(join(outside, "attempt.json"), "{}");
+    symlinkSync(outside, join(attemptsRoot, "linked-attempt"));
+
+    expect(() => task.listCanonicalReviewAttemptRefs()).toThrow(/symlink|directory/i);
+  });
+
   it("creates task.json once and opens it only with matching path and identity", () => {
     const { storageRoot, taskPath } = fixture();
     const manifest = {
@@ -114,16 +158,15 @@ describe("TaskHandle", () => {
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
     });
-    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
-      manifest,
-    );
+    const persistedManifest = manifest;
+    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(persistedManifest);
 
     const opened = openTask(
       taskPath,
       "PaperBuilder",
       "paperbuilder-phase-foundation",
     );
-    expect(opened.manifest).toEqual(manifest);
+    expect(opened.manifest).toEqual(persistedManifest);
     expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
   });
 
@@ -463,6 +506,37 @@ describe("TaskHandle", () => {
       { event: "stage_started", stage: "build-spec" },
       { event: "stage_finished", stage: "build-spec" },
     ]);
+  });
+
+  it("honors an explicit bounded wait when another process owns a record lock", async () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const lockRef = "locks/cross-process-wait.lock";
+    const code = [
+      `import { openTask } from ${JSON.stringify(modulePath)};`,
+      `const task = openTask(${JSON.stringify(taskPath)}, "PaperBuilder", "paperbuilder-phase-foundation");`,
+      `await task.withRecordLock(${JSON.stringify(lockRef)}, async () => {`,
+      `  process.stdout.write("locked\\n");`,
+      `  await new Promise((resolve) => setTimeout(resolve, 250));`,
+      `});`,
+    ].join("\n");
+    const child = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "inherit"] });
+    const exited = new Promise((resolveResult, reject) => {
+      child.once("error", reject);
+      child.once("exit", (status) => status === 0 ? resolveResult() : reject(new Error(`lock holder exited ${status}`)));
+    });
+    await new Promise((resolveStarted, reject) => {
+      child.stdout.once("data", resolveStarted);
+      child.once("error", reject);
+      child.once("exit", (status) => reject(new Error(`lock holder exited before ready: ${status}`)));
+    });
+
+    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: 25 })).toThrow(/timed out waiting for record lock/);
+    let acquired = false;
+    task.withRecordLock(lockRef, () => { acquired = true; }, { waitMs: 1_000 });
+    expect(acquired).toBe(true);
+    await exited;
+    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: -1 })).toThrow(/waitMs.*non-negative safe integer/);
   });
 
   it("publishes task creation atomically and leaves no orphan on serialization failure", () => {

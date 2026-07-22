@@ -277,6 +277,7 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
   return {
     schema_version: 'phase-diff-scan.v1',
     phase_id: phaseId,
+    allowed_files: [...allowed].sort(),
     baseline_commit: base,
     implementation_commit: implementation,
     snapshot_tree: snapshotTree,

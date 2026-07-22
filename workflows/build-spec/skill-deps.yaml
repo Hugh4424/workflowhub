@@ -1,7 +1,7 @@
 stage: build-spec
 skills:
   - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, invocation: always, trigger: always, bundle: skills/spec-specify/skill-bundle.json }
-  - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, invocation: always, trigger: clarification, bundle: skills/spec-clarify/skill-bundle.json }
+  - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, invocation: conditional, trigger: clarification, bundle: skills/spec-clarify/skill-bundle.json }
   - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_simplicity_lens, bundle: skills/simplicity-guard/skill-bundle.json }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
   - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_direction_lens, bundle: skills/plan-ceo-review/skill-bundle.json }
