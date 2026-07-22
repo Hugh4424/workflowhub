@@ -207,6 +207,12 @@ order, evidence, or authority boundaries.
    path, commit, range, review implementation detail, or output destination.
    `phase_id` and `allowed_files` are declared Phase facts, not a new approval
    registry; the independent review checks them against the accepted plan.
+   Complete `AGENTS.md` blocks explicitly marked as auto-managed runtime
+   context are reported as `runtime_controlled_changes`, not as Phase output.
+   The host may add, remove, or replace their task-local contents. Do not add
+   them to the Phase Card, revert them, or treat them as business changes. Any
+   edit outside complete marked blocks, malformed marker, mode change, symlink,
+   or any other path still fails the allowlist normally.
 5. Run one independent `wh-review` for the current `phase_id`. Then call
    `publish-phase-evidence` again with the same facts plus
    `review_result_ref`; this finalizes the current pointer without invoking a

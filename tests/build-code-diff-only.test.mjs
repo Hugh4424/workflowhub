@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -428,6 +428,175 @@ describe('createPhaseDiffScan', () => {
       const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-2', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
       expect(result.safe).toBe(false);
       expect(result.allowlist_violations).toEqual([{ path: 'unexpected.txt' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores only a complete auto-managed runtime block in AGENTS.md', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = `<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\nruntime command example: git push --force origin main\n<!-- END EXAMPLE-RUNTIME -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime}`);
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), '# Rules\n');
+      writeFileSync(join(root, 'phase.txt'), 'implemented\n');
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: ['phase.txt'],
+      });
+      expect(result.safe).toBe(true);
+      expect(result.changed_files).toEqual(['AGENTS.md', 'phase.txt']);
+      expect(result.runtime_controlled_changes).toEqual([{ path: 'AGENTS.md', baseline_runtime_blocks: 1, implementation_runtime_blocks: 0 }]);
+      expect(result.allowlist_violations).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not hide ordinary AGENTS.md edits behind a runtime block', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = `<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\nrunner context\n<!-- END EXAMPLE-RUNTIME -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime}`);
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), '# Changed product rule\n');
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [],
+      });
+      expect(result.safe).toBe(false);
+      expect(result.runtime_controlled_changes).toEqual([]);
+      expect(result.allowlist_violations).toEqual([{ path: 'AGENTS.md' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a pure addition of complete auto-managed runtime blocks', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = `<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\nruntime command example: git push --force origin main\n<!-- END EXAMPLE-RUNTIME -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), '# Rules\n');
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime}`);
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [],
+      });
+      expect(result.safe).toBe(true);
+      expect(result.runtime_controlled_changes).toEqual([{ path: 'AGENTS.md', baseline_runtime_blocks: 0, implementation_runtime_blocks: 1 }]);
+      expect(result.allowlist_violations).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a malformed runtime marker inside the Phase scope', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), '# Rules\n');
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), '<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\nwrong end marker\n<!-- END OTHER-RUNTIME -->\n');
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [],
+      });
+      expect(result.safe).toBe(false);
+      expect(result.runtime_controlled_changes).toEqual([]);
+      expect(result.allowlist_violations).toEqual([{ path: 'AGENTS.md' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a host-owned runtime-block replacement, including its C2-like instructions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = (body) => `<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\n${body}\n<!-- END EXAMPLE-RUNTIME -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime('old runner context')}`);
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime('git push --force origin main')}`);
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [],
+      });
+      expect(result.safe).toBe(true);
+      expect(result.runtime_controlled_changes).toEqual([{ path: 'AGENTS.md', baseline_runtime_blocks: 1, implementation_runtime_blocks: 1 }]);
+      expect(result.allowlist_violations).toEqual([]);
+      expect(result.c2_violations).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a replacement with a different runtime marker name inside the Phase scope', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = (name, body) => `<!-- BEGIN ${name} (auto-managed; do not edit) -->\n${body}\n<!-- END ${name} -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime('FIRST-RUNTIME', 'old context')}`);
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime('SECOND-RUNTIME', 'git push --force origin main')}`);
+      git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [],
+      });
+      expect(result.safe).toBe(false);
+      expect(result.runtime_controlled_changes).toEqual([]);
+      expect(result.allowlist_violations).toEqual([{ path: 'AGENTS.md' }]);
+      expect(result.c2_violations.some((violation) => violation.pattern === 'git push --force')).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps AGENTS.md mode changes and symlinks inside the Phase scope', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-runtime-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    const runtime = `<!-- BEGIN EXAMPLE-RUNTIME (auto-managed; do not edit) -->\nrunner context\n<!-- END EXAMPLE-RUNTIME -->\n`;
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'AGENTS.md'), `# Rules\n\n${runtime}`);
+      git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'AGENTS.md'), '# Rules\n');
+      git(['add', 'AGENTS.md']); git(['update-index', '--chmod=+x', 'AGENTS.md']); git(['commit', '-qm', 'mode change']);
+      let result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
+      expect(result.safe).toBe(false);
+      expect(result.runtime_controlled_changes).toEqual([]);
+
+      git(['checkout', '-q', baseline, '--', 'AGENTS.md']);
+      unlinkSync(join(root, 'AGENTS.md'));
+      symlinkSync('runner-context.md', join(root, 'AGENTS.md'));
+      git(['add', '-A']); git(['commit', '-qm', 'symlink change']);
+      result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-runtime', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
+      expect(result.safe).toBe(false);
+      expect(result.runtime_controlled_changes).toEqual([]);
+      expect(result.allowlist_violations).toEqual([{ path: 'AGENTS.md' }]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

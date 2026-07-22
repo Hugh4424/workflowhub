@@ -111,12 +111,13 @@ function basename(filePath) {
  * @param {string} diffText
  * @returns {{ violations: Array<{type: string, pattern: string, line: number}>, safe: boolean }}
  */
-export function scanDiff(diffText) {
+function scanDiffInternal(diffText, ignoredPaths = new Set()) {
   const lines = diffText.split('\n');
   const violations = [];
   const seen = new Set(); // deduplicate: one violation per (pattern, lineNum)
 
   let currentFilePath = null; // tracks which file the current hunk belongs to
+  let currentFileIgnored = false;
   const filePathViolationsSeen = new Set(); // one file-path violation per (pattern, filePath)
 
   for (let i = 0; i < lines.length; i++) {
@@ -127,6 +128,8 @@ export function scanDiff(diffText) {
     const parsedPath = extractFilePath(line);
     if (parsedPath !== null) {
       currentFilePath = parsedPath;
+      currentFileIgnored = ignoredPaths.has(currentFilePath);
+      if (currentFileIgnored) continue;
 
       // Check file-path rules against the changed file path (not content lines).
       const base = basename(currentFilePath);
@@ -175,7 +178,7 @@ export function scanDiff(diffText) {
     // Context lines (' ') and removed lines ('-') are intentionally excluded:
     //   - Context lines are pre-existing surrounding code — not what the developer is adding.
     //   - Removed lines represent code being DELETED — a git op being removed is not a new violation.
-    const isAddedLine = line.startsWith('+') && !line.startsWith('+++');
+    const isAddedLine = !currentFileIgnored && line.startsWith('+') && !line.startsWith('+++');
     if (!isAddedLine) continue;
 
     // Check irreversible_git rules against added content lines only.
@@ -203,6 +206,59 @@ export function scanDiff(diffText) {
   }
 
   return { violations, safe: violations.length === 0 };
+}
+
+export function scanDiff(diffText) {
+  return scanDiffInternal(diffText);
+}
+
+const AUTO_MANAGED_RUNTIME_BLOCK = /<!-- BEGIN ([A-Z][A-Z0-9_-]*-RUNTIME) \(auto-managed; do not edit\) -->\r?\n[\s\S]*?<!-- END \1 -->\r?\n?/g;
+
+function regularTextFileAt(root, commit, path) {
+  try {
+    const entry = execFileSync('git', ['ls-tree', '-z', commit, '--', path], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (entry === '') return null;
+    const match = entry.match(/^(100[0-7]{3}) blob [a-f0-9]{40,64}\t/);
+    if (!match) return { regular: false };
+    const text = execFileSync('git', ['show', `${commit}:${path}`], {
+      cwd: root, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { regular: true, mode: match[1], text };
+  } catch {
+    return null;
+  }
+}
+
+function removeAutoManagedRuntimeBlocks(text) {
+  const names = [];
+  const content = text.replace(AUTO_MANAGED_RUNTIME_BLOCK, (_, name) => {
+    names.push(name);
+    return '';
+  });
+  return { count: names.length, names, content: `${content.trimEnd()}\n` };
+}
+
+/**
+ * A runner may add or remove complete, explicitly marked runtime blocks in
+ * AGENTS.md. The host owns that entire marked block, including replacing its
+ * task-local contents. Only an unchanged regular file outside complete marked
+ * blocks is execution context, not a Phase product change. Any edit outside
+ * those blocks, mode change, symlink, malformed marker, or other path remains
+ * in scope.
+ */
+function runtimeControlledChange(root, baselineCommit, implementationCommit, path) {
+  if (path !== 'AGENTS.md') return null;
+  const baseline = regularTextFileAt(root, baselineCommit, path);
+  const implementation = regularTextFileAt(root, implementationCommit, path);
+  if (!baseline?.regular || !implementation?.regular || baseline.mode !== implementation.mode || baseline.text === implementation.text) return null;
+  const before = removeAutoManagedRuntimeBlocks(baseline.text);
+  const after = removeAutoManagedRuntimeBlocks(implementation.text);
+  if (before.count === 0 && after.count === 0) return null;
+  if (before.count > 0 && after.count > 0 && JSON.stringify(before.names) !== JSON.stringify(after.names)) return null;
+  if (before.content !== after.content) return null;
+  return { path, baseline_runtime_blocks: before.count, implementation_runtime_blocks: after.count };
 }
 
 function git(root, args) {
@@ -269,10 +325,16 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
     maxBuffer: 128 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  const c2 = scanDiff(diff);
   const changed_files = changedPaths(root, base, implementation);
+  const runtime_controlled_changes = changed_files
+    .map((path) => runtimeControlledChange(root, base, implementation, path))
+    .filter(Boolean);
+  const runtimeControlledPaths = new Set(runtime_controlled_changes.map(({ path }) => path));
+  const c2 = scanDiffInternal(diff, runtimeControlledPaths);
   const allowed = new Set(allowedFiles);
-  const allowlist_violations = changed_files.filter((path) => !allowed.has(path)).map((path) => ({ path }));
+  const allowlist_violations = changed_files
+    .filter((path) => !allowed.has(path) && !runtimeControlledPaths.has(path))
+    .map((path) => ({ path }));
   const c2_violations = c2.violations;
   return {
     schema_version: 'phase-diff-scan.v1',
@@ -282,6 +344,7 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
     implementation_commit: implementation,
     snapshot_tree: snapshotTree,
     changed_files,
+    runtime_controlled_changes,
     safe: c2_violations.length === 0 && allowlist_violations.length === 0,
     violations: c2_violations,
     c2_violations,
