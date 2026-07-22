@@ -42,9 +42,11 @@ continue only after it receives the new real user reply bound to that card.
 Multiple unresolved axes therefore require multiple visible ask → wait → resume
 cycles; posting several cards before the first reply is forbidden.
 
-For a material decision, present a plain-language card with 2～3 mutually
-exclusive valid options. State what each means, why it is available, its direct
-consequence and main risk, plus one recommended option and its reason. No
+For a material decision, present a plain-language card containing only current
+status (`spec-clarify`, question number, current ambiguity count), the question,
+affected scope, and 2～3 mutually exclusive valid options. State each option's
+direct consequence and main risk, plus one recommended option and its reason.
+Do not add completed-work, next-step, or generic user-action sections. No
 open-ended fill-in questions are allowed. Do not show internal IDs, hashes,
 receipts, attempts, or runner details. Keep formal evidence references out of
 the question. If upstream already supplied choices or a

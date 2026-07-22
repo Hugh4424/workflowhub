@@ -176,10 +176,12 @@ idempotent. Other attempts against a closed stage remain rejected.
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
    After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
-   a stage artifact, evidence ref, or handoff item. Present a plain-language gate
-   brief with exactly four items: current status; next step and owner; whether
-   the user must act; and, when action is required, the problem, a recommended
-   option, and every option's consequence and risk. Record the verification-stage
+   a stage artifact, evidence ref, or handoff item. Present a plain-language
+   verification brief covering the overall solution, how it was implemented,
+   observed behavior, fresh tests and AC coverage, the reused final build review
+   and its actual providers/available metrics, remaining risks, and the close
+   decision that follows. Clearly state that verify-code reuses the accepted
+   build review rather than running another provider review. Record the verification-stage
    decision with `confirm`, and pass only its accepted ref to `accept`. This
    confirmation accepts verification facts only.
 8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
@@ -234,12 +236,28 @@ failures stop before verification because continuing would inspect another task.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, and
-bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
-`## **需要你处理吗**`. Keep each section brief and use plain language a
-high-school student can understand. Raw paths, hashes, receipt or attempt refs,
-runner details, shell commands, and internal identifiers stay in formal records;
-the public message names only the human-readable artifact and result. The close
+Every public message uses the user's language, short Markdown headings, bullets,
+and plain language a high-school student can understand. Use one card type only:
+
+- A milestone card contains only current progress, 1–3 important conclusions,
+  next step, and whether user action is required. Publish once for verification
+  scope, fresh test/AC results, verification conclusion, and final delivery;
+  do not stream tool activity.
+- A review card for the reused accepted build review names the reviewed subject,
+  actual providers, verdict, up to three important findings and their final
+  disposition. Report actual duration and token usage only when supplied by
+  formal review/runtime facts; otherwise state `not provided`. State explicitly
+  that no new verify-code provider run occurred.
+- A verification or close question card contains only current status, decision,
+  affected scope, and 2–3 mutually exclusive options with one recommendation
+  and reason plus each option's consequence/risk. The verification card also
+  summarizes what the whole solution does, how it works, observed effect,
+  tests/review conclusion, and remaining risks so the user can judge close.
+
+Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
+internal identifiers stay in formal records; public messages name only the
+human-readable artifact and result. An unchanged milestone or reused review
+result is not published again. The close
 card explains the six actions, affected branches or workspaces in human terms,
 and their consequences and risks; its plan hash remains an internal binding.
 Ask and wait for the user only at the existing verification or close decision,

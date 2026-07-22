@@ -95,20 +95,24 @@ planning step.
 3. Give `spec-research` frozen spec content. Keep its result in memory; do not
    create `research.md`. Extracted data contracts remain in memory and are
    incorporated into `plan.md` when relevant; do not create a separate contract
-   artifact.
+   artifact. Present one host-visible research brief with the conclusions that
+   materially shape the plan and what they change.
 4. Create the draft plan by giving `spec-plan` frozen spec/research content and
    the `plan.md` writer.
 5. Create the draft task list by giving `spec-tasks` frozen spec/plan content
-   and the `tasks.md` writer.
+   and the `tasks.md` writer. Present one draft brief covering phases, major
+   dependencies, testing/review approach, delivery boundary, and next check.
 6. Run the initial review over the frozen draft. `spec-analyze` is a
    provider-visible lens loaded only by `wh-review`, not a separate planning
-   step. Components do not locate files themselves.
+   step. Components do not locate files themselves. Present one review brief
+   for the effective result using the review-card contract below.
 7. If the current review has actionable findings, revise the affected drafts,
    publish the changed `plan.md` and `tasks.md`, and run formal review again.
    Repeat for every changed draft until the current exact drafts have no
    unresolved actionable finding. There is no numeric review limit. Never repeat
    review for unchanged snapshot/material: `wh-review` reuses the existing
-   result for that exact identity.
+   result for that exact identity. Present one changed-result review brief after
+   each changed draft is reviewed; do not republish a reused unchanged result.
 8. After the review sequence finishes, without changing either artifact, create
    one final create-only receipt for `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
    or create official receipts from drafts. Publish the append-only
@@ -116,12 +120,13 @@ planning step.
    missing items. When review is unavailable, pass its canonical attempt ref so
    the runtime records the failure reason and provenance; never describe it as
    a pass or invent a result.
-9. Present the plan summary and record the decision with `confirm`. Only an
-   accepted confirmation may be passed to `accept`, which creates the
-   build-plan checkpoint and accepts the attempt. The plain-language summary
-   has exactly four items: current status; next step and owner; whether the user
-   must act; and, when action is required, the problem, a recommended option,
-   and every option's consequence and risk.
+9. Present the plan summary and record the decision with `confirm`. It must
+   summarize both the accepted specification (what, non-goals, acceptance) and
+   the implementation plan (phases, dependencies, tests, reviews, risks, and
+   expected impact). Only an accepted confirmation may be passed to `accept`,
+   which creates the build-plan checkpoint and accepts the attempt. Use the
+   confirmation-question contract below; do not append generic completed-work,
+   next-step, or user-action sections to that question card.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.
@@ -131,12 +136,25 @@ mismatched accepted provenance fails loud before planning.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, and
-bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
-`## **需要你处理吗**`. Keep each section brief and use plain language a
-high-school student can understand. Raw paths, hashes, receipt or attempt refs,
-runner details, shell commands, and internal identifiers stay in formal records;
-the public message names only the human-readable artifact and result.
+Every public message uses the user's language, short Markdown headings, bullets,
+and plain language a high-school student can understand. Use one card type only:
+
+- A confirmation question card contains only current status, decision, affected
+  scope, and 2–3 mutually exclusive options. Mark one recommendation with its
+  reason and give each option's consequence and risk. Do not add completed-work,
+  next-step, or generic user-action sections.
+- A milestone card contains only current progress, 1–3 important conclusions,
+  next step, and whether user action is required. Publish it for research,
+  draft-plan formation, and final plan; do not stream tool activity.
+- A review card contains the reviewed subject, actual providers, verdict, up to
+  three important findings, intended disposition, and next step. Report actual
+  duration and token usage only when supplied by formal review/runtime facts;
+  otherwise state `not provided`. Do not estimate or rerun review for metrics.
+
+Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
+internal identifiers stay in formal records; public messages name only the
+human-readable artifact and result. An unchanged milestone or reused review
+result is not published again.
 Ask and wait for the user only at the existing plan decision or when an answer
 can change accepted scope. When user action is required, present the problem,
 one recommended option with its reason, mutually exclusive choices, and each

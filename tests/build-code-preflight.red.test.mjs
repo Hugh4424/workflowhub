@@ -130,8 +130,8 @@ describe("build-code Phase execution, AC, and handoff contracts", () => {
 
   it("defines a concise downstream handoff without copying full artifacts or logs", () => {
     const compact = skill.replace(/\s+/g, " ");
-    expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
-    expect(compact).toMatch(/recommended option[\s\S]{0,180}every option's consequence and risk/i);
+    expect(compact).toMatch(/milestone card[\s\S]{0,220}current progress[\s\S]{0,220}next step[\s\S]{0,220}(?:whether user action is required|whether the user must act)/i);
+    expect(compact).toMatch(/recommendation[\s\S]{0,80}reason[\s\S]{0,120}each option's consequence\/risk/i);
     expect(compact).toMatch(/formal artifacts and evidence[\s\S]*without copying their full contents/i);
     expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
     expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);

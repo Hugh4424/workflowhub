@@ -25,10 +25,13 @@ describe("interaction quality amendment contracts", () => {
     expect(makeDecision).toMatch(/round 1[\s\S]*real (?:problem|pain)[\s\S]*success criteria[\s\S]*research/i);
     expect(makeDecision).toMatch(/round 2[\s\S]*direction[\s\S]*scope[\s\S]*non-goals[\s\S]*(?:trade-offs|tradeoffs)[\s\S]*risks/i);
     expect(makeDecision).toMatch(/round 3[\s\S]*contradictions[\s\S]*assumptions[\s\S]*(?:unresolved findings|blind findings)[\s\S]*(?:remaining|residual) risks/i);
+    expect(makeDecision).toMatch(/Start internally by enumerating known facts[\s\S]{0,160}every candidate question/i);
+    expect(makeDecision).not.toMatch(/presenting known facts and[\s\S]{0,40}every candidate question/i);
     expect(talk).toMatch(/(?:each|every|每个) Round[^。.;]{0,80}(?:own|independent|独立)/i);
     expect(talk).toMatch(/(?:question queue|候选队列)/i);
-    expect(talk).toMatch(/(?:当前进度|current progress)[\s\S]*(?:全部候选问题|every candidate question)/i);
-    expect(talk).toMatch(/(?:answered|已回答)[\s\S]*(?:not applicable|不适用)/i);
+    expect(talk).toMatch(/(?:完整候选队列|full candidate queue)[\s\S]{0,160}(?:内部|internal)/i);
+    expect(talk).toMatch(/(?:当前状态|current status)[\s\S]{0,180}Round[\s\S]{0,180}(?:当前总数|current total)/i);
+    expect(talk).toMatch(/(?:answered|已(?:由事实)?回答)[\s\S]*(?:not applicable|不适用)/i);
     expect(talk).toMatch(/(?:零、一个或多个|zero, one, or several)/i);
     expect(talk).toMatch(/(?:不得设置固定最少或最多|no fixed minimum or maximum)/i);
     expect(talk).toMatch(/(?:不得为了凑数量制造问题|never manufacture questions)/i);
@@ -133,10 +136,16 @@ describe("interaction quality amendment contracts", () => {
     expect(buildSpec).toMatch(/stop before acceptance[\s\S]{0,160}never publish a completion card/i);
   });
 
-  it("all five stages keep public messages short, structured, plain, and free of internal evidence", () => {
+  it("all five stages separate questions, milestones, and review briefs", () => {
     for (const name of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       const skill = compact(stage(name));
-      expect(skill).toMatch(/short Markdown headings[\s\S]{0,200}`## \*\*当前状态\*\*`[\s\S]{0,160}`## \*\*下一步\*\*`[\s\S]{0,160}`## \*\*需要你处理吗\*\*`/i);
+      expect(skill).toMatch(/one card type only/i);
+      expect(skill).toMatch(/question card|decision question card|confirmation question card|clarification question card|verification or close question card/i);
+      expect(skill).toMatch(/milestone card/i);
+      expect(skill).toMatch(/review card/i);
+      expect(skill).toMatch(name === "build-code" ? /actual reviewer sources/i : /actual providers/i);
+      expect(skill).toMatch(/duration[\s\S]{0,120}token usage[\s\S]{0,180}(?:not provided|formal review\/runtime facts)/i);
+      expect(skill).toMatch(/unchanged milestone or reused review result[\s\S]{0,100}not published again/i);
       expect(skill).toMatch(/high-school student/i);
       expect(skill).toMatch(/Raw paths[\s\S]{0,160}hashes[\s\S]{0,160}receipt or attempt refs[\s\S]{0,160}formal records/i);
       expect(skill).toMatch(name === "verify-code"
@@ -144,6 +153,30 @@ describe("interaction quality amendment contracts", () => {
         : /host must deliver[\s\S]{0,180}downstream[\s\S]{0,180}parent/i);
       expect(skill).toMatch(/upstream owner/i);
     }
+  });
+
+  it("question components keep user cards short and queue-aware", () => {
+    const talk = compact(component("talk-with-zhipeng"));
+    const grill = compact(component("grill-with-docs"));
+    const clarify = compact(component("spec-clarify"));
+
+    expect(talk).toMatch(/(?:当前状态|current status)[\s\S]{0,180}Round[\s\S]{0,180}(?:当前总数|current total)/i);
+    expect(talk).toMatch(/不得再写“刚完成”“下一步”“需要你处理吗”/i);
+    expect(talk).toMatch(/不展示完整重排表/i);
+    expect(grill).toMatch(/当前状态[\s\S]{0,120}`grill-with-docs`[\s\S]{0,160}问题序号[\s\S]{0,120}当前总数/i);
+    expect(clarify).toMatch(/current status[\s\S]{0,120}`spec-clarify`[\s\S]{0,140}current ambiguity count/i);
+  });
+
+  it("stage-specific final briefs expose the decisions needed at each boundary", () => {
+    const makeDecision = compact(stage("make-decision"));
+    const buildPlan = compact(stage("build-plan"));
+    const verifyCode = compact(stage("verify-code"));
+
+    expect(makeDecision).toMatch(/load-bearing decision's source[\s\S]{0,160}affected scope[\s\S]{0,120}consequence[\s\S]{0,80}risk/i);
+    expect(buildPlan).toMatch(/accepted specification[\s\S]{0,160}implementation plan[\s\S]{0,160}phases[\s\S]{0,120}tests[\s\S]{0,120}risks/i);
+    expect(buildPlan).not.toMatch(/exactly four items/i);
+    expect(compact(stage("build-code"))).not.toMatch(/exactly four items/i);
+    expect(verifyCode).toMatch(/overall solution[\s\S]{0,120}implemented[\s\S]{0,120}observed behavior[\s\S]{0,120}fresh tests[\s\S]{0,160}remaining risks/i);
   });
 
   it("make-decision and close keep internal bindings out of public decision cards", () => {

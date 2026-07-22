@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 
 const root = resolve(new URL("../../..", import.meta.url).pathname);
 const readStage = (stage) => readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8");
+const readSkill = (skill) => readFileSync(join(root, "skills", skill, "SKILL.md"), "utf8");
 
 describe("v2 human boundary summaries", () => {
   it("all stages present their result or boundary to the human", () => {
@@ -14,5 +15,13 @@ describe("v2 human boundary summaries", () => {
 
   it("irreversible close remains explicitly confirmed", () => {
     expect(readStage("verify-code")).toMatch(/confirmation accepts verification facts only[\s\S]*separate close authorization[\s\S]*plan hash[\s\S]*Never reuse the verify-code confirmation ref/i);
+  });
+
+  it("review briefs report real provider facts without inventing metrics", () => {
+    const review = readSkill("wh-review");
+    expect(review).toMatch(/actual providers[\s\S]*aggregate verdict[\s\S]*important findings/i);
+    expect(review).toMatch(/duration\s+and\s+token\s+usage/i);
+    expect(review).toMatch(/formal provider\/runtime result[\s\S]{0,220}not provided/i);
+    expect(review).toMatch(/never estimate[\s\S]*rerun an unchanged review/i);
   });
 });

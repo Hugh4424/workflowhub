@@ -103,24 +103,29 @@ only through `wh-review`; it is not a second review runner.
    never provide its path or baseline.
 2. Run `talk-with-zhipeng` round 1 on the original requirement and known facts.
    Its purpose is to identify the real problem, success criteria, and whether
-   external research is materially needed. Start by presenting known facts and
-   every candidate question currently justified by the requirement, ordered by
-   whether its answer could change direction. The queue may contain zero, one,
+   external research is materially needed. Start internally by enumerating known
+   facts and every candidate question currently justified by the requirement,
+   ordered by whether its answer could change direction. The queue may contain zero, one,
    or several items; never manufacture questions or enforce a fixed minimum or
    maximum. Ask only the highest-ranked open
    question, wait for the user's answer, then reorder the remaining queue before
    asking again. Never write or infer the user's answer on their behalf. End the
    round only when no direction-changing question remains, and present the
-   starting queue, each disposition, reorder result, and end reason on the
-   host-visible conversation surface.
+   round's resolved decisions, remaining risks, question count, and end reason
+   on the host-visible conversation surface. Keep the full queue and reorder
+   history in the component result, not in public prose.
 3. When research is needed and authorized, invoke `anysearch` with a frozen,
-   non-sensitive packet. Otherwise record the skip reason and continue.
+   non-sensitive packet. Otherwise record the skip reason and continue. Present
+   one host-visible research brief: what was checked, the 1–3 facts that can
+   affect the decision, their effect on the current direction, and what happens
+   next. Do not copy source dumps or internal evidence identifiers.
 4. Run `talk-with-zhipeng` round 2 on the requirement plus research. Its queue
    covers direction, scope, non-goals, material trade-offs, and risks. Apply the
-   same visible queue, one-question, wait, reorder, and explicit-end rules from
+   same internal queue, short question-card, wait, reorder, and explicit-end rules from
    round 1. Produce the direction baseline only after no direction-changing
-   item remains. Present the queue and each update on the host-visible
-   conversation surface. This is a non-blocking conversation checkpoint, not a confirmation gate.
+   item remains. Present the resolved direction, scope/non-goals, key trade-offs,
+   remaining risks, question count, and end reason on the host-visible surface.
+   This is a non-blocking conversation checkpoint, not a confirmation gate.
 5. Run independent direction review through the `wh-review` direction track. It
    is the only provider owner and gives
    providers only the frozen blind packet: raw requirement, objective facts,
@@ -131,13 +136,15 @@ only through `wh-review`; it is not a second review runner.
    failure: read its findings and continue with the next applicable convergence
    step. Only a terminal unavailable or failed result is a review-service
    problem. Do not rerun unrelated CLI diagnostics, repeat an unchanged review,
-   or ask the user to choose how to repair a valid review result.
+   or ask the user to choose how to repair a valid review result. Present one
+   review brief for the effective result using the review-card contract below.
 6. Run `talk-with-zhipeng` round 3 with the blind findings. Its queue covers
    contradictions, load-bearing assumptions, unresolved findings, and residual
-   risks. Apply the same visible queue, one-question, wait, reorder, and
+   risks. Apply the same internal queue, short question-card, wait, reorder, and
    explicit-end rules. Ask only about an item that can still change direction;
    record evidence-resolved or non-blocking findings without asking. Present
-   every finding disposition on the host-visible conversation surface.
+   one compact round summary with important finding dispositions, remaining
+   risks, question count, and end reason on the host-visible surface.
 7. Invoke the complete `grill-with-docs` skill in the authenticated
    CandidateWorkspace. Do not substitute a lite or read-only variant. The
    `grill-with-docs` completion reports changed context files or no file changes.
@@ -151,6 +158,9 @@ only through `wh-review`; it is not a second review runner.
    conflicts and their disposition; and conclusions for four exit checks:
    external interfaces verified against their authority, one authoritative
    field/path name, explicit failure semantics, and frozen scope/non-goals.
+   Present those conclusions on the host-visible surface, including whether
+   `CONTEXT.md` changed and whether an ADR was created or not needed, with the
+   plain-language reason.
 8. Use `decision-log` to produce the structured decision draft. For every
    load-bearing decision, record the decision; source as an exact supplied user
    answer, original requirement, research/code fact, grill result, or review
@@ -160,6 +170,7 @@ only through `wh-review`; it is not a second review runner.
    as "confirmed in discussion". Include the grill documentation outcome, then
    run the `wh-review` detail track over the candidate direction and draft.
    `wh-review` remains the only component that invokes review providers.
+   Present one review brief for the effective detail result.
 9. Bind the CandidateWorkspace's exact post-grill `snapshot_tree`, absolute root,
    and baseline commit into the attempt. Acceptance must recapture the tree and
    fail loud if it changed after the attempt was published.
@@ -168,7 +179,9 @@ only through `wh-review`; it is not a second review runner.
     choices, mark one recommendation, and state each choice's consequence, risk,
     and affected scope. This is the only make-decision confirmation. Keep
     worktree, baseline, snapshot, hashes, and formal refs in the internal record,
-    not in the decision card. Wait for the user's explicit response, then record
+    not in the decision card. Summarize each load-bearing decision's source,
+    reason, affected scope, consequence, and risk; include explicit non-goals
+    and unresolved items without copying the full decision-log. Wait for the user's explicit response, then record
     accepted or rejected with `confirm` and pass only an accepted confirmation
     record to `accept`.
 
@@ -192,12 +205,28 @@ real reply must trigger a fresh ranking before the round can end.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, and
-bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
-`## **需要你处理吗**`. Keep each section brief and use plain language a
-high-school student can understand. Raw paths, hashes, receipt or attempt refs,
-runner details, shell commands, and internal identifiers stay in formal records;
-the public message names only the human-readable artifact and result.
+Every public message uses the user's language, short Markdown headings, bullets,
+and plain language a high-school student can understand. Use one card type only:
+
+- A question card contains only current status, question, affected scope, and
+  2–3 mutually exclusive options. Current status names the active component,
+  round, and question number/current queue size; a dynamic queue says that the
+  total may change after re-ranking. Mark one recommendation with its reason and
+  give each option's consequence and risk. Do not add completed-work, next-step,
+  or generic user-action sections to a question card.
+- A milestone card contains only current progress, 1–3 important conclusions,
+  next step, and whether user action is required. Publish one after each talk
+  round, research, grill, and other Stage-owned milestone that changes the
+  decision picture; do not stream tool activity.
+- A review card contains the reviewed subject, actual providers, verdict, up to
+  three important findings, intended disposition, and next step. Report actual
+  duration and token usage only when supplied by formal review/runtime facts;
+  otherwise state `not provided` instead of estimating or rerunning review.
+
+Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
+internal identifiers stay in formal records; public messages name only the
+human-readable artifact and result. An unchanged milestone or reused review
+result is not published again.
 Ask and wait for the user only when the answer can change direction or an
 existing authorization boundary. When user action is required, present the
 problem, one recommended option with its reason, mutually exclusive choices,

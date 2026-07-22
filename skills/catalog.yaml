@@ -27,7 +27,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: e7669c92242aa2f7565e23042a4c36d269bf11bbd3170750f7119ea3156fe432
+    local_bundle_hash: b012862a25c7bd3ed8ebf1223453f5cd87361292269b807325fc93181ae27dab
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
@@ -40,7 +40,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 34eb3893cb50baeef08f31743c0c1be34c2774682054bee0de63674c7b4182af
+    local_bundle_hash: 9d4bc6985f65b14d88a731fc5b07ca815b4abaad73624ab3f51a11ead51eb19e
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -82,7 +82,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 1e055ce504a23554a8f83bcfa5d05a0f3d971d496d095cb7c7606678724183ea
+    local_bundle_hash: 75c40ba69fef6243a644f9a355c6c0aa72ac3444f73e1f651c9cdeda7f8130b4
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -121,7 +121,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 42471019a96fd927bdd2357004cff1d6a6c19a61d825a62fbf8ac8244ebe111d
+    local_bundle_hash: 9843b71859ade20a93af39e31525d4542489bf46bb6114e01048614ba5899b1d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5d7aa1207ab4926a517c698ac863484d9423c53a90f3da058ce406ebc99ace28
+    local_bundle_hash: 07ed9528d64b7e957d30feeb38e875fe85f37d2ecc51d8f172db4bf57778dfd7
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

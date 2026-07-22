@@ -150,17 +150,23 @@ order, evidence, or authority boundaries.
    change area, test result expected, and next owner. Raw Workspace paths,
    baselines, hashes, internal IDs, and exact commands belong only in the
    formal card record and must not appear in the user-visible description.
+   Present one Stage progress brief after the Phase breakdown is frozen: each
+   Phase's human-readable goal, ordering/dependencies, and the first Phase to run.
 3. Start only the current Phase. When Phase execution returns, run the Phase
    gate against the canonical result, its formal PASS review, and the live
    Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or
-   Workspace drift returns to the same Phase; it never advances.
+   Workspace drift returns to the same Phase; it never advances. Present one
+   Phase result brief after the gate decision: implemented behavior, real tests,
+   Phase review conclusion, important findings/disposition, residual risk, and
+   whether the next Phase may start.
 4. Start the next Phase only after the current Phase gate passes. The accepted
    plan remains the ordering authority; the mutable `phase-result.json` is only
    the current pointer because there is no machine-readable Phase index.
 5. After every planned Phase passes, verify each Phase ID has matching
    canonical snapshot/material evidence and a formal PASS result, then run one
    final full-worktree `wh-review`. Never repeat a Phase or final review when
-   its snapshot/material identity is unchanged.
+   its snapshot/material identity is unchanged. Present one review brief for
+   this final effective result.
 6. Create the final implementation and fresh test receipts, publish the
    build-code attempt with `run`, and let the trusted runtime accept it
    automatically. A Phase result is gate evidence and cannot replace the final
@@ -207,6 +213,8 @@ order, evidence, or authority boundaries.
    review itself.
    `simplicity-guard` is visible only inside `wh-review`; Stage coordination
    and Phase execution never invoke it directly.
+   Present one Phase review brief for the effective result before returning or
+   repairing findings.
 6. If the verdict is `revise_required`, verify each finding against the frozen
    evidence, repair the same Phase, capture fresh receipts, publish a changed
    identity, and review only that new identity. Do not return between finding
@@ -221,23 +229,38 @@ Publishing Phase evidence does not authorize a controlled revision after an
 accepted build. That authority is validated later by the existing final
 `run --reopen=<immutable-ref>` path.
 
-After the Stage is accepted, present a plain-language automatic-progress brief
-with exactly four items: current status; next step and owner; whether the user
-must act; and, only when action is required, the problem, a recommended option,
-and every option's consequence and risk. Point to formal artifacts and evidence
-refs without copying their full contents.
+After the Stage is accepted, present one plain-language final implementation
+brief: delivered behavior, Phase outcomes, real tests, final review conclusion,
+remaining risks, verify-code dependency, next owner, and whether user action is
+required. Point to formal artifacts and evidence without copying their full
+contents.
 
 ## Host interaction and completion handoff
 
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, and
-bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
-`## **需要你处理吗**`. Keep each section brief and use plain language a
-high-school student can understand. Raw paths, hashes, receipt or attempt refs,
-runner details, shell commands, and internal identifiers stay in formal records;
-the public message names only the human-readable artifact and result.
+Every public message uses the user's language, short Markdown headings, bullets,
+and plain language a high-school student can understand. Use one card type only:
+
+- A milestone card contains only current progress, 1–3 important conclusions,
+  next step, and whether user action is required. Publish once for Phase
+  breakdown, each Phase result, final implementation summary, and Stage
+  acceptance; do not stream tool activity or duplicate a worker's full report.
+- A review card contains the reviewed subject or Phase, actual reviewer sources,
+  verdict, up to three important findings, intended disposition, and next step.
+  Report actual duration and token usage only when supplied by formal
+  review/runtime facts; otherwise state `not provided`. Do not estimate or rerun
+  review for metrics. A finding repair reports only what changed and the new
+  effective result, not the whole history.
+- A decision question card contains only current status, question, affected
+  scope, and 2–3 mutually exclusive options with one recommendation/reason and
+  each option's consequence/risk. Do not add generic boilerplate sections.
+
+Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
+internal identifiers stay in formal records; public messages name only the
+human-readable artifact and result. An unchanged milestone or reused review
+result is not published again.
 Ask and wait for the user only when an answer can change accepted scope or an
 existing authorization boundary. When user action is required, present the
 problem, one recommended option with its reason, mutually exclusive choices,

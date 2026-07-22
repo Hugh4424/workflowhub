@@ -47,3 +47,9 @@ reference; ADR created/not-needed with reason and file reference; each of the
 three ADR criteria — hard to reverse, surprising without context, and a genuine
 trade-off; terminology/ADR conflicts and resolution; and all four
 objective exit checks. Missing facts stay missing rather than being inferred.
+
+Also return a host-visible summary that does not copy the full log. For each
+load-bearing decision, state the decision, source type, plain-language reason,
+affected scope, consequence, and main risk. End with explicit non-goals,
+unresolved items, and the documentation outcome. Keep internal IDs, paths,
+hashes, receipt/attempt refs, and raw evidence out of this summary.

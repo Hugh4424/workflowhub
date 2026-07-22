@@ -85,7 +85,9 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    wording, order, meaning, options, and recommendation; do not rename or ask it
    again.
 3. Create the draft by invoking `spec-specify` with the classified decision material and a
-   controlled writer for `spec.md`.
+   controlled writer for `spec.md`. Present one host-visible draft brief covering
+   the proposed goal, boundaries, major requirements, acceptance shape, and the
+   next check.
 4. Always perform a material ambiguity scan over the current `spec.md`.
    `spec-clarify` is conditional with trigger `clarification`: invoke it with
    the current content and the same named writer only when an ambiguity can
@@ -108,12 +110,15 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
 5. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
 6. Run the initial review using a frozen packet built from `spec.md`, decision
-   facts, and relevant evidence.
+   facts, and relevant evidence. Present one review brief for its effective
+   result using the review-card contract below.
 7. If the current review has actionable findings, revise the draft, publish the
    changed `spec.md`, and run formal review again. Repeat for every changed draft
    until the current exact draft has no unresolved actionable finding. There is
    no numeric review limit. Never repeat review for unchanged snapshot/material:
-   `wh-review` reuses the existing result for that exact identity.
+   `wh-review` reuses the existing result for that exact identity. After each
+   changed draft receives a new effective result, present one changed-result
+   review brief; never republish an unchanged reused result.
 8. Before the create-only receipt, reconcile the exact final `spec.md` bytes
    against every review finding and the planned completion card. Resolve every
    finding that alleges an internal contradiction, unresolved cross-reference,
@@ -130,10 +135,10 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and
    provenance; never describe it as a pass or invent a result.
-10. Present a plain-language progress brief with exactly these four items:
-   current status; next step and owner; whether the user must act; and, only
-   when action is required, the problem, a recommended option, and every
-   option's consequence and risk. The trusted runtime immediately runs
+10. Present a plain-language completion brief covering what the specification
+   will deliver, explicit non-goals, major functional requirements, acceptance
+   criteria, interfaces or operational boundaries, remaining risks, and the
+   exact input handed to build-plan. The trusted runtime immediately runs
    `accept --attempt=<attempt>` without a confirmation, creates the checkpoint,
    and accepts the attempt.
    Checkpoint failure is an integrity error; quality facts never become a gate.
@@ -146,12 +151,26 @@ paths. A missing named artifact fails with its ArtifactDir error.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, and
-bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
-`## **需要你处理吗**`. Keep each section brief and use plain language a
-high-school student can understand. Raw paths, hashes, receipt or attempt refs,
-runner details, shell commands, and internal identifiers stay in formal records;
-the public message names only the human-readable artifact and result.
+Every public message uses the user's language, short Markdown headings, bullets,
+and plain language a high-school student can understand. Use one card type only:
+
+- A clarification question card contains only current status, question,
+  affected scope, and 2–3 mutually exclusive options. Current status names
+  `spec-clarify` and the question number/current ambiguity count. Mark one
+  recommendation with its reason and give each option's consequence and risk.
+  Do not add completed-work, next-step, or generic user-action sections.
+- A milestone card contains only current progress, 1–3 important conclusions,
+  next step, and whether user action is required. Publish it for the first draft
+  and final specification, not for individual tool calls.
+- A review card contains the reviewed subject, actual providers, verdict, up to
+  three important findings, intended disposition, and next step. Report actual
+  duration and token usage only when supplied by formal review/runtime facts;
+  otherwise state `not provided`. Do not estimate or rerun review for metrics.
+
+Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
+internal identifiers stay in formal records; public messages name only the
+human-readable artifact and result. An unchanged milestone or reused review
+result is not published again.
 An `ask` is a suspension point: after one visible question, the Stage returns
 control and may resume only with the corresponding real answer. It must never
 batch multiple questions into one host turn.

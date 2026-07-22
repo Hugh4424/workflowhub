@@ -91,6 +91,16 @@ CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage resu
 
 Consumers open the referenced formal result and do not trust a copied verdict. `make-decision` stores separate `direction` and `detail` refs; any `revise_required` wins, both must pass, otherwise the stage is unavailable.
 
+## Host-visible review brief
+
+Return enough trusted facts for the invoking Stage to publish one plain-language
+review brief: reviewed subject, actual providers, aggregate verdict, up to three
+important findings, and the intended disposition. Include duration and token
+usage only when the formal provider/runtime result supplies them. When either is
+absent, report `not provided`; never estimate it, inspect broker-private state,
+or rerun an unchanged review just to obtain metrics. A reused result for the
+same snapshot/material produces no second public brief.
+
 ## Provider protocol
 
 3rd-review exposes only the public `workflowhub-result.v1` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence.

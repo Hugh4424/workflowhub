@@ -34,7 +34,7 @@ describe("five-stage v2 business contract", () => {
     for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
       const skill = readStage(stage);
       const compact = skill.replace(/\s+/g, " ");
-      expect(compact).toMatch(/current status; next step and owner; whether the user must act/i);
+      expect(compact).toMatch(/milestone card[\s\S]{0,220}current progress[\s\S]{0,220}next step[\s\S]{0,220}(?:whether user action is required|whether the user must act)/i);
       expect(compact).toMatch(/recommended option[\s\S]{0,180}(?:every option's consequence and risk|consequence[\s\S]*risk)/i);
       expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
     }

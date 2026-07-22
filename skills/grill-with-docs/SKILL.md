@@ -12,8 +12,9 @@ Ask the questions one at a time, waiting for feedback on each question before co
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
-需要用户决定时使用大白话单轴决策卡：只问一个决策轴，给 2～3 个互斥选项；每项
-说明含义、为什么可选、直接后果和主要风险，并给出推荐项及推荐理由。不得展示内部
+需要用户决定时使用大白话单轴决策卡，每张卡只问一个决策轴：只写当前状态（`grill-with-docs`、问题序号和
+当前总数）、问题、影响范围、2～3 个互斥选项、推荐项与理由，以及每项的直接后果和
+主要风险。不得添加“刚完成”“下一步”“需要你处理吗”等重复段落，不得展示内部
 ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式填空。多个决策轴按
 依赖逐个处理，每次真实回答后重新核对剩余问题。
 
@@ -47,6 +48,10 @@ decision-log 使用：
 `CONTEXT.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
 真时才创建。即使没有文件变化，也必须记录 `no change` / `not needed` 及理由；不能只写
 “已检查”。
+
+完成后必须向调用方返回一份可直接面向用户呈现的简短总结：检查了什么、最重要的
+结论、仍存风险、`CONTEXT.md` 是否变化、ADR 是否需要及理由、下一步。完整技术事实
+继续留在正式记录，不把内部引用或日志塞进总结。
 
 **Plain language mandatory**：面向非工程背景的人提问和汇报时用大白话，不堆专业术语；给选项时逐条说明含义、可选理由、后果和风险，不能只列名词让人自己猜。
 
