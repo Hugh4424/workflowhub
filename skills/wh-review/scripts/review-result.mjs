@@ -1,10 +1,16 @@
 import { posix } from "node:path";
+import { Buffer } from "node:buffer";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
 
 function safePart(value, label) {
   if (typeof value !== "string" || !/^[a-zA-Z0-9._-]+$/.test(value)) throw new TypeError(`${label} is invalid`);
   return value;
+}
+
+function providerFilePart(provider) {
+  if (typeof provider !== "string" || provider.trim() === "") throw new TypeError("provider is invalid");
+  return `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
 }
 
 export function aggregateProviderResults(providerResults, minimumReviewers = 1) {
@@ -32,9 +38,9 @@ export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {
 export function writeProviderOutput(task, directoryRef, provider, output, sequence = 1, provenance = {}) {
   if (typeof output !== "string") return null;
   const suffix = sequence === 1 ? "" : `-${sequence}`;
-  const ref = posix.join(directoryRef, `${safePart(provider, "provider")}${suffix}.output.json`);
+  const ref = posix.join(directoryRef, `${providerFilePart(provider)}${suffix}.output.json`);
   const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output, { provider });
 }
 
 export function writeAttempt(task, ref, attempt) {

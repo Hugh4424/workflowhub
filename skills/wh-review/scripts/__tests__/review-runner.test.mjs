@@ -74,6 +74,47 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("persists and reuses a semantic review from a slash-bearing configured provider", async () => {
+    const { task, attachmentRoot } = fixture("simple-review-provider-path-"); const provider = "antigravity/flash"; const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider, status: "completed", session_id: "session", output: pass, error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: [provider], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const attempt = JSON.parse(task.readRecord(first.attemptRef));
+    const outputRef = attempt.provider_attempts[0].output_ref;
+    expect(outputRef).toMatch(/^reviews\/attempts\/[^/]+\/providers\/p-[A-Za-z0-9_-]+\.output\.json$/);
+    expect(JSON.parse(task.readRecord(outputRef)).provider).toBe(provider);
+    expect(JSON.parse(task.readRecord(first.resultRef)).provider_results).toEqual([{ provider, output: JSON.parse(pass) }]);
+    const reused = await runReviewFixture(options);
+    expect(reused).toMatchObject({ reused: true, resultRef: first.resultRef });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("persists an unavailable attempt from a slash-bearing configured provider", async () => {
+    const { task, attachmentRoot } = fixture("simple-review-provider-path-unavailable-"); const provider = "antigravity/flash";
+    const providerClient = { run: async () => ({ runtimeId: "runtime", provider: { provider, status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "login required" } } }) };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: [provider], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(JSON.parse(task.readRecord(result.attemptRef)).provider_attempts).toMatchObject([{ provider, status: "failed", output_ref: null }]);
+  });
+
+  it("keeps slash-bearing provider output references distinct across format correction", async () => {
+    const { task, attachmentRoot } = fixture("simple-review-provider-path-correction-"); const provider = "antigravity/flash"; let calls = 0;
+    const providerClient = { run: async () => {
+      calls += 1;
+      return { runtimeId: `runtime-${calls}`, provider: { provider, status: "completed", session_id: "session", output: calls === 1 ? "not JSON" : pass, error: null } };
+    } };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: [provider], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt.provider_attempts.map(({ output_ref }) => output_ref)).toMatchObject([
+      expect.stringMatching(/\/p-[A-Za-z0-9_-]+\.output\.json$/),
+      expect.stringMatching(/\/p-[A-Za-z0-9_-]+-2\.output\.json$/)
+    ]);
+    for (const { output_ref } of attempt.provider_attempts) expect(JSON.parse(task.readRecord(output_ref)).provider).toBe(provider);
+  });
+
   it("serializes concurrent reviews of the same frozen material and reuses the published pass", async () => {
     const { attachmentRoot, task } = fixture("simple-review-concurrent-reuse-"); const calls = [];
     let releaseFirst; let signalStarted;

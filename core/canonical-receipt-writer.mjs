@@ -208,11 +208,15 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
     if (value.version !== expected) throw new Error(`${kind} record schema must be ${expected}`);
   };
   return Object.freeze({
-    writeProviderOutput(ref, output) {
+    writeProviderOutput(ref, output, metadata = undefined) {
       const match = ref.match(/^reviews\/attempts\/([a-zA-Z0-9._-]+)\/providers\/([a-zA-Z0-9._-]+)\.output\.json$/);
       if (!match) throw new Error("canonical provider output ref required");
       if (typeof output !== "string") throw new TypeError("provider output must be text");
-      const record = { schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: match[1], provider: match[2].replace(/-[0-9]+$/, ""), content: output, content_hash: sha256(output) };
+      const providerName = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? metadata.provider ?? match[2].replace(/-[0-9]+$/, "")
+        : match[2].replace(/-[0-9]+$/, "");
+      if (typeof providerName !== "string" || providerName.trim() === "") throw new TypeError("provider name required");
+      const record = { schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: match[1], provider: providerName, content: output, content_hash: sha256(output) };
       write(ref, `${JSON.stringify(record, null, 2)}\n`); return ref;
     },
     writeAttempt(ref, value) {

@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 866b5c07830a035c3a26b3a8a4a7f8fc1a174827e8e11d2a4d25816d782fe9cd
+    local_bundle_hash: 3f74d1be168aa11efa7f6a0aa2db5cfbf2c98bf326c1cbd6e4d1771e61ebc139
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
