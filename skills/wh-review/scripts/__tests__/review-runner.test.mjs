@@ -397,6 +397,18 @@ describe("aggregation and runner", () => {
     expect(JSON.parse(task.readRecord(result.resultRef)).verdict).toBe("pass");
   });
 
+  it("tells file-only reviewers to read the sealed bundle path", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-bundle-prompt-"); const calls = [];
+    const providerClient = { run: async (request) => {
+      calls.push(request);
+      return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } };
+    } };
+    await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toBe("Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.");
+  });
+
   it("records OUTPUT_INVALID on the final provider attempt after correction fails", async () => {
     const { attachmentRoot, task } = fixture("simple-review-format-failed-");
     const providerClient = { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: "not json", error: null } }) };

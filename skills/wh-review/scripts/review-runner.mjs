@@ -10,7 +10,9 @@ import { validateSchema } from "./schema-validator.mjs";
 
 const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUABLE_SESSION"]);
 const errorPriority = ["MATERIAL_INCOMPLETE", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
-const providerPrompt = "Read review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
+// Providers run from a writable wrapper directory; sealed review material is
+// deliberately exposed beneath `bundle/`, never at that directory's root.
+const providerPrompt = "Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const REVIEW_LOCK_WAIT_MS = 5 * 60 * 1000;
 const localReviewLocks = new Map();
