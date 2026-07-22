@@ -129,6 +129,22 @@ function phaseCommit(workspace, tree, baseline, phaseId) {
   }).trim();
 }
 
+function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot) {
+  if (snapshot.tree === implementation.value.snapshot_tree) return;
+  const runtimeOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "runtime-context");
+  const runtimeOnly = createPhaseDiffScan({
+    sourceRoot: workspace.worktreeRoot,
+    phaseId: "runtime-context",
+    baselineCommit: implementation.value.snapshot_commit,
+    implementationCommit: runtimeOnlyCommit,
+    allowedFiles: [],
+  });
+  if (!runtimeOnly.safe || runtimeOnly.changed_files.length !== 1 || runtimeOnly.changed_files[0] !== "AGENTS.md"
+    || runtimeOnly.runtime_controlled_changes.length !== 1 || runtimeOnly.runtime_controlled_changes[0].path !== "AGENTS.md") {
+    throw new Error("live Workspace snapshot drifted from the implementation receipt");
+  }
+}
+
 function publishIdempotently(task, kernel, ref, raw, label) {
   try {
     const existing = task.readRecord(ref);
@@ -175,7 +191,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
   const publishLocked = () => task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
     const reopen = input.reopen_ref === undefined ? null : kernel.buildCodeReopenProvenance(input.reopen_ref);
     const before = captureWorkspaceSnapshot(workspace);
-    if (before.tree !== implementation.value.snapshot_tree) throw new Error("live Workspace snapshot drifted from the implementation receipt");
+    assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
     if (reopen && (!current || current.phase_id !== input.phase_id)) {
       throw new Error("reopen_ref may repair only the current PASS Phase");

@@ -33,7 +33,8 @@ function fixture(taskId = "phase-evidence") {
   git(repo, ["config", "user.name", "Test"]);
   git(repo, ["config", "user.email", "test@example.com"]);
   writeFileSync(join(repo, "README.md"), "base\n");
-  git(repo, ["add", "README.md"]);
+  writeFileSync(join(repo, "AGENTS.md"), "# Host contract\n");
+  git(repo, ["add", "README.md", "AGENTS.md"]);
   git(repo, ["commit", "-qm", "base"]);
   const task = createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0", project_name: "Demo", task_id: taskId,
@@ -155,6 +156,59 @@ function controlledReopen(state, published, receipts, reviewRef) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("build-code phase evidence publication", () => {
+  it("accepts only a complete host-managed runtime block outside the implementation snapshot", () => {
+    const runtime = fixture("runtime-context");
+    const runtimeAgents = join(runtime.workspace.worktreeRoot, "AGENTS.md");
+    writeFileSync(runtimeAgents, [
+      "# Host contract",
+      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
+      "decision-maker runtime detail",
+      "<!-- END HOST-RUNTIME -->",
+      "",
+    ].join("\n"));
+    const runtimeReceipts = phaseReceipts(runtime, "phase-1");
+    writeFileSync(runtimeAgents, [
+      "# Host contract",
+      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
+      "coder runtime detail",
+      "<!-- END HOST-RUNTIME -->",
+      "",
+    ].join("\n"));
+    expect(publish(runtime, "phase-1", runtimeReceipts).snapshot_tree).toBe(runtimeReceipts.implementation.value.snapshot_tree);
+
+    const outer = fixture("runtime-context-outer");
+    const outerAgents = join(outer.workspace.worktreeRoot, "AGENTS.md");
+    writeFileSync(outerAgents, [
+      "# Host contract",
+      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
+      "task-local runtime detail",
+      "<!-- END HOST-RUNTIME -->",
+      "",
+    ].join("\n"));
+    const outerReceipts = phaseReceipts(outer, "phase-1");
+    writeFileSync(outerAgents, "# Changed host contract\n");
+    expect(() => publish(outer, "phase-1", outerReceipts)).toThrow(/Workspace.*drift/i);
+
+    const malformed = fixture("runtime-context-malformed");
+    const malformedAgents = join(malformed.workspace.worktreeRoot, "AGENTS.md");
+    writeFileSync(malformedAgents, [
+      "# Host contract",
+      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
+      "task-local runtime detail",
+      "<!-- END HOST-RUNTIME -->",
+      "",
+    ].join("\n"));
+    const malformedReceipts = phaseReceipts(malformed, "phase-1");
+    writeFileSync(malformedAgents, [
+      "# Host contract",
+      "<!-- BEGIN OTHER-RUNTIME (auto-managed; do not edit) -->",
+      "task-local runtime detail",
+      "<!-- END OTHER-RUNTIME -->",
+      "",
+    ].join("\n"));
+    expect(() => publish(malformed, "phase-1", malformedReceipts)).toThrow(/Workspace.*drift/i);
+  });
+
   it("derives the first baseline, publishes pre-review evidence, attaches PASS, and reuses the same identity", () => {
     const state = fixture();
     const red = redReceipt(state, "phase-1");
