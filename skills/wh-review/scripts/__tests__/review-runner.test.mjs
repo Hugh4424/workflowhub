@@ -149,15 +149,34 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("reuses an unchanged unavailable attempt without calling a provider", async () => {
+  it("retries an unchanged unavailable attempt and preserves both attempts", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-unavailable-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
     const second = await runReviewFixture(options);
-    expect(second).toMatchObject({ reused: true, status: "unavailable", verdict: null, attemptRef: first.attemptRef, resultRef: null });
-    expect(calls).toHaveLength(1);
+    expect(second).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(second.attemptRef).not.toBe(first.attemptRef);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("accepts a later semantic result after an unchanged unavailable attempt", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-retry-after-unavailable-"); let calls = 0;
+    const providerClient = { run: async () => {
+      calls += 1;
+      return calls === 1
+        ? { runtimeId: "runtime-1", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "not ready" } } }
+        : { runtimeId: "runtime-2", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } };
+    } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const unavailable = await runReviewFixture(options);
+    const semantic = await runReviewFixture(options);
+    expect(unavailable).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(semantic).toMatchObject({ status: "semantic", verdict: "pass" });
+    expect(semantic.attemptRef).not.toBe(unavailable.attemptRef);
+    expect(calls).toBe(2);
   });
 
   it("fails loudly without a provider call when an unavailable attempt was changed", async () => {

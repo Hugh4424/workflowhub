@@ -63,7 +63,7 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
-    expect(skill).toMatch(/do not retry the same material with guessed fields or provider names/);
+    expect(skill).toMatch(/later retry uses the same public contract[\s\S]*must not guess fields, providers, or models/i);
     expect(skill).toMatch(/Send the input JSON over stdin/);
     expect(skill).toMatch(/Never place a transient review-input file in/);
     for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);

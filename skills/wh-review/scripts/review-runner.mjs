@@ -129,19 +129,25 @@ function reusableOutcome(task, identity) {
   const { taskId, stage, reviewTrack } = identity;
   const matchingResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
   const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
-  if (matchingResults.length > 1 || matchingAttempts.length > 1) {
-    throw invalidEvidence("multiple canonical outcomes exist for the same review identity");
+  if (matchingResults.length > 1) throw invalidEvidence("multiple canonical semantic results exist for the same review identity");
+  // Transport failures are immutable evidence, not a permanent ban on another
+  // formal review of the same draft. Validate every historical attempt before
+  // continuing so damaged evidence is still fail-loud.
+  for (const item of matchingAttempts) {
+    validateAttemptIdentity(item.record, item.ref, identity);
+    if (item.record.terminal_status === "unavailable") validateUnavailableAttemptEvidence(task, item.record);
   }
   if (matchingResults.length === 1) {
     const { ref: resultRef, record: result } = matchingResults[0];
     try { validateSchema("result", result); }
     catch (error) { throw invalidEvidence(`result schema is invalid: ${error.message}`); }
+    const referencedAttempts = matchingAttempts.filter((item) => item.ref === result.attempt_ref);
+    if (referencedAttempts.length !== 1) throw invalidEvidence("semantic result does not have exactly one matching attempt");
     let attempt;
     try { attempt = JSON.parse(task.readRecord(result.attempt_ref)); }
     catch (error) { throw invalidEvidence(`result attempt cannot be read: ${error.message}`); }
     validateAttemptIdentity(attempt, result.attempt_ref, identity);
-    if (matchingAttempts.length !== 1 || matchingAttempts[0].ref !== result.attempt_ref ||
-        attempt.terminal_status !== "semantic" || attempt.error !== null) {
+    if (attempt.terminal_status !== "semantic" || attempt.error !== null) {
       throw invalidEvidence("semantic result is not backed by exactly one matching semantic attempt");
     }
     const attemptMatch = result.attempt_ref.match(/^reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
@@ -183,17 +189,10 @@ function reusableOutcome(task, identity) {
       materialId: result.material_id, runtimeIds, subjectKind: result.subject_kind, phaseId: result.phase_id,
       baseTree: result.base_tree, candidateTree: result.candidate_tree, reused: true };
   }
-  if (matchingAttempts.length === 1) {
-    const { ref: attemptRef, record: attempt } = matchingAttempts[0];
-    validateAttemptIdentity(attempt, attemptRef, identity);
+  for (const { ref: attemptRef, record: attempt } of matchingAttempts) {
     if (attempt.terminal_status !== "unavailable" || !attempt.error) {
-      throw invalidEvidence("an attempt without a result must be unavailable");
+      throw invalidEvidence(`attempt without a semantic result is not unavailable: ${attemptRef}`);
     }
-    validateUnavailableAttemptEvidence(task, attempt);
-    const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
-    return { status: "unavailable", verdict: null, attemptRef, resultRef: null, snapshotTree: attempt.snapshot_tree,
-      materialId: attempt.material_id, runtimeIds, subjectKind: attempt.subject_kind, phaseId: attempt.phase_id,
-      baseTree: attempt.base_tree, candidateTree: attempt.candidate_tree, reused: true };
   }
   return null;
 }

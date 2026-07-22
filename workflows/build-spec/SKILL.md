@@ -109,17 +109,21 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    scope.
 6. Run the initial review using a frozen packet built from `spec.md`, decision
    facts, and relevant evidence.
-7. If that review has actionable findings, revise the draft once and run at most one revision review.
-   There is no third review in this stage.
+7. If the current review has actionable findings, revise the draft, publish the
+   changed `spec.md`, and run formal review again. Repeat for every changed draft
+   until the current exact draft has no unresolved actionable finding. There is
+   no numeric review limit. Never repeat review for unchanged snapshot/material:
+   `wh-review` reuses the existing result for that exact identity.
 8. Before the create-only receipt, reconcile the exact final `spec.md` bytes
    against every review finding and the planned completion card. Resolve every
    finding that alleges an internal contradiction, unresolved cross-reference,
    missing acceptance criterion, or mismatch between claimed and written
    coverage, even when the provider verdict is `pass`. Enumerate the actual FR
    and AC identifiers and verify that every stated range and downstream coverage
-   claim resolves to them. If the revision review still reports such a mismatch,
-   stop before acceptance; never publish a completion card that claims more than
-   the artifact contains.
+   claim resolves to them. If reconciliation changes the draft, return to Step 7.
+   Stop before acceptance until that changed current draft is formally reviewed
+   with no unresolved actionable finding; never publish a completion card that
+   claims more than the artifact contains.
 9. After that reconciliation finishes, without changing `spec.md`, create one final create-only receipt
    from its exact content. The normal path must not use a revision receipt
    or create an official receipt from a draft. Publish the append-only stage

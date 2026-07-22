@@ -9,8 +9,9 @@ description: Freeze the current source and stage evidence, ask independent provi
 
 Before starting a provider attempt, the runner checks canonical results for the
 same task, stage, track, subject identity, snapshot tree, and material ID. An
-existing valid `pass` is returned unchanged. Changed material or source creates
-one new attempt; unchanged approved material is never reviewed twice.
+existing valid semantic result is returned unchanged. A changed draft creates a
+new attempt. An unavailable transport attempt is retained as evidence but never
+sets a numeric limit on later formal retries of the same draft.
 
 ## Commands
 
@@ -63,7 +64,7 @@ The runner supplies `review_instructions`; callers must not add it. A
 `materials` and `host_provider` with `result_ref` and reuses the
 same task/stage identity.
 
-There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. Local input validation fails before an attempt exists; fix the JSON from this public contract and call once. A provider or protocol failure creates an immutable unavailable attempt; do not retry the same material with guessed fields or provider names.
+There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. Local input validation fails before an attempt exists; fix the JSON from this public contract and call again. A provider or protocol failure creates an immutable unavailable attempt. A later retry uses the same public contract and host-owned provider routing; it must not guess fields, providers, or models.
 
 ## Inputs
 
@@ -92,7 +93,7 @@ Consumers open the referenced formal result and do not trust a copied verdict. `
 
 ## Provider protocol
 
-3rd-review exposes only the public `workflowhub-result.v1` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. One same-session format correction is allowed; if the session is unavailable, one fresh complete review is allowed.
+3rd-review exposes only the public `workflowhub-result.v1` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence.
 
 Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON or one unique fenced JSON object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
 

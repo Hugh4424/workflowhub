@@ -84,4 +84,4 @@ request 声明：
 - 只要存在 `major` 或 `blocking` finding，`verdict` 必须是 `revise_required`。
 - `revise_required` 必须至少包含一条具体 finding，不得只给空泛结论。
 
-不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误最多在同一 session 请求一次只重发 JSON；仍失败时本次 provider 结果不可用，原文继续保存，但不得提升为 pass。
+不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误时只能请求重发 canonical JSON，不重传或修改材料。每次失败都保留原文且不得提升为 pass；后续正式调用可在同一公共合同下再次尝试，不能因为次数耗尽而伪造或阻断语义审查。
