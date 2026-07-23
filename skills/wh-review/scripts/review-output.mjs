@@ -37,14 +37,110 @@ function validate(value, options) {
   return Object.freeze({ verdict: value.verdict, summary: value.summary, findings: Object.freeze(findings) });
 }
 
+function reviewShaped(value) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    Object.hasOwn(value, "verdict") && Object.hasOwn(value, "summary") && Object.hasOwn(value, "findings");
+}
+
+function containsReviewShape(value) {
+  const pending = [value];
+  while (pending.length) {
+    const current = pending.pop();
+    if (!current || typeof current !== "object") continue;
+    if (reviewShaped(current)) return true;
+    for (const key in current) pending.push(current[key]);
+  }
+  return false;
+}
+
+function jsonObjectStart(source, start) {
+  let index = start + 1;
+  while (index < source.length && " \t\n\r".includes(source[index])) index += 1;
+  return source[index] === '"' || source[index] === "}";
+}
+
+function objectSpans(source) {
+  // Scan once: provider output has no size ceiling, so repeatedly looking for
+  // the closing brace from every opening brace would make parsing quadratic.
+  const spans = []; const open = []; let quoted = false; let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (open.length === 0) {
+      if (char === "{") open.push({ start: index, parentStart: null, jsonAware: jsonObjectStart(source, index) });
+      continue;
+    }
+    const current = open.at(-1);
+    if (!current.jsonAware) {
+      if (char === "{") open.push({ start: index, parentStart: current.start, jsonAware: jsonObjectStart(source, index) });
+      else if (char === "}") { const frame = open.pop(); spans.push({ start: frame.start, end: index + 1, parentStart: frame.parentStart }); }
+      continue;
+    }
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === "{") open.push({ start: index, parentStart: current.start, jsonAware: jsonObjectStart(source, index) });
+    else if (char === "}") { const frame = open.pop(); spans.push({ start: frame.start, end: index + 1, parentStart: frame.parentStart }); }
+  }
+  const starts = new Set(spans.map(({ start }) => start));
+  return { roots: spans.filter(({ parentStart }) => !starts.has(parentStart)), unclosed: open.map(({ start }) => start) };
+}
+
+function parseObject(source, { start, end }) {
+  try { return JSON.parse(source.slice(start, end)); } catch { return null; }
+}
+
+function hasCompetingReviewObject(source, roots, outside = () => true) {
+  return roots.some((span) => outside(span) && containsReviewShape(parseObject(source, span)));
+}
+
+function hasInvalidJsonLikeObject(source, roots, unclosed, outside = () => true) {
+  return roots.some((span) => outside(span) && jsonObjectStart(source, span.start) && parseObject(source, span) === null) ||
+    unclosed.some((start) => outside({ start, end: start + 1 }) && jsonObjectStart(source, start));
+}
+
+function terminalJsonAfterProse(raw) {
+  // A reviewer can accidentally explain its assessment before emitting the
+  // required final object. Accept one complete terminal object, but never
+  // choose among competing review-shaped objects or fenced alternatives.
+  const source = raw.trimEnd(); const { roots, unclosed } = objectSpans(source);
+  const candidates = roots.filter(({ end }) => end === source.length).map((span) => ({ ...span, value: parseObject(source, span) })).filter(({ value }) => value !== null);
+  const terminal = candidates.length === 1 ? candidates[0] : null;
+  if (!terminal || terminal.start === 0) return null;
+  const prose = source.slice(0, terminal.start);
+  if (/```/.test(prose)) return null;
+  for (const span of roots) {
+    if (span.end > terminal.start) continue;
+    // Do not silently skip an incomplete or malformed JSON-looking object and
+    // then accept a later answer as if it were unambiguous prose.
+    const value = parseObject(source, span);
+    if (value === null && jsonObjectStart(source, span.start)) return null;
+    if (containsReviewShape(value)) return null;
+  }
+  if (unclosed.some((start) => start < terminal.start && jsonObjectStart(source, start))) return null;
+  return terminal.value;
+}
+
 export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
   const options = { requireEvidence };
   try { return validate(JSON.parse(raw.trim()), options); } catch (error) { if (error?.code === "OUTPUT_INVALID") throw error; }
   const fences = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
-  if (fences.length !== 1) invalid("expected pure JSON or exactly one fenced JSON object");
-  let value; try { value = JSON.parse(fences[0][1].trim()); } catch { invalid("fenced block is not valid JSON"); }
-  return validate(value, options);
+  if (fences.length === 1) {
+    const fence = fences[0]; const rangeStart = fence.index; const rangeEnd = rangeStart + fence[0].length;
+    const scanned = objectSpans(raw); const outsideFence = ({ start, end }) => end <= rangeStart || start >= rangeEnd;
+    const invalidFenceContext = ({ start, end }) => outsideFence({ start, end }) || (start < rangeStart && end > rangeEnd);
+    if (hasInvalidJsonLikeObject(raw, scanned.roots, scanned.unclosed, invalidFenceContext)) invalid("fenced JSON has invalid JSON-like content outside the fence");
+    if (hasCompetingReviewObject(raw, scanned.roots, outsideFence)) invalid("fenced JSON conflicts with another review object");
+    let value; try { value = JSON.parse(fences[0][1].trim()); } catch { invalid("fenced block is not valid JSON"); }
+    return validate(value, options);
+  }
+  const terminal = terminalJsonAfterProse(raw);
+  if (terminal !== null) return validate(terminal, options);
+  invalid("expected pure JSON, exactly one fenced JSON object, or one terminal JSON object after non-JSON prose");
 }
 
 export const FORMAT_CORRECTION_PROMPT = "Your previous final response had an invalid format. Do not repeat the review. Return only one JSON object with verdict, summary, and findings that matches review-instructions.md.";

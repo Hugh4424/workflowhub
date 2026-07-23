@@ -56,13 +56,38 @@ function fixture(prefix = "simple-review-") {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("review output", () => {
-  it("accepts pure JSON or one fenced JSON object only", () => {
+  it("accepts pure JSON, one fenced object, or one terminal object after prose", () => {
     expect(parseReviewerOutput(pass).verdict).toBe("pass");
     expect(parseReviewerOutput(`note\n\`\`\`json\n${revise}\n\`\`\``).verdict).toBe("revise_required");
+    expect(parseReviewerOutput(`assessment notes with {ordinary prose} braces\n\n${revise}`).verdict).toBe("revise_required");
     expect(() => parseReviewerOutput(`\`\`\`json\n${pass}\n\`\`\`\n\`\`\`json\n${pass}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`\`\`\`json\n${pass}\n\`\`\`\n${revise}`)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`${pass}\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`{"verdict":"pass"\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`{"verdict": nope}\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`{"verdict":"pass"\n\`\`\`json\n${revise}\n\`\`\`\n}`)).toThrow(/OUTPUT_INVALID/);
+    expect(parseReviewerOutput(`notes {ordinary}\n\`\`\`json\n${revise}\n\`\`\``).verdict).toBe("revise_required");
+    expect(() => parseReviewerOutput(`${pass}\n${pass}`)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`notes\n${pass}\ntrailing text`)).toThrow(/OUTPUT_INVALID/);
+    expect(() => parseReviewerOutput(`notes\n{"verdict":"pass"\n${pass}`)).toThrow(/OUTPUT_INVALID/);
+    expect(parseReviewerOutput(`${"{ordinary}".repeat(10_000)}\n${pass}`).verdict).toBe("pass");
+    const nestedReview = `${'{"nested":'.repeat(1_000)}${pass}${"}".repeat(1_000)}`;
+    expect(() => parseReviewerOutput(`${nestedReview}\n${pass}`)).toThrow(/OUTPUT_INVALID/);
     expect(() => parseReviewerOutput("not json")).toThrow(/OUTPUT_INVALID/);
     expect(parseReviewerOutput(JSON.stringify({ verdict: "revise_required", summary: "file issue", findings: [{ severity: "major", path: "a.js", line: null, issue: "bug", root_cause: "missing guard", recommendation: "fix", evidence_kind: "direct", evidence: "a.js has no guard" }] })).findings[0]).not.toHaveProperty("line");
     expect(() => parseReviewerOutput(JSON.stringify({ verdict: "revise_required", summary: "unsupported", findings: [{ severity: "major", path: "a.js", issue: "bug", recommendation: "fix" }] }), { requireEvidence: true })).toThrow(/evidence_kind/);
+  });
+
+  it("keeps a managed group semantic when a provider prefixes one terminal review object", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-managed-terminal-json-"); const calls = [];
+    const providerClient = { runGroup: async () => {
+      calls.push(true);
+      return { runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: `assessment\n\n${pass}`, error: null, execution: null }] };
+    } };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ status: "semantic", verdict: "pass" });
+    expect(calls).toHaveLength(1);
   });
 });
 
