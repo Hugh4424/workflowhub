@@ -159,6 +159,52 @@ describe("stage-runner capability unit", () => {
     expect(() => context("verify-code").kernel.reopenBuildCode({ verifyAttemptRef: "attempt-0003.json", failureEvidenceRef: "evidence/acceptance-ac-005.json" })).toThrow(/legacy verify-code failure without upstream acceptance.*revised build-code/i);
   });
 
+  it("ignores legacy build-code fact shape while publishing a repaired attempt", async () => {
+    const { task, taskPath, worktree, oid } = fixture();
+    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const hash = "b".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
+    const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "c".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
+    const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
+    const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
+    const accept = (stage, stageContext, result) => {
+      const request = { attemptRef: result.attempt_ref };
+      if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(stageContext.kernel, stage, result);
+      acceptStageAttempt(stage, stageContext, request);
+    };
+    const decision = context("make-decision");
+    const decisionAttempt = await runStage("make-decision", decision, async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
+    accept("make-decision", decision, decisionAttempt);
+    const spec = context("build-spec");
+    spec.artifacts.writeAtomic("spec.md", "spec\n");
+    const specAttempt = await runStage("build-spec", spec, async (worker) => ({ facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }));
+    accept("build-spec", spec, specAttempt);
+    const plan = context("build-plan");
+    plan.artifacts.writeAtomic("plan.md", "plan\n"); plan.artifacts.writeAtomic("tasks.md", "tasks\n");
+    const planAttempt = await runStage("build-plan", plan, async (worker) => ({ facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }));
+    accept("build-plan", plan, planAttempt);
+    const build = context("build-code");
+    const buildAttempt = await runStage("build-code", build, async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }));
+    accept("build-code", build, buildAttempt);
+
+    const acceptedRef = task.recordPath("results/build-code/accepted.json");
+    const accepted = JSON.parse(task.readRecord("results/build-code/accepted.json"));
+    const legacyAttempt = JSON.parse(task.readRecord(`results/build-code/${accepted.attempt_ref}`));
+    delete legacyAttempt.facts.acceptance_coverage;
+    const legacyRaw = `${JSON.stringify(legacyAttempt, null, 2)}\n`;
+    writeFileSync(task.recordPath(`results/build-code/${accepted.attempt_ref}`), legacyRaw);
+    accepted.integrity_hash = `sha256:${createHash("sha256").update(legacyRaw).digest("hex")}`;
+    writeFileSync(acceptedRef, `${JSON.stringify(accepted, null, 2)}\n`);
+
+    const verify = context("verify-code");
+    const { raw: failureRaw, hash: failureHash } = publishFailure(verify.kernel, "evidence/legacy-build-failure.json", "AC-LEGACY");
+    const failed = await runStage("verify-code", verify, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/legacy-build-failure.json", sha256: failureHash }] } }));
+    const reopen = verify.kernel.reopenBuildCode({ verifyAttemptRef: failed.attempt_ref, failureEvidenceRef: "evidence/legacy-build-failure.json" });
+    expect(failureRaw).toContain("AC-LEGACY");
+    const revised = await runStage("build-code", context("build-code"), async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }), { reopenProvenance: reopen });
+    expect(revised.attempt.reopen_provenance.reopen_ref).toBe(reopen.reopen_ref);
+  });
+
   it("preserves canonical bytes in a collision-safe archive without rewriting a legacy archive", async () => {
     const setup = async () => {
       const { task, taskPath, worktree, oid } = fixture();
