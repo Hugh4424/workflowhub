@@ -27,6 +27,9 @@ function publishFailure(kernel, evidenceRef, acceptanceCriterionId) {
   kernel.publishCanonicalRecord(evidenceRef, raw);
   return { raw, hash: createHash("sha256").update(raw).digest("hex") };
 }
+function acceptanceCoverage(snapshotTree) {
+  return { snapshot_tree: snapshotTree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] };
+}
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 describe("stage-runner capability unit", () => {
   it("fails closed when task manifest changes between bootstrap and publish", async()=>{
@@ -77,7 +80,7 @@ describe("stage-runner capability unit", () => {
     await execute("make-decision", async (context, upstream) => { seen.push([context.stage, upstream]); return { facts: { worktree_root: worktree, baseline_commit: oid } }; });
     await execute("build-spec", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("spec.md","spec\n"); const cp=context.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: cp } }; });
     await execute("build-plan", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("plan.md","plan\n"); context.artifacts.writeAtomic("tasks.md","tasks\n"); const cp=context.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: cp } }; });
-    await execute("build-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { changed: [], tests: testFacts("build"), review: reviewFacts("build-code"), phase_completion: true } }; });
+    await execute("build-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { changed: [], tests: testFacts("build"), review: reviewFacts("build-code"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }; });
     await execute("verify-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { tests: testFacts("verify"), review: reviewFacts("verify-code"), evidence_refs: [] } }; });
     const verifyContext = contextFor("verify-code");
     expect(() => verifyContext.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: "evidence/missing-failure.json" })).toThrow(/ENOENT|no such/i);
@@ -122,7 +125,7 @@ describe("stage-runner capability unit", () => {
     await execute("make-decision", async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
     await execute("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); const checkpoint = worker.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint } }; });
     await execute("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); const checkpoint = worker.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint } }; });
-    await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
+    await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }));
     const firstCanonicalRaw = task.readRecord("results/build-code/accepted.json");
     const verifyContext = context("verify-code");
     const passDetail = "acceptance criterion passed\n";
@@ -138,7 +141,7 @@ describe("stage-runner capability unit", () => {
     const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
     expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" })).toThrow(/reopen already exists/i);
     const revisedContext = context("build-code");
-    const revisedHandler = async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } });
+    const revisedHandler = async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } });
     const revised = await runStage("build-code", revisedContext, revisedHandler, { reopenProvenance: reopen });
     await expect(runStage("build-code", revisedContext, revisedHandler, { reopenProvenance: reopen })).rejects.toThrow(/already published as attempt-0002.*resume and accept/i);
     acceptStageAttempt("build-code", revisedContext, { attemptRef: revised.attempt_ref });
@@ -178,11 +181,11 @@ describe("stage-runner capability unit", () => {
       await publish("make-decision", async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
       await publish("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }; });
       await publish("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }; });
-      await publish("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
+      await publish("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }));
       const verifyContext = context("verify-code"), { raw: failureRaw } = publishFailure(verifyContext.kernel, "evidence/acceptance-ac-005.json", "AC-005");
       const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
       const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
-      const revisedContext = context("build-code"), revised = await runStage("build-code", revisedContext, async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } }), { reopenProvenance: reopen });
+      const revisedContext = context("build-code"), revised = await runStage("build-code", revisedContext, async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } }), { reopenProvenance: reopen });
       return { task, revisedContext, revised, accept };
     };
     const { task, revisedContext, revised, accept } = await setup();

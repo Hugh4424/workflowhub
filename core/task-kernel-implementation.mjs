@@ -35,7 +35,7 @@ const ALLOWED_FACTS = Object.freeze({
   "make-decision": new Set(["worktree_root", "baseline_commit", "snapshot_tree", "decision", "scope", "risks", "decision_ref", "decision_hash", "reviews"]),
   "build-spec": new Set(["spec_ref", "checkpoint", "review"]),
   "build-plan": new Set(["plan_ref", "tasks_ref", "checkpoint", "review"]),
-  "build-code": new Set(["changed", "tests", "review", "phase_completion"]),
+  "build-code": new Set(["changed", "tests", "review", "phase_completion", "acceptance_coverage"]),
   "verify-code": new Set(["tests", "review", "evidence_refs", "quality_note"]),
 });
 

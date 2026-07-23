@@ -119,7 +119,10 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     const changed = [...new Set([...tracked, ...untracked])].sort();
     const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
     const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
-    write(diffRef, diff);
+    // The diff is content-addressed by its hash. Reusing the same snapshot
+    // during a controlled reopen must be safe; a different payload is still
+    // rejected by the idempotent writer.
+    publishIdempotently({ task: safeTask, write, ref: diffRef, raw: diff, label: "implementation diff evidence" });
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");

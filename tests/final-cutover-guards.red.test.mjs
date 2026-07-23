@@ -251,6 +251,16 @@ describe("final cutover guard contracts", () => {
       .rejects.toThrow(/attempt\/result (subject_kind|phase_id) mismatch/i);
   });
 
+  it("rejects build-code acceptance without an acceptance coverage table", async () => {
+    const stage = "build-code", values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } }))
+      .rejects.toThrow(/acceptance_coverage/i);
+  });
+
   it("rejects a pass result when the provider's final raw output requires revision", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage), "reviews/results/review.json": reviewReceipt(stage),

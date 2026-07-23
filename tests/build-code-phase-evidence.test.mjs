@@ -17,6 +17,7 @@ import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evi
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+const acceptanceCoverage = (snapshotTree, criterion = "PHASE-REPAIR") => ({ snapshot_tree: snapshotTree, accepted_criterion_ids: [criterion], items: [{ acceptance_criterion_id: criterion, status: "unknown", evidence_refs: [] }] });
 
 function accept(kernel, stage, facts, human = false, upstream_refs = []) {
   const attempt = kernel.publishAttempt(stage, { facts, upstream_refs });
@@ -167,6 +168,7 @@ function controlledReopen(state, published, receipts, reviewRef) {
   };
   accept(state.kernel, "build-code", {
     changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts, phase_completion: true,
+    acceptance_coverage: acceptanceCoverage(testFacts.snapshot_tree),
   }, false, [{ task_id: state.task.identity.taskId, stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }]);
 
   const failureRef = "evidence/acceptance-reopened-phase.json";
@@ -186,6 +188,13 @@ function controlledReopen(state, published, receipts, reviewRef) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("build-code phase evidence publication", () => {
+  it("reuses identical implementation diff evidence during a same-snapshot revision", () => {
+    const state = fixture("same-snapshot-revision");
+    const first = writeOfficialComponentReceipt({ task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
+    const repeated = writeOfficialComponentReceipt({ task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true }, revisionOf: first.ref });
+    expect(repeated.value.diff_ref).toBe(first.value.diff_ref);
+  });
+
   it("accepts only a complete host-managed runtime block outside the implementation snapshot", () => {
     const runtime = fixture("runtime-context");
     const runtimeAgents = join(runtime.workspace.worktreeRoot, "AGENTS.md");
@@ -430,6 +439,7 @@ describe("build-code phase evidence publication", () => {
       },
       review: { verdict: "pass", result_ref: repairedPhaseReview, result_hash: sha256(state.task.readRecord(repairedPhaseReview)), snapshot_tree: repairedDone.snapshot_tree },
       phase_completion: true,
+      acceptance_coverage: acceptanceCoverage(testReceipt.snapshot_tree),
     }, false, [{ task_id: state.task.identity.taskId, stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }]);
 
     const late = phaseReceipts(state, "phase-1-late", { revisionOf: repaired.implementation.ref });

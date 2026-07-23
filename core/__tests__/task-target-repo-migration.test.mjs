@@ -89,6 +89,7 @@ describe("target repository migration", () => {
     const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration", targetRepoRoot: f.repo, targetBranch: "main" });
     const hash = "a".repeat(64);
     const tree = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]);
+    const acceptanceCoverage = { snapshot_tree: tree, accepted_criterion_ids: ["AC-005"], items: [{ acceptance_criterion_id: "AC-005", status: "unknown", evidence_refs: [] }] };
     const testFacts = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: f.candidate.baselineCommit, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-18T00:00:00.000Z", completed_at: "2026-07-18T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
     const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
     const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
@@ -103,7 +104,7 @@ describe("target repository migration", () => {
 
     await publishAndAccept("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: "specs/migration/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }; });
     await publishAndAccept("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: "specs/migration/plan.md", tasks_ref: "specs/migration/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }; });
-    await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true } }));
+    await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage } }));
 
     const verifyContext = context("verify-code");
     const failureDetail = "AC-005 failed\n";

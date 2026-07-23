@@ -31,12 +31,13 @@
       }
     },
     "build-code": {
-      "required_keys": ["changed", "tests", "review", "phase_completion"],
+      "required_keys": ["changed", "tests", "review", "phase_completion", "acceptance_coverage"],
       "semantics": {
         "changed": "List of changed artifacts from this stage",
         "tests": "Test execution conclusion (pass/fail counts)",
         "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref plus its snapshot tree. Consumers must open the referenced record and must not trust a copied verdict.",
-        "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records, or provenance-bound legacy commit migration records that visibly mark missing canonical phase reports"
+        "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records, or provenance-bound legacy commit migration records that visibly mark missing canonical phase reports",
+        "acceptance_coverage": "Exactly one covered, missing, or unknown row for every accepted acceptance criterion, bound to the same snapshot as implementation, tests, and final review"
       }
     },
     "verify-code": {
