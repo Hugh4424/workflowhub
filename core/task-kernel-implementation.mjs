@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -512,10 +512,15 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     if (facts.tests.exit_code !== 0) throw new Error("verify-code passing publication requires tests with exit_code=0");
     if (facts.review.verdict !== "pass") throw new Error("verify-code passing publication requires an independent review verdict=pass");
     const snapshot = captureGitWorktreeSnapshot(assertWorkspace(workspace).worktreeRoot);
-    if (publication.workspace_head !== snapshot.head || publication.workspace_tree !== snapshot.tree || facts.tests.snapshot_head !== snapshot.head || facts.tests.snapshot_tree !== snapshot.tree || facts.review.snapshot_tree !== snapshot.tree) {
+    const workspaceRoot = assertWorkspace(workspace).worktreeRoot;
+    const snapshotsMatch = equivalentWorkspaceTrees(workspaceRoot, facts.tests.snapshot_tree, snapshot.tree)
+      && equivalentWorkspaceTrees(workspaceRoot, facts.review.snapshot_tree, snapshot.tree)
+      && equivalentWorkspaceTrees(workspaceRoot, activeBuild.facts.tests.snapshot_tree, snapshot.tree)
+      && equivalentWorkspaceTrees(workspaceRoot, activeBuild.facts.review.snapshot_tree, snapshot.tree);
+    if (publication.workspace_head !== snapshot.head || facts.tests.snapshot_head !== snapshot.head || !snapshotsMatch) {
       throw new Error("verify-code passing publication Workspace binding changed before publication");
     }
-    if (activeBuild.facts.tests.snapshot_head !== snapshot.head || activeBuild.facts.tests.snapshot_tree !== snapshot.tree || activeBuild.facts.review.snapshot_tree !== snapshot.tree) {
+    if (activeBuild.facts.tests.snapshot_head !== snapshot.head) {
       throw new Error("verify-code passing publication active accepted build tests/review snapshot does not match the active Workspace");
     }
     assertSnapshotCommitBinding(facts.tests.snapshot_commit, facts.tests.snapshot_head, facts.tests.snapshot_tree, "verify-code passing tests");
