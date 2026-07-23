@@ -108,8 +108,8 @@ describe("wh-review production CLI", () => {
 
   it("accepts only phase_id as the phase scope selector", async () => {
     const { runReviewRound } = await import(cli.href);
-    for (const field of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
-      await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/forbidden/);
+    for (const field of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff", "review_scope", "reviewScope"]) {
+      await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/forbidden|derived/);
     }
   });
 

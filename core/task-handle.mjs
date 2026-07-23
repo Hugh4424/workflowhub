@@ -679,6 +679,59 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate only content-addressed Phase map traces; this is not a generic evidence walk. */
+    listCanonicalPhaseMapTraceRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const evidenceRoot = resolve(realTaskPath, "evidence");
+      const phasesRoot = resolve(evidenceRoot, "phases");
+      assertInside(realTaskPath, evidenceRoot, "evidence directory");
+      assertInside(realTaskPath, phasesRoot, "Phase evidence directory");
+      if (!existsSync(phasesRoot)) return [];
+      const evidenceIdentity = directorySnapshot(realTaskPath, evidenceRoot);
+      const phasesIdentity = directorySnapshot(realTaskPath, phasesRoot);
+      const identities = [];
+      const refs = [];
+      for (const phaseEntry of readdirSync(phasesRoot, { withFileTypes: true })) {
+        if (!/^[A-Za-z0-9._-]+$/.test(phaseEntry.name)) throw new Error(`Phase trace namespace has an invalid phase directory: ${phaseEntry.name}`);
+        const phaseRoot = resolve(phasesRoot, phaseEntry.name);
+        const phaseStat = lstatSync(phaseRoot);
+        if (!phaseEntry.isDirectory() || phaseStat.isSymbolicLink() || !phaseStat.isDirectory()) {
+          throw new Error(`Phase trace namespace must use real phase directories: ${phaseEntry.name}`);
+        }
+        const phaseIdentity = directorySnapshot(realTaskPath, phaseRoot);
+        identities.push(phaseIdentity);
+        for (const snapshotEntry of readdirSync(phaseRoot, { withFileTypes: true })) {
+          if (!/^[a-f0-9]{40,64}$/.test(snapshotEntry.name)) throw new Error(`Phase trace namespace has an invalid snapshot directory: ${snapshotEntry.name}`);
+          const snapshotRoot = resolve(phaseRoot, snapshotEntry.name);
+          const snapshotStat = lstatSync(snapshotRoot);
+          if (!snapshotEntry.isDirectory() || snapshotStat.isSymbolicLink() || !snapshotStat.isDirectory()) {
+            throw new Error(`Phase trace namespace must use real snapshot directories: ${snapshotEntry.name}`);
+          }
+          const snapshotIdentity = directorySnapshot(realTaskPath, snapshotRoot);
+          identities.push(snapshotIdentity);
+          for (const traceEntry of readdirSync(snapshotRoot, { withFileTypes: true })) {
+            const trace = /^phase-map-trace-[a-f0-9]{64}\.json$/.test(traceEntry.name);
+            const supporting = /^(?:phase-evidence|diff-scan)-[a-f0-9]{64}\.json$/.test(traceEntry.name);
+            if (!trace && !supporting) {
+              throw new Error(`Phase trace namespace has an invalid trace record: ${traceEntry.name}`);
+            }
+            const tracePath = resolve(snapshotRoot, traceEntry.name);
+            const traceStat = lstatSync(tracePath);
+            if (!traceEntry.isFile() || traceStat.isSymbolicLink() || !traceStat.isFile()) {
+              throw new Error(`Phase trace must be a regular non-symlink JSON file: ${traceEntry.name}`);
+            }
+            if (trace) refs.push(`evidence/phases/${phaseEntry.name}/${snapshotEntry.name}/${traceEntry.name}`);
+          }
+        }
+      }
+      refs.sort((left, right) => left.localeCompare(right));
+      for (const identity of identities) verifyDirectorySnapshot(identity);
+      verifyDirectorySnapshot(phasesIdentity);
+      verifyDirectorySnapshot(evidenceIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate external wh-review audit records. They are never stage receipts. */
     listCanonicalReviewResolutionRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");

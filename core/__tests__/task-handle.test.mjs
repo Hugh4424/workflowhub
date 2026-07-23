@@ -111,6 +111,33 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("enumerates only content-addressed Phase map traces in the narrow evidence namespace", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const snapshot = "a".repeat(40);
+    const tracesRoot = join(taskPath, "evidence", "phases", "T02", snapshot);
+    mkdirSync(tracesRoot, { recursive: true });
+    const first = "1".repeat(64), second = "2".repeat(64);
+    writeFileSync(join(tracesRoot, `phase-map-trace-${second}.json`), "{}");
+    writeFileSync(join(tracesRoot, `phase-map-trace-${first}.json`), "{}");
+    expect(task.listCanonicalPhaseMapTraceRefs()).toEqual([
+      `evidence/phases/T02/${snapshot}/phase-map-trace-${first}.json`,
+      `evidence/phases/T02/${snapshot}/phase-map-trace-${second}.json`,
+    ]);
+  });
+
+  it("rejects noncanonical entries and symlinks in the Phase trace namespace", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const snapshot = "b".repeat(40);
+    const tracesRoot = join(taskPath, "evidence", "phases", "T03", snapshot);
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-phase-trace-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(tracesRoot, { recursive: true });
+    symlinkSync(outside, join(tracesRoot, `phase-map-trace-${"c".repeat(64)}.json`));
+    expect(() => task.listCanonicalPhaseMapTraceRefs()).toThrow(/symlink|regular/i);
+  });
+
   it("enumerates external review audits without treating them as review results", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });

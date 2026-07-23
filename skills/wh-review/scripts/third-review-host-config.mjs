@@ -175,8 +175,7 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   const broker = brokerConfig(configPath);
   const whReview = whReviewPolicy(config.wh_review);
   validateWhReviewProfileDeclarations(whReview, broker);
-  const runtimeRoot = realDirectory(broker?.runtime?.root, "3rd-review config runtime.root");
-  return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, runtimeRoot, ...(whReview ? { whReview } : {}) };
+  return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, ...(whReview ? { whReview } : {}) };
 }
 
 function routeWithProfilePriorities(route, profiles) {

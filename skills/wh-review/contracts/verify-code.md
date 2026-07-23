@@ -17,15 +17,20 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - `review-instructions.md`：stage、审查问题和输出格式。
 - 验收标准。
 - 默认不发送完整代码或 diff；只有 `context_map` 明确选择的直接证据片段才可交付。
-- 每条验收标准对应的新鲜、可定位证据。
+- `ac-evidence-summary.v1`：每条验收标准的 result、场景、oracle、实际结果、范围限制、例外，以及
+  acceptance leaf、嵌套证据和测试 receipt 的 canonical ref/SHA-256。生成器逐条验证这些
+  ref、hash、snapshot 和 AC 一对一覆盖；无法从已认证证据推导的字段必须标为 `unknown`，不发送
+  aggregate、leaf、原始日志或完整证据树。
 - 尚未关闭的问题和例外；没有时也要明确写明“无”。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
 `wh_review.v2` 路由还必须给出 `context_map` 和 `evidence_map`。每张 map 都有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
-`rationale`）；`unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。`context_map` 的
-每个 `complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）。
+`rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。
+`complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
+`not_applicable` 或 `unknown` 条目必须给出受限 `reason_code` 和理由，不能用自由文本
+`not_needed_reason` 绕过锚点。
 
 首轮返回 `revise_required` 仍是质量事实而不是 stage pass gate。普通修复直接继续，
 不做二审；可选 response ledger 只形成外置审计记录，缺失或无法验证时标记

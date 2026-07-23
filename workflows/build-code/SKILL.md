@@ -69,10 +69,10 @@ Before build-code is accepted, a same-Phase repair after a failed pre-review
 check or review finding must preserve the old receipt and publish the repaired
 snapshot with `--revision=true --recover=<latest-implementation-receipt-ref>`.
 Capture repaired tests under new receipt/output refs and pass those new refs to
-the next review and stage run. If a Phase or final full-worktree review returns
+the next review and stage run. If a Phase or final integration review returns
 `revise_required`, repair the same original Phase that owns the finding,
 publish a revision receipt, capture fresh tests under new refs, and repeat the
-affected Phase review before the final full-worktree review. This is
+affected Phase review before the final integration review. This is
 append-only repair of the current open stage; it
 does not require or create a verify-code reopen authorization. After build-code
 is accepted, only the controlled verification-failure path above may create
@@ -94,12 +94,16 @@ Use fresh task-relative refs for a controlled rework attempt. Do not pass
 name; `capture-tests` is the single public producer for build-code test facts.
 
 After every Phase has passed its Phase review, and the final implementation
-receipt and fresh test receipt exist, run one final independent code review
-using those fresh tests: one full-worktree `wh-review` without `phase_id`. This
-final review is separate from the required per-Phase reviews. The review host
-freezes the authenticated Workspace itself; do not supply paths, commits,
-ranges, or a caller-built diff.
-The canonical implementation receipt, canonical tests receipt, and final review
+receipt and fresh test receipt exist, run one final independent **integration**
+review: `wh-review` without `phase_id`. The runner derives
+`review_scope=integration`; callers never supply it, paths, commits, ranges, or
+a caller-built diff. Before any independent review call, it reconstructs one unique,
+continuous formal PASS Phase-trace chain from the accepted build-plan checkpoint
+to the final tree, validates final test and AC trace identity, and builds only
+the integration packet. Missing/branched/stale traces, zero-Phase work, legacy
+unscoped final results, or missing AC/seam facts fail `MATERIAL_INCOMPLETE`;
+they never fall back to a full history or cumulative diff. The canonical
+implementation receipt, canonical tests receipt, and final integration result
 must all bind the same snapshot tree. A mismatch fails before the build-code
 attempt is published.
 
@@ -158,17 +162,23 @@ order, evidence, or authority boundaries.
    plan remains the ordering authority; the mutable `phase-result.json` is only
    the current pointer because there is no machine-readable Phase index.
 5. After every planned Phase passes, verify each Phase ID has matching
-   canonical snapshot/material evidence and a formal PASS result, then run one
-   final full-worktree `wh-review`. Never repeat a Phase or final review when
-   its snapshot/material identity is unchanged.
+   canonical snapshot/material evidence, a formal PASS result, and a minimal
+   phase-map trace. Reconstruct one unique continuous coverage chain from the
+   accepted build-plan checkpoint to the final tree; missing/ambiguous/legacy
+   facts are `MATERIAL_INCOMPLETE`. A trace that only authenticates paths and
+   evidence must emit an audited `unknown` seam, not invent a semantic
+   producer/consumer relation. Then run exactly one final
+   `worktree + integration` `wh-review` without historical or cumulative diff.
+   Never repeat a Phase or final review when its snapshot/material identity is
+   unchanged.
 6. Create the final implementation and fresh test receipts, publish the
    build-code attempt with `run`, and let the trusted runtime accept it
    automatically. A Phase result is gate evidence and cannot replace the final
-   full-worktree review.
+   same-snapshot `worktree + integration` result.
 7. If verify-code later publishes an authenticated failure, use only the
    controlled `reopen` flow above. Preserve the prior accepted attempt and
    rerun only the current, last affected PASS Phase before repeating the final
-   full-worktree review. Pass the immutable `reopen_ref` in every
+   integration review. Pass the immutable `reopen_ref` in every
    `publish-phase-evidence` input for that repair. The runtime authenticates it
    against the active accepted build and records only the ref in the new Phase
    evidence. While that reopen remains bound to the active accepted build, each
@@ -261,7 +271,7 @@ Publish one concise completion handoff containing the stage result, human-readab
 artifact names, test and review conclusions, downstream dependencies, unresolved
 risks, next owner, and user action. Do not copy artifacts or raw logs. The
 handoff must be rebuilt from the latest completed Phase results and final
-full-worktree evidence. Later facts supersede earlier provisional skips,
+integration evidence. Later facts supersede earlier provisional skips,
 risks, and findings; never reuse a stale Phase summary as the final result. The
 invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream

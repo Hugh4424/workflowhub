@@ -43,10 +43,11 @@ That input has exactly:
 `{"refs":[{"ref":"<leaf ref returned by the runtime>","sha256":"<leaf hash returned by the runtime>"}]}`.
 
 Verify-code has two distinct review facts. The active accepted build-code final
-full-worktree **pass** review remains the acceptance lineage. Pass that exact
-build-code review ref in the verify run input; the runtime authenticates its
-provider evidence and current snapshot. A verify-code quality review never
-replaces, upgrades, or becomes this `receipts.review` fact.
+same-snapshot `worktree + integration` **pass** review remains the acceptance
+lineage. Pass that exact build-code review ref in the verify run input; the
+runtime authenticates its `review_scope=integration`, provider evidence, and
+current snapshot. A Phase result, legacy unscoped worktree result, or verify-code
+quality review never replaces, upgrades, or becomes this `receipts.review` fact.
 
 After fresh tests and every acceptance-evidence leaf are complete, normal
 verify-code must run configured `wh-review` with `stage: "verify-code"`. It
@@ -122,7 +123,7 @@ fresh passing verification through
 --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
 kernel requires a new active accepted build, fresh passing tests and acceptance
-evidence, plus that build's accepted final full-worktree review. The active build's accepted tests and
+evidence, plus that build's accepted final integration review. The active build's accepted tests and
 review snapshots must match those fresh materials and the live Workspace; a
 build accepted at snapshot A cannot validate later Workspace B evidence. The
 kernel then binds their hashes plus the old
@@ -172,7 +173,8 @@ idempotent. Other attempts against a closed stage remain rejected.
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-6. Authenticate the active accepted build-code final full-worktree review.
+6. Authenticate the active accepted build-code final `worktree + integration`
+   review and its `review_scope=integration`.
    This is the existing acceptance lineage and must remain the `review` ref in
    the verify run input. Reject a Phase result, wrong task, changed bytes, or a
    snapshot different from the fresh tests/current Workspace. The new
@@ -181,12 +183,15 @@ idempotent. Other attempts against a closed stage remain rejected.
    run configured `wh-review` with `stage: "verify-code"`, the authenticated
    TaskHandle identity, current host provider, and only
    `acceptance_criteria`, structured `acceptance_evidence`, `open_exceptions`,
-   `context_map`, and `evidence_map`. Do not select providers, models, or a
-   review round. Its material maps must identify only the AC/evidence excerpts
-   needed for verification; do not send a full codebase, raw logs, or a copied
-   build-code diff. Record the returned result/attempt and report as a quality
-   fact. Do not put it in `$TMP_DIR/run.json`, acceptance-evidence leaves, or
-   `facts.review`.
+   `context_map`, and `evidence_map`. The evidence material contains the
+   schema-validated `ac-evidence-summary.v1`: exactly one row per accepted AC
+   with acceptance leaf, nested evidence, and test receipt ref/SHA-256 plus
+   scenario/oracle/outcome/limits/exceptions. Unknown source semantics remain
+   explicit `unknown`; raw logs, full canonical evidence trees, full codebases,
+   and copied build-code diffs are forbidden. Do not select providers, models,
+   or a review round. Record the returned result/attempt and report it as a
+   quality fact. Do not put it in `$TMP_DIR/run.json`, acceptance-evidence
+   leaves, or `facts.review`.
 
    If that first review is `revise_required`, normal repair records a bound
    response ledger and does not call a provider again. Only a complete ledger

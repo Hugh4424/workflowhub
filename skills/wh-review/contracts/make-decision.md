@@ -55,9 +55,12 @@ detail 必须加载 `simplicity-guard` 只读 lens，逐项执行 P0-P3：优先
 direction 是不含候选方案的盲审，禁止加载 `simplicity-guard`，避免从不存在的
 方案中推断或裁剪内容。
 
-`wh_review.v2` 的 detail 还必须提供 `context_map` 和 `evidence_map`；每个
-`context_map` 的 `complete` 条目使用可验证 anchors（id、snapshot path、行区间、
-role、reason），runner 只交付这些直接片段。
+`wh_review.v2` 的 detail 还必须提供 `context_map` 和 `evidence_map`。每张 map 的
+map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；每个 entry
+有 id、subject、rationale、disposition。`complete` entry 必须使用可验证 anchors
+（id、snapshot path、行区间、role、reason）；`not_applicable` 或 `unknown` entry 必须
+有受限 reason code 和理由，不能用自由文本 `not_needed_reason` 冒充完整判断。map-level
+`unknown` 还必须说明 `unknown_reason`。runner 只交付 complete anchors 对应的直接片段。
 
 ## 输出
 

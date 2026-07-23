@@ -14,8 +14,8 @@ function expectSchemaError(name, value, pointer) {
 }
 
 describe("schema-validator", () => {
-  it("compiles the simple review and resolution schemas", () => {
-    expect(compiledSchemaNames).toEqual(["attempt", "result", "resolution"]);
+  it("compiles the review, resolution, and AC evidence schemas", () => {
+    expect(compiledSchemaNames).toEqual(["attempt", "result", "resolution", "ac_evidence_summary"]);
   });
 
   it("rejects unknown attempt fields", () => {
@@ -55,6 +55,35 @@ describe("schema-validator", () => {
     expectSchemaError("result", result, "/verdict");
   });
 
+  it("keeps a provider's rejected major finding as audit evidence when aggregation passes", () => {
+    const result = {
+      version: "wh-review-result.v1",
+      task_id: "task-1",
+      stage: "build-code",
+      review_track: null,
+      subject_kind: "worktree", phase_id: null, base_tree: oid, candidate_tree: oid,
+      source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
+      snapshot_tree: oid,
+      material_id: hash,
+      attempt_ref: "reviews/attempts/attempt-1.json",
+      verdict: "pass",
+      findings: [],
+      provider_results: [{
+        provider: "kimi/coding",
+        output: {
+          verdict: "revise_required", summary: "unverified concern",
+          findings: [{ severity: "major", path: "requirements/impact_map.json", issue: "scope concern", recommendation: "verify approved scope", evidence_kind: "direct", evidence: "the submitted anchor is invalid" }],
+        },
+      }],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [{
+        id: "F-123456789abc", severity: "major", path: "requirements/impact_map.json", issue: "scope concern", root_cause: "unverified scope", recommendation: "verify approved scope",
+        providers: ["kimi/coding"], adapter_count: 1, finding_count: 1, disposition: "invalid_evidence", evidence_status: "invalid_anchor",
+        provider_findings: [{ provider: "kimi/coding", adapter: "kimi", severity: "major", evidence_kind: "direct", evidence_anchor_valid: false }],
+      }] },
+    };
+    expect(validateSchema("result", result)).toEqual(result);
+  });
+
   it("rejects a resolution with an untrusted extra field", () => {
     const resolution = {
       version: "wh-review-resolution.v1", task_id: "task-1", stage: "build-spec", review_track: null,
@@ -64,5 +93,19 @@ describe("schema-validator", () => {
       unverified_reason: null, accepted_risk_count: 0, leaked: "secret-value",
     };
     expectSchemaError("resolution", resolution, "/leaked");
+  });
+
+  it("requires every provider-visible AC summary field", () => {
+    const summary = {
+      schema_version: "ac-evidence-summary.v1", snapshot_tree: oid,
+      test_receipt: { ref: "receipts/tests.json", sha256: hash },
+      criteria: [{
+        acceptance_criterion_id: "AC-1", result: "pass", acceptance_leaf: { ref: "evidence/ac-1.json", sha256: hash },
+        nested_evidence: [{ ref: "evidence/ac-1-proof.json", sha256: hash }], scenario: "scenario", oracle: "oracle",
+        actual_outcome: "pass", evidence_type: "acceptance_leaf", coverage_limits: ["unknown"], exceptions: ["unknown"],
+      }],
+    };
+    expect(validateSchema("ac_evidence_summary", summary)).toEqual(summary);
+    expectSchemaError("ac_evidence_summary", { ...summary, criteria: [{ ...summary.criteria[0], oracle: "" }] }, "/criteria/0/oracle");
   });
 });

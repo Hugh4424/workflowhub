@@ -7,6 +7,7 @@ import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
+import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
@@ -57,6 +58,7 @@ function hash(raw) { return createHash("sha256").update(raw).digest("hex"); }
 
 export function validateAcceptanceEvidence(value, label = "acceptance evidence") {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
+  for (const key of Object.keys(value)) if (!["schema_version", "acceptance_criterion_id", "result", "refs", "snapshot_tree", "summary"].includes(key)) throw new Error(`${label} has unknown field ${key}`);
   if (value.schema_version !== "acceptance-evidence.v1") throw new Error(`${label} schema_version must be acceptance-evidence.v1`);
   if (typeof value.acceptance_criterion_id !== "string" || !ACCEPTANCE_ID.test(value.acceptance_criterion_id)) throw new Error(`${label} acceptance_criterion_id must be stable and non-empty`);
   if (!new Set(["pass", "fail"]).has(value.result)) throw new Error(`${label} result must be pass or fail`);
@@ -65,7 +67,27 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(entry.ref) || entry.ref.includes("..") || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
     return { ref: entry.ref, sha256: entry.sha256 };
   });
-  return Object.freeze({ schema_version: value.schema_version, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result, refs: Object.freeze(refs) });
+  if (value.snapshot_tree !== undefined && (typeof value.snapshot_tree !== "string" || !GIT_OID.test(value.snapshot_tree))) throw new Error(`${label} snapshot_tree must be a Git tree id`);
+  let summary;
+  if (value.summary !== undefined) {
+    if (!value.summary || typeof value.summary !== "object" || Array.isArray(value.summary)) throw new Error(`${label}.summary must be an object`);
+    const fields = ["scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions"];
+    for (const key of Object.keys(value.summary)) if (!fields.includes(key)) throw new Error(`${label}.summary has unknown field ${key}`);
+    summary = {};
+    for (const key of ["scenario", "oracle", "actual_outcome", "evidence_type"]) {
+      if (value.summary[key] !== undefined) {
+        if (typeof value.summary[key] !== "string" || value.summary[key].trim() === "") throw new Error(`${label}.summary.${key} must be non-empty text`);
+        summary[key] = value.summary[key];
+      }
+    }
+    for (const key of ["coverage_limits", "exceptions"]) {
+      if (value.summary[key] !== undefined) {
+        if (!Array.isArray(value.summary[key]) || value.summary[key].length === 0 || value.summary[key].some((item) => typeof item !== "string" || item.trim() === "")) throw new Error(`${label}.summary.${key} must be a non-empty text array`);
+        summary[key] = Object.freeze([...value.summary[key]]);
+      }
+    }
+  }
+  return Object.freeze({ schema_version: value.schema_version, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result, refs: Object.freeze(refs), ...(value.snapshot_tree === undefined ? {} : { snapshot_tree: value.snapshot_tree }), ...(summary === undefined ? {} : { summary: Object.freeze(summary) }) });
 }
 
 function validateRefs(refs, label) {
@@ -234,8 +256,22 @@ function validateTests(value, label) {
 
 function validateReview(value, label) {
   plain(value, label);
+  const scopeFields = ["subject_kind", "phase_id", "review_scope"];
+  const hasScope = scopeFields.some((key) => Object.prototype.hasOwnProperty.call(value, key));
+  if (hasScope && !scopeFields.every((key) => Object.prototype.hasOwnProperty.call(value, key))) {
+    throw new TypeError(`${label} review scope must provide subject_kind, phase_id, and review_scope together`);
+  }
+  if (hasScope) {
+    if (!new Set(["worktree", "phase"]).has(value.subject_kind)) throw new TypeError(`${label}.subject_kind must be worktree or phase`);
+    if (!new Set(["phase", "integration"]).has(value.review_scope)) throw new TypeError(`${label}.review_scope must be phase or integration`);
+    if (value.subject_kind === "phase") {
+      if (typeof value.phase_id !== "string" || value.phase_id.trim() === "" || value.review_scope !== "phase") throw new TypeError(`${label} phase review scope is invalid`);
+    } else if (value.phase_id !== null || value.review_scope !== "integration") {
+      throw new TypeError(`${label} worktree review scope is invalid`);
+    }
+  }
   if (value.status === "unavailable") {
-    rejectUnknown(value, new Set(["status", "attempt_ref", "attempt_hash", "snapshot_tree", "material_id", "error", "review_track"]), label);
+    rejectUnknown(value, new Set(["status", "attempt_ref", "attempt_hash", "snapshot_tree", "material_id", "error", "review_track", ...scopeFields]), label);
     artifactRef(value.attempt_ref, `${label}.attempt_ref`);
     if (!value.attempt_ref.startsWith("reviews/attempts/") || !value.attempt_ref.endsWith("/attempt.json")) throw new TypeError(`${label}.attempt_ref must reference a formal wh-review attempt`);
     if (!HASH.test(value.attempt_hash ?? "")) throw new TypeError(`${label}.attempt_hash must be sha256`);
@@ -248,7 +284,7 @@ function validateReview(value, label) {
     if (value.review_track !== undefined && !new Set(["direction", "detail"]).has(value.review_track)) throw new TypeError(`${label}.review_track must be direction or detail`);
     return;
   }
-  rejectUnknown(value, new Set(["verdict", "result_ref", "result_hash", "snapshot_tree"]), label);
+  rejectUnknown(value, new Set(["verdict", "result_ref", "result_hash", "snapshot_tree", ...scopeFields]), label);
   nonemptyString(value.verdict, `${label}.verdict`);
   artifactRef(value.result_ref, `${label}.result_ref`);
   if (!value.result_ref.startsWith("reviews/results/")) throw new TypeError(`${label}.result_ref must reference a formal wh-review result`);
@@ -545,6 +581,20 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const reviewRaw = task.readRecord(publication.review_result_ref);
     if (hash(reviewRaw) !== publication.review_result_hash) throw new Error("verify-code passing review result changed before publication");
     const review = parseJson(reviewRaw, "verify-code passing review result");
+    const integrationScopeError = "MATERIAL_INCOMPLETE: build-code final review must be a same-snapshot formal integration result (subject_kind=worktree, review_scope=integration, phase_id=null); return to build-code";
+    if (review.subject_kind !== "worktree" || review.review_scope !== "integration" || review.phase_id !== null || review.candidate_tree !== review.snapshot_tree ||
+      facts.review.subject_kind !== "worktree" || facts.review.review_scope !== "integration" || facts.review.phase_id !== null ||
+      activeBuild.facts.review?.subject_kind !== "worktree" || activeBuild.facts.review?.review_scope !== "integration" || activeBuild.facts.review?.phase_id !== null) throw new Error(integrationScopeError);
+    try { validateSchema("result", review); }
+    catch (error) { throw new Error(`verify-code passing formal integration result schema is invalid: ${error.message}`); }
+    if (!/^reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/.test(review.attempt_ref ?? "")) throw new Error("verify-code passing formal integration result attempt reference is invalid");
+    const reviewAttempt = parseJson(task.readRecord(review.attempt_ref), "verify-code passing review attempt");
+    try { validateSchema("attempt", reviewAttempt); }
+    catch (error) { throw new Error(`verify-code passing formal integration attempt schema is invalid: ${error.message}`); }
+    for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {
+      if (reviewAttempt[key] !== review[key]) throw new Error(`verify-code passing formal integration attempt/result ${key} mismatch`);
+    }
+    if (reviewAttempt.terminal_status !== "semantic" || reviewAttempt.error !== null) throw new Error("verify-code passing formal integration result is not backed by a semantic attempt");
     if (review.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId || review.stage !== "build-code" || review.verdict !== "pass" || review.verdict !== facts.review.verdict || review.snapshot_tree !== facts.review.snapshot_tree || facts.review.result_ref !== publication.review_result_ref || facts.review.result_hash !== publication.review_result_hash || activeBuild.facts.review.result_ref !== publication.review_result_ref || activeBuild.facts.review.result_hash !== publication.review_result_hash) throw new Error("verify-code passing review result provenance mismatch");
 
     if (JSON.stringify(facts.evidence_refs) !== JSON.stringify(publication.acceptance_evidence_refs)) throw new Error("verify-code passing acceptance evidence binding mismatch");

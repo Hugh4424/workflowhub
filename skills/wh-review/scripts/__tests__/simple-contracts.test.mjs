@@ -40,8 +40,11 @@ describe("simple wh-review contracts", () => {
       "schemas/attempt.schema.json",
       "schemas/result.schema.json",
       "schemas/resolution.schema.json",
+      "schemas/ac-evidence-summary.schema.json",
       "schemas/stage-materials.schema.json",
       "scripts/review-materials.mjs",
+      "scripts/ac-evidence-summary.mjs",
+      "scripts/__tests__/ac-evidence-summary.test.mjs",
       "scripts/review-controller.mjs",
       "scripts/review-output.mjs",
       "scripts/review-provider-client.mjs",
@@ -195,6 +198,23 @@ describe("simple wh-review contracts", () => {
     const matrix = readJson(join(root, "wh-review", "stage-materials.json"));
     const validate = validator("stage-materials.schema.json");
     expect(validate(matrix), validate.errors).toBe(true);
+    expect(matrix.stages["build-plan"].required).toEqual(expect.arrayContaining(["draft_tasks"]));
+    const missingDraftTasks = structuredClone(matrix);
+    missingDraftTasks.stages["build-plan"].required = missingDraftTasks.stages["build-plan"].required.filter((key) => key !== "draft_tasks");
+    expect(validate(missingDraftTasks)).toBe(false);
+    const optionalDraftTasks = structuredClone(matrix);
+    optionalDraftTasks.stages["build-plan"].required = optionalDraftTasks.stages["build-plan"].required.filter((key) => key !== "draft_tasks");
+    optionalDraftTasks.stages["build-plan"].optional.push("draft_tasks");
+    expect(validate(optionalDraftTasks)).toBe(false);
+    const forbiddenDraftTasks = structuredClone(matrix);
+    forbiddenDraftTasks.stages["build-plan"].forbidden.push("draft_tasks");
+    expect(validate(forbiddenDraftTasks)).toBe(false);
+    expect(matrix.stages["build-code"].profiles.phase.source_bundle).toBe("diff");
+    expect(matrix.stages["build-code"].profiles.integration.source_bundle).toBe("none");
+    expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "ac_trace"]));
+    const missingIntegrationTrace = structuredClone(matrix);
+    missingIntegrationTrace.stages["build-code"].profiles.integration.required = missingIntegrationTrace.stages["build-code"].profiles.integration.required.filter((key) => key !== "ac_trace");
+    expect(validate(missingIntegrationTrace)).toBe(false);
     const direction = matrix.stages["make-decision"].tracks.direction;
     expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement", "objective_facts"]));
     expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution", "decision_log", "spec", "plan", "changes_diff"]));

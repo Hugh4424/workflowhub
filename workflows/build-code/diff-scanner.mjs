@@ -1,11 +1,14 @@
 /**
  * diff-scanner.mjs
- * Pure function: scan diff text for C2 violations. No IO, no side effects.
+ * The exported scanDiff() remains pure for small/unit inputs. Phase evidence
+ * scans Git output incrementally from an external temporary file so complete
+ * diffs are never captured in a child-process buffer.
  */
 
-import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { closeSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Literal patterns matched against content lines (added/removed/context lines).
@@ -111,17 +114,14 @@ function basename(filePath) {
  * @param {string} diffText
  * @returns {{ violations: Array<{type: string, pattern: string, line: number}>, safe: boolean }}
  */
-export function scanDiff(diffText) {
-  const lines = diffText.split('\n');
+function createDiffLineScanner() {
   const violations = [];
   const seen = new Set(); // deduplicate: one violation per (pattern, lineNum)
 
   let currentFilePath = null; // tracks which file the current hunk belongs to
   const filePathViolationsSeen = new Set(); // one file-path violation per (pattern, filePath)
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lineNum = i + 1;
+  function scanLine(line, lineNum) {
 
     // Update current file path from diff header.
     const parsedPath = extractFilePath(line);
@@ -166,7 +166,7 @@ export function scanDiff(diffText) {
         }
       }
 
-      continue; // header line processed; skip content-line checks
+      return; // header line processed; skip content-line checks
     }
 
     // Content rules (irreversible_git and testLine regex rules) must ONLY fire on ADDED lines —
@@ -176,7 +176,7 @@ export function scanDiff(diffText) {
     //   - Context lines are pre-existing surrounding code — not what the developer is adding.
     //   - Removed lines represent code being DELETED — a git op being removed is not a new violation.
     const isAddedLine = line.startsWith('+') && !line.startsWith('+++');
-    if (!isAddedLine) continue;
+    if (!isAddedLine) return;
 
     // Check irreversible_git rules against added content lines only.
     for (const rule of C2_IRREVERSIBLE_GIT_RULES) {
@@ -202,31 +202,129 @@ export function scanDiff(diffText) {
     }
   }
 
-  return { violations, safe: violations.length === 0 };
+  return {
+    scanLine,
+    result: () => ({ violations, safe: violations.length === 0 }),
+  };
 }
 
-function git(root, args) {
+/**
+ * @param {string} diffText
+ * @returns {{ violations: Array<{type: string, pattern: string, line: number}>, safe: boolean }}
+ */
+export function scanDiff(diffText) {
+  const scanner = createDiffLineScanner();
+  const lines = diffText.split('\n');
+  for (let index = 0; index < lines.length; index++) {
+    scanner.scanLine(lines[index], index + 1);
+  }
+  return scanner.result();
+}
+
+/** Process a UTF-8 text file one complete line at a time, without readFile(). */
+function scanTextFileLines(filePath, onLine) {
+  const descriptor = openSync(filePath, 'r');
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const decoder = new TextDecoder('utf-8');
+  let pending = '';
+  let lineNumber = 0;
   try {
-    return execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: 128 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim();
-  } catch (error) {
-    throw new Error(`PHASE_DIFF_SCAN_INVALID: ${error.stderr?.trim() || error.message}`);
+    for (;;) {
+      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      pending += decoder.decode(buffer.subarray(0, bytesRead), { stream: true });
+      for (;;) {
+        const newline = pending.indexOf('\n');
+        if (newline < 0) break;
+        onLine(pending.slice(0, newline), ++lineNumber);
+        pending = pending.slice(newline + 1);
+      }
+    }
+    pending += decoder.decode();
+    // String#split("\n") always yields the trailing empty line, including for
+    // an empty file. Preserve the pure scanner's line-number semantics.
+    onLine(pending, ++lineNumber);
+  } finally {
+    closeSync(descriptor);
   }
 }
 
-function changedPaths(root, baselineCommit, implementationCommit) {
-  const raw = execFileSync('git', ['diff', '--name-status', '-z', '-M', baselineCommit, implementationCommit], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 128 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const fields = raw.split('\0');
-  if (fields.at(-1) === '') fields.pop();
+/**
+ * Stream a complete frozen diff from a host-private file. This intentionally
+ * has no byte limit: a late hunk must be checked just as rigorously as the first.
+ */
+export function scanDiffFile(filePath) {
+  if (typeof filePath !== 'string' || !isAbsolute(filePath)) throw new TypeError('diff file path must be absolute');
+  const scanner = createDiffLineScanner();
+  scanTextFileLines(filePath, (line, lineNumber) => scanner.scanLine(line, lineNumber));
+  return scanner.result();
+}
+
+function externalTempDirectory(sourceRoot) {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-phase-diff-')));
+  const relation = relative(sourceRoot, directory);
+  if (relation === '' || (!relation.startsWith('..') && !isAbsolute(relation))) {
+    rmSync(directory, { recursive: true, force: true });
+    throw new Error('PHASE_DIFF_SCAN_INVALID: temporary diff storage must be outside source root');
+  }
+  return directory;
+}
+
+function runGitToFiles(root, args, stdoutPath, stderrPath, { allowFailure = false } = {}) {
+  const stdout = openSync(stdoutPath, 'w', 0o600);
+  const stderr = openSync(stderrPath, 'w', 0o600);
+  let result;
+  try {
+    result = spawnSync('git', args, { cwd: root, stdio: ['ignore', stdout, stderr] });
+  } finally {
+    closeSync(stdout);
+    closeSync(stderr);
+  }
+  if (result.error) throw new Error(`PHASE_DIFF_SCAN_INVALID: ${result.error.message}`);
+  if (!allowFailure && result.status !== 0) {
+    const detail = readFileSync(stderrPath, 'utf8').trim();
+    throw new Error(`PHASE_DIFF_SCAN_INVALID: ${detail || `git ${args.join(' ')} exited ${result.status}`}`);
+  }
+  return result.status;
+}
+
+function gitText(root, temporaryRoot, label, args) {
+  const stdoutPath = join(temporaryRoot, `${label}.stdout`);
+  const stderrPath = join(temporaryRoot, `${label}.stderr`);
+  runGitToFiles(root, args, stdoutPath, stderrPath);
+  return readFileSync(stdoutPath, 'utf8').trim();
+}
+
+function readNullDelimited(filePath) {
+  const descriptor = openSync(filePath, 'r');
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  let pending = Buffer.alloc(0);
+  const fields = [];
+  try {
+    for (;;) {
+      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      const chunk = buffer.subarray(0, bytesRead);
+      const combined = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk;
+      let start = 0;
+      for (let index = 0; index < combined.length; index++) {
+        if (combined[index] !== 0) continue;
+        fields.push(combined.subarray(start, index).toString('utf8'));
+        start = index + 1;
+      }
+      // The reusable read buffer is overwritten on the next read, so retain
+      // only the incomplete NUL-delimited field.
+      pending = Buffer.from(combined.subarray(start));
+    }
+    if (pending.length > 0) fields.push(pending.toString('utf8'));
+  } finally {
+    closeSync(descriptor);
+  }
+  return fields;
+}
+
+function changedPathsFromFile(filePath) {
+  const fields = readNullDelimited(filePath);
   const paths = [];
   for (let index = 0; index < fields.length;) {
     const status = fields[index++];
@@ -252,41 +350,44 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
   }
 
   const root = realpathSync(sourceRoot);
-  const base = git(root, ['rev-parse', '--verify', `${baselineCommit}^{commit}`]);
-  const implementation = git(root, ['rev-parse', '--verify', `${implementationCommit}^{commit}`]);
+  const temporaryRoot = externalTempDirectory(root);
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', base, implementation], {
-      cwd: root,
-      stdio: ['ignore', 'ignore', 'pipe'],
-    });
-  } catch {
-    throw new Error('PHASE_DIFF_SCAN_INVALID: baselineCommit must be an ancestor of implementationCommit');
+    const base = gitText(root, temporaryRoot, 'baseline', ['rev-parse', '--verify', `${baselineCommit}^{commit}`]);
+    const implementation = gitText(root, temporaryRoot, 'implementation', ['rev-parse', '--verify', `${implementationCommit}^{commit}`]);
+    const ancestorStatus = runGitToFiles(
+      root,
+      ['merge-base', '--is-ancestor', base, implementation],
+      join(temporaryRoot, 'ancestor.stdout'),
+      join(temporaryRoot, 'ancestor.stderr'),
+      { allowFailure: true },
+    );
+    if (ancestorStatus !== 0) throw new Error('PHASE_DIFF_SCAN_INVALID: baselineCommit must be an ancestor of implementationCommit');
+    const snapshotTree = gitText(root, temporaryRoot, 'snapshot-tree', ['rev-parse', '--verify', `${implementation}^{tree}`]);
+    const diffPath = join(temporaryRoot, 'phase.diff');
+    runGitToFiles(root, ['diff', '-M', '--binary', '--no-ext-diff', base, implementation], diffPath, join(temporaryRoot, 'phase.diff.stderr'));
+    const c2 = scanDiffFile(diffPath);
+    const changedPathsFile = join(temporaryRoot, 'changed-paths.nul');
+    runGitToFiles(root, ['diff', '--name-status', '-z', '-M', base, implementation], changedPathsFile, join(temporaryRoot, 'changed-paths.stderr'));
+    const changed_files = changedPathsFromFile(changedPathsFile);
+    const allowed = new Set(allowedFiles);
+    const allowlist_violations = changed_files.filter((path) => !allowed.has(path)).map((path) => ({ path }));
+    const c2_violations = c2.violations;
+    return {
+      schema_version: 'phase-diff-scan.v1',
+      phase_id: phaseId,
+      allowed_files: [...allowed].sort(),
+      baseline_commit: base,
+      implementation_commit: implementation,
+      snapshot_tree: snapshotTree,
+      changed_files,
+      safe: c2_violations.length === 0 && allowlist_violations.length === 0,
+      violations: c2_violations,
+      c2_violations,
+      allowlist_violations,
+    };
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
   }
-  const snapshotTree = git(root, ['rev-parse', '--verify', `${implementation}^{tree}`]);
-  const diff = execFileSync('git', ['diff', '-M', '--binary', '--no-ext-diff', base, implementation], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 128 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const c2 = scanDiff(diff);
-  const changed_files = changedPaths(root, base, implementation);
-  const allowed = new Set(allowedFiles);
-  const allowlist_violations = changed_files.filter((path) => !allowed.has(path)).map((path) => ({ path }));
-  const c2_violations = c2.violations;
-  return {
-    schema_version: 'phase-diff-scan.v1',
-    phase_id: phaseId,
-    allowed_files: [...allowed].sort(),
-    baseline_commit: base,
-    implementation_commit: implementation,
-    snapshot_tree: snapshotTree,
-    changed_files,
-    safe: c2_violations.length === 0 && allowlist_violations.length === 0,
-    violations: c2_violations,
-    c2_violations,
-    allowlist_violations,
-  };
 }
 
 function cliArguments(argv) {

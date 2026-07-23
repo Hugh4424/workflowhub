@@ -7,15 +7,18 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - `review-instructions.md`：stage、审查问题和输出格式。
 - 已批准 spec 和验收标准。
 - 待审 plan，至少包含 phase、任务、依赖和验证方式。
+- 与 plan 一一对应的 `draft_tasks`；它是独立冻结材料，审查任务拆分、依赖和验收能否真正执行。
 - 仅由 `context_map` 明确选择的模块边界、依赖、接口或测试约定片段；本阶段不得默认附带 diff 或完整当前文件。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
 `wh_review.v2` 路由还必须给出 `context_map` 和 `evidence_map`。每张 map 都有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
-`rationale`）；`unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。`context_map` 的
-每个 `complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
-runner 仅交付这些片段，不按目录或文件全文扩张材料。
+`rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。
+`complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
+`not_applicable` 或 `unknown` 条目必须给出受限 `reason_code` 和理由，不能用自由文本
+`not_needed_reason` 绕过锚点；runner 仅交付 complete anchor 的片段，不按目录或文件全文
+扩张材料。
 
 缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
 

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { createPhaseDiffScan, scanDiff } from '../workflows/build-code/diff-scanner.mjs';
+import { createPhaseDiffScan, scanDiff, scanDiffFile } from '../workflows/build-code/diff-scanner.mjs';
 
 describe('scanDiff', () => {
   it('case 1: clean .mjs source change → safe, no violations', () => {
@@ -373,6 +373,20 @@ index 1234567..abcdefg 100644
     expect(mjsResult.violations.length).toBe(0);
     expect(mjsResult.safe).toBe(true);
   });
+
+  it('streams the complete diff and detects a late added-line violation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-stream-'));
+    try {
+      const diffPath = join(root, 'complete.diff');
+      const forbidden = "git " + "push origin main";
+      const diffText = `diff --git a/lib/large.mjs b/lib/large.mjs\n--- a/lib/large.mjs\n+++ b/lib/large.mjs\n@@ -1 +1,20001 @@\n${'+const harmless = true;\n'.repeat(20_000)}+exec('${forbidden}');\n`;
+      writeFileSync(diffPath, diffText);
+      expect(scanDiffFile(diffPath)).toEqual(scanDiff(diffText));
+      expect(scanDiffFile(diffPath).violations).toContainEqual(expect.objectContaining({ type: 'irreversible_git', pattern: "git " + "push" }));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('createPhaseDiffScan', () => {
@@ -428,6 +442,23 @@ describe('createPhaseDiffScan', () => {
       const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-2', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
       expect(result.safe).toBe(false);
       expect(result.allowlist_violations).toEqual([{ path: 'unexpected.txt' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps both sides of a rename while reading NUL-delimited name status incrementally', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'before.txt'), 'before\n'); git(['add', '.']); git(['commit', '-qm', 'base']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      git(['mv', 'before.txt', 'after.txt']); git(['commit', '-qm', 'rename']);
+      const implementation = git(['rev-parse', 'HEAD']);
+      const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-rename', baselineCommit: baseline, implementationCommit: implementation, allowedFiles: ['before.txt', 'after.txt'] });
+      expect(result.changed_files).toEqual(['after.txt', 'before.txt']);
+      expect(result.safe).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
