@@ -24,9 +24,12 @@ function upstreamForStage(ctx, stage, upstreamStage) {
   const slot = UPSTREAM_INPUT[stage];
   const hasInput = slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot);
   if (!upstreamStage) return hasInput ? ctx.kernel.readInput(slot) : null;
-  if (!hasInput) return ctx.kernel.readAccepted(upstreamStage);
+  const readOptions = stage === "verify-code" && upstreamStage === "build-code"
+    ? { allowLegacyBuildCode: true }
+    : undefined;
+  if (!hasInput) return ctx.kernel.readAccepted(upstreamStage, readOptions);
   let local;
-  try { local = ctx.kernel.readAccepted(upstreamStage); } catch (error) {
+  try { local = ctx.kernel.readAccepted(upstreamStage, readOptions); } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
   if (local) throw new Error(`${stage} has both current accepted ${upstreamStage} and manifest input ${slot}`);
