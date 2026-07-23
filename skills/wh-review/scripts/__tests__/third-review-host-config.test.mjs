@@ -28,8 +28,17 @@ function configuredRoot() {
 
 describe("trusted third-review host configuration", () => {
   it("loads one canonical packet root only when the broker allowlist accepts its packet source", () => {
-    const { packetRoot, runtimeRoot, brokerConfig, hostConfig } = configuredRoot();
-    expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toEqual({ command: [process.execPath, "/broker/scripts/3rd-review.mjs"], config: realpathSync(brokerConfig), attachmentRoot: realpathSync(packetRoot), attachmentSource: PACKET_SOURCE_PREFIX, runtimeRoot: realpathSync(runtimeRoot) });
+    const { packetRoot, brokerConfig, hostConfig } = configuredRoot();
+    expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toEqual({ command: [process.execPath, "/broker/scripts/3rd-review.mjs"], config: realpathSync(brokerConfig), attachmentRoot: realpathSync(packetRoot), attachmentSource: PACKET_SOURCE_PREFIX });
+  });
+
+  it("does not expose or require the broker runtime root", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.runtime.root = join(brokerConfig, "..", "runtime-not-present");
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+    expect(trusted).not.toHaveProperty("runtimeRoot");
   });
 
   it("fails loud when the broker allowlist omits the fixed packet source", () => {

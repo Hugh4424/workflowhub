@@ -211,7 +211,7 @@ export async function runReviewRound(input) {
     currentSnapshotTree, round: control.round,
   });
   const result = await runReview({
-    ...trusted, attachmentRoot: thirdReview.attachmentRoot, brokerRuntimeRoot: thirdReview.runtimeRoot,
+    ...trusted, attachmentRoot: thirdReview.attachmentRoot,
     stage, phaseId: input.phase_id ?? input.phaseId ?? null, reviewTrack, uiScope: input.ui_scope === true,
     // The ledger is controller/audit data. Full reviews must see a fresh packet
     // and stage-material validation forbids closure-only fields outside closure.

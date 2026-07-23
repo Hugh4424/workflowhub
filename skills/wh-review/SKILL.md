@@ -169,17 +169,17 @@ also its own `packet-plan.json` and sealed `manifest.json` metadata entries.
 
 Only two durable record types exist:
 
-- `attempt`: transport, material, provider status, raw output references, and errors. It may end `unavailable`.
+- `attempt`: transport、material、provider status 和公开错误。它可能以 `unavailable` 结束；不保存 broker raw output、raw hash 或路径。
 - `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and its declared review subject. A phase result records `phase_id`, `base_tree`, and `candidate_tree`; a worktree result records the captured `snapshot_tree`.
 
 Every attempt also publishes `reviews/reports/<attempt-id>.md`. It is rendered
-only from canonical facts: route/profile/model/thinking, duration and token
-usage (or unavailability), runtime/session IDs, the trusted local broker
-session-state file path, coverage, every provider's findings, root causes,
-correction direction, and unavailable diagnostics. Native CLI session files
-remain provider-private and are never invented.
+only from canonical public facts: route/profile/model/thinking, duration and
+token usage (or unavailability), runtime/session IDs, coverage, every
+provider's findings, root causes, correction direction, and unavailable
+diagnostics. It always renders `SESSION_PATH_UNAVAILABLE`; broker runtime and
+native CLI session paths remain provider-private.
 
-Transport success is not review success. Authentication, cancellation, timeout, malformed output, missing material, and protocol failure never become a semantic verdict. Raw provider output is retained in the attempt.
+Transport success is not review success. Authentication, cancellation, timeout, malformed output, missing material, and protocol failure never become a semantic verdict. Managed nonzero transport stderr is never retained; it becomes a fixed public `PROTOCOL_INCOMPATIBLE` diagnostic.
 
 CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage results store only that pair:
 
@@ -191,7 +191,7 @@ Consumers open the referenced formal result and do not trust a copied verdict. `
 
 ## Provider protocol
 
-3rd-review exposes only the public `workflowhub-result.v2` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. The canonical attempt stores only public profile, timing, usage, retry, runtime/session IDs, and safe raw-output hashes. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence. Build-code has no cycle, time, token, output-size, or repeated-finding stop rule: every repaired phase is reviewed again from its complete current frozen material until its formal review is `pass`.
+3rd-review exposes managed public `workflowhub-run.v1` `start/status` and a terminal `workflowhub-result.v2` group. wh-review uses a deterministic request ID to reconnect the same runtime, polls without a review deadline, and never falls back to blocking `run` or reads broker private state, attachment workspaces, or `/tmp/3rd-review`. A terminal group must expose `raw_output_ref: null`; canonical attempts store only public profile, timing, usage, retry, runtime/session IDs and normalized public errors. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence. Build-code has no cycle, time, token, output-size, or repeated-finding stop rule: every repaired phase is reviewed again from its complete current frozen material until its formal review is `pass`.
 
 Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON or one unique fenced JSON object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
 

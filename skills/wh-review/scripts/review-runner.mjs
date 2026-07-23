@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
@@ -17,7 +16,6 @@ const errorPriority = ["MATERIAL_INCOMPLETE", "PROTOCOL_INCOMPATIBLE", "OUTPUT_I
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 const providerPrompt = "Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
-const REVIEW_LOCK_WAIT_MS = 5 * 60 * 1000;
 const localReviewLocks = new Map();
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -28,7 +26,7 @@ function protocolFailure(message) {
   return error;
 }
 
-async function withLocalReviewLock(task, lockRef, waitMs, operation) {
+async function withLocalReviewLock(task, lockRef, operation) {
   const key = JSON.stringify([task.identity.projectName, task.identity.taskId, lockRef]);
   const previous = localReviewLocks.get(key) ?? Promise.resolve();
   let release;
@@ -38,25 +36,28 @@ async function withLocalReviewLock(task, lockRef, waitMs, operation) {
     release();
     if (localReviewLocks.get(key) === current) localReviewLocks.delete(key);
   };
-  let timeout; let acquired = false;
   try {
-    await Promise.race([previous, new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(new Error(`timed out waiting for record lock: ${lockRef}`)), waitMs);
-    })]);
-    acquired = true;
-    clearTimeout(timeout); timeout = undefined;
+    await previous;
     return await operation();
   }
   finally {
-    clearTimeout(timeout);
-    if (acquired) finish();
-    else void previous.then(finish);
+    finish();
   }
 }
 
 function reviewLockRef({ stage, reviewTrack, snapshotTree, materialId, reviewChain }) {
   const identity = JSON.stringify([stage, reviewTrack, snapshotTree, materialId, reviewChain ?? null]);
   return `locks/reviews/${createHash("sha256").update(identity).digest("hex")}.lock`;
+}
+
+function managedRequestId({ taskId, stage, reviewTrack, subject, snapshotTree, materialId, reviewChain, hostProvider, providers, continuationRuntimeId }) {
+  const identity = canonicalJson({
+    version: "wh-review-dispatch.v1", task_id: taskId, stage, review_track: reviewTrack,
+    subject, snapshot_tree: snapshotTree, material_id: materialId, review_chain: reviewChain ?? null,
+    host_provider: hostProvider, provider_allowlist: providers, prompt_sha256: createHash("sha256").update(providerPrompt).digest("hex"),
+    continuation_runtime_id: continuationRuntimeId ?? null,
+  });
+  return `wh-review-${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 function sourceRecord(source) {
@@ -492,7 +493,7 @@ function reviewGroupOutcome(provider, result, runtimeId) {
   }
 }
 
-async function reviewGroup({ providerClient, providers, hostProvider, materials, previousRuntimeIds, allowLegacyFixtureClient = false }) {
+async function reviewGroup({ providerClient, providers, hostProvider, materials, previousRuntimeIds, requestId, allowLegacyFixtureClient = false }) {
   // Test doubles from the old single-provider boundary retain a narrow,
   // explicit fixture seam. Production rejects that interface: its only
   // dispatch is one broker-owned reviewer group.
@@ -507,6 +508,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
     group = await providerClient.runGroup({
       hostProvider, providers, materials, prompt: providerPrompt,
       continuationRuntimeId: groupContinuationRuntime(providers, previousRuntimeIds),
+      requestId,
     });
   } catch (error) {
     return providers.map((provider) => {
@@ -532,11 +534,10 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   });
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, brokerRuntimeRoot = null, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
+export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (new Set(providers).size !== providers.length) throw new TypeError("providers must be unique");
-  if (brokerRuntimeRoot !== null && (typeof brokerRuntimeRoot !== "string" || !brokerRuntimeRoot.startsWith("/"))) throw new TypeError("brokerRuntimeRoot must be an absolute trusted path or null");
   // Candidate groups intentionally retain same-adapter profiles. The broker
   // is the single authority that excludes them and emits SAME_SOURCE facts.
   const policy = reviewPolicyRecord(reviewPolicy);
@@ -571,24 +572,29 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
     materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2", reviewRound: effectiveReviewRound,
   });
   const lockRef = reviewLockRef({ stage, reviewTrack, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain });
-  return withLocalReviewLock(taskHandle, lockRef, REVIEW_LOCK_WAIT_MS, () => taskHandle.withRecordLock(lockRef, async () => {
-    const reused = reusableOutcome(taskHandle, { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain }, bundle);
+  const identity = { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain };
+  const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle)));
+  const existing = await reusable();
+  if (existing) return existing;
+  const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
+  const requestId = managedRequestId({ ...identity, hostProvider, providers, continuationRuntimeId });
+  // Managed start/status owns provider execution. No WorkflowHub record lock
+  // is held while a healthy reviewer group is running or reconnecting.
+  const reviewed = rejectProfileMismatches(await reviewGroup({
+    providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds, requestId,
+    allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
+  }), policy);
+  return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
+    const reused = reusableOutcome(taskHandle, identity, bundle);
     if (reused) return reused;
     const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
-    const reviewed = rejectProfileMismatches(await reviewGroup({
-      providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds,
-      allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
-    }), policy);
     const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
     const providerAttempts = [];
     for (const item of reviewed) {
       for (let index = 0; index < item.calls.length; index += 1) {
         const call = item.calls[index]; const isLast = index === item.calls.length - 1; const finalError = isLast ? item.final?.error ?? null : call.provider.error ?? null;
         const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, { taskId, stage });
-        const sessionArtifactPath = typeof call.runtimeId === "string" && brokerRuntimeRoot !== null
-          ? join(brokerRuntimeRoot, call.runtimeId, "state.json")
-          : null;
-        providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, ...(sessionArtifactPath && existsSync(sessionArtifactPath) ? { session_artifact_path: sessionArtifactPath } : {}), execution: call.provider.execution ?? null, unavailable_diagnostics: call.provider.unavailable_diagnostics ?? null, output_ref: outputRef, error: finalError });
+        providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, execution: call.provider.execution ?? null, unavailable_diagnostics: call.provider.unavailable_diagnostics ?? null, output_ref: outputRef, error: finalError });
       }
     }
     const assessed = evidenceAnchorsFor(reviewed, bundle);
@@ -620,7 +626,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
     };
     validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
     return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
-  }, { waitMs: REVIEW_LOCK_WAIT_MS }));
+  }));
 }
 
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */

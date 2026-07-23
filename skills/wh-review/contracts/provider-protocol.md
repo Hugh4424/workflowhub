@@ -12,11 +12,18 @@
 
 ## 3rd-review 公共结果：workflowhub-result.v2
 
-WorkflowHub 仍只调用现有入口：
+WorkflowHub 使用受控会话入口：
 
 ```text
-3rd-review.mjs run --request=... --attachments=... --attachments-root=... --attachment-delivery=file_only
+3rd-review.mjs start --request-id=<deterministic-public-id> --request=... --attachments=... --attachments-root=... --attachment-delivery=file_only
+3rd-review.mjs status --runtime-id=<opaque-runtime-id>
 ```
+
+`start` 只返回公开 `workflowhub-run.v1` 的 request/runtime ID、material ID 和
+`starting|running|terminal` 状态；只有 `terminal` 状态才携带完整
+`workflowhub-result.v2` group。相同 request ID 与同一冻结绑定重连同一 runtime，
+WorkflowHub 轮询 `status` 不设审查 deadline，也绝不回退 blocking `run` 或再次派发。
+只有显式 `cancel` 能结束受控会话。
 
 request 声明：
 
@@ -66,12 +73,12 @@ request 声明：
 
 - `status` 只能是 `completed`、`failed` 或 `cancelled`。
 - `session_id`、`output` 可以为空。
-- `error` 只能是 `null` 或 `{ "code": "...", "message": "..." }`。
-- WorkflowHub 严格校验 `adapter/model/effort/thinking`、时间、usage、retry、runtime/session 和安全 raw-output hash 引用；绝不读取 broker private runtime 或 session 文件。
+- `error` 只能是 `null` 或 `{ "code": "...", "message": "<non-empty public string>" }`。对旧版或越约 broker 的缺失 message，WorkflowHub 只会在内部规范化为固定公开诊断后写 unavailable attempt；这不扩展公共协议。
+- WorkflowHub 严格校验 `adapter/model/effort/thinking`、时间、usage、retry、runtime/session 和完整公共 schema；绝不读取 broker private runtime 或 session 文件。
 - `session_file_path` 必须为 `null`；报告应显示 `SESSION_PATH_UNAVAILABLE`，不能猜测路径。
 - provider 未回传 usage 时必须为 `null`，不能用 packet bytes 冒充 token。
-- `raw_output_ref` 仅含 runtime/provider 和 SHA-256 摘要；它不是可读取文件路径。
-- 协议不兼容必须在 provider 启动前返回 `PROTOCOL_INCOMPATIBLE`。
+- managed `status` 的 `raw_output_ref` 必须为 `null`；WorkflowHub 不保存或显示 raw-output hash/路径。
+- 非零 start/status、私有路径或协议不兼容只会写 `PROTOCOL_INCOMPATIBLE` 和固定公开消息，绝不转录 stderr。
 - runtime/session 只用于续跑和诊断，不参与材料身份、聚合或放行。
 - `completed` 只表示 provider 已返回。只有 reviewer output 解析成功后才有语义结果。
 

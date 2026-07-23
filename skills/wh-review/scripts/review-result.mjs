@@ -152,6 +152,11 @@ export function writeProviderOutput(task, directoryRef, provider, output, sequen
 }
 
 export function writeAttempt(task, ref, attempt) {
+  for (const providerAttempt of attempt?.provider_attempts ?? []) {
+    if (Object.hasOwn(providerAttempt, "session_artifact_path")) {
+      throw new TypeError("session_artifact_path is legacy-only and cannot be written by managed wh-review");
+    }
+  }
   const safeTask = assertTaskHandle(task);
   return createCanonicalReviewWriter({ task: safeTask, taskId: attempt?.task_id, stage: attempt?.stage }).writeAttempt(ref, attempt);
 }
@@ -225,8 +230,7 @@ export function renderReviewReport({ attempt, result = null }) {
     const usage = tokenUsage(execution?.usage);
     const runtime = execution?.runtime_id ?? providerAttempt.runtime_id ?? "UNAVAILABLE";
     const session = providerAttempt.session_id ?? "SESSION_UNAVAILABLE";
-    const statePath = providerAttempt.session_artifact_path ?? "STATE_PATH_UNAVAILABLE";
-    lines.push(`| ${markdown(providerAttempt.provider)} | ${markdown(model)} | ${duration} ms | ${usage} | ${markdown(runtime)}/${markdown(session)}; state=${markdown(statePath)} | ${providerAttempt.status}${providerAttempt.error ? ` (${markdown(providerAttempt.error.code)})` : ""} |`);
+    lines.push(`| ${markdown(providerAttempt.provider)} | ${markdown(model)} | ${duration} ms | ${usage} | ${markdown(runtime)}/${markdown(session)}; state=SESSION_PATH_UNAVAILABLE | ${providerAttempt.status}${providerAttempt.error ? ` (${markdown(providerAttempt.error.code)})` : ""} |`);
   }
   const diagnostics = latestAttempts(attempt).filter((providerAttempt) => providerAttempt.unavailable_diagnostics !== null && providerAttempt.unavailable_diagnostics !== undefined);
   if (diagnostics.length > 0) {
@@ -259,7 +263,7 @@ export function renderReviewReport({ attempt, result = null }) {
       lines.push(`  - correction direction: ${finding.recommendation}`);
     }
   }
-  lines.push("", "Session-state paths are broker runtime state files derived from trusted local configuration. Native CLI session files stay provider-private and are never fabricated.");
+  lines.push("", "Native CLI session files and broker runtime paths stay provider-private; reports expose only the public managed result.");
   if (attempt.error) lines.push("", "## Unavailable diagnostic", "", `- ${attempt.error.code}: ${attempt.error.message}`);
   return `${lines.join("\n")}\n`;
 }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { createTask } from "../../../../core/task-handle.mjs";
 import { writeAttempt, writeSemanticResult } from "../review-result.mjs";
+import { validateSchema } from "../schema-validator.mjs";
 
 const temporary = [];
 function fixture() {
@@ -32,5 +33,17 @@ describe("review writer TaskHandle boundary", () => {
     writeSemanticResult(task, "reviews/results/a.json", result);
     expect(JSON.parse(task.readRecord("reviews/attempts/a/attempt.json"))).toEqual(attempt);
     expect(() => writeSemanticResult(task, "reviews/results/a.json", result)).toThrow(/exist|create-only/i);
+  });
+
+  it("keeps legacy session-artifact attempts readable but rejects new writes", () => {
+    const task = fixture();
+    const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
+    const legacy={
+      version:"wh-review-attempt.v1",attempt_id:"legacy",task_id:"review-task",stage:"build-code",review_track:null,source,
+      snapshot_tree:"b".repeat(40),material_id:"c".repeat(64),terminal_status:"unavailable",error:{code:"PROVIDER_UNAVAILABLE",message:"old transport"},
+      provider_attempts:[{provider:"kimi",status:"failed",session_id:null,runtime_id:"runtime",session_artifact_path:"/legacy/broker/state.json",execution:null,unavailable_diagnostics:null,output_ref:null,error:{code:"PROVIDER_UNAVAILABLE",message:"old transport"}}],
+    };
+    expect(validateSchema("attempt", legacy)).toBe(legacy);
+    expect(() => writeAttempt(task, "reviews/attempts/legacy/attempt.json", legacy)).toThrow(/legacy-only/i);
   });
 });
