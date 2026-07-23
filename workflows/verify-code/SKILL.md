@@ -184,6 +184,14 @@ idempotent. Other attempts against a closed stage remain rejected.
    build review rather than running another provider review. Record the verification-stage
    decision with `confirm`, and pass only its accepted ref to `accept`. This
    confirmation accepts verification facts only.
+
+   If the official `run` finds an acceptance failure or a tests/review/Workspace
+   lineage mismatch, it first publishes an unaccepted `verify-code` failure
+   attempt and then exits with that attempt reference. Do not treat the
+   non-zero exit as “no attempt was written”, and do not retry blindly. Use
+   the published failure attempt plus its failed `acceptance-evidence.v1`
+   reference for the existing controlled `reopen` flow; a failure attempt
+   cannot be accepted.
 8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
    snapshot commit from the current canonical accepted verification facts,

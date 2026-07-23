@@ -315,6 +315,7 @@ export function validateAttempt(attempt, expected = {}) {
   if (attempt.reopen_provenance !== undefined && stage !== "build-code") throw new Error("reopen_provenance is only valid for build-code");
   if (attempt.verify_failure_publication !== undefined && stage !== "verify-code") throw new Error("verify_failure_publication is only valid for verify-code");
   if (attempt.verify_passing_publication !== undefined && stage !== "verify-code") throw new Error("verify_passing_publication is only valid for verify-code");
+  if (attempt.verification_failure !== undefined && (stage !== "verify-code" || attempt.verification_failure !== true)) throw new Error("verification_failure is only valid as true on verify-code attempts");
   if (attempt.verify_failure_publication !== undefined && attempt.verify_passing_publication !== undefined) throw new Error("verify publication modes are mutually exclusive");
   validateStageUpstream(stage, attempt.task_id, attempt.upstream_refs);
   if (expected.taskId && attempt.task_id !== expected.taskId) throw new Error("attempt task identity mismatch");
@@ -685,6 +686,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
             ...(data.verify_failure_publication ? { verify_failure_publication: structuredClone(data.verify_failure_publication) } : {}),
             ...(data.verify_passing_publication ? { verify_passing_publication: structuredClone(data.verify_passing_publication) } : {}),
+            ...(data.verification_failure ? { verification_failure: true } : {}),
             ...((data.checkpoint ?? data.facts.checkpoint) ? { checkpoint: structuredClone(data.checkpoint ?? data.facts.checkpoint) } : {}),
             ...(data.reason !== undefined ? { reason: String(data.reason) } : {}),
           };
@@ -791,6 +793,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
         const attemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
         const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+        if (name === "verify-code" && attempt.verification_failure === true) {
+          throw new Error("cannot accept a failed verify-code attempt");
+        }
         const readAndValidateConfirmation = (expectedRaw) => {
           const raw = task.readRecord(humanConfirmationRef);
           if (expectedRaw !== undefined && raw !== expectedRaw) throw new Error("human confirmation changed during acceptance");

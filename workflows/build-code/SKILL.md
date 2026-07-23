@@ -182,8 +182,13 @@ order, evidence, or authority boundaries.
    this final effective result.
 6. Create the final implementation and fresh test receipts, publish the
    build-code attempt with `run`, and let the trusted runtime accept it
-   automatically. A Phase result is gate evidence and cannot replace the final
-   full-worktree review.
+   automatically. The final attempt facts must also carry the complete
+   `acceptance_coverage` table for every accepted AC (exactly one row per AC,
+   marked `covered`, `missing`, or `unknown`, with canonical evidence refs for
+   `covered`). A Phase result is gate evidence and cannot replace the final
+   full-worktree review. Do not accept or hand off build-code when that table
+   is absent, partial, or not bound to the same snapshot as the tests and
+   review.
 7. If verify-code later publishes an authenticated failure, use only the
    controlled `reopen` flow above. Preserve the prior accepted attempt and
    rerun only the current, last affected PASS Phase before repeating the final

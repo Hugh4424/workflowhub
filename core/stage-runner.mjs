@@ -90,15 +90,22 @@ export async function runStage(stage, context, handler, publication = {}) {
   }] : [];
 
   if (!publication || typeof publication !== "object" || Array.isArray(publication)) throw new TypeError("stage publication options must be an object");
-  return ctx.kernel.publishAttempt(stage, {
+  const attempt = ctx.kernel.publishAttempt(stage, {
     facts: result.facts,
     evidence_refs: result.evidence_refs ?? [],
     missing_items: result.missing_items ?? [],
     upstream_refs: upstreamRefs,
+    ...(result.verification_failure ? { verification_failure: true } : {}),
     ...(result.checkpoint !== undefined ? { checkpoint: result.checkpoint } : {}),
     ...(result.reason !== undefined ? { reason: result.reason } : {}),
     ...(publication.reopenProvenance !== undefined ? { reopen_provenance: publication.reopenProvenance } : {}),
   });
+  if (result.verification_failure) {
+    const error = new Error(`${stage} verification failed; formal failure attempt published: ${attempt.attempt_ref}`);
+    error.attempt_ref = attempt.attempt_ref;
+    throw error;
+  }
+  return attempt;
 }
 
 function officialWorkerContext(ctx) {
@@ -199,6 +206,12 @@ export async function publishOfficialVerifyPassing(context, invocation) {
   const handler = officialStageHandler("verify-code");
   const input = Object.freeze(structuredClone(invocation));
   const result = plainResult(verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)));
+  if (result.verification_failure) {
+    if (result.reason?.includes("acceptance criterion(s) failed")) {
+      throw new Error("verify-code passing publication requires acceptance-evidence.v1 with result=pass");
+    }
+    throw new Error(result.reason ?? "verify-code verification failed");
+  }
   return ctx.kernel.publishVerifyPassingFromAccepted({
     facts: result.facts,
     evidenceRefs: result.evidence_refs ?? [],
