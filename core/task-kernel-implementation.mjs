@@ -139,12 +139,14 @@ function validateStageUpstream(stage, _taskId, refs) {
   }
 }
 
-export function validateStageFacts(stage, facts) {
+export function validateStageFacts(stage, facts, { allowLegacyBuildCode = false } = {}) {
   const name = stageName(stage);
   plain(facts, `${name} facts`);
-  const missing = REQUIRED_FACTS[name].filter((key) => !Object.prototype.hasOwnProperty.call(facts, key));
+  const missing = REQUIRED_FACTS[name].filter((key) => !Object.prototype.hasOwnProperty.call(facts, key)
+    && !(allowLegacyBuildCode && name === "build-code" && key === "acceptance_coverage"));
   if (missing.length) throw new Error(`${name} facts missing required keys: ${missing.join(", ")}`);
-  const empty = REQUIRED_FACTS[name].filter((key) => facts[key] === null || facts[key] === undefined || facts[key] === "");
+  const empty = REQUIRED_FACTS[name].filter((key) => !(allowLegacyBuildCode && name === "build-code" && key === "acceptance_coverage")
+    && (facts[key] === null || facts[key] === undefined || facts[key] === ""));
   if (empty.length) throw new Error(`${name} facts contain empty required keys: ${empty.join(", ")}`);
   rejectUnknown(facts, ALLOWED_FACTS[name], `${name} facts`);
   if (name === "make-decision") {
@@ -304,7 +306,7 @@ export function validateAttempt(attempt, expected = {}) {
   const stage = stageName(attempt.stage);
   if (typeof attempt.task_id !== "string" || typeof attempt.attempt_id !== "string") throw new Error("attempt identity fields required");
   if (!Number.isFinite(Date.parse(attempt.created_at))) throw new Error("attempt created_at invalid");
-  validateStageFacts(stage, attempt.facts);
+  validateStageFacts(stage, attempt.facts, { allowLegacyBuildCode: expected.allowLegacyBuildCode === true });
   if (!Array.isArray(attempt.missing_items)) throw new Error("attempt missing_items list required");
   validateEvidenceRefs(attempt.evidence_refs, "attempt evidence_refs");
   validateRefs(attempt.upstream_refs, "upstream_refs");
@@ -380,7 +382,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   });
   const archivedAcceptedFileFor = (attemptRef) => `accepted-${attemptRef}`;
   const collisionArchiveFileFor = (attemptRef, acceptedRaw) => `accepted-${attemptRef.slice(0, -5)}-canonical-${hash(acceptedRaw)}.json`;
-  const readAcceptedAt = (name, acceptedFile) => {
+  const readAcceptedAt = (name, acceptedFile, { allowLegacyBuildCode = false } = {}) => {
     if (!ACCEPTED_FILE.test(acceptedFile)) throw new Error("invalid accepted record name");
     const acceptedRef = `results/${name}/${acceptedFile}`;
     const acceptedRaw = task.readRecord(acceptedRef);
@@ -388,15 +390,15 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const attemptRaw = task.readRecord(`results/${name}/${accepted.attempt_ref}`);
     const expectedHash = String(accepted.integrity_hash).replace(/^sha256:/, "");
     if (expectedHash !== hash(attemptRaw)) throw new Error(`${name} accepted integrity hash mismatch`);
-    const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+    const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name, allowLegacyBuildCode });
     if (accepted.upstream_refs.length !== attempt.upstream_refs.length || JSON.stringify(accepted.upstream_refs) !== JSON.stringify(attempt.upstream_refs)) throw new Error(`${name} accepted upstream refs mismatch`);
     if (["build-spec", "build-plan"].includes(name)) verifyCheckpoint(name, accepted.checkpoint);
     const facts = accepted.checkpoint ? { ...structuredClone(attempt.facts), checkpoint: structuredClone(accepted.checkpoint) } : attempt.facts;
     return deepFreeze({ accepted_ref: acceptedRef, accepted_hash: hash(acceptedRaw), accepted, attempt, facts });
   };
-  const readAcceptedLocal = (stage) => {
+  const readAcceptedLocal = (stage, options) => {
     const name = stageName(stage);
-    return readAcceptedAt(name, "accepted.json");
+    return readAcceptedAt(name, "accepted.json", options);
   };
   const checkpointBase = (stage) => {
     const name = stageName(stage);
@@ -624,7 +626,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       }
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let current;
-        try { current = readAcceptedLocal(name); }
+        try { current = readAcceptedLocal(name, { allowLegacyBuildCode: name === "build-code" && data.reopen_provenance !== undefined }); }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         const controlledVerifyFailure = data.verify_failure_publication !== undefined;
         const controlledVerifyPassing = data.verify_passing_publication !== undefined;
@@ -806,7 +808,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           return { raw, value };
         };
         let current;
-        try { current = readAcceptedLocal(name); }
+        try { current = readAcceptedLocal(name, { allowLegacyBuildCode: name === "build-code" && attempt.reopen_provenance !== undefined }); }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         const controlledVerifyPassing = name === "verify-code" && attempt.verify_passing_publication !== undefined;
         if (controlledVerifyPassing && current?.accepted.attempt_ref === attemptRef) {
@@ -932,7 +934,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     reopenBuildCode({ verifyAttemptRef, failureEvidenceRef } = {}) {
       if (!ATTEMPT_REF.test(verifyAttemptRef ?? "")) throw new Error("valid verify-code attempt reference is required");
       return task.withRecordLock("locks/build-code.publication.lock", () => {
-        const current = readAcceptedLocal("build-code");
+        const current = readAcceptedLocal("build-code", { allowLegacyBuildCode: true });
         const verifyRef = `results/verify-code/${verifyAttemptRef}`;
         const verifyRaw = task.readRecord(verifyRef);
         const verifyAttempt = validateAttempt(parseJson(verifyRaw, "verify-code failure attempt"), { taskId: task.identity.taskId, stage: "verify-code", attemptId: `verify-code:${verifyAttemptRef.slice(0, -5)}` });
@@ -965,13 +967,13 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       });
     },
     buildCodeReopenProvenance(reopenRef) {
-      const current = readAcceptedLocal("build-code");
+      const current = readAcceptedLocal("build-code", { allowLegacyBuildCode: true });
       const reopen = readReopen(reopenRef);
       if (reopen.record.previous_accepted_ref !== current.accepted_ref || reopen.record.previous_accepted_hash !== current.accepted_hash) throw new Error("build-code reopen is not authorized for the active accepted record");
       return deepFreeze({ reopen_ref: reopen.ref, reopen_hash: reopen.hash, previous_accepted_ref: reopen.record.previous_accepted_ref, previous_accepted_hash: reopen.record.previous_accepted_hash, verify_failure_ref: reopen.record.verify_failure_ref, verify_failure_hash: reopen.record.verify_failure_hash });
     },
-    readAccepted(stage) {
-      return readAcceptedLocal(stage);
+    readAccepted(stage, options) {
+      return readAcceptedLocal(stage, options);
     },
     readInput(slot) {
       const stage = INPUT_STAGES[slot];

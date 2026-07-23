@@ -228,7 +228,7 @@ HANDLERS.set("build-code", async (worker, input) => { const impl = receipt(worke
 
 HANDLERS.set("verify-code", async (worker, input) => {
   const tests = testFacts(worker, input);
-  const acceptedBuild = worker.readAcceptedBuildCode();
+  const acceptedBuild = worker.readAcceptedBuildCode({ allowLegacyBuildCode: true });
   const review = reviewFacts(worker, input, "review", undefined, "build-code");
   const evidence = receipt(worker, input, "evidence");
   const current = worker.snapshotWorkspace();
@@ -260,6 +260,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
     }
   }
   const mismatches = [];
+  if (!acceptedBuild.facts.acceptance_coverage) mismatches.push("accepted build-code lacks acceptance_coverage; controlled reopen required");
   if (acceptedRef !== reviewRef || acceptedHash !== reviewHash) mismatches.push("verify-code review must reuse the active accepted build-code final review");
   if (review.subject_kind !== "worktree") mismatches.push("verify-code requires the accepted build-code final full-worktree review");
   if (tests.facts.snapshot_tree !== review.facts.snapshot_tree || current.tree !== tests.facts.snapshot_tree) mismatches.push("tests, review, and current Workspace snapshot must match");

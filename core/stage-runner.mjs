@@ -128,7 +128,12 @@ function officialWorkerContext(ctx) {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
     },
-    ...(ctx.stage === "verify-code" ? { readAcceptedBuildCode: () => ctx.kernel.readAccepted("build-code") } : {}),
+    ...(ctx.stage === "verify-code" ? {
+      // Verify must be able to turn a legacy accepted build into an explicit
+      // failure so the controlled reopen path can upgrade it. The handler
+      // still fails closed when acceptance_coverage is absent.
+      readAcceptedBuildCode: ({ allowLegacyBuildCode = false } = {}) => ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode }),
+    } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
     ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({

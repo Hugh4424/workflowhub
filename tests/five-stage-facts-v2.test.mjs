@@ -35,6 +35,12 @@ describe("five-stage facts v2 schema", () => {
     const phase_completion = { status: "complete", evidence_ref: "evidence/phase-summary.json" };
     expect(validateStageFacts("build-code", { ...valid["build-code"], phase_completion }).phase_completion).toBe(phase_completion);
   });
+  it("allows legacy build-code facts only for an explicit controlled-reopen read", () => {
+    const legacy = { ...valid["build-code"] };
+    delete legacy.acceptance_coverage;
+    expect(() => validateStageFacts("build-code", legacy)).toThrow(/acceptance_coverage/i);
+    expect(validateStageFacts("build-code", legacy, { allowLegacyBuildCode: true })).toBe(legacy);
+  });
   it("rejects phase details that omit the documented status and evidence ref", () => {
     expect(() => validateStageFacts("build-code", { ...valid["build-code"], phase_completion: { phases: [], acceptance: [] } })).toThrow(/phase_completion\.status/i);
   });
