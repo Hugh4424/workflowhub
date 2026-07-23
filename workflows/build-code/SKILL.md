@@ -92,9 +92,14 @@ example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output
 Use fresh task-relative refs for a controlled rework attempt. Do not pass
 `component=tests`, call internal receipt writers, or guess another component
 name; `capture-tests` is the single public producer for build-code test facts.
+Focused Phase commands are intermediate evidence only. The final build-code
+test receipt must capture the complete test command required by the accepted
+plan, using that repository's low-memory configuration when available. For
+WorkflowHub itself, `npm test` uses the repository Vitest configuration;
+verify-code reuses the final command and must not receive a Phase-only command.
 
 After every Phase has passed its Phase review, and the final implementation
-receipt and fresh test receipt exist, run one final independent code review
+receipt and fresh full-suite test receipt exist, run one final independent code review
 using those fresh tests: one full-worktree `wh-review` without `phase_id`. This
 final review is separate from the required per-Phase reviews. The review host
 freezes the authenticated Workspace itself; do not supply paths, commits,
@@ -160,7 +165,8 @@ order, evidence, or authority boundaries.
 5. After every planned Phase passes, verify each Phase ID has matching
    canonical snapshot/material evidence and a formal PASS result, then run one
    final full-worktree `wh-review`. Never repeat a Phase or final review when
-   its snapshot/material identity is unchanged.
+   its existing `snapshot_tree`, review material identity, test command hash,
+   and referenced evidence hashes are unchanged.
 6. Create the final implementation and fresh test receipts, publish the
    build-code attempt with `run`, and let the trusted runtime accept it
    automatically. A Phase result is gate evidence and cannot replace the final
