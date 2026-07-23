@@ -103,7 +103,7 @@ Required `materials` keys come directly from `stage-materials.json`:
 - make-decision/detail: `raw_requirement`, `approved_direction`,
   `draft_spec_or_acceptance`;
 - build-spec: `raw_requirement`, `approved_decision`, `draft_spec`;
-- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`;
+- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`, `draft_tasks`;
 - build-code: `approved_spec`, `acceptance_criteria`, `test_evidence`;
 - verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
 

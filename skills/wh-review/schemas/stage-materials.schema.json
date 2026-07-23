@@ -26,7 +26,7 @@
           "additionalProperties": false
         },
         "build-spec": { "$ref": "#/$defs/rule" },
-        "build-plan": { "$ref": "#/$defs/rule" },
+        "build-plan": { "$ref": "#/$defs/buildPlanRule" },
         "build-code": { "$ref": "#/$defs/rule" },
         "verify-code": { "$ref": "#/$defs/rule" }
       },
@@ -48,6 +48,30 @@
         "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
+    },
+    "buildPlanRule": {
+      "allOf": [
+        { "$ref": "#/$defs/rule" },
+        {
+          "properties": {
+            "required": {
+              "contains": { "const": "draft_tasks" }
+            },
+            "optional": {
+              "not": { "contains": { "const": "draft_tasks" } }
+            },
+            "closure_optional": {
+              "not": { "contains": { "const": "draft_tasks" } }
+            },
+            "generated": {
+              "not": { "contains": { "const": "draft_tasks" } }
+            },
+            "forbidden": {
+              "not": { "contains": { "const": "draft_tasks" } }
+            }
+          }
+        }
+      ]
     }
   },
   "additionalProperties": false

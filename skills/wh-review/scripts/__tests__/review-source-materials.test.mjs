@@ -338,6 +338,39 @@ describe("review materials", () => {
     expect(bundle.packetPlan).not.toHaveProperty("budget_bytes");
   });
 
+  it("seals the independent build-plan task draft as required material", () => {
+    const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const base = {
+      approved_spec: "accepted spec", acceptance_criteria: "AC-1", draft_plan: "# Plan\n\nPhase 1", review_instructions: reviewInstructionsFor("build-plan")
+    };
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan", materials: base }))
+      .toThrow(/MATERIAL_INCOMPLETE.*draft_tasks/);
+    const tasks = "# Tasks\n\n- [ ] T01 implement the plan\n";
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan",
+      materials: { ...base, draft_tasks: tasks }
+    });
+    const taskPath = "requirements/draft_tasks.md";
+    const taskBytes = Buffer.from(tasks, "utf8");
+    expect(readFileSync(join(bundle.bundleRoot, taskPath), "utf8")).toBe(tasks);
+    expect(bundle.manifest.find(({ path }) => path === taskPath)).toEqual({
+      path: taskPath, bytes: taskBytes.length, sha256: createHash("sha256").update(taskBytes).digest("hex")
+    });
+    expect(bundle.deliveryManifest.find(({ path }) => path === taskPath)).toEqual(bundle.manifest.find(({ path }) => path === taskPath));
+    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: taskPath, authority: "required", inclusion_reason: "stage_required_draft_tasks" })
+    ]));
+    const changedTasks = buildReviewMaterials({
+      reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan",
+      materials: { ...base, draft_tasks: `${tasks}- [ ] T02 verify it\n` }
+    });
+    expect(changedTasks.materialId).not.toBe(bundle.materialId);
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec",
+      materials: { raw_requirement: "need", approved_decision: "decision", draft_spec: "spec", draft_tasks: tasks, review_instructions: reviewInstructionsFor("build-spec") }
+    })).toThrow(/MATERIAL_FORBIDDEN.*draft_tasks/);
+  });
+
   it("requires explicit complete-or-unknown maps for wh_review.v2 routes", () => {
     const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const base = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
@@ -421,7 +454,7 @@ describe("review materials", () => {
   it("makes an adaptive closure packet delta-only and gives the provider fixed closure instructions", () => {
     const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan", reviewRound: "closure",
-      materials: { approved_spec: "spec", acceptance_criteria: "ac", draft_plan: "plan", response_ledger: { version: "wh-review-response-ledger.v1", responses: [] }, review_instructions: reviewInstructionsFor("build-plan", null, false, "closure") } });
+      materials: { approved_spec: "spec", acceptance_criteria: "ac", draft_plan: "plan", draft_tasks: "tasks", response_ledger: { version: "wh-review-response-ledger.v1", responses: [] }, review_instructions: reviewInstructionsFor("build-plan", null, false, "closure") } });
     expect(bundle.files).toContain("requirements/response_ledger.json");
     expect(bundle.files).not.toContain("changes.diff");
     expect(bundle.files.some((path) => path.startsWith("changed/"))).toBe(false);

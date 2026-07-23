@@ -102,7 +102,8 @@ planning step.
 5. Create the draft task list by giving `spec-tasks` frozen spec/plan content
    and the `tasks.md` writer. Present one draft brief covering phases, major
    dependencies, testing/review approach, delivery boundary, and next check.
-6. Run the initial review over the frozen draft. `spec-analyze` is a
+6. Run the initial review over the frozen `plan.md` and `tasks.md` drafts with
+   the accepted spec and acceptance criteria. `spec-analyze` is a
    provider-visible lens loaded only by `wh-review`, not a separate planning
    step. Components do not locate files themselves. Present one review brief
    for the effective result using the review-card contract below.

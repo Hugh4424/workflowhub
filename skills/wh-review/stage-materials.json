@@ -37,7 +37,7 @@
     },
     "build-plan": {
       "source_bundle": "none",
-      "required": ["approved_spec", "acceptance_criteria", "draft_plan", "review_instructions"],
+      "required": ["approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "review_instructions"],
       "optional": ["context_map", "evidence_map"],
       "closure_optional": ["response_ledger", "previous_review"],
       "generated": ["review_instructions"],
