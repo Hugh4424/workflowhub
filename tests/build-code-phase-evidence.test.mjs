@@ -110,6 +110,36 @@ function formalPhaseReview(state, published, verdict = "pass") {
   return resultRef;
 }
 
+function formalWorktreeReview(state, published, verdict = "revise_required") {
+  const writer = createCanonicalReviewWriter({ task: state.task, taskId: state.task.identity.taskId, stage: "build-code" });
+  const suffix = `worktree-${verdict}-${published.snapshot_tree.slice(0, 8)}`;
+  const attemptRef = `reviews/attempts/${suffix}/attempt.json`;
+  const outputRef = `reviews/attempts/${suffix}/providers/fixture.output.json`;
+  const resultRef = `reviews/results/${suffix}.json`;
+  const source = {
+    target_commit: published.implementation_commit, base_commit: published.baseline_commit,
+    base_tree: published.base_tree, captured_head: published.implementation_commit,
+  };
+  const subject = { subject_kind: "worktree", phase_id: null, base_tree: published.base_tree, candidate_tree: published.snapshot_tree };
+  const finding = { severity: "major", path: "fixture", issue: "final review requires repair", recommendation: "repair the owning Phase" };
+  const output = { verdict, summary: "fixture", findings: verdict === "pass" ? [] : [finding] };
+  writer.writeProviderOutput(outputRef, JSON.stringify(output));
+  const materialId = sha256(`${suffix}:material`);
+  writer.writeAttempt(attemptRef, {
+    version: "wh-review-attempt.v1", attempt_id: suffix, task_id: state.task.identity.taskId, stage: "build-code",
+    review_track: null, source, snapshot_tree: published.snapshot_tree, material_id: materialId, ...subject,
+    provider_attempts: [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }],
+    terminal_status: "semantic", error: null,
+  });
+  writer.writeResult(resultRef, {
+    version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-code", review_track: null,
+    source, snapshot_tree: published.snapshot_tree, material_id: materialId, attempt_ref: attemptRef, ...subject,
+    provider_results: [{ provider: "fixture", output }], verdict,
+    findings: verdict === "pass" ? [] : [{ provider: "fixture", ...finding }],
+  });
+  return resultRef;
+}
+
 function publish(state, phaseId, receipts, extra = {}) {
   return publishBuildCodePhaseEvidence({ task: state.task, kernel: state.kernel, workspace: state.workspace }, {
     phase_id: phaseId,
@@ -361,6 +391,52 @@ describe("build-code phase evidence publication", () => {
     });
     expect(next.snapshot_tree).not.toBe(first.snapshot_tree);
     expect(next.diff_scan_ref).not.toBe(first.diff_scan_ref);
+  });
+
+  it("allows a final worktree revise-required result to repair the current Phase before build acceptance", () => {
+    const state = fixture("pre-accept-final-review-repair");
+    const firstReceipts = phaseReceipts(state, "phase-1");
+    const first = publish(state, "phase-1", firstReceipts);
+    const firstPhaseReview = formalPhaseReview(state, first);
+    publish(state, "phase-1", firstReceipts, { review_result_ref: firstPhaseReview });
+
+    const finalReview = formalWorktreeReview(state, first);
+    const repaired = phaseReceipts(state, "phase-1-repair", { revisionOf: firstReceipts.implementation.ref });
+    const repairedPending = publish(state, "phase-1", repaired, {
+      allowed_files: ["phase-1.txt", "phase-1-repair.txt"], repair_review_result_ref: finalReview,
+    });
+    expect(repairedPending.snapshot_tree).not.toBe(first.snapshot_tree);
+    expect(JSON.parse(state.task.readRecord("phase-result.json"))).toMatchObject({
+      status: "awaiting_review", repair_review_result_ref: finalReview,
+    });
+
+    const repairedPhaseReview = formalPhaseReview(state, repairedPending);
+    const repairedDone = publish(state, "phase-1", repaired, {
+      allowed_files: ["phase-1.txt", "phase-1-repair.txt"], review_result_ref: repairedPhaseReview,
+    });
+    expect(repairedDone.review_verdict).toBe("pass");
+    expect(JSON.parse(state.task.readRecord("phase-result.json"))).toMatchObject({
+      status: "done", repair_review_result_ref: finalReview,
+    });
+
+    const testReceipt = JSON.parse(state.task.readRecord(repaired.tests.receipt_ref));
+    accept(state.kernel, "build-code", {
+      changed: ["phase-1.txt", "phase-1-repair.txt"],
+      tests: {
+        command: testReceipt.command, exit_code: testReceipt.exit_code, command_hash: testReceipt.command_hash,
+        snapshot_head: testReceipt.snapshot_head, snapshot_tree: testReceipt.snapshot_tree, snapshot_commit: testReceipt.snapshot_commit,
+        started_at: testReceipt.started_at, completed_at: testReceipt.completed_at, receipt_ref: repaired.tests.receipt_ref,
+        receipt_hash: sha256(state.task.readRecord(repaired.tests.receipt_ref)), output_ref: testReceipt.output_ref, output_hash: testReceipt.output_hash,
+      },
+      review: { verdict: "pass", result_ref: repairedPhaseReview, result_hash: sha256(state.task.readRecord(repairedPhaseReview)), snapshot_tree: repairedDone.snapshot_tree },
+      phase_completion: true,
+    }, false, [{ task_id: state.task.identity.taskId, stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }]);
+
+    const late = phaseReceipts(state, "phase-1-late", { revisionOf: repaired.implementation.ref });
+    const lateReview = formalWorktreeReview(state, repairedDone);
+    expect(() => publish(state, "phase-1", late, {
+      allowed_files: ["phase-1.txt", "phase-1-repair.txt", "phase-1-late.txt"], repair_review_result_ref: lateReview,
+    })).toThrow(/unavailable after build-code acceptance/i);
   });
 
   it("rejects candidate-bound RED, unsafe or duplicate paths, and extra public command flags", async () => {

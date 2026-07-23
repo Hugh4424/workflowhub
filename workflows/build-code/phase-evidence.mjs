@@ -15,6 +15,7 @@ const REOPEN = /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
   "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "review_result_ref", "reopen_ref",
+  "repair_review_result_ref",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -81,6 +82,35 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
   return review;
 }
 
+function readPreAcceptRepairReview(task, ref, expectedCandidateTree) {
+  safeRef(ref, /^reviews\/results\/[A-Za-z0-9._-]+\.json$/, "repair review result ref");
+  const review = readJson(task, ref, "pre-accept repair review result");
+  validateSchema("result", review.value);
+  const value = review.value;
+  if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
+    || value.subject_kind !== "worktree" || value.phase_id !== null
+    || value.candidate_tree !== expectedCandidateTree || value.snapshot_tree !== expectedCandidateTree
+    || value.verdict !== "revise_required") {
+    throw new Error("pre-accept repair review identity does not match the current Phase");
+  }
+  const attempt = readJson(task, value.attempt_ref, "pre-accept repair review attempt");
+  validateSchema("attempt", attempt.value);
+  for (const key of ["task_id", "stage", "subject_kind", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
+    if (attempt.value[key] !== value[key]) throw new Error(`pre-accept repair review attempt/result ${key} mismatch`);
+  }
+  return review;
+}
+
+function hasAcceptedBuildCode(task) {
+  try {
+    task.readRecord("results/build-code/accepted.json");
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 function currentPhaseResult(task) {
   try { return readJson(task, "phase-result.json", "current Phase result").value; }
   catch (error) {
@@ -106,9 +136,17 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
   }
   const previous = phaseSubject(task, workspace, current);
   if (current.phase_id !== input.phase_id) {
+    if (input.repair_review_result_ref !== undefined) throw new Error("pre-accept repair review must target the current Phase");
     if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("next Phase requires the current previous_phase_review_ref");
     readFormalPhaseReview(task, input.previous_phase_review_ref, previous.subject, { requirePass: true });
     return previous.scan.implementation_commit;
+  }
+  if (input.repair_review_result_ref !== undefined) {
+    if (input.reopen_ref !== undefined) throw new Error("pre-accept repair review cannot be combined with reopen_ref");
+    if (current.status !== "done") throw new Error("pre-accept repair review requires the current PASS Phase");
+    if (hasAcceptedBuildCode(task)) throw new Error("pre-accept repair review is unavailable after build-code acceptance");
+    readPreAcceptRepairReview(task, input.repair_review_result_ref, previous.scan.snapshot_tree);
+    return previous.scan.baseline_commit;
   }
   if (input.previous_phase_review_ref === undefined) return previous.scan.baseline_commit;
   if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("same-Phase repair review reference mismatch");
@@ -193,6 +231,20 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     const before = captureWorkspaceSnapshot(workspace);
     assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
+    const repairReviewRef = input.repair_review_result_ref ?? (current?.phase_id === input.phase_id ? current.repair_review_result_ref : undefined);
+    if (input.repair_review_result_ref !== undefined && input.reopen_ref !== undefined) {
+      throw new Error("pre-accept repair review cannot be combined with reopen_ref");
+    }
+    if (input.repair_review_result_ref !== undefined && (!current || current.phase_id !== input.phase_id || current.status !== "done")) {
+      throw new Error("pre-accept repair review requires the current PASS Phase");
+    }
+    if (input.repair_review_result_ref !== undefined && hasAcceptedBuildCode(task)) {
+      throw new Error("pre-accept repair review is unavailable after build-code acceptance");
+    }
+    if (input.repair_review_result_ref !== undefined) {
+      const currentSubject = phaseSubject(task, workspace, current);
+      readPreAcceptRepairReview(task, input.repair_review_result_ref, currentSubject.scan.snapshot_tree);
+    }
     if (reopen && (!current || current.phase_id !== input.phase_id)) {
       throw new Error("reopen_ref may repair only the current PASS Phase");
     }
@@ -231,7 +283,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         });
       }
       if (!sameIdentity && current.status === "done") {
-        if (!reopen) {
+        if (!reopen && repairReviewRef === undefined) {
           throw new Error("a PASS Phase identity is closed and cannot be reopened");
         }
       }
@@ -261,6 +313,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       status: "awaiting_review",
       needs_human: false,
       ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
+      ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
       tests: {
         ...(red ? { red: { path: input.red_evidence_ref } } : {}),
         green: { path: input.green_test_receipt_ref },

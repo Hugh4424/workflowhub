@@ -207,6 +207,12 @@ order, evidence, or authority boundaries.
    path, commit, range, review implementation detail, or output destination.
    `phase_id` and `allowed_files` are declared Phase facts, not a new approval
    registry; the independent review checks them against the accepted plan.
+   If the final full-worktree review finds a problem before build-code is
+   accepted, include its formal `revise_required` result as
+   `repair_review_result_ref`. The runtime binds that result to the current
+   PASS Phase and allows that append-only repair without a verify-code reopen.
+   This reference is invalid after build-code acceptance and cannot be mixed
+   with the post-verify `reopen_ref`.
    Complete `AGENTS.md` blocks explicitly marked as auto-managed runtime
    context are reported as `runtime_controlled_changes`, not as Phase output.
    The host may add, remove, or replace their task-local contents. Do not add
