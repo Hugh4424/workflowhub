@@ -149,9 +149,10 @@ idempotent. Other attempts against a closed stage remain rejected.
    coverage table, every affected AC remains `unknown`; verification cannot
    claim full coverage or pass. Never infer coverage from a green aggregate
    test run.
-3. Take the fresh test command only from accepted build-code facts. Missing
-   command is a fail-loud lineage error; never reuse an older command. Capture
-   it through the only public path:
+3. Take the final test command required by the accepted plan only from
+   accepted build-code facts. A Phase-focused command is not valid verify
+   input. Missing command is a fail-loud lineage error; never reuse an older
+   command. Capture it through the only public path:
    `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
    --project=<project> --task=<task>
    --input=$TMP_DIR/test-capture.json`.
