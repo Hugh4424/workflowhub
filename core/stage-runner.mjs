@@ -201,7 +201,13 @@ function assertOfficialRevisionAuthorization(stage, ctx, invocation, publication
   }
   let acceptedVerify;
   try { acceptedVerify = ctx.kernel.readAccepted("verify-code"); }
-  catch { throw new Error("verify-code revision receipt requires controlled fresh verify lineage"); }
+  catch (error) {
+    // The first fresh verify may revise a stale create-only evidence record
+    // before any verify result has been accepted. That is a failure attempt,
+    // not a reopen of an accepted verify result. Keep the normal path strict.
+    if (error?.code === "ENOENT") return;
+    throw new Error("verify-code revision receipt requires controlled fresh verify lineage");
+  }
   const activeBuild = ctx.kernel.readAccepted("build-code");
   if (!acceptedVerify || !activeBuild.attempt.reopen_provenance) throw new Error("verify-code revision receipt requires controlled fresh verify lineage");
 }
