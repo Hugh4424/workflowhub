@@ -565,20 +565,20 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (hash(task.readRecord(entry.ref)) !== entry.sha256) throw new Error(`verify-code passing attempt evidence changed before publication: ${entry.ref}`);
     }
   };
-  const visitAttempts = (stage, visitor) => {
+  const visitAttempts = (stage, visitor, options = {}) => {
     for (let sequence = 1; sequence <= 9999; sequence += 1) {
       const attemptRef = `attempt-${String(sequence).padStart(4, "0")}.json`;
       let raw;
       try { raw = task.readRecord(`results/${stage}/${attemptRef}`); }
       catch (error) { if (error?.code === "ENOENT") return; throw error; }
-      const attempt = validateAttempt(parseJson(raw, `${stage} attempt`), { taskId: task.identity.taskId, stage, attemptId: `${stage}:${attemptRef.slice(0, -5)}` });
+      const attempt = validateAttempt(parseJson(raw, `${stage} attempt`), { taskId: task.identity.taskId, stage, attemptId: `${stage}:${attemptRef.slice(0, -5)}`, ...options });
       if (visitor(attempt, attemptRef)) return;
     }
   };
   const rejectPublishedBuildReopen = (reopenRef) => visitAttempts("build-code", (attempt, attemptRef) => {
     if (attempt.reopen_provenance?.reopen_ref !== reopenRef) return false;
     throw new Error(`build-code reopen already published as ${attemptRef}; resume and accept that attempt`);
-  });
+  }, { allowLegacyBuildCode: true });
   const controlledVerifyFailurePublications = new WeakSet();
   const controlledVerifyPassingPublications = new WeakSet();
   const duplicateVerifyFailurePublication = (publication) => {
