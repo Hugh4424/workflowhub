@@ -1,4 +1,5 @@
 import { posix } from "node:path";
+import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
 
@@ -7,14 +8,125 @@ function safePart(value, label) {
   return value;
 }
 
-export function aggregateProviderResults(providerResults, minimumReviewers = 1) {
-  if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be a positive integer");
-  const valid = providerResults.filter((item) => item?.review && ["pass", "revise_required"].includes(item.review.verdict))
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function providerOutputName(provider) {
+  if (typeof provider !== "string" || provider.length === 0) throw new TypeError("provider is invalid");
+  // Provider profile IDs intentionally use `adapter/profile`. Encode only the
+  // filename component: records keep the original profile ID for attribution.
+  return `provider-${Buffer.from(provider, "utf8").toString("base64url")}`;
+}
+
+function normalizedIssue(value) {
+  return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
+}
+
+function overlap(left, right) {
+  const leftTerms = new Set(left); const rightTerms = new Set(right);
+  if (!leftTerms.size || !rightTerms.size) return 0;
+  let shared = 0;
+  for (const item of leftTerms) if (rightTerms.has(item)) shared += 1;
+  return shared / Math.min(leftTerms.size, rightTerms.size);
+}
+
+function findingKey(finding) {
+  return `${finding.path}\u0000${finding.line ?? ""}\u0000${normalizedIssue(finding.issue).join(" ")}`;
+}
+
+function sameCluster(cluster, candidate) {
+  const seed = cluster.members[0];
+  if (seed.finding.path !== candidate.finding.path) return false;
+  if (seed.finding.line !== undefined && candidate.finding.line !== undefined && seed.finding.line !== candidate.finding.line) return false;
+  const left = normalizedIssue(seed.finding.issue); const right = normalizedIssue(candidate.finding.issue);
+  return left.join(" ") === right.join(" ") || overlap(left, right) >= 0.7;
+}
+
+function severityOf(members) {
+  if (members.some(({ finding }) => finding.severity === "blocking")) return "blocking";
+  if (members.some(({ finding }) => finding.severity === "major")) return "major";
+  return "minor";
+}
+
+function adapterOf(provider) { return provider.split("/", 1)[0]; }
+
+function prioritizedValidResults(providerResults, profilePriority) {
+  if (!Array.isArray(profilePriority) || profilePriority.some((provider) => typeof provider !== "string" || provider.length === 0)) {
+    throw new TypeError("profilePriority must be a string array");
+  }
+  const priority = new Map(profilePriority.map((provider, index) => [provider, index]));
+  const valid = providerResults.filter((item) => item?.review && ["pass", "revise_required"].includes(item.review.verdict));
+  const byAdapter = new Map();
+  for (let index = 0; index < valid.length; index += 1) {
+    const candidate = valid[index]; const adapter = adapterOf(candidate.provider);
+    const current = byAdapter.get(adapter);
+    const candidatePriority = priority.get(candidate.provider) ?? Number.MAX_SAFE_INTEGER;
+    const currentPriority = current ? (priority.get(current.item.provider) ?? Number.MAX_SAFE_INTEGER) : null;
+    // Route order decides which profile represents an adapter. If a test
+    // double or a non-conforming broker returns several successful profiles
+    // for one CLI, only that representative contributes to quorum or verdict.
+    if (!current || candidatePriority < currentPriority || (candidatePriority === currentPriority && index < current.index)) {
+      byAdapter.set(adapter, { item: candidate, index });
+    }
+  }
+  return [...byAdapter.values()].map(({ item }) => item)
     .sort((left, right) => left.provider.localeCompare(right.provider));
-  const revise = valid.filter((item) => item.review.verdict === "revise_required");
-  if (revise.length) return { status: "semantic", verdict: "revise_required", valid };
-  if (valid.length < minimumReviewers) return { status: "unavailable", verdict: null, valid };
-  return { status: "semantic", verdict: "pass", valid };
+}
+
+function clusterRecord(cluster) {
+  const members = [...cluster.members].sort((left, right) => left.provider.localeCompare(right.provider) || left.index - right.index);
+  const severity = severityOf(members);
+  const validDirect = members.filter(({ finding, anchorValid }) =>
+    ["direct", "machine"].includes(finding.evidence_kind) && anchorValid !== false);
+  const inferredAdapters = new Set(members.filter(({ finding }) => finding.evidence_kind === "inferred").map(({ adapter }) => adapter));
+  const id = `F-${createHash("sha256").update(findingKey(members[0].finding)).digest("hex").slice(0, 12)}`;
+  let disposition = "nonblocking_minor"; let evidenceStatus = "minor";
+  if (severity !== "minor") {
+    if (validDirect.length > 0) { disposition = "actionable"; evidenceStatus = "direct"; }
+    else if (inferredAdapters.size >= 2) { disposition = "actionable"; evidenceStatus = "corroborated_inference"; }
+    else if (members.some(({ finding, anchorValid }) => ["direct", "machine"].includes(finding.evidence_kind) && anchorValid === false)) {
+      disposition = "invalid_evidence"; evidenceStatus = "invalid_anchor";
+    } else { disposition = "needs_corroboration"; evidenceStatus = "single_inference"; }
+  }
+  const representative = members[0].finding;
+  return {
+    id, severity, path: representative.path, ...(representative.line ? { line: representative.line } : {}),
+    issue: representative.issue, root_cause: representative.root_cause ?? representative.issue, recommendation: representative.recommendation,
+    providers: [...new Set(members.map(({ provider }) => provider))], adapter_count: new Set(members.map(({ adapter }) => adapter)).size,
+    finding_count: members.length, disposition, evidence_status: evidenceStatus,
+    provider_findings: members.map(({ provider, adapter, finding, anchorValid }) => ({
+      provider, adapter, severity: finding.severity, evidence_kind: finding.evidence_kind ?? "unspecified",
+      evidence_anchor_valid: anchorValid !== false,
+    })),
+  };
+}
+
+function adjudicate(valid) {
+  const candidates = valid.flatMap((item) => item.review.findings.map((finding, index) => ({
+    provider: item.provider, adapter: adapterOf(item.provider), finding, index, anchorValid: item.evidenceAnchors?.[index] ?? true,
+  }))).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
+  const grouped = [];
+  for (const candidate of candidates) {
+    const cluster = grouped.find((current) => sameCluster(current, candidate));
+    if (cluster) cluster.members.push(candidate);
+    else grouped.push({ members: [candidate] });
+  }
+  const clusters = grouped.map(clusterRecord).sort((left, right) => left.id.localeCompare(right.id));
+  const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
+  const reportFindings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
+  return { version: "wh-review-adjudication.v1", clusters, actionable, reportFindings };
+}
+
+export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [] } = {}) {
+  if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be a positive integer");
+  const valid = prioritizedValidResults(providerResults, profilePriority);
+  const adjudication = adjudicate(valid);
+  if (valid.length < minimumReviewers) return { status: "unavailable", verdict: null, valid, adjudication };
+  if (adjudication.actionable.length) return { status: "semantic", verdict: "revise_required", valid, adjudication };
+  return { status: "semantic", verdict: "pass", valid, adjudication };
 }
 
 export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {
@@ -26,15 +138,16 @@ export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {
     attemptRef: posix.join(attemptDirectoryRef, "attempt.json"),
     providerDirectoryRef: posix.join(attemptDirectoryRef, "providers"),
     resultRef: posix.join("reviews", "results", resultName),
+    reportRef: posix.join("reviews", "reports", `${id}.md`),
   };
 }
 
 export function writeProviderOutput(task, directoryRef, provider, output, sequence = 1, provenance = {}) {
   if (typeof output !== "string") return null;
   const suffix = sequence === 1 ? "" : `-${sequence}`;
-  const ref = posix.join(directoryRef, `${safePart(provider, "provider")}${suffix}.output.json`);
+  const ref = posix.join(directoryRef, `${providerOutputName(provider)}${suffix}.output.json`);
   const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output, provider);
 }
 
 export function writeAttempt(task, ref, attempt) {
@@ -45,4 +158,112 @@ export function writeAttempt(task, ref, attempt) {
 export function writeSemanticResult(task, ref, result) {
   const safeTask = assertTaskHandle(task);
   return createCanonicalReviewWriter({ task: safeTask, taskId: result?.task_id, stage: result?.stage }).writeResult(ref, result);
+}
+
+export function resolutionRef(resolution) {
+  if (!resolution || typeof resolution !== "object") throw new TypeError("resolution is required");
+  return `reviews/resolutions/${createHash("sha256").update(canonicalJson(resolution)).digest("hex")}.json`;
+}
+
+export function writeReviewResolution(task, ref, resolution) {
+  const safeTask = assertTaskHandle(task);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: resolution?.task_id, stage: resolution?.stage }).writeResolution(ref, resolution);
+}
+
+function markdown(value) { return String(value ?? "").replaceAll("|", "\\|").replaceAll("\n", " "); }
+
+function tokenUsage(usage) {
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return "TOKENS_UNAVAILABLE";
+  const aliases = [
+    ["input", ["input_tokens", "inputTokens", "prompt_tokens", "promptTokens"]],
+    ["output", ["output_tokens", "outputTokens", "completion_tokens", "completionTokens"]],
+    ["total", ["total_tokens", "totalTokens"]],
+  ];
+  const values = aliases.flatMap(([label, keys]) => {
+    const key = keys.find((candidate) => Number.isSafeInteger(usage[candidate]) && usage[candidate] >= 0);
+    return key ? [`${label}=${usage[key]}`] : [];
+  });
+  return values.length ? values.join(", ") : markdown(JSON.stringify(usage));
+}
+
+function latestAttempts(attempt) {
+  const latest = new Map();
+  for (const providerAttempt of attempt.provider_attempts ?? []) latest.set(providerAttempt.provider, providerAttempt);
+  return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
+}
+
+export function renderReviewReport({ attempt, result = null }) {
+  const lines = [
+    `# wh-review report — ${attempt.stage}`,
+    "",
+    `- attempt: \`${attempt.attempt_id}\``,
+    `- task: \`${attempt.task_id}\``,
+    `- subject: \`${attempt.subject_kind}${attempt.phase_id ? `/${attempt.phase_id}` : ""}\``,
+    `- snapshot: \`${attempt.snapshot_tree}\``,
+    `- material: \`${attempt.material_id}\``,
+    `- terminal status: \`${attempt.terminal_status}\``,
+    `- verdict: \`${result?.verdict ?? "unavailable"}\``,
+    "",
+    "## Routing and coverage",
+    "",
+  ];
+  if (attempt.review_policy) {
+    lines.push(`- policy: \`${attempt.review_policy.source}/${attempt.review_policy.round}\`; configured mode \`${attempt.review_policy.mode}\``);
+    lines.push(`- requested profiles: ${attempt.review_policy.requested_profiles.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
+    const pins = attempt.review_policy.requested_profile_specs ?? [];
+    if (pins.length > 0) lines.push(`- requested profile pins: ${pins.map((profile) => `\`${profile.provider}\` priority=${profile.priority}; model=${profile.model ?? "null"}; effort=${profile.effort ?? "null"}; thinking=${profile.thinking ?? "null"}`).join(" | ")}`);
+    lines.push(`- eligible profiles: ${attempt.review_policy.eligible_profiles.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
+    lines.push(`- same-source exclusions: ${attempt.review_policy.same_source_exclusions.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
+  }
+  if (attempt.coverage) lines.push(`- coverage: \`${attempt.coverage.mode}\`; ${attempt.coverage.valid_provider_count}/${attempt.coverage.minimum_required} valid reviewers`);
+  lines.push("", "## Provider runs", "", "| Provider | Model / thinking | Duration | Token usage | Runtime / session state | Status |", "| --- | --- | ---: | --- | --- | --- |");
+  for (const providerAttempt of latestAttempts(attempt)) {
+    const execution = providerAttempt.execution;
+    const model = execution ? `${execution.adapter}/${execution.model ?? "MODEL_UNAVAILABLE"}; effort=${execution.effort ?? "UNAVAILABLE"}; thinking=${execution.thinking ?? "UNAVAILABLE"}` : "EXECUTION_UNAVAILABLE";
+    const duration = execution?.timing?.duration_ms ?? "UNAVAILABLE";
+    const usage = tokenUsage(execution?.usage);
+    const runtime = execution?.runtime_id ?? providerAttempt.runtime_id ?? "UNAVAILABLE";
+    const session = providerAttempt.session_id ?? "SESSION_UNAVAILABLE";
+    const statePath = providerAttempt.session_artifact_path ?? "STATE_PATH_UNAVAILABLE";
+    lines.push(`| ${markdown(providerAttempt.provider)} | ${markdown(model)} | ${duration} ms | ${usage} | ${markdown(runtime)}/${markdown(session)}; state=${markdown(statePath)} | ${providerAttempt.status}${providerAttempt.error ? ` (${markdown(providerAttempt.error.code)})` : ""} |`);
+  }
+  const diagnostics = latestAttempts(attempt).filter((providerAttempt) => providerAttempt.unavailable_diagnostics !== null && providerAttempt.unavailable_diagnostics !== undefined);
+  if (diagnostics.length > 0) {
+    lines.push("", "Provider unavailable diagnostics:");
+    for (const providerAttempt of diagnostics) {
+      const diagnostic = providerAttempt.unavailable_diagnostics;
+      lines.push(`- ${markdown(providerAttempt.provider)}: ${markdown(diagnostic.code)} — ${markdown(diagnostic.message ?? "message unavailable")}`);
+    }
+  }
+  lines.push("", "## Findings and adjudication", "");
+  const clusters = result?.adjudication?.clusters ?? [];
+  if (clusters.length === 0) lines.push("No adjudicated findings.");
+  for (const cluster of clusters) {
+    lines.push(`### ${cluster.id} — ${cluster.severity} / ${cluster.disposition}`);
+    lines.push(`- providers: ${cluster.providers.map((provider) => `\`${provider}\``).join(", ")}; adapters: ${cluster.adapter_count}; evidence: \`${cluster.evidence_status}\``);
+    lines.push(`- finding: ${cluster.path}${cluster.line ? `:${cluster.line}` : ""} — ${cluster.issue}`);
+    lines.push(`- root cause: ${cluster.root_cause}`);
+    lines.push(`- correction direction: ${cluster.recommendation}`);
+  }
+  lines.push("", "## Provider finding details", "");
+  const providerResults = result?.provider_results ?? [];
+  if (providerResults.length === 0) lines.push("No semantic provider finding output is available.");
+  for (const providerResult of providerResults) {
+    lines.push(`### ${providerResult.provider} — ${providerResult.output.verdict}`);
+    lines.push(`- summary: ${providerResult.output.summary}`);
+    if (providerResult.output.findings.length === 0) lines.push("- findings: none");
+    for (const finding of providerResult.output.findings) {
+      lines.push(`- ${finding.severity}: ${finding.path}${finding.line ? `:${finding.line}` : ""} — ${finding.issue}`);
+      lines.push(`  - root cause: ${finding.root_cause ?? "not supplied"}`);
+      lines.push(`  - correction direction: ${finding.recommendation}`);
+    }
+  }
+  lines.push("", "Session-state paths are broker runtime state files derived from trusted local configuration. Native CLI session files stay provider-private and are never fabricated.");
+  if (attempt.error) lines.push("", "## Unavailable diagnostic", "", `- ${attempt.error.code}: ${attempt.error.message}`);
+  return `${lines.join("\n")}\n`;
+}
+
+export function writeReviewReport(task, ref, { attempt, result = null }) {
+  return createCanonicalReviewWriter({ task: assertTaskHandle(task), taskId: attempt.task_id, stage: attempt.stage })
+    .writeReport(ref, renderReviewReport({ attempt, result }));
 }

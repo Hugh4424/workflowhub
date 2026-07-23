@@ -93,15 +93,34 @@ describe("final cutover guard contracts", () => {
     expect(checkpointCalls).toBe(0);
   });
 
-  it("rejects a stale build-spec review tree before creating a checkpoint", async () => {
+  it("records a stale revise-required build-spec review as a non-gate quality fact", async () => {
     const stage = "build-spec", content = "# Spec\n", values = {
       "receipts/spec.json": canonical(stage, { producer: { stage, component: "spec", version: "1" }, content, content_hash: createHash("sha256").update(content).digest("hex") }),
-      "reviews/results/review.json": reviewReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
     };
     let checkpointCalls = 0;
     const worker = { ...workerFor(stage, values, "c".repeat(40)), readArtifact: () => content, createCheckpoint: () => { checkpointCalls += 1; return {}; }, artifactRef: () => "specs/task/spec.md" };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } })).rejects.toThrow(/same snapshot tree/i);
-    expect(checkpointCalls).toBe(0);
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } }))
+      .resolves.toMatchObject({ facts: { review: { verdict: "revise_required" } }, missing_items: ["review findings recorded; response evidence: unknown/unverified"] });
+    expect(checkpointCalls).toBe(1);
+  });
+
+  it("surfaces accepted risk from external audit at the build-plan human boundary without making it a stage fact", async () => {
+    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n", auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
+    const values = {
+      "receipts/plan.json": canonical(stage, { producer: { stage, component: "plan", version: "1" }, content: plan, content_hash: createHash("sha256").update(plan).digest("hex") }),
+      "receipts/tasks.json": canonical(stage, { producer: { stage, component: "tasks", version: "1" }, content: tasks, content_hash: createHash("sha256").update(tasks).digest("hex") }),
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    const worker = {
+      ...workerFor(stage, values), readArtifact: (name) => name === "plan.md" ? plan : tasks,
+      createCheckpoint: () => ({}), artifactRef: (name) => `specs/task/${name}`,
+      listReviewAuditRefs: () => [auditRef],
+      readReviewAudit: () => ({ value: { version: "wh-review-resolution.v1", task_id: "task", stage, outcome: "recorded_non_gate_response", accepted_risk_count: 1 }, sha256: sha }),
+    };
+    const outcome = await officialStageHandler(stage)(worker, { receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" } });
+    expect(outcome.facts).not.toHaveProperty("review_audit");
+    expect(outcome.missing_items).toContain(`accepted risk recorded in external wh-review audit: ${auditRef}; present it to the human confirmer`);
   });
 
   it("records a real failing test command as a quality fact", async () => {

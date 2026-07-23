@@ -6,11 +6,12 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const json = (path) => JSON.parse(read(path));
 
-const trace = json("specs/m14a-audit-contract-layer/execution-trace.schema.json");
-const inventory = json("specs/m14a-audit-contract-layer/skills-inventory.schema.json");
-const taxonomy = read("specs/m14a-audit-contract-layer/quality-failure-taxonomy.md");
-const surfaces = read("specs/m14a-audit-contract-layer/harness-surface.md");
-const spec = read("specs/m14a-audit-contract-layer/spec.md");
+const historicalContract = "specs/archive/m14a-audit-contract-layer/";
+const trace = json(`${historicalContract}execution-trace.schema.json`);
+const inventory = json(`${historicalContract}skills-inventory.schema.json`);
+const taxonomy = read(`${historicalContract}quality-failure-taxonomy.md`);
+const surfaces = read(`${historicalContract}harness-surface.md`);
+const spec = read(`${historicalContract}spec.md`);
 
 const traceRequired = [
   "run_id", "session_id", "stage", "step_id", "attempt_id", "skill", "skill_version",

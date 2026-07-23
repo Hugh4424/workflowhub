@@ -45,9 +45,57 @@ field names. A normal review input has this exact shape:
 ```
 
 `host_provider` is the exact current host ID. Callers must not select providers
-or models. `wh-review` selects every enabled heterologous provider from the
-first usable tier in the host-owned 3rd-review config. Changing routing belongs
-to that config, never to a Stage prompt or review request.
+or models. `wh-review` resolves the stage policy from `wh_review.v2` in the
+trusted WorkflowHub configuration (or falls back to the legacy 3rd-review
+route), then sends the complete configured candidate group once to 3rd-review.
+`wh_review.profiles` pins each routed profile's model, effort, thinking mode,
+and numeric priority (smaller runs earlier). WorkflowHub checks the pin against
+the trusted 3rd-review config before dispatch and rejects a returned v2 tuple
+that differs as `PROFILE_MISMATCH`; it never overrides adapter commands or
+credentials. The trusted 3rd-review config remains the only execution registry
+and attachment allowlist; callers never provide a broker config path.
+When `profiles` is present, every ID in that route must be pinned and each
+`initial`/`closure` list must already be sorted by ascending priority; equal
+priorities retain list order. A legacy route without `profiles` keeps the
+existing array-order behavior. An omitted `wh_review` stage is not a skipped
+review: it falls back to the trusted 3rd-review default tiers.
+
+Example host configuration:
+
+```json
+{
+  "wh_review": {
+    "version": 2,
+    "profiles": {
+      "claude-code/opus": {
+        "model": "claude-opus-4-8",
+        "effort": "high",
+        "thinking": null,
+        "priority": 10
+      },
+      "kimi/coding": {
+        "model": "kimi-code/kimi-for-coding",
+        "effort": null,
+        "thinking": true,
+        "priority": 20
+      }
+    },
+    "stages": {
+      "build-code": {
+        "initial": ["claude-code/opus", "kimi/coding"],
+        "mode": "full_only",
+        "minimum_heterologous": 1
+      }
+    }
+  }
+}
+```
+
+3rd-review, not WorkflowHub, is the final adapter-isolation authority: host
+and duplicate adapters are returned as public `SAME_SOURCE` records without a
+CLI call. WorkflowHub records the eligible unique-adapter quorum from that
+attested group. Changing routing belongs to trusted configuration, never to a
+Stage prompt or review request.
 Required `materials` keys come directly from `stage-materials.json`:
 
 - make-decision/direction: `raw_requirement`, `objective_facts`;
@@ -57,6 +105,37 @@ Required `materials` keys come directly from `stage-materials.json`:
 - build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`;
 - build-code: `approved_spec`, `acceptance_criteria`, `test_evidence`;
 - verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
+
+`stage-materials.json` is a strict allowlist: each stage exposes only required
+and declared optional material. `review_instructions` and packet metadata are
+runner-generated. Only a closure round may additionally carry
+`response_ledger` and runner-generated `previous_review`; arbitrary fields,
+raw-output references and caller-supplied generated material fail before any
+provider call.
+
+For a follow-up after `revise_required`, the caller may supply the canonical
+`previous_result_ref` plus a `response_ledger` in `materials`. For
+`full_on_structural_rework`, build-spec, build-plan and verify-code treat the
+first review as a quality fact, not a pass gate. Verify-code runs its initial
+configured review only after its fresh tests and acceptance evidence are
+complete; it never replaces the accepted build-code final review used for
+verify-stage lineage. A normal repair makes no second provider call; WorkflowHub writes an external
+`wh-review-resolution.v1` audit record with `verified` or `unverified`
+evidence state. It never claims `fixed` or `pass` when that evidence is absent.
+Only when a complete, bound ledger explicitly declares a change to direction,
+AC, interface, schema, state, security, concurrency, topology, phase order or
+test strategy, it runs at most one
+fresh full review through the initial high-strength group. That second finding
+set is also a quality fact: it neither loops nor decides stage acceptance.
+The ledger is controller/audit data and is never sent in a full-review packet.
+`accepted_risk` is recorded and must be shown at the build-plan or verify-code
+human boundary; it does not auto-escalate or block. Callers cannot select a
+round. V2 host configuration fixes make-decision to `single_round`,
+build-spec/build-plan/verify-code to `full_on_structural_rework`, and
+build-code to `full_only`; therefore a V2 non-code stage cannot select a cheap
+closure review. Build-code never uses this shortcut: every repaired phase runs
+a fresh complete phase review, with its existing strict full-review behavior
+unchanged.
 
 The runner supplies `review_instructions`; callers must not add it. A
 `build-code` phase review also adds `phase_id`. `verify-final` replaces
@@ -73,12 +152,31 @@ For a normal worktree review, the host captures tracked changes, deletions, mode
 
 The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
 
+Each bundle also contains `packet-plan.json`: every included file has its byte
+count, authority level, inclusion reason and map relation; contract-forbidden
+material is listed with its exclusion reason. Bytes are telemetry only: there
+is no configured packet cap, size rejection, truncation, or phase-splitting
+rule. A code review carries the complete phase diff and only map-selected
+direct-context excerpts plus deterministic `change-map.json`; raw evidence logs
+remain canonical audit records. For build-code, anchors default to unmodified
+direct dependencies. A changed-file anchor needs `outside_diff_reason` and may
+contain only candidate lines outside every unified-diff hunk; an overlap fails
+loud instead of duplicating changed code. The plan lists every payload file and
+also its own `packet-plan.json` and sealed `manifest.json` metadata entries.
+
 ## Attempts and results
 
 Only two durable record types exist:
 
 - `attempt`: transport, material, provider status, raw output references, and errors. It may end `unavailable`.
 - `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and its declared review subject. A phase result records `phase_id`, `base_tree`, and `candidate_tree`; a worktree result records the captured `snapshot_tree`.
+
+Every attempt also publishes `reviews/reports/<attempt-id>.md`. It is rendered
+only from canonical facts: route/profile/model/thinking, duration and token
+usage (or unavailability), runtime/session IDs, the trusted local broker
+session-state file path, coverage, every provider's findings, root causes,
+correction direction, and unavailable diagnostics. Native CLI session files
+remain provider-private and are never invented.
 
 Transport success is not review success. Authentication, cancellation, timeout, malformed output, missing material, and protocol failure never become a semantic verdict. Raw provider output is retained in the attempt.
 
@@ -92,7 +190,7 @@ Consumers open the referenced formal result and do not trust a copied verdict. `
 
 ## Provider protocol
 
-3rd-review exposes only the public `workflowhub-result.v1` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. One same-session format correction is allowed; if the session is unavailable, one fresh complete review is allowed.
+3rd-review exposes only the public `workflowhub-result.v2` contract. wh-review never reads broker private state, attachment workspaces, or `/tmp/3rd-review`. The canonical attempt stores only public profile, timing, usage, retry, runtime/session IDs, and safe raw-output hashes. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. One same-session format correction is allowed; if the session is unavailable, one fresh complete review is allowed. Build-code has no cycle, time, token, output-size, or repeated-finding stop rule: every repaired phase is reviewed again from its complete current frozen material until its formal review is `pass`.
 
 Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON or one unique fenced JSON object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
 

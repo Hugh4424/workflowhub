@@ -109,17 +109,25 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    scope.
 6. Run the initial review using a frozen packet built from `spec.md`, decision
    facts, and relevant evidence.
-7. If that review has actionable findings, revise the draft once and run at most one revision review.
-   There is no third review in this stage.
+7. If that review has actionable findings, revise the draft directly. The first
+   review is a quality fact, not a pass gate. A response ledger is optional
+   external audit evidence; absent evidence is `unknown/unverified`, never a
+   claimed repair. Only a complete, bound ledger that explicitly declares a
+   change to direction, AC, interface, schema, state, security, concurrency,
+   topology, phase order or test strategy runs at most one revision review: a
+   fresh full review through the initial high-strength group. Its
+   findings also guide revision only: do not use a low-cost closure review, loop,
+   or block stage acceptance on a reviewer verdict.
 8. Before the create-only receipt, reconcile the exact final `spec.md` bytes
-   against every review finding and the planned completion card. Resolve every
-   finding that alleges an internal contradiction, unresolved cross-reference,
-   missing acceptance criterion, or mismatch between claimed and written
-   coverage, even when the provider verdict is `pass`. Enumerate the actual FR
-   and AC identifiers and verify that every stated range and downstream coverage
-   claim resolves to them. If the revision review still reports such a mismatch,
+   against every review finding and the planned completion card. For findings
+   about an internal contradiction, unresolved cross-reference, missing
+   acceptance criterion, or mismatch between claimed and written coverage,
+   compare the written artifact directly; enumerate the actual FR and AC
+   identifiers, and verify that every stated range and downstream coverage claim
+   resolves to them. If this artifact-level reconciliation finds a mismatch,
    stop before acceptance; never publish a completion card that claims more than
-   the artifact contains.
+   the artifact contains. Record any remaining or unverified review response
+   honestly in the stage attempt; it is not a provider pass gate.
 9. After that reconciliation finishes, without changing `spec.md`, create one final create-only receipt
    from its exact content. The normal path must not use a revision receipt
    or create an official receipt from a draft. Publish the append-only stage

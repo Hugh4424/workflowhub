@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "3rd-review public WorkflowHub result v2",
+  "type": "object",
+  "required": ["result_protocol", "provider", "adapter", "model", "effort", "thinking", "status", "material_id", "runtime_id", "session_id", "session_file_path", "continuable", "timing", "usage", "retry", "raw_output_ref", "unavailable_diagnostics", "output", "error"],
+  "properties": {
+    "result_protocol": { "const": "workflowhub-result.v2" },
+    "provider": { "type": "string", "minLength": 1 },
+    "adapter": { "type": "string", "minLength": 1 },
+    "model": { "type": ["string", "null"] },
+    "effort": { "type": ["string", "null"] },
+    "thinking": { "type": ["boolean", "null"] },
+    "status": { "enum": ["completed", "failed", "cancelled"] },
+    "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "runtime_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": ["string", "null"] },
+    "session_file_path": { "type": "null" },
+    "continuable": { "type": "boolean" },
+    "timing": {
+      "type": "object",
+      "required": ["started_at_ms", "completed_at_ms", "duration_ms"],
+      "properties": {
+        "started_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "usage": { "type": ["object", "null"] },
+    "retry": {
+      "type": "object",
+      "required": ["count", "progress_events"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "progress_events": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "raw_output_ref": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["version", "runtime_id", "provider", "stdout_sha256", "stderr_sha256"],
+          "properties": {
+            "version": { "const": "broker-output-ref.v1" },
+            "runtime_id": { "type": "string", "minLength": 1 },
+            "provider": { "type": "string", "minLength": 1 },
+            "stdout_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "stderr_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "unavailable_diagnostics": { "type": ["object", "null"] },
+    "output": { "type": ["string", "null"] },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "type": "string", "minLength": 1 },
+            "message": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

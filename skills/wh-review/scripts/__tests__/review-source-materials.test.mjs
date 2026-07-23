@@ -25,6 +25,7 @@ function fixture() {
   writeFileSync(join(target, "keep.txt"), "base\n");
   writeFileSync(join(target, "delete.txt"), "delete\n");
   writeFileSync(join(target, "rename.txt"), "rename\n");
+  writeFileSync(join(target, "context-change.txt"), `${Array.from({ length: 12 }, (_value, index) => `line-${index + 1}`).join("\n")}\n`);
   writeFileSync(join(target, ".gitignore"), "ignored.txt\n");
   git(target, ["add", "-A"]); git(target, ["commit", "-m", "base"]);
   git(target, ["worktree", "add", "-b", "feature", source]);
@@ -163,7 +164,8 @@ describe("review source capture", () => {
     expect(source.changedFiles.map(({ path }) => path)).toEqual(expect.arrayContaining(paths));
     const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests", review_instructions: reviewInstructionsFor("build-code") } });
-    expect(bundle.files).toEqual(expect.arrayContaining(paths.map((path) => `changed/${path}`)));
+    expect(bundle.files).toContain("changes.diff");
+    expect(bundle.files.some((path) => path.startsWith("changed/"))).toBe(false);
   });
 
   it("rejects a missing or non-ancestor supplied baseline", () => {
@@ -198,7 +200,7 @@ describe("review source capture", () => {
 });
 
 describe("review materials", () => {
-  it("preserves canonical receipt/output bytes and closes their manifest graph", () => {
+  it("preserves the canonical receipt but excludes recursive raw test output", () => {
     const f = fixture(); changeAll(f.source);
     const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const output = Buffer.from("real test output\n");
@@ -209,13 +211,21 @@ describe("review materials", () => {
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: instructions } });
     expect(readFileSync(join(bundle.bundleRoot, "canonical/receipts/tests.json"))).toEqual(receipt);
-    expect(readFileSync(join(bundle.bundleRoot, "canonical/evidence/tests-output.txt"))).toEqual(output);
-    for (const ref of ["canonical/receipts/tests.json", "canonical/evidence/tests-output.txt"]) {
+    expect(bundle.files).not.toContain("canonical/evidence/tests-output.txt");
+    for (const ref of ["canonical/receipts/tests.json"]) {
       const bytes = readFileSync(join(bundle.bundleRoot, ...ref.split("/")));
       expect(bundle.manifest.find((item) => item.path === ref)?.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
     }
     const graph = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"));
-    expect(graph.map(({ source_ref }) => source_ref).sort()).toEqual(["evidence/tests-output.txt", "receipts/tests.json"]);
+    expect(graph.map(({ source_ref }) => source_ref).sort()).toEqual(["receipts/tests.json"]);
+    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({ output_hash: createHash("sha256").update(output).digest("hex"), raw_output_included: false });
+    const plan = JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8"));
+    expect(plan).toMatchObject({ schema_version: "wh-review-packet-plan.v1", stage: "build-code" });
+    expect(plan.included).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "changes.diff", authority: "required", inclusion_reason: "complete_phase_diff" }),
+      expect.objectContaining({ path: "canonical/receipts/tests.json", authority: "evidence" }),
+    ]));
+    expect(plan.delivery_bytes).toBe(bundle.deliveryManifest.reduce((total, entry) => total + entry.bytes, 0));
   });
 
   it("freezes the same canonical evidence closure for verify-code", () => {
@@ -223,7 +233,7 @@ describe("review materials", () => {
     const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") } });
     const refs = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8")).map(({ source_ref }) => source_ref).sort();
-    expect(refs).toEqual(["evidence/acceptance-ac-1.json", "evidence/tests-output.txt", "evidence/verify-evidence.json", "receipts/tests.json"]);
+    expect(refs).toEqual(["evidence/verify-evidence.json", "receipts/tests.json"]);
     for (const ref of refs) expect(bundle.manifest.map(({ path }) => path)).toContain(`canonical/${ref}`);
   });
 
@@ -245,14 +255,16 @@ describe("review materials", () => {
   });
 
   it.each([
-    ["missing output entity", false, false],
+    ["missing raw output is excluded", false, false],
     ["receipt hash mismatch", true, true],
-  ])("fails evidence closure before delivery: %s", (_label, includeOutput, wrongHash) => {
+  ])("validates selected evidence roots before delivery: %s", (_label, includeOutput, wrongHash) => {
     const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const output = Buffer.from("output\n"), receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/out.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
     const task = evidenceTask(f, receipt, output, { includeOutput });
     const evidence = { receipt_ref: "receipts/tests.json", receipt_hash: wrongHash ? "0".repeat(64) : createHash("sha256").update(receipt).digest("hex") };
-    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: reviewInstructionsFor("build-code") } })).toThrow(/MATERIAL_INCOMPLETE|evidence|hash|output|ENOENT/i);
+    const build = () => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: reviewInstructionsFor("build-code") } });
+    if (wrongHash) expect(build).toThrow(/MATERIAL_INCOMPLETE|evidence|hash|output|ENOENT/i);
+    else expect(build().files).not.toContain("canonical/evidence/out.txt");
   });
 
   it("keeps every manifest skill file present and exactly named in review instructions", () => {
@@ -277,6 +289,11 @@ describe("review materials", () => {
     });
     expect(direction.files).not.toEqual(expect.arrayContaining(["changes.diff", "changed/added.txt"]));
     expect(direction.files).not.toContain("source.json");
+    const directionPlan = JSON.parse(readFileSync(join(direction.bundleRoot, "packet-plan.json"), "utf8"));
+    expect(directionPlan.excluded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: "source_bundle", reason: "stage_contract_does_not_require_a_diff" }),
+      expect.objectContaining({ category: "material:proposed_solution", reason: "forbidden_by_stage_contract" }),
+    ]));
     expect(direction.files).toEqual(expect.arrayContaining(["contracts/make-decision.md", "skills/plan-ceo-review/SKILL.md", "skills/review/SKILL.md"]));
     expect(() => buildReviewMaterials({
       reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "make-decision", reviewTrack: "direction",
@@ -287,9 +304,9 @@ describe("review materials", () => {
       reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewTrack: null,
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
     });
-    expect(code.files).toEqual(expect.arrayContaining(["changes.diff", "changed/added.txt", "changed/link.txt", "changed/untracked.txt", "contracts/build-code.md", "skills/simplicity-guard/SKILL.md"]));
+    expect(code.files).toEqual(expect.arrayContaining(["changes.diff", "contracts/build-code.md", "skills/simplicity-guard/SKILL.md"]));
+    expect(code.files.some((path) => path.startsWith("changed/"))).toBe(false);
     expect(code.files).toContain("contracts/provider-protocol.md");
-    expect(readFileSync(join(code.bundleRoot, "changed", "link.txt"), "utf8")).toBe("added.txt");
     const repeated = buildReviewMaterials({
       reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewTrack: null,
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
@@ -309,11 +326,120 @@ describe("review materials", () => {
       .toBe("2459e73e3f3a754519fc84a9e9e616010c0e43e80d3e218a10316665d84922bf");
   });
 
+  it("tracks packet bytes without a budget gate", () => {
+    const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec",
+      materials: { raw_requirement: "x".repeat(128 * 1024), approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") } });
+    expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(128 * 1024);
+    expect(bundle.packetPlan).not.toHaveProperty("budget_bytes");
+  });
+
+  it("requires explicit complete-or-unknown maps for wh_review.v2 routes", () => {
+    const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const base = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true, materials: base }))
+      .toThrow(/wh_review\.v2 requires context_map/);
+    const map = { state: "complete", summary: "one checked authority", entries: [{ id: "ctx-1", subject: "existing contract", rationale: "it defines the public boundary", anchors: [{ id: "ctx-1-source", path: "keep.txt", start_line: 1, end_line: 1, role: "existing_contract", reason: "direct boundary" }] }] };
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true,
+      materials: { ...base, context_map: map, evidence_map: { state: "unknown", summary: "no runtime evidence exists", entries: [], unknown_reason: "implementation has not started" } } });
+    expect(bundle.files).toEqual(expect.arrayContaining(["requirements/context_map.json", "requirements/evidence_map.json"]));
+    expect(bundle.files).toContain("context/ctx-1-source.txt");
+    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([expect.objectContaining({ path: "context/ctx-1-source.txt", map_relation: expect.objectContaining({ map: "context_map", entry_id: "ctx-1", anchor_id: "ctx-1-source" }) })]));
+  });
+
+  it("requires build-code acceptance maps to name and map every declared AC", () => {
+    const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const changeIds = source.changedFiles.map((item) => `C-${createHash("sha256").update(JSON.stringify([item.path, item.old_path, item.status, item.mode, item.old_mode, item.blob, item.old_blob])).digest("hex").slice(0, 16)}`);
+    const output = Buffer.from("tests pass\n"); const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
+    const task = evidenceTask(f, receipt, output); const test_evidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
+    const base = {
+      approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence, review_instructions: reviewInstructionsFor("build-code"),
+      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete phase", change_ids: changeIds }] },
+      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer", change_ids: changeIds, anchors: [{ id: "impact-source", path: ".gitignore", start_line: 1, end_line: 1, role: "consumer", reason: "direct consumer" }] }] },
+      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "existing helper", rationale: "reviewed", change_ids: [changeIds[0]], anchors: [{ id: "reuse-source", path: ".gitignore", start_line: 1, end_line: 1, role: "reuse", reason: "checked helper" }] }] },
+    };
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", strictV2Maps: true,
+      materials: { ...base, acceptance_map: { state: "complete", summary: "generic", entries: [{ id: "AC-1", subject: "AC", rationale: "generic" }] } } }))
+      .toThrow(/acceptance_map\.acceptance_ids/);
+    const acceptance_map = { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["impact-source"], verification_anchor_ids: ["reuse-source"], anchors: [{ id: "ac-source", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "AC implementation" }] }] };
+    const changedImpact = {
+      ...base,
+      impact_map: { ...base.impact_map, entries: [{ ...base.impact_map.entries[0], anchors: [{ id: "impact-source", path: "keep.txt", start_line: 1, end_line: 1, role: "consumer", reason: "direct consumer" }] }] }
+    };
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true, materials: { ...changedImpact, acceptance_map } }))
+      .toThrow(/changed file keep\.txt and requires outside_diff_reason/);
+    const hunkRepeatingImpact = {
+      ...changedImpact,
+      impact_map: { ...changedImpact.impact_map, entries: [{ ...changedImpact.impact_map.entries[0], anchors: [{ ...changedImpact.impact_map.entries[0].anchors[0], outside_diff_reason: "need surrounding call site" }] }] }
+    };
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true, materials: { ...hunkRepeatingImpact, acceptance_map } }))
+      .toThrow(/overlaps a candidate hunk.*changes\.diff is the only authority/);
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true,
+      materials: { ...base, acceptance_map } });
+    expect(bundle.files).toContain("requirements/acceptance_map.json");
+    const changeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
+    expect(changeMap).toMatchObject({ schema_version: "wh-review-change-map.v1", phase_id: "phase-1", base_tree: source.baseTree, candidate_tree: source.snapshotTree, changes: expect.arrayContaining([expect.objectContaining({ change_id: changeIds[0] })]) });
+    expect(changeMap.changes.find(({ path }) => path === "keep.txt")?.hunks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "unified", header: expect.stringMatching(/^@@/) }),
+    ]));
+    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "packet-plan.json", inclusion_reason: "packet_plan_self" }),
+      expect.objectContaining({ path: "manifest.json", inclusion_reason: "sealed_delivery_manifest" }),
+    ]));
+    for (const path of bundle.files.filter((item) => item.startsWith("context/"))) {
+      const [header] = readFileSync(join(bundle.bundleRoot, path), "utf8").split("\n", 1);
+      expect(JSON.parse(header)).toMatchObject({ changed_file: false, outside_diff_reason: null });
+    }
+  });
+
+  it("allows a declared changed-file context exception only outside complete diff hunks", () => {
+    const f = fixture();
+    const lines = Array.from({ length: 12 }, (_value, index) => `line-${index + 1}`);
+    lines[5] = "changed-line-6";
+    writeFileSync(join(f.source, "context-change.txt"), `${lines.join("\n")}\n`);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const changeIds = source.changedFiles.map((item) => `C-${createHash("sha256").update(JSON.stringify([item.path, item.old_path, item.status, item.mode, item.old_mode, item.blob, item.old_blob])).digest("hex").slice(0, 16)}`);
+    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: "0".repeat(64) })}\n`);
+    const task = evidenceTask(f, receipt, Buffer.from("tests pass\n"));
+    const materials = {
+      approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") }, review_instructions: reviewInstructionsFor("build-code"),
+      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete", change_ids: changeIds }] },
+      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer is below the changed hunk", change_ids: changeIds, anchors: [{ id: "changed-outside-hunk", path: "context-change.txt", start_line: 10, end_line: 12, role: "consumer", reason: "direct dependency call site", outside_diff_reason: "the consumer is outside the changed hunk and is needed to judge the changed contract" }] }] },
+      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "no reusable helper", rationale: "checked", change_ids: [changeIds[0]], not_needed_reason: "the diff has no reusable helper boundary" }] },
+      acceptance_map: { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["changed-outside-hunk"], verification_anchor_ids: ["changed-outside-hunk"], not_needed_reason: "the selected impact anchor is sufficient AC context" }] }
+    };
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true, materials });
+    const [header, ...content] = readFileSync(join(bundle.bundleRoot, "context/changed-outside-hunk.txt"), "utf8").trimEnd().split("\n");
+    expect(JSON.parse(header)).toMatchObject({ path: "context-change.txt", start_line: 10, end_line: 12, changed_file: true, outside_diff_reason: "the consumer is outside the changed hunk and is needed to judge the changed contract" });
+    expect(content).toEqual(["line-10", "line-11", "line-12"]);
+  });
+
+  it("makes an adaptive closure packet delta-only and gives the provider fixed closure instructions", () => {
+    const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan", reviewRound: "closure",
+      materials: { approved_spec: "spec", acceptance_criteria: "ac", draft_plan: "plan", response_ledger: { version: "wh-review-response-ledger.v1", responses: [] }, review_instructions: reviewInstructionsFor("build-plan", null, false, "closure") } });
+    expect(bundle.files).toContain("requirements/response_ledger.json");
+    expect(bundle.files).not.toContain("changes.diff");
+    expect(bundle.files.some((path) => path.startsWith("changed/"))).toBe(false);
+    expect(readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8")).toMatch(/bounded closure review/);
+  });
+
   it("rejects empty required stage material", () => {
     const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
       materials: { approved_spec: "", acceptance_criteria: "ac", test_evidence: [], review_instructions: reviewInstructionsFor("build-code") } }))
       .toThrow(/MATERIAL_INCOMPLETE.*approved_spec/);
+  });
+
+  it("enforces every stage material allowlist and keeps raw logs outside the packet", () => {
+    const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const spec = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", materials: { ...spec, unrelated: "no" } })).toThrow(/MATERIAL_FORBIDDEN.*unrelated/);
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", materials: { ...spec, response_ledger: {} } })).toThrow(/response_ledger.*initial/);
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", materials: { ...spec, change_map: {} } })).toThrow(/not allowed/);
+    const output = Buffer.from("tests\n"), receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
+    const task = evidenceTask(f, receipt, output);
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex"), output_ref: "evidence/tests-output.txt" }, review_instructions: reviewInstructionsFor("build-code") } })).toThrow(/raw output/);
   });
 
   it("adds only the fixed UI lens when ui_scope is explicit", () => {

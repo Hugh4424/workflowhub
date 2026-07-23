@@ -272,7 +272,7 @@ function inventorySkill(entry) {
 
 export function buildSkillsProjection(preflight, now = () => new Date()) {
   const root = preflight.workspace.worktreeRoot;
-  const schema = JSON.parse(fs.readFileSync(path.join(root, "specs/m14a-audit-contract-layer/skills-inventory.schema.json"), "utf8"));
+  const schema = JSON.parse(fs.readFileSync(path.join(root, "schemas/skills-inventory.schema.json"), "utf8"));
   const contract = validateSkillsSchemaContract(schema);
   if (!contract.ok) throw new Error(contract.error.message);
   const catalog = yaml.load(fs.readFileSync(path.join(root, "skills/catalog.yaml"), "utf8"));

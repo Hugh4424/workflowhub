@@ -40,7 +40,7 @@
       "logical_skill_id": "wh-review/verify-code",
       "required_skills": ["qa-only", "verify-change"],
       "review_mode": "lens-only",
-      "invocation": "standalone-diagnostic-only",
+      "invocation": "post-evidence-non-gate",
       "delivery_mode": "file_only"
     }
   }
