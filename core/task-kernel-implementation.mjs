@@ -421,7 +421,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const bindings = [];
     for (const ref of refs) {
       if (ref.task_id === task.identity.taskId) {
-        const source = readAcceptedLocal(ref.stage);
+        const source = readAcceptedLocal(ref.stage, {
+          allowLegacyBuildCode: stage === "verify-code" && ref.stage === "build-code",
+        });
         bindings.push({ task_id: source.accepted.task_id, stage: source.accepted.stage, accepted_ref: source.accepted_ref, integrity_hash: String(source.accepted.integrity_hash).replace(/^sha256:/, "") });
         continue;
       }
