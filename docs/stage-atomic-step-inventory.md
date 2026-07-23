@@ -43,10 +43,11 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | verify-code | 2 | verify-receipts | §5 freshness + §7 trace | stale SHA is info; receipt/trace issue follows D7; intentional no-browser-test is the only L3 skip trace |
 | verify-code | 3 | run-verification-tests | §4 fresh tests + §6 strategy + §8 browser | run fresh; required L3 missing/mismatch is D7 red; no UI skips with record |
 | verify-code | 4 | assemble-facts | AC coverage + human brief | record every AC result; quality anomalies remain visible for the verify stage gate |
-| verify-code | 5 | review-verification | independent review | record pass/revise/unavailable facts; no review result can authorize close |
-| verify-code | 6 | publish-verification-attempt | verification facts | publish all facts, including failures and unknowns, for the verification-stage decision |
-| verify-code | 7 | approve-verification | human checkpoint | accepts passing verification facts only; a failed AC remains an unaccepted attempt and may authorize controlled build-code reopen, never close |
-| verify-code | 8 | publish-verification-result | accepted handoff | close remains an independent plan-hash-bound operation |
+| verify-code | 5 | authenticate-build-review | build-code review lineage | authenticate the active accepted build-code final pass review as acceptance lineage |
+| verify-code | 6 | run-verify-quality-review | non-gate quality review | record configured external review after fresh verification evidence; it cannot replace build-code review lineage or authorize close |
+| verify-code | 7 | publish-verification-attempt | verification facts | publish all facts, including failures and unknowns, for the verification-stage decision without replacing build-code review lineage |
+| verify-code | 8 | approve-verification | human checkpoint | accepts passing verification facts only; a failed AC remains an unaccepted attempt and may authorize controlled build-code reopen, never close |
+| verify-code | 9 | publish-verification-result | accepted handoff | close remains an independent plan-hash-bound operation |
 
 ## P0 boundary
 

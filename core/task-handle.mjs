@@ -679,6 +679,33 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate external wh-review audit records. They are never stage receipts. */
+    listCanonicalReviewResolutionRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const resolutionsRoot = resolve(reviewsRoot, "resolutions");
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, resolutionsRoot, "review resolutions directory");
+      if (!existsSync(resolutionsRoot)) return [];
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const resolutionsIdentity = directorySnapshot(realTaskPath, resolutionsRoot);
+      const refs = readdirSync(resolutionsRoot, { withFileTypes: true })
+        .filter((entry) => entry.name.endsWith(".json"))
+        .map((entry) => {
+          const candidate = resolve(resolutionsRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile() || !/^[a-f0-9]{64}\.json$/.test(entry.name)) {
+            throw new Error(`canonical review resolution must be a regular SHA-256 JSON file: ${entry.name}`);
+          }
+          return `reviews/resolutions/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(resolutionsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate only canonical wh-review attempt envelopes. */
     listCanonicalReviewAttemptRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");

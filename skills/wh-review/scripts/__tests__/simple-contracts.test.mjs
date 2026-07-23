@@ -27,7 +27,7 @@ describe("simple wh-review contracts", () => {
     expect(manifest).toMatchObject({
       stage_materials: "stage-materials.json",
       stage_skill_plan: "stage-skill-plan.json",
-      provider_result_contract: "contracts/workflowhub-result.v1.json"
+      provider_result_contract: "contracts/workflowhub-result.v2.json"
     });
     const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
     expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
@@ -36,10 +36,13 @@ describe("simple wh-review contracts", () => {
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
     for (const file of [
       "contracts/workflowhub-result.v1.json",
+      "contracts/workflowhub-result.v2.json",
       "schemas/attempt.schema.json",
       "schemas/result.schema.json",
+      "schemas/resolution.schema.json",
       "schemas/stage-materials.schema.json",
       "scripts/review-materials.mjs",
+      "scripts/review-controller.mjs",
       "scripts/review-output.mjs",
       "scripts/review-provider-client.mjs",
       "scripts/review-result.mjs",
@@ -129,12 +132,24 @@ describe("simple wh-review contracts", () => {
       ]);
   });
 
-  it("keeps verify-code reviewer lenses available only for standalone diagnostics", () => {
+  it("runs verify-code reviewer lenses after fresh evidence as non-gate quality facts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-code"].required_skills).not.toHaveLength(0);
-    expect(plan.stages["verify-code"].invocation).toBe("standalone-diagnostic-only");
+    expect(plan.stages["verify-code"].invocation).toBe("post-evidence-non-gate");
     for (const stage of ["build-code", "verify-code"])
       for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
+    const projectRoot = join(root, "..");
+    const deps = yaml.load(readFileSync(join(projectRoot, "workflows", "verify-code", "skill-deps.yaml"), "utf8"));
+    expect(deps.skills.find(({ name }) => name === "wh-review"))
+      .toMatchObject({ execution: "inline", invocation: "always", trigger: "fresh_verification_evidence" });
+    const steps = readJson(join(projectRoot, "workflows", "verify-code", "steps.json")).steps;
+    const qualityReview = steps.find(({ step_slug }) => step_slug === "run-verify-quality-review");
+    const publish = steps.find(({ step_slug }) => step_slug === "publish-verification-attempt");
+    expect(qualityReview).toMatchObject({ order: 6, depends_on: [5], completion_evidence: [{ kind: "review", uri_or_path: "review://verify-code-quality" }] });
+    expect(publish).toMatchObject({ order: 7, depends_on: [6] });
+    const contract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
+    expect(contract).toMatch(/标准 verify-code[\s\S]*新鲜测试[\s\S]*acceptance-evidence[\s\S]*wh-review/);
+    expect(contract).toMatch(/非 gate[\s\S]*不能自动接受[\s\S]*receipts\.review/);
   });
 
   it("accepts a terminal attempt and keeps unavailable outside semantic results", () => {

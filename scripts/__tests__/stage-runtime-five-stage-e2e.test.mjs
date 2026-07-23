@@ -125,9 +125,10 @@ describe("official five-stage CLI", () => {
     writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     mkdirSync(join(workspace.worktreeRoot, "specs", "official-chain"), { recursive: true });
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec\n");
-    const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     rejectBareRun("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
-    invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
+    const buildSpec = invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
+    expect(buildSpec.attempt.attempt.missing_items).toContain("review findings recorded; response evidence: unknown/unverified");
     const invalidPlanPrepare = spawnSync(process.execPath, [runtime, "prepare", "--stage=build-plan", "--project=Demo", "--task=official-chain"], { cwd: repo, env, encoding: "utf8" });
     expect(invalidPlanPrepare.status).not.toBe(0);
     expect(invalidPlanPrepare.stderr).toMatch(/prepare is only valid for make-decision/i);
@@ -150,9 +151,10 @@ describe("official five-stage CLI", () => {
     }
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
-    const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     rejectBareRun("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
     const buildPlan = invoke("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
+    expect(buildPlan.attempt.attempt.missing_items).toContain("review findings recorded; response evidence: unknown/unverified");
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",

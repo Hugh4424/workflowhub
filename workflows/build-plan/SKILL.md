@@ -103,12 +103,15 @@ planning step.
 6. Run the initial review over the frozen draft. `spec-analyze` is a
    provider-visible lens loaded only by `wh-review`, not a separate planning
    step. Components do not locate files themselves.
-7. If the current review has actionable findings, revise the affected drafts,
-   publish the changed `plan.md` and `tasks.md`, and run formal review again.
-   Repeat for every changed draft until the current exact drafts have no
-   unresolved actionable finding. There is no numeric review limit. Never repeat
-   review for unchanged snapshot/material: `wh-review` reuses the existing
-   result for that exact identity.
+7. If that review has actionable findings, revise both drafts directly. The
+   first review is a quality fact, not a pass gate. A response ledger is optional
+   external audit evidence; absent evidence is `unknown/unverified`, never a
+   claimed repair. Only a complete, bound ledger that explicitly declares a
+   changed direction, AC, interface, schema, state, security, concurrency,
+   topology, phase order or test strategy runs at most one revision review: a
+   fresh full review through the initial high-strength group. Its findings also guide
+   revision only: no low-cost closure review, no loop, and no reviewer verdict
+   blocks stage acceptance.
 8. After the review sequence finishes, without changing either artifact, create
    one final create-only receipt for `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
    or create official receipts from drafts. Publish the append-only
@@ -121,7 +124,9 @@ planning step.
    build-plan checkpoint and accepts the attempt. The plain-language summary
    has exactly four items: current status; next step and owner; whether the user
    must act; and, when action is required, the problem, a recommended option,
-   and every option's consequence and risk.
+   and every option's consequence and risk. If an external review audit records
+   `accepted_risk`, include the audit ref, affected paths and rationale here;
+   the user must see it before confirming, but it does not auto-block the stage.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.
