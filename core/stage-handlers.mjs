@@ -5,6 +5,7 @@ import { minimumReviewersFor } from "../skills/wh-review/scripts/review-material
 import { parseReviewerOutput } from "../skills/wh-review/scripts/review-output.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
+import { equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -263,7 +264,11 @@ HANDLERS.set("verify-code", async (worker, input) => {
   if (!acceptedBuild.facts.acceptance_coverage) mismatches.push("accepted build-code lacks acceptance_coverage; controlled reopen required");
   if (acceptedRef !== reviewRef || acceptedHash !== reviewHash) mismatches.push("verify-code review must reuse the active accepted build-code final review");
   if (review.subject_kind !== "worktree") mismatches.push("verify-code requires the accepted build-code final full-worktree review");
-  if (tests.facts.snapshot_tree !== review.facts.snapshot_tree || current.tree !== tests.facts.snapshot_tree) mismatches.push("tests, review, and current Workspace snapshot must match");
+  const workspaceRoot = worker.workspace?.worktreeRoot;
+  const snapshotsMatch = workspaceRoot
+    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, review.facts.snapshot_tree)
+    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree);
+  if (!snapshotsMatch) mismatches.push("tests, review, and current Workspace snapshot must match");
   const result = {
     facts: { tests: tests.facts, review: review.facts, evidence_refs: evidence.value.refs },
     evidence_refs: [tests.evidence, review.evidence, evidence.evidence, ...evidence.value.refs, ...nestedEvidence],
