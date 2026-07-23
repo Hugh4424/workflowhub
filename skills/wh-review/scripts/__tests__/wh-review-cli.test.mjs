@@ -39,8 +39,22 @@ describe("wh-review production CLI", () => {
     const mod = await import(cli.href);
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.verifyFinalReview).toBe("function");
+    expect(typeof mod.providerVisibleMaterialsForRound).toBe("function");
     expect(mod.resetReviewFlow).toBeUndefined();
     expect(mod.recoverReviewProjections).toBeUndefined();
+  });
+
+  it("never sends a response ledger to a fresh full review", async () => {
+    const { providerVisibleMaterialsForRound } = await import(cli.href);
+    const materials = {
+      draft_spec: "spec.md",
+      response_ledger: { version: "wh-review-response-ledger.v1" },
+    };
+    expect(providerVisibleMaterialsForRound({ materials, round: "full" })).toEqual({ draft_spec: "spec.md" });
+    expect(providerVisibleMaterialsForRound({ materials, round: "initial" })).toEqual({ draft_spec: "spec.md" });
+    expect(providerVisibleMaterialsForRound({ materials, round: "closure", previousResult: {
+      result_ref: "reviews/results/prior.json", snapshot_tree: "a".repeat(40), adjudication: { clusters: [] },
+    } })).toMatchObject({ draft_spec: "spec.md", response_ledger: materials.response_ledger, previous_review: { result_ref: "reviews/results/prior.json" } });
   });
 
   it("uses the simple runner and no V4 facade or legacy argv", () => {
@@ -104,5 +118,94 @@ describe("wh-review production CLI", () => {
     for (const field of ["providers", "provider_allowlist", "providerAllowlist"]) {
       await expect(runReviewRound({ [field]: ["claude-code"], task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/provider.*forbidden|configured 3rd-review/i);
     }
+  });
+
+  it("keeps closure failures and build-code no-progress counters inside one canonical chain", async () => {
+    const { closureFailureCount } = await import(cli.href);
+    const refs = {
+      "reviews/results/root.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "a".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        attempt_ref: "reviews/attempts/root/attempt.json",
+      },
+      "reviews/results/no-progress-1.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "b".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        review_chain: { round: "full", parent_result_ref: "reviews/results/root.json", root_result_ref: "reviews/results/root.json" },
+        attempt_ref: "reviews/attempts/no-progress-1/attempt.json",
+      },
+      "reviews/results/no-progress-2.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "c".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        review_chain: { round: "full", parent_result_ref: "reviews/results/no-progress-1.json", root_result_ref: "reviews/results/root.json" },
+        attempt_ref: "reviews/attempts/no-progress-2/attempt.json",
+      },
+      "reviews/results/other-chain.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "d".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        review_chain: { round: "closure", parent_result_ref: "reviews/results/other-root.json", root_result_ref: "reviews/results/other-root.json" },
+        attempt_ref: "reviews/attempts/other/attempt.json",
+      },
+      "reviews/results/closure-1.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "b".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        review_chain: { round: "closure", parent_result_ref: "reviews/results/root.json", root_result_ref: "reviews/results/root.json" },
+        attempt_ref: "reviews/attempts/closure-1/attempt.json",
+      },
+      "reviews/results/closure-2.json": {
+        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
+        snapshot_tree: "c".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+        review_chain: { round: "closure", parent_result_ref: "reviews/results/closure-1.json", root_result_ref: "reviews/results/root.json" },
+        attempt_ref: "reviews/attempts/closure-2/attempt.json",
+      },
+      "reviews/attempts/other/attempt.json": { review_policy: { round: "closure" } },
+      "reviews/attempts/root/attempt.json": { review_policy: { round: "initial" } },
+      "reviews/attempts/no-progress-1/attempt.json": { review_policy: { round: "full" } },
+      "reviews/attempts/no-progress-2/attempt.json": { review_policy: { round: "full" } },
+      "reviews/attempts/closure-1/attempt.json": { review_policy: { round: "closure" } },
+      "reviews/attempts/closure-2/attempt.json": { review_policy: { round: "closure" } },
+    };
+    const task = {
+      identity: { taskId: "task" },
+      listCanonicalReviewResultRefs: () => Object.keys(refs).filter((ref) => ref.startsWith("reviews/results/")),
+      readRecord: (ref) => JSON.stringify(refs[ref]),
+    };
+    const prior = { ...refs["reviews/results/no-progress-2.json"], result_ref: "reviews/results/no-progress-2.json" };
+    expect(closureFailureCount(task, "build-code", null, prior)).toBe(2);
+  });
+
+  it("does not dispatch a second structural full review when an old previous ref has an immutable full attempt", async () => {
+    const { selectCanonicalReviewRound, structuralFullAlreadyRecorded } = await import(cli.href);
+    const rootRef = "reviews/results/root.json";
+    const root = {
+      version: "wh-review-result.v1", task_id: "task", stage: "build-spec", review_track: null,
+      subject_kind: "worktree", phase_id: null, result_ref: rootRef, snapshot_tree: "a".repeat(40), verdict: "revise_required",
+      adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
+    };
+    const fullRef = "reviews/results/structural-full.json";
+    const records = {
+      [rootRef]: root,
+      [fullRef]: {
+        ...root, snapshot_tree: "b".repeat(40),
+        review_chain: { round: "full", parent_result_ref: rootRef, root_result_ref: rootRef },
+      },
+      "reviews/attempts/structural-full/attempt.json": {
+        ...root, snapshot_tree: "b".repeat(40),
+        review_chain: { round: "full", parent_result_ref: rootRef, root_result_ref: rootRef },
+      },
+    };
+    const task = {
+      listCanonicalReviewResultRefs: () => [rootRef, fullRef],
+      listCanonicalReviewAttemptRefs: () => ["reviews/attempts/structural-full/attempt.json"],
+      readRecord: (ref) => JSON.stringify(records[ref]),
+    };
+    const ledger = {
+      version: "wh-review-response-ledger.v1", previous_result_ref: rootRef,
+      previous_snapshot_tree: root.snapshot_tree, current_snapshot_tree: "b".repeat(40),
+      responses: [{ finding_id: "F-123456789abc", status: "fixed", rationale: "structural schema rework", changed_dimensions: ["schema"], evidence_refs: ["evidence/fix.json"] }],
+    };
+    expect(structuralFullAlreadyRecorded(task, root)).toBe(true);
+    expect(selectCanonicalReviewRound({ task, stage: "build-spec", route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] }, previousResult: root, ledger, currentSnapshotTree: ledger.current_snapshot_tree }))
+      .toEqual({ round: "none", reason: "structural_rework_already_reviewed" });
   });
 });

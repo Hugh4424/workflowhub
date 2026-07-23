@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { officialStageHandler } from "../core/stage-handlers.mjs";
 import { validateStageFacts } from "../core/task-kernel.mjs";
+import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
@@ -11,14 +12,28 @@ describe("final cutover guard contracts", () => {
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "evidence/test.txt", output_hash: sha });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree, subjectKind = "worktree") => {
     const reviewStage = stage === "verify-code" ? "build-code" : stage;
-    const providerFinding = { severity: "major", path: "fixture", issue: "fixture", recommendation: "revise" };
+    const providerFinding = {
+      severity: "major",
+      path: "fixture",
+      issue: "fixture",
+      root_cause: "fixture review identifies an anchored issue",
+      recommendation: "revise",
+      evidence_kind: "direct",
+      evidence: "fixture evidence is anchored to the fixture path",
+    };
     const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [providerFinding] };
+    const aggregation = ["pass", "revise_required"].includes(verdict) ? aggregateProviderResults([{ provider: "fixture-provider", review: providerOutput }], 1) : null;
+    const resultVerdict = aggregation?.verdict ?? verdict;
+    const resultFindings = aggregation
+      ? aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item }))
+      : [{ provider: "fixture-provider", severity: providerFinding.severity, path: providerFinding.path, issue: providerFinding.issue, recommendation: providerFinding.recommendation }];
     return { version: "wh-review-result.v1", task_id: "task", stage: reviewStage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
       subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, base_tree: tree, candidate_tree: snapshotTree,
       material_id: sha, attempt_ref: `reviews/attempts/${stage}-attempt/attempt.json`,
-      provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict,
-      findings: verdict === "pass" ? [] : [{ provider: "fixture-provider", ...providerFinding }] };
+      provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict: resultVerdict,
+      findings: resultFindings,
+      ...(aggregation ? { adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters } } : {}) };
   };
   const workerFor = (stage, values, currentTree = tree) => {
     for (const result of Object.values(values).filter((value) => value?.version === "wh-review-result.v1")) {
@@ -93,15 +108,34 @@ describe("final cutover guard contracts", () => {
     expect(checkpointCalls).toBe(0);
   });
 
-  it("rejects a stale build-spec review tree before creating a checkpoint", async () => {
+  it("records a stale revise-required build-spec review as a non-gate quality fact", async () => {
     const stage = "build-spec", content = "# Spec\n", values = {
       "receipts/spec.json": canonical(stage, { producer: { stage, component: "spec", version: "1" }, content, content_hash: createHash("sha256").update(content).digest("hex") }),
-      "reviews/results/review.json": reviewReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
     };
     let checkpointCalls = 0;
     const worker = { ...workerFor(stage, values, "c".repeat(40)), readArtifact: () => content, createCheckpoint: () => { checkpointCalls += 1; return {}; }, artifactRef: () => "specs/task/spec.md" };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } })).rejects.toThrow(/same snapshot tree/i);
-    expect(checkpointCalls).toBe(0);
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } }))
+      .resolves.toMatchObject({ facts: { review: { verdict: "revise_required" } }, missing_items: ["review findings recorded; response evidence: unknown/unverified"] });
+    expect(checkpointCalls).toBe(1);
+  });
+
+  it("surfaces accepted risk from external audit at the build-plan human boundary without making it a stage fact", async () => {
+    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n", auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
+    const values = {
+      "receipts/plan.json": canonical(stage, { producer: { stage, component: "plan", version: "1" }, content: plan, content_hash: createHash("sha256").update(plan).digest("hex") }),
+      "receipts/tasks.json": canonical(stage, { producer: { stage, component: "tasks", version: "1" }, content: tasks, content_hash: createHash("sha256").update(tasks).digest("hex") }),
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    const worker = {
+      ...workerFor(stage, values), readArtifact: (name) => name === "plan.md" ? plan : tasks,
+      createCheckpoint: () => ({}), artifactRef: (name) => `specs/task/${name}`,
+      listReviewAuditRefs: () => [auditRef],
+      readReviewAudit: () => ({ value: { version: "wh-review-resolution.v1", task_id: "task", stage, outcome: "recorded_non_gate_response", accepted_risk_count: 1 }, sha256: sha }),
+    };
+    const outcome = await officialStageHandler(stage)(worker, { receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" } });
+    expect(outcome.facts).not.toHaveProperty("review_audit");
+    expect(outcome.missing_items).toContain(`accepted risk recorded in external wh-review audit: ${auditRef}; present it to the human confirmer`);
   });
 
   it("records a real failing test command as a quality fact", async () => {
@@ -226,7 +260,7 @@ describe("final cutover guard contracts", () => {
     const output = values[attempt.provider_attempts[0].output_ref];
     output.content = JSON.stringify({ verdict: "revise_required", summary: "must revise", findings: [{ severity: "major", path: "src/a.js", issue: "bug", recommendation: "fix it" }] });
     output.content_hash = createHash("sha256").update(output.content).digest("hex");
-    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/semantic output mismatch|verdict does not match/i);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/OUTPUT_INVALID|semantic output mismatch|verdict does not match/i);
   });
 
   it("rejects build-code receipts bound to different snapshot trees", async () => {
@@ -248,13 +282,14 @@ describe("final cutover guard contracts", () => {
       .rejects.toThrow(/final review.*full-worktree/i);
   });
 
-  it("rejects verify-code when tests/review no longer match the current tree", async () => {
+  it("publishes a verify failure when tests/review no longer match the current tree", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values, "c".repeat(40)), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/current.*snapshot|must match/i);
+    await expect(officialStageHandler(stage)(workerFor(stage, values, "c".repeat(40)), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } }))
+      .resolves.toMatchObject({ verification_failure: true, reason: expect.stringMatching(/current.*snapshot|must match/i) });
   });
 
   it("rejects acceptance evidence without stable criterion identity and schema", async () => {

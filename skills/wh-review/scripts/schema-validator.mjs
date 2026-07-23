@@ -4,6 +4,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 const SCHEMAS = {
   attempt: "attempt.schema.json",
   result: "result.schema.json",
+  resolution: "resolution.schema.json",
 };
 
 // Conditional `required` clauses intentionally target properties declared at

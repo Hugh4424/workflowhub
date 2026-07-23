@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
 import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
-import { aggregateProviderResults, reviewRefs, writeAttempt, writeProviderOutput, writeSemanticResult } from "./review-result.mjs";
+import { aggregateProviderResults, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
+import { validateResponseLedger } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 
 const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUABLE_SESSION"]);
@@ -14,10 +16,17 @@ const errorPriority = ["MATERIAL_INCOMPLETE", "PROTOCOL_INCOMPATIBLE", "OUTPUT_I
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 const providerPrompt = "Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
-const REVIEW_LOCK_WAIT_MS = 5 * 60 * 1000;
 const localReviewLocks = new Map();
+const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const OID = /^[a-f0-9]{40,64}$/;
 
-async function withLocalReviewLock(task, lockRef, waitMs, operation) {
+function protocolFailure(message) {
+  const error = new Error(`PROTOCOL_INCOMPATIBLE: ${message}`);
+  error.code = "PROTOCOL_INCOMPATIBLE";
+  return error;
+}
+
+async function withLocalReviewLock(task, lockRef, operation) {
   const key = JSON.stringify([task.identity.projectName, task.identity.taskId, lockRef]);
   const previous = localReviewLocks.get(key) ?? Promise.resolve();
   let release;
@@ -27,25 +36,28 @@ async function withLocalReviewLock(task, lockRef, waitMs, operation) {
     release();
     if (localReviewLocks.get(key) === current) localReviewLocks.delete(key);
   };
-  let timeout; let acquired = false;
   try {
-    await Promise.race([previous, new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(new Error(`timed out waiting for record lock: ${lockRef}`)), waitMs);
-    })]);
-    acquired = true;
-    clearTimeout(timeout); timeout = undefined;
+    await previous;
     return await operation();
   }
   finally {
-    clearTimeout(timeout);
-    if (acquired) finish();
-    else void previous.then(finish);
+    finish();
   }
 }
 
-function reviewLockRef({ stage, reviewTrack, snapshotTree, materialId }) {
-  const identity = JSON.stringify([stage, reviewTrack, snapshotTree, materialId]);
+function reviewLockRef({ stage, reviewTrack, snapshotTree, materialId, reviewChain }) {
+  const identity = JSON.stringify([stage, reviewTrack, snapshotTree, materialId, reviewChain ?? null]);
   return `locks/reviews/${createHash("sha256").update(identity).digest("hex")}.lock`;
+}
+
+function managedRequestId({ taskId, stage, reviewTrack, subject, snapshotTree, materialId, reviewChain, hostProvider, providers, continuationRuntimeId }) {
+  const identity = canonicalJson({
+    version: "wh-review-dispatch.v1", task_id: taskId, stage, review_track: reviewTrack,
+    subject, snapshot_tree: snapshotTree, material_id: materialId, review_chain: reviewChain ?? null,
+    host_provider: hostProvider, provider_allowlist: providers, prompt_sha256: createHash("sha256").update(providerPrompt).digest("hex"),
+    continuation_runtime_id: continuationRuntimeId ?? null,
+  });
+  return `wh-review-${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 function sourceRecord(source) {
@@ -56,11 +68,201 @@ function subjectRecord(source, phaseId) {
   return { subject_kind: phaseId ? "phase" : "worktree", phase_id: phaseId ?? null, base_tree: source.baseTree, candidate_tree: source.snapshotTree };
 }
 
-function matchesReviewIdentity(record, { taskId, stage, reviewTrack, subject, snapshotTree, materialId }) {
+function stringList(value, label) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) throw new TypeError(label + " must be a string array");
+  return [...value];
+}
+
+function adapterOf(provider) { return provider.split("/", 1)[0]; }
+
+function uniqueAdapterProfiles(providers, label) {
+  const adapters = new Set();
+  for (const provider of providers) {
+    const adapter = adapterOf(provider);
+    if (adapters.has(adapter)) throw new TypeError(label + " must contain at most one profile per adapter");
+    adapters.add(adapter);
+  }
+  return providers;
+}
+
+function normalizeRequestedProfileSpecs(value, requestedProfiles) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError("reviewPolicy.requested_profile_specs is invalid");
+  const specs = value.map((profile) => {
+    if (!profile || typeof profile !== "object" || Array.isArray(profile) || typeof profile.provider !== "string" ||
+        (profile.model !== null && typeof profile.model !== "string") ||
+        (profile.effort !== null && typeof profile.effort !== "string") ||
+        (profile.thinking !== null && typeof profile.thinking !== "boolean") ||
+        !Number.isSafeInteger(profile.priority) || profile.priority < 0) {
+      throw new TypeError("reviewPolicy.requested_profile_specs is invalid");
+    }
+    return { provider: profile.provider, model: profile.model, effort: profile.effort, thinking: profile.thinking, priority: profile.priority };
+  });
+  if (specs.length !== requestedProfiles.length || specs.some((profile, index) => profile.provider !== requestedProfiles[index])) {
+    throw new TypeError("reviewPolicy.requested_profile_specs must pin requested_profiles in priority order");
+  }
+  return specs;
+}
+
+function reviewPolicyRecord(value) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value) || !["wh_review.v2", "legacy_3rd_review"].includes(value.source)) throw new TypeError("reviewPolicy is invalid");
+  if (typeof value.mode !== "string" || !["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"].includes(value.mode)) throw new TypeError("reviewPolicy.mode is invalid");
+  if (value.minimum_heterologous !== null && (!Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1)) throw new TypeError("reviewPolicy.minimum_heterologous is invalid");
+  if (value.source === "wh_review.v2" && value.minimum_heterologous === null) throw new TypeError("wh_review.v2 requires reviewPolicy.minimum_heterologous");
+  const effectiveProfiles = Array.isArray(value.effective_profiles) ? value.effective_profiles.map((profile) => {
+    if (!profile || typeof profile !== "object" || Array.isArray(profile) || typeof profile.provider !== "string" || typeof profile.adapter !== "string") throw new TypeError("reviewPolicy.effective_profiles is invalid");
+    if (profile.model !== null && typeof profile.model !== "string") throw new TypeError("reviewPolicy effective model is invalid");
+    if (profile.effort !== null && typeof profile.effort !== "string") throw new TypeError("reviewPolicy effective effort is invalid");
+    if (profile.thinking !== null && typeof profile.thinking !== "boolean") throw new TypeError("reviewPolicy effective thinking is invalid");
+    return { provider: profile.provider, adapter: profile.adapter, model: profile.model, effort: profile.effort, thinking: profile.thinking };
+  }) : (() => { throw new TypeError("reviewPolicy.effective_profiles is invalid"); })();
+  const requestedProfiles = stringList(value.requested_profiles, "reviewPolicy.requested_profiles");
+  const requestedProfileSpecs = normalizeRequestedProfileSpecs(value.requested_profile_specs, requestedProfiles);
+  const eligibleProfiles = uniqueAdapterProfiles(stringList(value.eligible_profiles, "reviewPolicy.eligible_profiles"), "reviewPolicy.eligible_profiles");
+  if (effectiveProfiles.length !== eligibleProfiles.length || effectiveProfiles.some((profile, index) =>
+    profile.provider !== eligibleProfiles[index] || profile.adapter !== adapterOf(profile.provider))) {
+    throw new TypeError("reviewPolicy.effective_profiles must represent eligible_profiles in priority order");
+  }
+  return {
+    source: value.source, mode: value.mode, minimum_heterologous: value.minimum_heterologous,
+    requested_profiles: requestedProfiles,
+    ...(requestedProfileSpecs.length ? { requested_profile_specs: requestedProfileSpecs } : {}),
+    eligible_profiles: eligibleProfiles,
+    same_source_exclusions: stringList(value.same_source_exclusions, "reviewPolicy.same_source_exclusions"),
+    effective_profiles: effectiveProfiles,
+    round: value.round === undefined ? "legacy" : (() => {
+      if (!["initial", "closure", "full", "legacy"].includes(value.round)) throw new TypeError("reviewPolicy.round is invalid");
+      return value.round;
+    })(),
+  };
+}
+
+// Stage-material defaults exist for legacy 3rd-review records only. A v2
+// route is the authority for its own quorum, including adaptive closure.
+function minimumReviewersForPolicy(policy, stage, reviewTrack) {
+  return policy?.source === "wh_review.v2"
+    ? policy.minimum_heterologous
+    : minimumReviewersFor(stage, reviewTrack);
+}
+
+function minimumReviewersForAttempt(attempt) {
+  return minimumReviewersForPolicy(reviewPolicyRecord(attempt.review_policy ?? null), attempt.stage, attempt.review_track);
+}
+
+function profilePriorityForAttempt(attempt) {
+  const policy = reviewPolicyRecord(attempt.review_policy ?? null);
+  return policy?.requested_profiles ?? [...new Set((attempt.provider_attempts ?? []).map(({ provider }) => provider))];
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  if (value && typeof value === "object") return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + canonicalJson(value[key])).join(",") + "}";
+  return JSON.stringify(value);
+}
+
+function hashCanonical(value) {
+  return createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
+
+function reviewChainRecord(value, { task, taskId, stage, reviewTrack, subject, source, reviewRound, controlLedger, policy, fixtureSourceToken }) {
+  // Authentic captures always include the diff. Isolated fixture seams may
+  // omit it; hash the empty fixture value instead of making review routing
+  // depend on an undefined byte stream.
+  const sourceDiffHash = createHash("sha256").update(source.diff ?? "").digest("hex");
+  if (value === null || value === undefined) {
+    if (policy?.source === "wh_review.v2" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
+      throw new TypeError("wh_review.v2 requires a controller-derived reviewChain");
+    }
+    if (policy?.source !== "wh_review.v2") return null;
+    return {
+      version: "wh-review-chain.v1", round: reviewRound,
+      parent_result_ref: null, root_result_ref: null, prior_snapshot_tree: null,
+      current_snapshot_tree: source.snapshotTree, response_ledger_sha256: null,
+      source_diff_sha256: sourceDiffHash,
+    };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("reviewChain is invalid");
+  const allowed = new Set(["version", "round", "parent_result_ref", "root_result_ref", "prior_snapshot_tree", "current_snapshot_tree", "response_ledger_sha256"]);
+  for (const key of Object.keys(value)) if (!allowed.has(key)) throw new TypeError(`reviewChain.${key} is not supported`);
+  if (value.version !== "wh-review-chain.v1" || value.round !== reviewRound || !OID.test(value.current_snapshot_tree ?? "") ||
+      value.current_snapshot_tree !== source.snapshotTree) {
+    throw new TypeError("reviewChain does not bind the captured source snapshot");
+  }
+  const parentRef = value.parent_result_ref;
+  const rootRef = value.root_result_ref;
+  const priorSnapshot = value.prior_snapshot_tree;
+  const ledgerHash = value.response_ledger_sha256;
+  if (parentRef === null) {
+    if (rootRef !== null || priorSnapshot !== null || ledgerHash !== null || !["initial", "legacy"].includes(reviewRound)) {
+      throw new TypeError("root reviewChain cannot claim parent evidence");
+    }
+  } else {
+    if (!RESULT_REF.test(parentRef ?? "") || !RESULT_REF.test(rootRef ?? "") || !OID.test(priorSnapshot ?? "")) {
+      throw new TypeError("reviewChain parent provenance is invalid");
+    }
+    let parent;
+    try { parent = JSON.parse(task.readRecord(parentRef)); }
+    catch (error) { throw new Error(`reviewChain parent cannot be read: ${error.message}`); }
+    if (parent?.version !== "wh-review-result.v1" || parent.task_id !== taskId || parent.stage !== stage || parent.review_track !== reviewTrack ||
+        parent.subject_kind !== subject.subject_kind || parent.phase_id !== subject.phase_id || parent.snapshot_tree !== priorSnapshot) {
+      throw new Error("reviewChain parent does not match the current review subject");
+    }
+    const expectedRoot = RESULT_REF.test(parent.review_chain?.root_result_ref ?? "") ? parent.review_chain.root_result_ref : parentRef;
+    if (rootRef !== expectedRoot) throw new Error("reviewChain root does not match its canonical parent");
+    if (typeof ledgerHash !== "string" || !/^[a-f0-9]{64}$/.test(ledgerHash)) throw new TypeError("follow-up reviewChain requires response ledger hash");
+    const ledger = validateResponseLedger(controlLedger);
+    if (hashCanonical(ledger) !== ledgerHash || ledger.previous_result_ref !== parentRef ||
+        ledger.previous_snapshot_tree !== priorSnapshot || ledger.current_snapshot_tree !== source.snapshotTree) {
+      throw new Error("reviewChain response ledger does not bind its parent and source snapshot");
+    }
+  }
+  return {
+    version: "wh-review-chain.v1", round: reviewRound,
+    parent_result_ref: parentRef, root_result_ref: rootRef, prior_snapshot_tree: priorSnapshot,
+    current_snapshot_tree: source.snapshotTree, response_ledger_sha256: ledgerHash,
+    source_diff_sha256: sourceDiffHash,
+  };
+}
+
+function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) {
+  if (!policy) return null;
+  const selectedProfiles = [...policy.eligible_profiles];
+  return {
+    mode: stage === "build-code" && policy.mode === "full_only" && selectedProfiles.length === 1
+      ? "single_external"
+      : "parallel_external",
+    selected_profiles: selectedProfiles,
+    selected_count: selectedProfiles.length,
+    valid_provider_count: aggregation.valid.length,
+    minimum_required: minimumReviewers,
+  };
+}
+
+function evidenceAnchorsFor(reviewed, bundle) {
+  if (!Array.isArray(bundle.manifest) || bundle.manifest.length === 0) return reviewed;
+  const manifestPaths = new Set(bundle.manifest.map(({ path }) => path));
+  return reviewed.map((item) => {
+    if (!item.review) return item;
+    const evidenceAnchors = item.review.findings.map((finding) => {
+      if (!["direct", "machine"].includes(finding.evidence_kind)) return true;
+      if (!manifestPaths.has(finding.path)) return false;
+      if (finding.evidence_kind === "machine" && !finding.path.startsWith("canonical/")) return false;
+      if (finding.line === undefined) return true;
+      try {
+        return readFileSync(join(bundle.bundleRoot, ...finding.path.split("/")), "utf8").split(/\r?\n/).length >= finding.line;
+      } catch { return false; }
+    });
+    return { ...item, evidenceAnchors };
+  });
+}
+
+function matchesReviewIdentity(record, { taskId, stage, reviewTrack, subject, snapshotTree, materialId, reviewChain = undefined }) {
   return record?.task_id === taskId && record.stage === stage && record.review_track === reviewTrack &&
     record.snapshot_tree === snapshotTree && record.material_id === materialId &&
     record.subject_kind === subject.subject_kind && record.phase_id === subject.phase_id &&
-    record.base_tree === subject.base_tree && record.candidate_tree === subject.candidate_tree;
+    record.base_tree === subject.base_tree && record.candidate_tree === subject.candidate_tree &&
+    (reviewChain === undefined || isDeepStrictEqual(record.review_chain ?? null, reviewChain));
 }
 
 function invalidEvidence(message) {
@@ -89,7 +291,7 @@ function validateAttemptIdentity(attempt, attemptRef, identity) {
   }
 }
 
-function validateUnavailableAttemptEvidence(task, attempt) {
+function validateUnavailableAttemptEvidence(task, attempt, bundle) {
   const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
@@ -120,12 +322,12 @@ function validateUnavailableAttemptEvidence(task, attempt) {
     provider,
     review: latest.providerAttempt.status === "completed" ? latest.review : null,
   }));
-  if (aggregateProviderResults(recomputed, minimumReviewersFor(attempt.stage, attempt.review_track)).status !== "unavailable") {
+  if (aggregateProviderResults(evidenceAnchorsFor(recomputed, bundle), minimumReviewersForAttempt(attempt), { profilePriority: profilePriorityForAttempt(attempt) }).status !== "unavailable") {
     throw invalidEvidence("unavailable attempt provider evidence produces a semantic result");
   }
 }
 
-function reusableOutcome(task, identity) {
+function reusableOutcome(task, identity, bundle) {
   const { taskId, stage, reviewTrack } = identity;
   const matchingResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
   const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
@@ -135,7 +337,7 @@ function reusableOutcome(task, identity) {
   // continuing so damaged evidence is still fail-loud.
   for (const item of matchingAttempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
-    if (item.record.terminal_status === "unavailable") validateUnavailableAttemptEvidence(task, item.record);
+    if (item.record.terminal_status === "unavailable") validateUnavailableAttemptEvidence(task, item.record, bundle);
   }
   if (matchingResults.length === 1) {
     const { ref: resultRef, record: result } = matchingResults[0];
@@ -155,39 +357,48 @@ function reusableOutcome(task, identity) {
         attempt.stage !== result.stage || attempt.review_track !== result.review_track ||
         attempt.snapshot_tree !== result.snapshot_tree || attempt.material_id !== result.material_id ||
         attempt.subject_kind !== result.subject_kind || attempt.phase_id !== result.phase_id ||
-        attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree) {
+        attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree ||
+        !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) {
       throw invalidEvidence("attempt and result identities differ");
     }
     const parsed = [];
     const providers = new Set();
+    const expectedProfiles = new Map((reviewPolicyRecord(attempt.review_policy ?? null)?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
     let chainValid = true;
     for (const providerResult of result.provider_results) {
       if (providers.has(providerResult.provider)) { chainValid = false; break; }
       providers.add(providerResult.provider);
       const providerAttempt = [...attempt.provider_attempts].reverse().find((entry) => entry.provider === providerResult.provider && entry.status === "completed" && typeof entry.output_ref === "string");
       if (!providerAttempt) { chainValid = false; break; }
+      if (expectedProfiles.has(providerResult.provider) && !pinnedProfileMatches(expectedProfiles.get(providerResult.provider), providerAttempt.execution)) { chainValid = false; break; }
       try {
         const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
         if (!providerAttempt.output_ref.startsWith(outputPrefix) || !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) { chainValid = false; break; }
         const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
-        const review = parseReviewerOutput(output.content);
+        const review = parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined });
         if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== taskId || output.stage !== stage ||
             output.attempt_id !== attempt.attempt_id || output.provider !== providerResult.provider ||
             output.content_hash !== createHash("sha256").update(output.content).digest("hex") || !isDeepStrictEqual(review, providerResult.output)) { chainValid = false; break; }
         parsed.push({ provider: providerResult.provider, review });
       } catch { chainValid = false; break; }
     }
-    const aggregation = aggregateProviderResults(parsed, minimumReviewersFor(stage, reviewTrack));
+    const aggregation = aggregateProviderResults(evidenceAnchorsFor(parsed, bundle), minimumReviewersForAttempt(attempt), { profilePriority: profilePriorityForAttempt(attempt) });
     const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-    const expectedFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
-    if (!chainValid || aggregation.status !== "semantic" || aggregation.verdict !== result.verdict ||
-        !isDeepStrictEqual(result.provider_results, expectedProviderResults) || !isDeepStrictEqual(result.findings, expectedFindings)) {
+    const expectedFindings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
+    const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
+    const legacyFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
+    const legacyVerdict = expectedProviderResults.some(({ output }) => output.verdict === "revise_required") ? "revise_required" : "pass";
+    if (!chainValid || (result.adjudication === undefined ? legacyVerdict !== result.verdict : (aggregation.status !== "semantic" || aggregation.verdict !== result.verdict)) ||
+        !isDeepStrictEqual(result.provider_results, expectedProviderResults) ||
+        (result.adjudication === undefined
+          ? (result.verdict !== legacyVerdict || !isDeepStrictEqual(result.findings, legacyFindings))
+          : (!isDeepStrictEqual(result.findings, expectedFindings) || !isDeepStrictEqual(result.adjudication, expectedAdjudication)))) {
       throw invalidEvidence("semantic result does not match its provider evidence and aggregation");
     }
     const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
     return { status: "semantic", verdict: result.verdict, attemptRef: result.attempt_ref, resultRef, snapshotTree: result.snapshot_tree,
       materialId: result.material_id, runtimeIds, subjectKind: result.subject_kind, phaseId: result.phase_id,
-      baseTree: result.base_tree, candidateTree: result.candidate_tree, reused: true };
+      baseTree: result.base_tree, candidateTree: result.candidate_tree, reportRef: result.report_ref ?? attempt.report_ref ?? null, reused: true };
   }
   for (const { ref: attemptRef, record: attempt } of matchingAttempts) {
     if (attempt.terminal_status !== "unavailable" || !attempt.error) {
@@ -198,7 +409,7 @@ function reusableOutcome(task, identity) {
 }
 
 function failedProvider(provider, error) {
-  return { provider, status: "failed", session_id: null, output: null, error: { code: error?.code ?? "PROVIDER_UNAVAILABLE", message: error?.message ?? String(error) } };
+  return { provider, status: "failed", session_id: null, output: null, error: { code: error?.code ?? "PROVIDER_UNAVAILABLE", message: error?.message ?? String(error) }, execution: null };
 }
 
 function primaryError(reviewed) {
@@ -209,6 +420,31 @@ function primaryError(reviewed) {
     const rank = (leftRank < 0 ? errorPriority.length : leftRank) - (rightRank < 0 ? errorPriority.length : rightRank);
     return rank || left.code.localeCompare(right.code) || left.message.localeCompare(right.message);
   })[0];
+}
+
+function pinnedProfileMatches(profile, execution) {
+  // Host validation makes null an exact configured absence, never a wildcard.
+  return execution !== null && execution !== undefined &&
+    execution.model === profile.model && execution.effort === profile.effort && execution.thinking === profile.thinking;
+}
+
+function rejectProfileMismatches(reviewed, policy) {
+  const expected = new Map((policy?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
+  return reviewed.map((item) => {
+    const profile = expected.get(item.provider);
+    if (!profile || item.final.status !== "completed" || pinnedProfileMatches(profile, item.final.execution)) return item;
+    return {
+      ...item,
+      review: null,
+      final: {
+        ...item.final,
+        error: {
+          code: "PROFILE_MISMATCH",
+          message: `3rd-review execution tuple does not match configured profile ${item.provider}`,
+        },
+      },
+    };
+  });
 }
 
 async function reviewOne({ providerClient, provider, hostProvider, materials, continuationRuntimeId }) {
@@ -225,23 +461,91 @@ async function reviewOne({ providerClient, provider, hostProvider, materials, co
   let current = await normal(continuationRuntimeId);
   for (;;) {
     if (current.provider.status !== "completed" || typeof current.provider.output !== "string") return { provider, review: null, final: current.provider, calls };
-    try { return { provider, review: parseReviewerOutput(current.provider.output), final: current.provider, calls }; }
+    try { return { provider, review: parseReviewerOutput(current.provider.output, { requireEvidence: true }), final: current.provider, calls }; }
     catch {
       if (!current.provider.session_id) return { provider, review: null, final: { ...current.provider, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } }, calls };
       const correction = await invoke(FORMAT_CORRECTION_PROMPT, current.runtimeId);
       if (freshable.has(correction.provider.error?.code) && !freshUsed) { freshUsed = true; current = await invoke(providerPrompt, null); continue; }
       if (correction.provider.status !== "completed" || typeof correction.provider.output !== "string") return { provider, review: null, final: correction.provider, calls };
-      try { return { provider, review: parseReviewerOutput(correction.provider.output), final: correction.provider, calls }; }
+      try { return { provider, review: parseReviewerOutput(correction.provider.output, { requireEvidence: true }), final: correction.provider, calls }; }
       catch { return { provider, review: null, final: { ...correction.provider, error: { code: "OUTPUT_INVALID", message: "provider output remained invalid after one same-session correction" } }, calls }; }
     }
   }
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, hostProvider, providers, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
+function groupContinuationRuntime(providers, previousRuntimeIds) {
+  const runtimes = providers.map((provider) => previousRuntimeIds[provider]).filter((runtimeId) => typeof runtimeId === "string" && runtimeId.length > 0);
+  // A broker continuation belongs to one prior reviewer group. Never join
+  // unrelated per-provider runtimes from the old dispatch shape.
+  return runtimes.length === providers.length && new Set(runtimes).size === 1 ? runtimes[0] : null;
+}
+
+function reviewGroupOutcome(provider, result, runtimeId) {
+  const calls = [{ runtimeId, provider: result }];
+  if (result.status !== "completed" || typeof result.output !== "string") return { provider, review: null, final: result, calls };
+  try { return { provider, review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls }; }
+  catch {
+    return {
+      provider, review: null,
+      final: { ...result, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } },
+      calls,
+    };
+  }
+}
+
+async function reviewGroup({ providerClient, providers, hostProvider, materials, previousRuntimeIds, requestId, allowLegacyFixtureClient = false }) {
+  // Test doubles from the old single-provider boundary retain a narrow,
+  // explicit fixture seam. Production rejects that interface: its only
+  // dispatch is one broker-owned reviewer group.
+  if (typeof providerClient.runGroup !== "function") {
+    if (!allowLegacyFixtureClient) throw new TypeError("providerClient.runGroup is required for production review dispatch");
+    return Promise.all(providers.map((provider) => reviewOne({
+      providerClient, provider, hostProvider, materials, continuationRuntimeId: previousRuntimeIds[provider] ?? null,
+    })));
+  }
+  let group;
+  try {
+    group = await providerClient.runGroup({
+      hostProvider, providers, materials, prompt: providerPrompt,
+      continuationRuntimeId: groupContinuationRuntime(providers, previousRuntimeIds),
+      requestId,
+    });
+  } catch (error) {
+    return providers.map((provider) => {
+      const failed = failedProvider(provider, error);
+      return { provider, review: null, final: failed, calls: [{ runtimeId: null, provider: failed }] };
+    });
+  }
+  if (!group || typeof group.runtimeId !== "string" || !Array.isArray(group.providers)) {
+    const error = protocolFailure("3rd-review group client returned an incomplete result");
+    return providers.map((provider) => {
+      const failed = failedProvider(provider, error);
+      return { provider, review: null, final: failed, calls: [{ runtimeId: null, provider: failed }] };
+    });
+  }
+  const byProvider = new Map(group.providers.map((result) => [result?.provider, result]));
+  return providers.map((provider) => {
+    const result = byProvider.get(provider);
+    if (!result) {
+      const failed = failedProvider(provider, protocolFailure(`3rd-review group omitted provider ${provider}`));
+      return { provider, review: null, final: failed, calls: [{ runtimeId: group.runtimeId, provider: failed }] };
+    }
+    return reviewGroupOutcome(provider, result, group.runtimeId);
+  });
+}
+
+export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (new Set(providers).size !== providers.length) throw new TypeError("providers must be unique");
-  if (providers.includes(hostProvider)) throw new TypeError("provider must differ from hostProvider");
+  // Candidate groups intentionally retain same-adapter profiles. The broker
+  // is the single authority that excludes them and emits SAME_SOURCE facts.
+  const policy = reviewPolicyRecord(reviewPolicy);
+  if (policy?.source !== "wh_review.v2" && providers.includes(hostProvider)) throw new TypeError("provider must differ from hostProvider");
+  const effectiveReviewRound = reviewRound ?? policy?.round ?? "initial";
+  if (!["initial", "closure", "full", "legacy"].includes(effectiveReviewRound)) throw new TypeError("reviewRound is invalid");
+  if (policy && effectiveReviewRound !== policy.round) throw new TypeError("reviewRound must equal reviewPolicy.round");
+  if (policy && !isDeepStrictEqual(policy.requested_profiles, providers)) throw new TypeError("reviewPolicy requested_profiles must equal broker reviewer group");
   if (!previousRuntimeIds || typeof previousRuntimeIds !== "object" || Array.isArray(previousRuntimeIds)) throw new TypeError("previousRuntimeIds must be an object keyed by provider");
   if (phaseId !== null && (stage !== "build-code" || typeof phaseId !== "string" || phaseId.length === 0)) throw new TypeError("phase_id is supported only for build-code and must be non-empty");
   if (stage === "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
@@ -258,43 +562,71 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
     ? capturePhaseSource({ sourceRoot, task: taskHandle, phaseId })
     : captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
   const subject = subjectRecord(source, phaseId);
-  const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope) };
-  const bundle = buildMaterials({ reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, reviewTrack, uiScope, materials: fixedMaterials });
-  const lockRef = reviewLockRef({ stage, reviewTrack, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
-  return withLocalReviewLock(taskHandle, lockRef, REVIEW_LOCK_WAIT_MS, () => taskHandle.withRecordLock(lockRef, async () => {
-    const reused = reusableOutcome(taskHandle, { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId });
+  const chain = reviewChainRecord(reviewChain, {
+    task: taskHandle, taskId, stage, reviewTrack, subject, source, reviewRound: effectiveReviewRound,
+    controlLedger, policy, fixtureSourceToken,
+  });
+  const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveReviewRound) };
+  const bundle = buildMaterials({
+    reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, uiScope,
+    materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2", reviewRound: effectiveReviewRound,
+  });
+  const lockRef = reviewLockRef({ stage, reviewTrack, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain });
+  const identity = { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain };
+  const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle)));
+  const existing = await reusable();
+  if (existing) return existing;
+  const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
+  const requestId = managedRequestId({ ...identity, hostProvider, providers, continuationRuntimeId });
+  // Managed start/status owns provider execution. No WorkflowHub record lock
+  // is held while a healthy reviewer group is running or reconnecting.
+  const reviewed = rejectProfileMismatches(await reviewGroup({
+    providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds, requestId,
+    allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
+  }), policy);
+  return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
+    const reused = reusableOutcome(taskHandle, identity, bundle);
     if (reused) return reused;
     const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
-    const reviewed = await Promise.all(providers.map((provider) => reviewOne({ providerClient, provider, hostProvider, materials: bundle, continuationRuntimeId: previousRuntimeIds[provider] ?? null })));
     const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
     const providerAttempts = [];
     for (const item of reviewed) {
       for (let index = 0; index < item.calls.length; index += 1) {
         const call = item.calls[index]; const isLast = index === item.calls.length - 1; const finalError = isLast ? item.final?.error ?? null : call.provider.error ?? null;
         const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, { taskId, stage });
-        providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, output_ref: outputRef, error: finalError });
+        providerAttempts.push({ provider: item.provider, status: finalError ? "failed" : call.provider.status, session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null, execution: call.provider.execution ?? null, unavailable_diagnostics: call.provider.unavailable_diagnostics ?? null, output_ref: outputRef, error: finalError });
       }
     }
-    const minimumReviewers = minimumReviewersFor(stage, reviewTrack); const aggregation = aggregateProviderResults(reviewed, minimumReviewers);
+    const assessed = evidenceAnchorsFor(reviewed, bundle);
+    const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack); const aggregation = aggregateProviderResults(assessed, minimumReviewers, { profilePriority: policy?.requested_profiles ?? providers });
+    const coverage = reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation });
     const unavailableError = primaryError(reviewed);
     const attempt = {
       version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
       ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+      report_ref: refs.reportRef,
       provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
-      error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }
+      error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` },
+      ...(policy ? { review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"), coverage } : {}),
+      ...(chain ? { review_chain: chain } : {})
     };
     validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
-    if (aggregation.status !== "semantic") return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    if (aggregation.status !== "semantic") {
+      writeReviewReport(taskHandle, refs.reportRef, { attempt });
+      return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    }
     const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-    const findings = providerResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
+    const findings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
     const result = {
       version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
-      material_id: bundle.materialId, attempt_ref: refs.attemptRef, provider_results: providerResults,
-      verdict: aggregation.verdict, findings
+      material_id: bundle.materialId, attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
+      verdict: aggregation.verdict, findings,
+      adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+      ...(chain ? { review_chain: chain } : {}),
     };
-    validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result);
-    return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
-  }, { waitMs: REVIEW_LOCK_WAIT_MS }));
+    validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
+    return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+  }));
 }
 
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */

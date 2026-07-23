@@ -203,8 +203,9 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
   const validateProvenance = (value, kind) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${kind} record must be an object`);
     if (value.task_id !== taskId || value.stage !== stage) throw new Error(`${kind} record producer provenance mismatch`);
-    if (!value.source || typeof value.snapshot_tree !== "string" || typeof value.material_id !== "string") throw new Error(`${kind} record source provenance is required`);
-    const expected = kind === "result" ? "wh-review-result.v1" : "wh-review-attempt.v1";
+    if (kind !== "resolution" && (!value.source || typeof value.snapshot_tree !== "string" || typeof value.material_id !== "string")) throw new Error(`${kind} record source provenance is required`);
+    if (kind === "resolution" && typeof value.snapshot_tree !== "string") throw new Error("resolution record snapshot provenance is required");
+    const expected = { result: "wh-review-result.v1", attempt: "wh-review-attempt.v1", resolution: "wh-review-resolution.v1" }[kind];
     if (value.version !== expected) throw new Error(`${kind} record schema must be ${expected}`);
   };
   return Object.freeze({
@@ -226,6 +227,15 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
     writeResult(ref, value) {
       if (!/^reviews\/results\/[a-zA-Z0-9._-]+\.json$/.test(ref)) throw new Error("canonical review result ref required");
       validateProvenance(value, "result"); validateSchema("result", value); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
+    },
+    writeResolution(ref, value) {
+      if (!/^reviews\/resolutions\/[a-f0-9]{64}\.json$/.test(ref)) throw new Error("canonical review resolution ref required");
+      validateProvenance(value, "resolution"); validateSchema("resolution", value); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
+    },
+    writeReport(ref, content) {
+      if (!/^reviews\/reports\/[a-zA-Z0-9._-]+\.md$/.test(ref)) throw new Error("canonical review report ref required");
+      if (typeof content !== "string" || content.trim() === "") throw new TypeError("canonical review report must be non-empty markdown");
+      write(ref, content); return ref;
     },
   });
 }

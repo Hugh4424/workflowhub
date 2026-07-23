@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { createCanonicalReviewWriter } from "../../core/canonical-receipt-writer.mjs";
+import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-result.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -12,7 +13,15 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const outputRef = `reviews/attempts/${attemptId}/providers/${provider}.output.json`;
   const resultRef = `reviews/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
   const source = { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree };
-  const finding = { severity: "major", path: "fixture", issue: "fixture finding", recommendation: "revise fixture" };
+  const finding = {
+    severity: "major",
+    path: "fixture",
+    issue: "fixture finding",
+    root_cause: "fixture intentionally models an anchored review finding",
+    recommendation: "revise fixture",
+    evidence_kind: "direct",
+    evidence: "fixture evidence is intentionally anchored to the fixture path",
+  };
   const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [finding] };
   writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), 1);
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
@@ -23,11 +32,13 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     provider_attempts: [{ provider, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
   });
+  const aggregation = aggregateProviderResults([{ provider, review: providerOutput }], 1);
+  const findings = aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item }));
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
     source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, ...subject,
-    provider_results: [{ provider, output: providerOutput }], verdict,
-    findings: verdict === "pass" ? [] : [{ provider, ...finding }],
+    provider_results: [{ provider, output: providerOutput }], verdict: aggregation.verdict,
+    findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   });
   return Object.freeze({ resultRef, attemptRef, outputRef, materialId });
 }

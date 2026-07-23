@@ -14,8 +14,8 @@ function expectSchemaError(name, value, pointer) {
 }
 
 describe("schema-validator", () => {
-  it("compiles only the simple review schemas", () => {
-    expect(compiledSchemaNames).toEqual(["attempt", "result"]);
+  it("compiles the simple review and resolution schemas", () => {
+    expect(compiledSchemaNames).toEqual(["attempt", "result", "resolution"]);
   });
 
   it("rejects unknown attempt fields", () => {
@@ -53,5 +53,16 @@ describe("schema-validator", () => {
       provider_results: [{ provider: "opencode", output: { verdict: "pass", summary: "ok", findings: [] } }],
     };
     expectSchemaError("result", result, "/verdict");
+  });
+
+  it("rejects a resolution with an untrusted extra field", () => {
+    const resolution = {
+      version: "wh-review-resolution.v1", task_id: "task-1", stage: "build-spec", review_track: null,
+      outcome: "recorded_non_gate_response", previous_result_ref: "reviews/results/prior.json",
+      previous_result_sha256: hash, previous_snapshot_tree: oid, snapshot_tree: oid,
+      evidence_state: "verified", response_ledger: {}, response_ledger_sha256: hash,
+      unverified_reason: null, accepted_risk_count: 0, leaked: "secret-value",
+    };
+    expectSchemaError("resolution", resolution, "/leaked");
   });
 });

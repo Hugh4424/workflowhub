@@ -1,0 +1,30 @@
+# wh-review v2 — tasks
+
+- [x] W1 Add `wh_review.v2` policy schema/config loading and explicit legacy fallback.
+- [x] W2 Implement profile resolution, effective snapshot, same-source exclusion and coverage diagnostics.
+  - [x] W2.1 Consume workflowhub-result.v2 and persist only its public execution facts.
+  - [x] W2.2 Persist policy/profile snapshots, same-source exclusions and coverage diagnostics.
+  - [x] W2.3 Preserve `unavailable` when heterogeneous quorum is not met; retain per-provider diagnostics and never emit partial semantic verdicts.
+  - [x] W2.4 Fail loud for unresolved/disabled profiles, unavailable adapters, invalid model facts, and zero eligible reviewers; cover each condition with a behavior test.
+- [x] W3 Implement the fixed Kimi/Codex build-code route with `single_external` reporting.
+- [x] W4 Add packet planning, manifests, semantic selection and the blind-direction guard.
+- [x] W5 Add spec/plan/verify context/evidence maps and build-code phase/impact/reuse/AC maps.
+  - [x] W5.1 Generate deterministic `change-map.json`; enforce change-ID coverage, outside-hunk context anchors with `outside_diff_reason`, and raw-log exclusion.
+  - [x] W5.2 Put reviewer lenses, snapshot-bound test summaries, and directly affected consumer/dependency/test selections in every applicable code packet.
+- [x] W6 Implement evidence validation, finding IDs/clustering, deterministic adjudication and response ledger.
+  - [x] W6.1 Enforce direct/inferred/invalid-anchor evidence thresholds and add behavior tests for each adjudication branch.
+- [x] W7 Implement V2 full-rework policy and build-code fresh-full controller.
+- [x] W7.1 Replace configured spec/plan/verify closure review with `full_on_structural_rework`: normal or unverified repair has no second review; explicitly declared structural repair has at most one high-strength ledger-free full review; optional response audit is non-gating.
+- [x] W8 Persist/render v2 reports and public telemetry; retain v1 reads.
+  - [x] W8.5 Persist every provider's model/effort/thinking, duration, usage or unavailable fact, session/runtime, finding, root-cause and correction-direction fields.
+- [x] W8.1 Remove packet-size gates; retain delivery-byte telemetry only.
+- [x] W8.2 Send complete build-code diff plus map-selected context, not full changed files or recursive raw logs.
+- [x] W8.3 Enforce per-stage required/optional/generated material allowlists, explicit canonical evidence roots, deterministic change maps and fixed packet metadata accounting.
+- [x] W8.4 Make complete build-code diff the sole changed-code authority; default context to nonchanged direct dependencies and fail loud on overlapping changed-file anchors.
+- [x] W8.6 Keep live review execution free of WorkflowHub time/token termination caps; rely on 3rd-review liveness supervision and record observed liveness/termination facts.
+- [x] W8.7 Produce and record applicable `constitution-checklist.md` evidence for the changed contracts, including explicit not-applicable reasons where relevant.
+- [x] W9 Run regression, migration and controlled real-review scenarios; enable only validated routes.
+  - [x] Validate the real trusted configuration and host-adapter exclusions.
+  - [x] Run focused packet/controller/CLI/schema/core regressions.
+  - [x] Obtain clean WorkflowHub (102/102 files, 956/956 tests) and broker (196/196) suite runs.
+  - [x] Map each acceptance behavior to a failing test: configuration/routes and all four fail-loud conditions, blind packet rejection, quorum-unavailable diagnostics, code consumer/dependency/test selection and snapshot-bound test summary, change-map/hunk guards, evidence thresholds, ledger non-escalation, structural follow-up bound, non-gating progression, build-code full-only, no WorkflowHub time/token/byte termination or truncation/size split, constitution-checklist evidence, private-state rejection, and legacy fallback.

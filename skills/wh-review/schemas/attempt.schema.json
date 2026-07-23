@@ -26,6 +26,79 @@
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "review_chain": {
+      "type": "object",
+      "required": ["version", "round", "parent_result_ref", "root_result_ref", "prior_snapshot_tree", "current_snapshot_tree", "response_ledger_sha256", "source_diff_sha256"],
+      "properties": {
+        "version": { "const": "wh-review-chain.v1" },
+        "round": { "enum": ["initial", "closure", "full", "legacy"] },
+        "parent_result_ref": { "type": ["string", "null"], "pattern": "^reviews/results/[A-Za-z0-9._-]+\\.json$" },
+        "root_result_ref": { "type": ["string", "null"], "pattern": "^reviews/results/[A-Za-z0-9._-]+\\.json$" },
+        "prior_snapshot_tree": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40,64}$" },
+        "current_snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "response_ledger_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "source_diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "review_policy": {
+      "type": "object",
+      "required": ["source", "mode", "minimum_heterologous", "requested_profiles", "eligible_profiles", "same_source_exclusions", "effective_profiles"],
+      "properties": {
+        "source": { "enum": ["wh_review.v2", "legacy_3rd_review"] },
+        "mode": { "enum": ["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"] },
+        "minimum_heterologous": { "type": ["integer", "null"], "minimum": 1 },
+        "requested_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "requested_profile_specs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["provider", "model", "effort", "thinking", "priority"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 1 },
+              "model": { "type": ["string", "null"] },
+              "effort": { "type": ["string", "null"] },
+              "thinking": { "type": ["boolean", "null"] },
+              "priority": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "eligible_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "same_source_exclusions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "round": { "enum": ["initial", "closure", "full", "legacy"] },
+        "effective_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["provider", "adapter", "model", "effort", "thinking"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 1 },
+              "adapter": { "type": "string", "minLength": 1 },
+              "model": { "type": ["string", "null"] },
+              "effort": { "type": ["string", "null"] },
+              "thinking": { "type": ["boolean", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy_snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "report_ref": { "type": "string", "pattern": "^reviews/reports/[A-Za-z0-9._-]+\\.md$" },
+    "coverage": {
+      "type": "object",
+      "required": ["mode", "selected_profiles", "selected_count", "valid_provider_count", "minimum_required"],
+      "properties": {
+        "mode": { "enum": ["single_external", "parallel_external"] },
+        "selected_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "selected_count": { "type": "integer", "minimum": 0 },
+        "valid_provider_count": { "type": "integer", "minimum": 0 },
+        "minimum_required": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
     "provider_attempts": {
       "type": "array",
       "items": {
@@ -36,6 +109,76 @@
           "status": { "enum": ["completed", "failed", "cancelled"] },
           "session_id": { "type": ["string", "null"] },
           "runtime_id": { "type": ["string", "null"] },
+          "session_artifact_path": { "type": ["string", "null"] },
+          "execution": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["adapter", "model", "effort", "thinking", "timing", "usage", "retry", "runtime_id", "session_file_path", "raw_output_ref"],
+                "properties": {
+                  "adapter": { "type": "string", "minLength": 1 },
+                  "model": { "type": ["string", "null"] },
+                  "effort": { "type": ["string", "null"] },
+                  "thinking": { "type": ["boolean", "null"] },
+                  "timing": {
+                    "type": "object",
+                    "required": ["started_at_ms", "completed_at_ms", "duration_ms"],
+                    "properties": {
+                      "started_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+                      "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+                      "duration_ms": { "type": ["integer", "null"], "minimum": 0 }
+                    },
+                    "additionalProperties": false
+                  },
+                  "usage": { "type": ["object", "null"] },
+                  "retry": {
+                    "type": "object",
+                    "required": ["count", "progress_events"],
+                    "properties": {
+                      "count": { "type": "integer", "minimum": 0 },
+                      "progress_events": { "type": "integer", "minimum": 0 }
+                    },
+                    "additionalProperties": false
+                  },
+                  "runtime_id": { "type": "string", "minLength": 1 },
+                  "session_file_path": { "type": "null" },
+                  "raw_output_ref": {
+                    "oneOf": [
+                      { "type": "null" },
+                      {
+                        "type": "object",
+                        "required": ["version", "runtime_id", "provider", "stdout_sha256", "stderr_sha256"],
+                        "properties": {
+                          "version": { "const": "broker-output-ref.v1" },
+                          "runtime_id": { "type": "string", "minLength": 1 },
+                          "provider": { "type": "string", "minLength": 1 },
+                          "stdout_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                          "stderr_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "unavailable_diagnostics": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                  "code": { "type": "string", "minLength": 1 },
+                  "message": { "type": ["string", "null"] }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
           "output_ref": { "type": ["string", "null"] },
           "error": {
             "oneOf": [
@@ -45,7 +188,7 @@
           }
         },
         "allOf": [{
-          "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+          "if": { "type": "object", "properties": { "status": { "const": "completed" } }, "required": ["status"] },
           "then": { "properties": { "error": { "type": "null" } } },
           "else": { "properties": { "error": { "type": "object" } } }
         }],
@@ -61,15 +204,22 @@
     }
   },
   "allOf": [{
-    "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
+    "if": {
+      "type": "object",
+      "properties": { "review_policy": { "type": "object", "properties": { "source": { "const": "wh_review.v2" } }, "required": ["source"] } },
+      "required": ["review_policy"]
+    },
+    "then": { "required": ["review_chain"] }
+  }, {
+    "if": { "type": "object", "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
     "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
     "else": { "properties": { "review_track": { "type": "null" } } }
   }, {
-    "if": { "properties": { "subject_kind": { "const": "phase" } }, "required": ["subject_kind"] },
+    "if": { "type": "object", "properties": { "subject_kind": { "const": "phase" } }, "required": ["subject_kind"] },
     "then": { "required": ["phase_id", "base_tree", "candidate_tree"], "properties": { "stage": { "const": "build-code" }, "phase_id": { "type": "string", "minLength": 1 } } },
     "else": { "properties": { "phase_id": { "type": "null" } } }
   }, {
-    "if": { "properties": { "terminal_status": { "const": "semantic" } }, "required": ["terminal_status"] },
+    "if": { "type": "object", "properties": { "terminal_status": { "const": "semantic" } }, "required": ["terminal_status"] },
     "then": { "properties": { "error": { "type": "null" } } },
     "else": { "properties": { "error": { "type": "object" } } }
   }],

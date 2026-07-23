@@ -4,42 +4,66 @@
     "make-decision": {
       "tracks": {
         "direction": {
-          "source_bundle": "forbidden",
+          "source_bundle": "none",
           "required": ["raw_requirement", "objective_facts", "review_instructions"],
+          "optional": [],
+          "closure_optional": [],
+          "generated": ["review_instructions"],
           "forbidden": ["proposed_solution", "decision_log", "spec", "plan", "changes_diff", "changed_files"],
-          "minimum_reviewers": 1
+          "minimum_reviewers": 1,
+          "v2_required_maps": []
         },
         "detail": {
-          "source_bundle": "required",
+          "source_bundle": "none",
           "required": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "review_instructions"],
+          "optional": ["context_map", "evidence_map"],
+          "closure_optional": ["response_ledger", "previous_review"],
+          "generated": ["review_instructions"],
           "forbidden": [],
-          "minimum_reviewers": 1
+          "minimum_reviewers": 1,
+          "v2_required_maps": ["context_map", "evidence_map"]
         }
       }
     },
     "build-spec": {
-      "source_bundle": "required",
+      "source_bundle": "none",
       "required": ["raw_requirement", "approved_decision", "draft_spec", "review_instructions"],
+      "optional": ["context_map", "evidence_map"],
+      "closure_optional": ["response_ledger", "previous_review"],
+      "generated": ["review_instructions"],
       "forbidden": [],
-      "minimum_reviewers": 1
+      "minimum_reviewers": 1,
+      "v2_required_maps": ["context_map", "evidence_map"]
     },
     "build-plan": {
-      "source_bundle": "required",
+      "source_bundle": "none",
       "required": ["approved_spec", "acceptance_criteria", "draft_plan", "review_instructions"],
+      "optional": ["context_map", "evidence_map"],
+      "closure_optional": ["response_ledger", "previous_review"],
+      "generated": ["review_instructions"],
       "forbidden": [],
-      "minimum_reviewers": 1
+      "minimum_reviewers": 1,
+      "v2_required_maps": ["context_map", "evidence_map"]
     },
     "build-code": {
-      "source_bundle": "required",
+      "source_bundle": "diff",
       "required": ["approved_spec", "acceptance_criteria", "test_evidence", "review_instructions"],
+      "optional": ["phase_map", "impact_map", "reuse_map", "acceptance_map"],
+      "closure_optional": [],
+      "generated": ["review_instructions", "change_map", "test_summary"],
       "forbidden": [],
-      "minimum_reviewers": 1
+      "minimum_reviewers": 1,
+      "v2_required_maps": ["phase_map", "impact_map", "reuse_map", "acceptance_map"]
     },
     "verify-code": {
-      "source_bundle": "required",
+      "source_bundle": "none",
       "required": ["acceptance_criteria", "acceptance_evidence", "open_exceptions", "review_instructions"],
+      "optional": ["context_map", "evidence_map"],
+      "closure_optional": ["response_ledger", "previous_review"],
+      "generated": ["review_instructions"],
       "forbidden": [],
-      "minimum_reviewers": 1
+      "minimum_reviewers": 1,
+      "v2_required_maps": ["context_map", "evidence_map"]
     }
   }
 }

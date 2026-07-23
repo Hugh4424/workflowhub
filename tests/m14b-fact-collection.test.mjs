@@ -28,7 +28,9 @@ import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.m
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const cleanup = [];
-vi.setConfig({ testTimeout: 15_000 });
+// This fixture creates real repositories and accepted worktrees. Under a full
+// parallel suite it can legitimately exceed the global 15s test default.
+vi.setConfig({ testTimeout: 60_000 });
 afterEach(async () => Promise.all(cleanup.splice(0).map((path) => rm(path, {
   recursive: true, force: true, maxRetries: 3, retryDelay: 100,
 }))));
@@ -87,7 +89,7 @@ async function createM14bFixture() {
   });
   const baseline = workspace.baselineCommit;
   await mkdir(join(workspace.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
-  for (const relative of ["config", "schemas", "skills", "workflows", "specs/m14a-audit-contract-layer"]) {
+  for (const relative of ["config", "schemas", "skills", "workflows"]) {
     await cp(join(repositoryRoot, relative), join(workspace.worktreeRoot, relative), { recursive: true });
   }
   await cp(join(repositoryRoot, "THIRD_PARTY_NOTICES.md"), join(workspace.worktreeRoot, "THIRD_PARTY_NOTICES.md"));
@@ -378,7 +380,7 @@ describe("M14b fact collection acceptance", () => {
     expect(records(absent.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
       expect.objectContaining({ record_kind: "artifact", id: `specs/${absent.task.identity.taskId}/decision.md`, status: "missing", reason: "not_found", required: true }),
     ]));
-  }, 15_000);
+  }, 30_000);
 
   it("AC-009/010/014 validates the original M14a schema, all nine health domains, and non-blocking facts", async () => {
     const fixture = await createM14bFixture();
@@ -388,7 +390,7 @@ describe("M14b fact collection acceptance", () => {
     });
     const skills = JSON.parse(file(fixture.task, "indexes/skills-inventory.json"));
     const health = records(fixture.task, "indexes/flow-health-facts.jsonl");
-    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "specs/m14a-audit-contract-layer/skills-inventory.schema.json"), "utf8"));
+    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "schemas/skills-inventory.schema.json"), "utf8"));
     const validate = new Ajv2020({ strict: false, formats: { "date-time": true } }).compile(schema);
     const before = file(fixture.task, "indexes/skills-inventory.json");
     const second = collectTaskFacts(collectionContext(fixture), {

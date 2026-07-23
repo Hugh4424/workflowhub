@@ -121,6 +121,13 @@ function officialWorkerContext(ctx) {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ bytes: raw, sha256: createHash("sha256").update(raw).digest("hex") });
     },
+    // External audit records are visible only for human-boundary notices.
+    // They are deliberately not receipts, facts, evidence refs, or gates.
+    listReviewAuditRefs: () => ctx.task.listCanonicalReviewResolutionRefs(),
+    readReviewAudit: (ref) => {
+      const raw = ctx.task.readRecord(ref);
+      return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
+    },
     ...(ctx.stage === "verify-code" ? { readAcceptedBuildCode: () => ctx.kernel.readAccepted("build-code") } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
@@ -140,7 +147,7 @@ function officialWorkerContext(ctx) {
 
 function verifyEvidenceReference(ctx, entry, label = "evidence") {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new TypeError(`${label} must be an authenticated reference`);
-  if (typeof entry.ref !== "string" || !entry.ref.startsWith("evidence/") && !entry.ref.startsWith("receipts/") && !entry.ref.startsWith("reviews/results/")) {
+  if (typeof entry.ref !== "string" || !entry.ref.startsWith("evidence/") && !entry.ref.startsWith("receipts/") && !entry.ref.startsWith("reviews/results/") && !entry.ref.startsWith("reviews/attempts/")) {
     throw new Error(`${label} is outside a canonical namespace`);
   }
   if (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new TypeError(`${label} sha256 is required`);

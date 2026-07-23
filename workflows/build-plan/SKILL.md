@@ -126,7 +126,10 @@ planning step.
    expected impact). Only an accepted confirmation may be passed to `accept`,
    which creates the build-plan checkpoint and accepts the attempt. Use the
    confirmation-question contract below; do not append generic completed-work,
-   next-step, or user-action sections to that question card.
+   next-step, or user-action sections to that question card. If an external
+   review audit records accepted risk, show its affected area and rationale in
+   this summary; it is visible context for the human confirmation, not an
+   automatic acceptance gate.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.

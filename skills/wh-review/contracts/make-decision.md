@@ -38,7 +38,7 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 - 原始用户需求。
 - 已批准方向，包括可读 decision log 与 grill 文档判断。
 - 待审规格或验收草案。
-- `source.json`、`changes.diff`、changed-files 清单和所有未删除变更文件的当前内容。
+- 仅由 `context_map` 明确选择的、与方向落地直接相关的既有约束片段；不得默认附带 diff 或完整当前文件。
 
 审查重点：
 
@@ -54,6 +54,10 @@ detail 必须加载 `simplicity-guard` 只读 lens，逐项执行 P0-P3：优先
 
 direction 是不含候选方案的盲审，禁止加载 `simplicity-guard`，避免从不存在的
 方案中推断或裁剪内容。
+
+`wh_review.v2` 的 detail 还必须提供 `context_map` 和 `evidence_map`；每个
+`context_map` 的 `complete` 条目使用可验证 anchors（id、snapshot path、行区间、
+role、reason），runner 只交付这些直接片段。
 
 ## 输出
 

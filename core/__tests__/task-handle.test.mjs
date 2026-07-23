@@ -111,6 +111,21 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("enumerates external review audits without treating them as review results", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const auditsRoot = join(taskPath, "reviews", "resolutions");
+    mkdirSync(auditsRoot, { recursive: true });
+    const a = "a".repeat(64), b = "b".repeat(64);
+    writeFileSync(join(auditsRoot, `${b}.json`), "{}");
+    writeFileSync(join(auditsRoot, `${a}.json`), "{}");
+    writeFileSync(join(auditsRoot, "ignored.txt"), "{}");
+    expect(task.listCanonicalReviewResolutionRefs()).toEqual([
+      `reviews/resolutions/${a}.json`,
+      `reviews/resolutions/${b}.json`,
+    ]);
+  });
+
   it("enumerates only sorted regular canonical review attempts", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });

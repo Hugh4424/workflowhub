@@ -10,9 +10,10 @@
   "schemas": {
     "attempt": "schemas/attempt.schema.json",
     "result": "schemas/result.schema.json",
+    "resolution": "schemas/resolution.schema.json",
     "stage_materials": "schemas/stage-materials.schema.json"
   },
-  "provider_result_contract": "contracts/workflowhub-result.v1.json",
+  "provider_result_contract": "contracts/workflowhub-result.v2.json",
   "contracts": {
     "make-decision": {
       "path": "contracts/make-decision.md",
