@@ -84,7 +84,7 @@ request 声明：
 
 ## Reviewer 最小输出
 
-允许完整纯 JSON，或全文唯一一个 fenced JSON object。最小结构：
+允许完整纯 JSON、全文唯一一个 fenced JSON object，或前置说明不含代码围栏/竞争 review object 且末尾唯一 JSON object。最小结构：
 
 ```json
 {

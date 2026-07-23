@@ -193,7 +193,7 @@ Consumers open the referenced formal result and do not trust a copied verdict. `
 
 3rd-review exposes managed public `workflowhub-run.v1` `start/status` and a terminal `workflowhub-result.v2` group. wh-review uses a deterministic request ID to reconnect the same runtime, polls without a review deadline, and never falls back to blocking `run` or reads broker private state, attachment workspaces, or `/tmp/3rd-review`. A terminal group must expose `raw_output_ref: null`; canonical attempts store only public profile, timing, usage, retry, runtime/session IDs and normalized public errors. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence. Build-code has no cycle, time, token, output-size, or repeated-finding stop rule: every repaired phase is reviewed again from its complete current frozen material until its formal review is `pass`.
 
-Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON or one unique fenced JSON object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
+Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON, one unique fenced JSON object, or one terminal JSON object after prose with no fenced block or competing review object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
 
 ## Final gate
 
