@@ -132,8 +132,14 @@ idempotent. Other attempts against a closed stage remain rejected.
 
 ## Procedure
 
-1. Validate StageContext and read the accepted build-code result through
-   `ctx.kernel.readAccepted("build-code")`.
+1. Validate StageContext and read the accepted build-code result through the
+   TaskKernel. Use
+   `ctx.kernel.readAccepted("build-code", {allowLegacyBuildCode: true})` only
+   for the initial read: this lets an older accepted record reach the explicit
+   verification-failure path. If `acceptance_coverage` is absent, mark the
+   affected criteria `unknown` and return a formal failed verify attempt; never
+   treat the legacy record as passing and never use the compatibility option
+   for acceptance or close.
 2. Read only the accepted build-code facts and `evidence_refs` from its
    authenticated accepted attempt. Resolve formal artifacts, dependencies, and
    unresolved risks from those existing records; the human brief is display,
