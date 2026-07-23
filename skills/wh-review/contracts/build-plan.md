@@ -7,6 +7,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - `review-instructions.md`：stage、审查问题和输出格式。
 - 已批准 spec 和验收标准。
 - 待审 plan，至少包含 phase、任务、依赖和验证方式。
+- 与该 plan 对应的独立待审 `tasks.md`。它和 plan 一起是本次审查的完整交付草案；不能把 task 拆分、顺序或验收细节藏在 provider 不可见的材料里。
 - 仅由 `context_map` 明确选择的模块边界、依赖、接口或测试约定片段；本阶段不得默认附带 diff 或完整当前文件。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。

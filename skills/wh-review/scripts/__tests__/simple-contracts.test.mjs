@@ -195,6 +195,17 @@ describe("simple wh-review contracts", () => {
     const matrix = readJson(join(root, "wh-review", "stage-materials.json"));
     const validate = validator("stage-materials.schema.json");
     expect(validate(matrix), validate.errors).toBe(true);
+    expect(matrix.stages["build-plan"].required).toEqual(expect.arrayContaining(["draft_tasks"]));
+    const missingDraftTasks = structuredClone(matrix);
+    missingDraftTasks.stages["build-plan"].required = missingDraftTasks.stages["build-plan"].required.filter((key) => key !== "draft_tasks");
+    expect(validate(missingDraftTasks)).toBe(false);
+    const optionalDraftTasks = structuredClone(matrix);
+    optionalDraftTasks.stages["build-plan"].required = optionalDraftTasks.stages["build-plan"].required.filter((key) => key !== "draft_tasks");
+    optionalDraftTasks.stages["build-plan"].optional.push("draft_tasks");
+    expect(validate(optionalDraftTasks)).toBe(false);
+    const forbiddenDraftTasks = structuredClone(matrix);
+    forbiddenDraftTasks.stages["build-plan"].forbidden.push("draft_tasks");
+    expect(validate(forbiddenDraftTasks)).toBe(false);
     const direction = matrix.stages["make-decision"].tracks.direction;
     expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement", "objective_facts"]));
     expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution", "decision_log", "spec", "plan", "changes_diff"]));
