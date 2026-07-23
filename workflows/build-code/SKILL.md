@@ -99,6 +99,15 @@ using those fresh tests: one full-worktree `wh-review` without `phase_id`. This
 final review is separate from the required per-Phase reviews. The review host
 freezes the authenticated Workspace itself; do not supply paths, commits,
 ranges, or a caller-built diff.
+The final review packet must also include the authoritative Phase Card facts
+for every changed Phase, especially its necessary regression scope and any
+explicit compatibility boundary or compatibility non-goal. The packet must
+not be assembled from `spec.md` alone: a Phase Card that says an existing
+consumer remains supported through an already-approved compatibility path is
+part of the accepted contract, while a missing declaration remains fail
+closed. Reviewers must judge the current tree against those accepted facts;
+they must not turn an already-accepted compatibility boundary into a new
+finding merely because older fixtures exercise it.
 The canonical implementation receipt, canonical tests receipt, and final review
 must all bind the same snapshot tree. A mismatch fails before the build-code
 attempt is published.
@@ -142,7 +151,11 @@ order, evidence, or authority boundaries.
    StageContext and accepted records: project/task/phase identity, goal,
    accepted AC IDs, Workspace root, allowed files, baseline, non-goals,
    applicable RED expectation, exact test commands, necessary regression
-   scope, conditional-component trigger facts, and upstream findings.
+   scope, explicit compatibility boundaries, conditional-component trigger
+   facts, and upstream findings. A compatibility boundary is valid only when
+   it is copied from an accepted record; never invent one to make a failing
+   regression green. The Phase Card is authoritative input to both the Phase
+   review and the final full-worktree review.
    The card must not copy execution steps, review selection rules, or
    task-storage paths. Never infer any card field from cwd or directory scans.
    When a host exposes the Phase Card on a user-visible surface, it must lead
