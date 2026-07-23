@@ -6,7 +6,7 @@ import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspa
 import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
-import { aggregateProviderResults, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
+import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
 import { validateResponseLedger } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 
@@ -146,10 +146,6 @@ function minimumReviewersForPolicy(policy, stage, reviewTrack) {
     : minimumReviewersFor(stage, reviewTrack);
 }
 
-function minimumReviewersForAttempt(attempt) {
-  return minimumReviewersForPolicy(reviewPolicyRecord(attempt.review_policy ?? null), attempt.stage, attempt.review_track);
-}
-
 function profilePriorityForAttempt(attempt) {
   const policy = reviewPolicyRecord(attempt.review_policy ?? null);
   return policy?.requested_profiles ?? [...new Set((attempt.provider_attempts ?? []).map(({ provider }) => provider))];
@@ -163,6 +159,24 @@ function canonicalJson(value) {
 
 function hashCanonical(value) {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
+
+function hasExactProviderSet(providers, requestedProfiles) {
+  const actual = new Set(providers);
+  const expected = new Set(requestedProfiles);
+  return expected.size === requestedProfiles.length && actual.size === expected.size && [...expected].every((provider) => actual.has(provider));
+}
+
+function verifiedPolicyForAttempt(attempt, providers) {
+  const policy = reviewPolicyRecord(attempt.review_policy ?? null);
+  if (policy?.source !== "wh_review.v2") return policy;
+  if (attempt.policy_snapshot_hash !== hashCanonical(policy)) {
+    throw invalidEvidence("wh_review.v2 policy snapshot hash does not match its persisted policy");
+  }
+  if (!hasExactProviderSet(providers, policy.requested_profiles)) {
+    throw invalidEvidence("wh_review.v2 provider attempts do not exactly match requested profiles");
+  }
+  return policy;
 }
 
 function reviewChainRecord(value, { task, taskId, stage, reviewTrack, subject, source, reviewRound, controlLedger, policy, fixtureSourceToken }) {
@@ -292,6 +306,7 @@ function validateAttemptIdentity(attempt, attemptRef, identity) {
 }
 
 function validateUnavailableAttemptEvidence(task, attempt, bundle) {
+  const policy = verifiedPolicyForAttempt(attempt, attempt.provider_attempts.map(({ provider }) => provider));
   const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
@@ -322,9 +337,102 @@ function validateUnavailableAttemptEvidence(task, attempt, bundle) {
     provider,
     review: latest.providerAttempt.status === "completed" ? latest.review : null,
   }));
-  if (aggregateProviderResults(evidenceAnchorsFor(recomputed, bundle), minimumReviewersForAttempt(attempt), { profilePriority: profilePriorityForAttempt(attempt) }).status !== "unavailable") {
+  if (aggregateProviderResults(evidenceAnchorsFor(recomputed, bundle), minimumReviewersForPolicy(policy, attempt.stage, attempt.review_track), { profilePriority: policy?.requested_profiles ?? profilePriorityForAttempt(attempt) }).status !== "unavailable") {
     throw invalidEvidence("unavailable attempt provider evidence produces a semantic result");
   }
+}
+
+function readCanonicalOrMissing(task, ref) {
+  try { return task.readRecord(ref); }
+  catch (error) { if (error?.code === "ENOENT") return null; throw invalidEvidence(`canonical review record cannot be read: ${ref}: ${error.message}`); }
+}
+
+function publishRecoveredRecord(task, ref, raw, write, label) {
+  const existing = readCanonicalOrMissing(task, ref);
+  if (existing !== null) {
+    if (existing !== raw) throw invalidEvidence(`${label} already exists with different content`);
+    return;
+  }
+  try { write(); }
+  catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    if (readCanonicalOrMissing(task, ref) !== raw) throw invalidEvidence(`${label} already exists with different content`);
+  }
+}
+
+function semanticAttemptResult(task, attempt, attemptRef, bundle) {
+  const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const latestByProvider = new Map();
+  for (const providerAttempt of attempt.provider_attempts) {
+    let content = null;
+    if (providerAttempt.output_ref !== null) {
+      if (typeof providerAttempt.output_ref !== "string" || !providerAttempt.output_ref.startsWith(outputPrefix) ||
+          !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) {
+        throw invalidEvidence("semantic provider output is outside its canonical attempt");
+      }
+      let output;
+      try { output = JSON.parse(task.readRecord(providerAttempt.output_ref)); }
+      catch (error) { throw invalidEvidence(`semantic provider output cannot be read: ${error.message}`); }
+      if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== attempt.task_id || output.stage !== attempt.stage ||
+          output.attempt_id !== attempt.attempt_id || output.provider !== providerAttempt.provider || typeof output.content !== "string" ||
+          output.content_hash !== createHash("sha256").update(output.content).digest("hex")) {
+        throw invalidEvidence("semantic provider output does not match its attempt or content hash");
+      }
+      content = output.content;
+    } else if (providerAttempt.status === "completed") throw invalidEvidence("completed provider attempt has no canonical output");
+    // Every call is hash-verified, but an early invalid-format completion may
+    // legitimately be followed by one same-session formatting correction.
+    latestByProvider.set(providerAttempt.provider, { providerAttempt, content });
+  }
+  const policy = verifiedPolicyForAttempt(attempt, latestByProvider.keys());
+  const expectedProfiles = new Map((policy?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
+  const parsed = [];
+  for (const [provider, { providerAttempt, content }] of latestByProvider) {
+    if (providerAttempt.status !== "completed") {
+      if (content !== null) {
+        try { if (parseReviewerOutput(content) !== null) throw invalidEvidence("failed provider attempt contains a valid semantic review"); }
+        catch (error) { if (error?.code === "REVIEW_EVIDENCE_INVALID") throw error; }
+      }
+      continue;
+    }
+    if (content === null) throw invalidEvidence("completed provider attempt has no semantic review");
+    let review;
+    try { review = parseReviewerOutput(content, { requireEvidence: true }); }
+    catch { throw invalidEvidence("completed provider output is not a valid semantic review"); }
+    if (expectedProfiles.has(provider) && !pinnedProfileMatches(expectedProfiles.get(provider), providerAttempt.execution)) {
+      throw invalidEvidence("completed provider execution does not match its pinned profile");
+    }
+    parsed.push({ provider, review });
+  }
+  const aggregation = aggregateProviderResults(evidenceAnchorsFor(parsed, bundle), minimumReviewersForPolicy(policy, attempt.stage, attempt.review_track), { profilePriority: policy?.requested_profiles ?? profilePriorityForAttempt(attempt) });
+  if (aggregation.status !== "semantic") throw invalidEvidence("semantic attempt provider evidence does not meet its required quorum");
+  const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
+  const findings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
+  const result = {
+    version: "wh-review-result.v1", task_id: attempt.task_id, stage: attempt.stage, review_track: attempt.review_track,
+    subject_kind: attempt.subject_kind, phase_id: attempt.phase_id, base_tree: attempt.base_tree, candidate_tree: attempt.candidate_tree,
+    source: attempt.source, snapshot_tree: attempt.snapshot_tree, material_id: attempt.material_id, attempt_ref: attemptRef,
+    report_ref: attempt.report_ref, provider_results: providerResults, verdict: aggregation.verdict, findings,
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+    ...(attempt.review_chain ? { review_chain: attempt.review_chain } : {}),
+  };
+  validateSchema("result", result);
+  return result;
+}
+
+function recoverSemanticFinalization(task, identity, bundle, attemptRef, attempt) {
+  if (attempt.terminal_status !== "semantic" || attempt.error !== null) throw invalidEvidence("only a terminal semantic attempt can be recovered");
+  const refs = reviewRefs({ attemptId: attempt.attempt_id, stage: attempt.stage, reviewTrack: attempt.review_track, snapshotTree: attempt.snapshot_tree });
+  if (attempt.report_ref !== refs.reportRef) throw invalidEvidence("semantic attempt report ref is not its canonical derived ref");
+  const result = semanticAttemptResult(task, attempt, attemptRef, bundle);
+  const resultRaw = `${JSON.stringify(result, null, 2)}\n`;
+  const reportRaw = renderReviewReport({ attempt, result });
+  publishRecoveredRecord(task, refs.resultRef, resultRaw, () => writeSemanticResult(task, refs.resultRef, result), "recovered semantic result");
+  publishRecoveredRecord(task, refs.reportRef, reportRaw, () => writeReviewReport(task, refs.reportRef, { attempt, result }), "recovered semantic report");
+  const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
+  return { status: "semantic", verdict: result.verdict, attemptRef, resultRef: refs.resultRef, snapshotTree: result.snapshot_tree,
+    materialId: result.material_id, runtimeIds, subjectKind: result.subject_kind, phaseId: result.phase_id,
+    baseTree: result.base_tree, candidateTree: result.candidate_tree, reportRef: refs.reportRef, reused: true };
 }
 
 function reusableOutcome(task, identity, bundle) {
@@ -338,6 +446,11 @@ function reusableOutcome(task, identity, bundle) {
   for (const item of matchingAttempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
     if (item.record.terminal_status === "unavailable") validateUnavailableAttemptEvidence(task, item.record, bundle);
+  }
+  if (matchingResults.length === 0) {
+    const semanticAttempts = matchingAttempts.filter(({ record }) => record.terminal_status === "semantic" && record.error === null);
+    if (semanticAttempts.length > 1) throw invalidEvidence("multiple semantic attempts exist without a canonical result");
+    if (semanticAttempts.length === 1) return recoverSemanticFinalization(task, identity, bundle, semanticAttempts[0].ref, semanticAttempts[0].record);
   }
   if (matchingResults.length === 1) {
     const { ref: resultRef, record: result } = matchingResults[0];
@@ -361,9 +474,10 @@ function reusableOutcome(task, identity, bundle) {
         !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) {
       throw invalidEvidence("attempt and result identities differ");
     }
+    const policy = verifiedPolicyForAttempt(attempt, attempt.provider_attempts.map(({ provider }) => provider));
     const parsed = [];
     const providers = new Set();
-    const expectedProfiles = new Map((reviewPolicyRecord(attempt.review_policy ?? null)?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
+    const expectedProfiles = new Map((policy?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
     let chainValid = true;
     for (const providerResult of result.provider_results) {
       if (providers.has(providerResult.provider)) { chainValid = false; break; }
@@ -382,7 +496,7 @@ function reusableOutcome(task, identity, bundle) {
         parsed.push({ provider: providerResult.provider, review });
       } catch { chainValid = false; break; }
     }
-    const aggregation = aggregateProviderResults(evidenceAnchorsFor(parsed, bundle), minimumReviewersForAttempt(attempt), { profilePriority: profilePriorityForAttempt(attempt) });
+    const aggregation = aggregateProviderResults(evidenceAnchorsFor(parsed, bundle), minimumReviewersForPolicy(policy, attempt.stage, attempt.review_track), { profilePriority: policy?.requested_profiles ?? profilePriorityForAttempt(attempt) });
     const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
     const expectedFindings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
     const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
@@ -395,10 +509,21 @@ function reusableOutcome(task, identity, bundle) {
           : (!isDeepStrictEqual(result.findings, expectedFindings) || !isDeepStrictEqual(result.adjudication, expectedAdjudication)))) {
       throw invalidEvidence("semantic result does not match its provider evidence and aggregation");
     }
+    const refs = reviewRefs({ attemptId: attempt.attempt_id, stage: attempt.stage, reviewTrack: attempt.review_track, snapshotTree: attempt.snapshot_tree });
+    const hasResultReportRef = result.report_ref !== undefined;
+    const hasAttemptReportRef = attempt.report_ref !== undefined;
+    if (resultRef !== refs.resultRef || hasResultReportRef !== hasAttemptReportRef ||
+        (hasResultReportRef && (result.report_ref !== refs.reportRef || attempt.report_ref !== refs.reportRef))) {
+      throw invalidEvidence("semantic result or attempt report ref is not canonical for its attempt");
+    }
+    if (hasResultReportRef) {
+      const reportRaw = renderReviewReport({ attempt, result });
+      publishRecoveredRecord(task, refs.reportRef, reportRaw, () => writeReviewReport(task, refs.reportRef, { attempt, result }), "semantic report");
+    }
     const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
     return { status: "semantic", verdict: result.verdict, attemptRef: result.attempt_ref, resultRef, snapshotTree: result.snapshot_tree,
       materialId: result.material_id, runtimeIds, subjectKind: result.subject_kind, phaseId: result.phase_id,
-      baseTree: result.base_tree, candidateTree: result.candidate_tree, reportRef: result.report_ref ?? attempt.report_ref ?? null, reused: true };
+      baseTree: result.base_tree, candidateTree: result.candidate_tree, reportRef: hasResultReportRef ? refs.reportRef : null, reused: true };
   }
   for (const { ref: attemptRef, record: attempt } of matchingAttempts) {
     if (attempt.terminal_status !== "unavailable" || !attempt.error) {
