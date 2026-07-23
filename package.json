@@ -7,7 +7,9 @@
     "check": "markdownlint-cli2 \"**/*.md\" && node scripts/verify-structure.mjs && node scripts/run-checks.mjs && npm run check:skill-closure && npm run smoke:skill-dispatch",
     "check:skill-closure": "node core/check-skill-closure.mjs",
     "smoke:skill-dispatch": "node scripts/smoke-local-skill-dispatch.mjs",
-    "test": "vitest run"
+    "test": "npm run test:safe && npm run test:exclusive",
+    "test:safe": "vitest run --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
+    "test:exclusive": "vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism"
   },
   "dependencies": {
     "ajv": "8.17.1",

@@ -90,9 +90,13 @@ describe("official five-stage CLI", () => {
       expect(result.status).not.toBe(0);
       expect(result.stderr).toMatch(/receipts/i);
     };
+    const acceptanceCoverage = (testReceiptRef) => {
+      const { snapshot_tree } = JSON.parse(task.readRecord(testReceiptRef));
+      return { snapshot_tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] };
+    };
     const invoke = (stage, receipts, extra = []) => {
       const input = join(inputRoots[stage], `${stage}-input.json`);
-      writeFileSync(input, `${JSON.stringify({ receipts })}\n`);
+      writeFileSync(input, `${JSON.stringify({ receipts, ...(stage === "build-code" ? { acceptance_coverage: acceptanceCoverage(receipts.tests) } : {}) })}\n`);
       const attempt = run(root, repo, ["run", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--input=${input}`, ...extra]);
       if (["build-spec", "build-plan"].includes(stage)) expect(attempt.attempt.checkpoint).not.toHaveProperty("ref");
       const human = ["make-decision", "build-plan", "verify-code"].includes(stage);
@@ -233,7 +237,7 @@ describe("official five-stage CLI", () => {
     const revisedBuildTests = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf revised-build", receiptRef: "receipts/build-tests-revised.json", outputRef: "evidence/build-output-revised.txt" });
     const revisedBuildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: revisedImplementation.value.snapshot_tree });
     const revisedBuildInput = join(inputRoots["build-code"], "build-code-revised-input.json");
-    writeFileSync(revisedBuildInput, `${JSON.stringify({ receipts: { implementation: revisedImplementation.ref, tests: revisedBuildTests.receipt_ref, review: revisedBuildReview.resultRef } })}\n`);
+    writeFileSync(revisedBuildInput, `${JSON.stringify({ receipts: { implementation: revisedImplementation.ref, tests: revisedBuildTests.receipt_ref, review: revisedBuildReview.resultRef }, acceptance_coverage: acceptanceCoverage(revisedBuildTests.receipt_ref) })}\n`);
     const acceptedBuild = JSON.parse(task.readRecord("results/build-code/accepted.json"));
     const acceptedBuildAttemptPath = task.recordPath(`results/build-code/${acceptedBuild.attempt_ref}`);
     const acceptedBuildAttemptRaw = readFileSync(acceptedBuildAttemptPath, "utf8");

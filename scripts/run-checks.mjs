@@ -68,23 +68,6 @@ function runChecker(checkerName, checkerArgs) {
   return result.status ?? 1;
 }
 
-function retryTransientCheckerFailure(checkerName, checkerArgs, code) {
-  if (code === 0 || checkerName !== "check-extensibility") return code;
-
-  // check-extensibility.test intentionally mutates core/kernel.mjs for a
-  // falsifiability window. Full-suite runs can overlap this aggregate check;
-  // bounded short retries remove that transient race while persistent core
-  // diffs still fail.
-  let nextCode = code;
-  const blocker = new Int32Array(new SharedArrayBuffer(4));
-  for (let attempt = 1; attempt <= 6 && nextCode !== 0; attempt += 1) {
-    Atomics.wait(blocker, 0, 0, 750);
-    console.log(`[run-checks] retrying ${checkerName} after transient failure (${attempt}/6) ...`);
-    nextCode = runChecker(checkerName, checkerArgs);
-  }
-  return nextCode;
-}
-
 // ---------------------------------------------------------------------------
 // Aggregate mode (default)
 // ---------------------------------------------------------------------------
@@ -101,11 +84,7 @@ function runAggregate() {
 
   // 2. check-extensibility (no args, CLI self-builds tmpdir config)
   console.log("[run-checks] running check-extensibility ...");
-  const extCode = retryTransientCheckerFailure(
-    "check-extensibility",
-    [],
-    runChecker("check-extensibility", [])
-  );
+  const extCode = runChecker("check-extensibility", []);
   if (extCode !== 0) {
     failures.push({ name: "check-extensibility", code: extCode });
   }

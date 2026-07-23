@@ -4,16 +4,17 @@ import { defineConfig } from "vitest/config";
 // Tests live next to the modules they cover (core/*.test.mjs, scripts/*.test.mjs).
 export default defineConfig({
   test: {
-    // Keep the default suite safe on developer machines. Phase-specific
-    // commands may still narrow the file selection, but they use one fork and
-    // never create a CPU-sized worker pool.
+    // Safe tests use at most two forks. Tests that write into this repository
+    // are run by npm's exclusive batch instead; re-audit that list before
+    // adding another source-mutating test.
     pool: "forks",
     poolOptions: {
       forks: {
-        singleFork: true,
+        minForks: 1,
+        maxForks: 2,
       },
     },
-    fileParallelism: false,
+    fileParallelism: true,
     include: [
       "core/**/*.test.mjs",
       "scripts/**/*.test.mjs",

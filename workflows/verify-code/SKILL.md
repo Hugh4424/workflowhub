@@ -199,7 +199,7 @@ idempotent. Other attempts against a closed stage remain rejected.
    the published failure attempt plus its failed `acceptance-evidence.v1`
    reference for the existing controlled `reopen` flow; a failure attempt
    cannot be accepted.
-9. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
+8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
    snapshot commit from the current canonical accepted verification facts,
    accepted spec path,

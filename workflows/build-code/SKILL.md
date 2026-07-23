@@ -180,14 +180,15 @@ order, evidence, or authority boundaries.
 4. Start the next Phase only after the current Phase gate passes. The accepted
    plan remains the ordering authority; the mutable `phase-result.json` is only
    the current pointer because there is no machine-readable Phase index.
-5. After every planned Phase passes, verify each Phase ID has matching
-   canonical snapshot/material evidence and a formal PASS result, then run one
-   final full-worktree `wh-review`. Never repeat a Phase or final review when
+5. After every planned Phase passes, create the final implementation receipt,
+   capture one fresh complete test receipt required by the accepted plan, and
+   verify each Phase ID has matching canonical snapshot/material evidence and a
+   formal PASS result. Then run one final full-worktree `wh-review`. Never
+   repeat a Phase or final review when
    its existing `snapshot_tree`, review material identity, test command hash,
    and referenced evidence hashes are unchanged. Present one review brief for
    this final effective result.
-6. Create the final implementation and fresh test receipts, publish the
-   build-code attempt with `run`, and let the trusted runtime accept it
+6. Publish the build-code attempt with `run`, and let the trusted runtime accept it
    automatically. The final attempt facts must also carry the complete
    `acceptance_coverage` table for every accepted AC (exactly one row per AC,
    marked `covered`, `missing`, or `unknown`, with canonical evidence refs for

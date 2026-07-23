@@ -28,6 +28,7 @@ async function fixture({ reverseLast = false, tamper = false } = {}) {
   execFileSync("git",["init","-q"],{cwd:repo}); execFileSync("git",["config","user.email","t@example.com"],{cwd:repo}); execFileSync("git",["config","user.name","Test"],{cwd:repo}); execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});
   const oid=execFileSync("git",["rev-parse","HEAD"],{cwd:repo,encoding:"utf8"}).trim(); execFileSync("git",["worktree","add","-q","-b","task/Demo/demo-task",worktree,oid],{cwd:repo});
   const tree=execFileSync("git",["rev-parse","HEAD^{tree}"],{cwd:repo,encoding:"utf8"}).trim(), hash="a".repeat(64);
+  const acceptanceCoverage={snapshot_tree:tree,accepted_criterion_ids:["AC-1"],items:[{acceptance_criterion_id:"AC-1",status:"unknown",evidence_refs:[]}]};
   const testFacts=(prefix)=>({command:"npm test",exit_code:0,command_hash:hash,snapshot_head:oid,snapshot_tree:tree,snapshot_commit:oid,started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z",receipt_ref:`evidence/${prefix}-receipt.json`,receipt_hash:hash,output_ref:`evidence/${prefix}-output.txt`,output_hash:hash});
   const reviewFacts=(stage)=>({verdict:"pass",result_ref:`reviews/results/${stage}.json`,result_hash:hash,snapshot_tree:tree});
   const task = createTask({ storageRoot, taskPath, manifest: {
@@ -40,7 +41,7 @@ async function fixture({ reverseLast = false, tamper = false } = {}) {
   await execute("make-decision",async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
   await execute("build-spec",async(ctx)=>{ctx.artifacts.writeAtomic("spec.md","spec\n");const checkpoint=ctx.createCheckpoint("build-spec");return{facts:{spec_ref:"specs/demo-task/spec.md",checkpoint}};});
   await execute("build-plan",async(ctx)=>{ctx.artifacts.writeAtomic("plan.md","plan\n");ctx.artifacts.writeAtomic("tasks.md","tasks\n");const checkpoint=ctx.createCheckpoint("build-plan");return{facts:{plan_ref:"specs/demo-task/plan.md",tasks_ref:"specs/demo-task/tasks.md",checkpoint}};});
-  await execute("build-code",async()=>({facts:{changed:[],tests:testFacts("build"),review:reviewFacts("build-code"),phase_completion:true}}));
+  await execute("build-code",async()=>({facts:{changed:[],tests:testFacts("build"),review:reviewFacts("build-code"),phase_completion:true,acceptance_coverage:acceptanceCoverage}}));
   await execute("verify-code",async()=>({facts:{tests:testFacts("verify"),review:reviewFacts("verify-code"),evidence_refs:[]}}));
   if(reverseLast){const acceptedRef="results/verify-code/accepted.json";const accepted=JSON.parse(task.readRecord(acceptedRef));const attemptRef=`results/verify-code/${accepted.attempt_ref}`;const attempt=JSON.parse(task.readRecord(attemptRef));attempt.created_at="2000-01-01T00:00:00.000Z";const raw=`${JSON.stringify(attempt)}\n`;writeFileSync(join(task.taskPath,attemptRef),raw);accepted.integrity_hash=createHash("sha256").update(raw).digest("hex");writeFileSync(join(task.taskPath,acceptedRef),`${JSON.stringify(accepted)}\n`);}
   if (tamper) writeFileSync(join(task.taskPath,"results/build-code/attempt-0001.json"), "{}\n");
