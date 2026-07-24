@@ -12,17 +12,20 @@ import {
   createArtifactRecord,
   createHealthFact,
   createRuntimeFact,
+  createRuntimeFactV2,
   createTranscriptRecord,
   mergeArtifactRecords,
   mergeHealthFacts,
   mergeRuntimeFacts,
+  mergeRuntimeFactsV2,
   mergeSkills,
   mergeTranscriptRecords,
   parseJsonl,
   validateRuntimeFact,
+  validateRuntimeFactV2,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, buildRuntimeFactV2Projection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createRuntimeFactV2Reader, createRuntimeFactV2Registry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
@@ -41,7 +44,7 @@ const exec = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const INDEX_REFS = [
   "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
-  "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl",
+  "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl", "indexes/runtime-facts-v2.jsonl",
 ];
 
 async function createM14bFixture() {
@@ -126,6 +129,17 @@ function runtimeRegistry(entries = []) {
     source_format: entry.source_format ?? "json",
     source_version: entry.source_version ?? "v1",
     reader: createRuntimeFactReader(entry.read),
+  })));
+}
+
+function runtimeV2Registry(entries = []) {
+  return createRuntimeFactV2Registry(entries.map((entry) => ({
+    fact_type: entry.fact_type,
+    source_class: entry.source_class,
+    registration_id: entry.registration_id ?? `${entry.fact_type}-source`,
+    source_format: entry.source_format ?? "json",
+    source_version: entry.source_version ?? "v1",
+    reader: createRuntimeFactV2Reader(entry.read),
   })));
 }
 
@@ -362,15 +376,85 @@ describe("M14b fact collection pure contracts", () => {
   });
 });
 
+describe("M14b runtime-facts.v2 contracts", () => {
+  it("AC-V2-001/002/003/017 validates all ten values and full-scope fact IDs", () => {
+    const values = {
+      cost: { cost_id: "cost-1", receipt_id: "usage-1", amount_minor: 12, currency: "USD", unit: "request", line_item_id: null, period_start: null, period_end: null },
+      token: { usage_id: "usage-1", input_tokens: 2, output_tokens: 3, total_tokens: 9, unit: "tokens" },
+      duration: { execution_id: "exec-1", duration_ms: 4, started_at: "2026-07-18T00:00:00.000Z", ended_at: "2026-07-18T00:00:01.000Z", measure: "wall_clock" },
+      tool_count: { execution_id: "exec-1", total_calls: 3, successful_calls: 1, failed_calls: 1, unknown_calls: 1 },
+      attribution: { attribution_id: "attr-1", subject_kind: "session", subject_id: "session-1", attributed_kind: "agent", attributed_id: "agent-1", relation: "launched_by" },
+      review: { review_id: "review-1", stage: "build-code", verdict: "pass", finding_count: 0, reviewer_count: 1, evidence_id: "evidence-1" },
+      verification: { verification_id: "verify-1", stage: "build-code", result: "pass", passed_count: 10, failed_count: 0, evidence_id: "evidence-2" },
+      stage_reconciliation: { reconciliation_id: "reconcile-1", stage: "build-code", expected_topology_id: "topology-1", expected_step_id: "step-1", observed_state: "completed", terminal_fact_id: "terminal-1", skip_receipt_id: null },
+      human_intervention: { intervention_id: "intervention-1", kind: "confirmation", actor_id: "member-1", action: "approve", reason: "scope locked", started_at: null, ended_at: null },
+      automation_rate: { aggregation_id: "aggregate-1", scope_kind: "run", automated_count: 2, manual_count: 1, denominator: 3, rate_ppm: 666667, period_start: null, period_end: null },
+    };
+    const classes = {
+      cost: "usage_receipt", token: "usage_receipt", duration: "usage_receipt", tool_count: "usage_receipt",
+      attribution: "launcher_transcript_metadata", review: "review_record", verification: "verification_receipt",
+      stage_reconciliation: "stage_topology_journal", human_intervention: "human_confirmation_record", automation_rate: "orchestrator_dispatch",
+    };
+    for (const [factType, value] of Object.entries(values)) {
+      const fact = createRuntimeFactV2({ fact_type: factType, value, source: { class: classes[factType], registration_id: "registered", object_id: value[{
+        cost: "cost_id", token: "usage_id", duration: "execution_id", tool_count: "execution_id", attribution: "attribution_id", review: "review_id", verification: "verification_id", stage_reconciliation: "reconciliation_id", human_intervention: "intervention_id", automation_rate: "aggregation_id",
+      }[factType]] }, observed_at: "2026-07-18T00:00:00.000Z", run_id: "run-1", session_id: "session-1", stage: "build-code", status: "present" });
+      expect(fact.fact_id).toMatch(/^rf2_[a-f0-9]{64}$/);
+      expect(validateRuntimeFactV2(fact), `${factType}: ${JSON.stringify(validateRuntimeFactV2(fact).errors)}`).toMatchObject({ ok: true });
+    }
+  });
+
+  it("AC-V2-005/006/007/008/009/010/011/016 projects direct sources without inference", () => {
+    const classes = {
+      cost: "usage_receipt", token: "usage_receipt", duration: "usage_receipt", tool_count: "usage_receipt",
+      attribution: "launcher_transcript_metadata", review: "review_record", verification: "verification_receipt",
+      stage_reconciliation: "stage_topology_journal", human_intervention: "human_confirmation_record", automation_rate: "orchestrator_dispatch",
+    };
+    const values = {
+      cost: { cost_id: "cost-1", receipt_id: "usage-1", amount_minor: 1, currency: "USD", unit: "request", line_item_id: null, period_start: null, period_end: null },
+      token: { usage_id: "usage-1", input_tokens: 1, output_tokens: 2, total_tokens: 8, unit: "tokens" },
+      duration: { execution_id: "exec-1", duration_ms: 1, started_at: "2026-07-18T00:00:00.000Z", ended_at: "2026-07-18T00:00:01.000Z", measure: "active" },
+      tool_count: { execution_id: "exec-1", total_calls: 2, successful_calls: 1, failed_calls: 0, unknown_calls: 1 },
+      attribution: { attribution_id: "attr-1", subject_kind: "session", subject_id: "s", attributed_kind: "agent", attributed_id: "a", relation: "owns" },
+      review: { review_id: "review-1", stage: "build-code", verdict: "pass", finding_count: 0, reviewer_count: 1, evidence_id: "e1" },
+      verification: { verification_id: "verify-1", stage: "build-code", result: "pass", passed_count: 1, failed_count: 0, evidence_id: "e2" },
+      stage_reconciliation: { reconciliation_id: "rec-1", stage: "build-code", expected_topology_id: "top-1", expected_step_id: "step-1", observed_state: "skipped", terminal_fact_id: null, skip_receipt_id: "skip-1" },
+      human_intervention: { intervention_id: "human-1", kind: "confirmation", actor_id: "member-1", action: "approve", reason: "review", started_at: null, ended_at: null },
+      automation_rate: { aggregation_id: "rate-1", scope_kind: "stage", automated_count: 1, manual_count: 1, denominator: 2, rate_ppm: 500000, period_start: null, period_end: null },
+    };
+    const projection = buildRuntimeFactV2Projection(runtimeV2Registry(Object.entries(values).map(([fact_type, value]) => ({ fact_type, source_class: classes[fact_type], read: () => value }))), { runId: "run-1", now: () => new Date("2026-07-18T00:00:00.000Z") });
+    expect(projection).toHaveLength(10);
+    expect(projection.every((fact) => fact.status === "present")).toBe(true);
+    expect(projection.find((fact) => fact.fact_type === "token").value.total_tokens).toBe(8);
+  });
+
+  it("AC-V2-004/005/012/014 preserves missing, unknown, privacy and conflict states", () => {
+    const projection = buildRuntimeFactV2Projection(runtimeV2Registry([
+      { fact_type: "attribution", source_class: "launcher_transcript_metadata", read: () => ({ attribution_id: "a", body: "private" }) },
+      { fact_type: "review", source_class: "review_record", read: () => { throw Object.assign(new Error("read"), { code: "EIO" }); } },
+      { fact_type: "automation_rate", source_class: "orchestrator_dispatch", read: () => [] },
+    ]), { runId: "run-1", now: () => new Date("2026-07-18T00:00:00.000Z") });
+    expect(projection).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "attribution", status: "unknown", reason: "unsupported_format", value: null }),
+      expect.objectContaining({ fact_type: "review", status: "unknown", reason: "read_error", value: null }),
+      expect.objectContaining({ fact_type: "automation_rate", status: "missing", reason: "not_found", value: null }),
+      expect.objectContaining({ fact_type: "cost", status: "missing", reason: "no_registered_source", value: null }),
+    ]));
+    const base = createRuntimeFactV2({ fact_type: "token", value: { usage_id: "u", input_tokens: 1, output_tokens: 0, total_tokens: 1, unit: "tokens" }, source: { class: "usage_receipt", registration_id: "r", object_id: "u" }, observed_at: "2026-07-18T00:00:00.000Z", run_id: "run-1", status: "present" });
+    const conflict = createRuntimeFactV2({ ...base, value: { ...base.value, total_tokens: 2 } });
+    expect(mergeRuntimeFactsV2([base, conflict]).records[0]).toMatchObject({ status: "unknown", reason: "duplicate_id_conflict", value: null });
+  });
+});
+
 describe("M14b fact collection acceptance", () => {
-  it("AC-001/002 collects all four task-local indexes with the deterministic no-source fact", async () => {
+  it("AC-V2-001/004 collects both runtime index versions with deterministic no-source facts", async () => {
     const fixture = await createM14bFixture();
     const result = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
 
     expect(result).toMatchObject({ status: "success" });
     expect(result.files.map((file) => file.ref)).toEqual([
       "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
-      "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl",
+      "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl", "indexes/runtime-facts-v2.jsonl",
     ]);
     expect(result.files.every((file) => file.saved)).toBe(true);
     expect(fixture.task.readRecord("indexes/transcript-index.jsonl")).toContain('"id":"transcript-source-registry"');
@@ -379,8 +463,27 @@ describe("M14b fact collection acceptance", () => {
       expect.objectContaining({ fact_type: "cost", status: "missing", reason: "no_registered_source", value: null }),
       expect.objectContaining({ fact_type: "automation", status: "missing", reason: "no_registered_source", value: null }),
     ]));
+    expect(records(fixture.task, "indexes/runtime-facts-v2.jsonl")).toHaveLength(10);
+    expect(records(fixture.task, "indexes/runtime-facts-v2.jsonl").every((fact) => fact.status === "missing" && fact.reason === "no_registered_source" && fact.value === null)).toBe(true);
     expect(records(fixture.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
       expect.objectContaining({ record_kind: "artifact", id: `specs/${fixture.task.identity.taskId}/decision.md`, status: "present" }),
+    ]));
+  });
+
+  it("AC-V2-013/015 writes v2 beside v1 without changing v1 facts", async () => {
+    const fixture = await createM14bFixture();
+    const result = collectTaskFacts(collectionContext(fixture), {
+      transcriptRegistry: registry(),
+      runtimeV2Registry: runtimeV2Registry([{ fact_type: "cost", source_class: "usage_receipt", read: () => ({ receipt_id: "usage-1", amount_minor: 7, currency: "USD", unit: "request" }) }]),
+      runId: "run-v1",
+      now: () => new Date(fixture.clock()),
+    });
+    expect(result.status).toBe("success");
+    expect(records(fixture.task, "indexes/runtime-facts.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "cost", status: "missing", reason: "no_registered_source" }),
+    ]));
+    expect(records(fixture.task, "indexes/runtime-facts-v2.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "cost", status: "present", value: expect.objectContaining({ cost_id: "usage-1" }) }),
     ]));
   });
 

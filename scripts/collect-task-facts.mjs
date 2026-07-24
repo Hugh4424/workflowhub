@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 import { RUNTIME_FACT_SOURCES } from "../config/runtime-fact-sources.mjs";
+import { RUNTIME_FACT_V2_SOURCES } from "../config/runtime-fact-v2-sources.mjs";
 import { TRANSCRIPT_SOURCES } from "../config/transcript-sources.mjs";
-import { collectTaskFacts, createRuntimeFactRegistry, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { collectTaskFacts, createRuntimeFactRegistry, createRuntimeFactV2Registry, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
 import { loadConfig } from "../core/load-config.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { configForCollector, createMetricsLauncherConfig, recordSkeleton, updateOwnResult } from "../metrics/collector.mjs";
@@ -33,6 +34,10 @@ function productionRuntimeRegistry() {
   return createRuntimeFactRegistry(RUNTIME_FACT_SOURCES);
 }
 
+function productionRuntimeV2Registry() {
+  return createRuntimeFactV2Registry(RUNTIME_FACT_V2_SOURCES);
+}
+
 function recordMetric(operation, warnings) {
   try { operation(); }
   catch { warnings.push({ code: "METRICS_WRITE_FAILED", message: "Metrics collection failed" }); }
@@ -53,7 +58,7 @@ export function collectTaskFactsMain(argv = process.argv.slice(2)) {
   recordMetric(() => recordSkeleton({ execution_id: executionId, skill_or_stage: "fact-collection", stage: options.stage, skill_version: "v1" }, metrics), metricWarnings);
   let result;
   try {
-    result = collectTaskFacts(ctx, { transcriptRegistry: productionRegistry(), runtimeRegistry: productionRuntimeRegistry(), runId: executionId });
+    result = collectTaskFacts(ctx, { transcriptRegistry: productionRegistry(), runtimeRegistry: productionRuntimeRegistry(), runtimeV2Registry: productionRuntimeV2Registry(), runId: executionId });
     return result;
   } finally {
     recordMetric(() => updateOwnResult(executionId, {

@@ -14,6 +14,23 @@ export const RUNTIME_FACT_SOURCE_CLASSES = Object.freeze({
   step_skip: "canonical_skipped_receipt",
   automation: "launcher_orchestrator_dispatch",
 });
+export const RUNTIME_FACT_V2_SCHEMA_VERSION = "runtime-facts.v2";
+export const RUNTIME_FACT_V2_COLLECTOR_VERSION = "1.0.0";
+export const RUNTIME_FACT_V2_TYPES = Object.freeze([
+  "cost", "token", "duration", "tool_count", "attribution", "review",
+  "verification", "stage_reconciliation", "human_intervention", "automation_rate",
+]);
+export const RUNTIME_FACT_V2_SOURCE_CLASSES = Object.freeze({
+  cost: "usage_receipt", token: "usage_receipt", duration: "usage_receipt", tool_count: "usage_receipt",
+  attribution: "launcher_transcript_metadata", review: "review_record", verification: "verification_receipt",
+  stage_reconciliation: "stage_topology_journal", human_intervention: "human_confirmation_record",
+  automation_rate: "orchestrator_dispatch",
+});
+export const RUNTIME_FACT_V2_VALUE_ID_FIELDS = Object.freeze({
+  cost: "cost_id", token: "usage_id", duration: "execution_id", tool_count: "execution_id",
+  attribution: "attribution_id", review: "review_id", verification: "verification_id",
+  stage_reconciliation: "reconciliation_id", human_intervention: "intervention_id", automation_rate: "aggregation_id",
+});
 
 const STATUSES = new Set(["present", "missing", "unknown"]);
 const TRANSCRIPT_KINDS = new Set(["transcript", "source_status", "parse_error"]);
@@ -51,6 +68,10 @@ export function safeError(code, message) {
     RUNTIME_FACT_MALFORMED_LINE: "Runtime fact source contains a malformed line",
     RUNTIME_FACT_DUPLICATE_ID_CONFLICT: "Runtime facts share the same identity with different values",
     RUNTIME_FACT_LEGACY_NOT_COLLECTED: "Legacy runtime fact was not collected",
+    RUNTIME_FACT_V2_READ_ERROR: "Runtime fact v2 source could not be read",
+    RUNTIME_FACT_V2_UNSUPPORTED_FORMAT: "Runtime fact v2 source format is unsupported",
+    RUNTIME_FACT_V2_MALFORMED_LINE: "Runtime fact v2 source contains a malformed line",
+    RUNTIME_FACT_V2_DUPLICATE_ID_CONFLICT: "Runtime facts v2 share the same identity with different values",
   };
   return { code, message: known[code] ?? "Fact index error" };
 }
@@ -236,6 +257,183 @@ export function mergeRuntimeFacts(records) {
 export const createRuntimeFactRecord = createRuntimeFact;
 export const validateRuntimeFactRecord = validateRuntimeFact;
 export const mergeRuntimeFactRecords = mergeRuntimeFacts;
+
+const RUNTIME_FACT_V2_FIELDS = new Set(["schema_version", "collector_version", "fact_id", "fact_type", "status", "value", "source", "observed_at", "reason", "error", "scope"]);
+const RUNTIME_FACT_V2_SOURCE_FIELDS = new Set(["class", "registration_id", "object_id"]);
+const RUNTIME_FACT_V2_SCOPE_FIELDS = new Set(["run_id", "session_id", "agent_id", "stage", "step", "attempt_id"]);
+const RUNTIME_FACT_V2_MISSING_REASONS = new Set(["no_registered_source", "not_found"]);
+const RUNTIME_FACT_V2_UNKNOWN_REASONS = new Set(["read_error", "unsupported_format", "malformed_line", "duplicate_id_conflict"]);
+
+const RUNTIME_FACT_V2_VALUE_FIELDS = Object.freeze({
+  cost: new Set(["cost_id", "receipt_id", "amount_minor", "currency", "unit", "line_item_id", "period_start", "period_end"]),
+  token: new Set(["usage_id", "input_tokens", "output_tokens", "total_tokens", "unit"]),
+  duration: new Set(["execution_id", "duration_ms", "started_at", "ended_at", "measure"]),
+  tool_count: new Set(["execution_id", "total_calls", "successful_calls", "failed_calls", "unknown_calls"]),
+  attribution: new Set(["attribution_id", "subject_kind", "subject_id", "attributed_kind", "attributed_id", "relation"]),
+  review: new Set(["review_id", "stage", "verdict", "finding_count", "reviewer_count", "evidence_id"]),
+  verification: new Set(["verification_id", "stage", "result", "passed_count", "failed_count", "evidence_id"]),
+  stage_reconciliation: new Set(["reconciliation_id", "stage", "expected_topology_id", "expected_step_id", "observed_state", "terminal_fact_id", "skip_receipt_id"]),
+  human_intervention: new Set(["intervention_id", "kind", "actor_id", "action", "reason", "started_at", "ended_at"]),
+  automation_rate: new Set(["aggregation_id", "scope_kind", "automated_count", "manual_count", "denominator", "rate_ppm", "period_start", "period_end"]),
+});
+
+const v2ExactObject = (value, fields) => exactObject(value, fields);
+const v2Timestamp = (value) => text(value) && /Z$/.test(value) && !Number.isNaN(Date.parse(value));
+const v2NullableTimestamp = (value) => value === null || v2Timestamp(value);
+const v2NonNegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
+const v2PositiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
+const v2SafeString = (value) => text(value) && !pathLike(value);
+const V2_FORBIDDEN_KEYS = new Set(["body", "content", "text", "raw", "private_path", "cache", "credential", "password", "secret", "provider_output", "private_session"]);
+
+function v2PrivacySafe(value) {
+  if (!value || typeof value !== "object") return true;
+  if (Array.isArray(value)) return value.every(v2PrivacySafe);
+  return Object.entries(value).every(([key, item]) => !V2_FORBIDDEN_KEYS.has(key) && v2PrivacySafe(item)
+    && (typeof item !== "string" || !pathLike(item)));
+}
+
+function validRuntimeFactV2Value(factType, value) {
+  if (!v2PrivacySafe(value) || !value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (factType === "cost") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.cost)
+    && v2SafeString(value.cost_id) && v2SafeString(value.receipt_id) && v2NonNegativeInteger(value.amount_minor)
+    && /^[A-Z]{3}$/.test(value.currency) && v2SafeString(value.unit) && (value.line_item_id === null || v2SafeString(value.line_item_id))
+    && v2NullableTimestamp(value.period_start) && v2NullableTimestamp(value.period_end);
+  if (factType === "token") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.token)
+    && v2SafeString(value.usage_id) && v2NonNegativeInteger(value.input_tokens) && v2NonNegativeInteger(value.output_tokens)
+    && v2NonNegativeInteger(value.total_tokens) && value.unit === "tokens";
+  if (factType === "duration") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.duration)
+    && v2SafeString(value.execution_id) && v2NonNegativeInteger(value.duration_ms)
+    && v2Timestamp(value.started_at) && v2Timestamp(value.ended_at) && new Set(["wall_clock", "active"]).has(value.measure);
+  if (factType === "tool_count") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.tool_count)
+    && v2SafeString(value.execution_id) && [value.total_calls, value.successful_calls, value.failed_calls, value.unknown_calls].every(v2NonNegativeInteger)
+    && value.total_calls === value.successful_calls + value.failed_calls + value.unknown_calls;
+  if (factType === "attribution") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.attribution)
+    && [value.attribution_id, value.subject_kind, value.subject_id, value.attributed_kind, value.attributed_id, value.relation].every(v2SafeString);
+  if (factType === "review") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.review)
+    && v2SafeString(value.review_id) && v2SafeString(value.stage) && new Set(["pass", "revise_required", "unavailable"]).has(value.verdict)
+    && v2NonNegativeInteger(value.finding_count) && v2PositiveInteger(value.reviewer_count) && v2SafeString(value.evidence_id);
+  if (factType === "verification") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.verification)
+    && v2SafeString(value.verification_id) && v2SafeString(value.stage) && new Set(["pass", "fail"]).has(value.result)
+    && v2NonNegativeInteger(value.passed_count) && v2NonNegativeInteger(value.failed_count) && v2SafeString(value.evidence_id);
+  if (factType === "stage_reconciliation") {
+    return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.stage_reconciliation)
+      && v2SafeString(value.reconciliation_id) && v2SafeString(value.stage) && v2SafeString(value.expected_topology_id)
+      && v2SafeString(value.expected_step_id) && new Set(["completed", "failed", "skipped", "missing-stage"]).has(value.observed_state)
+      && (value.terminal_fact_id === null || v2SafeString(value.terminal_fact_id)) && (value.skip_receipt_id === null || v2SafeString(value.skip_receipt_id))
+      && ((value.observed_state === "completed" || value.observed_state === "failed") && value.terminal_fact_id !== null && value.skip_receipt_id === null
+        || value.observed_state === "skipped" && value.terminal_fact_id === null && value.skip_receipt_id !== null
+        || value.observed_state === "missing-stage" && value.terminal_fact_id === null && value.skip_receipt_id === null);
+  }
+  if (factType === "human_intervention") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.human_intervention)
+    && [value.intervention_id, value.kind, value.actor_id, value.action, value.reason].every(v2SafeString)
+    && v2NullableTimestamp(value.started_at) && v2NullableTimestamp(value.ended_at);
+  if (factType === "automation_rate") return v2ExactObject(value, RUNTIME_FACT_V2_VALUE_FIELDS.automation_rate)
+    && v2SafeString(value.aggregation_id) && new Set(["run", "stage", "step"]).has(value.scope_kind)
+    && v2PositiveInteger(value.denominator) && v2NonNegativeInteger(value.automated_count) && v2NonNegativeInteger(value.manual_count)
+    && value.denominator === value.automated_count + value.manual_count && v2NonNegativeInteger(value.rate_ppm) && value.rate_ppm <= 1_000_000
+    && value.rate_ppm === Math.round(value.automated_count * 1_000_000 / value.denominator)
+    && v2NullableTimestamp(value.period_start) && v2NullableTimestamp(value.period_end);
+  return false;
+}
+
+function runtimeFactV2Scope(input = {}) {
+  const scope = input.scope ?? input;
+  return {
+    run_id: scope.run_id ?? input.run_id ?? null,
+    session_id: scope.session_id ?? input.session_id ?? null,
+    agent_id: scope.agent_id ?? input.agent_id ?? null,
+    stage: scope.stage ?? input.stage ?? null,
+    step: scope.step ?? input.step ?? null,
+    attempt_id: scope.attempt_id ?? input.attempt_id ?? null,
+  };
+}
+
+function runtimeFactV2Source(source = {}) {
+  return { class: source.class ?? null, registration_id: source.registration_id ?? null, object_id: source.object_id ?? null };
+}
+
+export function runtimeFactV2Id({ fact_type, source = {}, scope = {} } = {}) {
+  if (!RUNTIME_FACT_V2_TYPES.includes(fact_type)) return null;
+  return `rf2_${contentHash({ fact_type, source: runtimeFactV2Source(source), scope: runtimeFactV2Scope({ scope }) })}`;
+}
+
+export function createRuntimeFactV2(input = {}) {
+  const fact_type = input.fact_type ?? null;
+  const source = runtimeFactV2Source(input.source ?? { class: input.source_class, registration_id: input.registration_id, object_id: input.object_id });
+  const scope = runtimeFactV2Scope(input);
+  return {
+    schema_version: input.schema_version ?? RUNTIME_FACT_V2_SCHEMA_VERSION,
+    collector_version: input.collector_version ?? RUNTIME_FACT_V2_COLLECTOR_VERSION,
+    fact_id: input.fact_id ?? runtimeFactV2Id({ fact_type, source, scope }),
+    fact_type,
+    status: input.status ?? "unknown",
+    value: input.value ?? null,
+    source,
+    observed_at: input.observed_at ?? null,
+    reason: input.reason ?? null,
+    error: input.error ?? null,
+    scope,
+  };
+}
+
+export function validateRuntimeFactV2(record) {
+  const errors = [];
+  validateShape(record, RUNTIME_FACT_V2_FIELDS, errors);
+  if (record?.schema_version !== RUNTIME_FACT_V2_SCHEMA_VERSION) errors.push("schema_version is unsupported");
+  if (!text(record?.collector_version)) errors.push("collector_version is required");
+  if (!/^rf2_[a-f0-9]{64}$/.test(record?.fact_id ?? "")) errors.push("fact_id is invalid");
+  if (!RUNTIME_FACT_V2_TYPES.includes(record?.fact_type)) errors.push("fact_type is invalid");
+  if (!STATUSES.has(record?.status)) errors.push("status is invalid");
+  if (!v2ExactObject(record?.source, RUNTIME_FACT_V2_SOURCE_FIELDS)) errors.push("source is invalid");
+  if (record?.source?.class !== RUNTIME_FACT_V2_SOURCE_CLASSES[record?.fact_type]) errors.push("source class is invalid");
+  if (record?.source && (!nullableText(record.source.registration_id) || !nullableText(record.source.object_id))) errors.push("source identifiers are invalid");
+  if (!v2Timestamp(record?.observed_at)) errors.push("observed_at is invalid");
+  if (!v2ExactObject(record?.scope, RUNTIME_FACT_V2_SCOPE_FIELDS) || !text(record?.scope?.run_id)
+    || ["session_id", "agent_id", "stage", "step", "attempt_id"].some((key) => !nullableText(record.scope[key]))) errors.push("scope is invalid");
+  if (record?.error !== null && !safeRuntimeError(record?.error)) errors.push("error is invalid or unsafe");
+  if (record?.fact_type && record?.source && record?.scope && runtimeFactV2Id(record) !== record.fact_id) errors.push("fact_id does not match identity");
+  if (record?.status === "present") {
+    if (!validRuntimeFactV2Value(record.fact_type, record.value)) errors.push("value is invalid");
+    const idField = RUNTIME_FACT_V2_VALUE_ID_FIELDS[record.fact_type];
+    if (!text(record?.source?.registration_id) || !text(record?.source?.object_id) || !text(record?.value?.[idField])) errors.push("present identity is required");
+    if (validRuntimeFactV2Value(record.fact_type, record.value) && record.source.object_id !== record.value[idField]) errors.push("source object_id does not match value identity");
+    if (record.reason !== null || record.error !== null) errors.push("present reason and error must be null");
+  } else if (record?.status === "missing") {
+    if (record.value !== null || !RUNTIME_FACT_V2_MISSING_REASONS.has(record.reason) || record.error !== null) errors.push("missing record is invalid");
+    if (record.reason === "no_registered_source" && (record.source?.registration_id !== null || record.source?.object_id !== null)) errors.push("unregistered source identifiers must be null");
+  } else if (record?.status === "unknown") {
+    if (record.value !== null || !RUNTIME_FACT_V2_UNKNOWN_REASONS.has(record.reason) || !safeRuntimeError(record.error)) errors.push("unknown record is invalid");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export function runtimeFactV2Hash(record) {
+  const { observed_at: _observedAt, collector_version: _collectorVersion, ...stable } = record;
+  return contentHash(stable);
+}
+
+export function mergeRuntimeFactsV2(records) {
+  if (!Array.isArray(records)) return { ok: false, code: "INVALID_RECORD", errors: ["records must be an array"] };
+  const errors = records.flatMap((record) => validateRuntimeFactV2(record).errors);
+  if (errors.length) return { ok: false, code: "INVALID_RECORD", errors };
+  const merged = [];
+  for (const entries of group(records, (record) => record.fact_id).values()) {
+    if (new Set(entries.map(runtimeFactV2Hash)).size === 1) {
+      merged.push(createRuntimeFactV2(deterministic(entries)));
+      continue;
+    }
+    const first = deterministic(entries);
+    merged.push(createRuntimeFactV2({ ...first, status: "unknown", value: null, reason: "duplicate_id_conflict", error: safeError("RUNTIME_FACT_V2_DUPLICATE_ID_CONFLICT") }));
+  }
+  return { ok: true, records: merged.sort((left, right) => left.fact_type.localeCompare(right.fact_type) || left.fact_id.localeCompare(right.fact_id)) };
+}
+
+export const createRuntimeFactV2Record = createRuntimeFactV2;
+export const validateRuntimeFactV2Record = validateRuntimeFactV2;
+export const mergeRuntimeFactV2Records = mergeRuntimeFactsV2;
+export const createRuntimeV2Fact = createRuntimeFactV2;
+export const validateRuntimeV2Fact = validateRuntimeFactV2;
+export const mergeRuntimeV2Facts = mergeRuntimeFactsV2;
 
 export function createTranscriptRecord(input = {}) {
   return {
@@ -522,14 +720,19 @@ export function parseJsonl(input, { index = "transcript", source_ref = null } = 
       fact_type: "automation", status: "unknown", source: { class: RUNTIME_FACT_SOURCE_CLASSES.automation, registration_id: "parser", object_id: `bad-line:${line_number}` },
       observed_at: "1970-01-01T00:00:00.000Z", run_id: "parse-jsonl", reason: "malformed_line", error: runtimeError("malformed_line"),
     });
+    if (index === "runtime-v2" || index === "runtime-facts-v2") return createRuntimeFactV2({
+      fact_type: "cost", status: "unknown", source: { class: RUNTIME_FACT_V2_SOURCE_CLASSES.cost, registration_id: "parser", object_id: `bad-line:${line_number}` },
+      observed_at: "1970-01-01T00:00:00.000Z", run_id: "parse-jsonl", reason: "malformed_line", error: safeError("RUNTIME_FACT_V2_MALFORMED_LINE"),
+    });
     return createTranscriptRecord({ record_kind: "parse_error", id: `bad-line:${source_ref ?? "transcript-index"}:${line_number}`, status: "unknown", source_ref, line_number, reason: "malformed_line", error: safeError("MALFORMED_LINE", "Malformed JSONL record") });
   };
   String(input).split(/\r?\n/).forEach((line, offset) => {
     if (!line.trim()) return;
     try {
       const record = JSON.parse(line);
-      if (record?.schema_version != null && record.schema_version !== FACT_SCHEMA_VERSION) { records.push(record); return; }
-      const validator = index === "artifact" ? validateArtifactRecord : index === "health" ? validateHealthFact : index === "runtime" || index === "runtime-facts" ? validateRuntimeFact : validateTranscriptRecord;
+      const isRuntimeV2 = index === "runtime-v2" || index === "runtime-facts-v2";
+      if (record?.schema_version != null && record.schema_version !== (isRuntimeV2 ? RUNTIME_FACT_V2_SCHEMA_VERSION : FACT_SCHEMA_VERSION)) { records.push(record); return; }
+      const validator = index === "artifact" ? validateArtifactRecord : index === "health" ? validateHealthFact : isRuntimeV2 ? validateRuntimeFactV2 : index === "runtime" || index === "runtime-facts" ? validateRuntimeFact : validateTranscriptRecord;
       if (!validator(record).ok) records.push(malformed(offset + 1));
       else records.push(record);
     } catch {
