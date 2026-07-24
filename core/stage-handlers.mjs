@@ -93,6 +93,34 @@ function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   }
   return policy.minimum_heterologous;
 }
+function normalizedReviewIssue(value) {
+  return String(value ?? "").toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
+}
+function reviewIssueMatches(left, right) {
+  if (left.path !== right.path) return false;
+  if (left.line !== undefined && right.line !== undefined && left.line !== right.line) return false;
+  const leftTerms = normalizedReviewIssue(left.issue); const rightTerms = normalizedReviewIssue(right.issue);
+  if (leftTerms.join(" ") === rightTerms.join(" ")) return true;
+  const rightSet = new Set(rightTerms); const leftSet = new Set(leftTerms);
+  if (!leftSet.size || !rightSet.size) return false;
+  let shared = 0;
+  for (const term of leftSet) if (rightSet.has(term)) shared += 1;
+  return shared / Math.min(leftSet.size, rightSet.size) >= 0.7;
+}
+function evidenceAnchorsFromAdjudication(result, provider, review) {
+  const clusters = result?.adjudication?.clusters;
+  if (!Array.isArray(clusters)) return review.findings.map(() => true);
+  const used = new Set();
+  return review.findings.map((finding) => {
+    const clusterIndex = clusters.findIndex((cluster, index) => {
+      if (used.has(index) || !reviewIssueMatches(cluster, finding)) return false;
+      return cluster.provider_findings?.some((item) => item.provider === provider);
+    });
+    if (clusterIndex < 0) return true;
+    used.add(clusterIndex);
+    return clusters[clusterIndex].provider_findings.find((item) => item.provider === provider)?.evidence_anchor_valid ?? true;
+  });
+}
 function verifyReviewChain(worker, result, expectedTrack, producerStage = worker.stage) {
   const attemptRecord = object(worker.readReceipt(result.attempt_ref), "review attempt record");
   const attempt = object(attemptRecord.value, "review attempt");
@@ -119,9 +147,10 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
     }
     const parsed = parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined });
     if (!isDeepStrictEqual(parsed, providerResult.output)) throw new Error(`review provider ${providerResult.provider} semantic output mismatch`);
-    parsedResults.push({ provider: providerResult.provider, review: parsed });
+    parsedResults.push({ provider: providerResult.provider, review: parsed, evidenceAnchors: evidenceAnchorsFromAdjudication(result, providerResult.provider, parsed) });
   }
-  const aggregation = aggregateProviderResults(parsedResults, minimumReviewers);
+  const profilePriority = attempt.review_policy?.requested_profiles ?? attempt.provider_attempts.map(({ provider }) => provider);
+  const aggregation = aggregateProviderResults(parsedResults, minimumReviewers, { profilePriority });
   if (aggregation.status !== "semantic" || aggregation.verdict !== result.verdict) throw new Error("review result verdict does not match provider outputs");
   const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   if (!isDeepStrictEqual(result.provider_results, expectedProviderResults)) throw new Error("review result provider outputs do not match provider evidence");
