@@ -52,6 +52,18 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **运行事实（runtime fact）**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
 
+**运行事实 v2（runtime-facts.v2）**：
+在不改变既有 v1 的前提下，补充运行成本、归属、审查、验证、阶段对照和自动化信息的独立事实合同。
+
+**事实归属（fact attribution）**：
+用可公开回指的记录标识说明一条事实属于哪个技能、会话或执行单元，不保存原始正文、私有路径或缓存。
+
+**阶段对照事实（stage reconciliation fact）**：
+把阶段清单中的应有步骤与 journal/receipt 中的实际结果逐项对照，区分已跳过和完全缺记录。
+
+**自动化率分母（automation denominator）**：
+同一范围内全部可核实的执行或派发记录；分母缺失时自动化率也必须标为缺失，而不是零。
+
 **已登记来源（registered source）**：
 由受控 launcher 明确登记格式、版本和读取权限的事实来源；它是采集成本、会话归属和自动化信息的唯一入口。
 

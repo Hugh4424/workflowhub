@@ -8,18 +8,23 @@ import {
   createArtifactRecord,
   createHealthFact,
   createRuntimeFact,
+  createRuntimeFactV2,
   createTranscriptRecord,
   mergeArtifactRecords,
   mergeHealthFacts,
   mergeRuntimeFacts,
+  mergeRuntimeFactsV2,
   mergeSkills,
   mergeTranscriptRecords,
   parseJsonl,
   RUNTIME_FACT_SOURCE_CLASSES,
   RUNTIME_FACT_TYPES,
+  RUNTIME_FACT_V2_SOURCE_CLASSES,
+  RUNTIME_FACT_V2_TYPES,
   runtimeFactId,
   safeError,
   toJsonl,
+  validateRuntimeFactV2,
   validateSkillsInventory,
   validateSkillsSchemaContract,
 } from "./fact-indexes.mjs";
@@ -34,14 +39,18 @@ const INDEX_REFS = Object.freeze([
   "indexes/flow-health-facts.jsonl",
   "indexes/skills-inventory.json",
   "indexes/runtime-facts.jsonl",
+  "indexes/runtime-facts-v2.jsonl",
 ]);
 const REGISTRIES = new WeakSet();
 const READERS = new WeakSet();
 const RUNTIME_REGISTRIES = new WeakSet();
 const RUNTIME_READERS = new WeakSet();
+const RUNTIME_V2_REGISTRIES = new WeakSet();
+const RUNTIME_V2_READERS = new WeakSet();
 const WRITE_TEST_HOOKS = new WeakSet();
 const ENTRY_FIELDS = new Set(["source_id", "source_ref", "source_format", "source_version", "required", "reader"]);
 const RUNTIME_ENTRY_FIELDS = new Set(["fact_type", "source_class", "registration_id", "source_format", "source_version", "reader"]);
+const RUNTIME_V2_ENTRY_FIELDS = new Set(["fact_type", "source_class", "registration_id", "source_format", "source_version", "reader"]);
 const WRITE_HOOK_NAMES = new Set(["afterParentPrecheck", "beforeFileFsync", "afterOpenBeforeRename", "beforeDirectoryFsync"]);
 const text = (value) => typeof value === "string" && value.trim() !== "";
 const plain = (value) => value && typeof value === "object" && !Array.isArray(value);
@@ -123,6 +132,38 @@ export function createRuntimeFactRegistry(entries) {
 export const createRuntimeFactSourceReader = createRuntimeFactReader;
 export const createRuntimeFactSourceRegistry = createRuntimeFactRegistry;
 
+/** Minted only by a launcher (or controlled fixture) for runtime-facts.v2. */
+export function createRuntimeFactV2Reader(read) {
+  if (typeof read !== "function") throw new TypeError("runtime fact v2 reader must be a function");
+  const reader = Object.freeze({ read: () => read() });
+  RUNTIME_V2_READERS.add(reader);
+  return reader;
+}
+
+/** Closed v2 registry. One registration per fact type; shared usage registration is allowed across usage facts. */
+export function createRuntimeFactV2Registry(entries) {
+  if (!Array.isArray(entries)) throw new TypeError("runtime fact v2 registry entries must be an array");
+  const factTypes = new Set();
+  const normalized = entries.map((entry) => {
+    if (!plain(entry) || Object.keys(entry).length !== RUNTIME_V2_ENTRY_FIELDS.size || Object.keys(entry).some((field) => !RUNTIME_V2_ENTRY_FIELDS.has(field))) {
+      throw new TypeError("runtime fact v2 source entry must contain exactly the registered fields");
+    }
+    if (!text(entry.fact_type) || !RUNTIME_FACT_V2_TYPES.includes(entry.fact_type)) throw new TypeError("runtime fact v2 source fact_type is invalid");
+    if (RUNTIME_FACT_V2_SOURCE_CLASSES[entry.fact_type] !== entry.source_class) throw new TypeError("runtime fact v2 source class does not match fact_type");
+    if (!text(entry.registration_id) || !text(entry.source_format ?? "json") || !text(entry.source_version ?? "v1")) throw new TypeError("invalid runtime fact v2 source entry");
+    if (!RUNTIME_V2_READERS.has(entry.reader)) throw new TypeError("launcher-issued runtime fact v2 reader capability required");
+    if (factTypes.has(entry.fact_type)) throw new TypeError(`duplicate runtime fact v2 fact_type: ${entry.fact_type}`);
+    factTypes.add(entry.fact_type);
+    return Object.freeze({ fact_type: entry.fact_type, source_class: entry.source_class, registration_id: entry.registration_id, source_format: entry.source_format ?? "json", source_version: entry.source_version ?? "v1", reader: entry.reader });
+  });
+  const registry = Object.freeze(normalized);
+  RUNTIME_V2_REGISTRIES.add(registry);
+  return registry;
+}
+
+export const createRuntimeV2FactReader = createRuntimeFactV2Reader;
+export const createRuntimeV2FactRegistry = createRuntimeFactV2Registry;
+
 /** Test-only capability. Launchers never receive raw atomic-write hooks. */
 export function createFactCollectorWriteTestHooks(hooks) {
   if (!plain(hooks) || Object.keys(hooks).some((name) => !WRITE_HOOK_NAMES.has(name) || typeof hooks[name] !== "function")) {
@@ -143,10 +184,21 @@ function assertRuntimeRegistry(registry) {
   return registry;
 }
 
+function assertRuntimeV2Registry(registry) {
+  if (!RUNTIME_V2_REGISTRIES.has(registry)) throw new TypeError("branded runtime fact v2 source registry required");
+  return registry;
+}
+
 let emptyRuntimeRegistry;
 function defaultRuntimeRegistry() {
   emptyRuntimeRegistry ??= createRuntimeFactRegistry([]);
   return emptyRuntimeRegistry;
+}
+
+let emptyRuntimeV2Registry;
+function defaultRuntimeV2Registry() {
+  emptyRuntimeV2Registry ??= createRuntimeFactV2Registry([]);
+  return emptyRuntimeV2Registry;
 }
 
 function wrongWorktree(message) {
@@ -386,6 +438,124 @@ export function buildRuntimeFactProjection(registry, options = {}) {
   return merged.records;
 }
 
+const RUNTIME_V2_ID_FIELDS = Object.freeze({
+  cost: "cost_id", token: "usage_id", duration: "execution_id", tool_count: "execution_id",
+  attribution: "attribution_id", review: "review_id", verification: "verification_id",
+  stage_reconciliation: "reconciliation_id", human_intervention: "intervention_id", automation_rate: "aggregation_id",
+});
+const RUNTIME_V2_UNKNOWN_REASONS = new Set(["read_error", "unsupported_format", "malformed_line", "duplicate_id_conflict"]);
+
+function runtimeV2Error(reason) {
+  return safeError(`RUNTIME_FACT_V2_${reason.toUpperCase()}`);
+}
+
+function runtimeV2Scope(options = {}, item = {}) {
+  const base = options.scope ?? options;
+  const itemScope = plain(item.scope) ? item.scope : {};
+  const runId = base.run_id ?? options.runId ?? options.run_id;
+  if (!text(runId)) throw new Error("runtime fact v2 collection run_id is required");
+  return {
+    run_id: runId,
+    session_id: itemScope.session_id ?? base.session_id ?? null,
+    agent_id: itemScope.agent_id ?? base.agent_id ?? null,
+    stage: itemScope.stage ?? base.stage ?? "build-code",
+    step: itemScope.step ?? base.step ?? null,
+    attempt_id: itemScope.attempt_id ?? base.attempt_id ?? null,
+  };
+}
+
+function runtimeV2SourceItems(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (Buffer.isBuffer(raw) || raw instanceof Uint8Array) raw = Buffer.from(raw).toString("utf8");
+  if (typeof raw === "string") {
+    const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+    if (!lines.length) return [];
+    return lines.map((line, index) => {
+      try { return JSON.parse(line); }
+      catch { return { status: "unknown", reason: "malformed_line", object_id: `bad-line:${index + 1}` }; }
+    });
+  }
+  if (plain(raw) && Array.isArray(raw.records)) return raw.records;
+  return [raw];
+}
+
+function runtimeV2Candidate(entry, item, options, now) {
+  const scope = runtimeV2Scope(options, item);
+  const observedAt = item?.observed_at ?? now().toISOString();
+  const baseSource = { class: entry.source_class, registration_id: entry.registration_id, object_id: null };
+  const status = item?.status;
+  const reason = item?.reason;
+  if (plain(item?.source) && (item.source.class !== entry.source_class || (item.source.registration_id != null && item.source.registration_id !== entry.registration_id))) {
+    throw new Error("runtime fact v2 source registration identity mismatch");
+  }
+  const sourceScope = plain(item?.scope) && item.scope.run_id != null ? item.scope.run_id : scope.run_id;
+  if (sourceScope !== scope.run_id) throw new Error("runtime fact v2 source run identity mismatch");
+  let value = plain(item) && Object.hasOwn(item, "value") ? item.value : item;
+  if (entry.fact_type === "cost" && plain(value) && !Object.hasOwn(value, "cost_id") && text(value.receipt_id)) {
+    value = { ...value, cost_id: value.line_item_id ?? value.receipt_id };
+  }
+  if (entry.fact_type === "cost" && plain(value)) value = { line_item_id: null, period_start: null, period_end: null, ...value };
+  if (entry.fact_type === "human_intervention" && plain(value)) value = { started_at: null, ended_at: null, ...value };
+  if (status === "missing" || reason === "not_found" || value == null) {
+    return createRuntimeFactV2({ fact_type: entry.fact_type, source: baseSource, scope, observed_at: observedAt, status: "missing", reason: "not_found" });
+  }
+  if (status === "unknown" || reason === "read_error" || reason === "unsupported_format" || reason === "malformed_line" || reason === "duplicate_id_conflict") {
+    const objectId = text(item?.object_id) ? item.object_id : null;
+    return createRuntimeFactV2({ fact_type: entry.fact_type, source: { ...baseSource, object_id: objectId }, scope, observed_at: observedAt, status: "unknown", reason: RUNTIME_V2_UNKNOWN_REASONS.has(reason) ? reason : "malformed_line", error: runtimeV2Error(RUNTIME_V2_UNKNOWN_REASONS.has(reason) ? reason : "malformed_line") });
+  }
+  const idField = RUNTIME_V2_ID_FIELDS[entry.fact_type];
+  const objectId = value?.[idField];
+  const candidate = createRuntimeFactV2({ fact_type: entry.fact_type, source: { ...baseSource, object_id: objectId ?? null }, scope, observed_at: observedAt, status: "present", value });
+  if (!validateRuntimeFactV2(candidate).ok) {
+    return createRuntimeFactV2({ fact_type: entry.fact_type, source: { ...baseSource, object_id: text(item?.object_id) ? item.object_id : null }, scope, observed_at: observedAt, status: "unknown", reason: "unsupported_format", error: runtimeV2Error("unsupported_format") });
+  }
+  return candidate;
+}
+
+function runtimeV2Missing(entry, options, now, reason = "no_registered_source") {
+  return createRuntimeFactV2({ fact_type: entry.fact_type, source: { class: entry.source_class, registration_id: null, object_id: null }, scope: runtimeV2Scope(options), observed_at: now().toISOString(), status: "missing", reason });
+}
+
+/** Project only registered, direct machine records into the independent runtime-facts.v2 index. */
+export function buildRuntimeFactV2Projection(registry, options = {}) {
+  const sources = assertRuntimeV2Registry(registry);
+  const now = options.now ?? (() => new Date());
+  const byType = new Map(sources.map((entry) => [entry.fact_type, entry]));
+  const candidates = [];
+  for (const factType of RUNTIME_FACT_V2_TYPES) {
+    const entry = byType.get(factType);
+    if (!entry) {
+      candidates.push(runtimeV2Missing({ fact_type: factType, source_class: RUNTIME_FACT_V2_SOURCE_CLASSES[factType] }, options, now));
+      continue;
+    }
+    if (entry.source_version !== "v1" || !["json", "jsonl"].includes(entry.source_format)) {
+      candidates.push(createRuntimeFactV2({ fact_type: factType, source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null }, scope: runtimeV2Scope(options), observed_at: now().toISOString(), status: "unknown", reason: "unsupported_format", error: runtimeV2Error("unsupported_format") }));
+      continue;
+    }
+    let raw;
+    try { raw = entry.reader.read(); }
+    catch (error) {
+      candidates.push(error?.code === "ENOENT"
+        ? createRuntimeFactV2({ fact_type: factType, source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null }, scope: runtimeV2Scope(options), observed_at: now().toISOString(), status: "missing", reason: "not_found" })
+        : createRuntimeFactV2({ fact_type: factType, source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null }, scope: runtimeV2Scope(options), observed_at: now().toISOString(), status: "unknown", reason: "read_error", error: runtimeV2Error("read_error") }));
+      continue;
+    }
+    const items = runtimeV2SourceItems(raw);
+    if (!items.length) {
+      candidates.push(createRuntimeFactV2({ fact_type: factType, source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null }, scope: runtimeV2Scope(options), observed_at: now().toISOString(), status: "missing", reason: "not_found" }));
+      continue;
+    }
+    for (const item of items) candidates.push(runtimeV2Candidate(entry, item, options, now));
+  }
+  const merged = mergeRuntimeFactsV2(candidates);
+  if (!merged.ok) throw new Error(`runtime fact v2 projection invalid: ${merged.code ?? "INVALID_RECORD"}`);
+  return merged.records;
+}
+
+export const createRuntimeFactV2SourceReader = createRuntimeFactV2Reader;
+export const createRuntimeFactV2SourceRegistry = createRuntimeFactV2Registry;
+
 function referenceRecord(preflight, ref) {
   try {
     const probeRef = artifactReference(preflight.task.identity.taskId, "fact-collector-probe");
@@ -515,11 +685,13 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   return merged.records;
 }
 
-export function collectTaskFacts(ctx, { transcriptRegistry, runtimeRegistry, runtimeFactRegistry, now = () => new Date(), runId, scope, writeTestHooks } = {}) {
+export function collectTaskFacts(ctx, { transcriptRegistry, runtimeRegistry, runtimeFactRegistry, runtimeV2Registry, runtimeFactV2Registry, now = () => new Date(), runId, scope, writeTestHooks } = {}) {
   const preflight = preflightFactCollection(ctx);
   assertRegistry(transcriptRegistry);
   const registeredRuntimeSources = runtimeRegistry ?? runtimeFactRegistry ?? defaultRuntimeRegistry();
   assertRuntimeRegistry(registeredRuntimeSources);
+  const registeredRuntimeV2Sources = runtimeV2Registry ?? runtimeFactV2Registry ?? defaultRuntimeV2Registry();
+  assertRuntimeV2Registry(registeredRuntimeV2Sources);
   const atomicWriteOptions = writeTestHooks === undefined ? undefined : { testHooks: assertWriteTestHooks(writeTestHooks) };
   const warnings = [];
   let lockFailed = false;
@@ -559,6 +731,14 @@ export function collectTaskFacts(ctx, { transcriptRegistry, runtimeRegistry, run
           scope: { ...(scope ?? {}), stage: scope?.stage ?? "build-code" },
         }));
       runtime.saved ? save(INDEX_REFS[4]) : fail(INDEX_REFS[4], runtime.error);
+
+      const runtimeV2 = persistJsonl(preflight.task, INDEX_REFS[5], "runtime-v2", mergeRuntimeFactsV2, atomicWriteOptions,
+        () => buildRuntimeFactV2Projection(registeredRuntimeV2Sources, {
+          now,
+          runId: runId ?? `${preflight.task.identity.taskId}:${preflight.workspace.baselineCommit}`,
+          scope: { ...(scope ?? {}), stage: scope?.stage ?? "build-code" },
+        }));
+      runtimeV2.saved ? save(INDEX_REFS[5]) : fail(INDEX_REFS[5], runtimeV2.error);
     });
     if (result && typeof result.then === "function") throw new Error("asynchronous record locks are unsupported by collectTaskFacts");
   } catch (error) {
