@@ -3,6 +3,17 @@ import { canonicalJson, contentHash } from "./canonical-source.mjs";
 export const FACT_SCHEMA_VERSION = "v1";
 export const COLLECTOR_VERSION = "v1";
 export const SKILLS_SCHEMA_ID = "https://workflowhub.local/schemas/skills-inventory.schema.json";
+export const RUNTIME_FACT_SCHEMA_VERSION = "runtime-facts.v1";
+export const RUNTIME_FACT_COLLECTOR_VERSION = "1.0.0";
+export const RUNTIME_FACT_TYPES = Object.freeze(["cost", "conversation", "session", "subagent", "step_skip", "automation"]);
+export const RUNTIME_FACT_SOURCE_CLASSES = Object.freeze({
+  cost: "billing_usage_receipt",
+  conversation: "message_metadata",
+  session: "launcher_adapter_registry",
+  subagent: "launcher_adapter_registry",
+  step_skip: "canonical_skipped_receipt",
+  automation: "launcher_orchestrator_dispatch",
+});
 
 const STATUSES = new Set(["present", "missing", "unknown"]);
 const TRANSCRIPT_KINDS = new Set(["transcript", "source_status", "parse_error"]);
@@ -17,6 +28,11 @@ const SKILL_FIELDS = new Set(["name", "path", "version", "stage", "owner", "sour
 const TRANSCRIPT_FIELDS = new Set(["schema_version", "collector_version", "record_kind", "id", "run_id", "status", "source_ref", "source_format", "source_version", "line_number", "content_hash", "payload", "reason", "error", "variant_hashes", "variant_source_refs"]);
 const ARTIFACT_FIELDS = new Set(["schema_version", "collector_version", "record_kind", "id", "run_id", "stage", "status", "ref", "required", "content_hash", "source_ref", "reason", "error"]);
 const HEALTH_FIELDS = new Set(["schema_version", "collector_version", "fact_id", "run_id", "stage", "domain", "status", "observed_value", "source_ref", "reason", "error"]);
+const RUNTIME_FACT_FIELDS = new Set(["schema_version", "collector_version", "fact_id", "fact_type", "status", "value", "source", "observed_at", "reason", "error", "scope"]);
+const RUNTIME_SOURCE_FIELDS = new Set(["class", "registration_id", "object_id"]);
+const RUNTIME_SCOPE_FIELDS = new Set(["run_id", "session_id", "agent_id", "stage", "step", "attempt_id"]);
+const RUNTIME_UNKNOWN_REASONS = new Set(["read_error", "unsupported_format", "malformed_line", "duplicate_id_conflict", "legacy_not_collected"]);
+const RUNTIME_MISSING_REASONS = new Set(["no_registered_source", "not_found"]);
 
 const text = (value) => typeof value === "string" && value.trim() ? value : null;
 const nullableText = (value) => value == null || typeof value === "string";
@@ -30,9 +46,196 @@ export function safeError(code, message) {
     DUPLICATE_ID_CONFLICT: "Conflicting records share the same identity",
     UNSUPPORTED_FORMAT: "Unsupported schema version",
     CONTRACT_MISMATCH: "Skills inventory schema contract does not match",
+    RUNTIME_FACT_READ_ERROR: "Runtime fact source could not be read",
+    RUNTIME_FACT_UNSUPPORTED_FORMAT: "Runtime fact source format is unsupported",
+    RUNTIME_FACT_MALFORMED_LINE: "Runtime fact source contains a malformed line",
+    RUNTIME_FACT_DUPLICATE_ID_CONFLICT: "Runtime facts share the same identity with different values",
+    RUNTIME_FACT_LEGACY_NOT_COLLECTED: "Legacy runtime fact was not collected",
   };
   return { code, message: known[code] ?? "Fact index error" };
 }
+
+const runtimeError = (reason) => safeError(`RUNTIME_FACT_${reason.toUpperCase()}`, reason);
+
+function runtimeSourceKey(source = {}) {
+  return {
+    class: source.class ?? null,
+    registration_id: source.registration_id ?? null,
+    object_id: source.object_id ?? null,
+  };
+}
+
+export function runtimeFactId({ fact_type, source = {} } = {}) {
+  if (!RUNTIME_FACT_TYPES.includes(fact_type)) return null;
+  const key = runtimeSourceKey(source);
+  return `rf_${contentHash({ fact_type, source: key })}`;
+}
+
+function runtimeScope(input = {}) {
+  const scope = input.scope ?? input;
+  return {
+    run_id: scope.run_id ?? input.run_id ?? null,
+    session_id: scope.session_id ?? input.session_id ?? null,
+    agent_id: scope.agent_id ?? input.agent_id ?? null,
+    stage: scope.stage ?? input.stage ?? null,
+    step: scope.step ?? input.step ?? null,
+    attempt_id: scope.attempt_id ?? input.attempt_id ?? null,
+  };
+}
+
+export function createRuntimeFact(input = {}) {
+  const source = runtimeSourceKey(input.source ?? {
+    class: input.source_class,
+    registration_id: input.registration_id,
+    object_id: input.object_id,
+  });
+  const fact_type = input.fact_type ?? null;
+  return {
+    schema_version: input.schema_version ?? RUNTIME_FACT_SCHEMA_VERSION,
+    collector_version: input.collector_version ?? RUNTIME_FACT_COLLECTOR_VERSION,
+    fact_id: input.fact_id ?? runtimeFactId({ fact_type, source }),
+    fact_type,
+    status: input.status ?? "unknown",
+    value: input.value ?? null,
+    source,
+    observed_at: input.observed_at ?? null,
+    reason: input.reason ?? null,
+    error: input.error ?? null,
+    scope: runtimeScope(input),
+  };
+}
+
+function exactObject(value, fields) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).every((field) => fields.has(field))
+    && [...fields].every((field) => Object.hasOwn(value, field));
+}
+
+function validTimestamp(value) {
+  return text(value) && /Z$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function validNullableTimestamp(value) {
+  return value === null || validTimestamp(value);
+}
+
+function validRuntimeValue(factType, value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (factType === "cost") {
+    return exactObject(value, new Set(["receipt_id", "amount_minor", "currency", "unit"]))
+      && text(value.receipt_id) && Number.isInteger(value.amount_minor) && value.amount_minor >= 0
+      && typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency) && text(value.unit);
+  }
+  if (factType === "conversation") {
+    return exactObject(value, new Set(["conversation_id", "message_id", "role", "message_created_at", "channel"]))
+      && text(value.conversation_id) && text(value.message_id) && nullableText(value.role)
+      && validNullableTimestamp(value.message_created_at) && nullableText(value.channel);
+  }
+  if (factType === "session") {
+    return exactObject(value, new Set(["session_id", "adapter_id", "parent_session_id", "started_at", "ended_at"]))
+      && text(value.session_id) && text(value.adapter_id) && nullableText(value.parent_session_id)
+      && validNullableTimestamp(value.started_at) && validNullableTimestamp(value.ended_at);
+  }
+  if (factType === "subagent") {
+    return exactObject(value, new Set(["agent_id", "adapter_id", "parent_agent_id", "session_id", "started_at", "ended_at"]))
+      && text(value.agent_id) && text(value.adapter_id) && nullableText(value.parent_agent_id)
+      && nullableText(value.session_id) && validNullableTimestamp(value.started_at) && validNullableTimestamp(value.ended_at);
+  }
+  if (factType === "step_skip") {
+    return exactObject(value, new Set(["skipped", "step_id", "skip_reason", "authorizer", "receipt_ref"]))
+      && value.skipped === true && text(value.step_id) && text(value.skip_reason)
+      && text(value.authorizer) && text(value.receipt_ref) && !pathLike(value.receipt_ref);
+  }
+  if (factType === "automation") {
+    return exactObject(value, new Set(["dispatch_id", "orchestrator_id", "action", "outcome", "dispatched_at"]))
+      && text(value.dispatch_id) && text(value.orchestrator_id) && text(value.action)
+      && text(value.outcome) && validTimestamp(value.dispatched_at);
+  }
+  return false;
+}
+
+function runtimeValueObjectId(factType, value) {
+  return value?.[{
+    cost: "receipt_id", conversation: "message_id", session: "session_id",
+    subagent: "agent_id", step_skip: "receipt_ref", automation: "dispatch_id",
+  }[factType]];
+}
+
+function pathLike(value) {
+  return typeof value === "string" && (value.startsWith("/") || value.includes("\\") || value.split("/").some((part) => part === ".."));
+}
+
+function safeRuntimeError(error) {
+  return exactObject(error, new Set(["code", "message"])) && text(error.code) && text(error.message)
+    && !pathLike(error.message) && !/(?:token|secret|password|credential|authorization|bearer|body|content)/i.test(error.message);
+}
+
+export function validateRuntimeFact(record) {
+  const errors = [];
+  validateShape(record, RUNTIME_FACT_FIELDS, errors);
+  if (record?.schema_version !== RUNTIME_FACT_SCHEMA_VERSION) errors.push("schema_version is unsupported");
+  if (!text(record?.collector_version)) errors.push("collector_version is required");
+  if (!text(record?.fact_id) || !/^rf_[a-f0-9]{64}$/.test(record.fact_id)) errors.push("fact_id is invalid");
+  if (!RUNTIME_FACT_TYPES.includes(record?.fact_type)) errors.push("fact_type is invalid");
+  if (!STATUSES.has(record?.status)) errors.push("status is invalid");
+  if (!exactObject(record?.source, RUNTIME_SOURCE_FIELDS)) errors.push("source is invalid");
+  if (record?.source && record.source.class !== RUNTIME_FACT_SOURCE_CLASSES[record.fact_type]) errors.push("source class is invalid");
+  if (record?.source && (!nullableText(record.source.registration_id) || !nullableText(record.source.object_id))) errors.push("source identifiers are invalid");
+  if (!validTimestamp(record?.observed_at)) errors.push("observed_at is invalid");
+  if (!exactObject(record?.scope, RUNTIME_SCOPE_FIELDS)) errors.push("scope is invalid");
+  if (record?.scope && (!text(record.scope.run_id) || ["session_id", "agent_id", "stage", "step", "attempt_id"].some((field) => !nullableText(record.scope[field])))) errors.push("scope values are invalid");
+  if (record?.error !== null && !safeRuntimeError(record?.error)) errors.push("error is invalid or unsafe");
+  if (record?.fact_id && record?.fact_type && record?.source && runtimeFactId(record) !== record.fact_id) errors.push("fact_id does not match source identity");
+  if (record?.status === "present") {
+    if (!validRuntimeValue(record.fact_type, record.value)) errors.push("value is invalid");
+    if (!text(record?.source?.registration_id) || !text(record?.source?.object_id)) errors.push("present source identifiers are required");
+    if (validRuntimeValue(record.fact_type, record.value) && runtimeValueObjectId(record.fact_type, record.value) !== record.source.object_id) errors.push("source object_id does not match value identity");
+    if (record.reason !== null || record.error !== null) errors.push("present reason and error must be null");
+  } else if (record?.status === "missing") {
+    if (record.value !== null || !RUNTIME_MISSING_REASONS.has(record.reason) || record.error !== null) errors.push("missing record is invalid");
+    if (record.reason === "no_registered_source" && (record.source?.registration_id !== null || record.source?.object_id !== null)) errors.push("unregistered source identifiers must be null");
+  } else if (record?.status === "unknown") {
+    if (record.value !== null || !RUNTIME_UNKNOWN_REASONS.has(record.reason) || !safeRuntimeError(record.error)) errors.push("unknown record is invalid");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export function runtimeFactHash(record) {
+  const { observed_at: _observedAt, collector_version: _collectorVersion, ...stable } = record;
+  return contentHash(stable);
+}
+
+export function mergeRuntimeFacts(records) {
+  if (!Array.isArray(records)) return { ok: false, code: "INVALID_RECORD", errors: ["records must be an array"] };
+  if (records.some((record) => record?.schema_version !== RUNTIME_FACT_SCHEMA_VERSION)) {
+    return { ok: false, code: "UNSUPPORTED_FORMAT", error: safeError("UNSUPPORTED_FORMAT", "Unsupported schema version") };
+  }
+  const errors = records.flatMap((record) => validateRuntimeFact(record).errors);
+  if (errors.length) return { ok: false, code: "INVALID_RECORD", errors };
+  const groups = group(records, (record) => record.fact_id);
+  const merged = [];
+  for (const entries of groups.values()) {
+    const hashes = new Set(entries.map(runtimeFactHash));
+    if (hashes.size === 1) {
+      merged.push(createRuntimeFact(deterministic(entries)));
+      continue;
+    }
+    const first = deterministic(entries);
+    merged.push(createRuntimeFact({
+      ...first,
+      status: "unknown",
+      value: null,
+      reason: "duplicate_id_conflict",
+      error: runtimeError("duplicate_id_conflict"),
+      fact_id: first.fact_id,
+    }));
+  }
+  return { ok: true, records: merged.sort((left, right) => left.fact_type.localeCompare(right.fact_type) || left.fact_id.localeCompare(right.fact_id)) };
+}
+
+export const createRuntimeFactRecord = createRuntimeFact;
+export const validateRuntimeFactRecord = validateRuntimeFact;
+export const mergeRuntimeFactRecords = mergeRuntimeFacts;
 
 export function createTranscriptRecord(input = {}) {
   return {
@@ -315,6 +518,10 @@ export function parseJsonl(input, { index = "transcript", source_ref = null } = 
   const malformed = (line_number) => {
     if (index === "artifact") return createArtifactRecord({ id: `bad-line:artifact-index:${line_number}`, status: "unknown", ref: "indexes/artifact-index.jsonl", required: false, source_ref: "indexes/artifact-index.jsonl", reason: "unsupported_format", error: safeError("MALFORMED_LINE", "Malformed JSONL record") });
     if (index === "health") return createHealthFact({ fact_id: `bad-line:flow-health:${line_number}`, domain: "artifact_missing", status: "unknown", reason: "malformed_line", error: safeError("MALFORMED_LINE", "Malformed JSONL record") });
+    if (index === "runtime" || index === "runtime-facts") return createRuntimeFact({
+      fact_type: "automation", status: "unknown", source: { class: RUNTIME_FACT_SOURCE_CLASSES.automation, registration_id: "parser", object_id: `bad-line:${line_number}` },
+      observed_at: "1970-01-01T00:00:00.000Z", run_id: "parse-jsonl", reason: "malformed_line", error: runtimeError("malformed_line"),
+    });
     return createTranscriptRecord({ record_kind: "parse_error", id: `bad-line:${source_ref ?? "transcript-index"}:${line_number}`, status: "unknown", source_ref, line_number, reason: "malformed_line", error: safeError("MALFORMED_LINE", "Malformed JSONL record") });
   };
   String(input).split(/\r?\n/).forEach((line, offset) => {
@@ -322,7 +529,7 @@ export function parseJsonl(input, { index = "transcript", source_ref = null } = 
     try {
       const record = JSON.parse(line);
       if (record?.schema_version != null && record.schema_version !== FACT_SCHEMA_VERSION) { records.push(record); return; }
-      const validator = index === "artifact" ? validateArtifactRecord : index === "health" ? validateHealthFact : validateTranscriptRecord;
+      const validator = index === "artifact" ? validateArtifactRecord : index === "health" ? validateHealthFact : index === "runtime" || index === "runtime-facts" ? validateRuntimeFact : validateTranscriptRecord;
       if (!validator(record).ok) records.push(malformed(offset + 1));
       else records.push(record);
     } catch {

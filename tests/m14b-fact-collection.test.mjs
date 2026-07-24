@@ -11,15 +11,18 @@ import Ajv2020 from "ajv/dist/2020.js";
 import {
   createArtifactRecord,
   createHealthFact,
+  createRuntimeFact,
   createTranscriptRecord,
   mergeArtifactRecords,
   mergeHealthFacts,
+  mergeRuntimeFacts,
   mergeSkills,
   mergeTranscriptRecords,
   parseJsonl,
+  validateRuntimeFact,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { buildArtifactProjection, buildHealthProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
@@ -38,7 +41,7 @@ const exec = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const INDEX_REFS = [
   "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
-  "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json",
+  "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl",
 ];
 
 async function createM14bFixture() {
@@ -115,6 +118,17 @@ function registry(entries = []) {
   })));
 }
 
+function runtimeRegistry(entries = []) {
+  return createRuntimeFactRegistry(entries.map((entry) => ({
+    fact_type: entry.fact_type,
+    source_class: entry.source_class,
+    registration_id: entry.registration_id ?? `${entry.fact_type}-source`,
+    source_format: entry.source_format ?? "json",
+    source_version: entry.source_version ?? "v1",
+    reader: createRuntimeFactReader(entry.read),
+  })));
+}
+
 function records(task, ref) {
   return task.readRecord(ref).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
@@ -148,6 +162,56 @@ function reversedBytes(merge, candidates) {
 }
 
 describe("M14b fact collection pure contracts", () => {
+  it("AC-001/006/008 validates all runtime-facts.v1 value shapes and fixed fields", () => {
+    const values = {
+      cost: { receipt_id: "receipt-1", amount_minor: 12, currency: "USD", unit: "request" },
+      conversation: { conversation_id: "conversation-1", message_id: "message-1", role: "user", message_created_at: "2026-07-18T00:00:00.000Z", channel: "chat" },
+      session: { session_id: "session-1", adapter_id: "adapter-1", parent_session_id: null, started_at: "2026-07-18T00:00:00.000Z", ended_at: null },
+      subagent: { agent_id: "agent-1", adapter_id: "adapter-1", parent_agent_id: "root-1", session_id: "session-1", started_at: "2026-07-18T00:00:00.000Z", ended_at: null },
+      step_skip: { skipped: true, step_id: "T001", skip_reason: "already complete", authorizer: "planner", receipt_ref: "receipts/step-skip.json" },
+      automation: { dispatch_id: "dispatch-1", orchestrator_id: "orchestrator-1", action: "run", outcome: "accepted", dispatched_at: "2026-07-18T00:00:00.000Z" },
+    };
+    for (const [factType, value] of Object.entries(values)) {
+      const sourceClass = {
+        cost: "billing_usage_receipt", conversation: "message_metadata", session: "launcher_adapter_registry",
+        subagent: "launcher_adapter_registry", step_skip: "canonical_skipped_receipt", automation: "launcher_orchestrator_dispatch",
+      }[factType];
+      const objectId = { cost: "receipt-1", conversation: "message-1", session: "session-1", subagent: "agent-1", step_skip: "receipts/step-skip.json", automation: "dispatch-1" }[factType];
+      const fact = createRuntimeFact({ fact_type: factType, value, source: { class: sourceClass, registration_id: "registered", object_id: objectId }, observed_at: "2026-07-18T00:00:00.000Z", run_id: "run-1", status: "present" });
+      expect(validateRuntimeFact(fact), `${factType}: ${JSON.stringify(validateRuntimeFact(fact).errors)}`).toMatchObject({ ok: true });
+      expect(Object.keys(fact)).toEqual(["schema_version", "collector_version", "fact_id", "fact_type", "status", "value", "source", "observed_at", "reason", "error", "scope"]);
+    }
+  });
+
+  it("AC-007/012 makes runtime dedupe idempotent and exposes conflicting values", () => {
+    const base = { fact_type: "cost", source: { class: "billing_usage_receipt", registration_id: "billing", object_id: "receipt" }, observed_at: "2026-07-18T00:00:00.000Z", run_id: "run-1", status: "present" };
+    const left = createRuntimeFact({ ...base, value: { receipt_id: "receipt", amount_minor: 1, currency: "USD", unit: "request" } });
+    const right = createRuntimeFact({ ...base, value: { receipt_id: "receipt", amount_minor: 2, currency: "USD", unit: "request" } });
+    expect(mergeRuntimeFacts([left, left])).toMatchObject({ ok: true, records: [expect.objectContaining({ status: "present" })] });
+    expect(mergeRuntimeFacts([left, right])).toMatchObject({ ok: true, records: [expect.objectContaining({ status: "unknown", value: null, reason: "duplicate_id_conflict", error: expect.objectContaining({ code: "RUNTIME_FACT_DUPLICATE_ID_CONFLICT" }) })] });
+  });
+
+  it("AC-004/005/006 projects privacy-safe metadata, skip receipt, and unknown reasons", () => {
+    const projected = buildRuntimeFactProjection(runtimeRegistry([
+      { fact_type: "conversation", source_class: "message_metadata", read: () => ({ conversation_id: "c", message_id: "m", body: "private" }) },
+      { fact_type: "step_skip", source_class: "canonical_skipped_receipt", read: () => ({ skipped: true, step_id: "T001", skip_reason: "cached", authorizer: "planner", receipt_ref: "receipts/skip.json" }) },
+      { fact_type: "automation", source_class: "launcher_orchestrator_dispatch", source_version: "v2", read: () => ({}) },
+    ]), { runId: "run-1", now: () => new Date("2026-07-18T00:00:00.000Z") });
+    expect(projected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "conversation", status: "unknown", reason: "unsupported_format", value: null }),
+      expect.objectContaining({ fact_type: "step_skip", status: "present", value: expect.objectContaining({ skipped: true }) }),
+      expect.objectContaining({ fact_type: "automation", status: "unknown", reason: "unsupported_format" }),
+    ]));
+    expect(JSON.stringify(projected)).not.toContain("private");
+  });
+
+  it("T005 keeps the production empty registry honest about unavailable sources", () => {
+    const projected = buildRuntimeFactProjection(createRuntimeFactRegistry([]), { runId: "run-production", now: () => new Date("2026-07-18T00:00:00.000Z") });
+    expect(projected).toHaveLength(5);
+    expect(projected.every((fact) => fact.status === "missing" && fact.reason === "no_registered_source" && fact.value === null)).toBe(true);
+    expect(projected.some((fact) => fact.fact_type === "step_skip")).toBe(false);
+  });
+
   it("AC-006 merges idempotent transcript candidates deterministically", () => {
     const base = { record_kind: "transcript", id: "turn-1", run_id: "run-1", status: "present", payload: { text: "hello" } };
     const candidates = [
@@ -306,11 +370,15 @@ describe("M14b fact collection acceptance", () => {
     expect(result).toMatchObject({ status: "success" });
     expect(result.files.map((file) => file.ref)).toEqual([
       "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
-      "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json",
+      "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json", "indexes/runtime-facts.jsonl",
     ]);
     expect(result.files.every((file) => file.saved)).toBe(true);
     expect(fixture.task.readRecord("indexes/transcript-index.jsonl")).toContain('"id":"transcript-source-registry"');
     expect(fixture.task.readRecord("indexes/transcript-index.jsonl")).toContain('"reason":"no_registered_source"');
+    expect(records(fixture.task, "indexes/runtime-facts.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "cost", status: "missing", reason: "no_registered_source", value: null }),
+      expect.objectContaining({ fact_type: "automation", status: "missing", reason: "no_registered_source", value: null }),
+    ]));
     expect(records(fixture.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
       expect.objectContaining({ record_kind: "artifact", id: `specs/${fixture.task.identity.taskId}/decision.md`, status: "present" }),
     ]));

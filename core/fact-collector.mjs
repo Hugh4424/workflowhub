@@ -7,12 +7,17 @@ import { checkSkillClosure } from "./check-skill-closure.mjs";
 import {
   createArtifactRecord,
   createHealthFact,
+  createRuntimeFact,
   createTranscriptRecord,
   mergeArtifactRecords,
   mergeHealthFacts,
+  mergeRuntimeFacts,
   mergeSkills,
   mergeTranscriptRecords,
   parseJsonl,
+  RUNTIME_FACT_SOURCE_CLASSES,
+  RUNTIME_FACT_TYPES,
+  runtimeFactId,
   safeError,
   toJsonl,
   validateSkillsInventory,
@@ -28,11 +33,15 @@ const INDEX_REFS = Object.freeze([
   "indexes/artifact-index.jsonl",
   "indexes/flow-health-facts.jsonl",
   "indexes/skills-inventory.json",
+  "indexes/runtime-facts.jsonl",
 ]);
 const REGISTRIES = new WeakSet();
 const READERS = new WeakSet();
+const RUNTIME_REGISTRIES = new WeakSet();
+const RUNTIME_READERS = new WeakSet();
 const WRITE_TEST_HOOKS = new WeakSet();
 const ENTRY_FIELDS = new Set(["source_id", "source_ref", "source_format", "source_version", "required", "reader"]);
+const RUNTIME_ENTRY_FIELDS = new Set(["fact_type", "source_class", "registration_id", "source_format", "source_version", "reader"]);
 const WRITE_HOOK_NAMES = new Set(["afterParentPrecheck", "beforeFileFsync", "afterOpenBeforeRename", "beforeDirectoryFsync"]);
 const text = (value) => typeof value === "string" && value.trim() !== "";
 const plain = (value) => value && typeof value === "object" && !Array.isArray(value);
@@ -71,6 +80,49 @@ export function createTranscriptSourceRegistry(entries) {
   return registry;
 }
 
+/** Minted only by a launcher (or a controlled test fixture); it carries no path access. */
+export function createRuntimeFactReader(read) {
+  if (typeof read !== "function") throw new TypeError("runtime fact reader must be a function");
+  const reader = Object.freeze({ read: () => read() });
+  RUNTIME_READERS.add(reader);
+  return reader;
+}
+
+/** Closed source registry. Each fact type has one source class and registration. */
+export function createRuntimeFactRegistry(entries) {
+  if (!Array.isArray(entries)) throw new TypeError("runtime fact registry entries must be an array");
+  const factTypes = new Set();
+  const normalized = entries.map((entry) => {
+    if (!plain(entry) || Object.keys(entry).some((field) => !RUNTIME_ENTRY_FIELDS.has(field))) {
+      throw new TypeError("runtime fact source entry contains unsupported fields");
+    }
+    const keys = Object.keys(entry);
+    for (const field of ["fact_type", "source_class", "registration_id", "reader"]) if (!keys.includes(field)) {
+      throw new TypeError(`runtime fact source entry requires ${field}`);
+    }
+    if (!RUNTIME_FACT_TYPES.includes(entry.fact_type)) throw new TypeError("runtime fact source fact_type is invalid");
+    if (RUNTIME_FACT_SOURCE_CLASSES[entry.fact_type] !== entry.source_class) throw new TypeError("runtime fact source class does not match fact_type");
+    if (!text(entry.registration_id) || !text(entry.source_format ?? "json") || !text(entry.source_version ?? "v1")) throw new TypeError("invalid runtime fact source entry");
+    if (!RUNTIME_READERS.has(entry.reader)) throw new TypeError("launcher-issued runtime fact reader capability required");
+    if (factTypes.has(entry.fact_type)) throw new TypeError(`duplicate runtime fact fact_type: ${entry.fact_type}`);
+    factTypes.add(entry.fact_type);
+    return Object.freeze({
+      fact_type: entry.fact_type,
+      source_class: entry.source_class,
+      registration_id: entry.registration_id,
+      source_format: entry.source_format ?? "json",
+      source_version: entry.source_version ?? "v1",
+      reader: entry.reader,
+    });
+  });
+  const registry = Object.freeze(normalized);
+  RUNTIME_REGISTRIES.add(registry);
+  return registry;
+}
+
+export const createRuntimeFactSourceReader = createRuntimeFactReader;
+export const createRuntimeFactSourceRegistry = createRuntimeFactRegistry;
+
 /** Test-only capability. Launchers never receive raw atomic-write hooks. */
 export function createFactCollectorWriteTestHooks(hooks) {
   if (!plain(hooks) || Object.keys(hooks).some((name) => !WRITE_HOOK_NAMES.has(name) || typeof hooks[name] !== "function")) {
@@ -84,6 +136,17 @@ export function createFactCollectorWriteTestHooks(hooks) {
 function assertRegistry(registry) {
   if (!REGISTRIES.has(registry)) throw new TypeError("branded transcript source registry required");
   return registry;
+}
+
+function assertRuntimeRegistry(registry) {
+  if (!RUNTIME_REGISTRIES.has(registry)) throw new TypeError("branded runtime fact source registry required");
+  return registry;
+}
+
+let emptyRuntimeRegistry;
+function defaultRuntimeRegistry() {
+  emptyRuntimeRegistry ??= createRuntimeFactRegistry([]);
+  return emptyRuntimeRegistry;
 }
 
 function wrongWorktree(message) {
@@ -173,6 +236,153 @@ export function buildTranscriptProjection(registry) {
   }
   const merged = mergeTranscriptRecords(candidates);
   if (!merged.ok) throw new Error(`transcript projection invalid: ${merged.code ?? "INVALID_RECORD"}`);
+  return merged.records;
+}
+
+const RUNTIME_ERROR_CODES = Object.freeze({
+  read_error: "RUNTIME_FACT_READ_ERROR",
+  unsupported_format: "RUNTIME_FACT_UNSUPPORTED_FORMAT",
+  malformed_line: "RUNTIME_FACT_MALFORMED_LINE",
+  duplicate_id_conflict: "RUNTIME_FACT_DUPLICATE_ID_CONFLICT",
+  legacy_not_collected: "RUNTIME_FACT_LEGACY_NOT_COLLECTED",
+});
+
+function runtimeError(reason) {
+  return safeError(RUNTIME_ERROR_CODES[reason] ?? "RUNTIME_FACT_READ_ERROR", reason);
+}
+
+function runtimeScope(options = {}) {
+  const scope = options.scope ?? options;
+  const runId = scope.run_id ?? options.runId ?? options.run_id ?? "runtime-fact-collection";
+  if (!text(runId)) throw new Error("runtime fact collection run_id is required");
+  return {
+    run_id: runId,
+    session_id: scope.session_id ?? null,
+    agent_id: scope.agent_id ?? null,
+    stage: scope.stage ?? "build-code",
+    step: scope.step ?? null,
+    attempt_id: scope.attempt_id ?? null,
+  };
+}
+
+function runtimeObjectId(factType, value, item = {}) {
+  if (text(item.object_id)) return item.object_id;
+  const ids = {
+    cost: value?.receipt_id,
+    conversation: value?.message_id,
+    session: value?.session_id,
+    subagent: value?.agent_id,
+    step_skip: value?.receipt_ref,
+    automation: value?.dispatch_id,
+  };
+  return text(ids[factType]) ? ids[factType] : null;
+}
+
+function runtimeFactCandidate(entry, item, options, now) {
+  const factType = entry.fact_type;
+  const source = { class: entry.source_class, registration_id: entry.registration_id, object_id: null };
+  const base = runtimeScope(options);
+  const value = plain(item) && Object.hasOwn(item, "value") ? item.value : item;
+  const objectId = runtimeObjectId(factType, value, item);
+  source.object_id = objectId;
+  const observedAt = item?.observed_at ?? now().toISOString();
+  const scope = { ...base, ...(plain(item?.scope) ? item.scope : {}) };
+  if (item?.legacy_not_collected === true || item?.status === "unknown" && item?.reason === "legacy_not_collected") {
+    return createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "unknown", reason: "legacy_not_collected", error: runtimeError("legacy_not_collected") });
+  }
+  if (item?.status === "missing" || value == null) {
+    return createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "missing", reason: item?.reason === "not_found" ? "not_found" : "not_found" });
+  }
+  if (item?.status === "unknown") {
+    const reason = ["read_error", "unsupported_format", "malformed_line", "legacy_not_collected"].includes(item.reason) ? item.reason : "malformed_line";
+    return createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "unknown", reason, error: runtimeError(reason) });
+  }
+  if (plain(value) && ["body", "content", "text"].some((field) => Object.hasOwn(value, field))) {
+    return createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "unknown", reason: "unsupported_format", error: runtimeError("unsupported_format") });
+  }
+  if (factType === "step_skip" && value?.skipped !== true) return null;
+  if (!plain(value)) return createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "unknown", reason: "malformed_line", error: runtimeError("malformed_line") });
+  const candidate = createRuntimeFact({ fact_type: factType, source, observed_at: observedAt, scope, status: "present", value });
+  return candidate;
+}
+
+function runtimeSourceItems(entry, raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (Buffer.isBuffer(raw) || raw instanceof Uint8Array) raw = Buffer.from(raw).toString("utf8");
+  if (typeof raw === "string") {
+    const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+    if (!lines.length) return [];
+    const items = [];
+    for (const [index, line] of lines.entries()) {
+      try { items.push(JSON.parse(line)); }
+      catch { items.push({ status: "unknown", reason: "malformed_line", object_id: `bad-line:${index + 1}` }); }
+    }
+    return items;
+  }
+  if (plain(raw) && Array.isArray(raw.records)) return raw.records;
+  return [raw];
+}
+
+function runtimeMissing(entry, options, now) {
+  return createRuntimeFact({
+    fact_type: entry.fact_type,
+    source: { class: entry.source_class, registration_id: null, object_id: null },
+    observed_at: now().toISOString(), scope: runtimeScope(options), status: "missing", reason: "no_registered_source",
+  });
+}
+
+/** Project only launcher-registered direct machine records into runtime-facts.v1. */
+export function buildRuntimeFactProjection(registry, options = {}) {
+  const sources = assertRuntimeRegistry(registry);
+  const now = options.now ?? (() => new Date());
+  const candidates = [];
+  const byType = new Map(sources.map((entry) => [entry.fact_type, entry]));
+  for (const factType of RUNTIME_FACT_TYPES) {
+    const entry = byType.get(factType);
+    if (!entry) {
+      if (factType !== "step_skip") candidates.push(runtimeMissing({ fact_type: factType, source_class: RUNTIME_FACT_SOURCE_CLASSES[factType] }, options, now));
+      continue;
+    }
+    if (entry.source_version !== "v1" || !["json", "jsonl"].includes(entry.source_format)) {
+      candidates.push(createRuntimeFact({
+        fact_type: factType,
+        source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null },
+        observed_at: now().toISOString(), scope: runtimeScope(options), status: "unknown", reason: "unsupported_format", error: runtimeError("unsupported_format"),
+      }));
+      continue;
+    }
+    let raw;
+    try { raw = entry.reader.read(); }
+    catch (error) {
+      if (error?.code === "ENOENT") candidates.push(createRuntimeFact({
+        fact_type: factType,
+        source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null },
+        observed_at: now().toISOString(), scope: runtimeScope(options), status: "missing", reason: "not_found",
+      }));
+      else candidates.push(createRuntimeFact({
+        fact_type: factType,
+        source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null },
+        observed_at: now().toISOString(), scope: runtimeScope(options), status: "unknown", reason: "read_error", error: runtimeError("read_error"),
+      }));
+      continue;
+    }
+    const items = runtimeSourceItems(entry, raw);
+    if (!items.length) {
+      if (factType !== "step_skip") candidates.push(createRuntimeFact({
+        fact_type: factType,
+        source: { class: entry.source_class, registration_id: entry.registration_id, object_id: null },
+        observed_at: now().toISOString(), scope: runtimeScope(options), status: "missing", reason: "not_found",
+      }));
+      continue;
+    }
+    for (const item of items) {
+      const candidate = runtimeFactCandidate(entry, item, options, now);
+      if (candidate) candidates.push(candidate);
+    }
+  }
+  const merged = mergeRuntimeFacts(candidates);
+  if (!merged.ok) throw new Error(`runtime fact projection invalid: ${merged.code ?? "INVALID_RECORD"}`);
   return merged.records;
 }
 
@@ -305,9 +515,11 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   return merged.records;
 }
 
-export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date(), writeTestHooks } = {}) {
+export function collectTaskFacts(ctx, { transcriptRegistry, runtimeRegistry, runtimeFactRegistry, now = () => new Date(), runId, scope, writeTestHooks } = {}) {
   const preflight = preflightFactCollection(ctx);
   assertRegistry(transcriptRegistry);
+  const registeredRuntimeSources = runtimeRegistry ?? runtimeFactRegistry ?? defaultRuntimeRegistry();
+  assertRuntimeRegistry(registeredRuntimeSources);
   const atomicWriteOptions = writeTestHooks === undefined ? undefined : { testHooks: assertWriteTestHooks(writeTestHooks) };
   const warnings = [];
   let lockFailed = false;
@@ -339,6 +551,14 @@ export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date
 
       const savedSkills = persistSkills(preflight.task, skills, atomicWriteOptions);
       savedSkills.saved ? save(INDEX_REFS[3]) : fail(INDEX_REFS[3], savedSkills.error);
+
+      const runtime = persistJsonl(preflight.task, INDEX_REFS[4], "runtime", mergeRuntimeFacts, atomicWriteOptions,
+        () => buildRuntimeFactProjection(registeredRuntimeSources, {
+          now,
+          runId: runId ?? `${preflight.task.identity.taskId}:${preflight.workspace.baselineCommit}`,
+          scope: { ...(scope ?? {}), stage: scope?.stage ?? "build-code" },
+        }));
+      runtime.saved ? save(INDEX_REFS[4]) : fail(INDEX_REFS[4], runtime.error);
     });
     if (result && typeof result.then === "function") throw new Error("asynchronous record locks are unsupported by collectTaskFacts");
   } catch (error) {

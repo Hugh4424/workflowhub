@@ -49,6 +49,21 @@ stage manifest 定义应执行的 step 集合（expected topology）；journal �
 **audit 单一真相源（single source of truth）**：
 audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘要，validator 只验证一致性，facts assembly 只装配事实，不另算第二套 audit 结论。
 
+**运行事实（runtime fact）**：
+可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
+
+**已登记来源（registered source）**：
+由受控 launcher 明确登记格式、版本和读取权限的事实来源；它是采集成本、会话归属和自动化信息的唯一入口。
+
+**缺失（missing）**：
+契约要求的来源或对象没有登记、或已登记后读取时找不到。
+
+**未知（unknown）**：
+来源不可读、格式不支持、内容损坏或互相冲突，因而不能可靠判断。
+
+**跳步事实（skip fact）**：
+正式执行记录中标为跳过并带有原因的步骤结果；它不是成功，也不由采集器推测。
+
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
 
