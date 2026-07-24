@@ -14,9 +14,11 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 `wh_review.v2` 路由还必须给出 `context_map` 和 `evidence_map`。每张 map 都有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
-`rationale`）；`unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。`context_map` 的
-每个 `complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
-runner 仅交付这些片段，不按目录或文件全文扩张材料。
+`rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能
+伪装成完整上下文。`complete` entry 必须有可验证 anchors（id、snapshot path、行区间、
+role、reason）；`not_applicable` 或 `unknown` entry 必须有受限 `reason_code` 和理由，
+不能用自由文本 `not_needed_reason` 绕过 anchor。runner 仅交付 complete anchor 的片段，
+不按目录或文件全文扩张材料。
 
 缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
 

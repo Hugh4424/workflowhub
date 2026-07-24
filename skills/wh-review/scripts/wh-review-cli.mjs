@@ -6,6 +6,7 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
+import { capturePhaseReviewSource } from "./review-source.mjs";
 import { buildNonGateReviewResponseRecord, buildReviewChain, selectReviewRound } from "./review-controller.mjs";
 import { resolutionRef, writeReviewResolution } from "./review-result.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection } from "./third-review-host-config.mjs";
@@ -111,7 +112,25 @@ export function providerVisibleMaterialsForRound({ materials = {}, round, previo
   };
 }
 
-function frozenSnapshotTree(trusted) {
+function frozenSnapshotTree(trusted, phaseId = null) {
+  if (phaseId !== null) {
+    const workspace = assertWorkspace(trusted.workspace);
+    // Phase capture now keeps its complete diff in a caller-owned external
+    // directory. This preflight only needs the frozen tree identity, so release
+    // that temporary capture immediately rather than leaving a private diff
+    // artifact behind for the full review path to create again.
+    const source = capturePhaseReviewSource({
+      sourceRoot: workspace.worktreeRoot,
+      task: trusted.task,
+      phaseId,
+      reviewDataRoot: trusted.task.taskPath,
+    });
+    try {
+      return source.snapshotTree;
+    } finally {
+      source.dispose();
+    }
+  }
   const snapshot = trusted.workspace
     ? captureGitWorktreeSnapshot(assertWorkspace(trusted.workspace).worktreeRoot)
     : trusted.candidateWorkspace?.captureSnapshot?.();
@@ -167,13 +186,17 @@ export async function runReviewRound(input) {
     if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; providers come from the configured 3rd-review tier`);
   }
   if (input.review_round !== undefined || input.reviewRound !== undefined) throw new TypeError("review_round is derived from canonical prior review evidence");
+  if (input.review_scope !== undefined || input.reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient();
   const hostProvider = input.host_provider ?? input.hostProvider;
-  const stage = input.stage; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
+  const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack);
   const previousRef = input.previous_result_ref ?? input.previousResultRef ?? null;
   const prior = previousRef === null ? null : previousResult(trusted.task, previousRef, stage, reviewTrack);
-  const currentSnapshotTree = frozenSnapshotTree(trusted);
+  // A Phase is immutable evidence. Controller identity must use that frozen
+  // Phase tree rather than the live worktree, which can already contain the
+  // repair that makes an interrupted review recoverable.
+  const currentSnapshotTree = frozenSnapshotTree(trusted, phaseId);
   const control = selectCanonicalReviewRound({
     task: trusted.task, stage, route, previousResult: prior, ledger: input.materials?.response_ledger ?? null,
     currentSnapshotTree,
@@ -212,7 +235,7 @@ export async function runReviewRound(input) {
   });
   const result = await runReview({
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
-    stage, phaseId: input.phase_id ?? input.phaseId ?? null, reviewTrack, uiScope: input.ui_scope === true,
+    stage, phaseId, reviewTrack, uiScope: input.ui_scope === true,
     // The ledger is controller/audit data. Full reviews must see a fresh packet
     // and stage-material validation forbids closure-only fields outside closure.
     materials: providerVisibleMaterialsForRound({
@@ -234,7 +257,7 @@ export async function runReviewRound(input) {
     result_ref: result.resultRef,
     report_ref: result.reportRef,
     snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
-    subject_kind: result.subjectKind, phase_id: result.phaseId, base_tree: result.baseTree, candidate_tree: result.candidateTree,
+    subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
   };
 }
 

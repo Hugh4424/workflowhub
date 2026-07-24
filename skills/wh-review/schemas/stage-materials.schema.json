@@ -27,7 +27,7 @@
         },
         "build-spec": { "$ref": "#/$defs/rule" },
         "build-plan": { "$ref": "#/$defs/buildPlanRule" },
-        "build-code": { "$ref": "#/$defs/rule" },
+        "build-code": { "$ref": "#/$defs/buildCodeProfiles" },
         "verify-code": { "$ref": "#/$defs/rule" }
       },
       "additionalProperties": false
@@ -68,6 +68,58 @@
             },
             "forbidden": {
               "not": { "contains": { "const": "draft_tasks" } }
+            }
+          }
+        }
+      ]
+    },
+    "buildCodeProfiles": {
+      "type": "object",
+      "required": ["profiles"],
+      "properties": {
+        "profiles": {
+          "type": "object",
+          "required": ["phase", "integration"],
+          "properties": {
+            "phase": { "$ref": "#/$defs/phaseRule" },
+            "integration": { "$ref": "#/$defs/integrationRule" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "phaseRule": {
+      "allOf": [
+        { "$ref": "#/$defs/rule" },
+        {
+          "properties": {
+            "source_bundle": { "const": "diff" },
+            "required": { "contains": { "const": "test_evidence" } }
+          }
+        }
+      ]
+    },
+    "integrationRule": {
+      "allOf": [
+        { "$ref": "#/$defs/rule" },
+        {
+          "properties": {
+            "source_bundle": { "const": "none" },
+            "required": {
+              "allOf": [
+                { "contains": { "const": "phase_coverage" } },
+                { "contains": { "const": "seam_index" } },
+                { "contains": { "const": "ac_trace" } }
+              ]
+            },
+            "forbidden": {
+              "allOf": [
+                { "contains": { "const": "changes_diff" } },
+                { "contains": { "const": "cumulative_diff" } },
+                { "contains": { "const": "phase_diff" } },
+                { "contains": { "const": "integration_map" } }
+              ]
             }
           }
         }

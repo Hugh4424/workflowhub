@@ -74,7 +74,19 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
 
 **wh-review**：
-workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05）。承接原来分散在 3rd-review 下的 workflowhub 专属知识：make-decision、build-spec、build-plan、build-code 的正式审查，以及按需调用的独立诊断合同。正常 verify-code 复用 active accepted build-code 的最终全树审查，不再次调用 provider。wh-review 在内部调用 3rd-review 完成实际审查，对需要审查的 stage executor 暴露统一入口。
+workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05）。承接原来分散在 3rd-review 下的 workflowhub 专属知识：五个 stage 的正式审查，以及按需调用的独立诊断合同；build-spec、build-plan、verify-code 的正常修复不做小型二审，build-code 仍对每个 Phase 完整审查至 pass。wh-review 在内部调用 3rd-review 完成实际异源派发，对需要审查的 stage executor 暴露统一入口；3rd-review 只负责派发，不解释 WorkflowHub 的 stage 语义。
+
+**审查材料地图（review material map）**：
+每个 stage 明确列出的最小充分审查材料及其锚点、未知项和不适用项；它是 reviewer 的导航和可核查边界，不是把整个项目或原始日志重新投递给 provider。
+
+**Phase 审查（phase review）**：
+对单个 build-code Phase 的完整、冻结 diff 审查；每个 Phase 持续完整审查至 pass，不因材料优化降低代码、测试、简单性或鲁棒性检查强度。
+
+**集成审查（integration review）**：
+build-code 结束时对最终快照的跨 Phase 交互审查。它读取连续的 Phase PASS 覆盖链、跨 Phase seam 索引、每个 seam 的最终锚点或显式未知/不适用项，以及 AC 到改动和测试/证据的追踪；它不重新投递历史完整 diff。
+
+**AC 证据摘要（AC evidence summary）**：
+逐条 AC 的可读验收视图，记录结果、场景、判定标准、实际结果、证据引用/hash 和覆盖边界；它来自已认证证据，不包含原始日志。
 
 ## verify-code 深化术语（m13e）
 

@@ -42,13 +42,21 @@ Create the evidence aggregate with `node scripts/stage-runtime.mjs receipt
 That input has exactly:
 `{"refs":[{"ref":"<leaf ref returned by the runtime>","sha256":"<leaf hash returned by the runtime>"}]}`.
 
-Verify-code does not run a second full-tree review. It reuses the active
-accepted build-code result's canonical final full-worktree review. Pass that
-exact final review ref in the verify run input; the runtime authenticates the
-result or unavailable attempt, its provider evidence, and the current snapshot.
-`pass`, `revise_required`, and `unavailable` remain visible quality facts for
-the human verify boundary; verify-code does not invoke review providers again.
-Fresh verification evidence remains structured canonical roots:
+Verify-code has two distinct review facts. The active accepted build-code final
+same-snapshot `worktree + integration` **pass** review remains the acceptance
+lineage. Pass that exact build-code review ref in the verify run input; the
+runtime authenticates its `review_scope=integration`, provider evidence, and
+current snapshot. A Phase result, legacy unscoped worktree result, or verify-code
+quality review never replaces, upgrades, or becomes this `receipts.review` fact.
+
+After fresh tests and every acceptance-evidence leaf are complete, normal
+verify-code must run configured `wh-review` with `stage: "verify-code"`. It
+reviews only the frozen verification packet and publishes its own canonical
+result or unavailable attempt. Its `pass`, `revise_required`, and `unavailable`
+outcome is a non-gate quality fact for the human verify boundary. It cannot
+accept the stage, invalidate the authenticated build-code review, or substitute
+for fresh acceptance evidence. Fresh verification evidence remains structured
+canonical roots:
 
 ```json
 {
@@ -67,8 +75,8 @@ canonical test output. If parameterized or unchanged tests make a static
 `test()` source count differ, explain the difference instead of treating that
 source count as executed evidence.
 
-Declared runtime components: conditional `test-strategy` and conditional
-`isolated-browser-qa`.
+Declared runtime components: required post-evidence `wh-review`; conditional
+`test-strategy`; and conditional `isolated-browser-qa`.
 
 ## Inputs and outputs
 
@@ -115,7 +123,7 @@ fresh passing verification through
 --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
 kernel requires a new active accepted build, fresh passing tests and acceptance
-evidence, plus that build's accepted final full-worktree review. The active build's accepted tests and
+evidence, plus that build's accepted final integration review. The active build's accepted tests and
 review snapshots must match those fresh materials and the live Workspace; a
 build accepted at snapshot A cannot validate later Workspace B evidence. The
 kernel then binds their hashes plus the old
@@ -132,14 +140,8 @@ idempotent. Other attempts against a closed stage remain rejected.
 
 ## Procedure
 
-1. Validate StageContext and read the accepted build-code result through the
-   TaskKernel. Use
-   `ctx.kernel.readAccepted("build-code", {allowLegacyBuildCode: true})` only
-   for the initial read: this lets an older accepted record reach the explicit
-   verification-failure path. If `acceptance_coverage` is absent, mark the
-   affected criteria `unknown` and return a formal failed verify attempt; never
-   treat the legacy record as passing and never use the compatibility option
-   for acceptance or close.
+1. Validate StageContext and read the accepted build-code result through
+   `ctx.kernel.readAccepted("build-code")`.
 2. Read only the accepted build-code facts and `evidence_refs` from its
    authenticated accepted attempt. Resolve formal artifacts, dependencies, and
    unresolved risks from those existing records; the human brief is display,
@@ -148,10 +150,9 @@ idempotent. Other attempts against a closed stage remain rejected.
    coverage table, every affected AC remains `unknown`; verification cannot
    claim full coverage or pass. Never infer coverage from a green aggregate
    test run.
-3. Take the final test command required by the accepted plan only from
-   accepted build-code facts. A Phase-focused command is not valid verify
-   input. Missing command is a fail-loud lineage error; never reuse an older
-   command. Capture it through the only public path:
+3. Take the fresh test command only from accepted build-code facts. Missing
+   command is a fail-loud lineage error; never reuse an older command. Capture
+   it through the only public path:
    `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
    --project=<project> --task=<task>
    --input=$TMP_DIR/test-capture.json`.
@@ -172,34 +173,49 @@ idempotent. Other attempts against a closed stage remain rejected.
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-6. Read the active accepted build-code final review ref. Do not call a review
-   provider again. The runtime rejects a Phase result, wrong task, changed
-   bytes, or a snapshot different from the fresh tests/current Workspace. Keep
-   `revise_required` or `unavailable` as quality facts for the human boundary.
-7. After evidence assembly, create `$TMP_DIR/run.json` with exactly:
+6. Authenticate the active accepted build-code final `worktree + integration`
+   review and its `review_scope=integration`.
+   This is the existing acceptance lineage and must remain the `review` ref in
+   the verify run input. Reject a Phase result, wrong task, changed bytes, or a
+   snapshot different from the fresh tests/current Workspace. The new
+   verify-code review must never replace this ref.
+7. After the fresh test receipt and every acceptance-evidence leaf are complete,
+   run configured `wh-review` with `stage: "verify-code"`, the authenticated
+   TaskHandle identity, current host provider, and only
+   `acceptance_criteria`, structured `acceptance_evidence`, `open_exceptions`,
+   `context_map`, and `evidence_map`. The evidence material contains the
+   schema-validated `ac-evidence-summary.v1`: exactly one row per accepted AC
+   with acceptance leaf, nested evidence, and test receipt ref/SHA-256 plus
+   scenario/oracle/outcome/limits/exceptions. Unknown source semantics remain
+   explicit `unknown`; raw logs, full canonical evidence trees, full codebases,
+   and copied build-code diffs are forbidden. Do not select providers, models,
+   or a review round. Record the returned result/attempt and report it as a
+   quality fact. Do not put it in `$TMP_DIR/run.json`, acceptance-evidence
+   leaves, or `facts.review`.
+
+   If that first review is `revise_required`, normal repair records a bound
+   response ledger and does not call a provider again. Only a complete ledger
+   that explicitly declares structural changes to direction, ACs, interface,
+   schema, state, security, concurrency, topology, phase order, or test
+   strategy permits one fresh full re-review. That re-review uses the configured
+   initial route, does not receive the ledger, is capped at one, and remains a
+   non-gate quality fact. Missing, invalid, or unavailable review evidence is
+   recorded honestly and goes to the human verify summary; it never blocks or
+   silently passes the stage.
+8. After evidence assembly, create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"tests":"receipts/verify-tests.json","review":"<active accepted build-code final review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
    Publish the append-only pass or fail attempt with
    `node scripts/stage-runtime.mjs run --stage=verify-code
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
    After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
-   a stage artifact, evidence ref, or handoff item. Present a plain-language
-   verification brief covering the overall solution, how it was implemented,
-   observed behavior, fresh tests and AC coverage, the reused final build review
-   and its actual providers/available metrics, remaining risks, and the close
-   decision that follows. Clearly state that verify-code reuses the accepted
-   build review rather than running another provider review. Record the verification-stage
+   a stage artifact, evidence ref, or handoff item. Present a plain-language gate
+   brief with exactly four items: current status; next step and owner; whether
+   the user must act; and, when action is required, the problem, a recommended
+   option, and every option's consequence and risk. Record the verification-stage
    decision with `confirm`, and pass only its accepted ref to `accept`. This
    confirmation accepts verification facts only.
-
-   If the official `run` finds an acceptance failure or a tests/review/Workspace
-   lineage mismatch, it first publishes an unaccepted `verify-code` failure
-   attempt and then exits with that attempt reference. Do not treat the
-   non-zero exit as “no attempt was written”, and do not retry blindly. Use
-   the published failure attempt plus its failed `acceptance-evidence.v1`
-   reference for the existing controlled `reopen` flow; a failure attempt
-   cannot be accepted.
-8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
+9. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
    snapshot commit from the current canonical accepted verification facts,
    accepted spec path,
@@ -228,16 +244,16 @@ idempotent. Other attempts against a closed stage remain rejected.
    requires the same Git common directory as the accepted workspace, records
    immutable migration lineage, atomically updates the target identity, and must
    finish before a fresh `prepare` run.
-9. Record that one decision with `scripts/task-close.mjs confirm`. Only a
+10. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.
-10. Run `scripts/task-close.mjs execute` with the plan hash and close confirmation
+11. Run `scripts/task-close.mjs execute` with the plan hash and close confirmation
    ref. The controlled executor rechecks the target checkout, clean state, and
    frozen local/remote baselines before its first Git write, then performs the
    fixed six actions in order. It uses `--no-ff --no-edit` merge and a non-force
    push, stops at the first failure, and reconciles already completed physical
    actions on retry. Do not issue the six Git operations by hand.
-11. Run `scripts/task-close.mjs status` with the same explicit identity and plan
+12. Run `scripts/task-close.mjs status` with the same explicit identity and plan
     hash. It reads live local and remote facts and reports completed and missing
     actions. Only `record_status: completed` together with physical
     `status: ready` permits reporting close complete. Never infer a task path
@@ -251,28 +267,12 @@ failures stop before verification because continuing would inspect another task.
 Procedure actions named `ask`, `wait`, or `present` must be projected onto a
 host-visible conversation surface. The invoking host owns delivery and resume;
 WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, bullets,
-and plain language a high-school student can understand. Use one card type only:
-
-- A milestone card contains only current progress, 1–3 important conclusions,
-  next step, and whether user action is required. Publish once for verification
-  scope, fresh test/AC results, verification conclusion, and final delivery;
-  do not stream tool activity.
-- A review card for the reused accepted build review names the reviewed subject,
-  actual providers, verdict, up to three important findings and their final
-  disposition. Report actual duration and token usage only when supplied by
-  formal review/runtime facts; otherwise state `not provided`. State explicitly
-  that no new verify-code provider run occurred.
-- A verification or close question card contains only current status, decision,
-  affected scope, and 2–3 mutually exclusive options with one recommendation
-  and reason plus each option's consequence/risk. The verification card also
-  summarizes what the whole solution does, how it works, observed effect,
-  tests/review conclusion, and remaining risks so the user can judge close.
-
-Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
-internal identifiers stay in formal records; public messages name only the
-human-readable artifact and result. An unchanged milestone or reused review
-result is not published again. The close
+Every public message uses the user's language, short Markdown headings, and
+bullets. For Chinese, start with `## **当前状态**`, then `## **下一步**`, then
+`## **需要你处理吗**`. Keep each section brief and use plain language a
+high-school student can understand. Raw paths, hashes, receipt or attempt refs,
+runner details, shell commands, and internal identifiers stay in formal records;
+the public message names only the human-readable artifact and result. The close
 card explains the six actions, affected branches or workspaces in human terms,
 and their consequences and risks; its plan hash remains an internal binding.
 Ask and wait for the user only at the existing verification or close decision,

@@ -156,6 +156,10 @@ export function writeAttempt(task, ref, attempt) {
     if (Object.hasOwn(providerAttempt, "session_artifact_path")) {
       throw new TypeError("session_artifact_path is legacy-only and cannot be written by managed wh-review");
     }
+    if (Object.hasOwn(providerAttempt?.execution ?? {}, "session_file_path") ||
+        Object.hasOwn(providerAttempt?.execution ?? {}, "raw_output_ref")) {
+      throw new TypeError("broker private session/output fields cannot be written by managed wh-review");
+    }
   }
   const safeTask = assertTaskHandle(task);
   return createCanonicalReviewWriter({ task: safeTask, taskId: attempt?.task_id, stage: attempt?.stage }).writeAttempt(ref, attempt);

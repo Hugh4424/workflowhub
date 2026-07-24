@@ -104,7 +104,9 @@ Required `materials` keys come directly from `stage-materials.json`:
   `draft_spec_or_acceptance`;
 - build-spec: `raw_requirement`, `approved_decision`, `draft_spec`;
 - build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`, `draft_tasks`;
-- build-code: `approved_spec`, `acceptance_criteria`, `test_evidence`;
+- build-code/phase: `approved_spec`, `acceptance_criteria`, `test_evidence`;
+- build-code/integration: `approved_spec`, `acceptance_criteria`,
+  `test_evidence`, `phase_coverage`, `seam_index`, `ac_trace`;
 - verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
 
 `stage-materials.json` is a strict allowlist: each stage exposes only required
@@ -147,39 +149,58 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 
 ## Inputs
 
-`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, and frozen materials. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, commit ranges, providers, and models are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
+`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, and frozen materials. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, commit ranges, providers, models, or `review_scope` are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
 
-For a normal worktree review, the host captures tracked changes, deletions, modes, symlinks, and non-ignored untracked files through a temporary Git index. It captures twice and rejects a changing source. For a `build-code` phase review, the host resolves the current phase's `phase-diff-scan.v1` evidence and regenerates the complete `base_tree..candidate_tree` diff itself. Runtime files are written outside the source repository.
+`build-code` has two non-interchangeable subjects. With `phase_id`, the runner
+derives `review_scope=phase`, resolves the current `phase-diff-scan.v1`, and
+regenerates the complete frozen `base_tree..candidate_tree` diff. Without
+`phase_id`, it derives `review_scope=integration` for the final worktree
+review. Integration first reconstructs one unique continuous, formal PASS
+Phase-trace chain from the accepted build-plan checkpoint to the final tree;
+it validates the current test identity and AC trace before it can call a
+provider. A missing, branched, stale, or legacy-only trace is
+`MATERIAL_INCOMPLETE`, not a reason to send a cumulative diff. A legacy final
+result without `review_scope=integration` cannot authorize final verification;
+it may be rerun only when the same-snapshot canonical coverage, trace, AC, and
+test facts are complete. Runtime files are written outside the source
+repository.
 
 The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
 
-Each bundle also contains `packet-plan.json`: every included file has its byte
-count, authority level, inclusion reason and map relation; contract-forbidden
-material is listed with its exclusion reason. Bytes are telemetry only: there
-is no configured packet cap, size rejection, truncation, or phase-splitting
-rule. A code review carries the complete phase diff and only map-selected
-direct-context excerpts plus deterministic `change-map.json`; raw evidence logs
-remain canonical audit records. For build-code, anchors default to unmodified
-direct dependencies. A changed-file anchor needs `outside_diff_reason` and may
-contain only candidate lines outside every unified-diff hunk; an overlap fails
-loud instead of duplicating changed code. The plan lists every payload file and
-also its own `packet-plan.json` and sealed `manifest.json` metadata entries.
+Each bundle also contains `packet-plan.json`: a compact material-category plan
+with selected context and exclusion reasons. `manifest.json` is the only
+complete provider-visible file byte/hash list. Delivery bytes are telemetry
+only: there is no packet cap, size rejection, truncation, phase-splitting,
+token, duration, or output-count admission rule. A Phase review carries the
+complete frozen Phase diff, deterministic `change-map.json`, and only
+map-selected direct-context excerpts; raw evidence logs remain canonical audit
+records. For Phase material, anchors default to unmodified direct dependencies.
+A changed-file anchor needs `outside_diff_reason` and may contain only candidate
+lines outside every unified-diff hunk; an overlap fails loud instead of
+duplicating changed code. An integration packet carries no `changes.diff`,
+historical Phase diff, cumulative diff, raw log, complete project, or duplicate
+`integration_map`: it carries its coverage chain, seam index, AC trace, fresh
+test summary, and only their selected final-snapshot excerpts.
 
 ## Attempts and results
 
 Only two durable record types exist:
 
-- `attempt`: transport、material、provider status 和公开错误。它可能以 `unavailable` 结束；不保存 broker raw output、raw hash 或路径。
+- `attempt`: transport, material, provider status, and public diagnostics. It may end `unavailable`; it contains neither raw output nor broker-private paths.
 - `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and its declared review subject. A phase result records `phase_id`, `base_tree`, and `candidate_tree`; a worktree result records the captured `snapshot_tree`.
 
 Every attempt also publishes `reviews/reports/<attempt-id>.md`. It is rendered
-only from canonical public facts: route/profile/model/thinking, duration and
-token usage (or unavailability), runtime/session IDs, coverage, every
+only from public canonical facts: route/profile/model/effort/thinking, duration
+and token usage (or unavailability), runtime/session IDs, coverage, every
 provider's findings, root causes, correction direction, and unavailable
 diagnostics. It always renders `SESSION_PATH_UNAVAILABLE`; broker runtime and
-native CLI session paths remain provider-private.
+native CLI session paths remain provider-private and are never invented.
 
-Transport success is not review success. Authentication, cancellation, timeout, malformed output, missing material, and protocol failure never become a semantic verdict. Managed nonzero transport stderr is never retained; it becomes a fixed public `PROTOCOL_INCOMPATIBLE` diagnostic.
+Transport success is not review success. Authentication, cancellation, malformed
+output, missing material, and protocol failure never become a semantic verdict.
+The broker supervises provider liveness; WorkflowHub polls the same managed
+request without a wall-clock review deadline and never reads broker-private
+state to decide that a healthy review has stopped.
 
 CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage results store only that pair:
 
@@ -189,24 +210,51 @@ CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage resu
 
 Consumers open the referenced formal result and do not trust a copied verdict. `make-decision` stores separate `direction` and `detail` refs; any `revise_required` wins, both must pass, otherwise the stage is unavailable.
 
-## Host-visible review brief
-
-Return enough trusted facts for the invoking Stage to publish one plain-language
-review brief: reviewed subject, actual providers, aggregate verdict, up to three
-important findings, and the intended disposition. Include duration and token
-usage only when the formal provider/runtime result supplies them. When either is
-absent, report `not provided`; never estimate it, inspect broker-private state,
-or rerun an unchanged review just to obtain metrics. A reused result for the
-same snapshot/material produces no second public brief.
-
 ## Provider protocol
 
-3rd-review exposes managed public `workflowhub-run.v1` `start/status` and a terminal `workflowhub-result.v2` group. wh-review uses a deterministic request ID to reconnect the same runtime, polls without a review deadline, and never falls back to blocking `run` or reads broker private state, attachment workspaces, or `/tmp/3rd-review`. A terminal group must expose `raw_output_ref: null`; canonical attempts store only public profile, timing, usage, retry, runtime/session IDs and normalized public errors. Session reuse is an optional optimization, not proof of correctness. A retry always sends the complete current bundle. A format correction or fresh session is transport recovery, not a cap on later formal review attempts; every failed attempt remains immutable evidence. Build-code has no cycle, time, token, output-size, or repeated-finding stop rule: every repaired phase is reviewed again from its complete current frozen material until its formal review is `pass`.
+3rd-review exposes only the public managed `workflowhub-run.v1` start/status
+and terminal `workflowhub-result.v2` group. wh-review never reads broker private
+state, attachment workspaces, or `/tmp/3rd-review`. The canonical attempt stores
+only public profile, timing, usage, retry, runtime/session IDs, and normalized
+public diagnostics. Session reuse is an optional optimization, not proof of
+correctness. A retry always sends the complete current bundle. A format
+correction or fresh session is transport recovery, not a cap on later formal
+review attempts; every failed attempt remains immutable evidence. Build-code
+has no cycle, time, token, output-size, or repeated-finding stop rule: every
+repaired Phase is reviewed again from its complete current frozen material until
+its formal review is `pass`.
 
-Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON, one unique fenced JSON object, or one terminal JSON object after prose with no fenced block or competing review object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
+### Finding aggregation
+
+Only parse-valid `pass` or `revise_required` outputs from eligible adapters
+enter semantic aggregation. If a broker returns multiple successful profiles
+for one adapter, only the configured highest-priority profile represents that
+adapter; priority is not an intelligence score and never makes a finding true.
+The runner clusters equivalent findings by packet path, line, and normalized
+issue text, then preserves every provider attribution in the cluster.
+
+- A `blocking` or `major` cluster is actionable only with a valid direct or
+  machine anchor, or with matching inferred evidence from at least two distinct
+  adapters.
+- An invalid direct/machine anchor is `invalid_evidence`; one inferred adapter
+  is `needs_corroboration`. Neither changes the semantic verdict.
+- `minor` clusters are reported as nonblocking. A `revise_required` verdict
+  exists only when at least one actionable cluster exists.
+
+This avoids trusting a provider merely for brand, cost, or transient model
+quality while retaining concrete single-reviewer evidence.
+
+Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pure JSON or one unique fenced JSON object is accepted. Host identifiers and hashes are host-owned and are not required in model prose.
 
 ## Final gate
 
-`verify-final` accepts only a worktree result. It recaptures the source and requires the current tree to equal `result.snapshot_tree`; a phase result returns `PHASE_RESULT_NOT_FINAL` because a partial review cannot authorize commit or merge. A worktree mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run the final review again. Phase results are consumed only by phase-gate, which compares their `phase_id`, `base_tree`, and `candidate_tree` with the current phase evidence.
+`verify-final` accepts only a same-snapshot worktree result with
+`review_scope=integration`. It recaptures the source and requires the current
+tree to equal `result.snapshot_tree`; a Phase result, a legacy worktree result,
+or an integration-scope mismatch cannot authorize commit or merge. A worktree
+mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run the final integration
+review again. Phase results are consumed only by phase-gate, which compares
+their `phase_id`, `base_tree`, and `candidate_tree` with the current Phase
+evidence.
 
 Human risk acceptance belongs to the stage execution record. It never edits the review result, and it cannot turn `unavailable` into `pass`.

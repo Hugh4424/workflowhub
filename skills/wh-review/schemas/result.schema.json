@@ -10,6 +10,7 @@
     "review_track": { "enum": ["direction", "detail", null] },
     "subject_kind": { "enum": ["worktree", "phase"] },
     "phase_id": { "type": ["string", "null"], "minLength": 1 },
+    "review_scope": { "enum": ["phase", "integration", null] },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "source": { "$ref": "attempt.schema.json#/properties/source" },
@@ -106,6 +107,12 @@
     "if": { "properties": { "review_chain": { "type": "object" } }, "required": ["review_chain"] },
     "then": { "properties": { "review_chain": { "$ref": "#/properties/review_chain" } } }
   }, {
+    "if": { "properties": { "review_scope": { "const": "phase" } }, "required": ["review_scope"] },
+    "then": { "properties": { "stage": { "const": "build-code" }, "subject_kind": { "const": "phase" } } }
+  }, {
+    "if": { "properties": { "review_scope": { "const": "integration" } }, "required": ["review_scope"] },
+    "then": { "properties": { "stage": { "const": "build-code" }, "subject_kind": { "const": "worktree" }, "phase_id": { "type": "null" } } }
+  }, {
     "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
     "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
     "else": { "properties": { "review_track": { "type": "null" } } }
@@ -117,8 +124,7 @@
     "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
     "then": {
       "properties": {
-        "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/resultFinding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } },
-        "provider_results": { "type": "array", "items": { "type": "object", "properties": { "output": { "type": "object", "properties": { "verdict": { "const": "pass" }, "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/finding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } } } } } } }
+        "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/resultFinding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } }
       }
     },
     "else": { "properties": { "findings": { "type": "array", "minItems": 1 } } }

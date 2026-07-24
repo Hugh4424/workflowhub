@@ -13,11 +13,13 @@ import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.m
 import { validatePhaseGate } from "../scripts/phase-gate.mjs";
 import { stageRuntimeMain } from "../scripts/stage-runtime.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
+import { readPhaseMapTrace } from "../skills/wh-review/scripts/phase-review-subject.mjs";
+import { buildIntegrationReviewSubject } from "../skills/wh-review/scripts/integration-review-subject.mjs";
+import { capturePhaseReviewSource } from "../skills/wh-review/scripts/review-source.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-const acceptanceCoverage = (snapshotTree, criterion = "PHASE-REPAIR") => ({ snapshot_tree: snapshotTree, accepted_criterion_ids: [criterion], items: [{ acceptance_criterion_id: criterion, status: "unknown", evidence_refs: [] }] });
 
 function accept(kernel, stage, facts, human = false, upstream_refs = []) {
   const attempt = kernel.publishAttempt(stage, { facts, upstream_refs });
@@ -34,8 +36,7 @@ function fixture(taskId = "phase-evidence") {
   git(repo, ["config", "user.name", "Test"]);
   git(repo, ["config", "user.email", "test@example.com"]);
   writeFileSync(join(repo, "README.md"), "base\n");
-  writeFileSync(join(repo, "AGENTS.md"), "# Host contract\n");
-  git(repo, ["add", "README.md", "AGENTS.md"]);
+  git(repo, ["add", "README.md"]);
   git(repo, ["commit", "-qm", "base"]);
   const task = createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0", project_name: "Demo", task_id: taskId,
@@ -62,8 +63,9 @@ function fixture(taskId = "phase-evidence") {
   return { root, task, workspace, kernel: bound };
 }
 
-function phaseReceipts(state, name, { revisionOf } = {}) {
+function phaseReceipts(state, name, { revisionOf, extraFiles = [] } = {}) {
   writeFileSync(join(state.workspace.worktreeRoot, `${name}.txt`), `${name}\n`);
+  for (const { path, content } of extraFiles) writeFileSync(join(state.workspace.worktreeRoot, path), content);
   const implementation = writeOfficialComponentReceipt({
     task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation",
     payload: { phase_completion: true }, ...(revisionOf ? { revisionOf } : {}),
@@ -78,7 +80,7 @@ function redReceipt(state, name) {
     .captureTests({ command: "false", receiptRef: `receipts/${name}-red.json`, outputRef: `evidence/${name}-red.txt` });
 }
 
-function formalPhaseReview(state, published, verdict = "pass") {
+function formalPhaseReview(state, published, verdict = "pass", { reviewScope = "phase", includePhaseAcTrace = true } = {}) {
   const writer = createCanonicalReviewWriter({ task: state.task, taskId: state.task.identity.taskId, stage: "build-code" });
   const suffix = `${published.phase_id}-${verdict}-${published.snapshot_tree.slice(0, 8)}`;
   const attemptRef = `reviews/attempts/${suffix}/attempt.json`;
@@ -90,47 +92,33 @@ function formalPhaseReview(state, published, verdict = "pass") {
   };
   const subject = {
     subject_kind: "phase", phase_id: published.phase_id,
+    review_scope: reviewScope,
     base_tree: published.base_tree, candidate_tree: published.snapshot_tree,
   };
   const finding = { severity: "major", path: "fixture", issue: "fix", recommendation: "repair" };
   const output = { verdict, summary: "fixture", findings: verdict === "pass" ? [] : [finding] };
   writer.writeProviderOutput(outputRef, JSON.stringify(output));
   const materialId = sha256(`${suffix}:material`);
-  writer.writeAttempt(attemptRef, {
-    version: "wh-review-attempt.v1", attempt_id: suffix, task_id: state.task.identity.taskId, stage: "build-code",
-    review_track: null, source, snapshot_tree: published.snapshot_tree, material_id: materialId, ...subject,
-    provider_attempts: [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }],
-    terminal_status: "semantic", error: null,
-  });
-  writer.writeResult(resultRef, {
-    version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-code", review_track: null,
-    source, snapshot_tree: published.snapshot_tree, material_id: materialId, attempt_ref: attemptRef, ...subject,
-    provider_results: [{ provider: "fixture", output }], verdict,
-    findings: verdict === "pass" ? [] : [{ provider: "fixture", ...finding }],
-  });
-  return resultRef;
-}
-
-function formalWorktreeReview(state, published, verdict = "revise_required") {
-  const writer = createCanonicalReviewWriter({ task: state.task, taskId: state.task.identity.taskId, stage: "build-code" });
-  const suffix = `worktree-${verdict}-${published.snapshot_tree.slice(0, 8)}`;
-  const attemptRef = `reviews/attempts/${suffix}/attempt.json`;
-  const outputRef = `reviews/attempts/${suffix}/providers/fixture.output.json`;
-  const resultRef = `reviews/results/${suffix}.json`;
-  const source = {
-    target_commit: published.implementation_commit, base_commit: published.baseline_commit,
-    base_tree: published.base_tree, captured_head: published.implementation_commit,
+  const phaseEvidence = JSON.parse(state.task.readRecord("phase-result.json"));
+  const greenRef = phaseEvidence.evidence.green_test_receipt_ref;
+  const greenHash = sha256(state.task.readRecord(greenRef));
+  const phaseAcTrace = {
+    schema_version: "phase-ac-change-test-trace.v1", phase_id: published.phase_id,
+    base_tree: published.base_tree, snapshot_tree: published.snapshot_tree,
+    acceptance_ids: [`AC-${published.phase_id}`],
+    entries: [{
+      acceptance_criterion_id: `AC-${published.phase_id}`,
+      change: [{ change_id: `C-${published.phase_id}`, path: `${published.phase_id}.txt` }],
+      test: [{ receipt_ref: greenRef, receipt_hash: greenHash }],
+      anchors: [{ id: "phase-ac", path: `${published.phase_id}.txt`, start_line: 1, end_line: 1, role: "acceptance", reason: "Phase implementation" }],
+    }],
   };
-  const subject = { subject_kind: "worktree", phase_id: null, base_tree: published.base_tree, candidate_tree: published.snapshot_tree };
-  const finding = { severity: "major", path: "fixture", issue: "final review requires repair", recommendation: "repair the owning Phase" };
-  const output = { verdict, summary: "fixture", findings: verdict === "pass" ? [] : [finding] };
-  writer.writeProviderOutput(outputRef, JSON.stringify(output));
-  const materialId = sha256(`${suffix}:material`);
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: suffix, task_id: state.task.identity.taskId, stage: "build-code",
     review_track: null, source, snapshot_tree: published.snapshot_tree, material_id: materialId, ...subject,
     provider_attempts: [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
+    ...(includePhaseAcTrace ? { phase_ac_trace: phaseAcTrace } : {}),
   });
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-code", review_track: null,
@@ -151,6 +139,14 @@ function publish(state, phaseId, receipts, extra = {}) {
   });
 }
 
+function completePhase(state, phaseId, receipts, extra = {}) {
+  const pending = publish(state, phaseId, receipts, extra);
+  const review = formalPhaseReview(state, pending);
+  const { previous_phase_review_ref: _predecessor, ...completionExtra } = extra;
+  const completed = publish(state, phaseId, receipts, { ...completionExtra, review_result_ref: review });
+  return { pending, completed, review, traceRef: JSON.parse(state.task.readRecord("phase-result.json")).evidence.phase_map_trace_ref };
+}
+
 function controlledReopen(state, published, receipts, reviewRef) {
   const testReceipt = JSON.parse(state.task.readRecord(receipts.tests.receipt_ref));
   const reviewRaw = state.task.readRecord(reviewRef);
@@ -168,7 +164,11 @@ function controlledReopen(state, published, receipts, reviewRef) {
   };
   accept(state.kernel, "build-code", {
     changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts, phase_completion: true,
-    acceptance_coverage: acceptanceCoverage(testFacts.snapshot_tree),
+    acceptance_coverage: {
+      snapshot_tree: published.snapshot_tree,
+      accepted_criterion_ids: [`AC-${published.phase_id}`],
+      items: [{ acceptance_criterion_id: `AC-${published.phase_id}`, status: "covered", evidence_refs: [{ ref: testReceipt.output_ref, sha256: testReceipt.output_hash }] }],
+    },
   }, false, [{ task_id: state.task.identity.taskId, stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }]);
 
   const failureRef = "evidence/acceptance-reopened-phase.json";
@@ -188,64 +188,108 @@ function controlledReopen(state, published, receipts, reviewRef) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("build-code phase evidence publication", () => {
-  it("reuses identical implementation diff evidence during a same-snapshot revision", () => {
-    const state = fixture("same-snapshot-revision");
-    const first = writeOfficialComponentReceipt({ task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
-    const repeated = writeOfficialComponentReceipt({ task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true }, revisionOf: first.ref });
-    expect(repeated.value.diff_ref).toBe(first.value.diff_ref);
+  it("seals a non-ignored untracked file into the first Phase only, while rejecting later workspace drift", () => {
+    const state = fixture("phase-untracked-snapshot");
+    const firstReceipts = phaseReceipts(state, "phase-1", {
+      extraFiles: [{ path: "phase-untracked.txt", content: "sealed untracked content\n" }],
+    });
+    const implementation = JSON.parse(state.task.readRecord(firstReceipts.implementation.ref));
+    const implementationDiff = JSON.parse(state.task.readRecord(implementation.diff_ref));
+    const untrackedBlob = git(state.workspace.worktreeRoot, ["hash-object", "--", "phase-untracked.txt"]);
+
+    expect(implementation.changed).toEqual(expect.arrayContaining(["phase-1.txt", "phase-untracked.txt"]));
+    expect(implementationDiff.untracked).toEqual(expect.arrayContaining([{ path: "phase-untracked.txt", blob_oid: untrackedBlob }]));
+    expect(git(state.workspace.worktreeRoot, ["status", "--porcelain", "--untracked-files=all"])).toContain("?? phase-untracked.txt");
+
+    const firstAllowedFiles = { allowed_files: ["phase-1.txt", "phase-untracked.txt"] };
+    const first = publish(state, "phase-1", firstReceipts, firstAllowedFiles);
+    const reviewDataRoot = join(state.root, "review-data");
+    mkdirSync(reviewDataRoot);
+    const source = capturePhaseReviewSource({
+      sourceRoot: state.workspace.worktreeRoot, task: state.task, phaseId: "phase-1", reviewDataRoot,
+    });
+    try {
+      const phaseDiff = readFileSync(source.diffPath, "utf8");
+      const expectedDiff = execFileSync("git", ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", source.baseTree, source.snapshotTree], {
+        cwd: state.workspace.worktreeRoot, encoding: "utf8",
+      });
+      expect(source.changedFiles.map(({ path }) => path)).toEqual(expect.arrayContaining(["phase-1.txt", "phase-untracked.txt"]));
+      expect(phaseDiff).toContain("phase-untracked.txt");
+      expect(phaseDiff).toContain("sealed untracked content");
+      expect(phaseDiff).toBe(expectedDiff);
+      expect(phaseDiff).not.toContain('"schema_version": "workflowhub-diff-evidence.v1"');
+      expect(phaseDiff).not.toContain('"untracked"');
+    } finally {
+      source.dispose();
+    }
+
+    const firstReview = formalPhaseReview(state, first);
+    writeFileSync(join(state.workspace.worktreeRoot, "late-untracked.txt"), "late drift\n");
+    expect(() => publish(state, "phase-1", firstReceipts, { ...firstAllowedFiles, review_result_ref: firstReview }))
+      .toThrow(/Workspace.*drift|snapshot.*drift/i);
+    rmSync(join(state.workspace.worktreeRoot, "late-untracked.txt"));
+
+    publish(state, "phase-1", firstReceipts, { ...firstAllowedFiles, review_result_ref: firstReview });
+    const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
+    const second = publish(state, "phase-2", secondReceipts, { previous_phase_review_ref: firstReview });
+    const secondScan = JSON.parse(state.task.readRecord(second.diff_scan_ref));
+    const secondSource = capturePhaseReviewSource({
+      sourceRoot: state.workspace.worktreeRoot, task: state.task, phaseId: "phase-2", reviewDataRoot,
+    });
+    try {
+      const phaseDiff = readFileSync(secondSource.diffPath, "utf8");
+      expect(secondScan.changed_files).toEqual(["phase-2.txt"]);
+      expect(secondSource.changedFiles.map(({ path }) => path)).toEqual(["phase-2.txt"]);
+      expect(phaseDiff).toContain("phase-2.txt");
+      expect(phaseDiff).not.toContain("phase-untracked.txt");
+      expect(phaseDiff).not.toContain("sealed untracked content");
+    } finally {
+      secondSource.dispose();
+    }
+    expect(git(state.workspace.worktreeRoot, ["status", "--porcelain", "--untracked-files=all"])).toContain("?? phase-untracked.txt");
   });
 
-  it("accepts only a complete host-managed runtime block outside the implementation snapshot", () => {
-    const runtime = fixture("runtime-context");
-    const runtimeAgents = join(runtime.workspace.worktreeRoot, "AGENTS.md");
-    writeFileSync(runtimeAgents, [
-      "# Host contract",
-      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
-      "decision-maker runtime detail",
-      "<!-- END HOST-RUNTIME -->",
-      "",
-    ].join("\n"));
-    const runtimeReceipts = phaseReceipts(runtime, "phase-1");
-    writeFileSync(runtimeAgents, [
-      "# Host contract",
-      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
-      "coder runtime detail",
-      "<!-- END HOST-RUNTIME -->",
-      "",
-    ].join("\n"));
-    expect(publish(runtime, "phase-1", runtimeReceipts).snapshot_tree).toBe(runtimeReceipts.implementation.value.snapshot_tree);
+  it("reconstructs one continuous PASS chain and emits a trace-only seam index without a cumulative diff", () => {
+    const state = fixture("integration-subject");
+    const firstReceipts = phaseReceipts(state, "phase-1");
+    const first = completePhase(state, "phase-1", firstReceipts);
+    const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
+    const second = completePhase(state, "phase-2", secondReceipts, { previous_phase_review_ref: first.review });
 
-    const outer = fixture("runtime-context-outer");
-    const outerAgents = join(outer.workspace.worktreeRoot, "AGENTS.md");
-    writeFileSync(outerAgents, [
-      "# Host contract",
-      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
-      "task-local runtime detail",
-      "<!-- END HOST-RUNTIME -->",
-      "",
-    ].join("\n"));
-    const outerReceipts = phaseReceipts(outer, "phase-1");
-    writeFileSync(outerAgents, "# Changed host contract\n");
-    expect(() => publish(outer, "phase-1", outerReceipts)).toThrow(/Workspace.*drift/i);
+    const subject = buildIntegrationReviewSubject({ task: state.task, sourceRoot: state.workspace.worktreeRoot, finalTree: second.completed.snapshot_tree });
+    expect(subject).toMatchObject({
+      schema_version: "integration-review-subject.v1", subject_kind: "worktree", review_scope: "integration",
+      base_commit: state.kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid,
+      snapshot_tree: second.completed.snapshot_tree,
+    });
+    expect(subject.phase_coverage.phases.map(({ phase_id }) => phase_id)).toEqual(["phase-1", "phase-2"]);
+    expect(subject.phase_coverage.phases.map(({ review_result }) => review_result.ref)).toEqual([first.review, second.review]);
+    expect(subject.seam_index).toEqual(expect.objectContaining({
+      schema_version: "cross-phase-seam-index.v1", snapshot_tree: second.completed.snapshot_tree,
+      entries: [expect.objectContaining({ producer_phase_id: "phase-1", consumer_phase_id: "phase-2", disposition: "unknown" })],
+    }));
+    expect(JSON.stringify(subject)).not.toMatch(/changes\.diff|cumulative_diff|raw_log|integration_map/);
+  });
 
-    const malformed = fixture("runtime-context-malformed");
-    const malformedAgents = join(malformed.workspace.worktreeRoot, "AGENTS.md");
-    writeFileSync(malformedAgents, [
-      "# Host contract",
-      "<!-- BEGIN HOST-RUNTIME (auto-managed; do not edit) -->",
-      "task-local runtime detail",
-      "<!-- END HOST-RUNTIME -->",
-      "",
-    ].join("\n"));
-    const malformedReceipts = phaseReceipts(malformed, "phase-1");
-    writeFileSync(malformedAgents, [
-      "# Host contract",
-      "<!-- BEGIN OTHER-RUNTIME (auto-managed; do not edit) -->",
-      "task-local runtime detail",
-      "<!-- END OTHER-RUNTIME -->",
-      "",
-    ].join("\n"));
-    expect(() => publish(malformed, "phase-1", malformedReceipts)).toThrow(/Workspace.*drift/i);
+  it("fails closed when a historic PASS phase has no phase-map trace", () => {
+    const state = fixture("integration-legacy-trace");
+    const firstReceipts = phaseReceipts(state, "phase-1");
+    const first = completePhase(state, "phase-1", firstReceipts);
+    const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
+    const second = completePhase(state, "phase-2", secondReceipts, { previous_phase_review_ref: first.review });
+    rmSync(join(state.task.taskPath, first.traceRef));
+    expect(() => buildIntegrationReviewSubject({ task: state.task, sourceRoot: state.workspace.worktreeRoot, finalTree: second.completed.snapshot_tree }))
+      .toThrow(/MATERIAL_INCOMPLETE.*continuous PASS Phase coverage/i);
+  });
+
+  it("fails closed when a continuous Phase trace omits its AC mapping", () => {
+    const state = fixture("integration-missing-ac-trace");
+    const receipts = phaseReceipts(state, "phase-1");
+    const pending = publish(state, "phase-1", receipts);
+    const review = formalPhaseReview(state, pending, "pass", { includePhaseAcTrace: false });
+    const completed = publish(state, "phase-1", receipts, { review_result_ref: review });
+    expect(() => buildIntegrationReviewSubject({ task: state.task, sourceRoot: state.workspace.worktreeRoot, finalTree: completed.snapshot_tree }))
+      .toThrow(/MATERIAL_INCOMPLETE.*AC change\/test mapping/i);
   });
 
   it("derives the first baseline, publishes pre-review evidence, attaches PASS, and reuses the same identity", () => {
@@ -266,6 +310,22 @@ describe("build-code phase evidence publication", () => {
     expect(JSON.parse(state.task.readRecord("phase-result.json"))).toMatchObject({
       status: "done", declared_allowed_files: ["phase-1.txt"],
     });
+    const traceRef = phaseResult.evidence.phase_map_trace_ref;
+    expect(traceRef).toMatch(/^evidence\/phases\/phase-1\/[a-f0-9]{40}\/phase-map-trace-[a-f0-9]{64}\.json$/);
+    const trace = readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef });
+    expect(trace.trace).toMatchObject({
+      phase_id: "phase-1", review_scope: "phase", verdict: "pass",
+      canonical_phase_evidence: { ref: first.canonical_phase_evidence_ref },
+      review_result: { ref: reviewRef },
+    });
+    expect(trace.trace.implementation_commit_ref).toBe(
+      `refs/workflowhub/phases/Demo/${state.task.identity.taskId}/build-code/phase-1/snapshot-${first.snapshot_tree}`,
+    );
+    expect(git(state.workspace.worktreeRoot, ["rev-parse", `${trace.trace.implementation_commit_ref}^{commit}`]))
+      .toBe(first.implementation_commit);
+    git(state.workspace.worktreeRoot, ["gc", "--prune=now"]);
+    expect(readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef }).trace.implementation_commit)
+      .toBe(first.implementation_commit);
     const changed = phaseReceipts(state, "after-pass", { revisionOf: receipts.implementation.ref });
     const changedInput = {
       phase_id: "phase-1", implementation_receipt_ref: changed.implementation.ref,
@@ -284,6 +344,8 @@ describe("build-code phase evidence publication", () => {
     const first = publish(state, "phase-1", receipts);
     const firstReview = formalPhaseReview(state, first);
     publish(state, "phase-1", receipts, { review_result_ref: firstReview });
+    const originalTraceRef = JSON.parse(state.task.readRecord("phase-result.json")).evidence.phase_map_trace_ref;
+    const originalTraceRaw = state.task.readRecord(originalTraceRef);
     const reopen = controlledReopen(state, first, receipts, firstReview);
 
     const repaired = phaseReceipts(state, "phase-1-reopened", { revisionOf: receipts.implementation.ref });
@@ -303,11 +365,19 @@ describe("build-code phase evidence publication", () => {
       green_test_receipt_ref: repaired.tests.receipt_ref, allowed_files: ["phase-1.txt", "phase-1-reopened.txt"],
       review_result_ref: reopenedReview,
     })).toThrow(/reopen_ref/i);
-    publishBuildCodePhaseEvidence({ task: state.task, kernel: state.kernel, workspace: state.workspace }, {
+    const completedReopen = publishBuildCodePhaseEvidence({ task: state.task, kernel: state.kernel, workspace: state.workspace }, {
       phase_id: "phase-1", implementation_receipt_ref: repaired.implementation.ref,
       green_test_receipt_ref: repaired.tests.receipt_ref, allowed_files: ["phase-1.txt", "phase-1-reopened.txt"],
       review_result_ref: reopenedReview, reopen_ref: reopen.reopen_ref,
     });
+    const reopenedTraceRef = JSON.parse(state.task.readRecord("phase-result.json")).evidence.phase_map_trace_ref;
+    expect(completedReopen.phase_map_trace_ref).toBe(reopenedTraceRef);
+    expect(reopenedTraceRef).not.toBe(originalTraceRef);
+    expect(state.task.readRecord(originalTraceRef)).toBe(originalTraceRaw);
+    expect(readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: originalTraceRef }).trace.snapshot_tree)
+      .toBe(first.snapshot_tree);
+    expect(readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: reopenedTraceRef }).trace.snapshot_tree)
+      .toBe(reopened.snapshot_tree);
 
     const secondRepair = phaseReceipts(state, "phase-1-reopened-again", { revisionOf: repaired.implementation.ref });
     const secondReopened = publishBuildCodePhaseEvidence({ task: state.task, kernel: state.kernel, workspace: state.workspace }, {
@@ -363,6 +433,12 @@ describe("build-code phase evidence publication", () => {
     const secondReceipts = phaseReceipts(nonPass, "phase-2", { revisionOf: firstReceipts.implementation.ref });
     expect(() => publish(nonPass, "phase-2", secondReceipts, { previous_phase_review_ref: reviewRef })).toThrow(/PASS|pass/);
 
+    const legacy = fixture("legacy-phase-scope");
+    const legacyReceipts = phaseReceipts(legacy, "phase-1");
+    const legacyPhase = publish(legacy, "phase-1", legacyReceipts);
+    const legacyReview = formalPhaseReview(legacy, legacyPhase, "pass", { reviewScope: null });
+    expect(() => publish(legacy, "phase-1", legacyReceipts, { review_result_ref: legacyReview })).toThrow(/formal phase review identity|review_scope/i);
+
     const invalid = fixture("invalid-input");
     const invalidReceipts = phaseReceipts(invalid, "phase-1");
     expect(() => publish(invalid, "phase-1", invalidReceipts, { provider: "forbidden" })).toThrow(/unknown|only/i);
@@ -402,51 +478,70 @@ describe("build-code phase evidence publication", () => {
     expect(next.diff_scan_ref).not.toBe(first.diff_scan_ref);
   });
 
-  it("allows a final worktree revise-required result to repair the current Phase before build acceptance", () => {
-    const state = fixture("pre-accept-final-review-repair");
-    const firstReceipts = phaseReceipts(state, "phase-1");
-    const first = publish(state, "phase-1", firstReceipts);
-    const firstPhaseReview = formalPhaseReview(state, first);
-    publish(state, "phase-1", firstReceipts, { review_result_ref: firstPhaseReview });
+  it("does not backfill missing traces and rejects malformed trace bindings", () => {
+    const state = fixture("phase-map-trace-integrity");
+    const receipts = phaseReceipts(state, "phase-1");
+    const first = publish(state, "phase-1", receipts);
+    const missingRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-map-trace-${"0".repeat(64)}.json`;
+    expect(() => readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: missingRef }))
+      .toThrow(/phase map trace is missing/i);
 
-    const finalReview = formalWorktreeReview(state, first);
-    const repaired = phaseReceipts(state, "phase-1-repair", { revisionOf: firstReceipts.implementation.ref });
-    const repairedPending = publish(state, "phase-1", repaired, {
-      allowed_files: ["phase-1.txt", "phase-1-repair.txt"], repair_review_result_ref: finalReview,
-    });
-    expect(repairedPending.snapshot_tree).not.toBe(first.snapshot_tree);
-    expect(JSON.parse(state.task.readRecord("phase-result.json"))).toMatchObject({
-      status: "awaiting_review", repair_review_result_ref: finalReview,
-    });
+    const reviewRef = formalPhaseReview(state, first);
+    publish(state, "phase-1", receipts, { review_result_ref: reviewRef });
+    const publishedRef = JSON.parse(state.task.readRecord("phase-result.json")).evidence.phase_map_trace_ref;
+    const publishedRaw = state.task.readRecord(publishedRef);
+    const legacyPointer = JSON.parse(state.task.readRecord("phase-result.json"));
+    delete legacyPointer.evidence.phase_map_trace_ref;
+    delete legacyPointer.evidence.phase_map_trace_hash;
+    state.task.writeRecordAtomic("phase-result.json", `${JSON.stringify(legacyPointer, null, 2)}\n`);
+    const reused = publish(state, "phase-1", receipts, { review_result_ref: reviewRef });
+    expect(reused.phase_map_trace_ref).toBeUndefined();
+    expect(JSON.parse(state.task.readRecord("phase-result.json")).evidence.phase_map_trace_ref).toBeUndefined();
 
-    const repairedPhaseReview = formalPhaseReview(state, repairedPending);
-    const repairedDone = publish(state, "phase-1", repaired, {
-      allowed_files: ["phase-1.txt", "phase-1-repair.txt"], review_result_ref: repairedPhaseReview,
-    });
-    expect(repairedDone.review_verdict).toBe("pass");
-    expect(JSON.parse(state.task.readRecord("phase-result.json"))).toMatchObject({
-      status: "done", repair_review_result_ref: finalReview,
-    });
+    const badAddressRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-map-trace-${"0".repeat(64)}.json`;
+    state.kernel.publishCanonicalRecord(badAddressRef, publishedRaw);
+    expect(() => readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: badAddressRef }))
+      .toThrow(/phase map trace identity/i);
 
-    const testReceipt = JSON.parse(state.task.readRecord(repaired.tests.receipt_ref));
-    accept(state.kernel, "build-code", {
-      changed: ["phase-1.txt", "phase-1-repair.txt"],
-      tests: {
-        command: testReceipt.command, exit_code: testReceipt.exit_code, command_hash: testReceipt.command_hash,
-        snapshot_head: testReceipt.snapshot_head, snapshot_tree: testReceipt.snapshot_tree, snapshot_commit: testReceipt.snapshot_commit,
-        started_at: testReceipt.started_at, completed_at: testReceipt.completed_at, receipt_ref: repaired.tests.receipt_ref,
-        receipt_hash: sha256(state.task.readRecord(repaired.tests.receipt_ref)), output_ref: testReceipt.output_ref, output_hash: testReceipt.output_hash,
-      },
-      review: { verdict: "pass", result_ref: repairedPhaseReview, result_hash: sha256(state.task.readRecord(repairedPhaseReview)), snapshot_tree: repairedDone.snapshot_tree },
-      phase_completion: true,
-      acceptance_coverage: acceptanceCoverage(testReceipt.snapshot_tree),
-    }, false, [{ task_id: state.task.identity.taskId, stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }]);
+    const legacyTrace = JSON.parse(publishedRaw);
+    legacyTrace.review_scope = null;
+    const legacyRaw = `${JSON.stringify(legacyTrace, null, 2)}\n`;
+    const legacyRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-map-trace-${sha256(legacyRaw)}.json`;
+    state.kernel.publishCanonicalRecord(legacyRef, legacyRaw);
+    expect(() => readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: legacyRef }))
+      .toThrow(/phase map trace identity|review_scope/i);
 
-    const late = phaseReceipts(state, "phase-1-late", { revisionOf: repaired.implementation.ref });
-    const lateReview = formalWorktreeReview(state, repairedDone);
-    expect(() => publish(state, "phase-1", late, {
-      allowed_files: ["phase-1.txt", "phase-1-repair.txt", "phase-1-late.txt"], repair_review_result_ref: lateReview,
-    })).toThrow(/unavailable after build-code acceptance/i);
+    const tampered = JSON.parse(state.task.readRecord(publishedRef));
+    tampered.green_test_receipt.sha256 = "0".repeat(64);
+    const raw = `${JSON.stringify(tampered, null, 2)}\n`;
+    const tamperedRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-map-trace-${sha256(raw)}.json`;
+    state.kernel.publishCanonicalRecord(tamperedRef, raw);
+    expect(() => readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: tamperedRef }))
+      .toThrow(/GREEN test receipt hash/i);
+
+    const originalTrace = JSON.parse(publishedRaw);
+    const forgedGreen = {
+      ...JSON.parse(state.task.readRecord(originalTrace.green_test_receipt.ref)),
+      exit_code: 1,
+    };
+    const forgedGreenRaw = `${JSON.stringify(forgedGreen, null, 2)}\n`;
+    const forgedGreenRef = "receipts/forged-green.json";
+    state.kernel.publishCanonicalRecord(forgedGreenRef, forgedGreenRaw);
+    const forgedEvidence = JSON.parse(state.task.readRecord(originalTrace.canonical_phase_evidence.ref));
+    forgedEvidence.evidence.green_test_receipt_ref = forgedGreenRef;
+    const forgedEvidenceRaw = `${JSON.stringify(forgedEvidence, null, 2)}\n`;
+    const forgedEvidenceRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-evidence-${sha256(forgedEvidenceRaw)}.json`;
+    state.kernel.publishCanonicalRecord(forgedEvidenceRef, forgedEvidenceRaw);
+    const forgedTrace = {
+      ...originalTrace,
+      canonical_phase_evidence: { ref: forgedEvidenceRef, sha256: sha256(forgedEvidenceRaw) },
+      green_test_receipt: { ref: forgedGreenRef, sha256: sha256(forgedGreenRaw) },
+    };
+    const forgedTraceRaw = `${JSON.stringify(forgedTrace, null, 2)}\n`;
+    const forgedTraceRef = `evidence/phases/phase-1/${first.snapshot_tree}/phase-map-trace-${sha256(forgedTraceRaw)}.json`;
+    state.kernel.publishCanonicalRecord(forgedTraceRef, forgedTraceRaw);
+    expect(() => readPhaseMapTrace({ task: state.task, sourceRoot: state.workspace.worktreeRoot, traceRef: forgedTraceRef }))
+      .toThrow(/GREEN test receipt provenance/i);
   });
 
   it("rejects candidate-bound RED, unsafe or duplicate paths, and extra public command flags", async () => {

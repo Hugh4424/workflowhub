@@ -5,7 +5,7 @@ import { captureWorkspaceSnapshot } from "../../core/canonical-receipt-writer.mj
 import { assertTaskHandle, assertTaskKernel } from "../../core/task-handle.mjs";
 import { assertWorkspace } from "../../core/workspace.mjs";
 import { validateSchema } from "../../skills/wh-review/scripts/schema-validator.mjs";
-import { validatePhaseReviewEvidence } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
+import { validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -41,7 +41,7 @@ function readImplementation(task, ref) {
     || value.stage !== "build-code" || value.producer?.stage !== "build-code"
     || value.producer?.component !== "implementation" || !OID.test(value.snapshot_tree ?? "")
     || !OID.test(value.snapshot_commit ?? "")) throw new Error("implementation receipt provenance is invalid");
-  return receipt;
+  return { ...receipt, ref };
 }
 
 function readTestReceipt(task, ref, { green }) {
@@ -59,7 +59,7 @@ function readTestReceipt(task, ref, { green }) {
   if (!HASH.test(value.output_hash ?? "") || sha256(task.readRecord(value.output_ref)) !== value.output_hash) {
     throw new Error(`${green ? "GREEN" : "RED"} test output hash mismatch`);
   }
-  return receipt;
+  return { ...receipt, ref };
 }
 
 function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}) {
@@ -69,6 +69,7 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
   const value = review.value;
   if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
     || value.subject_kind !== "phase" || value.phase_id !== expected.phaseId
+    || value.review_scope !== "phase"
     || value.base_tree !== expected.baseTree || value.candidate_tree !== expected.candidateTree
     || value.snapshot_tree !== expected.candidateTree || !["pass", "revise_required"].includes(value.verdict)) {
     throw new Error("formal phase review identity does not match the Phase evidence");
@@ -76,10 +77,10 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
   if (requirePass && value.verdict !== "pass") throw new Error(`previous Phase review must be PASS (got ${value.verdict})`);
   const attempt = readJson(task, value.attempt_ref, "formal phase review attempt");
   validateSchema("attempt", attempt.value);
-  for (const key of ["task_id", "stage", "subject_kind", "phase_id", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
+  for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
     if (attempt.value[key] !== value[key]) throw new Error(`formal phase review attempt/result ${key} mismatch`);
   }
-  return review;
+  return { ...review, ref, attempt_ref: value.attempt_ref, attempt };
 }
 
 function readPreAcceptRepairReview(task, ref, expectedCandidateTree) {
@@ -88,14 +89,14 @@ function readPreAcceptRepairReview(task, ref, expectedCandidateTree) {
   validateSchema("result", review.value);
   const value = review.value;
   if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
-    || value.subject_kind !== "worktree" || value.phase_id !== null
+    || value.subject_kind !== "worktree" || value.review_scope !== "integration" || value.phase_id !== null
     || value.candidate_tree !== expectedCandidateTree || value.snapshot_tree !== expectedCandidateTree
     || value.verdict !== "revise_required") {
     throw new Error("pre-accept repair review identity does not match the current Phase");
   }
   const attempt = readJson(task, value.attempt_ref, "pre-accept repair review attempt");
   validateSchema("attempt", attempt.value);
-  for (const key of ["task_id", "stage", "subject_kind", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
+  for (const key of ["task_id", "stage", "subject_kind", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
     if (attempt.value[key] !== value[key]) throw new Error(`pre-accept repair review attempt/result ${key} mismatch`);
   }
   return review;
@@ -109,6 +110,41 @@ function hasAcceptedBuildCode(task) {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
+}
+
+function phaseMapTrace({ scan, scanRef, scanHash, canonicalEvidenceRef, canonicalEvidenceHash, implementation, green, red, review, implementationCommitRef }) {
+  const value = review.value;
+  const acceptanceTrace = validatePhaseAcceptanceTrace({
+    trace: review.attempt.value.phase_ac_trace,
+    phaseId: scan.phase_id,
+    baseTree: value.base_tree,
+    snapshotTree: scan.snapshot_tree,
+    changedFiles: scan.changed_files,
+    greenTestReceipt: { ref: green.ref, sha256: green.hash },
+    required: false,
+  });
+  return {
+    schema_version: "phase-map-trace.v1",
+    phase_id: scan.phase_id,
+    baseline_commit: scan.baseline_commit,
+    implementation_commit: scan.implementation_commit,
+    implementation_commit_ref: implementationCommitRef,
+    base_tree: value.base_tree,
+    snapshot_tree: scan.snapshot_tree,
+    allowed_files: [...scan.allowed_files],
+    changed_files: [...scan.changed_files],
+    canonical_phase_evidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidenceHash },
+    diff_scan: { ref: scanRef, sha256: scanHash },
+    implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
+    green_test_receipt: { ref: green.ref, sha256: green.hash },
+    red_test_receipt: red === null ? null : { ref: red.ref, sha256: red.hash },
+    review_result: { ref: review.ref, sha256: review.hash },
+    review_attempt: { ref: review.attempt_ref, sha256: review.attempt.hash },
+    material_id: value.material_id,
+    review_scope: "phase",
+    verdict: value.verdict,
+    ...(acceptanceTrace === null ? {} : { acceptance_trace: acceptanceTrace }),
+  };
 }
 
 function currentPhaseResult(task) {
@@ -181,6 +217,44 @@ function assertLiveWorkspaceMatchesImplementation(workspace, implementation, sna
     || runtimeOnly.runtime_controlled_changes.length !== 1 || runtimeOnly.runtime_controlled_changes[0].path !== "AGENTS.md") {
     throw new Error("live Workspace snapshot drifted from the implementation receipt");
   }
+}
+
+function phaseCommitRef(task, phaseId, snapshotTree) {
+  return `refs/workflowhub/phases/${task.identity.projectName}/${task.identity.taskId}/build-code/${phaseId}/snapshot-${snapshotTree}`;
+}
+
+function readPinnedCommit(workspace, ref) {
+  try {
+    return execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
+      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch (error) {
+    if (error.status === 128) return null;
+    throw new Error(`Phase snapshot ref could not be read: ${ref}`);
+  }
+}
+
+function pinPhaseCommit(workspace, task, phaseId, snapshotTree, implementationCommit) {
+  const ref = phaseCommitRef(task, phaseId, snapshotTree);
+  const current = readPinnedCommit(workspace, ref);
+  if (current !== null && current !== implementationCommit) throw new Error("Phase snapshot ref already points to a different commit");
+  if (current === null) {
+    try {
+      execFileSync("git", ["update-ref", ref, implementationCommit, "0".repeat(40)], {
+        cwd: workspace.worktreeRoot, stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch {
+      const raced = readPinnedCommit(workspace, ref);
+      if (raced !== implementationCommit) throw new Error("Phase snapshot ref could not be created immutably");
+    }
+  }
+  const pinned = readPinnedCommit(workspace, ref);
+  if (pinned !== implementationCommit) throw new Error("Phase snapshot ref no longer points to the implementation commit");
+  const pinnedTree = execFileSync("git", ["rev-parse", `${pinned}^{tree}`], {
+    cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  if (pinnedTree !== snapshotTree) throw new Error("Phase snapshot ref tree does not match the implementation snapshot");
+  return ref;
 }
 
 function publishIdempotently(task, kernel, ref, raw, label) {
@@ -295,6 +369,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim();
     if (red && red.value.snapshot_tree !== baselineTree) throw new Error("RED test receipt must bind the Phase baseline tree");
     const implementationCommit = phaseCommit(workspace, implementation.value.snapshot_tree, baseline, input.phase_id);
+    const implementationCommitRef = pinPhaseCommit(workspace, task, input.phase_id, implementation.value.snapshot_tree, implementationCommit);
     const scan = createPhaseDiffScan({
       sourceRoot: workspace.worktreeRoot, phaseId: input.phase_id, baselineCommit: baseline,
       implementationCommit, allowedFiles: input.allowed_files,
@@ -328,7 +403,8 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       },
     };
     const evidenceRaw = canonical(evidence);
-    const canonicalEvidenceRef = `${namespace}/phase-evidence-${sha256(evidenceRaw)}.json`;
+    const canonicalEvidenceHash = sha256(evidenceRaw);
+    const canonicalEvidenceRef = `${namespace}/phase-evidence-${canonicalEvidenceHash}.json`;
     publishIdempotently(task, kernel, canonicalEvidenceRef, evidenceRaw, "canonical Phase evidence");
     evidence.evidence.canonical_phase_evidence_ref = canonicalEvidenceRef;
 
@@ -337,6 +413,16 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       review = readFormalPhaseReview(task, input.review_result_ref, {
         phaseId: input.phase_id, baseTree, candidateTree: scan.snapshot_tree,
       });
+      const trace = phaseMapTrace({
+        scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash,
+        implementation, green, red, review, implementationCommitRef,
+      });
+      const traceRaw = canonical(trace);
+      const traceHash = sha256(traceRaw);
+      const traceRef = `${namespace}/phase-map-trace-${traceHash}.json`;
+      publishIdempotently(task, kernel, traceRef, traceRaw, "Phase map trace");
+      evidence.evidence.phase_map_trace_ref = traceRef;
+      evidence.evidence.phase_map_trace_hash = traceHash;
       evidence.review = { result_ref: input.review_result_ref, snapshot_tree: scan.snapshot_tree };
       evidence.status = review.value.verdict === "pass" ? "done" : "needs_revision";
     }
@@ -346,7 +432,11 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       base_tree: baseTree, snapshot_tree: scan.snapshot_tree, diff_scan_ref: scanRef,
       canonical_phase_evidence_ref: canonicalEvidenceRef,
       ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
-      ...(review ? { review_result_ref: input.review_result_ref, review_verdict: review.value.verdict } : {}),
+      ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
+      ...(review ? {
+        review_result_ref: input.review_result_ref, review_verdict: review.value.verdict,
+        phase_map_trace_ref: evidence.evidence.phase_map_trace_ref, phase_map_trace_hash: evidence.evidence.phase_map_trace_hash,
+      } : {}),
     });
   });
   return input.reopen_ref === undefined

@@ -9,7 +9,8 @@ const groupFields = ["host_provider", "outcome", "providers", "round", "runtime_
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
-const absolutePathPattern = /(?:^|[^A-Za-z0-9._~/%-])(?:\/[A-Za-z0-9._-]+(?:\/|$)|[A-Za-z]:[\\/])/;
+// Reject filesystem roots, not ordinary review terms such as `map/AC`.
+const absolutePathPattern = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)(?:\/|$)|[A-Za-z]:[\\/])/;
 const fileUriPathPattern = /\bfile:\/\/\/(?:[A-Za-z0-9._~%-]|%[A-Fa-f0-9]{2})/i;
 
 function containsPrivatePath(value) {
@@ -85,7 +86,7 @@ function parseManagedWire(wire, command) {
   let result;
   try { result = JSON.parse(wire.stdout); }
   catch { throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} stdout is not JSON`); }
-  if (containsPrivatePath(result)) throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} result contains a private path`);
+  if (containsPrivatePath(result)) throw failure("PUBLIC_RESULT_INVALID", `3rd-review managed ${command} result contains a private path`);
   return result;
 }
 
@@ -142,7 +143,7 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
     execution: Object.freeze({
       adapter: value.adapter, model: value.model, effort: value.effort, thinking: value.thinking,
       timing: Object.freeze(timing), usage: value.usage, retry: Object.freeze(retry),
-      runtime_id: runtimeId, session_file_path: null, raw_output_ref: null,
+      runtime_id: runtimeId,
     }),
   });
 }

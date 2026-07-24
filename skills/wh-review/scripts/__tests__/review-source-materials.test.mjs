@@ -44,12 +44,15 @@ function evidenceTask(f, receipt, output, { includeOutput = true } = {}) {
 function verifyEvidenceFixture(f) {
   const output = Buffer.from("verify output\n");
   const outputHash = createHash("sha256").update(output).digest("hex");
-  const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: outputHash })}\n`);
-  const task = evidenceTask(f, receipt, output);
-  const acceptance = Buffer.from(`${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/tests-output.txt", sha256: outputHash }] })}\n`);
-  const acceptanceHash = createHash("sha256").update(acceptance).digest("hex");
-  const aggregate = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-receipt.v1", refs: [{ ref: "evidence/acceptance-ac-1.json", sha256: acceptanceHash }] })}\n`);
+  const snapshotTree = "a".repeat(40);
+  const task = createTask({ storageRoot: f.root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: `verify-${Math.random().toString(16).slice(2)}`, created_at: new Date().toISOString(), target_repo_root: f.target, issue_ids: [], inputs: {} } });
+  const receipt = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", snapshot_tree: snapshotTree, output_ref: "evidence/tests-output.txt", output_hash: outputHash })}\n`);
   const kernel = createTaskKernel(task);
+  kernel.publishCanonicalRecord("receipts/tests.json", receipt);
+  kernel.publishCanonicalRecord("evidence/tests-output.txt", output);
+  const acceptance = Buffer.from(`${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", snapshot_tree: snapshotTree, refs: [{ ref: "evidence/tests-output.txt", sha256: outputHash }] })}\n`);
+  const acceptanceHash = createHash("sha256").update(acceptance).digest("hex");
+  const aggregate = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", producer: { component: "evidence" }, refs: [{ ref: "evidence/acceptance-ac-1.json", sha256: acceptanceHash }] })}\n`);
   kernel.publishCanonicalRecord("evidence/acceptance-ac-1.json", acceptance);
   kernel.publishCanonicalRecord("evidence/verify-evidence.json", aggregate);
   return {
@@ -105,11 +108,12 @@ describe("review source capture", () => {
     task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-1", evidence: { diff: "evidence/phase-1-diff-scan.json" } })}\n`);
     createTaskKernel(task).publishCanonicalRecord("evidence/phase-1-diff-scan.json", Buffer.from(`${JSON.stringify({ schema_version: "phase-diff-scan.v1", phase_id: "phase-1", baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]) })}\n`));
 
-    const result = capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" });
-    expect(result.diff).toContain("phase.txt");
-    expect(result.diff).toContain("phase-two.txt");
-    expect(result.diff).not.toContain("upstream.txt");
-    expect(result.diff).not.toContain("later.txt");
+    const result = capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1", reviewDataRoot: f.data });
+    const diff = readFileSync(result.diffPath, "utf8");
+    expect(diff).toContain("phase.txt");
+    expect(diff).toContain("phase-two.txt");
+    expect(diff).not.toContain("upstream.txt");
+    expect(diff).not.toContain("later.txt");
     expect(result.baseTree).toBe(git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]));
     expect(result.snapshotTree).toBe(git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]));
   });
@@ -117,7 +121,7 @@ describe("review source capture", () => {
   it("rejects a phase id or evidence record that does not match", () => {
     const f = fixture(); const task = evidenceTask(f, Buffer.from("{}\n"), Buffer.from(""));
     task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-2", evidence: { diff: "scan.json" } })}\n`);
-    expect(() => capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" })).toThrow(/PHASE_EVIDENCE_INVALID/);
+    expect(() => capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1", reviewDataRoot: f.data })).toThrow(/PHASE_EVIDENCE_INVALID/);
   });
 
   it("captures the whole dirty tree twice against the current target HEAD", () => {
@@ -126,14 +130,21 @@ describe("review source capture", () => {
     expect(result.targetCommit).toBe(git(f.target, ["rev-parse", "HEAD"]));
     expect(result.baseCommit).toBe(result.targetCommit);
     expect(result.snapshotTree).toMatch(/^[a-f0-9]{40,64}$/);
-    expect(result.diff).toContain("added.txt");
-    expect(result.diff).toContain("deleted file mode");
-    expect(result.diff).toContain("similarity index 100%");
+    const diff = readFileSync(result.diffPath, "utf8");
+    expect(diff).toContain("added.txt");
+    expect(diff).toContain("deleted file mode");
+    expect(diff).toContain("similarity index 100%");
     expect(result.changedFiles.map((item) => item.path)).toEqual(expect.arrayContaining(["added.txt", "keep.txt", "link.txt", "renamed.txt", "untracked.txt"]));
     expect(result.changedFiles.map((item) => item.path)).not.toContain("ignored.txt");
     expect(result.changedFiles.find((item) => item.path === "keep.txt").mode).toBe("100755");
     expect(result.changedFiles.find((item) => item.path === "link.txt").mode).toBe("120000");
-    expect(result.readSnapshotFile("keep.txt").toString()).toBe("modified\n");
+    const expectedDiff = execFileSync("git", ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", result.baseTree, result.snapshotTree], { cwd: f.source });
+    expect(readFileSync(result.diffPath)).toEqual(expectedDiff);
+    expect(result.diffBytes).toBe(expectedDiff.length);
+    expect(result.diffSha256).toBe(createHash("sha256").update(expectedDiff).digest("hex"));
+    const copied = join(f.root, "keep-snapshot.txt");
+    result.copySnapshotFile("keep.txt", copied);
+    expect(readFileSync(copied, "utf8")).toBe("modified\n");
   });
 
   it("moves the base forward after main advances and the feature merges main", () => {
@@ -144,8 +155,9 @@ describe("review source capture", () => {
     writeFileSync(join(f.source, "feature.txt"), "feature\n");
     const result = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     expect(result.baseCommit).toBe(git(f.target, ["rev-parse", "HEAD"]));
-    expect(result.diff).toContain("feature.txt");
-    expect(result.diff).not.toContain("main.txt");
+    const diff = readFileSync(result.diffPath, "utf8");
+    expect(diff).toContain("feature.txt");
+    expect(diff).not.toContain("main.txt");
   });
 
   it("uses the authenticated Workspace baseline after target main already contains task history", () => {
@@ -197,6 +209,14 @@ describe("review source capture", () => {
       betweenCaptures: () => writeFileSync(join(f.source, "late.txt"), "late\n")
     })).toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);
   });
+
+  it("captures final identity without creating an unused cumulative diff", () => {
+    const f = fixture(); changeAll(f.source);
+    const result = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data, includeDiff: false });
+    expect(result).not.toHaveProperty("diffPath");
+    expect(result.changedFiles).toEqual([]);
+    expect(() => result.copyDiffTo(join(f.root, "forbidden.diff"))).toThrow(/no diff artifact/i);
+  });
 });
 
 describe("review materials", () => {
@@ -204,7 +224,7 @@ describe("review materials", () => {
     expect(reviewInstructionsFor("make-decision", "direction")).toContain("bundle/review-instructions.md");
   });
 
-  it("preserves the canonical receipt but excludes recursive raw test output", () => {
+  it("authenticates the canonical receipt but sends only its compact test summary", () => {
     const f = fixture(); changeAll(f.source);
     const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const output = Buffer.from("real test output\n");
@@ -214,31 +234,27 @@ describe("review materials", () => {
     const instructions = reviewInstructionsFor("build-code");
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: instructions } });
-    expect(readFileSync(join(bundle.bundleRoot, "canonical/receipts/tests.json"))).toEqual(receipt);
-    expect(bundle.files).not.toContain("canonical/evidence/tests-output.txt");
-    for (const ref of ["canonical/receipts/tests.json"]) {
-      const bytes = readFileSync(join(bundle.bundleRoot, ...ref.split("/")));
-      expect(bundle.manifest.find((item) => item.path === ref)?.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
-    }
+    expect(bundle.files.some((path) => path.startsWith("canonical/"))).toBe(false);
     const graph = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"));
-    expect(graph.map(({ source_ref }) => source_ref).sort()).toEqual(["receipts/tests.json"]);
+    expect(graph).toEqual([]);
     expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({ output_hash: createHash("sha256").update(output).digest("hex"), raw_output_included: false });
     const plan = JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8"));
     expect(plan).toMatchObject({ schema_version: "wh-review-packet-plan.v1", stage: "build-code" });
-    expect(plan.included).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "changes.diff", authority: "required", inclusion_reason: "complete_phase_diff" }),
-      expect.objectContaining({ path: "canonical/receipts/tests.json", authority: "evidence" }),
-    ]));
-    expect(plan.delivery_bytes).toBe(bundle.deliveryManifest.reduce((total, entry) => total + entry.bytes, 0));
+    expect(plan.included.required).toEqual(expect.arrayContaining(["changes.diff", "requirements/test_evidence.json"]));
+    expect(plan.included.evidence).toEqual(expect.arrayContaining(["evidence/test-summary.json", "canonical-evidence.json"]));
+    expect(bundle.packetPlan.delivery_bytes).toBe(bundle.deliveryManifest.reduce((total, entry) => total + entry.bytes, 0));
   });
 
-  it("freezes the same canonical evidence closure for verify-code", () => {
+  it("reduces verify evidence to a per-AC summary without sending the evidence tree", () => {
     const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
-    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") } });
-    const refs = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8")).map(({ source_ref }) => source_ref).sort();
-    expect(refs).toEqual(["evidence/verify-evidence.json", "receipts/tests.json"]);
-    for (const ref of refs) expect(bundle.manifest.map(({ path }) => path)).toContain(`canonical/${ref}`);
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { acceptance_criteria: "AC-1", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") } });
+    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"))).toEqual([]);
+    expect(bundle.files).toContain("requirements/ac_evidence_summary.json");
+    expect(bundle.files).not.toContain("requirements/acceptance_evidence.json");
+    expect(bundle.files.some((path) => path.startsWith("canonical/"))).toBe(false);
+    const summary = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/ac_evidence_summary.json"), "utf8"));
+    expect(summary).toMatchObject({ schema_version: "ac-evidence-summary.v1", criteria: [expect.objectContaining({ acceptance_criterion_id: "AC-1", scenario: "unknown", oracle: "unknown" })] });
   });
 
   it("rejects prose or incomplete verify evidence before provider delivery", () => {
@@ -277,7 +293,7 @@ describe("review materials", () => {
     const instructions = reviewInstructionsFor("verify-code");
     const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code",
-      materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: instructions } });
+      materials: { acceptance_criteria: "AC-1", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: instructions } });
     const declared = bundle.manifest.map(({ path }) => path).filter((path) => path.startsWith("skills/"));
     const instructed = [...instructions.matchAll(/skills\/[A-Za-z0-9._-]+\/SKILL\.md/g)].map(([path]) => path);
     expect(declared.sort()).toEqual(instructed.sort());
@@ -357,9 +373,7 @@ describe("review materials", () => {
       path: taskPath, bytes: taskBytes.length, sha256: createHash("sha256").update(taskBytes).digest("hex")
     });
     expect(bundle.deliveryManifest.find(({ path }) => path === taskPath)).toEqual(bundle.manifest.find(({ path }) => path === taskPath));
-    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: taskPath, authority: "required", inclusion_reason: "stage_required_draft_tasks" })
-    ]));
+    expect(bundle.packetPlan.included.required).toContain(taskPath);
     const changedTasks = buildReviewMaterials({
       reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan",
       materials: { ...base, draft_tasks: `${tasks}- [ ] T02 verify it\n` }
@@ -376,12 +390,12 @@ describe("review materials", () => {
     const base = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
     expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true, materials: base }))
       .toThrow(/wh_review\.v2 requires context_map/);
-    const map = { state: "complete", summary: "one checked authority", entries: [{ id: "ctx-1", subject: "existing contract", rationale: "it defines the public boundary", anchors: [{ id: "ctx-1-source", path: "keep.txt", start_line: 1, end_line: 1, role: "existing_contract", reason: "direct boundary" }] }] };
+    const map = { state: "complete", summary: "one checked authority", entries: [{ id: "ctx-1", subject: "existing contract", rationale: "it defines the public boundary", disposition: "complete", anchors: [{ id: "ctx-1-source", path: "keep.txt", start_line: 1, end_line: 1, role: "existing_contract", reason: "direct boundary" }] }] };
     const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true,
       materials: { ...base, context_map: map, evidence_map: { state: "unknown", summary: "no runtime evidence exists", entries: [], unknown_reason: "implementation has not started" } } });
     expect(bundle.files).toEqual(expect.arrayContaining(["requirements/context_map.json", "requirements/evidence_map.json"]));
     expect(bundle.files).toContain("context/ctx-1-source.txt");
-    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([expect.objectContaining({ path: "context/ctx-1-source.txt", map_relation: expect.objectContaining({ map: "context_map", entry_id: "ctx-1", anchor_id: "ctx-1-source" }) })]));
+    expect(bundle.packetPlan.included.context).toContain("context/ctx-1-source.txt");
   });
 
   it("requires build-code acceptance maps to name and map every declared AC", () => {
@@ -391,14 +405,14 @@ describe("review materials", () => {
     const task = evidenceTask(f, receipt, output); const test_evidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
     const base = {
       approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence, review_instructions: reviewInstructionsFor("build-code"),
-      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete phase", change_ids: changeIds }] },
-      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer", change_ids: changeIds, anchors: [{ id: "impact-source", path: ".gitignore", start_line: 1, end_line: 1, role: "consumer", reason: "direct consumer" }] }] },
-      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "existing helper", rationale: "reviewed", change_ids: [changeIds[0]], anchors: [{ id: "reuse-source", path: ".gitignore", start_line: 1, end_line: 1, role: "reuse", reason: "checked helper" }] }] },
+      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete phase", disposition: "not_applicable", reason_code: "complete_diff_authority", reason: "changes.diff is the authority for changed lines", change_ids: changeIds }] },
+      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer", disposition: "complete", change_ids: changeIds, anchors: [{ id: "impact-source", path: ".gitignore", start_line: 1, end_line: 1, role: "consumer", reason: "direct consumer" }] }] },
+      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "existing helper", rationale: "reviewed", disposition: "complete", change_ids: [changeIds[0]], anchors: [{ id: "reuse-source", path: ".gitignore", start_line: 1, end_line: 1, role: "reuse", reason: "checked helper" }] }] },
     };
     expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", strictV2Maps: true,
-      materials: { ...base, acceptance_map: { state: "complete", summary: "generic", entries: [{ id: "AC-1", subject: "AC", rationale: "generic" }] } } }))
+      materials: { ...base, acceptance_map: { state: "complete", summary: "generic", entries: [{ id: "AC-1", subject: "AC", rationale: "generic", disposition: "complete", anchors: [{ id: "generic-source", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "generic AC context" }] }] } } }))
       .toThrow(/acceptance_map\.acceptance_ids/);
-    const acceptance_map = { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["impact-source"], verification_anchor_ids: ["reuse-source"], anchors: [{ id: "ac-source", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "AC implementation" }] }] };
+    const acceptance_map = { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", disposition: "complete", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["impact-source"], verification_anchor_ids: ["reuse-source"], anchors: [{ id: "ac-source", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "AC implementation" }] }] };
     const changedImpact = {
       ...base,
       impact_map: { ...base.impact_map, entries: [{ ...base.impact_map.entries[0], anchors: [{ id: "impact-source", path: "keep.txt", start_line: 1, end_line: 1, role: "consumer", reason: "direct consumer" }] }] }
@@ -419,13 +433,57 @@ describe("review materials", () => {
     expect(changeMap.changes.find(({ path }) => path === "keep.txt")?.hunks).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "unified", header: expect.stringMatching(/^@@/) }),
     ]));
-    expect(bundle.packetPlan.included).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "packet-plan.json", inclusion_reason: "packet_plan_self" }),
-      expect.objectContaining({ path: "manifest.json", inclusion_reason: "sealed_delivery_manifest" }),
-    ]));
+    expect(bundle.packetPlan.included.metadata).toEqual(expect.arrayContaining(["packet-plan.json", "manifest.json"]));
     for (const path of bundle.files.filter((item) => item.startsWith("context/"))) {
       const [header] = readFileSync(join(bundle.bundleRoot, path), "utf8").split("\n", 1);
       expect(JSON.parse(header)).toMatchObject({ changed_file: false, outside_diff_reason: null });
+    }
+  });
+
+  it("uses a diff-free integration profile with only final seam and coverage facts", () => {
+    const f = fixture(); changeAll(f.source);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const output = Buffer.from("tests pass\n");
+    const receipt = Buffer.from(`${JSON.stringify({ command: "npm run test:targeted", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`);
+    const task = evidenceTask(f, receipt, output);
+    const testEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
+    const changedPath = source.changedFiles[0].path;
+    const traceHash = "a".repeat(64), evidenceHash = "b".repeat(64), implementationHash = "c".repeat(64);
+    const materials = {
+      approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: testEvidence,
+      phase_coverage: {
+        schema_version: "phase-review-coverage.v1", checkpoint: { commit: source.baseCommit, tree: source.baseTree }, snapshot_tree: source.snapshotTree,
+        phases: [{
+          phase_id: "T01", base_tree: source.baseTree, snapshot_tree: source.snapshotTree,
+          trace_ref: `evidence/phases/T01/${source.snapshotTree}/phase-map-trace-${traceHash}.json`, trace_sha256: traceHash,
+          changed_files: [changedPath], green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
+          canonical_phase_evidence: { ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash },
+          implementation_receipt: { ref: "receipts/implementation.json", sha256: implementationHash },
+          review_result: { ref: "reviews/results/phase.json", sha256: "d".repeat(64) },
+        }],
+      },
+      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+      ac_trace: {
+        schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"],
+        entries: [{ acceptance_criterion_id: "AC-1", change: [{ phase_id: "T01", path: changedPath }], test: [{ phase_id: "T01", receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ phase_id: "T01", ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],
+      },
+      review_instructions: reviewInstructionsFor("build-code", null, false, "initial", "integration"),
+    };
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewScope: "integration", strictV2Maps: true, materials });
+    expect(bundle.files).not.toEqual(expect.arrayContaining(["changes.diff", "change-map.json", "changed-files.json", "source.json"]));
+    expect(bundle.files).toEqual(expect.arrayContaining(["requirements/phase_coverage.json", "requirements/seam_index.json", "requirements/ac_trace.json", "evidence/test-summary.json", "context/integration-ac.txt"]));
+    expect(bundle.packetPlan).toMatchObject({ review_scope: "integration" });
+    expect(bundle.packetPlan.excluded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: "material:changes_diff" }),
+      expect.objectContaining({ category: "source_bundle" }),
+    ]));
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewScope: "integration", materials: { ...materials, changes_diff: "all historical changes" } }))
+      .toThrow(/MATERIAL_FORBIDDEN.*changes_diff/);
+    for (const key of ["change", "test", "evidence"]) {
+      const incomplete = structuredClone(materials);
+      incomplete.ac_trace.entries[0][key] = [];
+      expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewScope: "integration", strictV2Maps: true, materials: incomplete }))
+        .toThrow(/MATERIAL_INCOMPLETE.*change, test, and evidence mappings/i);
     }
   });
 
@@ -440,10 +498,10 @@ describe("review materials", () => {
     const task = evidenceTask(f, receipt, Buffer.from("tests pass\n"));
     const materials = {
       approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") }, review_instructions: reviewInstructionsFor("build-code"),
-      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete", change_ids: changeIds }] },
-      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer is below the changed hunk", change_ids: changeIds, anchors: [{ id: "changed-outside-hunk", path: "context-change.txt", start_line: 10, end_line: 12, role: "consumer", reason: "direct dependency call site", outside_diff_reason: "the consumer is outside the changed hunk and is needed to judge the changed contract" }] }] },
-      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "no reusable helper", rationale: "checked", change_ids: [changeIds[0]], not_needed_reason: "the diff has no reusable helper boundary" }] },
-      acceptance_map: { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["changed-outside-hunk"], verification_anchor_ids: ["changed-outside-hunk"], not_needed_reason: "the selected impact anchor is sufficient AC context" }] }
+      phase_map: { state: "complete", summary: "phase", entries: [{ id: "phase", subject: "diff", rationale: "complete", disposition: "not_applicable", reason_code: "complete_diff_authority", reason: "changes.diff is the authority for changed lines", change_ids: changeIds }] },
+      impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct consumer is below the changed hunk", disposition: "complete", change_ids: changeIds, anchors: [{ id: "changed-outside-hunk", path: "context-change.txt", start_line: 10, end_line: 12, role: "consumer", reason: "direct dependency call site", outside_diff_reason: "the consumer is outside the changed hunk and is needed to judge the changed contract" }] }] },
+      reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "no reusable helper", rationale: "checked", disposition: "not_applicable", reason_code: "no_reuse_boundary", reason: "the diff has no reusable helper boundary", change_ids: [changeIds[0]] }] },
+      acceptance_map: { state: "complete", summary: "mapped", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "mapped", disposition: "complete", change_ids: [changeIds[0]], implementation: "changes.diff", verification: "test evidence", implementation_anchor_ids: ["changed-outside-hunk"], verification_anchor_ids: ["changed-outside-hunk"], anchors: [{ id: "ac-boundary", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "direct accepted boundary" }] }] }
     };
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true, materials });
     const [header, ...content] = readFileSync(join(bundle.bundleRoot, "context/changed-outside-hunk.txt"), "utf8").trimEnd().split("\n");

@@ -357,7 +357,7 @@ describe("official five-stage CLI", () => {
     expect(() => injectedKernel.publishVerifyPassingFromAccepted({
       facts: {
         tests: { command: freshVerifyTests.command, exit_code: freshVerifyTests.exit_code, command_hash: freshVerifyTests.command_hash, snapshot_head: freshVerifyTests.snapshot_head, snapshot_tree: freshVerifyTests.snapshot_tree, snapshot_commit: freshVerifyTests.snapshot_commit, started_at: freshVerifyTests.started_at, completed_at: freshVerifyTests.completed_at, receipt_ref: freshVerifyTests.receipt_ref, receipt_hash: freshVerifyTests.receipt_hash, output_ref: freshVerifyTests.output_ref, output_hash: freshVerifyTests.output_hash },
-        review: { verdict: revisedReviewValue.verdict, result_ref: revisedBuildReview.resultRef, result_hash: createHash("sha256").update(revisedReviewRaw).digest("hex"), snapshot_tree: revisedReviewValue.snapshot_tree },
+        review: { verdict: revisedReviewValue.verdict, result_ref: revisedBuildReview.resultRef, result_hash: createHash("sha256").update(revisedReviewRaw).digest("hex"), snapshot_tree: revisedReviewValue.snapshot_tree, subject_kind: "worktree", phase_id: null, review_scope: "integration" },
         evidence_refs: [{ ref: "evidence/acceptance-AC-1-revised.json", sha256: freshAcceptanceHash }],
       },
       evidenceRefs: [
@@ -388,7 +388,7 @@ describe("official five-stage CLI", () => {
     workspaceBAttempt.attempt_id = "verify-code:attempt-0010";
     workspaceBAttempt.facts = {
       tests: { command: workspaceBTests.command, exit_code: workspaceBTests.exit_code, command_hash: workspaceBTests.command_hash, snapshot_head: workspaceBTests.snapshot_head, snapshot_tree: workspaceBTests.snapshot_tree, snapshot_commit: workspaceBTests.snapshot_commit, started_at: workspaceBTests.started_at, completed_at: workspaceBTests.completed_at, receipt_ref: workspaceBTests.receipt_ref, receipt_hash: workspaceBTests.receipt_hash, output_ref: workspaceBTests.output_ref, output_hash: workspaceBTests.output_hash },
-      review: { verdict: revisedReviewValue.verdict, result_ref: revisedBuildReview.resultRef, result_hash: createHash("sha256").update(revisedReviewRaw).digest("hex"), snapshot_tree: revisedReviewValue.snapshot_tree },
+      review: { verdict: revisedReviewValue.verdict, result_ref: revisedBuildReview.resultRef, result_hash: createHash("sha256").update(revisedReviewRaw).digest("hex"), snapshot_tree: revisedReviewValue.snapshot_tree, subject_kind: "worktree", phase_id: null, review_scope: "integration" },
       evidence_refs: [{ ref: "evidence/acceptance-AC-1-workspace-b.json", sha256: workspaceBAcceptanceHash }],
     };
     workspaceBAttempt.evidence_refs = [];

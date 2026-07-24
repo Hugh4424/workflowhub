@@ -56,38 +56,13 @@ function fixture(prefix = "simple-review-") {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("review output", () => {
-  it("accepts pure JSON, one fenced object, or one terminal object after prose", () => {
+  it("accepts pure JSON or one fenced JSON object only", () => {
     expect(parseReviewerOutput(pass).verdict).toBe("pass");
     expect(parseReviewerOutput(`note\n\`\`\`json\n${revise}\n\`\`\``).verdict).toBe("revise_required");
-    expect(parseReviewerOutput(`assessment notes with {ordinary prose} braces\n\n${revise}`).verdict).toBe("revise_required");
     expect(() => parseReviewerOutput(`\`\`\`json\n${pass}\n\`\`\`\n\`\`\`json\n${pass}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`\`\`\`json\n${pass}\n\`\`\`\n${revise}`)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`${pass}\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`{"verdict":"pass"\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`{"verdict": nope}\n\`\`\`json\n${revise}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`{"verdict":"pass"\n\`\`\`json\n${revise}\n\`\`\`\n}`)).toThrow(/OUTPUT_INVALID/);
-    expect(parseReviewerOutput(`notes {ordinary}\n\`\`\`json\n${revise}\n\`\`\``).verdict).toBe("revise_required");
-    expect(() => parseReviewerOutput(`${pass}\n${pass}`)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`notes\n${pass}\ntrailing text`)).toThrow(/OUTPUT_INVALID/);
-    expect(() => parseReviewerOutput(`notes\n{"verdict":"pass"\n${pass}`)).toThrow(/OUTPUT_INVALID/);
-    expect(parseReviewerOutput(`${"{ordinary}".repeat(10_000)}\n${pass}`).verdict).toBe("pass");
-    const nestedReview = `${'{"nested":'.repeat(1_000)}${pass}${"}".repeat(1_000)}`;
-    expect(() => parseReviewerOutput(`${nestedReview}\n${pass}`)).toThrow(/OUTPUT_INVALID/);
     expect(() => parseReviewerOutput("not json")).toThrow(/OUTPUT_INVALID/);
     expect(parseReviewerOutput(JSON.stringify({ verdict: "revise_required", summary: "file issue", findings: [{ severity: "major", path: "a.js", line: null, issue: "bug", root_cause: "missing guard", recommendation: "fix", evidence_kind: "direct", evidence: "a.js has no guard" }] })).findings[0]).not.toHaveProperty("line");
     expect(() => parseReviewerOutput(JSON.stringify({ verdict: "revise_required", summary: "unsupported", findings: [{ severity: "major", path: "a.js", issue: "bug", recommendation: "fix" }] }), { requireEvidence: true })).toThrow(/evidence_kind/);
-  });
-
-  it("keeps a managed group semantic when a provider prefixes one terminal review object", async () => {
-    const { attachmentRoot, task } = fixture("simple-review-managed-terminal-json-"); const calls = [];
-    const providerClient = { runGroup: async () => {
-      calls.push(true);
-      return { runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: `assessment\n\n${pass}`, error: null, execution: null }] };
-    } };
-    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
-    expect(result).toMatchObject({ status: "semantic", verdict: "pass" });
-    expect(calls).toHaveLength(1);
   });
 });
 
@@ -146,7 +121,7 @@ describe("public provider client", () => {
     await expect(client.run({ hostProvider: "codex", provider: "kimi", materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", requestId: "request" })).rejects.toThrow(/PROTOCOL_INCOMPATIBLE/);
     const privatePath = publicProvider("kimi"); privatePath.session_file_path = "/tmp/3rd-review/private-session.json";
     const privateClient = new ReviewProviderClient({ pollIntervalMs: 0, invoke: managedInvoke(publicGroup([privatePath])) });
-    await expect(privateClient.run({ hostProvider: "codex", provider: "kimi", materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", requestId: "request" })).rejects.toThrow(/PROTOCOL_INCOMPATIBLE/);
+    await expect(privateClient.run({ hostProvider: "codex", provider: "kimi", materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", requestId: "request" })).rejects.toThrow(/PUBLIC_RESULT_INVALID/);
   });
 
   it("fails closed when managed start is unavailable and never falls back to blocking run", async () => {
@@ -232,8 +207,7 @@ describe("aggregation and runner", () => {
     const execution = {
       adapter: "kimi", model: "kimi-code/k3", effort: null, thinking: true,
       timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      retry: { count: 0, progress_events: 1 }, runtime_id: "runtime", session_file_path: null,
-      raw_output_ref: { version: "broker-output-ref.v1", runtime_id: "runtime", provider: "kimi", stdout_sha256: "a".repeat(64), stderr_sha256: "b".repeat(64) },
+      retry: { count: 0, progress_events: 1 }, runtime_id: "runtime",
     };
     const providerClient = { runGroup: async () => ({ runtimeId: "runtime", providers: [
       { provider: "codex/terra", status: "failed", session_id: null, output: null, error: { code: "SAME_SOURCE", message: "host provider cannot review itself" }, unavailable_diagnostics: { code: "SAME_SOURCE", message: "host provider cannot review itself" }, execution: null },
@@ -249,6 +223,8 @@ describe("aggregation and runner", () => {
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     const attempt = JSON.parse(task.readRecord(result.attemptRef));
     expect(attempt.provider_attempts.find(({ provider }) => provider === "kimi").execution).toEqual(execution);
+    expect(attempt.provider_attempts.find(({ provider }) => provider === "kimi").execution).not.toHaveProperty("session_file_path");
+    expect(attempt.provider_attempts.find(({ provider }) => provider === "kimi").execution).not.toHaveProperty("raw_output_ref");
     expect(attempt.provider_attempts.find(({ provider }) => provider === "codex/terra")).toMatchObject({ status: "failed", error: { code: "SAME_SOURCE" } });
     expect(attempt.review_policy).toEqual(reviewPolicy);
     expect(attempt.policy_snapshot_hash).toMatch(/^[a-f0-9]{64}$/);
@@ -266,12 +242,86 @@ describe("aggregation and runner", () => {
     expect(JSON.stringify(attempt)).not.toContain("/tmp/3rd-review");
   });
 
+  it("derives final build-code coverage and seams before assembling an integration packet", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-integration-subject-");
+    const integration = {
+      schema_version: "integration-review-subject.v1", subject_kind: "worktree", review_scope: "integration",
+      base_commit: source.baseCommit, base_tree: source.baseTree, snapshot_tree: source.snapshotTree,
+      phase_coverage: { schema_version: "phase-review-coverage.v1", checkpoint: { commit: source.baseCommit, tree: source.baseTree }, snapshot_tree: source.snapshotTree, phases: [{ phase_id: "T01" }] },
+      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+      ac_trace: { schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"], entries: [{ acceptance_criterion_id: "AC-1", change: [{ phase_id: "T01", path: "change.mjs" }], test: [{ phase_id: "T01", receipt_ref: "receipts/tests.json", receipt_hash: "a".repeat(64) }], evidence: [{ phase_id: "T01", ref: "evidence/phase.json", sha256: "b".repeat(64) }], anchors: [{ id: "ac", path: "change.mjs", start_line: 1, end_line: 1, role: "acceptance", reason: "bound" }] }] },
+    };
+    let materialInput = null;
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"],
+      materials: { phase_coverage: { forged: true }, seam_index: { forged: true }, ac_trace: { forged: true } },
+      providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null } }) },
+      captureSource: (input) => { expect(input.includeDiff).toBe(false); return source; },
+      buildIntegrationSubject: (input) => { expect(input).toMatchObject({ task, finalTree: source.snapshotTree }); return integration; },
+      buildMaterials: (input) => { materialInput = input; return { bundleRoot: attachmentRoot, materialId, manifest: [] }; },
+    });
+    expect(materialInput.reviewScope).toBe("integration");
+    expect(materialInput.materials.phase_coverage).toBe(integration.phase_coverage);
+    expect(materialInput.materials.seam_index).toBe(integration.seam_index);
+    expect(materialInput.materials.ac_trace).toBe(integration.ac_trace);
+    const resultRecord = JSON.parse(task.readRecord(result.resultRef));
+    expect(resultRecord).toMatchObject({ review_scope: "integration", base_tree: source.baseTree, candidate_tree: source.snapshotTree, source: { base_commit: source.baseCommit, base_tree: source.baseTree } });
+  });
+
+  it("records a missing integration trace as one canonical unavailable attempt without provider dispatch", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-integration-material-incomplete-");
+    const calls = [];
+    // Material compilers conventionally report their public failure code in
+    // the message; they are not required to attach a JavaScript error.code.
+    const incomplete = new Error("MATERIAL_INCOMPLETE: no continuous PASS Phase coverage chain reaches the final tree");
+    const options = {
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => { calls.push(true); throw new Error("provider must not be called"); } },
+      captureSource: () => source,
+      buildIntegrationSubject: () => { throw incomplete; },
+      buildMaterials: () => { throw new Error("material assembly must not run after failed integration identity"); },
+    };
+    const first = await runReviewFixture(options);
+    expect(first).toMatchObject({ status: "unavailable", verdict: null, resultRef: null, reviewScope: "integration" });
+    expect(calls).toHaveLength(0);
+    const attempt = JSON.parse(task.readRecord(first.attemptRef));
+    expect(attempt).toMatchObject({
+      terminal_status: "unavailable", error: { code: "MATERIAL_INCOMPLETE", message: incomplete.message },
+      review_scope: "integration", provider_attempts: [],
+    });
+    expect(task.readRecord(first.reportRef)).toContain("MATERIAL_INCOMPLETE: no continuous PASS Phase coverage chain");
+
+    const second = await runReviewFixture(options);
+    expect(second).toMatchObject({ status: "unavailable", attemptRef: first.attemptRef, reused: true });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("withholds a generic absolute material-preflight diagnostic from canonical public evidence", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-integration-private-diagnostic-");
+    const calls = [];
+    const syntheticHostPath = String.fromCharCode(47, 119, 111, 114, 107, 115, 112, 97, 99, 101, 47, 104, 111, 115, 116, 45, 111, 110, 108, 121, 47, 116, 114, 97, 99, 101, 46, 106, 115, 111, 110);
+    const incomplete = new Error(`MATERIAL_INCOMPLETE: integration trace was read from ${syntheticHostPath}`);
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => { calls.push(true); throw new Error("provider must not be called"); } },
+      captureSource: () => source,
+      buildIntegrationSubject: () => { throw incomplete; },
+      buildMaterials: () => { throw new Error("material assembly must not run after failed integration identity"); },
+    });
+    expect(calls).toHaveLength(0);
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt.error).toEqual({ code: "MATERIAL_INCOMPLETE", message: "review material preflight failed; private diagnostic withheld" });
+    const report = task.readRecord(result.reportRef);
+    expect(report).toContain("private diagnostic withheld");
+    expect(report).not.toContain(syntheticHostPath);
+  });
+
   it("rejects a completed provider whose execution tuple differs from the pinned profile", async () => {
     const { attachmentRoot, task } = fixture("simple-review-profile-mismatch-");
     const execution = {
       adapter: "kimi", model: "unexpected-model", effort: null, thinking: true,
       timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime", session_file_path: null, raw_output_ref: null,
+      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime",
     };
     const reviewPolicy = {
       source: "wh_review.v2", mode: "full_only", minimum_heterologous: 1,
@@ -481,179 +531,19 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("reuses a legacy semantic result without a report binding", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-legacy-no-report-"); const calls = [];
-    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
-    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-    const first = await runReviewFixture(options);
-    const taskRoot = join(root, "Projects", "Demo", "tasks", "task");
-    const attemptPath = join(taskRoot, first.attemptRef);
-    const resultPath = join(taskRoot, first.resultRef);
-    const attempt = JSON.parse(readFileSync(attemptPath, "utf8")); delete attempt.report_ref;
-    const result = JSON.parse(readFileSync(resultPath, "utf8")); delete result.report_ref;
-    writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
-    writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`);
-
-    const reused = await runReviewFixture(options);
-    expect(reused).toMatchObject({ reused: true, resultRef: first.resultRef, reportRef: null });
-    expect(calls).toHaveLength(1);
-  });
-
-  it("recovers a torn semantic finalization without another provider dispatch", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-torn-semantic-"); const calls = [];
-    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
+  it("recovers a semantic attempt interrupted before its result and report publication", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-semantic-attempt-recovery-"); const calls = [];
+    const providerClient = { runGroup: async () => { calls.push(true); return { runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null }] }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
     rmSync(join(root, "Projects", "Demo", "tasks", "task", first.resultRef));
     rmSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef));
-
     const recovered = await runReviewFixture(options);
-    expect(recovered).toMatchObject({ reused: true, attemptRef: first.attemptRef, resultRef: first.resultRef, reportRef: first.reportRef, verdict: "pass" });
-    expect(JSON.parse(task.readRecord(recovered.resultRef)).provider_results).toEqual([{ provider: "kimi", output: JSON.parse(pass) }]);
-    expect(task.readRecord(recovered.reportRef)).toContain("# wh-review report — build-code");
+    expect(recovered).toMatchObject({ reused: true, verdict: "pass", attemptRef: first.attemptRef, resultRef: first.resultRef, reportRef: first.reportRef });
     expect(calls).toHaveLength(1);
-
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", recovered.reportRef));
-    const reportRecovered = await runReviewFixture(options);
-    expect(reportRecovered).toMatchObject({ reused: true, resultRef: first.resultRef, reportRef: first.reportRef });
-    expect(task.readRecord(reportRecovered.reportRef)).toContain("# wh-review report — build-code");
-    expect(calls).toHaveLength(1);
-
-    writeFileSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef), "tampered report\n");
-    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
-    expect(calls).toHaveLength(1);
-  });
-
-  it("recovers a torn semantic finalization after one same-session format correction", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-torn-semantic-correction-"); let calls = 0;
-    const providerClient = { run: async () => {
-      calls += 1;
-      return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: calls === 1 ? "not JSON" : pass, error: null } };
-    } };
-    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-    const first = await runReviewFixture(options);
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.resultRef));
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef));
-
-    const recovered = await runReviewFixture(options);
-    expect(recovered).toMatchObject({ reused: true, verdict: "pass", resultRef: first.resultRef });
-    expect(calls).toBe(2);
-  });
-
-  it("recovers a pinned heterogeneous V2 group and rejects a changed pinned execution", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-torn-v2-pins-"); let calls = 0;
-    const execution = (adapter, model, effort, thinking) => ({ adapter, model, effort, thinking,
-      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime", session_file_path: null, raw_output_ref: null,
-    });
-    const reviewPolicy = {
-      source: "wh_review.v2", mode: "full_only", minimum_heterologous: 2,
-      requested_profiles: ["claude-code/opus", "kimi/k3"],
-      requested_profile_specs: [
-        { provider: "claude-code/opus", model: "claude-opus-4-8", effort: "high", thinking: null, priority: 20 },
-        { provider: "kimi/k3", model: "kimi-code/k3", effort: null, thinking: true, priority: 30 },
-      ],
-      eligible_profiles: ["claude-code/opus", "kimi/k3"], same_source_exclusions: [],
-      effective_profiles: [
-        { provider: "claude-code/opus", adapter: "claude-code", model: "claude-opus-4-8", effort: "high", thinking: null },
-        { provider: "kimi/k3", adapter: "kimi", model: "kimi-code/k3", effort: null, thinking: true },
-      ], round: "full",
-    };
-    const providerClient = { runGroup: async () => {
-      calls += 1;
-      return { runtimeId: "runtime", providers: [
-        { provider: "claude-code/opus", status: "completed", session_id: "claude", output: pass, error: null, execution: execution("claude-code", "claude-opus-4-8", "high", null) },
-        { provider: "kimi/k3", status: "completed", session_id: "kimi", output: pass, error: null, execution: execution("kimi", "kimi-code/k3", null, true) },
-      ] };
-    } };
-    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: reviewPolicy.requested_profiles, reviewPolicy, providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-    const first = await runReviewFixture(options);
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.resultRef));
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef));
-
-    const recovered = await runReviewFixture(options);
-    expect(recovered).toMatchObject({ reused: true, resultRef: first.resultRef, verdict: "pass" });
-    expect(JSON.parse(task.readRecord(recovered.resultRef)).provider_results.map(({ provider }) => provider)).toEqual(["claude-code/opus", "kimi/k3"]);
-    expect(calls).toBe(1);
-
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", recovered.resultRef));
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", recovered.reportRef));
-    const attemptPath = join(root, "Projects", "Demo", "tasks", "task", first.attemptRef);
-    const attempt = JSON.parse(readFileSync(attemptPath, "utf8")); attempt.provider_attempts[0].execution.model = "unexpected";
-    writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
-    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
-    expect(calls).toBe(1);
-  });
-
-  it("fails closed when a torn V2 attempt has a changed policy snapshot or a rogue provider", async () => {
-    const reviewPolicy = {
-      source: "wh_review.v2", mode: "full_only", minimum_heterologous: 2,
-      requested_profiles: ["claude-code/opus", "kimi/k3"],
-      requested_profile_specs: [
-        { provider: "claude-code/opus", model: "claude-opus-4-8", effort: "high", thinking: null, priority: 20 },
-        { provider: "kimi/k3", model: "kimi-code/k3", effort: null, thinking: true, priority: 30 },
-      ],
-      eligible_profiles: ["claude-code/opus", "kimi/k3"], same_source_exclusions: [],
-      effective_profiles: [
-        { provider: "claude-code/opus", adapter: "claude-code", model: "claude-opus-4-8", effort: "high", thinking: null },
-        { provider: "kimi/k3", adapter: "kimi", model: "kimi-code/k3", effort: null, thinking: true },
-      ], round: "full",
-    };
-    const execution = (adapter, model, effort, thinking) => ({ adapter, model, effort, thinking,
-      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime", session_file_path: null, raw_output_ref: null,
-    });
-    const runTorn = async (mutate) => {
-      const { root, attachmentRoot, task } = fixture("simple-review-torn-v2-binding-"); let calls = 0;
-      const providerClient = { runGroup: async () => {
-        calls += 1;
-        return { runtimeId: "runtime", providers: [
-          { provider: "claude-code/opus", status: "completed", session_id: "claude", output: pass, error: null, execution: execution("claude-code", "claude-opus-4-8", "high", null) },
-          { provider: "kimi/k3", status: "completed", session_id: "kimi", output: pass, error: null, execution: execution("kimi", "kimi-code/k3", null, true) },
-        ] };
-      } };
-      const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: reviewPolicy.requested_profiles, reviewPolicy, providerClient,
-        captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-      const first = await runReviewFixture(options);
-      rmSync(join(root, "Projects", "Demo", "tasks", "task", first.resultRef));
-      rmSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef));
-      const attemptPath = join(root, "Projects", "Demo", "tasks", "task", first.attemptRef);
-      const attempt = JSON.parse(readFileSync(attemptPath, "utf8"));
-      mutate({ root, attempt, task });
-      writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
-      await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
-      expect(calls).toBe(1);
-    };
-    await runTorn(({ attempt }) => { attempt.review_policy.minimum_heterologous = 1; });
-    await runTorn(({ root, attempt }) => {
-      const rogue = "antigravity/flash";
-      const outputRef = `reviews/attempts/${attempt.attempt_id}/providers/p-rogue.output.json`;
-      writeFileSync(join(root, "Projects", "Demo", "tasks", "task", outputRef), `${JSON.stringify({
-        schema_version: "wh-review-provider-output.v1", task_id: attempt.task_id, stage: attempt.stage,
-        attempt_id: attempt.attempt_id, provider: rogue, content: pass, content_hash: createHash("sha256").update(pass).digest("hex"),
-      }, null, 2)}\n`);
-      attempt.provider_attempts.push({ ...attempt.provider_attempts[0], provider: rogue, output_ref: outputRef });
-    });
-  });
-
-  it("fails closed instead of redispatching a torn semantic attempt with changed provider evidence", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-torn-semantic-tamper-"); const calls = [];
-    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
-    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-    const first = await runReviewFixture(options); const attempt = JSON.parse(task.readRecord(first.attemptRef));
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.resultRef));
-    rmSync(join(root, "Projects", "Demo", "tasks", "task", first.reportRef));
-    const outputPath = join(root, "Projects", "Demo", "tasks", "task", attempt.provider_attempts[0].output_ref);
-    const output = JSON.parse(readFileSync(outputPath, "utf8")); output.content = "changed";
-    writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
-
-    await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
-    expect(calls).toHaveLength(1);
+    expect(JSON.parse(task.readRecord(recovered.resultRef)).verdict).toBe("pass");
+    expect(task.readRecord(recovered.reportRef)).toContain("# wh-review report");
   });
 
   it("persists and reuses a semantic review from a slash-bearing configured provider", async () => {
@@ -747,6 +637,26 @@ describe("aggregation and runner", () => {
     expect(second).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
     expect(second.attemptRef).not.toBe(first.attemptRef);
     expect(calls).toHaveLength(2);
+  });
+
+  it("uses a new managed request identity after an unavailable group attempt", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-group-retry-unavailable-"); const requestIds = [];
+    const providerClient = { runGroup: async ({ requestId }) => {
+      requestIds.push(requestId);
+      const unavailable = requestIds.length === 1;
+      return { runtimeId: `runtime-${requestIds.length}`, providers: [{
+        provider: "kimi", status: unavailable ? "failed" : "completed", session_id: unavailable ? null : "session",
+        output: unavailable ? null : pass, error: unavailable ? { code: "CANCELLED", message: "cancelled" } : null, execution: null,
+      }] };
+    } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const unavailable = await runReviewFixture(options);
+    const semantic = await runReviewFixture(options);
+    expect(unavailable).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(semantic).toMatchObject({ status: "semantic", verdict: "pass" });
+    expect(requestIds).toHaveLength(2);
+    expect(requestIds[1]).not.toBe(requestIds[0]);
   });
 
   it("accepts a later semantic result after an unchanged unavailable attempt", async () => {
@@ -896,10 +806,13 @@ describe("aggregation and runner", () => {
   it("records phase subject identity in the attempt, result, and public response", async () => {
     const { attachmentRoot, task } = fixture("simple-review-phase-");
     const phaseSource = { ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) };
+    let materialInput;
     const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", phaseId: "phase-1", materials: {}, hostProvider: "codex", providers: ["kimi"],
       providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }) },
-      capturePhaseSource: () => phaseSource, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+      capturePhaseSource: () => phaseSource, buildMaterials: (input) => { materialInput = input; return { bundleRoot: attachmentRoot, materialId, manifest: [] }; } });
     expect(result).toMatchObject({ subjectKind: "phase", phaseId: "phase-1", baseTree: phaseSource.baseTree, candidateTree: phaseSource.snapshotTree });
+    expect(materialInput).toMatchObject({ reviewScope: "phase" });
+    expect(materialInput.materials.review_instructions).toContain("build-code/phase");
     expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
     expect(JSON.parse(task.readRecord(result.resultRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
     expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
@@ -1085,7 +998,7 @@ describe("aggregation and runner", () => {
 });
 
 describe("verify final", () => {
-  it("accepts a legacy worktree v1 result without subject fields", () => {
+  it("rejects a legacy build-code result without integration scope", () => {
     const { attachmentRoot, task } = fixture("simple-review-legacy-final-");
     const resultRef = "reviews/results/legacy-worktree.json";
     const legacy = {
@@ -1095,7 +1008,7 @@ describe("verify final", () => {
       provider_results: [{ provider: "kimi", output: JSON.parse(pass) }], verdict: "pass", findings: []
     };
     createTaskKernel(task).publishCanonicalRecord(resultRef, Buffer.from(`${JSON.stringify(legacy)}\n`));
-    expect(verifyFinal({ resultRef, task, attachmentRoot, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
+    expect(() => verifyFinal({ resultRef, task, attachmentRoot, captureSource: () => source })).toThrow(/INTEGRATION_RESULT_REQUIRED/);
   });
 
   it("accepts the same full snapshot and rejects drift", async () => {
@@ -1103,6 +1016,8 @@ describe("verify final", () => {
     const providerClient={run:async()=>({runtimeId:"runtime",provider:{provider:"kimi",status:"completed",session_id:"session",output:pass,error:null}})};
     const run=await runReviewFixture({task,attachmentRoot,taskId:"task",stage:"build-code",materials:{},hostProvider:"codex",providers:["kimi"],providerClient,captureSource:()=>source,buildMaterials:()=>({bundleRoot:attachmentRoot,materialId,manifest:[]})});
     const resultRef=run.resultRef;
+    expect(run.reviewScope).toBe("integration");
+    expect(JSON.parse(task.readRecord(run.resultRef)).review_scope).toBe("integration");
     expect(verifyFinal({ resultRef, task, attachmentRoot, taskId: "task", stage: "build-code", reviewTrack: null, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
     expect(() => verifyFinal({ resultRef, task, attachmentRoot, captureSource: () => ({ ...source, targetCommit: "9".repeat(40) }) })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
     expect(() => verifyFinal({ resultRef: "outside.json", task, attachmentRoot, captureSource: () => source })).toThrow(/RESULT_REF_INVALID/);

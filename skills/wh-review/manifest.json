@@ -11,7 +11,8 @@
     "attempt": "schemas/attempt.schema.json",
     "result": "schemas/result.schema.json",
     "resolution": "schemas/resolution.schema.json",
-    "stage_materials": "schemas/stage-materials.schema.json"
+    "stage_materials": "schemas/stage-materials.schema.json",
+    "ac_evidence_summary": "schemas/ac-evidence-summary.schema.json"
   },
   "provider_result_contract": "contracts/workflowhub-result.v2.json",
   "contracts": {

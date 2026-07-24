@@ -5,6 +5,7 @@ const SCHEMAS = {
   attempt: "attempt.schema.json",
   result: "result.schema.json",
   resolution: "resolution.schema.json",
+  ac_evidence_summary: "ac-evidence-summary.schema.json",
 };
 
 // Conditional `required` clauses intentionally target properties declared at

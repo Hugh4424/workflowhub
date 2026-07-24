@@ -108,7 +108,7 @@ describe("five-stage v2 business contract", () => {
 
   it("keeps independent review, fresh tests, browser QA, and confirmed close", () => {
     expect(readStage("make-decision")).toMatch(/independent direction review/i);
-    expect(readStage("build-code")).toMatch(/independent code review[\s\S]*fresh test/i);
+    expect(readStage("build-code")).toMatch(/fresh test receipt[\s\S]{0,120}final independent[\s\S]{0,80}integration/i);
     expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*reuse[\s\S]*accepted build-code[\s\S]*final review/i);
     const verify = readStage("verify-code");
     expect(verify).toMatch(/plain-language summary[\s\S]*six actions[\s\S]*separate close authorization/i);
@@ -127,19 +127,20 @@ describe("five-stage v2 business contract", () => {
     expect(skill).toMatch(/revision[^\n]*(?:latest|newest)[^\n]*refs/i);
   });
 
-  it("reviews every build-code Phase and then the final worktree", () => {
+  it("reviews every build-code Phase and then the final worktree integration", () => {
     const skill = readStage("build-code");
     expect(skill).toMatch(/publish-phase-evidence/);
     expect(skill).toMatch(/current `phase_id`/i);
     expect(skill).toMatch(/Start the next Phase only after the current Phase gate passes/i);
-    expect(skill).toMatch(/full-worktree[^\n]*`wh-review`|`wh-review`[^\n]*full-worktree/i);
-    expect(skill).toMatch(/final review is separate from the required per-Phase\s+reviews/i);
-    expect(skill).toMatch(/canonical implementation[\s\S]{0,180}tests[\s\S]{0,180}same snapshot tree/i);
+    expect(skill).toMatch(/`worktree \+ integration` `wh-review`[\s\S]{0,120}without historical or cumulative diff/i);
+    expect(skill).toMatch(/A Phase result is gate evidence and cannot replace the final[\s\S]{0,80}`worktree \+ integration` result/i);
+    expect(skill).toMatch(/canonical\s+implementation[\s\S]{0,180}canonical\s+tests[\s\S]{0,180}same snapshot tree/i);
     expect(skill).toMatch(/revise_required[\s\S]*repair the same Phase[\s\S]*fresh receipts[\s\S]*new identity/i);
     expect(skill).toMatch(/controlled `reopen`[\s\S]*current[\s\S]*PASS Phase[\s\S]*`reopen_ref`/i);
     expect(skill).toMatch(/does not create[\s\S]*(?:Phase registry|Phase history)/i);
     const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
-    expect(handlers).toMatch(/build-code final review must be a full-worktree result/);
+    expect(handlers).toMatch(/scope\.subject_kind !== "worktree"[\s\S]{0,160}scope\.review_scope !== "integration"[\s\S]{0,120}scope\.phase_id !== null/);
+    expect(handlers).toMatch(/same-snapshot formal integration review \(subject_kind=worktree, review_scope=integration, phase_id=null\)/);
   });
 
   it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {

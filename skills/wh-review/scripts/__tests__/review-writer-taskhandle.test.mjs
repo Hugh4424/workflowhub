@@ -46,4 +46,19 @@ describe("review writer TaskHandle boundary", () => {
     expect(validateSchema("attempt", legacy)).toBe(legacy);
     expect(() => writeAttempt(task, "reviews/attempts/legacy/attempt.json", legacy)).toThrow(/legacy-only/i);
   });
+
+  it("rejects broker-private execution fields from new managed attempts", () => {
+    const task = fixture();
+    const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
+    const attempt={
+      version:"wh-review-attempt.v1",attempt_id:"private-execution",task_id:"review-task",stage:"build-code",review_track:null,source,
+      snapshot_tree:"b".repeat(40),material_id:"c".repeat(64),terminal_status:"unavailable",error:{code:"PUBLIC_RESULT_INVALID",message:"provider exposed private state"},
+      provider_attempts:[{provider:"kimi",status:"failed",session_id:null,runtime_id:"runtime",execution:{
+        adapter:"kimi",model:null,effort:null,thinking:null,timing:{started_at_ms:null,completed_at_ms:null,duration_ms:null},usage:null,
+        retry:{count:0,progress_events:0},runtime_id:"runtime",session_file_path:null,raw_output_ref:null,
+      },unavailable_diagnostics:{code:"PUBLIC_RESULT_INVALID",message:"provider exposed private state"},output_ref:null,error:{code:"PUBLIC_RESULT_INVALID",message:"provider exposed private state"}}],
+    };
+    expect(validateSchema("attempt", attempt)).toBe(attempt);
+    expect(() => writeAttempt(task, "reviews/attempts/private-execution/attempt.json", attempt)).toThrow(/private session\/output fields/i);
+  });
 });

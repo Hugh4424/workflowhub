@@ -46,21 +46,35 @@
       "v2_required_maps": ["context_map", "evidence_map"]
     },
     "build-code": {
-      "source_bundle": "diff",
-      "required": ["approved_spec", "acceptance_criteria", "test_evidence", "review_instructions"],
-      "optional": ["phase_map", "impact_map", "reuse_map", "acceptance_map"],
-      "closure_optional": [],
-      "generated": ["review_instructions", "change_map", "test_summary"],
-      "forbidden": [],
-      "minimum_reviewers": 1,
-      "v2_required_maps": ["phase_map", "impact_map", "reuse_map", "acceptance_map"]
+      "profiles": {
+        "phase": {
+          "source_bundle": "diff",
+          "required": ["approved_spec", "acceptance_criteria", "test_evidence", "review_instructions"],
+          "optional": ["phase_map", "impact_map", "reuse_map", "acceptance_map"],
+          "closure_optional": [],
+          "generated": ["review_instructions", "change_map", "test_summary"],
+          "forbidden": [],
+          "minimum_reviewers": 1,
+          "v2_required_maps": ["phase_map", "impact_map", "reuse_map", "acceptance_map"]
+        },
+        "integration": {
+          "source_bundle": "none",
+          "required": ["approved_spec", "acceptance_criteria", "test_evidence", "phase_coverage", "seam_index", "ac_trace", "review_instructions"],
+          "optional": [],
+          "closure_optional": [],
+          "generated": ["review_instructions", "test_summary"],
+          "forbidden": ["changes_diff", "cumulative_diff", "phase_diff", "raw_log", "integration_map"],
+          "minimum_reviewers": 1,
+          "v2_required_maps": []
+        }
+      }
     },
     "verify-code": {
       "source_bundle": "none",
       "required": ["acceptance_criteria", "acceptance_evidence", "open_exceptions", "review_instructions"],
       "optional": ["context_map", "evidence_map"],
       "closure_optional": ["response_ledger", "previous_review"],
-      "generated": ["review_instructions"],
+      "generated": ["review_instructions", "ac_evidence_summary"],
       "forbidden": [],
       "minimum_reviewers": 1,
       "v2_required_maps": ["context_map", "evidence_map"]
