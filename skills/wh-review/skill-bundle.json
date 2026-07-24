@@ -30,6 +30,7 @@
     "scripts/__tests__/wh-review-cli.test.mjs",
     "scripts/lib/safe-id.mjs",
     "scripts/phase-review-subject.mjs",
+    "scripts/integration-review-subject.mjs",
     "scripts/review-controller.mjs",
     "scripts/review-materials.mjs",
     "scripts/ac-evidence-summary.mjs",

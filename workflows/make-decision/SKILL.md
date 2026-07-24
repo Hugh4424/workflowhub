@@ -40,6 +40,9 @@ Every such file must stay under `$TMP_DIR`, never in the target base repository
 or CandidateWorkspace. Canonical records remain owned by TaskKernel. Only
 authorized product files such as `CONTEXT.md` or a qualifying ADR may be written
 to the CandidateWorkspace through its controlled capability.
+Create those temporary files with one shell command (`printf`, redirection, or a
+here-document). Never use an editing or patch tool for them: it is not part of
+the Stage contract and can leave the host waiting for an unrelated tool callback.
 
 Use this complete public sequence without inventing flags or input shapes:
 

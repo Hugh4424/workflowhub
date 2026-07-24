@@ -35,6 +35,9 @@ Every caller-owned draft, receipt payload, run input, or review request must
 stay under `$TMP_DIR`, never in the target base repository or CandidateWorkspace.
 The `artifact` commands below are the only route that copies reviewed drafts
 into the CandidateWorkspace; canonical receipts remain owned by TaskKernel.
+Create temporary inputs with one shell command (`printf`, redirection, or a
+here-document). Never use an editing or patch tool for them: it is not part of
+the Stage contract and can leave the host waiting for an unrelated tool callback.
 
 Use this complete public sequence without inventing flags or input shapes:
 
