@@ -143,4 +143,10 @@ export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   invalid("expected pure JSON, exactly one fenced JSON object, or one terminal JSON object after non-JSON prose");
 }
 
-export const FORMAT_CORRECTION_PROMPT = "Your previous final response had an invalid format. Do not repeat the review. Return only one JSON object with verdict, summary, and findings that matches review-instructions.md.";
+// This must be self-contained: a continuation may not reliably recover a
+// previously implied schema from the original prompt. It requests only a
+// serialization repair, preserves the strict parser contract, and never
+// authorizes a fresh semantic review.
+export const FORMAT_CORRECTION_PROMPT = `Your previous final response had an invalid format. Do not repeat the review or change its assessment. Return only one unfenced JSON object with exactly this shape:
+{"verdict":"pass|revise_required","summary":"non-empty string","findings":[{"severity":"blocking|major|minor","path":"bundle-relative path","line":1,"issue":"non-empty string","recommendation":"non-empty string","evidence_kind":"direct|inferred|machine","evidence":"non-empty string","root_cause":"non-empty string"}]}
+For every blocking or major finding, path, issue, recommendation, evidence_kind, evidence, and root_cause are required; line is optional. A pass may contain only minor findings. Do not use markdown fences, prose, alternate field names, or extra top-level fields.`;

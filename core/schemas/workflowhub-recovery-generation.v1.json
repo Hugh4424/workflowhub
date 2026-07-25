@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "workflowhub-recovery-generation.v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "project_name", "task_id", "recovery_kind", "generation", "credential_ref", "credential_hash", "before", "after", "created_at", "result"],
+  "properties": {
+    "schema_version": {"const": "workflowhub-recovery-generation.v1"},
+    "project_name": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "recovery_kind": {"enum": ["runner-replacement", "phase-pointer"]},
+    "generation": {"type": "integer", "minimum": 1},
+    "credential_ref": {"type": "string", "minLength": 1},
+    "credential_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "before": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
+    "after": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "result": {"const": "accepted"}
+  }
+}

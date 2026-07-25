@@ -275,11 +275,21 @@ runner details, shell commands, and internal identifiers stay in formal records;
 the public message names only the human-readable artifact and result. The close
 card explains the six actions, affected branches or workspaces in human terms,
 and their consequences and risks; its plan hash remains an internal binding.
+Use one card type only. A milestone card contains current progress, the next
+step, and whether user action is required. A review card reports actual
+providers, verdict, important findings, disposition, and next step. A question
+card contains only the current status, question, affected scope, and options.
+Report duration and token usage only when supplied by formal review/runtime facts;
+otherwise state `not provided`, and never estimate them.
+An unchanged milestone or reused review result is not published again.
 Ask and wait for the user only at the existing verification or close decision,
 or when an answer can change accepted scope. When user action is required,
 present the problem, one recommended option with its reason, mutually exclusive
 choices, and each choice's consequence and risk. Otherwise state
 `user action: none`.
+
+The final handoff states the overall solution, what was implemented, observed
+behavior, fresh tests, and remaining risks in that order.
 
 Before the Stage completes, report Stage-owned component facts using
 `skill-deps.yaml` as the declared baseline: every `always` component is

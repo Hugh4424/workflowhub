@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { validateSchema } from "./schema-validator.mjs";
+import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../core/canonical-utils.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -50,7 +51,8 @@ function boundRecord(task, binding, label) {
 }
 
 function sameArray(left, right) {
-  return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((item, index) => item === right[index]);
+  return Array.isArray(left) && Array.isArray(right)
+    && JSON.stringify(normalizeRuntimeOnlyPaths(left)) === JSON.stringify(normalizeRuntimeOnlyPaths(right));
 }
 
 function expectedPhaseCommitRef(task, trace) {
@@ -139,6 +141,7 @@ export function validatePhaseAcceptanceTrace({ trace, phaseId, baseTree, snapsho
     seen.add(entry.acceptance_criterion_id);
     const changeIds = new Set();
     for (const change of entry.change) {
+      if (isRuntimeOnlyPath(change?.path)) continue;
       if (!change || typeof change !== "object" || Array.isArray(change) || typeof change.change_id !== "string" || change.change_id === "" ||
           changeIds.has(change.change_id) || !safeRelative(change.path) || !knownPaths.has(change.path)) {
         invalid(`Phase acceptance trace change mapping is invalid for ${entry.acceptance_criterion_id}`);
@@ -163,9 +166,15 @@ export function validatePhaseAcceptanceTrace({ trace, phaseId, baseTree, snapsho
       }
       anchorIds.add(anchor.id);
     }
+    const normalizedChanges = entry.change
+      .filter(({ path }) => !isRuntimeOnlyPath(path))
+      .map(({ change_id, path }) => ({ change_id, path }));
+    if (normalizedChanges.length === 0) {
+      invalid(`Phase acceptance trace has no deliverable changes for ${entry.acceptance_criterion_id}`);
+    }
     normalized.push({
       acceptance_criterion_id: entry.acceptance_criterion_id,
-      change: entry.change.map(({ change_id, path }) => ({ change_id, path })),
+      change: normalizedChanges,
       test: entry.test.map(({ receipt_ref, receipt_hash }) => ({ receipt_ref, receipt_hash })),
       anchors: entry.anchors.map(({ id, path, start_line, end_line, role, reason }) => ({ id, path, start_line, end_line, role, reason })),
     });
@@ -247,7 +256,7 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
     phaseId: trace.phase_id,
     baseTree: trace.base_tree,
     snapshotTree: trace.snapshot_tree,
-    changedFiles: trace.changed_files,
+    changedFiles: normalizeRuntimeOnlyPaths(trace.changed_files),
     greenTestReceipt: { ref: green.ref, sha256: green.sha256 },
     required: false,
   });

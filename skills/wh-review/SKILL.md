@@ -13,12 +13,18 @@ existing valid semantic result is returned unchanged. A changed draft creates a
 new attempt. An unavailable transport attempt is retained as evidence but never
 sets a numeric limit on later formal retries of the same draft.
 
+Every review brief names the actual providers, aggregate verdict, and important findings from formal review/runtime facts; it never invents metrics or provider details.
+The formal provider/runtime result reports duration and token usage, or says
+`not provided` when those facts are unavailable.
+Never estimate or rerun an unchanged review.
+
 ## Commands
 
 Production callers use only:
 
 ```bash
 node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
+node skills/wh-review/scripts/wh-review-cli.mjs format-correct < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
 ```
 
@@ -26,6 +32,16 @@ Send the input JSON over stdin. Never place a transient review-input file in
 the runner, target repository, CandidateWorkspace, or TaskHandle. If the host
 cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
 file in the same foreground command; task storage is only for canonical output.
+
+`format-correct` is available only for one immutable unavailable attempt whose
+provider completed with invalid reviewer JSON. It rebuilds and verifies the
+same frozen material, sends exactly `FORMAT_CORRECTION_PROMPT` through that
+attempt's managed runtime continuation, preserves the original output, and
+publishes the corrected semantic result only when the correction itself is
+valid reviewer JSON. Its input is the normal review input plus exactly
+`format_correction_attempt_ref`; it cannot choose a provider, model, or a
+follow-up review chain. A failed or still-invalid correction remains
+`unavailable`.
 
 Before the first call, read this file and `stage-materials.json`; do not guess
 field names. A normal review input has this exact shape:

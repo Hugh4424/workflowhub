@@ -7,6 +7,8 @@ import { assertWorkspace } from "../../core/workspace.mjs";
 import { validateSchema } from "../../skills/wh-review/scripts/schema-validator.mjs";
 import { validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
+import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha256, assertSafeRecoveryRef, recoveryError } from "../../core/task-recovery.mjs";
+import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -15,7 +17,7 @@ const REOPEN = /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
   "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "review_result_ref", "reopen_ref",
-  "repair_review_result_ref",
+  "repair_review_result_ref", "recovery_ref", "recovery_hash",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -34,7 +36,7 @@ function readJson(task, ref, label) {
 }
 
 function readImplementation(task, ref) {
-  safeRef(ref, /^receipts\/(?:implementation\.json|revisions\/implementation\/[A-Za-z0-9._-]+\.json)$/, "implementation_receipt_ref");
+  safeRef(ref, /^receipts\/[A-Za-z0-9._/-]+\.json$/, "implementation_receipt_ref");
   const receipt = readJson(task, ref, "implementation receipt");
   const value = receipt.value;
   if (value?.schema_version !== "workflowhub-receipt.v1" || value.task_id !== task.identity.taskId
@@ -166,6 +168,19 @@ function phaseSubject(task, workspace, phaseResult) {
 }
 
 function deriveBaseline({ task, kernel, workspace, input, current }) {
+  if (current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined) {
+    if (current.recovery_ref !== input.recovery_ref || current.recovery_hash !== input.recovery_hash) {
+      throw new Error("recovery bootstrap must use the current recovery binding");
+    }
+    const generation = readRecoveryGeneration(task, "phase-pointer");
+    if (!generation || generation.ref !== current.recovery_ref || recoverySha256(generation.raw) !== current.recovery_hash) {
+      throw new Error("recovery bootstrap generation is invalid");
+    }
+    const credential = readRecoveryCredential(task, generation.value.credential_ref, generation.value.credential_hash, "phase-pointer");
+    const subject = credential.value.phase_subject;
+    if (subject?.target_phase_id !== input.phase_id) throw new Error("recovery bootstrap Phase does not match the credential");
+    return subject.baseline_commit;
+  }
   if (!current) {
     if (input.previous_phase_review_ref !== undefined) throw new Error("first Phase must not provide previous_phase_review_ref");
     return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
@@ -272,6 +287,11 @@ export function validatePhaseEvidenceInput(input) {
     || Object.keys(input).some((key) => !INPUT_KEYS.has(key))) throw new TypeError("phase evidence input contains unknown fields");
   if (!PHASE.test(input.phase_id ?? "")) throw new TypeError("phase_id is invalid");
   if (input.reopen_ref !== undefined && !REOPEN.test(input.reopen_ref)) throw new TypeError("reopen_ref is invalid");
+  if ((input.recovery_ref === undefined) !== (input.recovery_hash === undefined)) throw new TypeError("recovery_ref and recovery_hash must be provided together");
+  if (input.recovery_ref !== undefined) {
+    assertSafeRecoveryRef(input.recovery_ref, "recovery_ref");
+    if (!/^identity\/recoveries\/phase-pointer-[0-9]{4}\.json$/.test(input.recovery_ref) || !HASH.test(input.recovery_hash ?? "")) throw new TypeError("recovery_ref is invalid");
+  }
   if (!Array.isArray(input.allowed_files) || !input.allowed_files.every((file) => typeof file === "string" && file.length > 0
     && !file.startsWith("/") && !file.includes("\\") && file.split("/").every((part) => part && part !== "." && part !== ".."))
     || new Set(input.allowed_files).size !== input.allowed_files.length) {
@@ -285,26 +305,34 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
   const kernel = assertTaskKernel(context?.kernel);
   const workspace = assertWorkspace(context?.workspace);
   const input = validatePhaseEvidenceInput(rawInput);
+  const allowedFiles = normalizeRuntimeOnlyPaths(input.allowed_files);
   const implementation = readImplementation(task, input.implementation_receipt_ref);
   const green = readTestReceipt(task, input.green_test_receipt_ref, { green: true });
   const red = input.red_evidence_ref === undefined ? null : readTestReceipt(task, input.red_evidence_ref, { green: false });
-  if (green.value.snapshot_tree !== implementation.value.snapshot_tree) throw new Error("GREEN and implementation snapshot trees do not match");
+  if (green.value.snapshot_tree !== implementation.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", "GREEN and implementation snapshot trees do not match");
   const implementationCommitTree = execFileSync("git", ["rev-parse", `${implementation.value.snapshot_commit}^{tree}`], {
     cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
   }).trim();
-  if (implementationCommitTree !== implementation.value.snapshot_tree) throw new Error("implementation snapshot_commit tree mismatch");
+  if (implementationCommitTree !== implementation.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", "implementation snapshot_commit tree mismatch");
   for (const [label, receipt] of [["GREEN", green], ...(red ? [["RED", red]] : [])]) {
     const receiptTree = execFileSync("git", ["rev-parse", `${receipt.value.snapshot_commit}^{tree}`], {
       cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
-    if (receiptTree !== receipt.value.snapshot_tree) throw new Error(`${label} test receipt snapshot_commit tree mismatch`);
+    if (receiptTree !== receipt.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", `${label} test receipt snapshot_commit tree mismatch`);
   }
 
   const publishLocked = () => task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
     const reopen = input.reopen_ref === undefined ? null : kernel.buildCodeReopenProvenance(input.reopen_ref);
     const before = captureWorkspaceSnapshot(workspace);
-    assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
+    if (input.recovery_ref === undefined) assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
+    if (current?.recovery_ref !== undefined) {
+      if (input.recovery_ref !== current.recovery_ref || input.recovery_hash !== current.recovery_hash) throw new Error("recovered Phase publication requires the current recovery_ref and recovery_hash");
+      const generation = readRecoveryGeneration(task, "phase-pointer");
+      if (!generation || generation.ref !== input.recovery_ref || recoverySha256(generation.raw) !== input.recovery_hash) throw new Error("recovered Phase publication recovery generation is invalid");
+    } else if (input.recovery_ref !== undefined) {
+      throw new Error("recovery_ref does not match the current Phase pointer");
+    }
     const repairReviewRef = input.repair_review_result_ref ?? (current?.phase_id === input.phase_id ? current.repair_review_result_ref : undefined);
     if (input.repair_review_result_ref !== undefined && input.reopen_ref !== undefined) {
       throw new Error("pre-accept repair review cannot be combined with reopen_ref");
@@ -325,13 +353,14 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     if (current?.reopen_ref !== undefined && input.reopen_ref !== current.reopen_ref) {
       throw new Error("reopened Phase publication requires the same reopen_ref");
     }
-    if (current?.phase_id === input.phase_id) {
+    const recoveryBootstrap = current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined;
+    if (current?.phase_id === input.phase_id && !recoveryBootstrap) {
       const existing = phaseSubject(task, workspace, current);
       const sameIdentity = existing.scan.snapshot_tree === implementation.value.snapshot_tree
         && current.evidence?.implementation_receipt_ref === input.implementation_receipt_ref
         && current.evidence?.green_test_receipt_ref === input.green_test_receipt_ref
         && current.evidence?.red_evidence_ref === input.red_evidence_ref
-        && JSON.stringify(existing.scan.allowed_files ?? []) === JSON.stringify([...input.allowed_files].sort());
+        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.allowed_files ?? [])) === JSON.stringify(allowedFiles);
       if (sameIdentity && reopen && current.reopen_ref === undefined) {
         throw new Error("reopen_ref requires a changed current PASS Phase identity");
       }
@@ -372,7 +401,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     const implementationCommitRef = pinPhaseCommit(workspace, task, input.phase_id, implementation.value.snapshot_tree, implementationCommit);
     const scan = createPhaseDiffScan({
       sourceRoot: workspace.worktreeRoot, phaseId: input.phase_id, baselineCommit: baseline,
-      implementationCommit, allowedFiles: input.allowed_files,
+      implementationCommit, allowedFiles,
     });
     if (!scan.safe) throw new Error(`Phase diff is outside the allowed scope: ${JSON.stringify(scan.allowlist_violations)}`);
     const after = captureWorkspaceSnapshot(workspace);
@@ -387,6 +416,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       phase_id: input.phase_id,
       status: "awaiting_review",
       needs_human: false,
+      ...(input.recovery_ref === undefined ? {} : { recovery_ref: input.recovery_ref, recovery_hash: input.recovery_hash }),
       ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
       ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
       tests: {
@@ -394,7 +424,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         green: { path: input.green_test_receipt_ref },
       },
       diff_scan: { path: scanRef },
-      declared_allowed_files: [...input.allowed_files].sort(),
+      declared_allowed_files: allowedFiles,
       evidence: {
         diff: scanRef,
         implementation_receipt_ref: input.implementation_receipt_ref,

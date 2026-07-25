@@ -3,6 +3,7 @@
   "name": "wh-review",
   "commands": {
     "run": "scripts/wh-review-cli.mjs run",
+    "format-correct": "scripts/wh-review-cli.mjs format-correct",
     "verify-final": "scripts/wh-review-cli.mjs verify-final"
   },
   "stage_materials": "stage-materials.json",

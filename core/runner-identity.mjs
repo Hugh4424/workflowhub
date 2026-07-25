@@ -14,7 +14,7 @@ function regularReadableFile(path, label) {
 }
 
 /** Authenticate only an explicitly supplied WorkflowHub runner root. */
-export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage } = {}) {
+export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage, requireClean = false } = {}) {
   if (typeof runnerRoot !== "string" || !isAbsolute(runnerRoot)) throw new TypeError("runnerRoot must be an explicit absolute path");
   const requestedRoot = resolve(runnerRoot);
   const rootStat = lstatSync(requestedRoot);
@@ -46,6 +46,15 @@ export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage }
     throw new Error(`runner identity branch validation failed: ${error.stderr?.toString().trim() || error.message}`);
   }
   if (branch !== expectedBranch) throw new Error(`runner identity mismatch: expected branch ${expectedBranch}, actual ${branch}`);
+  if (requireClean) {
+    let dirty;
+    try {
+      dirty = String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim();
+    } catch (error) {
+      throw new Error(`runner identity cleanliness validation failed: ${error.stderr?.toString().trim() || error.message}`);
+    }
+    if (dirty !== "") throw new Error("runnerRoot must be a clean Git worktree");
+  }
   let oid;
   try {
     oid = String(execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {

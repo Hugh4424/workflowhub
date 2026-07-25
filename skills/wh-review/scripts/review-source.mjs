@@ -4,6 +4,7 @@ import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readSync, r
 import { isAbsolute, relative, resolve } from "node:path";
 import { reviewSourceForWorkspace } from "../../../core/workspace.mjs";
 import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
+import { isRuntimeOnlyPath } from "../../../core/canonical-utils.mjs";
 
 const CHUNK_BYTES = 64 * 1024;
 
@@ -126,7 +127,7 @@ function parseChangedFiles(root, baseTree, snapshotTree, captureRoot) {
       old_size: oldEntry?.size ?? null
     });
   }
-  return changed;
+  return changed.filter((entry) => !isRuntimeOnlyPath(entry.path) && !isRuntimeOnlyPath(entry.old_path));
 }
 
 function capture(root, head, indexFile, captureRoot) {
@@ -243,7 +244,7 @@ export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, bas
     const second = capture(source, secondHead, resolve(captureRoot, "index-2"), captureRoot);
     if (secondHead !== capturedHead || second !== first) fail("SOURCE_CHANGED_DURING_CAPTURE", "HEAD or working tree changed during capture");
     const diffPath = includeDiff ? resolve(captureRoot, "changes.diff") : null;
-    if (diffPath) runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first], diffPath);
+    if (diffPath) runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first, "--", ".", ":(exclude)node_modules"], diffPath);
     const changedFiles = includeDiff ? parseChangedFiles(source, baseTree, first, captureRoot) : [];
     return sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree, snapshotTree: first, diffPath, changedFiles, captureRoot });
   } catch (error) {
@@ -260,7 +261,7 @@ export function capturePhaseReviewSource({ sourceRoot, task, phaseId, reviewData
   const captureRoot = mkdtempSync(resolve(data, "capture-phase-"));
   try {
     const diffPath = resolve(captureRoot, "changes.diff");
-    runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", subject.baseTree, subject.candidateTree], diffPath);
+    runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", subject.baseTree, subject.candidateTree, "--", ".", ":(exclude)node_modules"], diffPath);
     const changedFiles = parseChangedFiles(source, subject.baseTree, subject.candidateTree, captureRoot);
     return sourceRecord({
       source,

@@ -22,6 +22,7 @@ describe("simple wh-review contracts", () => {
     const manifest = readJson(join(root, "wh-review", "manifest.json"));
     expect(manifest.commands).toEqual({
       run: "scripts/wh-review-cli.mjs run",
+      "format-correct": "scripts/wh-review-cli.mjs format-correct",
       "verify-final": "scripts/wh-review-cli.mjs verify-final"
     });
     expect(manifest).toMatchObject({

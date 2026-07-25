@@ -10,6 +10,7 @@ import { closeSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync,
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { normalizeRuntimeOnlyPaths } from '../../core/canonical-utils.mjs';
 
 // Literal patterns matched against content lines (added/removed/context lines).
 // These represent operations that appear as code content — not file paths.
@@ -402,13 +403,13 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
     const snapshotTree = gitText(root, temporaryRoot, 'snapshot-tree', ['rev-parse', '--verify', `${implementation}^{tree}`]);
     const changedPathsFile = join(temporaryRoot, 'changed-paths.nul');
     runGitToFiles(root, ['diff', '--name-status', '-z', '-M', base, implementation], changedPathsFile, join(temporaryRoot, 'changed-paths.stderr'));
-    const changed_files = changedPathsFromFile(changedPathsFile);
+    const changed_files = normalizeRuntimeOnlyPaths(changedPathsFromFile(changedPathsFile));
     const runtime_controlled_changes = changed_files.map((path) => runtimeControlledChange(root, base, implementation, path)).filter(Boolean);
     const runtimeControlledPaths = new Set(runtime_controlled_changes.map(({ path }) => path));
     const diffPath = join(temporaryRoot, 'phase.diff');
     runGitToFiles(root, ['diff', '-M', '--binary', '--no-ext-diff', base, implementation], diffPath, join(temporaryRoot, 'phase.diff.stderr'));
     const c2 = scanDiffFile(diffPath, runtimeControlledPaths);
-    const allowed = new Set(allowedFiles);
+    const allowed = new Set(normalizeRuntimeOnlyPaths(allowedFiles));
     const allowlist_violations = changed_files.filter((path) => !allowed.has(path) && !runtimeControlledPaths.has(path)).map((path) => ({ path }));
     const c2_violations = c2.violations;
     return {

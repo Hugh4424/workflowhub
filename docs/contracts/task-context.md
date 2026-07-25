@@ -35,6 +35,32 @@ manifest 中的期望值代替实际值完成自证。
 `task.json`。既有 task 的只读认证使用 `task-bootstrap.mjs --task-path=... --runner-root=...
 --stage=...`；该模式不读取 storage 配置，也不创建任务。
 
+## 同 task 恢复
+
+受信宿主可使用 `scripts/task-recovery.mjs` 的两个一次性入口：
+
+- `runner-replacement`：显式提供 task identity、clean 的新 runner、stage 和
+  `workflowhub-recovery-credential.v1` 凭证引用。新 runner 必须是精确 task branch，且
+  能证明旧 runner OID 是其祖先。成功后追加 runner generation 并原子切换当前 manifest；
+  旧 `task.json` 与旧 migration record 永不覆盖。
+- `phase-pointer`：只接受 `--stage=build-code`，只允许当前 `phase-1` 回到目标 `phase-0`。
+  凭证必须绑定旧 Phase 0 canonical evidence 与 matching formal PASS review，以及新的
+  receipts/snapshot。成功后当前 `phase-result.json` 变为 `phase-0`/`awaiting_review`；
+  必须重新走 `wh-review` PASS，才能用新的 review ref 续走 Phase 1。
+
+恢复 generation 的 `before/after.hash` 是可复现的完整记录哈希：记录中的单向自引用字段
+（runner manifest 的 `runner_replacement.integrity_hash` 或 phase pointer 的
+`recovery_hash`）在计算时规范化为空字符串，再由读取方按同一规则重算；这不是循环哈希，
+也不允许用占位值或只哈希 runner identity 冒充最终记录。
+
+两条入口只接受 task-local canonical credential ref/hash，不接受 inline JSON；每个 kind
+独立消费一次 gate。缺凭证、身份/来源/快照/记录不一致返回稳定 `RECOVERY_*` 错误，失败不
+消费 gate。目标 Phase 0 snapshot 未变化返回
+`RECOVERY_PHASE_SNAPSHOT_ALREADY_CURRENT`，不改变任何指针或记录。
+
+恢复期间禁止手改 `task.json`、`phase-result.json`、accepted、receipt、test 或 review；
+不得创建新 task、调用 provider 或用 recovery archive 旁路正式 evidence/review。
+
 ## StageContext
 
 ```text
