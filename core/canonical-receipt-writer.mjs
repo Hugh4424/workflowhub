@@ -11,6 +11,8 @@ import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
+const TEST_CAPTURE_LOCK_WAIT_MS = Number.MAX_SAFE_INTEGER;
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "decision-log", ref: "receipts/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "receipts/spec.json" }),
@@ -59,6 +61,29 @@ function publishIdempotently({ task, write, ref, raw, label }) {
     return;
   }
   if (existing !== raw) throw new Error(`${label} already exists with different content`);
+}
+
+function reusableTestCapture({ task, workspace, stage, component, command, receiptRef, outputRef }) {
+  const raw = readCanonicalRecord(task, receiptRef);
+  if (raw === undefined) return undefined;
+  let receipt;
+  try { receipt = JSON.parse(raw); } catch { throw new Error("existing test receipt is invalid"); }
+  receiptProvenance(receipt, { taskId: task.identity.taskId, stage, component });
+  if (receipt.command !== command || receipt.output_ref !== outputRef) {
+    throw new Error("existing test receipt conflicts with requested capture");
+  }
+  if (typeof receipt.output_hash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.output_hash)) {
+    throw new Error("existing test receipt output hash is invalid");
+  }
+  const output = readCanonicalRecord(task, outputRef);
+  if (output === undefined || sha256(output) !== receipt.output_hash) {
+    throw new Error("existing test output is missing or tampered");
+  }
+  const snapshot = captureWorkspaceSnapshot(workspace);
+  if (receipt.snapshot_head !== snapshot.head || receipt.snapshot_tree !== snapshot.tree) {
+    throw new Error("existing test receipt does not match current workspace; use a new receipt ref");
+  }
+  return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
 }
 
 function revisionRefFor(ref, component, contentHash) {
@@ -179,19 +204,23 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
     captureTests({ command, receiptRef, outputRef } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       if (!/^receipts\/[a-zA-Z0-9._/-]+\.json$/.test(receiptRef ?? "") || !/^evidence\/[a-zA-Z0-9._/-]+$/.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
-      const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree;
-      const startedAt = now();
-      const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
-      const completedAt = now();
-      const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
-      const after = captureWorkspaceSnapshot(safeWorkspace);
-      if (after.head !== headBefore || after.tree !== treeBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
-      const exitCode = proc.status ?? (proc.error ? 1 : 128);
-      const outputHash = sha256(output), commandHash = sha256(command);
-      write(outputRef, output);
-      const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
-      const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
-      return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
+      return safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
+        const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, stage, component, command, receiptRef, outputRef });
+        if (reusable !== undefined) return reusable;
+        const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree;
+        const startedAt = now();
+        const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
+        const completedAt = now();
+        const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
+        const after = captureWorkspaceSnapshot(safeWorkspace);
+        if (after.head !== headBefore || after.tree !== treeBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
+        const exitCode = proc.status ?? (proc.error ? 1 : 128);
+        const outputHash = sha256(output), commandHash = sha256(command);
+        write(outputRef, output);
+        const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
+        const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
+        return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
+      }, { waitMs: TEST_CAPTURE_LOCK_WAIT_MS });
     },
   };
   return Object.freeze(writer);

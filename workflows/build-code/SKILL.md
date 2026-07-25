@@ -92,9 +92,13 @@ example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output
 Use fresh task-relative refs for a controlled rework attempt. Do not pass
 `component=tests`, call internal receipt writers, or guess another component
 name; `capture-tests` is the single public producer for build-code test facts.
-Focused Phase commands are intermediate evidence only. The final build-code
-test receipt must capture the complete test command required by the accepted
-plan, using that repository's low-memory configuration when available. For
+For one task, only one formal capture may run at a time. A second identical
+capture waits for and reuses the same-snapshot receipt when the first has
+completed. Never start the complete test command directly beside a formal
+capture. Focused Phase commands remain intermediate evidence only.
+The final build-code test receipt must capture the complete test command
+required by the accepted plan, using that repository's low-memory configuration
+when available. For
 WorkflowHub itself, `npm test` uses the repository Vitest configuration;
 verify-code reuses the final command and must not receive a Phase-only command.
 

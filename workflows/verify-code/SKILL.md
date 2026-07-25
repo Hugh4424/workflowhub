@@ -158,6 +158,9 @@ idempotent. Other attempts against a closed stage remain rejected.
    --input=$TMP_DIR/test-capture.json`.
    The exact input shape is
    `{"command":"<accepted build test command>","receipt_ref":"receipts/verify-tests.json","output_ref":"evidence/verify-tests.output"}`.
+   For one task, only one formal capture may run at a time. Do not run the same
+   complete command directly beside a formal capture; an identical request
+   waits for and reuses a completed same-snapshot receipt.
 4. For every accepted AC, publish one leaf through
    `node scripts/stage-runtime.mjs publish-acceptance-evidence
    --stage=verify-code --project=<project> --task=<task>
