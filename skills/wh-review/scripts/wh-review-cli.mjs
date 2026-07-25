@@ -178,7 +178,7 @@ function providerClient() {
   return { thirdReview, client: new ReviewProviderClient({ command: thirdReview.command, config: thirdReview.config }) };
 }
 
-export async function runReviewRound(input) {
+export async function runReviewRound(input, { formatCorrection = false } = {}) {
   for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
     if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
   }
@@ -187,6 +187,12 @@ export async function runReviewRound(input) {
   }
   if (input.review_round !== undefined || input.reviewRound !== undefined) throw new TypeError("review_round is derived from canonical prior review evidence");
   if (input.review_scope !== undefined || input.reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
+  const formatCorrectionAttemptRef = input.format_correction_attempt_ref ?? input.formatCorrectionAttemptRef ?? null;
+  if (formatCorrection && typeof formatCorrectionAttemptRef !== "string") throw new TypeError("format-correct requires format_correction_attempt_ref");
+  if (!formatCorrection && formatCorrectionAttemptRef !== null) throw new TypeError("format_correction_attempt_ref is only valid for format-correct");
+  if (formatCorrection && (input.previous_result_ref !== undefined || input.previousResultRef !== undefined || input.materials?.response_ledger !== undefined)) {
+    throw new TypeError("format-correct cannot select a follow-up review chain");
+  }
   const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient();
   const hostProvider = input.host_provider ?? input.hostProvider;
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
@@ -249,7 +255,7 @@ export async function runReviewRound(input) {
     // group here so it can attest SAME_SOURCE rather than trusting a local
     // pre-filter; policy still records the eligible heterologous quorum.
     providers: selection.providers, reviewPolicy, reviewRound: control.round, reviewChain,
-    previousRuntimeIds: input.previous_runtime_ids ?? input.previousRuntimeIds ?? {}, providerClient: client,
+    previousRuntimeIds: input.previous_runtime_ids ?? input.previousRuntimeIds ?? {}, formatCorrectionAttemptRef, providerClient: client,
   });
   return {
     status: result.status, verdict: result.verdict,
@@ -272,9 +278,9 @@ export function verifyFinalReview(input) {
 
 async function main() {
   const command = process.argv[2];
-  if (!new Set(["run", "verify-final"]).has(command)) throw new Error("usage: wh-review-cli.mjs <run|verify-final> [input.json]");
+  if (!new Set(["run", "format-correct", "verify-final"]).has(command)) throw new Error("usage: wh-review-cli.mjs <run|format-correct|verify-final> [input.json]");
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
-  const result = command === "run" ? await runReviewRound(input) : verifyFinalReview(input);
+  const result = command === "run" ? await runReviewRound(input) : command === "format-correct" ? await runReviewRound(input, { formatCorrection: true }) : verifyFinalReview(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

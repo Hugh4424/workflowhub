@@ -4,11 +4,11 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseReviewerOutput } from "../review-output.mjs";
+import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults } from "../review-result.mjs";
 import { resolutionRef, writeReviewResolution } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
-import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
+import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject } from "../review-runner.mjs";
 import { buildNonGateReviewResponseRecord, buildReviewChain } from "../review-controller.mjs";
 import { createTask, createTaskKernel, openTask } from "../../../../core/task-handle.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../core/workspace.mjs";
@@ -450,6 +450,63 @@ describe("aggregation and runner", () => {
       expect.objectContaining({ provider: "claude-code/opus", runtime_id: "group-runtime", status: "completed" }),
       expect.objectContaining({ provider: "kimi/k3", runtime_id: "group-runtime", status: "failed", error: { code: "AUTH", message: "not available" } }),
     ]));
+  });
+
+  it("corrects one invalid managed-group output in the same runtime and preserves both outputs", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-group-format-correction-"); const calls = [];
+    const providerClient = { runGroup: async (request) => {
+      calls.push(request);
+      const output = calls.length === 1 ? "```json\\n{ invalid }\\n```" : revise;
+      return { runtimeId: calls.length === 1 ? "group-runtime" : "correction-runtime", providers: [
+        { provider: "kimi", status: "completed", session_id: "session", output, error: null, execution: null },
+      ] };
+    } };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ status: "semantic", verdict: "revise_required" });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ prompt: FORMAT_CORRECTION_PROMPT, continuationRuntimeId: "group-runtime", providers: ["kimi"] });
+    expect(calls[1].prompt).toContain('"path":"bundle-relative path"');
+    expect(calls[1].prompt).toContain('"evidence_kind":"direct|inferred|machine"');
+    expect(calls[1].prompt).toContain("Do not repeat the review or change its assessment.");
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt.provider_attempts).toHaveLength(2);
+    expect(JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref)).content).toContain("{ invalid }");
+    expect(JSON.parse(task.readRecord(attempt.provider_attempts[1].output_ref)).content).toBe(revise);
+  });
+
+  it("fails closed when the one managed-group format correction is still invalid", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-group-format-failed-"); const calls = [];
+    const providerClient = { runGroup: async (request) => {
+      calls.push(request);
+      return { runtimeId: calls.length === 1 ? "group-runtime" : "correction-runtime", providers: [
+        { provider: "kimi", status: "completed", session_id: "session", output: "not valid JSON", error: null, execution: null },
+      ] };
+    } };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(calls).toHaveLength(2);
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt.provider_attempts).toHaveLength(2);
+    expect(attempt.provider_attempts.at(-1)).toMatchObject({ status: "failed", error: { code: "OUTPUT_INVALID" } });
+  });
+
+  it("rejects a second group format correction after the one correction was already consumed", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-existing-group-format-correction-"); const calls = [];
+    const providerClient = { runGroup: async (request) => {
+      calls.push(request);
+      const output = calls.length < 3 ? "not valid JSON" : revise;
+      return { runtimeId: calls.length === 1 ? "frozen-runtime" : `runtime-${calls.length}`, providers: [
+        { provider: "kimi", status: "completed", session_id: "session", output, error: null, execution: null },
+      ] };
+    } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const unavailable = await runReviewFixture(options);
+    expect(unavailable).toMatchObject({ status: "unavailable", resultRef: null });
+    await expect(runReviewFixture({ ...options, formatCorrectionAttemptRef: unavailable.attemptRef })).rejects.toThrow(/already consumed/);
+    expect(calls).toHaveLength(2);
   });
 
   it("does not pass a v2 route when its configured initial quorum is not met", async () => {
@@ -998,6 +1055,17 @@ describe("aggregation and runner", () => {
 });
 
 describe("verify final", () => {
+  it("uses the verified integration checkpoint instead of the raw Workspace baseline", () => {
+    const result = {
+      stage: "build-code", review_scope: "integration", subject_kind: "worktree",
+      base_commit: "a".repeat(40), base_tree: "b".repeat(40), candidate_tree: "c".repeat(40), snapshot_tree: "c".repeat(40),
+      source: { target_commit: "d".repeat(40), base_commit: "a".repeat(40), base_tree: "b".repeat(40), captured_head: "e".repeat(40) },
+    };
+    const current = { baseCommit: "f".repeat(40), baseTree: "f".repeat(40), snapshotTree: "c".repeat(40), targetCommit: "d".repeat(40), capturedHead: "e".repeat(40) };
+    expect(verifyFinalSubject({ result, current, integrationSubject: { base_commit: "a".repeat(40), base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40) } })).toEqual({ status: "finalized", snapshotTree: "c".repeat(40) });
+    expect(() => verifyFinalSubject({ result, current, integrationSubject: { base_commit: "a".repeat(40), base_tree: "9".repeat(40), snapshot_tree: "c".repeat(40) } })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
+  });
+
   it("rejects a legacy build-code result without integration scope", () => {
     const { attachmentRoot, task } = fixture("simple-review-legacy-final-");
     const resultRef = "reviews/results/legacy-worktree.json";

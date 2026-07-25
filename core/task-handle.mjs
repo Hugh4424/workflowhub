@@ -36,6 +36,11 @@ const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const RUNNER_ROOT_MIGRATORS = new WeakMap();
+const RECOVERY_CREDENTIAL_WRITERS = new WeakMap();
+const RECOVERY_MANIFEST_REPLACERS = new WeakMap();
+const RECOVERY_POINTER_REPLACERS = new WeakMap();
+const PHASE_TRACE_LINEAGE_WRITERS = new WeakMap();
+const PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -97,6 +102,14 @@ function validateManifest(manifest) {
     const migration = manifest.target_repo_root_migration;
     if (Object.keys(migration).some((key) => !["ref", "integrity_hash"].includes(key)) || !TARGET_REPO_ROOT_MIGRATION_REF.test(migration.ref ?? "") || !HASH.test(migration.integrity_hash ?? "")) {
       throw new TypeError("task manifest target_repo_root_migration is invalid");
+    }
+  }
+  if (manifest.runner_replacement !== undefined) {
+    assertPlainObject(manifest.runner_replacement, "task manifest runner_replacement");
+    if (Object.keys(manifest.runner_replacement).some((key) => !["ref", "integrity_hash"].includes(key))
+      || !/^identity\/recoveries\/runner-replacement-[0-9]{4}\.json$/.test(manifest.runner_replacement.ref ?? "")
+      || !HASH.test(manifest.runner_replacement.integrity_hash ?? "")) {
+      throw new TypeError("task manifest runner_replacement is invalid");
     }
   }
   for (const field of FORBIDDEN_MANIFEST_FIELDS) {
@@ -179,14 +192,34 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
   }
   const identity = record.runner_identity;
   const identityKeys = new Set(["runner_root", "runner_oid", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
+  let expectedRunnerRoot = manifest.runner_root;
+  let expectedRunnerOid = manifest.runner_oid;
+  if (manifest.runner_replacement) {
+    try {
+      const replacementRaw = task.readRecord(manifest.runner_replacement.ref);
+      if (sha256(replacementRaw) !== manifest.runner_replacement.integrity_hash) throw new Error("runner replacement generation integrity mismatch");
+      const replacement = JSON.parse(replacementRaw);
+      expectedRunnerRoot = replacement.before?.identity?.runner_root;
+      expectedRunnerOid = replacement.before?.identity?.runner_oid;
+      if (replacement.after?.identity?.runner_root !== manifest.runner_root || replacement.after?.identity?.runner_oid !== manifest.runner_oid) throw new Error("runner replacement current identity mismatch");
+    } catch (error) { throw new Error(`runner replacement lineage is invalid: ${error.message}`); }
+  }
   if (!identity || typeof identity !== "object" || Array.isArray(identity) || Object.keys(identity).some((key) => !identityKeys.has(key)) ||
-      identity.runner_root !== manifest.runner_root || identity.runner_oid !== manifest.runner_oid || !/^[a-f0-9]{40}$/.test(identity.runner_oid ?? "") || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
+      identity.runner_root !== expectedRunnerRoot || identity.runner_oid !== expectedRunnerOid || !/^[a-f0-9]{40}$/.test(identity.runner_oid ?? "") || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
       typeof identity.stage !== "string" || identity.agents_ref !== "AGENTS.md" || identity.stage_skill_ref !== `workflows/${identity.stage}/SKILL.md`) {
     throw new Error("runner root migration identity mismatch");
   }
   if (runnerMigrationRef(record.previous_manifest_hash, identity) !== pointer.ref) throw new Error("runner root migration lineage mismatch");
-  let migrationManifest = manifest;
-  let migrationManifestRaw = manifestRaw;
+  // Runner replacement adds a newer current pointer to the manifest. The
+  // original migration lineage is validated against the same manifest with
+  // only that replacement pointer normalized away.
+  let migrationManifest = { ...manifest };
+  delete migrationManifest.runner_replacement;
+  if (manifest.runner_replacement) {
+    migrationManifest.runner_root = identity.runner_root;
+    migrationManifest.runner_oid = identity.runner_oid;
+  }
+  let migrationManifestRaw = `${JSON.stringify(migrationManifest, null, 2)}\n`;
   let targetPointer = manifest.target_repo_root_migration;
   while (sha256(migrationManifestRaw) !== record.new_manifest_hash && targetPointer) {
     const targetRecord = JSON.parse(task.readRecord(targetPointer.ref));
@@ -207,6 +240,7 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
   delete previousManifest.runner_root;
   delete previousManifest.runner_oid;
   delete previousManifest.runner_root_migration;
+  delete previousManifest.runner_replacement;
   const reconstructedPreviousRaw = `${JSON.stringify(previousManifest, null, 2)}\n`;
   if (sha256(reconstructedPreviousRaw) !== record.previous_manifest_hash) throw new Error("runner root migration previous manifest hash mismatch");
 }
@@ -732,6 +766,56 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate only append-only, content-addressed Phase trace lineage records. */
+    listCanonicalPhaseTraceLineageRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const identityRoot = resolve(realTaskPath, "identity");
+      const lineageRoot = resolve(identityRoot, "phase-trace-lineage");
+      assertInside(realTaskPath, identityRoot, "identity directory");
+      assertInside(realTaskPath, lineageRoot, "Phase trace lineage directory");
+      if (!existsSync(lineageRoot)) return Object.freeze([]);
+      const identityIdentity = directorySnapshot(realTaskPath, identityRoot);
+      const lineageIdentity = directorySnapshot(realTaskPath, lineageRoot);
+      const refs = readdirSync(lineageRoot, { withFileTypes: true })
+        .map((entry) => {
+          const candidate = resolve(lineageRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()
+            || !/^[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json$/.test(entry.name)) {
+            throw new Error(`Phase trace lineage must be a regular, content-addressed JSON file: ${entry.name}`);
+          }
+          return `identity/phase-trace-lineage/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(lineageIdentity);
+      verifyDirectorySnapshot(identityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate append-only corrections for legacy lineage records emitted without bindings. */
+    listCanonicalPhaseTraceLineageSupersessionRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const identityRoot = resolve(realTaskPath, "identity");
+      const root = resolve(identityRoot, "phase-trace-lineage-supersessions");
+      assertInside(realTaskPath, identityRoot, "identity directory");
+      assertInside(realTaskPath, root, "Phase trace lineage supersession directory");
+      if (!existsSync(root)) return Object.freeze([]);
+      const identityIdentity = directorySnapshot(realTaskPath, identityRoot);
+      const rootIdentity = directorySnapshot(realTaskPath, root);
+      const refs = readdirSync(root, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(root, entry.name); const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()
+          || !/^[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json$/.test(entry.name)) {
+          throw new Error(`Phase trace lineage supersession must be a regular, content-addressed JSON file: ${entry.name}`);
+        }
+        return `identity/phase-trace-lineage-supersessions/${entry.name}`;
+      }).sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(rootIdentity); verifyDirectorySnapshot(identityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate external wh-review audit records. They are never stage receipts. */
     listCanonicalReviewResolutionRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -811,6 +895,33 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return result;
     },
+    // Recovery records are identity-owned. These capabilities are installed
+    // only on an authentic TaskHandle and are not part of the normal record API.
+    writeRecoveryCredential(relativePath, data) {
+      const writer = RECOVERY_CREDENTIAL_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic recovery credential writer required");
+      return writer(relativePath, data);
+    },
+    replaceRecoveryManifest(options) {
+      const replacer = RECOVERY_MANIFEST_REPLACERS.get(handle);
+      if (typeof replacer !== "function") throw new TypeError("authentic recovery manifest replacer required");
+      return replacer(options);
+    },
+    replaceRecoveryPointer(options) {
+      const replacer = RECOVERY_POINTER_REPLACERS.get(handle);
+      if (typeof replacer !== "function") throw new TypeError("authentic recovery pointer replacer required");
+      return replacer(options);
+    },
+    writePhaseTraceLineage(relativePath, data) {
+      const writer = PHASE_TRACE_LINEAGE_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic phase trace lineage writer required");
+      return writer(relativePath, data);
+    },
+    writePhaseTraceLineageSupersession(relativePath, data) {
+      const writer = PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic phase trace lineage supersession writer required");
+      return writer(relativePath, data);
+    },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical attempts/accepted records only through TaskKernel.
     withRecordLock(relativePath, operation, options) {
@@ -843,10 +954,27 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
+  });
+  PHASE_TRACE_LINEAGE_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json$/.test(relativePath ?? "")) {
+      throw new Error("phase trace lineage path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("phase trace lineage data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    return createOnlyAt(realTaskPath, relativePath, data);
+  });
+  PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/phase-trace-lineage-supersessions\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json$/.test(relativePath ?? "")) {
+      throw new Error("phase trace lineage supersession path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("phase trace lineage supersession data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root"); verifyManifest();
+    return createOnlyAt(realTaskPath, relativePath, data);
   });
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -958,6 +1086,75 @@ function makeTaskHandle(taskPath, manifest) {
       if (restored !== previousManifestRaw) throw new Error("runner root migration failure left task manifest changed", { cause: error });
       throw error;
     }
+  });
+  RECOVERY_CREDENTIAL_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/recovery-credentials\/(runner-replacement|phase-pointer)\/[A-Za-z0-9._-]{1,256}\.json$/.test(relativePath ?? "")) throw new Error("recovery credential path is invalid");
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("recovery credential data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    try { return createOnlyAt(realTaskPath, relativePath, data); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const existing = readRegularFileNoFollow(resolveRecord(realTaskPath, relativePath).candidate, "recovery credential", taskRootIdentity.real);
+      if (existing !== data) throw new Error("recovery credential conflicts with immutable record");
+      return resolveRecord(realTaskPath, relativePath).candidate;
+    }
+  });
+  RECOVERY_MANIFEST_REPLACERS.set(frozen, ({ previousManifestRaw, manifestRaw, archiveRef, archiveRaw, generationRef, generationRaw, testHooks } = {}) => {
+    if (typeof previousManifestRaw !== "string" || typeof manifestRaw !== "string" || typeof archiveRaw !== "string" || typeof generationRaw !== "string") throw new TypeError("recovery manifest replacement payload is incomplete");
+    if (!/^identity\/recovery-archives\/runner-manifest-[a-f0-9]{64}\.json$/.test(archiveRef ?? "")) throw new Error("runner recovery archive path is invalid");
+    if (!/^identity\/recoveries\/runner-replacement-[0-9]{4}\.json$/.test(generationRef ?? "")) throw new Error("runner recovery generation path is invalid");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    const archiveCandidate = resolveRecord(realTaskPath, archiveRef, { createParents: true }).candidate;
+    const generationCandidate = resolveRecord(realTaskPath, generationRef, { createParents: true }).candidate;
+    const manifestCandidate = resolve(realTaskPath, "task.json");
+    const archiveExisted = existsSync(archiveCandidate);
+    const generationExisted = existsSync(generationCandidate);
+    try {
+      try { if (!archiveExisted) createOnlyAt(realTaskPath, archiveRef, archiveRaw); else if (readRegularFileNoFollow(archiveCandidate, "runner recovery archive", taskRootIdentity.real) !== archiveRaw) throw new Error("runner recovery archive conflicts with immutable record"); }
+      catch (error) { if (error?.code !== "EEXIST") throw error; }
+      try { if (!generationExisted) createOnlyAt(realTaskPath, generationRef, generationRaw); else if (readRegularFileNoFollow(generationCandidate, "runner recovery generation", taskRootIdentity.real) !== generationRaw) throw new Error("runner recovery generation conflicts with immutable record"); }
+      catch (error) { if (error?.code !== "EEXIST") throw error; }
+      testHooks?.beforeManifestReplace?.();
+      writeAtomicAt(realTaskPath, "task.json", manifestRaw, { expectedPriorRaw: previousManifestRaw, validator: testHooks?.validateManifestReplace });
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+    } catch (error) {
+      try {
+        if (readRegularFileNoFollow(manifestCandidate, "task manifest", taskRootIdentity.real) === manifestRaw) writeAtomicAt(realTaskPath, "task.json", previousManifestRaw, { expectedPriorRaw: manifestRaw });
+      } catch (rollbackError) { throw new Error("recovery manifest replacement failed and rollback did not restore the previous manifest", { cause: rollbackError }); }
+      if (!generationExisted && existsSync(generationCandidate)) { try { unlinkSync(generationCandidate); fsyncDirectory(dirname(generationCandidate)); } catch {} }
+      throw error;
+    }
+    return manifestCandidate;
+  });
+  RECOVERY_POINTER_REPLACERS.set(frozen, ({ previousPointerRaw, pointerRaw, archiveRef, archiveRaw, generationRef, generationRaw, testHooks } = {}) => {
+    if (typeof previousPointerRaw !== "string" || typeof pointerRaw !== "string" || typeof archiveRaw !== "string" || typeof generationRaw !== "string") throw new TypeError("recovery pointer replacement payload is incomplete");
+    if (!/^identity\/recovery-archives\/phase-result-[a-f0-9]{64}\.json$/.test(archiveRef ?? "")) throw new Error("phase recovery archive path is invalid");
+    if (!/^identity\/recoveries\/phase-pointer-[0-9]{4}\.json$/.test(generationRef ?? "")) throw new Error("phase recovery generation path is invalid");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    const archiveCandidate = resolveRecord(realTaskPath, archiveRef, { createParents: true }).candidate;
+    const generationCandidate = resolveRecord(realTaskPath, generationRef, { createParents: true }).candidate;
+    const pointerCandidate = resolve(realTaskPath, "phase-result.json");
+    const archiveExisted = existsSync(archiveCandidate);
+    const generationExisted = existsSync(generationCandidate);
+    try {
+      try { if (!archiveExisted) createOnlyAt(realTaskPath, archiveRef, archiveRaw); else if (readRegularFileNoFollow(archiveCandidate, "phase recovery archive", taskRootIdentity.real) !== archiveRaw) throw new Error("phase recovery archive conflicts with immutable record"); }
+      catch (error) { if (error?.code !== "EEXIST") throw error; }
+      try { if (!generationExisted) createOnlyAt(realTaskPath, generationRef, generationRaw); else if (readRegularFileNoFollow(generationCandidate, "phase recovery generation", taskRootIdentity.real) !== generationRaw) throw new Error("phase recovery generation conflicts with immutable record"); }
+      catch (error) { if (error?.code !== "EEXIST") throw error; }
+      testHooks?.beforePointerReplace?.();
+      writeAtomicAt(realTaskPath, "phase-result.json", pointerRaw, { expectedPriorRaw: previousPointerRaw, validator: testHooks?.validatePointerReplace });
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+    } catch (error) {
+      try {
+        if (readRegularFileNoFollow(pointerCandidate, "phase result", taskRootIdentity.real) === pointerRaw) writeAtomicAt(realTaskPath, "phase-result.json", previousPointerRaw, { expectedPriorRaw: pointerRaw });
+      } catch (rollbackError) { throw new Error("recovery pointer replacement failed and rollback did not restore the previous pointer", { cause: rollbackError }); }
+      if (!generationExisted && existsSync(generationCandidate)) { try { unlinkSync(generationCandidate); fsyncDirectory(dirname(generationCandidate)); } catch {} }
+      throw error;
+    }
+    return pointerCandidate;
   });
   return frozen;
 }

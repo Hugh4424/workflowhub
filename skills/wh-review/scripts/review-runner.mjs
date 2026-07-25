@@ -63,6 +63,10 @@ function managedRequestId({ taskId, stage, reviewTrack, subject, snapshotTree, m
   return `wh-review-${createHash("sha256").update(identity).digest("hex")}`;
 }
 
+function formatCorrectionRequestId(requestId) {
+  return `wh-review-format-${createHash("sha256").update(requestId).digest("hex")}`;
+}
+
 function sourceRecord(source, integrationSubject = null) {
   return {
     target_commit: source.targetCommit,
@@ -604,6 +608,60 @@ function unavailableDispatchSequence(task, identity) {
   return attempts.length;
 }
 
+function formatCorrectionSeedForAttempt(task, attemptRef, identity, bundle, policy, providers) {
+  if (typeof attemptRef !== "string" || !/^reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/.test(attemptRef)) {
+    throw new TypeError("formatCorrectionAttemptRef must be a canonical unavailable review attempt ref");
+  }
+  let attempt;
+  try { attempt = JSON.parse(task.readRecord(attemptRef)); }
+  catch (error) { throw invalidEvidence(`format correction attempt cannot be read: ${error.message}`); }
+  validateAttemptIdentity(attempt, attemptRef, identity);
+  if (attempt.terminal_status !== "unavailable" || !attempt.error || !isDeepStrictEqual(attempt.review_policy ?? null, policy ?? null)) {
+    throw invalidEvidence("format correction requires the matching unavailable attempt and unchanged review policy");
+  }
+  if (attempt.provider_attempts.length !== providers.length) {
+    throw invalidEvidence("format correction is already consumed for this unavailable attempt");
+  }
+  validateUnavailableAttemptEvidence(task, attempt, bundle);
+  const latest = new Map();
+  for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
+  if (latest.size !== providers.length || providers.some((provider) => !latest.has(provider))) {
+    throw invalidEvidence("format correction attempt does not bind the configured provider group");
+  }
+  const seed = new Map();
+  for (const provider of providers) {
+    const providerAttempt = latest.get(provider);
+    let content = null;
+    if (providerAttempt.output_ref !== null) {
+      try { content = JSON.parse(task.readRecord(providerAttempt.output_ref)).content; }
+      catch (error) { throw invalidEvidence(`format correction output cannot be read: ${error.message}`); }
+    }
+    let valid = false;
+    if (typeof content === "string") {
+      try { parseReviewerOutput(content, { requireEvidence: true }); valid = true; } catch {}
+    }
+    const needsCorrection = !valid;
+    if (needsCorrection && (providerAttempt.error?.code !== "OUTPUT_INVALID" || !providerAttempt.session_id || !providerAttempt.runtime_id || typeof content !== "string")) {
+      throw invalidEvidence("format correction requires one continuable OUTPUT_INVALID provider output");
+    }
+    seed.set(provider, {
+      runtimeId: providerAttempt.runtime_id,
+      provider: {
+        provider,
+        status: providerAttempt.status,
+        session_id: providerAttempt.session_id,
+        output: content,
+        error: providerAttempt.error,
+        execution: providerAttempt.execution,
+        unavailable_diagnostics: providerAttempt.unavailable_diagnostics,
+      },
+      needsCorrection,
+    });
+  }
+  if (![...seed.values()].some((item) => item.needsCorrection)) throw invalidEvidence("format correction attempt has no invalid provider output");
+  return seed;
+}
+
 function materialPreflightCode(error) {
   if (["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(error?.code)) return error.code;
   const match = /^(MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN):\s/.exec(error?.message ?? "");
@@ -756,8 +814,7 @@ function groupContinuationRuntime(providers, previousRuntimeIds) {
   return runtimes.length === providers.length && new Set(runtimes).size === 1 ? runtimes[0] : null;
 }
 
-function reviewGroupOutcome(provider, result, runtimeId) {
-  const calls = [{ runtimeId, provider: result }];
+function reviewGroupOutcome(provider, result, runtimeId, calls = [{ runtimeId, provider: result }]) {
   if (result.status !== "completed" || typeof result.output !== "string") return { provider, review: null, final: result, calls };
   try { return { provider, review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls }; }
   catch {
@@ -769,7 +826,59 @@ function reviewGroupOutcome(provider, result, runtimeId) {
   }
 }
 
-async function reviewGroup({ providerClient, providers, hostProvider, materials, previousRuntimeIds, requestId, allowLegacyFixtureClient = false }) {
+function correctionFailure(providers, seed, error) {
+  return providers.map((provider) => {
+    const original = seed.get(provider);
+    if (!original.needsCorrection) return reviewGroupOutcome(provider, original.provider, original.runtimeId);
+    const failed = failedProvider(provider, error);
+    return {
+      provider, review: null,
+      final: failed,
+      calls: [{ runtimeId: original.runtimeId, provider: original.provider }, { runtimeId: original.runtimeId, provider: failed }],
+    };
+  });
+}
+
+async function correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed }) {
+  const correctionProviders = providers.filter((provider) => seed.get(provider).needsCorrection);
+  if (correctionProviders.length === 0) return providers.map((provider) => reviewGroupOutcome(provider, seed.get(provider).provider, seed.get(provider).runtimeId));
+  const runtimes = [...new Set(correctionProviders.map((provider) => seed.get(provider).runtimeId))];
+  if (runtimes.length !== 1) return correctionFailure(providers, seed, protocolFailure("format correction requires one shared managed runtime"));
+  let group;
+  try {
+    group = await providerClient.runGroup({
+      hostProvider, providers: correctionProviders, materials, prompt: FORMAT_CORRECTION_PROMPT,
+      continuationRuntimeId: runtimes[0], requestId: formatCorrectionRequestId(requestId),
+    });
+  } catch (error) {
+    return correctionFailure(providers, seed, error);
+  }
+  if (!group || typeof group.runtimeId !== "string" || !Array.isArray(group.providers)) {
+    return correctionFailure(providers, seed, protocolFailure("3rd-review format correction returned an incomplete result"));
+  }
+  const corrected = new Map(group.providers.map((result) => [result?.provider, result]));
+  const outcomes = new Map();
+  for (const provider of providers) {
+    const original = seed.get(provider);
+    if (!original.needsCorrection) {
+      outcomes.set(provider, reviewGroupOutcome(provider, original.provider, original.runtimeId));
+      continue;
+    }
+    const correction = corrected.get(provider);
+    if (!correction) {
+      const failed = failedProvider(provider, protocolFailure(`3rd-review format correction omitted provider ${provider}`));
+      outcomes.set(provider, { provider, review: null, final: failed, calls: [{ runtimeId: original.runtimeId, provider: original.provider }, { runtimeId: group.runtimeId, provider: failed }] });
+      continue;
+    }
+    outcomes.set(provider, reviewGroupOutcome(provider, correction, group.runtimeId, [
+      { runtimeId: original.runtimeId, provider: original.provider },
+      { runtimeId: group.runtimeId, provider: correction },
+    ]));
+  }
+  return providers.map((provider) => outcomes.get(provider));
+}
+
+async function reviewGroup({ providerClient, providers, hostProvider, materials, previousRuntimeIds, requestId, formatCorrectionSeed = null, allowLegacyFixtureClient = false }) {
   // Test doubles from the old single-provider boundary retain a narrow,
   // explicit fixture seam. Production rejects that interface: its only
   // dispatch is one broker-owned reviewer group.
@@ -778,6 +887,9 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
     return Promise.all(providers.map((provider) => reviewOne({
       providerClient, provider, hostProvider, materials, continuationRuntimeId: previousRuntimeIds[provider] ?? null,
     })));
+  }
+  if (formatCorrectionSeed !== null) {
+    return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed: formatCorrectionSeed });
   }
   let group;
   try {
@@ -800,7 +912,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
     });
   }
   const byProvider = new Map(group.providers.map((result) => [result?.provider, result]));
-  return providers.map((provider) => {
+  const initial = providers.map((provider) => {
     const result = byProvider.get(provider);
     if (!result) {
       const failed = failedProvider(provider, protocolFailure(`3rd-review group omitted provider ${provider}`));
@@ -808,9 +920,15 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
     }
     return reviewGroupOutcome(provider, result, group.runtimeId);
   });
+  const seed = new Map(initial.map((outcome) => [outcome.provider, {
+    runtimeId: group.runtimeId,
+    provider: outcome.calls[0].provider,
+    needsCorrection: outcome.final.error?.code === "OUTPUT_INVALID" && outcome.calls[0].provider.session_id !== null,
+  }]));
+  return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed });
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -895,10 +1013,13 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
   const dispatchSequence = unavailableDispatchSequence(taskHandle, identity);
   const requestId = managedRequestId({ ...identity, hostProvider, providers, continuationRuntimeId, dispatchSequence });
+  const formatCorrectionSeed = formatCorrectionAttemptRef === null
+    ? null
+    : formatCorrectionSeedForAttempt(taskHandle, formatCorrectionAttemptRef, identity, bundle, policy, providers);
   // Managed start/status owns provider execution. No WorkflowHub record lock
   // is held while a healthy reviewer group is running or reconnecting.
   const reviewed = rejectProfileMismatches(await reviewGroup({
-    providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds, requestId,
+    providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds, requestId, formatCorrectionSeed,
     allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
   }), policy);
   return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
@@ -952,6 +1073,24 @@ export function runReviewFixture(options) {
   return runReview({ ...options, fixtureSourceToken: FIXTURE_SOURCE_TOKEN });
 }
 
+export function verifyFinalSubject({ result, current, integrationSubject = null } = {}) {
+  if (!result || typeof result !== "object" || !current || typeof current !== "object") throw new TypeError("result and current source are required");
+  const isIntegration = result.stage === "build-code" && result.review_scope === "integration" && integrationSubject !== null;
+  const expected = isIntegration
+    ? integrationSubject
+    : { base_commit: current.baseCommit, base_tree: current.baseTree, snapshot_tree: current.snapshotTree };
+  if (!expected || typeof expected !== "object" || expected.base_commit !== result.source.base_commit || expected.base_tree !== result.base_tree
+    || (isIntegration && expected.snapshot_tree !== current.snapshotTree)) {
+    const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
+  }
+  const subjectMismatch = result.subject_kind === "worktree" && (current.snapshotTree !== result.candidate_tree || current.snapshotTree !== result.snapshot_tree);
+  if (subjectMismatch || current.targetCommit !== result.source.target_commit || current.capturedHead !== result.source.captured_head
+    || result.source.base_commit !== expected.base_commit || result.source.base_tree !== expected.base_tree) {
+    const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
+  }
+  return { status: "finalized", snapshotTree: current.snapshotTree };
+}
+
 export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId = null, stage = null, reviewTrack = undefined, captureSource = captureSourceDefault } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (typeof resultRef !== "string" || !resultRef.startsWith("reviews/results/")) throw new Error("RESULT_REF_INVALID: canonical result ref required");
@@ -976,9 +1115,10 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
   }
   const current = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false });
   try {
-    const subjectMismatch = result.subject_kind === "worktree" && (current.baseTree !== result.base_tree || current.snapshotTree !== result.candidate_tree);
-    if (subjectMismatch || current.snapshotTree !== result.snapshot_tree || current.targetCommit !== result.source.target_commit) { const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error; }
-    return { status: "finalized", snapshotTree: current.snapshotTree };
+    const integrationSubject = result.stage === "build-code" && result.review_scope === "integration" && workspace?.worktreeRoot
+      ? buildIntegrationSubjectDefault({ task: taskHandle, sourceRoot: workspace.worktreeRoot, finalTree: result.snapshot_tree })
+      : null;
+    return verifyFinalSubject({ result, current, integrationSubject });
   } finally {
     current.dispose?.();
   }

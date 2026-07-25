@@ -9,6 +9,7 @@ import { assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
+import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
@@ -141,7 +142,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
     const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
     const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
-    const changed = [...new Set([...tracked, ...untracked])].sort();
+    const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
     const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
     const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
     // The diff is content-addressed by its hash. Reusing the same snapshot

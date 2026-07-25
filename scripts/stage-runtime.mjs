@@ -18,6 +18,7 @@ import {
 import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
+import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -33,8 +34,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "publish-phase-evidence", "publish-acceptance-evidence", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|publish-phase-evidence|publish-acceptance-evidence|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -53,6 +54,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-phase-evidence accepts only --stage, --project, --task, and --input");
   }
+  if (command === "publish-phase-trace-lineage") {
+    if (values.stage !== "build-code" || !values.input) throw new TypeError("publish-phase-trace-lineage requires --stage=build-code --input=<phase-trace-lineage.json>");
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-phase-trace-lineage accepts only --stage, --project, --task, and --input");
+  }
+  if (command === "supersede-phase-trace-lineage") {
+    if (values.stage !== "build-code" || !values.input) throw new TypeError("supersede-phase-trace-lineage requires --stage=build-code --input=<lineage-supersession.json>");
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("supersede-phase-trace-lineage accepts only --stage, --project, --task, and --input");
+  }
   if (command === "publish-acceptance-evidence" && (values.stage !== "verify-code" || !values.input)) throw new TypeError("publish-acceptance-evidence requires --stage=verify-code --input=<acceptance-evidence.json>");
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
@@ -69,7 +80,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["receipt", "capture-tests", "publish-phase-evidence", "publish-acceptance-evidence", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["receipt", "capture-tests", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -89,6 +100,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-passing") return publishOfficialVerifyPassing(context, input);
   if (command === "publish-phase-evidence") return publishBuildCodePhaseEvidence(context, input);
+  if (command === "publish-phase-trace-lineage") return publishPhaseTraceLineage(context, input);
+  if (command === "supersede-phase-trace-lineage") return supersedePhaseTraceLineage(context, input);
   if (command === "capture-tests") {
     if (!input || typeof input !== "object" || Array.isArray(input)
       || typeof input.command !== "string"

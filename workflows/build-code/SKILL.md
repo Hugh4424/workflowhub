@@ -190,8 +190,11 @@ order, evidence, or authority boundaries.
    accepted build-plan checkpoint to the final tree; missing/ambiguous/legacy
    facts are `MATERIAL_INCOMPLETE`. A trace that only authenticates paths and
    evidence must emit an audited `unknown` seam, not invent a semantic
-   producer/consumer relation. Then run exactly one final
-   `worktree + integration` `wh-review` without historical or cumulative diff.
+   producer/consumer relation. After the fresh test receipt is captured, run
+   exactly one final full-worktree `wh-review`; its scope is `worktree + integration`
+   and it uses no historical or cumulative diff.
+   After the fresh test receipt, run the final independent integration review.
+   The final scope is `worktree + integration` `wh-review` without historical or cumulative diff.
    Never repeat a Phase or final review when its snapshot/material identity is
    unchanged.
 6. Create the final implementation and fresh test receipts, publish the
@@ -201,6 +204,7 @@ order, evidence, or authority boundaries.
    evidence refs for covered rows. A Phase result is gate evidence and cannot
    replace the final same-snapshot `worktree + integration` result; absent,
    partial, or snapshot-mismatched coverage cannot be accepted or handed off.
+   A Phase result is gate evidence and cannot replace the final `worktree + integration` result.
 7. If verify-code later publishes an authenticated failure, use only the
    controlled `reopen` flow above. Preserve the prior accepted attempt and
    rerun only the current, last affected PASS Phase before repeating the final
@@ -270,6 +274,22 @@ order, evidence, or authority boundaries.
 Publishing Phase evidence does not authorize a controlled revision after an
 accepted build. That authority is validated later by the existing final
 `run --reopen=<immutable-ref>` path.
+
+## Append-only historical Phase lineage
+
+When final integration reports that an existing formal PASS Phase branch is
+untraced, bind only an already-published canonical trace through:
+`node scripts/stage-runtime.mjs publish-phase-trace-lineage --stage=build-code
+--project=<project> --task=<task> --input=$TMP_DIR/phase-trace-lineage.json`.
+The input contains exactly
+`{"trace_ref":"evidence/phases/<phase>/<tree>/phase-map-trace-<sha256>.json","trace_hash":"<sha256>"}`.
+Publish one binding per invocation. The runtime independently verifies the
+task/project, stage/Phase, tree and pinned commit, canonical evidence and
+receipt hashes, review result/attempt/material, and PASS verdict before writing
+one create-only `identity/phase-trace-lineage` generation record. Missing,
+tampered, misbound, non-PASS, or duplicate traces fail closed. This command
+never changes old records, the current Phase pointer, Phase path selection, or
+trusted review routing, and it never invokes an independent review.
 
 After the Stage is accepted, present one plain-language final implementation
 brief: delivered behavior, Phase outcomes, real tests, final review conclusion,
