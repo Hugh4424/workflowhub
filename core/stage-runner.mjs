@@ -36,7 +36,7 @@ function upstreamForStage(ctx, stage, upstreamStage) {
   return ctx.kernel.readInput(slot);
 }
 
-function workerContext(ctx) {
+function workerContext(ctx, publication = {}) {
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
@@ -44,7 +44,7 @@ function workerContext(ctx) {
     ...(ctx.candidateWorkspace ? { candidateWorkspace: ctx.candidateWorkspace } : {}),
     ...(ctx.workspace ? { workspace: ctx.workspace } : {}),
     ...(ctx.artifacts ? { artifacts: ctx.artifacts } : {}),
-    createCheckpoint: (stage = ctx.stage) => ctx.kernel.createCheckpoint(stage),
+    createCheckpoint: (stage = ctx.stage) => ctx.kernel.createCheckpoint(stage, publication.baselineRebindRef ? { baselineRebindRef: publication.baselineRebindRef } : undefined),
   });
 }
 
@@ -85,7 +85,7 @@ export async function runStage(stage, context, handler, publication = {}) {
 
   const upstreamStage = UPSTREAM_STAGE[stage];
   const upstream = upstreamForStage(ctx, stage, upstreamStage);
-  const result = plainResult(await handler(workerContext(ctx), upstream));
+  const result = plainResult(await handler(workerContext(ctx, publication), upstream));
   const upstreamRefs = upstream ? [{
     task_id: upstream.accepted.task_id,
     stage: upstream.accepted.stage,
@@ -102,6 +102,7 @@ export async function runStage(stage, context, handler, publication = {}) {
     ...(result.checkpoint !== undefined ? { checkpoint: result.checkpoint } : {}),
     ...(result.reason !== undefined ? { reason: result.reason } : {}),
     ...(publication.reopenProvenance !== undefined ? { reopen_provenance: publication.reopenProvenance } : {}),
+    ...(publication.baselineRebindRef !== undefined ? { baseline_rebind_ref: publication.baselineRebindRef } : {}),
   });
   if (result.verification_failure) {
     const error = new Error(`${stage} verification failed; formal failure attempt published: ${attempt.attempt_ref}`);
@@ -111,7 +112,7 @@ export async function runStage(stage, context, handler, publication = {}) {
   return attempt;
 }
 
-function officialWorkerContext(ctx) {
+function officialWorkerContext(ctx, publication = {}) {
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
@@ -148,7 +149,7 @@ function officialWorkerContext(ctx) {
       readArtifact: (name) => ctx.artifacts.read(name),
       writeArtifact: (name, value) => ctx.artifacts.writeAtomic(name, value),
       artifactRef: (name) => ctx.artifacts.reference(name),
-      createCheckpoint: (name) => ctx.kernel.createCheckpoint(name),
+      createCheckpoint: (name) => ctx.kernel.createCheckpoint(name, publication.baselineRebindRef ? { baselineRebindRef: publication.baselineRebindRef } : undefined),
     } : {}),
   });
 }
@@ -218,7 +219,7 @@ export function runOfficialStage(stage, context, invocation, publication) {
   assertOfficialRevisionAuthorization(stage, ctx, invocation, publication);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
-  return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)), publication);
+  return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input)), publication);
 }
 
 /** Re-run the official verifier after a revised build without replacing the accepted verify result. */

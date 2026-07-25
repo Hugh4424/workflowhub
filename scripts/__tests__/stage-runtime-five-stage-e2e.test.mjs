@@ -164,6 +164,19 @@ describe("official five-stage CLI", () => {
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",
     ]);
+    writeFileSync(join(workspace.worktreeRoot, "README.md"), "integrated upstream\n");
+    execFileSync("git", ["add", "README.md"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "integrate upstream"], { cwd: workspace.worktreeRoot });
+    const rebind = run(root, repo, ["rebind", "--stage=build-plan", "--project=Demo", "--task=official-chain"]);
+    expect(rebind.ref).toMatch(/^results\/build-plan\/revisions\/baseline-rebind-/);
+    const rebindReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    const rebindInput = join(inputRoots["build-plan"], "build-plan-rebind-input.json");
+    writeFileSync(rebindInput, `${JSON.stringify({ receipts: { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: rebindReview.resultRef } })}\n`);
+    const reboundAttempt = run(root, repo, ["run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${rebindInput}`, `--baseline-rebind=${rebind.ref}`]);
+    const reboundConfirmation = run(root, repo, ["confirm", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--attempt=${reboundAttempt.attempt_ref}`, "--decision=accepted"]);
+    const rebound = run(root, repo, ["accept", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--attempt=${reboundAttempt.attempt_ref}`, `--human-confirmation-ref=${reboundConfirmation.ref}`]);
+    expect(rebound.baseline_rebind_provenance.authorization_ref).toBe(rebind.ref);
+    expect(rebound.checkpoint.ref).not.toBe(buildPlan.accepted.checkpoint.ref);
 
     const code = "require('node:fs').mkdirSync('src',{recursive:true});require('node:fs').writeFileSync('src/feature.txt','implemented\\n')";
     expect(runWorkspaceCommand(workspace, process.execPath, ["-e", code]).status).toBe(0);
@@ -485,8 +498,9 @@ describe("official five-stage CLI", () => {
 
     const criticalCanonicalDriftKernel = createTaskKernel(task, { workspace, acceptedReplacementTestHooks: { afterRevalidateBeforeRename() { writeFileSync(task.recordPath("results/verify-code/accepted.json"), "critical canonical drift\n"); } } });
     expect(() => criticalCanonicalDriftKernel.acceptAttempt("verify-code", passing.attempt_ref, passingConfirmation.ref)).toThrow(/compare-and-swap|canonical/i);
-    expect(task.readRecord("results/verify-code/accepted.json")).toBe(verifyCanonicalBeforeAccept);
+    expect(task.readRecord("results/verify-code/accepted.json")).toBe("critical canonical drift\n");
     expect(() => task.readRecord(verifyArchiveRef)).toThrow(/ENOENT|no such/i);
+    writeFileSync(task.recordPath("results/verify-code/accepted.json"), verifyCanonicalBeforeAccept);
 
     const passingAttemptPath = `results/verify-code/${passing.attempt_ref}`;
     const passingAttemptRaw = task.readRecord(passingAttemptPath);

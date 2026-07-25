@@ -123,6 +123,116 @@ describe("TaskKernel append-only publication", () => {
     expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
   });
 
+  it("rebinds an accepted build-plan to the current integration baseline without changing design bytes", () => {
+    const { task, kernel } = fixture();
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const bound = createTaskKernel(task, { workspace, artifacts });
+    artifacts.writeAtomic("spec.md", "# Spec\n");
+    const specAttempt = bound.publishAttempt("build-spec", {
+      facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: bound.createCheckpoint("build-spec") },
+      upstream_refs: [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
+    });
+    bound.acceptAttempt("build-spec", specAttempt.attempt_ref);
+    artifacts.writeAtomic("plan.md", "# Plan\n");
+    artifacts.writeAtomic("tasks.md", "# Tasks\n");
+    const planAttempt = bound.publishAttempt("build-plan", {
+      facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: bound.createCheckpoint("build-plan") },
+      upstream_refs: [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+    });
+    bound.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(bound, "build-plan", planAttempt.attempt_ref));
+    const bytes = ["spec.md", "plan.md", "tasks.md"].map((name) => artifacts.read(name));
+    writeFileSync(join(workspace.worktreeRoot, "README.md"), "integrated\n");
+    execFileSync("git", ["add", "README.md"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "integration"], { cwd: workspace.worktreeRoot });
+
+    writeFileSync(join(workspace.worktreeRoot, "unexpected.txt"), "drift\n");
+    expect(() => bound.authorizeBuildPlanBaselineRebind()).toThrow(/unrelated Workspace drift/i);
+    rmSync(join(workspace.worktreeRoot, "unexpected.txt"));
+    artifacts.writeAtomic("plan.md", "# changed\n");
+    expect(() => bound.authorizeBuildPlanBaselineRebind()).toThrow(/artifact differs|design bytes|drift/i);
+    artifacts.writeAtomic("plan.md", bytes[1]);
+    const authorization = bound.authorizeBuildPlanBaselineRebind();
+    expect(() => bound.authorizeBuildPlanBaselineRebind("build-spec")).toThrow(/build-plan/i);
+    expect(() => bound.createCheckpoint("build-plan", { baselineRebindRef: "results/build-plan/revisions/baseline-rebind-9999.json" })).toThrow(/ENOENT|not found/i);
+    const authorizationRaw = task.readRecord(authorization.ref);
+    const wrongTreeAuthorization = JSON.parse(authorizationRaw);
+    wrongTreeAuthorization.base_tree = "0".repeat(40);
+    writeFileSync(task.recordPath(authorization.ref), `${JSON.stringify(wrongTreeAuthorization, null, 2)}\n`);
+    expect(() => bound.createCheckpoint("build-plan", { baselineRebindRef: authorization.ref })).toThrow(/Git checkpoint|tree|authorization/i);
+    writeFileSync(task.recordPath(authorization.ref), authorizationRaw);
+    const checkpoint = bound.createCheckpoint("build-plan", { baselineRebindRef: authorization.ref });
+    expect(bound.createCheckpoint("build-plan", { baselineRebindRef: authorization.ref })).toEqual(checkpoint);
+    expect(checkpoint.baseline_rebind_hash).toBe(authorization.hash);
+    const revised = bound.publishAttempt("build-plan", {
+      facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint },
+      upstream_refs: [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+      baseline_rebind_ref: authorization.ref,
+    });
+    const revisedRaw = task.readRecord(`results/build-plan/${revised.attempt_ref}`);
+    const badProvenance = JSON.parse(revisedRaw);
+    badProvenance.baseline_rebind_provenance.authorization_hash = "0".repeat(64);
+    writeFileSync(task.recordPath(`results/build-plan/${revised.attempt_ref}`), `${JSON.stringify(badProvenance, null, 2)}\n`);
+    expect(() => bound.acceptAttempt("build-plan", revised.attempt_ref, "confirmations/build-plan/missing.json")).toThrow(/provenance|authorization|confirmation|hash/i);
+    writeFileSync(task.recordPath(`results/build-plan/${revised.attempt_ref}`), revisedRaw);
+    expect(() => bound.acceptAttempt("build-plan", revised.attempt_ref, confirmation(bound, "build-plan", planAttempt.attempt_ref))).toThrow(/confirmation/i);
+    const freshConfirmation = confirmation(bound, "build-plan", revised.attempt_ref);
+    const conflictingRef = `refs/workflowhub/checkpoints/Demo/task-one/build-plan/plan-${checkpoint.plan_hash}`;
+    execFileSync("git", ["update-ref", conflictingRef, "HEAD"], { cwd: workspace.worktreeRoot });
+    expect(() => bound.acceptAttempt("build-plan", revised.attempt_ref, freshConfirmation)).toThrow(/checkpoint ref conflicts/i);
+    execFileSync("git", ["update-ref", "-d", conflictingRef], { cwd: workspace.worktreeRoot });
+    const accepted = bound.acceptAttempt("build-plan", revised.attempt_ref, freshConfirmation);
+    expect(bound.acceptAttempt("build-plan", revised.attempt_ref, freshConfirmation)).toEqual(accepted);
+    expect(accepted.baseline_rebind_provenance.authorization_ref).toBe(authorization.ref);
+    expect(accepted.checkpoint.ref).toContain(checkpoint.plan_hash);
+    expect(["spec.md", "plan.md", "tasks.md"].map((name) => artifacts.read(name))).toEqual(bytes);
+    const sameTreeNewPriorAuthorization = bound.authorizeBuildPlanBaselineRebind();
+    const sameTreeNewPriorCheckpoint = bound.createCheckpoint("build-plan", { baselineRebindRef: sameTreeNewPriorAuthorization.ref });
+    expect(sameTreeNewPriorAuthorization.ref).not.toBe(authorization.ref);
+    expect(sameTreeNewPriorCheckpoint.parent_commit).toBe(checkpoint.parent_commit);
+    expect(sameTreeNewPriorCheckpoint.plan_hash).not.toBe(checkpoint.plan_hash);
+
+    writeFileSync(join(workspace.worktreeRoot, "README.md"), "integrated again\n");
+    execFileSync("git", ["add", "README.md"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "second integration"], { cwd: workspace.worktreeRoot });
+    const secondAuthorization = bound.authorizeBuildPlanBaselineRebind();
+    const secondCheckpoint = bound.createCheckpoint("build-plan", { baselineRebindRef: secondAuthorization.ref });
+    expect(secondCheckpoint.plan_hash).not.toBe(checkpoint.plan_hash);
+    const secondAttempt = bound.publishAttempt("build-plan", {
+      facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: secondCheckpoint },
+      upstream_refs: [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+      baseline_rebind_ref: secondAuthorization.ref,
+    });
+    const secondAccepted = bound.acceptAttempt("build-plan", secondAttempt.attempt_ref, confirmation(bound, "build-plan", secondAttempt.attempt_ref));
+    expect(secondAccepted.checkpoint.ref).not.toBe(accepted.checkpoint.ref);
+
+    writeFileSync(join(workspace.worktreeRoot, "README.md"), "third integration\n");
+    execFileSync("git", ["add", "README.md"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "third integration"], { cwd: workspace.worktreeRoot });
+    const raceAuthorization = bound.authorizeBuildPlanBaselineRebind();
+    const raceCheckpoint = bound.createCheckpoint("build-plan", { baselineRebindRef: raceAuthorization.ref });
+    const raceAttempt = bound.publishAttempt("build-plan", {
+      facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: raceCheckpoint },
+      upstream_refs: [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+      baseline_rebind_ref: raceAuthorization.ref,
+    });
+    const raceConfirmation = confirmation(bound, "build-plan", raceAttempt.attempt_ref);
+    const concurrentRaw = "concurrent accepted writer\n";
+    const racing = createTaskKernel(task, { workspace, artifacts, acceptedReplacementTestHooks: {
+      afterRevalidateBeforeRename() { writeFileSync(task.recordPath("results/build-plan/accepted.json"), concurrentRaw); },
+    } });
+    expect(() => racing.acceptAttempt("build-plan", raceAttempt.attempt_ref, raceConfirmation)).toThrow(/compare-and-swap|changed/i);
+    expect(task.readRecord("results/build-plan/accepted.json")).toBe(concurrentRaw);
+  });
+
+  it("rejects build-plan baseline rebind when design bytes or unrelated workspace paths drift", () => {
+    const { kernel } = fixture();
+    expect(() => kernel.authorizeBuildPlanBaselineRebind()).toThrow(/accepted|Workspace|capabilit/i);
+  });
+
   it("accepts a checkpoint when the controlled artifact already matches its parent", () => {
     const { repo, task, kernel } = fixture();
     const artifactRoot = join(repo, "specs", "task-one");

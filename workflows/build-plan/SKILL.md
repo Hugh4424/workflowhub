@@ -23,6 +23,15 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
+If an accepted build-plan must be rebound after an upstream integration commit,
+do not edit `spec.md`, `plan.md`, or `tasks.md` and do not reopen build-spec.
+First run `stage-runtime.mjs rebind --stage=build-plan --project=<project>
+--task=<task>`. It fails unless the Workspace is exactly the current integration
+HEAD plus the three already accepted design artifacts. Pass the returned
+authorization ref to the normal build-plan `run` as
+`--baseline-rebind=<authorization-ref>`, then obtain a fresh confirmation for
+the new attempt. This is the only accepted-design baseline-rebind route.
+
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
 is never an entry.

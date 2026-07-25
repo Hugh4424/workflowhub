@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 
-import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
+import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, overlayCheckpointArtifacts, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
@@ -13,6 +13,7 @@ const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
 const ACCEPTED_FILE = /^accepted(?:-attempt-([0-9]{4}))?\.json$/;
 const REOPEN_REF = /^results\/build-code\/revisions\/reopen-([0-9]{4})\.json$/;
+const BASELINE_REBIND_REF = /^results\/build-plan\/revisions\/baseline-rebind-([0-9]{4})\.json$/;
 const HASH = /^[a-f0-9]{64}$/;
 const EXPECTED_UPSTREAM = Object.freeze({
   "make-decision": null,
@@ -121,6 +122,14 @@ function validateReopenProvenance(value) {
   if (!/^results\/build-code\/accepted(?:-attempt-[0-9]{4})?\.json$/.test(value.previous_accepted_ref ?? "")) throw new TypeError("reopen_provenance.previous_accepted_ref invalid");
   if (!/^results\/verify-code\/attempt-[0-9]{4}\.json$/.test(value.verify_failure_ref ?? "")) throw new TypeError("reopen_provenance.verify_failure_ref invalid");
   for (const key of ["reopen_hash", "previous_accepted_hash", "verify_failure_hash"]) if (!HASH.test(value[key] ?? "")) throw new TypeError(`reopen_provenance.${key} must be sha256`);
+}
+
+function validateBaselineRebindProvenance(value) {
+  if (value === undefined) return;
+  plain(value, "baseline_rebind_provenance");
+  rejectUnknown(value, new Set(["authorization_ref", "authorization_hash"]), "baseline_rebind_provenance");
+  if (!BASELINE_REBIND_REF.test(value.authorization_ref ?? "")) throw new Error("baseline_rebind_provenance.authorization_ref invalid");
+  if (!HASH.test(value.authorization_hash ?? "")) throw new Error("baseline_rebind_provenance.authorization_hash invalid");
 }
 
 function validateVerifyFailurePublication(value) {
@@ -327,10 +336,11 @@ function validateCheckpoint(checkpoint) {
 
 function validateCheckpointPlan(plan) {
   plain(plan, "checkpoint plan");
-  rejectUnknown(plan, new Set(["schema_version", "stage", "parent_commit", "artifacts", "plan_hash"]), "checkpoint plan");
+  rejectUnknown(plan, new Set(["schema_version", "stage", "parent_commit", "artifacts", "plan_hash", "baseline_rebind_hash"]), "checkpoint plan");
   if (plan.schema_version !== "git-checkpoint-plan.v1" || !["build-spec", "build-plan"].includes(plan.stage)) throw new Error("checkpoint plan schema/stage invalid");
   gitOid(plan.parent_commit, "checkpoint plan.parent_commit");
   if (!HASH.test(plan.plan_hash ?? "")) throw new Error("checkpoint plan.plan_hash must be sha256");
+  if (plan.baseline_rebind_hash !== undefined && !HASH.test(plan.baseline_rebind_hash)) throw new Error("checkpoint plan.baseline_rebind_hash must be sha256");
   if (!Array.isArray(plan.artifacts) || plan.artifacts.length === 0) throw new Error("checkpoint plan.artifacts required");
   plan.artifacts.forEach((record, index) => { plain(record, `checkpoint plan.artifacts[${index}]`); rejectUnknown(record, new Set(["path", "blob_oid", "content_hash"]), `checkpoint plan.artifacts[${index}]`); artifactRef(record.path, `checkpoint plan.artifacts[${index}].path`); gitOid(record.blob_oid, `checkpoint plan.artifacts[${index}].blob_oid`); if (!HASH.test(record.content_hash ?? "")) throw new Error("checkpoint plan artifact content_hash must be sha256"); });
   return plan;
@@ -348,8 +358,10 @@ export function validateAttempt(attempt, expected = {}) {
   validateRefs(attempt.upstream_refs, "upstream_refs");
   validateUpstreamAcceptances(attempt.upstream_acceptances);
   validateReopenProvenance(attempt.reopen_provenance);
+  validateBaselineRebindProvenance(attempt.baseline_rebind_provenance);
   validateVerifyFailurePublication(attempt.verify_failure_publication);
   validateVerifyPassingPublication(attempt.verify_passing_publication);
+  if (attempt.baseline_rebind_provenance !== undefined && stage !== "build-plan") throw new Error("baseline_rebind_provenance is only valid for build-plan");
   if (attempt.reopen_provenance !== undefined && stage !== "build-code") throw new Error("reopen_provenance is only valid for build-code");
   if (attempt.verify_failure_publication !== undefined && stage !== "verify-code") throw new Error("verify_failure_publication is only valid for verify-code");
   if (attempt.verify_passing_publication !== undefined && stage !== "verify-code") throw new Error("verify_passing_publication is only valid for verify-code");
@@ -384,6 +396,8 @@ export function validateAccepted(accepted, expected = {}) {
   if (!Number.isFinite(Date.parse(accepted.accepted_at))) throw new Error("accepted_at invalid");
   validateRefs(accepted.upstream_refs, "accepted upstream_refs");
   if (["build-spec", "build-plan"].includes(stage)) validateCheckpoint(accepted.checkpoint);
+  validateBaselineRebindProvenance(accepted.baseline_rebind_provenance);
+  if (accepted.baseline_rebind_provenance !== undefined && stage !== "build-plan") throw new Error("baseline_rebind_provenance is only valid for build-plan");
   if (expected.taskId && accepted.task_id !== expected.taskId) throw new Error("accepted task identity mismatch");
   if (expected.stage && stage !== expected.stage) throw new Error("accepted stage identity mismatch");
   return accepted;
@@ -451,6 +465,36 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       return { baseCommit: spec.accepted.checkpoint.commit_oid, baseTree: spec.accepted.checkpoint.tree_oid };
     }
     throw new Error(`stage does not produce a Git checkpoint: ${name}`);
+  };
+  const readBaselineRebind = (ref) => {
+    if (!BASELINE_REBIND_REF.test(ref ?? "")) throw new Error("invalid build-plan baseline rebind reference");
+    const raw = task.readRecord(ref);
+    const record = parseJson(raw, "build-plan baseline rebind");
+    if (record.schema_version !== "build-plan-baseline-rebind.v1" || record.task_id !== task.identity.taskId || record.stage !== "build-plan") throw new Error("invalid build-plan baseline rebind record");
+    for (const key of ["previous_accepted_hash", "previous_attempt_hash", "accepted_spec_hash", "accepted_spec_attempt_hash", "integration_head", "integration_tree", "base_tree", "workspace_tree", "accepted_spec_checkpoint_commit", "accepted_spec_checkpoint_tree"]) {
+      const pattern = key.includes("hash") ? HASH : GIT_OID;
+      if (!pattern.test(record[key] ?? "")) throw new Error(`invalid build-plan baseline rebind ${key}`);
+    }
+    if (typeof record.previous_accepted_raw !== "string" || hash(record.previous_accepted_raw) !== record.previous_accepted_hash) throw new Error("invalid build-plan baseline rebind prior accepted raw binding");
+    return { ref, raw, hash: hash(raw), record };
+  };
+  const assertBaselineRebind = (ref, currentPlan = readAcceptedLocal("build-plan")) => {
+    const authorization = readBaselineRebind(ref);
+    const spec = readAcceptedLocal("build-spec");
+    const repoRoot = assertWorkspace(workspace).worktreeRoot;
+    const snapshot = captureGitWorktreeSnapshot(repoRoot);
+    const value = authorization.record;
+    const integrationTree = String(execFileSync("git", ["rev-parse", `${value.integration_head}^{tree}`], { cwd: repoRoot, encoding: "utf8" })).trim();
+    const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: integrationTree, artifacts: spec.accepted.checkpoint.artifacts });
+    if (value.previous_accepted_ref !== currentPlan.accepted_ref || value.previous_accepted_hash !== currentPlan.accepted_hash ||
+      value.previous_accepted_raw !== task.readRecord(currentPlan.accepted_ref) ||
+      value.previous_attempt_ref !== currentPlan.accepted.attempt_ref || value.previous_attempt_hash !== String(currentPlan.accepted.integrity_hash).replace(/^sha256:/, "") ||
+      value.accepted_spec_ref !== spec.accepted_ref || value.accepted_spec_hash !== spec.accepted_hash ||
+      value.accepted_spec_attempt_ref !== spec.accepted.attempt_ref || value.accepted_spec_attempt_hash !== String(spec.accepted.integrity_hash).replace(/^sha256:/, "") ||
+      value.accepted_spec_checkpoint_commit !== spec.accepted.checkpoint.commit_oid || value.accepted_spec_checkpoint_tree !== spec.accepted.checkpoint.tree_oid ||
+      value.integration_head !== snapshot.head || value.integration_tree !== integrationTree || value.base_tree !== baseTree ||
+      value.workspace_tree !== snapshot.tree) throw new Error("build-plan baseline rebind authorization no longer matches active records or Workspace");
+    return authorization;
   };
   const verifyUpstream = (stage, refs) => {
     validateStageUpstream(stage, task.identity.taskId, refs);
@@ -668,10 +712,53 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (typeof relativePath !== "string" || !/^(?:receipts|reviews|evidence)\//.test(relativePath) || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
       return createKernelRecord(relativePath, data);
     },
-    createCheckpoint(stage) {
+    createCheckpoint(stage, options = {}) {
       if (!workspace || !artifacts) throw new Error("Git checkpoint requires Workspace and ArtifactDir capabilities");
       const name = stageName(stage);
+      if (options.baselineRebindRef !== undefined) {
+        if (name !== "build-plan") throw new Error("baseline rebind is only valid for build-plan");
+        const authorization = assertBaselineRebind(options.baselineRebindRef);
+        return createGitCheckpoint({ workspace, artifacts, task, stage: name, baseCommit: authorization.record.integration_head, baseTree: authorization.record.base_tree, baselineRebindHash: authorization.hash });
+      }
+      if (Object.keys(options).length) throw new Error("unsupported checkpoint options");
       return createGitCheckpoint({ workspace, artifacts, task, stage: name, ...checkpointBase(name) });
+    },
+    authorizeBuildPlanBaselineRebind(stage = "build-plan") {
+      if (stage !== "build-plan") throw new Error("baseline rebind is only valid for build-plan");
+      if (!workspace || !artifacts) throw new Error("build-plan baseline rebind requires Workspace and ArtifactDir capabilities");
+      return task.withRecordLock("locks/build-plan.publication.lock", () => {
+        const plan = readAcceptedLocal("build-plan");
+        const spec = readAcceptedLocal("build-spec");
+        const repoRoot = assertWorkspace(workspace).worktreeRoot;
+        const snapshot = captureGitWorktreeSnapshot(repoRoot);
+        const integrationTree = String(execFileSync("git", ["rev-parse", `${snapshot.head}^{tree}`], { cwd: repoRoot, encoding: "utf8" })).trim();
+        const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: integrationTree, artifacts: spec.accepted.checkpoint.artifacts });
+        const expectedTree = overlayCheckpointArtifacts({ repoRoot, baseTree, artifacts: plan.accepted.checkpoint.artifacts });
+        if (snapshot.tree !== expectedTree) throw new Error("build-plan baseline rebind rejects changed design bytes or unrelated Workspace drift");
+        const payload = {
+          schema_version: "build-plan-baseline-rebind.v1", task_id: task.identity.taskId, stage: "build-plan",
+          previous_accepted_ref: plan.accepted_ref, previous_accepted_hash: plan.accepted_hash,
+          previous_accepted_raw: task.readRecord(plan.accepted_ref),
+          previous_attempt_ref: plan.accepted.attempt_ref, previous_attempt_hash: String(plan.accepted.integrity_hash).replace(/^sha256:/, ""),
+          accepted_spec_ref: spec.accepted_ref, accepted_spec_hash: spec.accepted_hash,
+          accepted_spec_attempt_ref: spec.accepted.attempt_ref, accepted_spec_attempt_hash: String(spec.accepted.integrity_hash).replace(/^sha256:/, ""),
+          accepted_spec_checkpoint_commit: spec.accepted.checkpoint.commit_oid, accepted_spec_checkpoint_tree: spec.accepted.checkpoint.tree_oid,
+          integration_head: snapshot.head, integration_tree: integrationTree, base_tree: baseTree, workspace_tree: snapshot.tree,
+          authorized_at: now(),
+        };
+        for (let sequence = 1; sequence <= 9999; sequence += 1) {
+          const ref = `results/build-plan/revisions/baseline-rebind-${String(sequence).padStart(4, "0")}.json`;
+          try {
+            const existing = readBaselineRebind(ref);
+            const comparable = { ...existing.record, authorized_at: payload.authorized_at };
+            if (JSON.stringify(comparable) === JSON.stringify(payload)) return deepFreeze(existing);
+          } catch (error) { if (error?.code !== "ENOENT") throw error; }
+          const raw = `${JSON.stringify(payload, null, 2)}\n`;
+          try { createKernelRecord(ref, raw); return deepFreeze({ ref, raw, hash: hash(raw), record: payload }); }
+          catch (error) { if (error?.code !== "EEXIST") throw error; }
+        }
+        throw new Error("build-plan baseline rebind sequence exhausted");
+      });
     },
     publishAttempt(stage, data = {}) {
       const name = stageName(stage);
@@ -687,7 +774,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         const controlledVerifyFailure = data.verify_failure_publication !== undefined;
         const controlledVerifyPassing = data.verify_passing_publication !== undefined;
-        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing) throw new Error(`${name} is accepted and closed`);
+        const baselineRebind = name === "build-plan" && data.baseline_rebind_ref !== undefined;
+        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing && !baselineRebind) throw new Error(`${name} is accepted and closed`);
+        let baselineRebindAuthorization;
+        if (baselineRebind) baselineRebindAuthorization = assertBaselineRebind(data.baseline_rebind_ref, current);
         if (controlledVerifyFailure) {
           if (name !== "verify-code" || !current) throw new Error("controlled verify failure publication requires an accepted verify-code stage");
           const activeBuild = readAcceptedLocal("build-code");
@@ -726,7 +816,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (name === "make-decision") verifyCandidateSnapshot(data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
-          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint, ...checkpointBase(name) });
+          const base = baselineRebindAuthorization ? { baseCommit: baselineRebindAuthorization.record.integration_head, baseTree: baselineRebindAuthorization.record.base_tree } : checkpointBase(name);
+          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint, ...base, ...(baselineRebindAuthorization ? { baselineRebindHash: baselineRebindAuthorization.hash } : {}) });
           if (data.checkpoint !== undefined && data.checkpoint !== data.facts.checkpoint) throw new Error("caller checkpoint override is forbidden");
         }
         for (let sequence = 1; sequence <= 9999; sequence += 1) {
@@ -743,6 +834,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             upstream_refs: structuredClone(data.upstream_refs ?? []),
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
+            ...(baselineRebindAuthorization ? { baseline_rebind_provenance: { authorization_ref: baselineRebindAuthorization.ref, authorization_hash: baselineRebindAuthorization.hash } } : {}),
             ...(data.verify_failure_publication ? { verify_failure_publication: structuredClone(data.verify_failure_publication) } : {}),
             ...(data.verify_passing_publication ? { verify_passing_publication: structuredClone(data.verify_passing_publication) } : {}),
             ...(data.verification_failure ? { verification_failure: true } : {}),
@@ -875,7 +967,18 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           if (acceptanceMode === "human") readAndValidateConfirmation();
           return current.accepted;
         }
-        if (current && name !== "build-code" && !controlledVerifyPassing) throw new Error(`${name} is accepted and closed`);
+        if (name === "build-plan" && attempt.baseline_rebind_provenance !== undefined && current?.accepted.attempt_ref === attemptRef) {
+          if (current.accepted.human_confirmation_ref !== humanConfirmationRef) throw new Error("build-plan attempt is already accepted with a different confirmation");
+          readAndValidateConfirmation();
+          return current.accepted;
+        }
+        const controlledBaselineRebind = name === "build-plan" && attempt.baseline_rebind_provenance !== undefined;
+        if (current && name !== "build-code" && !controlledVerifyPassing && !controlledBaselineRebind) throw new Error(`${name} is accepted and closed`);
+        let baselineRebindAuthorization;
+        if (controlledBaselineRebind) {
+          baselineRebindAuthorization = assertBaselineRebind(attempt.baseline_rebind_provenance.authorization_ref, current);
+          if (attempt.baseline_rebind_provenance.authorization_hash !== baselineRebindAuthorization.hash) throw new Error("build-plan baseline rebind authorization hash mismatch");
+        }
         if (current && name === "build-code") assertReopenProvenance(attempt.reopen_provenance, current);
         if (!current && attempt.reopen_provenance !== undefined) throw new Error("build-code reopen provenance requires an accepted build-code stage");
         if (name === "make-decision" && candidate) {
@@ -937,7 +1040,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (["build-spec", "build-plan"].includes(name)) {
           if (!workspace || !artifacts) throw new Error("accepting a design checkpoint requires Workspace and ArtifactDir capabilities");
           if (acceptanceMode === "human" && confirmation.checkpoint_plan_hash !== attempt.checkpoint.plan_hash) throw new Error("human confirmation checkpoint plan hash mismatch");
-          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, ...checkpointBase(name), publishRef: (ref, commit, zeroOid) => {
+          const base = baselineRebindAuthorization ? { baseCommit: baselineRebindAuthorization.record.integration_head, baseTree: baselineRebindAuthorization.record.base_tree } : checkpointBase(name);
+          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, ...base, ...(baselineRebindAuthorization ? { baselineRebindHash: baselineRebindAuthorization.hash } : {}), publishRef: (ref, commit, zeroOid) => {
             execFileSync("git", ["update-ref", ref, commit, zeroOid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
           } });
           execFileSync("git", ["merge-base", "--is-ancestor", attempt.checkpoint.parent_commit, acceptedCheckpoint.commit_oid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
@@ -953,6 +1057,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           accepted_at: now(),
           upstream_refs: structuredClone(attempt.upstream_refs),
           ...(acceptedCheckpoint ? { checkpoint: structuredClone(acceptedCheckpoint) } : {}),
+          ...(attempt.baseline_rebind_provenance ? { baseline_rebind_provenance: structuredClone(attempt.baseline_rebind_provenance) } : {}),
         };
         validateAccepted(accepted, { taskId: task.identity.taskId, stage: name });
         const acceptedRaw = `${JSON.stringify(accepted, null, 2)}\n`;
@@ -962,7 +1067,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         }
         if (typeof replaceKernelAccepted !== "function") throw new Error("kernel canonical accepted replacement authority is required");
         const canonicalRef = `results/${name}/accepted.json`;
-        const priorRaw = task.readRecord(canonicalRef);
+        const priorRaw = controlledBaselineRebind
+          ? baselineRebindAuthorization.record.previous_accepted_raw
+          : task.readRecord(canonicalRef);
         let archiveRef = `results/${name}/${archivedAcceptedFileFor(current.accepted.attempt_ref)}`;
         try {
           if (task.readRecord(archiveRef) !== priorRaw) archiveRef = `results/${name}/${collisionArchiveFileFor(current.accepted.attempt_ref, priorRaw)}`;
@@ -980,6 +1087,18 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           archiveRef,
           archiveRaw: priorRaw,
           ...(controlledVerifyPassing ? { validator: revalidateControlledVerifyPassing, expectedPriorRaw: priorRaw } : {}),
+          ...(controlledBaselineRebind ? {
+            expectedPriorRaw: priorRaw,
+            validator: (mode) => {
+              const live = task.readRecord(`results/${name}/${attemptRef}`);
+              if (live !== attemptRaw) throw new Error("build-plan baseline rebind attempt changed during acceptance");
+              if (mode === "pre") assertBaselineRebind(attempt.baseline_rebind_provenance.authorization_ref, current);
+              else {
+                const authorization = readBaselineRebind(attempt.baseline_rebind_provenance.authorization_ref);
+                if (authorization.hash !== attempt.baseline_rebind_provenance.authorization_hash) throw new Error("build-plan baseline rebind authorization changed");
+              }
+            },
+          } : {}),
         };
         replaceKernelAccepted(canonicalRef, acceptedRaw, replacementOptions);
         return deepFreeze(accepted);

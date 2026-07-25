@@ -954,7 +954,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
@@ -979,11 +979,11 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!new Set(["results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
-      throw new Error("only controlled build-code or verify-code canonical accepted records may be replaced");
+    if (!new Set(["results/build-plan/accepted.json", "results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
+      throw new Error("only controlled build-plan, build-code, or verify-code canonical accepted records may be replaced");
     }
-    if (relativePath === "results/verify-code/accepted.json" && (typeof options?.validator !== "function" || typeof options?.expectedPriorRaw !== "string")) {
-      throw new Error("verify-code canonical accepted replacement requires validator and prior record binding");
+    if (new Set(["results/build-plan/accepted.json", "results/verify-code/accepted.json"]).has(relativePath) && (typeof options?.validator !== "function" || typeof options?.expectedPriorRaw !== "string")) {
+      throw new Error("controlled canonical accepted replacement requires validator and prior record binding");
     }
     const { candidate } = resolveRecord(realTaskPath, relativePath);
     const prior = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
@@ -1010,8 +1010,11 @@ function makeTaskHandle(taskPath, manifest) {
       try { current = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real); }
       catch (readError) { if (readError?.code !== "ENOENT") throw readError; }
       try {
-        if (current !== prior) writeAtomicAt(realTaskPath, relativePath, prior);
-        if (readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real) !== prior) {
+        // Roll back only our own successfully renamed bytes. A concurrent
+        // writer that won the CAS must never be overwritten by recovery.
+        if (current === data) writeAtomicAt(realTaskPath, relativePath, prior, { expectedPriorRaw: data, validator: () => {} });
+        const restored = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
+        if (current === data && restored !== prior) {
           throw new Error("canonical accepted rollback verification failed");
         }
       } catch (rollbackError) {
