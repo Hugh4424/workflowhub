@@ -129,6 +129,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "invalidate-review-binding") {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-review-binding accepts only --stage, --project, --task, and --input");
+    if (values.stage === "make-decision") context = prepareMakeDecisionWorkspace(context);
     return context.kernel.invalidateReviewBinding(values.stage, input);
   }
   if (command === "publish-requirements-ledger") {
