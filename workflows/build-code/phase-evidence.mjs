@@ -73,7 +73,9 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
     || value.subject_kind !== "phase" || value.phase_id !== expected.phaseId
     || value.review_scope !== "phase"
     || value.base_tree !== expected.baseTree || value.candidate_tree !== expected.candidateTree
-    || value.snapshot_tree !== expected.candidateTree || !["pass", "revise_required"].includes(value.verdict)) {
+    || value.snapshot_tree !== expected.candidateTree || !["pass", "revise_required"].includes(value.verdict)
+    || (expected.phaseEvidence !== undefined &&
+        JSON.stringify(value.phase_evidence ?? null) !== JSON.stringify(expected.phaseEvidence))) {
     throw new Error("formal phase review identity does not match the Phase evidence");
   }
   if (requirePass && value.verdict !== "pass") throw new Error(`previous Phase review must be PASS (got ${value.verdict})`);
@@ -81,6 +83,9 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
   validateSchema("attempt", attempt.value);
   for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
     if (attempt.value[key] !== value[key]) throw new Error(`formal phase review attempt/result ${key} mismatch`);
+  }
+  if (JSON.stringify(attempt.value.phase_evidence ?? null) !== JSON.stringify(value.phase_evidence ?? null)) {
+    throw new Error("formal phase review attempt/result phase_evidence mismatch");
   }
   return { ...review, ref, attempt_ref: value.attempt_ref, attempt };
 }
@@ -442,6 +447,14 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     if (input.review_result_ref !== undefined) {
       review = readFormalPhaseReview(task, input.review_result_ref, {
         phaseId: input.phase_id, baseTree, candidateTree: scan.snapshot_tree,
+        ...(input.recovery_ref === undefined ? {} : {
+          phaseEvidence: {
+            ref: canonicalEvidenceRef,
+            sha256: canonicalEvidenceHash,
+            recovery_ref: input.recovery_ref,
+            recovery_hash: input.recovery_hash,
+          },
+        }),
       });
       const trace = phaseMapTrace({
         scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash,

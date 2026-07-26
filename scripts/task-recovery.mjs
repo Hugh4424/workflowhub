@@ -9,7 +9,7 @@ import { createTaskKernel } from "../core/task-kernel.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import {
-  assertRecoveryUnused, canonical, deepEqual, generationRef, normalizedRecoveryRecordHash,
+  assertPhaseRecoveryIntent, assertRecoveryUnused, canonical, deepEqual, generationRef, normalizedRecoveryRecordHash,
   normalizeRuntimeOnlyPaths, readRecoveryCredential, recoveryError, readRecoveryGeneration, sha256, validateRecoveryInput,
 } from "../core/task-recovery.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
@@ -54,8 +54,13 @@ export function helpText() {
     "  node scripts/task-recovery.mjs phase-trace-lineage --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --phase-id=<phase> --phase-evidence-ref=<task-relative-ref> --phase-evidence-hash=<sha256> --review-result-ref=<task-relative-ref> --review-result-hash=<sha256>",
     "",
     "Credentials are canonical task-local records. phase-trace-lineage binds historical Phase facts append-only and never replaces old records or pointers.",
+    "phase-pointer same-snapshot recovery requires phase_subject.recovery_intent=same-snapshot-phase0-reopen; changed-snapshot recovery must omit it.",
+    "The authoritative pointer, closed Phase evidence/review, receipt hashes, and snapshot tree are validated before the create-only gate and pointer CAS.",
+    "A committed same-snapshot recovery must complete recovery-bound Phase evidence and a fresh wh-review PASS; interrupted continuation resumes at stage-runtime publish-phase-evidence.",
+    "Never edit task.json, phase-result.json, recovery generations, accepted records, receipts, tests, or reviews by hand.",
     "Success returns recovery_ref/recovery_hash. Continue with task-bootstrap or stage-runtime official entries.",
-    "Errors: RECOVERY_INPUT_REQUIRED, RECOVERY_CREDENTIAL_INVALID, RECOVERY_ALREADY_USED, RECOVERY_CONCURRENT_CHANGE, RECOVERY_*_MISMATCH.",
+    "Errors distinguish missing/mismatched/misused intent, pointer or closure mismatch, replay, concurrent pointer change, and persistence conflict.",
+    "Errors: RECOVERY_INPUT_REQUIRED, RECOVERY_CREDENTIAL_INVALID, RECOVERY_PHASE_INTENT_REQUIRED, RECOVERY_PHASE_INTENT_MISMATCH, RECOVERY_PHASE_INTENT_USAGE_MISMATCH, RECOVERY_ALREADY_USED, RECOVERY_CONCURRENT_CHANGE, RECOVERY_RECORD_CONFLICT, RECOVERY_*_MISMATCH.",
   ].join("\n");
 }
 
@@ -577,7 +582,7 @@ function phaseTraceLineage(values) {
   return { ...result, next_entry: "stage-runtime receipt --revision=true + capture-tests + publish-phase-evidence + fresh wh-review" };
 }
 
-function phasePointer(values) {
+function phasePointer(values, testHooks) {
   const task = openTask(values["task-path"], values.project, values.task);
   const credential = readRecoveryCredential(task, values["credential-ref"], values["credential-hash"], "phase-pointer");
   assertRecoveryUnused(task, "phase-pointer");
@@ -591,7 +596,8 @@ function phasePointer(values) {
   const review = readJson(task, subject.baseline_phase0_review_ref, subject.baseline_phase0_review_hash, "baseline Phase 0 review", PHASE_REVIEW_RESULT_REF);
   assertBaselinePhaseClosure(task, baseline, baselineSnapshot, subject);
   assertBaselineReviewClosure(task, subject, baselineSnapshot, review);
-  if (subject.snapshot_tree === baselineSnapshot) throw recoveryError("RECOVERY_PHASE_SNAPSHOT_ALREADY_CURRENT", "target Phase 0 snapshot is already current");
+  const sameSnapshot = subject.snapshot_tree === baselineSnapshot;
+  assertPhaseRecoveryIntent({ sameSnapshot, recoveryIntent: subject.recovery_intent });
   const implementation = readPhaseReceipt(task, subject.implementation_receipt, "Phase 0 implementation receipt", { component: "implementation" });
   const green = readPhaseReceipt(task, subject.green_test_receipt, "Phase 0 GREEN test receipt", { component: "build-code-test-capture", green: true });
   if (implementation.value.snapshot_tree !== subject.snapshot_tree || green.value.snapshot_tree !== subject.snapshot_tree) throw phaseEvidenceError("Phase 0 receipt snapshot mismatch");
@@ -613,18 +619,34 @@ function phasePointer(values) {
   const generationHash = sha256(generationRaw);
   pointerBody.recovery_hash = generationHash;
   const pointerRaw = canonical(pointerBody);
+  testHooks?.beforeCommitLock?.();
   task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
     if (readRecoveryGeneration(task, "phase-pointer")) throw recoveryError("RECOVERY_ALREADY_USED", "phase-pointer recovery gate is already consumed");
     if (sha256(task.readRecord("phase-result.json")) !== pointer.hash) throw recoveryError("RECOVERY_CONCURRENT_CHANGE", "Phase pointer changed before recovery");
-    try { task.replaceRecoveryPointer({ previousPointerRaw: pointer.raw, pointerRaw, archiveRef: archivePath, archiveRaw: pointer.raw, generationRef: generationPath, generationRaw }); }
+    try {
+      task.replaceRecoveryPointer({
+        previousPointerRaw: pointer.raw, pointerRaw, archiveRef: archivePath, archiveRaw: pointer.raw,
+        generationRef: generationPath, generationRaw, testHooks: testHooks?.pointerReplacement,
+      });
+    }
     catch (error) { if (error.code?.startsWith("RECOVERY_")) throw error; throw recoveryError(error.message?.includes("changed") ? "RECOVERY_CONCURRENT_CHANGE" : "RECOVERY_RECORD_CONFLICT", error.message); }
     return null;
   });
+  const committed = {
+    recovery_ref: generationPath, recovery_hash: generationHash, phase_id: "phase-0", status: "awaiting_review",
+  };
+  const continuationFailure = (error) => {
+    if (!sameSnapshot) throw error;
+    return { ...committed, next_entry: "stage-runtime publish-phase-evidence" };
+  };
   let context;
   try {
+    testHooks?.beforeContinuation?.();
     const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
     context = { task, kernel: createTaskKernel(task, { workspace }), workspace };
-  } catch (error) { throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", error.message); }
+  } catch (error) {
+    return continuationFailure(recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", error.message));
+  }
   let evidence;
   try {
     evidence = publishBuildCodePhaseEvidence(context, {
@@ -633,15 +655,17 @@ function phasePointer(values) {
       ...(subject.red_test_receipt ? { red_evidence_ref: subject.red_test_receipt.ref } : {}),
       allowed_files: normalizedAllowedFiles, recovery_ref: generationPath, recovery_hash: generationHash,
     });
-  } catch (error) { throw phaseEvidenceError(`Phase 0 evidence publication failed: ${error.message}`); }
-  return { recovery_ref: generationPath, recovery_hash: generationHash, phase_id: "phase-0", status: "awaiting_review", canonical_phase_evidence_ref: evidence.canonical_phase_evidence_ref, next_entry: "fresh wh-review" };
+  } catch (error) {
+    return continuationFailure(phaseEvidenceError(`Phase 0 evidence publication failed: ${error.message}`));
+  }
+  return { ...committed, canonical_phase_evidence_ref: evidence.canonical_phase_evidence_ref, next_entry: "fresh wh-review" };
 }
 
-export function runRecovery(argv = process.argv.slice(2)) {
+export function runRecovery(argv = process.argv.slice(2), options) {
   const values = parse(argv);
   if (values.help) return helpText();
   if (values.command === "runner-replacement") return runnerReplacement(values);
-  if (values.command === "phase-pointer") return phasePointer(values);
+  if (values.command === "phase-pointer") return phasePointer(values, options);
   return phaseTraceLineage(values);
 }
 

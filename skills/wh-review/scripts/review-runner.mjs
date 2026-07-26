@@ -87,6 +87,7 @@ function subjectRecord(source, stage, phaseId, integrationSubject = null) {
     review_scope: reviewScopeFor(stage, phaseId),
     base_tree: integrationSubject?.base_tree ?? source.baseTree,
     candidate_tree: source.snapshotTree,
+    ...(phaseId && source.phaseEvidenceBinding ? { phase_evidence: source.phaseEvidenceBinding } : {}),
   };
 }
 
@@ -316,6 +317,7 @@ function matchesReviewIdentity(record, { taskId, stage, reviewTrack, subject, sn
     record.subject_kind === subject.subject_kind && record.phase_id === subject.phase_id &&
     (record.review_scope ?? null) === subject.review_scope &&
     record.base_tree === subject.base_tree && record.candidate_tree === subject.candidate_tree &&
+    isDeepStrictEqual(record.phase_evidence ?? null, subject.phase_evidence ?? null) &&
     (reviewChain === undefined || isDeepStrictEqual(record.review_chain ?? null, reviewChain));
 }
 
@@ -451,6 +453,7 @@ function semanticAttemptResult(task, attempt, attemptRef, bundle) {
   const result = {
     version: "wh-review-result.v1", task_id: attempt.task_id, stage: attempt.stage, review_track: attempt.review_track,
     subject_kind: attempt.subject_kind, phase_id: attempt.phase_id, review_scope: attempt.review_scope ?? null, base_tree: attempt.base_tree, candidate_tree: attempt.candidate_tree,
+    ...(attempt.phase_evidence ? { phase_evidence: attempt.phase_evidence } : {}),
     source: attempt.source, snapshot_tree: attempt.snapshot_tree, material_id: attempt.material_id, attempt_ref: attemptRef,
     report_ref: attempt.report_ref, provider_results: providerResults, verdict: aggregation.verdict, findings,
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
@@ -523,6 +526,7 @@ function reusableOutcome(task, identity, bundle) {
         attempt.subject_kind !== result.subject_kind || attempt.phase_id !== result.phase_id ||
         (attempt.review_scope ?? null) !== (result.review_scope ?? null) ||
         attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree ||
+        !isDeepStrictEqual(attempt.phase_evidence ?? null, result.phase_evidence ?? null) ||
         !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) {
       throw invalidEvidence("attempt and result identities differ");
     }

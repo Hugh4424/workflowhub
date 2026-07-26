@@ -116,6 +116,16 @@ describe("review source capture", () => {
     expect(diff).not.toContain("later.txt");
     expect(result.baseTree).toBe(git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]));
     expect(result.snapshotTree).toBe(git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]));
+    result.dispose();
+    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({
+      phase_id: "phase-1",
+      recovery_ref: "identity/recoveries/phase-pointer-0001.json",
+      recovery_hash: "a".repeat(64),
+      evidence: { diff: "evidence/phase-1-diff-scan.json" },
+    })}\n`);
+    expect(() => capturePhaseReviewSource({
+      sourceRoot: f.source, task, phaseId: "phase-1", reviewDataRoot: f.data,
+    })).toThrow(/canonical Phase evidence ref is required for recovery binding/);
   });
 
   it("rejects a phase id or evidence record that does not match", () => {
@@ -332,6 +342,23 @@ describe("review materials", () => {
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
     });
     expect(repeated.materialId).toBe(code.materialId);
+    const recoveryBound = buildReviewMaterials({
+      reviewDataRoot: f.data, attachmentRoot: f.data,
+      source: {
+        ...source,
+        phaseEvidenceBinding: {
+          ref: `evidence/phases/phase-0/${source.snapshotTree}/phase-evidence-${"a".repeat(64)}.json`,
+          sha256: "a".repeat(64),
+          recovery_ref: "identity/recoveries/phase-pointer-0001.json",
+          recovery_hash: "b".repeat(64),
+        },
+      },
+      taskId: "task", stage: "build-code", reviewTrack: null,
+      materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
+    });
+    expect(recoveryBound.materialId).not.toBe(code.materialId);
+    expect(JSON.parse(readFileSync(join(recoveryBound.bundleRoot, "source.json"), "utf8")).phase_evidence)
+      .toMatchObject({ recovery_ref: "identity/recoveries/phase-pointer-0001.json", recovery_hash: "b".repeat(64) });
   });
 
   it("generates a deterministic canonical material id", () => {

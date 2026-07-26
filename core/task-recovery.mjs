@@ -17,7 +17,8 @@ export const RECOVERY_ERROR_CODES = Object.freeze([
   "RECOVERY_RUNNER_IDENTITY_INVALID", "RECOVERY_RUNNER_ANCESTRY_UNREACHABLE",
   "RECOVERY_RUNNER_PROVENANCE_MISMATCH", "RECOVERY_MANIFEST_HASH_MISMATCH",
   "RECOVERY_BUSINESS_SNAPSHOT_MISMATCH", "RECOVERY_PHASE_POINTER_MISMATCH",
-  "RECOVERY_PHASE_SNAPSHOT_ALREADY_CURRENT", "RECOVERY_PHASE_EVIDENCE_INVALID",
+  "RECOVERY_PHASE_INTENT_REQUIRED", "RECOVERY_PHASE_INTENT_MISMATCH",
+  "RECOVERY_PHASE_INTENT_USAGE_MISMATCH", "RECOVERY_PHASE_EVIDENCE_INVALID",
   "RECOVERY_PHASE_EVIDENCE_MISMATCH", "RECOVERY_PHASE_CONTINUATION_MISMATCH",
 ]);
 
@@ -26,6 +27,18 @@ export function recoveryError(code, detail = "recovery rejected") {
   error.code = code;
   error.recovery_code = code;
   return error;
+}
+
+export function assertPhaseRecoveryIntent({ sameSnapshot, recoveryIntent }) {
+  if (typeof sameSnapshot !== "boolean") {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "phase snapshot relationship is invalid");
+  }
+  if (sameSnapshot && recoveryIntent === undefined) {
+    throw recoveryError("RECOVERY_PHASE_INTENT_REQUIRED", "same-snapshot Phase 0 recovery requires explicit intent");
+  }
+  if (!sameSnapshot && recoveryIntent === "same-snapshot-phase0-reopen") {
+    throw recoveryError("RECOVERY_PHASE_INTENT_USAGE_MISMATCH", "same-snapshot Phase 0 recovery intent cannot be used for a changed snapshot");
+  }
 }
 
 
@@ -107,8 +120,12 @@ export function validateRecoveryCredential(value) {
   } else {
     const subject = value.phase_subject;
     const required = ["current_pointer_ref", "current_pointer_hash", "baseline_phase0_evidence_ref", "baseline_phase0_evidence_hash", "baseline_phase0_review_ref", "baseline_phase0_review_hash", "current_phase_id", "target_phase_id", "baseline_commit", "snapshot_tree", "implementation_receipt", "green_test_receipt", "allowed_files"];
-    if (!subject || typeof subject !== "object" || Object.keys(subject).some((key) => !required.includes(key)) || required.some((key) => subject[key] === undefined)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "phase_subject is incomplete");
+    const allowed = new Set([...required, "red_test_receipt", "recovery_intent"]);
+    if (!subject || typeof subject !== "object" || Object.keys(subject).some((key) => !allowed.has(key)) || required.some((key) => subject[key] === undefined)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "phase_subject is incomplete");
     if (subject.current_pointer_ref !== "phase-result.json" || subject.current_phase_id !== "phase-1" || subject.target_phase_id !== "phase-0") throw recoveryError("RECOVERY_PHASE_POINTER_MISMATCH", "phase recovery only supports phase-1 to phase-0");
+    if (subject.recovery_intent !== undefined && subject.recovery_intent !== "same-snapshot-phase0-reopen") {
+      throw recoveryError("RECOVERY_PHASE_INTENT_MISMATCH", "phase recovery intent must exactly match same-snapshot-phase0-reopen");
+    }
     assertHash(subject.current_pointer_hash, "phase_subject.current_pointer_hash");
     for (const key of ["baseline_phase0_evidence_hash", "baseline_phase0_review_hash"]) assertHash(subject[key], `phase_subject.${key}`);
     for (const key of ["baseline_phase0_evidence_ref", "baseline_phase0_review_ref"]) assertSafeRecoveryRef(subject[key], `phase_subject.${key}`);

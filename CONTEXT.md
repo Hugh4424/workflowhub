@@ -49,10 +49,10 @@ stage manifest 定义应执行的 step 集合（expected topology）；journal �
 **audit 单一真相源（single source of truth）**：
 audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘要，validator 只验证一致性，facts assembly 只装配事实，不另算第二套 audit 结论。
 
-**运行事实（runtime fact）**：
+**运行事实（机器执行事实）**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
 
-**运行事实 v2（runtime-facts.v2）**：
+**运行事实第二版**：
 在不改变既有 v1 的前提下，补充运行成本、归属、审查、验证、阶段对照和自动化信息的独立事实合同。
 
 **事实归属（fact attribution）**：
