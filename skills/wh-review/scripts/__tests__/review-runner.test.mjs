@@ -587,6 +587,30 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("does not reuse a result or semantic attempt with a binding invalidation", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-binding-invalid-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: `session-${calls.length}`, output: pass, error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const resultRaw = task.readRecord(first.resultRef);
+    const resultHash = createHash("sha256").update(resultRaw).digest("hex");
+    const invalidationDir = join(root, "Projects", "Demo", "tasks", "task", "reviews", "binding-invalidations");
+    mkdirSync(invalidationDir, { recursive: true });
+    writeFileSync(join(invalidationDir, `${resultHash}.json`), `${JSON.stringify({
+      schema_version: "review-binding-invalidation.v1",
+      task_id: "task",
+      stage: "build-code",
+      status: "binding_invalid",
+      result_ref: first.resultRef,
+      result_hash: resultHash,
+    }, null, 2)}\n`);
+    const second = await runReviewFixture(options);
+    expect(second).not.toMatchObject({ reused: true });
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(calls).toHaveLength(2);
+  });
+
   it("recovers a semantic attempt interrupted before its result and report publication", async () => {
     const { root, attachmentRoot, task } = fixture("simple-review-semantic-attempt-recovery-"); const calls = [];
     const providerClient = { runGroup: async () => { calls.push(true); return { runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null }] }; } };

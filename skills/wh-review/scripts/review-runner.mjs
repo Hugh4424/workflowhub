@@ -488,6 +488,30 @@ function ensureReviewReport(task, reportRef, attempt, result) {
   }
 }
 
+function reusableResults(task, identity) {
+  const candidateResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
+  const invalidatedAttemptRefs = new Set();
+  const results = candidateResults.filter(({ ref, record }) => {
+    const raw = task.readRecord(ref);
+    const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
+    let invalidation;
+    try { invalidation = JSON.parse(task.readRecord(invalidationRef)); }
+    catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw invalidEvidence(`review binding invalidation cannot be read: ${error.message}`);
+    }
+    if (invalidation?.schema_version !== "review-binding-invalidation.v1"
+        || invalidation.status !== "binding_invalid" || invalidation.result_ref !== ref
+        || invalidation.result_hash !== createHash("sha256").update(raw).digest("hex")
+        || invalidation.task_id !== record.task_id || invalidation.stage !== record.stage) {
+      throw invalidEvidence("review binding invalidation does not bind the canonical result");
+    }
+    invalidatedAttemptRefs.add(record.attempt_ref);
+    return false;
+  });
+  return { results, invalidatedAttemptRefs };
+}
+
 function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, claimedUnavailableAttemptRefs = [] } = {}) {
   const { taskId, stage, reviewTrack } = identity;
   if (!Array.isArray(claimedUnavailableAttemptRefs)
@@ -495,8 +519,9 @@ function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, cla
     throw new TypeError("claimedUnavailableAttemptRefs must contain canonical review attempt refs");
   }
   const claimedUnavailable = new Set(claimedUnavailableAttemptRefs);
-  const matchingResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
-  const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+  const { results: matchingResults, invalidatedAttemptRefs } = reusableResults(task, identity);
+  const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+    .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
   if (matchingResults.length > 1) throw invalidEvidence("multiple canonical semantic results exist for the same review identity");
   // Transport failures are immutable evidence, not a permanent ban on another
   // formal review of the same draft. Validate every historical attempt before
@@ -619,7 +644,9 @@ function unavailableDispatchSequence(task, identity) {
   // managed request ID; otherwise the broker can only replay the old terminal
   // cancellation forever. Revalidate every matching attempt before deriving
   // this sequence, so a damaged record never changes dispatch identity.
-  const attempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+  const { invalidatedAttemptRefs } = reusableResults(task, identity);
+  const attempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+    .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
   for (const item of attempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
     if (item.record.terminal_status !== "unavailable") throw invalidEvidence(`attempt without a semantic result is not unavailable: ${item.ref}`);
