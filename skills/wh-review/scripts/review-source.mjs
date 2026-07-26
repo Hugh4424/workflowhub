@@ -166,7 +166,7 @@ function hashFile(path) {
   return hash.digest("hex");
 }
 
-function sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree, snapshotTree, diffPath, changedFiles, captureRoot }) {
+function sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree, snapshotTree, diffPath, changedFiles, captureRoot, phaseEvidenceBinding }) {
   let disposed = false;
   const assertLive = () => { if (disposed || !existsSync(captureRoot)) fail("SOURCE_UNAVAILABLE", "review source capture has been released"); };
   const copySnapshotFile = (path, destination) => {
@@ -183,6 +183,7 @@ function sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree
     baseCommit,
     baseTree,
     snapshotTree,
+    ...(phaseEvidenceBinding === undefined ? {} : { phaseEvidenceBinding }),
     ...(diffPath ? { diffPath, diffBytes: statSync(diffPath).size, diffSha256: hashFile(diffPath) } : {}),
     changedFiles: Object.freeze(changedFiles),
     copyDiffTo(destination) {
@@ -272,7 +273,8 @@ export function capturePhaseReviewSource({ sourceRoot, task, phaseId, reviewData
       snapshotTree: subject.candidateTree,
       diffPath,
       changedFiles,
-      captureRoot
+      captureRoot,
+      phaseEvidenceBinding: subject.phaseEvidence,
     });
   } catch (error) {
     rmSync(captureRoot, { recursive: true, force: true });

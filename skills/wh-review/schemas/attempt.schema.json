@@ -14,6 +14,21 @@
     "review_scope": { "enum": ["phase", "integration", null] },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "phase_evidence": {
+      "type": "object",
+      "required": ["ref", "sha256"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^evidence/phases/[A-Za-z0-9._-]+/[a-f0-9]{40,64}/phase-evidence-[a-f0-9]{64}\\.json$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "recovery_ref": { "type": "string", "pattern": "^identity/recoveries/phase-pointer-[0-9]{4}\\.json$" },
+        "recovery_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "dependentRequired": {
+        "recovery_ref": ["recovery_hash"],
+        "recovery_hash": ["recovery_ref"]
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "object",
       "required": ["target_commit", "base_commit", "base_tree", "captured_head"],

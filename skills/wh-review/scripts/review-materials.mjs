@@ -693,7 +693,8 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       base_commit: source.baseCommit,
       base_tree: source.baseTree,
       captured_head: source.capturedHead,
-      snapshot_tree: source.snapshotTree
+      snapshot_tree: source.snapshotTree,
+      ...(source.phaseEvidenceBinding === undefined ? {} : { phase_evidence: source.phaseEvidenceBinding }),
     })}\n`));
     const copiedDiff = source.copyDiffTo(join(bundleRoot, "changes.diff"));
     if (copiedDiff.bytes !== source.diffBytes || copiedDiff.sha256 !== source.diffSha256) {

@@ -44,9 +44,31 @@ manifest 中的期望值代替实际值完成自证。
   能证明旧 runner OID 是其祖先。成功后追加 runner generation 并原子切换当前 manifest；
   旧 `task.json` 与旧 migration record 永不覆盖。
 - `phase-pointer`：只接受 `--stage=build-code`，只允许当前 `phase-1` 回到目标 `phase-0`。
-  凭证必须绑定旧 Phase 0 canonical evidence 与 matching formal PASS review，以及新的
-  receipts/snapshot。成功后当前 `phase-result.json` 变为 `phase-0`/`awaiting_review`；
-  必须重新走 `wh-review` PASS，才能用新的 review ref 续走 Phase 1。
+  凭证必须绑定当前权威 pointer、旧 Phase 0 canonical evidence 与 matching formal PASS
+  review，以及新的 receipts/snapshot。恢复前必须验证这些记录存在、可读、hash/ref 匹配且
+  已正式闭合；调用方提供的 Phase、snapshot 或来源状态不能代替这些权威记录。
+
+`phase-pointer` 根据 credential snapshot 与旧 Phase 0 snapshot 的精确关系使用以下矩阵：
+
+| snapshot 关系 | `phase_subject.recovery_intent` | 结果 |
+| --- | --- | --- |
+| same | 精确等于 `same-snapshot-phase0-reopen` | 允许受控恢复 |
+| same | 缺失 | 以 `RECOVERY_PHASE_INTENT_REQUIRED` 拒绝 |
+| same 或 changed | 空值、大小写/空白变化、别名或其他值 | 以 `RECOVERY_PHASE_INTENT_MISMATCH` 拒绝 |
+| changed | 精确等于 `same-snapshot-phase0-reopen` | 以 `RECOVERY_PHASE_INTENT_USAGE_MISMATCH` 拒绝 |
+| changed | 缺失 | 保持既有 changed-snapshot 恢复 |
+
+same-snapshot 成功只追加一条 create-only recovery generation。该 generation 同时是一次性
+gate；同一把 `build-code-phase-evidence` lock 内必须重读 gate 和 pointer，并以来源
+`phase-result.json` 的原始内容作 CAS 条件。只有 generation、gate 与 pointer 翻转全部成立才
+算提交成功；提交前故障必须恢复旧 pointer、移除本次 generation，且不触发 review。replay
+返回 `RECOVERY_ALREADY_USED`，并发 pointer 变化返回 `RECOVERY_CONCURRENT_CHANGE`。
+
+提交后当前 `phase-result.json` 为 `phase-0`/`awaiting_review`，并携带 recovery ref/hash。
+健康路径立即发布绑定该 recovery 的 canonical Phase evidence；若该 continuation 中断，恢复
+仍已提交，返回 `next_entry: stage-runtime publish-phase-evidence` 供同一 recovery 幂等补齐。
+新 evidence 必须触发 fresh `wh-review`：新 attempt/result 的材料身份与旧 Phase 0 review
+不同；同一新材料重试只能复用该新结果。只有 fresh PASS 才能续走 Phase 1。
 
 恢复 generation 的 `before/after.hash` 是可复现的完整记录哈希：记录中的单向自引用字段
 （runner manifest 的 `runner_replacement.integrity_hash` 或 phase pointer 的
@@ -55,11 +77,12 @@ manifest 中的期望值代替实际值完成自证。
 
 两条入口只接受 task-local canonical credential ref/hash，不接受 inline JSON；每个 kind
 独立消费一次 gate。缺凭证、身份/来源/快照/记录不一致返回稳定 `RECOVERY_*` 错误，失败不
-消费 gate。目标 Phase 0 snapshot 未变化返回
-`RECOVERY_PHASE_SNAPSHOT_ALREADY_CURRENT`，不改变任何指针或记录。
+消费 gate。intent 缺失/错值/用途错误、权威 pointer 或来源失配、闭合不完整、replay、CAS
+冲突与持久化失败保持可区分；任何提交前拒绝均不改变 pointer、gate、历史或 review 调度。
 
 恢复期间禁止手改 `task.json`、`phase-result.json`、accepted、receipt、test 或 review；
-不得创建新 task、调用 provider 或用 recovery archive 旁路正式 evidence/review。
+不得删除或改写 recovery generation/gate，不得创建新 task、直接调用 provider，或用
+recovery archive、旧 Phase evidence、旧 review 旁路正式 evidence/review。
 
 ## StageContext
 

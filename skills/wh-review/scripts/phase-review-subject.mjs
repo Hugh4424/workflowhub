@@ -7,6 +7,7 @@ import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../core/cano
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const TRACE_REF = /^evidence\/phases\/([A-Za-z0-9._-]+)\/([a-f0-9]{40,64})\/phase-map-trace-([a-f0-9]{64})\.json$/;
+const PHASE_EVIDENCE_REF = /^evidence\/phases\/([A-Za-z0-9._-]+)\/([a-f0-9]{40,64})\/phase-evidence-([a-f0-9]{64})\.json$/;
 const RECORD_REF = /^(?:receipts|reviews|evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
 function invalid(message) {
@@ -194,7 +195,38 @@ export function resolvePhaseReviewSubject({ task, sourceRoot, phaseId } = {}) {
   const diffRef = phaseResult.evidence?.diff ?? phaseResult.diff_scan?.path;
   if (typeof diffRef !== "string" || diffRef.length === 0) invalid("phase diff evidence ref is missing");
   const scan = readJson(safeTask, diffRef, "phase diff evidence").value;
-  return Object.freeze({ ...validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot, phaseId }), diffEvidenceRef: diffRef });
+  const canonicalEvidenceRef = phaseResult.evidence?.canonical_phase_evidence_ref;
+  if ((phaseResult.recovery_ref === undefined) !== (phaseResult.recovery_hash === undefined)) {
+    invalid("recovered Phase binding is incomplete");
+  }
+  if (phaseResult.recovery_ref !== undefined && canonicalEvidenceRef === undefined) {
+    invalid("canonical Phase evidence ref is required for recovery binding");
+  }
+  let phaseEvidence;
+  if (canonicalEvidenceRef !== undefined || phaseResult.recovery_ref !== undefined) {
+    const match = PHASE_EVIDENCE_REF.exec(canonicalEvidenceRef ?? "");
+    if (!match || match[1] !== phaseId) invalid("canonical Phase evidence ref is invalid");
+    const canonicalEvidence = readJson(safeTask, canonicalEvidenceRef, "canonical Phase evidence");
+    if (canonicalEvidence.sha256 !== match[3]) invalid("canonical Phase evidence ref does not match its bytes");
+    if (phaseResult.recovery_ref !== undefined &&
+        (canonicalEvidence.value.recovery_ref !== phaseResult.recovery_ref ||
+         canonicalEvidence.value.recovery_hash !== phaseResult.recovery_hash)) {
+      invalid("canonical Phase evidence does not match the current recovery binding");
+    }
+    phaseEvidence = Object.freeze({
+      ref: canonicalEvidenceRef,
+      sha256: canonicalEvidence.sha256,
+      ...(phaseResult.recovery_ref === undefined ? {} : {
+        recovery_ref: phaseResult.recovery_ref,
+        recovery_hash: phaseResult.recovery_hash,
+      }),
+    });
+  }
+  return Object.freeze({
+    ...validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot, phaseId }),
+    diffEvidenceRef: diffRef,
+    ...(phaseEvidence === undefined ? {} : { phaseEvidence }),
+  });
 }
 
 /**

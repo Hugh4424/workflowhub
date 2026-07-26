@@ -13,6 +13,7 @@
     "review_scope": { "enum": ["phase", "integration", null] },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "phase_evidence": { "$ref": "attempt.schema.json#/properties/phase_evidence" },
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },

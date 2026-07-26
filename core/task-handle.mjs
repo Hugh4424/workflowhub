@@ -1145,6 +1145,7 @@ function makeTaskHandle(taskPath, manifest) {
     try {
       try { if (!archiveExisted) createOnlyAt(realTaskPath, archiveRef, archiveRaw); else if (readRegularFileNoFollow(archiveCandidate, "phase recovery archive", taskRootIdentity.real) !== archiveRaw) throw new Error("phase recovery archive conflicts with immutable record"); }
       catch (error) { if (error?.code !== "EEXIST") throw error; }
+      testHooks?.beforeGenerationCreate?.();
       try { if (!generationExisted) createOnlyAt(realTaskPath, generationRef, generationRaw); else if (readRegularFileNoFollow(generationCandidate, "phase recovery generation", taskRootIdentity.real) !== generationRaw) throw new Error("phase recovery generation conflicts with immutable record"); }
       catch (error) { if (error?.code !== "EEXIST") throw error; }
       testHooks?.beforePointerReplace?.();
