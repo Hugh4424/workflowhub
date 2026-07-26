@@ -347,7 +347,7 @@ describe("aggregation and runner", () => {
     expect(report).toContain("PROFILE_MISMATCH");
   });
 
-  it("persists a non-gate repair audit without a second provider call or a stage receipt", async () => {
+  it("rejects direct non-gate audit writes outside TaskKernel flow authority without a second provider call", async () => {
     const { attachmentRoot, task } = fixture("simple-review-resolution-");
     const reviewPolicy = {
       source: "wh_review.v2", mode: "full_on_structural_rework", minimum_heterologous: 1,
@@ -377,11 +377,7 @@ describe("aggregation and runner", () => {
       previousResultSha256: createHash("sha256").update(priorRaw).digest("hex"), ledger, currentSnapshotTree: repairedTree,
     });
     const ref = resolutionRef(resolution);
-    writeReviewResolution(task, ref, resolution);
-    expect(JSON.parse(task.readRecord(ref))).toMatchObject({
-      outcome: "recorded_non_gate_response", evidence_state: "verified",
-      previous_result_ref: first.resultRef, snapshot_tree: repairedTree,
-    });
+    expect(() => writeReviewResolution(task, ref, resolution)).toThrow(/TaskKernel review-flow authority/i);
     expect(providerCalls).toBe(1);
   });
 
@@ -583,6 +579,9 @@ describe("aggregation and runner", () => {
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
+    const claimed = await runReviewFixture({ ...options, reuseUnavailable: true });
+    expect(claimed).toMatchObject({ reused: true, attemptRef: first.attemptRef });
+    expect(calls).toHaveLength(1);
     const second = await runReviewFixture(options);
     expect(second).toMatchObject({ reused: true, attemptRef: first.attemptRef, resultRef: first.resultRef });
     expect(calls).toHaveLength(1);
@@ -684,16 +683,33 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("retries an unchanged unavailable attempt and preserves both attempts", async () => {
+  it("claims only an orphan unavailable attempt and never loops through flow-claimed attempts", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-unavailable-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
-    const second = await runReviewFixture(options);
-    expect(second).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    const orphan = await runReviewFixture({
+      ...options, reuseUnavailable: true, claimedUnavailableAttemptRefs: [],
+    });
+    expect(orphan).toMatchObject({
+      status: "unavailable", verdict: null, resultRef: null,
+      attemptRef: first.attemptRef, reused: true,
+    });
+    expect(calls).toHaveLength(1);
+    const second = await runReviewFixture({
+      ...options, reuseUnavailable: true, claimedUnavailableAttemptRefs: [first.attemptRef],
+    });
     expect(second.attemptRef).not.toBe(first.attemptRef);
     expect(calls).toHaveLength(2);
+    const third = await runReviewFixture({
+      ...options, reuseUnavailable: true,
+      claimedUnavailableAttemptRefs: [first.attemptRef, second.attemptRef],
+    });
+    expect(third).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(third.attemptRef).not.toBe(first.attemptRef);
+    expect(third.attemptRef).not.toBe(second.attemptRef);
+    expect(calls).toHaveLength(3);
   });
 
   it("uses a new managed request identity after an unavailable group attempt", async () => {

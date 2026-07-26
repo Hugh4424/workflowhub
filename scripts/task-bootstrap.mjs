@@ -37,7 +37,7 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || Object.keys(inputs).some((key) => !["decision", "spec", "build_plan"].includes(key)) || Object.values(inputs).some((ref) => typeof ref !== "string" || !isAbsolute(ref))) throw new TypeError("inputs must contain only absolute decision/spec/build_plan accepted refs");
   const storageRoot = resolveStorageRoot({ env, home });
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
-  const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
+  const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", execution_mode: "per_invocation", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
   return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch });
 }
 

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-completion-facts.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "result", "objective", "approach", "effect", "verification", "artifacts", "review", "missing_items", "risks", "dependencies", "recovery_conditions", "downstream_read_rule", "next_owner", "user_action"],
+  "properties": {
+    "schema_version": { "const": "stage-completion-facts.v1" },
+    "result": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "approach": { "type": "string", "minLength": 1 },
+    "effect": { "type": "string", "minLength": 1 },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conclusion", "limits"],
+      "properties": {
+        "conclusion": { "type": "string", "minLength": 1 },
+        "limits": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+    "review": { "$ref": "#/$defs/review" },
+    "missing_items": { "$ref": "#/$defs/stringList" },
+    "risks": { "$ref": "#/$defs/stringList" },
+    "dependencies": { "$ref": "#/$defs/stringList" },
+    "recovery_conditions": { "$ref": "#/$defs/stringList" },
+    "downstream_read_rule": { "type": "string", "minLength": 1 },
+    "next_owner": { "type": "string", "minLength": 1 },
+    "user_action": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "ref": { "type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "minLength": 1 }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } },
+    "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "ref", "hash", "accepted_lookup"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "accepted_lookup": { "type": "string", "minLength": 1 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conclusion", "status", "providers", "duration_ms", "tokens", "findings", "refs"],
+      "properties": {
+        "conclusion": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "providers": { "$ref": "#/$defs/stringList" },
+        "duration_ms": { "type": ["number", "null"], "minimum": 0 },
+        "tokens": { "type": ["number", "null"], "minimum": 0 },
+        "findings": { "type": "array", "items": {} },
+        "refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } }
+      }
+    }
+  }
+}

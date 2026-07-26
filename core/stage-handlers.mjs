@@ -5,7 +5,15 @@ import { minimumReviewersFor } from "../skills/wh-review/scripts/review-material
 import { parseReviewerOutput } from "../skills/wh-review/scripts/review-output.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
+import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
 import { equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
+import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "./review-flow-authority.mjs";
+import { authenticateCanonicalReviewResult } from "./canonical-review-result.mjs";
+import {
+  deriveSeriousReviewPause,
+  validateRiskAcceptanceSet,
+} from "./stage-review-disposition.mjs";
+import { buildStageCompletion } from "./stage-completion-facts.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -13,20 +21,98 @@ const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "receipts/", spec: "receipts/", plan: "receipts/", tasks: "receipts/",
   implementation: "receipts/", tests: "receipts/", review: "reviews/results/",
-  direction_review: "reviews/results/", detail_review: "reviews/results/", evidence: "evidence/",
+  direction_review: "reviews/results/", detail_review: "reviews/results/",
+  quality_review: "reviews/results/", evidence: "evidence/",
+  audit: "evidence/audits/", risk_acceptance: "evidence/risk-acceptances/",
+  direction_risk_acceptance: "evidence/risk-acceptances/",
+  detail_risk_acceptance: "evidence/risk-acceptances/",
+  quality_risk_acceptance: "evidence/risk-acceptances/",
 });
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence" });
 const REVIEW_RESULT_REF = /^reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
 const REVIEW_ATTEMPT_REF = /^reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json$/;
+const REVIEW_RESOLUTION_REF = /^reviews\/resolutions\/[a-f0-9]{64}\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review"]);
+const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
+const REVIEW_RESOLUTION_NAMES = new Set(["review_resolution", "direction_review_resolution", "detail_review_resolution"]);
+const COMPLETION_COPY = Object.freeze({
+  "make-decision": { objective: "把方向和取舍整理成可执行的最终决定", approach: "核对真实交互、文档拷问和正式审查后发布最终决定", effect: "下一阶段只需读取已接受的最终决定", next_owner: "build-spec" },
+  "build-spec": { objective: "把已接受的决定写成完整需求规格", approach: "解决重大歧义并用正式审查验证最终规格", effect: "实施计划可以从稳定规格继续", next_owner: "build-plan" },
+  "build-plan": { objective: "把需求规格拆成可验证的实施计划", approach: "生成计划和任务清单并完成工程审查", effect: "实现阶段获得明确顺序、边界和验收方法", next_owner: "build-code" },
+  "build-code": { objective: "按已接受计划完成实现", approach: "分阶段实现、测试并完成最终集成审查", effect: "验证阶段可以检查同一份最终实现", next_owner: "verify-code" },
+  "verify-code": { objective: "独立验证最终实现是否满足验收条件", approach: "复用正式实现证据并执行独立质量检查", effect: "任务获得可关闭或返回修复的明确结论", next_owner: "task owner" },
+});
+const RECEIPT_KEYS = Object.freeze({
+  "make-decision": new Set(["decision", "direction_review", "detail_review", "direction_review_resolution", "detail_review_resolution", "direction_risk_acceptance", "detail_risk_acceptance", "audit"]),
+  "build-spec": new Set(["spec", "review", "review_resolution", "risk_acceptance", "audit"]),
+  "build-plan": new Set(["plan", "tasks", "review", "review_resolution", "risk_acceptance", "audit"]),
+  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit"]),
+  "verify-code": new Set(["tests", "review", "quality_review", "quality_risk_acceptance", "evidence", "risk_acceptance", "audit"]),
+});
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
+function completionReview(records) {
+  const reviews = records.filter(Boolean);
+  const statuses = reviews.map((entry) => entry.facts.verdict ?? entry.facts.status);
+  return {
+    conclusion: statuses.every((status) => status === "pass") ? "正式审查通过" : statuses.join(", "),
+    status: statuses.join("+"),
+    providers: [...new Set(reviews.flatMap((entry) => entry.value.provider_results?.map(({ provider }) => provider) ?? []))],
+    duration_ms: null,
+    tokens: null,
+    findings: reviews.flatMap((entry) => entry.value.findings ?? []),
+    refs: reviews.map((entry) => ({ ref: entry.ref, hash: entry.evidence.sha256 })),
+  };
+}
+function addCompletion(stage, result, { artifacts, reviews, verification }) {
+  const copy = COMPLETION_COPY[stage];
+  const missing = result.missing_items ?? [];
+  const completion = buildStageCompletion(stage, {
+    result: missing.length ? "completed_with_open_items" : "passed",
+    ...copy,
+    verification: { conclusion: verification, limits: missing.length ? ["仍有未完成项，不能当作无条件通过"] : [] },
+    artifacts,
+    review: completionReview(reviews),
+    missing_items: missing,
+    risks: missing,
+    dependencies: stage === "make-decision" ? [] : ["读取上一阶段的 accepted 结果"],
+    recovery_conditions: ["若下游证明输入无效，返回当前阶段修复后重新发布"],
+    downstream_read_rule: `只读取 results/${stage}/accepted.json 中的正式事实`,
+    next_owner: copy.next_owner,
+    user_action: missing.length ? "需要处理未完成项" : "无需操作",
+  });
+  return { ...result, completion };
+}
 const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
+  if (name === "audit") return /^evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name.endsWith("risk_acceptance")) return /^evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);
+  if (REVIEW_RESOLUTION_NAMES.has(name)) return REVIEW_RESOLUTION_REF.test(ref);
   return Boolean(NAMESPACE[name] && ref.startsWith(NAMESPACE[name]));
+}
+function auditFacts(worker, invocation) {
+  const ref = text(object(invocation.receipts, "receipts").audit, "audit summary ref");
+  if (!validReceiptRef("audit", ref)) throw new Error("audit summary ref is outside its canonical namespace");
+  const record = object(worker.readReceipt(ref), "audit summary record");
+  const value = object(record.value, "audit summary");
+  if (value.schema_version !== "v1" || value.task_id !== worker.identity.taskId
+      || value.stage_slug !== worker.stage || value.verdict !== "pass"
+      || !SHA256.test(value.summary_hash ?? "") || !Array.isArray(value.content_evidence_refs)
+      ) {
+    throw new Error("audit summary is not an authenticated passing summary for this stage");
+  }
+  return {
+    facts: {
+      audit_contract_version: "v1",
+      audit_summary_ref: ref,
+      audit_summary_hash: value.summary_hash,
+      audit_verdict: value.verdict,
+      content_evidence_refs: value.content_evidence_refs,
+    },
+    evidence: { ref, sha256: record.sha256 },
+  };
 }
 function receipt(worker, invocation, name, producerStage = worker.stage) {
   const ref = text(object(invocation.receipts, "receipts")[name], `${name} receipt ref`);
@@ -130,43 +216,36 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {
     if (attempt[key] !== result[key]) throw new Error(`review attempt/result ${key} mismatch`);
   }
+  if (!isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) throw new Error("review attempt/result review_chain mismatch");
   if (attempt.terminal_status !== "semantic" || attempt.error !== null) throw new Error("review attempt did not produce a semantic result");
   const minimumReviewers = reviewMinimumForAttempt(attempt, producerStage, expectedTrack);
-  if (result.provider_results.length < minimumReviewers) throw new Error("review result has too few independent providers");
-  const providers = new Set();
-  const parsedResults = [];
-  for (const providerResult of result.provider_results) {
-    if (providers.has(providerResult.provider)) throw new Error(`duplicate review provider: ${providerResult.provider}`);
-    providers.add(providerResult.provider);
-    const providerAttempt = [...attempt.provider_attempts].reverse().find((entry) => entry.provider === providerResult.provider && entry.status === "completed" && typeof entry.output_ref === "string");
-    if (!providerAttempt) throw new Error(`review provider ${providerResult.provider} has no completed attempt evidence`);
-    const outputRecord = object(worker.readReceipt(providerAttempt.output_ref), `review provider ${providerResult.provider} output record`);
-    const output = object(outputRecord.value, `review provider ${providerResult.provider} output`);
-    if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== worker.identity.taskId || output.stage !== producerStage || output.attempt_id !== attemptId || output.provider !== providerResult.provider || typeof output.content !== "string" || output.content_hash !== hashText(output.content)) {
-      throw new Error(`review provider ${providerResult.provider} output provenance mismatch`);
+  const providerOutputs = [];
+  for (const providerAttempt of attempt.provider_attempts) {
+    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    const outputRecord = object(worker.readReceipt(providerAttempt.output_ref), `review provider ${providerAttempt.provider} output record`);
+    const output = object(outputRecord.value, `review provider ${providerAttempt.provider} output`);
+    if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== worker.identity.taskId
+        || output.stage !== producerStage || output.attempt_id !== attemptId
+        || output.provider !== providerAttempt.provider || typeof output.content !== "string"
+        || output.content_hash !== hashText(output.content)) {
+      throw new Error(`review provider ${providerAttempt.provider} output provenance mismatch`);
     }
-    const parsed = parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined });
-    if (!isDeepStrictEqual(parsed, providerResult.output)) throw new Error(`review provider ${providerResult.provider} semantic output mismatch`);
-    parsedResults.push({ provider: providerResult.provider, review: parsed, evidenceAnchors: evidenceAnchorsFromAdjudication(result, providerResult.provider, parsed) });
+    providerOutputs.push({
+      ref: providerAttempt.output_ref,
+      provider: providerAttempt.provider,
+      review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
+    });
   }
-  const profilePriority = attempt.review_policy?.requested_profiles ?? attempt.provider_attempts.map(({ provider }) => provider);
-  const aggregation = aggregateProviderResults(parsedResults, minimumReviewers, { profilePriority });
-  if (aggregation.status !== "semantic" || aggregation.verdict !== result.verdict) throw new Error("review result verdict does not match provider outputs");
-  const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-  if (!isDeepStrictEqual(result.provider_results, expectedProviderResults)) throw new Error("review result provider outputs do not match provider evidence");
-  if (result.adjudication !== undefined) {
-    for (const cluster of result.adjudication.clusters) {
-      if (!cluster.providers.every((provider) => providers.has(provider)) || !cluster.provider_findings.every(({ provider }) => providers.has(provider))) {
-        throw new Error("review adjudication references an unknown provider");
-      }
-    }
-    const expectedFindings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
-    const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
-    if (!isDeepStrictEqual(result.findings, expectedFindings) || !isDeepStrictEqual(result.adjudication, expectedAdjudication)) throw new Error("review result aggregation does not match provider outputs");
-  } else {
-    const legacyVerdict = expectedProviderResults.some(({ output }) => output.verdict === "revise_required") ? "revise_required" : "pass";
-    const expectedFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
-    if (legacyVerdict !== result.verdict || !isDeepStrictEqual(result.findings, expectedFindings)) throw new Error("review result legacy aggregation does not match provider outputs");
+  try {
+    authenticateCanonicalReviewResult({
+      attempt, result, providerOutputs, fallbackMinimumReviewers: minimumReviewers,
+      assess: (items) => items.map((item) => ({
+        ...item,
+        evidenceAnchors: evidenceAnchorsFromAdjudication(result, item.provider, item.review),
+      })),
+    });
+  } catch (error) {
+    throw new Error(`review result canonical authentication failed: ${error.message}`);
   }
 }
 function verifyUnavailableReview(worker, item, expectedTrack, producerStage = worker.stage) {
@@ -246,19 +325,168 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
         snapshot_tree: item.value.snapshot_tree, material_id: item.value.material_id,
         error: { code, message }, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope),
       },
+      ref: item.ref,
       evidence: item.evidence,
+      value: item.value,
       scope,
       missing_items: [`review unavailable: ${code}: ${message}`],
     };
   }
   verifyReviewChain(worker, item.value, expectedTrack, producerStage);
   const scope = reviewScope(item.value);
+  const authenticatedFlow = worker.readAuthenticatedReviewFlow({
+    stage: producerStage,
+    review_track: item.value.review_track ?? null,
+    subject_kind: scope.subject_kind,
+    phase_id: scope.phase_id ?? null,
+    review_scope: scope.review_scope ?? null,
+  });
+  if (!authenticatedFlow || authenticatedFlow.head_result_ref !== item.ref
+      || authenticatedFlow.result_sha256 !== item.evidence.sha256) {
+    throw new Error(`${name} is not the authenticated review-flow head`);
+  }
+  const pause = deriveSeriousReviewPause({
+    taskId: worker.identity.taskId,
+    stage: producerStage,
+    reviewRef: item.ref,
+    reviewHash: item.evidence.sha256,
+    result: item.value,
+    workflowRunId: authenticatedFlow.identity.workflow_run_id,
+  });
+  let riskEvidence = [];
+  if (pause.status === "paused") {
+    const receiptName = name === "review" ? "risk_acceptance" : `${name.replace(/_review$/, "")}_risk_acceptance`;
+    const suppliedRiskRefs = invocation.receipts?.[receiptName];
+    if (suppliedRiskRefs === undefined) {
+      throw new Error(`SERIOUS_REVIEW_PAUSE: ${JSON.stringify(pause)}`);
+    }
+    const riskRefs = Array.isArray(suppliedRiskRefs) ? suppliedRiskRefs : [suppliedRiskRefs];
+    const records = riskRefs.map((riskRef) => {
+      if (!validReceiptRef(receiptName, riskRef)) throw new Error(`${receiptName} is outside the canonical risk acceptance namespace`);
+      const record = object(worker.readReceipt(riskRef), `${receiptName} record`);
+      return { riskRef, record, acceptance: object(record.value, `${receiptName} value`) };
+    });
+    validateRiskAcceptanceSet({ acceptances: records.map(({ acceptance }) => acceptance), pause });
+    riskEvidence = records.map(({ riskRef, record }) => ({ ref: riskRef, sha256: record.sha256 }));
+  }
   return {
     facts: { verdict: item.value.verdict, result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
+    ref: item.ref,
     evidence: item.evidence,
+    value: item.value,
     scope,
-    missing_items: item.value.verdict === "revise_required" ? ["review findings recorded; response evidence: unknown/unverified"] : [],
+    risk_evidence: riskEvidence,
+    missing_items: item.value.verdict === "revise_required"
+      ? [pause.status === "paused" ? "serious review finding accepted as explicit risk; verdict remains revise_required" : "review findings recorded; response evidence: unknown/unverified"]
+      : [],
   };
+}
+
+function reviewResolution(worker, invocation, { stage = worker.stage, reviewTrack = null, receiptName = "review_resolution" } = {}) {
+  const ref = text(object(invocation.receipts, "receipts")[receiptName], `${receiptName} receipt ref`);
+  if (!REVIEW_RESOLUTION_REF.test(ref)) throw new Error("review_resolution receipt ref is outside its canonical reviews/resolutions namespace");
+  const record = object(worker.readReceipt(ref), "review_resolution record");
+  const value = object(record.value, "review_resolution");
+  validateSchema("resolution", value);
+  if (value.task_id !== worker.identity.taskId || value.stage !== stage || (value.review_track ?? null) !== reviewTrack) {
+    throw new Error("review_resolution task/stage/track provenance mismatch");
+  }
+  if (!SHA256.test(record.sha256 ?? "")) throw new Error("review_resolution hash must be sha256");
+  return { ref, value, evidence: { ref, sha256: record.sha256 } };
+}
+
+function verifiedReviewParent(worker, result) {
+  const chain = object(result.review_chain, "structural full review_chain");
+  if (chain.round !== "full") throw new Error("changed build-spec requires a verified delta resolution or structural full review");
+  const parentRef = text(chain.parent_result_ref, "structural full review parent_result_ref");
+  if (!REVIEW_RESULT_REF.test(parentRef)) throw new Error("structural full review parent_result_ref must be canonical");
+  const parentRecord = object(worker.readReceipt(parentRef), "structural full review parent record");
+  const parent = object(parentRecord.value, "structural full review parent");
+  validateSchema("result", parent);
+  if (parent.task_id !== worker.identity.taskId || parent.stage !== "build-spec" || parent.review_track !== null) {
+    throw new Error("structural full review parent provenance mismatch");
+  }
+  verifyReviewChain(worker, parent, undefined, "build-spec");
+  if (chain.prior_snapshot_tree !== parent.snapshot_tree) throw new Error("structural full review prior snapshot does not match its parent result");
+  if (!SHA256.test(parentRecord.sha256 ?? "")) throw new Error("structural full review parent hash must be sha256");
+  return { ref: parentRef, sha256: parentRecord.sha256 };
+}
+
+function authenticateReviewHead(worker, review, expected, latestResolution) {
+  if (!review.facts.result_ref) {
+    return assertAuthenticatedReviewAttempt({
+      readFlow: worker.readAuthenticatedReviewFlow,
+      attemptRef: review.ref,
+      attemptHash: review.evidence.sha256,
+      attempt: review.value,
+      expected,
+    });
+  }
+  return assertAuthenticatedReviewHead({
+    readFlow: worker.readAuthenticatedReviewFlow,
+    reviewRef: review.ref,
+    reviewHash: review.evidence.sha256,
+    result: review.value,
+    expected,
+    ...(latestResolution === undefined ? {} : { latestResolution }),
+  });
+}
+
+function bindFinalReview(worker, invocation, review, currentTree, {
+  stage,
+  reviewTrack = null,
+  resolutionName = "review_resolution",
+} = {}) {
+  if (typeof currentTree !== "string" || !/^[a-f0-9]{40,64}$/.test(currentTree)) throw new Error(`${stage} current Workspace snapshot is required`);
+  const hasResolution = Object.prototype.hasOwnProperty.call(invocation.receipts, resolutionName);
+  const resolution = hasResolution ? reviewResolution(worker, invocation, {
+    stage, reviewTrack, receiptName: resolutionName,
+  }) : null;
+  authenticateReviewHead(worker, review, {
+    stage, review_track: reviewTrack, subject_kind: "worktree", phase_id: null, review_scope: null,
+  }, resolution?.evidence);
+  if (resolution === null) {
+    if (review.value.snapshot_tree !== currentTree) {
+      throw new Error(`${stage} review does not bind the final current snapshot; latest verified resolution required`);
+    }
+    return { resolution: null, evidence: [] };
+  }
+  const value = resolution.value;
+  if (value.outcome !== "recorded_non_gate_response" || value.evidence_state !== "verified") {
+    throw new Error(`${stage} delta resolution must be verified`);
+  }
+  if (value.previous_result_ref !== review.ref || value.previous_result_sha256 !== review.evidence.sha256
+      || value.previous_snapshot_tree !== review.value.snapshot_tree) {
+    throw new Error(`${stage} delta resolution does not bind the prior review ref/hash/snapshot`);
+  }
+  if (value.snapshot_tree !== currentTree) throw new Error(`${stage} delta resolution does not bind the final current snapshot`);
+  const expected = buildNonGateReviewResponseRecord({
+    taskId: worker.identity.taskId,
+    stage,
+    reviewTrack,
+    previousResult: { ...review.value, result_ref: review.ref },
+    previousResultSha256: review.evidence.sha256,
+    ledger: value.response_ledger,
+    currentSnapshotTree: currentTree,
+  });
+  if (expected.evidence_state !== "verified" || !isDeepStrictEqual(value, expected)) {
+    throw new Error(`${stage} delta resolution is not reproducible from its canonical prior result and response ledger`);
+  }
+  return { resolution, evidence: [resolution.evidence] };
+}
+
+function bindBuildSpecReview(worker, invocation, review, currentTree) {
+  const binding = bindFinalReview(worker, invocation, review, currentTree, { stage: "build-spec" });
+  if (binding.resolution === null) {
+    const chain = review.value.review_chain;
+    if (chain !== undefined && chain.current_snapshot_tree !== currentTree) throw new Error("build-spec review_chain does not bind the current snapshot");
+    if (chain?.round === "closure") throw new Error("build-spec closure review cannot replace a delta resolution or structural full review");
+    if (chain?.round === "initial" && (chain.parent_result_ref !== null || chain.root_result_ref !== null || chain.prior_snapshot_tree !== null)) {
+      throw new Error("build-spec initial review_chain cannot claim a prior review");
+    }
+    return [...binding.evidence, ...(chain?.round === "full" ? [verifiedReviewParent(worker, review.value)] : [])];
+  }
+  return binding.evidence;
 }
 
 /**
@@ -282,17 +510,139 @@ function acceptedRiskAuditNotices(worker, stage) {
   return notices;
 }
 
-HANDLERS.set("make-decision", async (worker, input) => { const item = receipt(worker, input, "decision"), direction = reviewFacts(worker, input, "direction_review", "direction"), detail = reviewFacts(worker, input, "detail_review", "detail"); if (typeof item.value.decision_log !== "string" || item.value.decision_log.trim() === "" || item.value.content_hash !== hashText(item.value.decision_log)) throw new Error("decision-log content hash mismatch"); if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required"); const snapshot = worker.candidateWorkspace.captureSnapshot(); if (detail.facts.snapshot_tree !== snapshot.tree) throw new Error("detail review and CandidateWorkspace must bind the same snapshot tree"); return { facts: { worktree_root: worker.candidateWorkspace.worktreeRoot, baseline_commit: worker.candidateWorkspace.baselineCommit, snapshot_tree: snapshot.tree, decision_ref: item.ref, decision_hash: item.evidence.sha256, reviews: { direction: direction.facts, detail: detail.facts } }, evidence_refs: [item.evidence, direction.evidence, detail.evidence], missing_items: [...direction.missing_items, ...detail.missing_items] }; });
-HANDLERS.set("build-spec", async (worker, input) => { const item = receipt(worker, input, "spec"), review = reviewFacts(worker, input); text(item.value.content, "spec content"); if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch"); if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt"); const checkpoint = worker.createCheckpoint("build-spec"); return { facts: { spec_ref: worker.artifactRef("spec.md"), checkpoint, review: review.facts }, evidence_refs: [item.evidence, review.evidence], missing_items: review.missing_items }; });
-HANDLERS.set("build-plan", async (worker, input) => { const plan = receipt(worker, input, "plan"), tasks = receipt(worker, input, "tasks"), review = reviewFacts(worker, input); text(plan.value.content, "plan content"); text(tasks.value.content, "tasks content"); if (plan.value.content_hash !== hashText(plan.value.content) || tasks.value.content_hash !== hashText(tasks.value.content)) throw new Error("plan/tasks content hash mismatch"); if (worker.readArtifact("plan.md") !== plan.value.content || worker.readArtifact("tasks.md") !== tasks.value.content) throw new Error("plan/tasks artifacts differ from final receipts"); const checkpoint = worker.createCheckpoint("build-plan"); return { facts: { plan_ref: worker.artifactRef("plan.md"), tasks_ref: worker.artifactRef("tasks.md"), checkpoint, review: review.facts }, evidence_refs: [plan.evidence, tasks.evidence, review.evidence], missing_items: [...review.missing_items, ...acceptedRiskAuditNotices(worker, "build-plan")] }; });
-HANDLERS.set("build-code", async (worker, input) => { const impl = receipt(worker, input, "implementation"), tests = testFacts(worker, input), review = reviewFacts(worker, input); if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array"); for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`); if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) throw new Error("implementation, tests, and review must bind the same Workspace snapshot tree"); const coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree); requireFinalIntegrationReview(review, "build-code final review"); const phase = impl.value.phase_completion; if (typeof phase !== "boolean" && (!phase || typeof phase !== "object" || Array.isArray(phase))) throw new TypeError("invalid phase_completion"); return { facts: { changed: impl.value.changed, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage }, evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)], missing_items: review.missing_items }; });
+HANDLERS.set("make-decision", async (worker, input) => {
+  const audit = auditFacts(worker, input);
+  const item = receipt(worker, input, "decision");
+  const direction = reviewFacts(worker, input, "direction_review", "direction");
+  const detail = reviewFacts(worker, input, "detail_review", "detail");
+  if (typeof item.value.decision_ref !== "string" || !/^receipts\/decision-log\/[a-f0-9]{64}\.md$/.test(item.value.decision_ref)
+      || typeof item.value.decision_hash !== "string" || item.value.content_hash !== item.value.decision_hash) {
+    throw new Error("decision-log receipt must point to the final human-readable artifact");
+  }
+  const decisionLog = worker.readEvidence(item.value.decision_ref);
+  if (decisionLog.sha256 !== item.value.decision_hash || decisionLog.bytes.trim() === "") throw new Error("decision-log content hash mismatch");
+  if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
+  if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
+  const snapshot = worker.candidateWorkspace.captureSnapshot();
+  const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, {
+    stage: "make-decision", reviewTrack: "direction", resolutionName: "direction_review_resolution",
+  });
+  const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, {
+    stage: "make-decision", reviewTrack: "detail", resolutionName: "detail_review_resolution",
+  });
+  if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
+  return addCompletion("make-decision", {
+    facts: {
+      worktree_root: worker.candidateWorkspace.worktreeRoot,
+      baseline_commit: worker.candidateWorkspace.baselineCommit,
+      snapshot_tree: snapshot.tree,
+      decision_ref: item.value.decision_ref,
+      decision_hash: item.value.decision_hash,
+      reviews: { direction: direction.facts, detail: detail.facts },
+      ...audit.facts,
+    },
+    evidence_refs: [
+      item.evidence,
+      { ref: item.value.decision_ref, sha256: item.value.decision_hash },
+      ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
+      direction.evidence, detail.evidence, audit.evidence, ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
+    ],
+    missing_items: [...direction.missing_items, ...detail.missing_items],
+  }, {
+    artifacts: [{ label: "最终决策文档", ref: item.value.decision_ref, hash: item.value.decision_hash, accepted_lookup: "results/make-decision/accepted.json#facts.decision_ref" }],
+    reviews: [direction, detail],
+    verification: "真实交互、最终决策和两轮正式审查已完成绑定检查",
+  });
+});
+HANDLERS.set("build-spec", async (worker, input) => {
+  const audit = auditFacts(worker, input);
+  const item = receipt(worker, input, "spec"), review = reviewFacts(worker, input);
+  text(item.value.content, "spec content");
+  if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
+  if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
+  if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-spec Workspace snapshot capability required");
+  const before = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
+  const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
+  const checkpoint = worker.createCheckpoint("build-spec");
+  const after = object(worker.snapshotWorkspace(), "build-spec post-checkpoint Workspace snapshot");
+  if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
+  return addCompletion("build-spec", {
+    facts: { spec_ref: worker.artifactRef("spec.md"), checkpoint, review: review.facts, ...audit.facts },
+    evidence_refs: [item.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...bindingEvidence],
+    missing_items: review.missing_items,
+  }, {
+    artifacts: [{ label: "需求规格", ref: item.ref, hash: item.evidence.sha256, accepted_lookup: "results/build-spec/accepted.json#facts.spec_ref" }],
+    reviews: [review],
+    verification: "最终规格、工作区快照和正式审查已完成绑定检查",
+  });
+});
+HANDLERS.set("build-plan", async (worker, input) => {
+  const audit = auditFacts(worker, input);
+  const plan = receipt(worker, input, "plan"), tasks = receipt(worker, input, "tasks"), review = reviewFacts(worker, input);
+  text(plan.value.content, "plan content");
+  text(tasks.value.content, "tasks content");
+  if (plan.value.content_hash !== hashText(plan.value.content) || tasks.value.content_hash !== hashText(tasks.value.content)) throw new Error("plan/tasks content hash mismatch");
+  if (worker.readArtifact("plan.md") !== plan.value.content || worker.readArtifact("tasks.md") !== tasks.value.content) throw new Error("plan/tasks artifacts differ from final receipts");
+  if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
+  const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
+  const binding = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
+  const checkpoint = worker.createCheckpoint("build-plan");
+  const after = object(worker.snapshotWorkspace(), "build-plan post-checkpoint Workspace snapshot");
+  if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final review");
+  return addCompletion("build-plan", {
+    facts: { plan_ref: worker.artifactRef("plan.md"), tasks_ref: worker.artifactRef("tasks.md"), checkpoint, review: review.facts, ...audit.facts },
+    evidence_refs: [plan.evidence, tasks.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...binding.evidence],
+    missing_items: [...review.missing_items, ...acceptedRiskAuditNotices(worker, "build-plan")],
+  }, {
+    artifacts: [
+      { label: "实施计划", ref: plan.ref, hash: plan.evidence.sha256, accepted_lookup: "results/build-plan/accepted.json#facts.plan_ref" },
+      { label: "任务清单", ref: tasks.ref, hash: tasks.evidence.sha256, accepted_lookup: "results/build-plan/accepted.json#facts.tasks_ref" },
+    ],
+    reviews: [review],
+    verification: "计划、任务清单、工作区快照和正式工程审查已完成绑定检查",
+  });
+});
+HANDLERS.set("build-code", async (worker, input) => {
+  const audit = auditFacts(worker, input);
+  const impl = receipt(worker, input, "implementation"), tests = testFacts(worker, input), review = reviewFacts(worker, input);
+  requireFinalIntegrationReview(review, "build-code final review");
+  authenticateReviewHead(worker, review, {
+    stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: "integration",
+  });
+  if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
+  for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
+  if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) throw new Error("implementation, tests, and review must bind the same Workspace snapshot tree");
+  const coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree);
+  const phase = impl.value.phase_completion;
+  if (typeof phase !== "boolean" && (!phase || typeof phase !== "object" || Array.isArray(phase))) throw new TypeError("invalid phase_completion");
+  return addCompletion("build-code", {
+    facts: { changed: impl.value.changed, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...audit.facts },
+    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
+    missing_items: review.missing_items,
+  }, {
+    artifacts: [{ label: "实现结果", ref: impl.ref, hash: impl.evidence.sha256, accepted_lookup: "results/build-code/accepted.json#facts.changed" }],
+    reviews: [review],
+    verification: tests.facts.exit_code === 0 ? "正式测试通过，最终实现与集成审查绑定同一快照" : "正式测试未通过",
+  });
+});
 
 HANDLERS.set("verify-code", async (worker, input) => {
+  const audit = auditFacts(worker, input);
   const tests = testFacts(worker, input);
   const acceptedBuild = worker.readAcceptedBuildCode({ allowLegacyBuildCode: true });
   const review = reviewFacts(worker, input, "review", undefined, "build-code");
+  const qualityReview = reviewFacts(worker, input, "quality_review", undefined, "verify-code");
+  authenticateReviewHead(worker, review, {
+    stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: "integration",
+  });
+  authenticateReviewHead(worker, qualityReview, {
+    stage: "verify-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: null,
+  });
   const evidence = receipt(worker, input, "evidence");
   const current = worker.snapshotWorkspace();
+  if (qualityReview.facts.snapshot_tree !== current.tree) {
+    throw new Error("verify-code quality review does not bind the current verification snapshot");
+  }
   const acceptedReview = acceptedBuild.facts.review;
   const acceptedRef = acceptedReview.result_ref ?? acceptedReview.attempt_ref;
   const acceptedHash = acceptedReview.result_hash ?? acceptedReview.attempt_hash;
@@ -330,15 +680,19 @@ HANDLERS.set("verify-code", async (worker, input) => {
     && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, review.facts.snapshot_tree)
     && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree);
   if (!snapshotsMatch) mismatches.push("tests, review, and current Workspace snapshot must match");
-  const result = {
-    facts: { tests: tests.facts, review: review.facts, evidence_refs: evidence.value.refs },
-    evidence_refs: [tests.evidence, review.evidence, evidence.evidence, ...evidence.value.refs, ...nestedEvidence],
-    missing_items: [...review.missing_items, ...mismatches, ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []), ...acceptedRiskAuditNotices(worker, "verify-code")],
-  };
+  const result = addCompletion("verify-code", {
+    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...audit.facts },
+    evidence_refs: [tests.evidence, review.evidence, qualityReview.evidence, evidence.evidence, audit.evidence, ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
+    missing_items: [...review.missing_items, ...qualityReview.missing_items, ...mismatches, ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []), ...acceptedRiskAuditNotices(worker, "verify-code")],
+  }, {
+    artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256, accepted_lookup: "results/verify-code/accepted.json#facts.evidence_refs" }],
+    reviews: [review, qualityReview],
+    verification: mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试和独立质量审查通过",
+  });
   if (mismatches.length || failedEvidence.length) {
     return { ...result, verification_failure: true, reason: "verify-code verification failed: " + [...mismatches, ...(failedEvidence.length ? [`${failedEvidence.length} acceptance criterion(s) failed`] : [])].join("; ") };
   }
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const refs = object(invocation?.receipts, "receipts"); for (const [name, ref] of Object.entries(refs)) { if (!validReceiptRef(name, ref)) throw new Error(`${name} receipt ref is outside its canonical namespace`); } return handler(worker, invocation); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage"] : ["receipts"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } return handler(worker, value); }; }

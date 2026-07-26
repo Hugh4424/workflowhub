@@ -99,8 +99,13 @@ function validateRouteProfiles(route, profiles, label) {
 }
 
 function requireStageReviewMode(stage, configuredRoute, label) {
-  const required = stage === "make-decision" ? "single_round"
-    : stage === "build-code" ? "full_only"
+  if (stage === "make-decision") {
+    if (!["single_round", "full_on_structural_rework"].includes(configuredRoute.mode)) {
+      throw new Error(`${label}.mode must be single_round or full_on_structural_rework`);
+    }
+    return;
+  }
+  const required = stage === "build-code" ? "full_only"
       : "full_on_structural_rework";
   if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
 }
@@ -116,7 +121,10 @@ function whReviewPolicy(value) {
     if (stage === "make-decision") {
       if (!configured || typeof configured !== "object" || Array.isArray(configured)) throw new Error("workflowhub host wh_review.stages.make-decision must be an object");
       for (const track of Object.keys(configured)) if (!DECISION_TRACKS.has(track)) throw new Error("workflowhub host wh_review.stages.make-decision." + track + " is unsupported");
-      stages[stage] = Object.fromEntries(Object.entries(configured).map(([track, item]) => [track, route(item, "workflowhub host wh_review.stages." + stage + "." + track)]));
+      stages[stage] = Object.fromEntries(Object.entries(configured).map(([track, item]) => {
+        const parsed = route(item, "workflowhub host wh_review.stages." + stage + "." + track);
+        return [track, parsed.mode === "single_round" ? { ...parsed, mode: "full_on_structural_rework" } : parsed];
+      }));
     } else stages[stage] = route(configured, "workflowhub host wh_review.stages." + stage);
   }
   for (const [stage, configured] of Object.entries(stages)) {

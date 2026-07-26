@@ -68,6 +68,10 @@ Use this complete public sequence without inventing flags or input shapes:
    Each input shape is exactly `{"content":"<exact final markdown>"}`.
 3. Create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"plan":"receipts/plan.json","tasks":"receipts/tasks.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
+   When an ordinary post-review edit is covered by the canonical same-flow
+   resolution, add `"review_resolution":"reviews/resolutions/<sha256>.json"`.
+   A structural follow-up instead supplies its current full result as `review`.
+   The runtime rejects a stale or cross-flow result/resolution.
 4. Publish the attempt:
    `node scripts/stage-runtime.mjs run --stage=build-plan
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
@@ -114,18 +118,33 @@ planning step.
 5. Create the draft task list by giving `spec-tasks` frozen spec/plan content
    and the `tasks.md` writer. Present one draft brief covering phases, major
    dependencies, testing/review approach, delivery boundary, and next check.
-6. Run the initial review over the frozen `plan.md` and `tasks.md` drafts with
-   the accepted spec and acceptance criteria. `spec-analyze` is a
-   provider-visible lens loaded only by `wh-review`, not a separate planning
-   step. Components do not locate files themselves. Present one review brief
-   for the effective result using the review-card contract below.
-7. If the current review has actionable findings, revise the affected drafts,
-   publish the changed `plan.md` and `tasks.md`, and run formal review again.
-   Repeat for every changed draft until the current exact drafts have no
-   unresolved actionable finding. There is no numeric review limit. Never repeat
-   review for unchanged snapshot/material: `wh-review` reuses the existing
-   result for that exact identity. Present one changed-result review brief after
-   each changed draft is reviewed; do not republish a reused unchanged result.
+   Run the deterministic plan/task validator over the exact named-artifact
+   bytes. It must report complete Phase rows, task rows, executable
+   command/oracle checks, an acyclic dependency graph, and full bidirectional
+   FR/AC coverage. Publish those facts through the controlled content writer as
+   `plan-task-contract.v1`, bound to the exact `plan.md` and `tasks.md` content
+   hashes. Any structural error stops before review; a provider cannot override
+   it.
+6. Run one initial full review over the frozen complete `spec.md`, `plan.md`,
+   `tasks.md`, and matching `plan-task-contract.v1` facts. `spec-analyze` and
+   `plan-eng-review` are provider-visible lenses loaded only by `wh-review`, not
+   separate planning or verdict steps. Components do not locate files
+   themselves. Present one review brief for the effective result.
+7. If a finding changes either draft, first republish both exact artifacts and
+   regenerate the deterministic contract facts. TaskKernel classifies the
+   change inside the same authenticated review flow:
+
+   - an ordinary edit uses a verified delta/resolution and makes zero provider
+     calls;
+   - a material structural change may append at most one fresh full review;
+   - unchanged snapshot/material reuses the existing result with zero provider
+     calls.
+
+   A stale contract, uncovered delta, or cross-flow resolution stops before
+   provider dispatch. A second structural full request stops before provider
+   dispatch. Do not loop reviews
+   to manufacture a pass. If the one structural follow-up leaves a material
+   actionable finding, report the blocker and its completion condition.
 8. After the review sequence finishes, without changing either artifact, create
    one final create-only receipt for `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
    or create official receipts from drafts. Publish the append-only
@@ -183,9 +202,15 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, human-readable
-artifact names, test and review conclusions, downstream dependencies, unresolved
-risks, next owner, and user action. Do not copy artifacts or raw logs. The
+The official Stage handler is the only completion-facts producer. Publish both
+completion views only through `core/stage-completion-facts.mjs`: the public
+surface receives its user renderer and the downstream surface receives its
+system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
+The shared result, risks, next owner, user action, and artifact labels must stay
+identical; only the system view carries formal refs, hashes, review details,
+dependencies, recovery conditions, and the downstream lookup rule.
+
+Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
 invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
 input, the host must return the finding and completion condition to the upstream owner
@@ -205,3 +230,14 @@ warn-only.
 ```json
 {"stage":"build-plan","skill_or_stage":"build-plan"}
 ```
+
+## Serious review exception
+
+After the formal review, pause only for an authenticated `actionable`
+`major|blocking` finding. Ask about one finding at a time using a plain-language
+card containing the problem, evidence, consequences, affected scope, and the
+mutually exclusive choices “repair first” (recommended) and “accept risk and
+continue”. Wait for the real host reply and use only `accept-review-risk`.
+Minor, invalid-anchor/evidence, unavailable, timeout, and adapter failures do
+not open this path. The risk choice keeps the original verdict and does not
+replace build-plan's normal confirmation or any structural gate.

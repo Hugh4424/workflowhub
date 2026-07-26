@@ -6,7 +6,7 @@ import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 /** Write a complete create-only wh-review attempt/provider/result chain for tests. */
-export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null } = {}) {
+export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain } = {}) {
   const attemptId = randomUUID();
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
   const attemptRef = `reviews/attempts/${attemptId}/attempt.json`;
@@ -29,6 +29,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: task.identity.taskId, stage,
     review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, ...subject,
+    ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_attempts: [{ provider, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
   });
@@ -37,6 +38,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
     source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, ...subject,
+    ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_results: [{ provider, output: providerOutput }], verdict: aggregation.verdict,
     findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   });

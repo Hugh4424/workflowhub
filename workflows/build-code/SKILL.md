@@ -342,9 +342,15 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, human-readable
-artifact names, test and review conclusions, downstream dependencies, unresolved
-risks, next owner, and user action. Do not copy artifacts or raw logs. The
+The official Stage handler is the only completion-facts producer. Publish both
+completion views only through `core/stage-completion-facts.mjs`: the public
+surface receives its user renderer and the downstream surface receives its
+system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
+The shared result, risks, next owner, user action, and artifact labels must stay
+identical; only the system view carries formal refs, hashes, review details,
+dependencies, recovery conditions, and the downstream lookup rule.
+
+Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
 handoff must be rebuilt from the latest completed Phase results and final
 integration evidence. Later facts supersede earlier provisional skips,
 risks, and findings; never reuse a stale Phase summary as the final result. The
@@ -375,3 +381,16 @@ warn-only.
 ```json
 {"stage":"build-code","skill_or_stage":"build-code"}
 ```
+
+## Serious review exception
+
+Phase reviews still repair and rerun a fresh full review until PASS; risk
+acceptance cannot bypass a Phase gate. Only the final integration review may
+pause for an authenticated `actionable` `major|blocking` finding. Show one
+plain-language card at a time with the problem, evidence, consequences,
+affected scope, and mutually exclusive “repair first” (recommended) and
+“accept risk and continue” choices. Wait for the real host reply and use only
+`accept-review-risk`. Minor, invalid-anchor/evidence, unavailable, timeout, and
+adapter failures never open this override. With no serious final finding
+build-code remains automatic; accepted risk keeps the original verdict and
+cannot excuse missing tests, Phase evidence, or integration structure.

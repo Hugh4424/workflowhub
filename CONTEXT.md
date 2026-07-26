@@ -3,22 +3,22 @@
 > 本项目自己的领域术语表骨架，统一术语避免后续设计漂移。
 > 随项目演进逐步补充；不照搬其它项目的特有术语，只列本项目自己的概念。
 
-## 五段流程术语
+## 五个正式阶段
 
-**需求确认（intake）**：
-开发流程的第一阶段。把需求收敛清楚，产出需求权威记录。
+**make-decision**：
+第一阶段。收敛方向、范围和风险，产出 accepted decision。概念别名：需求确认（intake）。
 
-**设计（design）**：
-第二阶段。把"做什么、怎么验收"写成设计文档。
+**build-spec**：
+第二阶段。把“做什么、怎么验收”写成 accepted spec。概念别名：设计（design）。
 
-**计划（plan）**：
-第三阶段。把设计拆成可执行任务与技术方案。
+**build-plan**：
+第三阶段。把 accepted spec 拆成可执行 plan 与 tasks。概念别名：计划（plan）。
 
-**实现（apply）**：
-第四阶段。逐项实现，配套测试与独立审查。
+**build-code**：
+第四阶段。逐项实现，配套测试与独立审查。概念别名：实现（apply）。
 
-**验收（test-acceptance）**：
-第五阶段。独立验证交付是否达标。
+**verify-code**：
+第五阶段。独立验证交付是否达标。概念别名：验收（test-acceptance）。
 
 ## 核心概念术语
 
@@ -37,8 +37,18 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 **执行记录（execution record）**：
 统一外置记录进度、指标与回溯信息的产物。
 
+**每次调用身份（per-invocation identity）**：
+正式入口在一次 run 开始前，对调用方显式提供的 WorkflowHub Git 顶层做认证后写入的
+create-only 记录。它绑定 task、stage、run、干净的已提交来源、合同内容校验值和能力，
+不把绝对 runner 路径写入任务清单，也不产生质量结论。
+
+**per_invocation / legacy_pinned**：
+`per_invocation` 是新任务的执行模式，每次调用独立认证当前 WorkflowHub。没有
+`execution_mode` 的旧任务按 `legacy_pinned` 解释：原 runner 字段只用于读取既有证据，
+必须通过一次受控迁移才能由新入口继续写入，不能因缺字段被静默当成新模式。
+
 **异源审查（cross-source review）**：
-由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判。
+由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判；证据充分的严重问题默认暂停，用户看完问题、证据和影响后，可明确承担风险继续。
 
 **需求保真链（requirement-fidelity chain）**：
 从权威 source，经 immutable requirement ID、decision、artifact，到 acceptance criteria 的可复算链路。任何 accepted requirement 缺少其中一环都不能算 covered。
@@ -48,6 +58,15 @@ stage manifest 定义应执行的 step 集合（expected topology）；journal �
 
 **audit 单一真相源（single source of truth）**：
 audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘要，validator 只验证一致性，facts assembly 只装配事实，不另算第二套 audit 结论。
+
+**交互完成记录（interaction completion record）**：
+绑定 make-decision 三轮对话与完整 grill 执行事实的正式记录；长期保存格式检查结果、用户选择和内容校验值，不保存完整问题卡，也不证明用户身份。
+
+**歧义台账（ambiguity ledger）**：
+记录每项重大歧义、当前状态和关闭依据的正式记录；仍有重大歧义未关闭时，build-spec 不得宣称 clarify 完成。
+
+**规范决策日志（canonical decision-log）**：
+make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
 
 **运行事实（runtime fact）**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
@@ -81,6 +100,9 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **恢复代次（recovery generation）**：
 同一任务为恢复可认证执行而追加的一份记录，始终保留其前一份记录。
 
+runner replacement generation 只属于 `legacy_pinned` 历史兼容。`per_invocation` 任务的正常
+WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态恢复仍使用恢复代次。
+
 **恢复门禁（recovery gate）**：
 恢复前按恢复目标一次性核验任务身份、来源、收据和工作树，任一不符即拒绝且不影响其他目标。
 
@@ -94,10 +116,13 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 调用方向用户展示问题、进度和结果，并把回答交回阶段执行者的交互边界。
 
 **决策卡（decision card）**：
-一次只承载一个决策轴，并说明推荐项、互斥选项及各自后果和风险的用户消息。
+一次只承载一个决策轴，用大白话说明问题、影响、推荐项、互斥选项及各自含义、后果和风险，不展示内部编号或记录术语；题号分母表示本轮当前预计总问题数，不能机械跟随分子增长。
 
-**完成卡（completion card）**：
-阶段结束时汇总结果、正式产物、证据、依赖、风险、下一责任人和用户待办的简短交接。
+**用户完成卡（user completion card）**：
+阶段结束时面向用户说明目标、方案、效果、验证边界、风险和下一步的简短消息；不承载内部引用、provider 流水或正式审计明细。
+
+**下游交接（downstream handoff）**：
+供后续阶段读取的正式产物、证据、依赖、未决风险和下一责任人；它是 canonical record，不由用户消息副本替代。
 
 **阶段协调 / Phase 执行（Stage coordination / Phase execution）**：
 同一 `build-code` 合同中可组合的两部分，前者管理顺序和阶段边界，后者完成一个 Phase 的实现、测试、证据和审查闭环。
@@ -162,10 +187,32 @@ verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文�
 
 **为什么要写在这里**：这条规矩之前只在全局个人偏好里出现过，但 stage-executor 实际执行时会被"结构化留痕"的习惯带跑偏（比如为了方便追溯，直接把内部字段名甩给用户）。写进 CONTEXT.md 是为了让 5 个 stage 都能读到同一份要求，不靠单次对话里记住。
 
+## Stage 内容契约窄研究记录（2026-07-26）
+
+本节只记录处理组 4 直接采用的三个成熟做法，不新增 provider、用户身份系统或通用工作流框架。
+
+**追加式审计事件**：
+
+- 来源：[NIST SP 800-92](https://csrc.nist.gov/pubs/sp/800/92/final) 的可靠日志管理与事件记录原则。
+- 采用：每次步骤、处置和风险决定写 create-only 事件，保留前一记录引用与内容校验；当前 TaskKernel/canonical writer 继续是唯一写入权威。
+- 拒绝：不新建第二事件仓库，不修改旧记录，不把审计日志变成另一套业务 verdict。
+
+**调用方可见交互绑定**：
+
+- 来源：[W3C PROV-O](https://www.w3.org/TR/prov-o/) 的活动、实体以及 `wasInformedBy`/`wasGeneratedBy` 因果链。
+- 采用：ask、真实 reply、re-rank 和最终决定使用稳定引用、顺序与内容校验绑定，让后一步能证明由哪一步产生。
+- 拒绝：不把 provenance 扩成真人认证、消息投递证明或宿主身份系统；它只证明记录存在、顺序和内容绑定。
+
+**人工风险与遗漏承担**：
+
+- 来源：[NIST SP 800-39](https://csrc.nist.gov/pubs/sp/800/39/final) 的识别风险、评估影响与后果、再选择接受/规避/缓解等 risk response 原则。
+- 采用：用户必须先看到具体问题、证据、影响范围和可能后果，再对绑定的 finding 或遗漏做明确选择；review risk 与 decision omission 使用不同记录。
+- 拒绝：不接受通用“用户同意”，不跨 finding/快照复用，不把风险承担改写成质量通过，也不建设通用风险治理平台。
+
 ## 关系与边界
 
 - 一个 **决策卡**只处理一个决策轴，并通过**调用方可见对话面**完成问答。
-- 一个阶段用**完成卡**向下游交付精简事实，不用消息副本替代正式产物和证据。
+- 一个阶段用**用户完成卡**向用户说明结果，用**下游交接**向后续阶段交付正式事实；两者不能互相替代。
 - **阶段协调**为每个 Phase 生成一张 **Phase Card**；**Phase 执行**消费它并返回正式证据。
 - 一个 **恢复代次**只属于一个工作流任务，并在通过**恢复门禁**后才可成为当前事实。
 - 新的 **当前 Phase 结果**会替代当前指针，但不会改写旧的正式结果。

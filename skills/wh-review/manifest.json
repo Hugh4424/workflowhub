@@ -37,7 +37,15 @@
         "spec-analyze",
         "plan-eng-review",
         "review"
-      ]
+      ],
+      "required_materials_by_skill": {
+        "plan-eng-review": [
+          "approved_spec",
+          "draft_plan",
+          "draft_tasks",
+          "plan_task_contract"
+        ]
+      }
     },
     "build-code": {
       "path": "contracts/build-code.md",

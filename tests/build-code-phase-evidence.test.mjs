@@ -95,6 +95,21 @@ function formalPhaseReview(state, published, verdict = "pass", { reviewScope = "
     review_scope: reviewScope,
     base_tree: published.base_tree, candidate_tree: published.snapshot_tree,
   };
+  const flowIdentity = state.kernel.deriveReviewFlowIdentity({
+    stage: "build-code", review_track: null,
+    subject_kind: subject.subject_kind, phase_id: subject.phase_id, review_scope: subject.review_scope,
+    ...(published.reopen_ref === undefined ? {} : { revision_ref: published.reopen_ref }),
+  });
+  const currentFlow = state.kernel.readReviewFlow(flowIdentity);
+  const reviewChain = currentFlow === null ? null : {
+    version: "wh-review-chain.v1", round: "full",
+    parent_result_ref: currentFlow.head_result_ref,
+    root_result_ref: currentFlow.root_result_ref,
+    prior_snapshot_tree: JSON.parse(state.task.readRecord(currentFlow.head_result_ref)).snapshot_tree,
+    current_snapshot_tree: published.snapshot_tree,
+    response_ledger_sha256: sha256(`${suffix}:response-ledger`),
+    source_diff_sha256: sha256(`${suffix}:source-diff`),
+  };
   const finding = { severity: "major", path: "fixture", issue: "fix", recommendation: "repair" };
   const output = { verdict, summary: "fixture", findings: verdict === "pass" ? [] : [finding] };
   writer.writeProviderOutput(outputRef, JSON.stringify(output));
@@ -118,6 +133,7 @@ function formalPhaseReview(state, published, verdict = "pass", { reviewScope = "
     review_track: null, source, snapshot_tree: published.snapshot_tree, material_id: materialId, ...subject,
     provider_attempts: [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
+    ...(reviewChain === null ? {} : { review_chain: reviewChain }),
     ...(includePhaseAcTrace ? { phase_ac_trace: phaseAcTrace } : {}),
   });
   writer.writeResult(resultRef, {
@@ -125,6 +141,12 @@ function formalPhaseReview(state, published, verdict = "pass", { reviewScope = "
     source, snapshot_tree: published.snapshot_tree, material_id: materialId, attempt_ref: attemptRef, ...subject,
     provider_results: [{ provider: "fixture", output }], verdict,
     findings: verdict === "pass" ? [] : [{ provider: "fixture", ...finding }],
+    ...(reviewChain === null ? {} : { review_chain: reviewChain }),
+  });
+  state.kernel.advanceReviewFlow(flowIdentity, {
+    expected_head_ref: currentFlow?.head_result_ref ?? null,
+    expected_event_ref: currentFlow?.event_ref ?? null,
+    result_ref: resultRef,
   });
   return resultRef;
 }

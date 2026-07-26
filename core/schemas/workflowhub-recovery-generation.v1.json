@@ -11,6 +11,8 @@
     "generation": {"type": "integer", "minimum": 1},
     "credential_ref": {"type": "string", "minLength": 1},
     "credential_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "previous_generation_ref": {"type": "string", "pattern": "^identity/recoveries/runner-replacement-[0-9]{4}\\.json$"},
+    "previous_generation_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "before": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
     "after": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
     "created_at": {"type": "string", "format": "date-time"},

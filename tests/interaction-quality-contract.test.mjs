@@ -85,7 +85,7 @@ describe("interaction quality amendment contracts", () => {
     expect(decisionLog).toMatch(/(?:each|every|每个|逐项)[^。.;]{0,40}(?:load-bearing decision|关键决定)/i);
     expect(decisionLog).not.toMatch(/(?:source|来源)\s*[:：]?\s*(?:confirmed|已确认|根据讨论)(?:\s|[。.;,，]){0,4}$/im);
     expect(decisionLog).toMatch(/(?:stable source reference|稳定来源引用)[\s\S]{0,120}(?:exact answer excerpt|准确答案摘录)/i);
-    expect(decisionLog).toMatch(/(?:every actual user answer|每个实际用户答案)[\s\S]{0,180}(?:decision entry|决定条目)[\s\S]{0,100}(?:non-decision fact|非决定事实)/i);
+    expect(decisionLog).toMatch(/(?:every[\s\S]{0,100}actual user answer|每个实际用户答案)[\s\S]{0,240}(?:(?:decision entry|main document|omission|决定条目|正文|遗漏)[\s\S]{0,160}(?:non-decision fact|exactly once|非决定事实|恰好一次)|(?:exactly once|恰好一次)[\s\S]{0,120}(?:main document|omission|正文|遗漏))/i);
   });
 
   it("AC-005 preserves locked decisions and separates unresolved from new ambiguity", () => {

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-entry.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["question", "selected_option", "recommendation_status", "recommendation_reason", "plain_language_meaning", "source_type", "source_exact_excerpt", "approval_status", "approval_ref", "approval_hash", "facts_and_constraints", "logic", "choice_reason", "impact", "consequences", "risks", "rejected_alternatives", "unresolved", "supersedes"],
+  "properties": {
+    "question": { "type": "string", "minLength": 1 },
+    "selected_option": { "type": "string", "minLength": 1 },
+    "recommendation_status": { "type": "string", "minLength": 1 },
+    "recommendation_reason": { "type": "string", "minLength": 1 },
+    "plain_language_meaning": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "minLength": 1 },
+    "source_exact_excerpt": { "type": "string", "minLength": 1 },
+    "approval_status": { "type": "string", "minLength": 1 },
+    "approval_ref": { "type": "string", "minLength": 1 },
+    "approval_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "facts_and_constraints": { "type": "array", "items": { "type": "string" } },
+    "logic": { "type": "string", "minLength": 1 },
+    "choice_reason": { "type": "string", "minLength": 1 },
+    "impact": { "type": "array", "items": { "type": "string" } },
+    "consequences": { "type": "array", "items": { "type": "string" } },
+    "risks": { "type": "array", "items": { "type": "string" } },
+    "rejected_alternatives": { "type": "array", "items": { "type": "object" } },
+    "unresolved": { "type": "array", "items": { "type": "string" } },
+    "supersedes": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { capturePhaseReviewSource, captureReviewSource } from "../review-source.mjs";
-import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor } from "../review-materials.mjs";
+import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor, validateDiffIndexBundle } from "../review-materials.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
 import { openAcceptedWorkspace } from "../../../../core/workspace.mjs";
 
@@ -26,6 +26,8 @@ function fixture() {
   writeFileSync(join(target, "delete.txt"), "delete\n");
   writeFileSync(join(target, "rename.txt"), "rename\n");
   writeFileSync(join(target, "context-change.txt"), `${Array.from({ length: 12 }, (_value, index) => `line-${index + 1}`).join("\n")}\n`);
+  mkdirSync(join(target, "tests"));
+  writeFileSync(join(target, "tests", "base.test.mjs"), `${Array.from({ length: 12 }, (_value, index) => `test-line-${index + 1}`).join("\n")}\n`);
   writeFileSync(join(target, ".gitignore"), "ignored.txt\n");
   git(target, ["add", "-A"]); git(target, ["commit", "-m", "base"]);
   git(target, ["worktree", "add", "-b", "feature", source]);
@@ -92,6 +94,94 @@ function acceptedWorkspaceFixture() {
 }
 
 describe("review source capture", () => {
+  it("delivers a large Phase diff as indexed selected context while retaining the canonical full diff", () => {
+    const f = fixture();
+    mkdirSync(join(f.source, "tests"), { recursive: true });
+    mkdirSync(join(f.source, "specs", "feature"), { recursive: true });
+    writeFileSync(join(f.source, "runtime.mjs"), "export const value = 1;\n");
+    writeFileSync(join(f.source, "specs", "feature", "spec.md"), "intro\nAC-1 relevant contract\n");
+    const changedContext = Array.from({ length: 12 }, (_value, index) => index === 5 ? "changed-line-6" : `line-${index + 1}`);
+    writeFileSync(join(f.source, "context-change.txt"), `${changedContext.join("\n")}\n`);
+    writeFileSync(join(f.source, "tests", "large.test.mjs"), `${"// evidence-only test line\n".repeat(16000)}`);
+    const changedTest = Array.from({ length: 12 }, (_value, index) => index === 5 ? "changed-test-line-6" : `test-line-${index + 1}`);
+    writeFileSync(join(f.source, "tests", "base.test.mjs"), `${changedTest.join("\n")}\n`);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const contextChange = source.changedFiles.find(({ path }) => path === "context-change.txt");
+    const contextChangeId = `C-${createHash("sha256").update(JSON.stringify([contextChange.path, contextChange.old_path, contextChange.status, contextChange.mode, contextChange.old_mode, contextChange.blob, contextChange.old_blob])).digest("hex").slice(0, 16)}`;
+    const specChange = source.changedFiles.find(({ path }) => path === "specs/feature/spec.md");
+    const specChangeId = `C-${createHash("sha256").update(JSON.stringify([specChange.path, specChange.old_path, specChange.status, specChange.mode, specChange.old_mode, specChange.blob, specChange.old_blob])).digest("hex").slice(0, 16)}`;
+    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: "0".repeat(64) })}\n`);
+    const task = evidenceTask(f, receipt, Buffer.from("tests pass\n"));
+    const materials = {
+        approved_spec: `intro\nAC-1 relevant contract\n\n${"unrelated full specification text ".repeat(10000)}`,
+        acceptance_criteria: "AC-1",
+        test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") },
+        impact_map: { state: "complete", summary: "impact", entries: [{ id: "impact", subject: "consumer", rationale: "direct", disposition: "complete", change_ids: [contextChangeId], anchors: [{ id: "covered-anchor", path: "context-change.txt", start_line: 12, end_line: 12, role: "consumer", reason: "covered by selected shard", outside_diff_reason: "outside changed hunk" }] }] },
+        reuse_map: { state: "complete", summary: "reuse", entries: [{ id: "reuse", subject: "config", rationale: "direct", disposition: "complete", change_ids: [contextChangeId], anchors: [{ id: "canonical-anchor", path: ".gitignore", start_line: 1, end_line: 1, role: "reuse", reason: "unchanged source" }] }] },
+        acceptance_map: { state: "complete", summary: "AC", acceptance_ids: ["AC-1"], entries: [{ id: "AC-1", subject: "AC", rationale: "direct", disposition: "complete", change_ids: [specChangeId], implementation: "spec", verification: "spec", implementation_anchor_ids: ["spec-ac-1"], verification_anchor_ids: ["spec-ac-1"], anchors: [{ id: "spec-ac-1", path: "specs/feature/spec.md", start_line: 2, end_line: 2, role: "verification", reason: "accepted contract", outside_diff_reason: "spec contract anchor" }] }] },
+        review_instructions: reviewInstructionsFor("build-code"),
+    };
+    const bundle = buildReviewMaterials({
+      task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
+      stage: "build-code", phaseId: "phase-large",
+      materials,
+    });
+    expect(bundle.files).not.toContain("changes.diff");
+    expect(bundle.files).toContain("diff-index.json");
+    expect(bundle.packetPlan.delivery_mode).toBe("selected_context");
+    expect(bundle.packetPlan.delivery_bytes).toBeLessThanOrEqual(330 * 1024);
+    expect(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).not.toContain("\n  \"");
+    const compactSpec = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/approved_spec.json"), "utf8"));
+    expect(compactSpec).toMatchObject({ schema_version: "wh-review-spec-excerpts.v1", selected_ids: ["AC-1"] });
+    expect(compactSpec.excerpts[0]).toMatchObject({ acceptance_id: "AC-1", start_line: 2, end_line: 2, text: "AC-1 relevant contract" });
+    expect(readFileSync(join(f.data, compactSpec.full.ref), "utf8")).toContain("unrelated full specification");
+    const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+    expect(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8")).not.toContain("\n  \"");
+    const compactChangeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
+    expect(compactChangeMap).toMatchObject({ schema_version: "wh-review-compact-change-map.v1", changes: expect.any(Array) });
+    expect(compactChangeMap.changes).toHaveLength(index.coverage.change_ids_total);
+    expect(compactChangeMap.changes[0]).not.toHaveProperty("hunks");
+    expect(index.coverage.change_ids_indexed).toBe(index.coverage.change_ids_total);
+    expect(index.anchors.find(({ anchor_id }) => anchor_id === "covered-anchor")).toMatchObject({
+      shard_id: expect.stringMatching(/^S-/),
+      source_lines: { old: { start_line: 12, end_line: 12 }, new: { start_line: 12, end_line: 12 } },
+    });
+    const canonicalAnchor = index.anchors.find(({ anchor_id }) => anchor_id === "canonical-anchor");
+    expect(canonicalAnchor).toMatchObject({ source_sha256: expect.stringMatching(/^[a-f0-9]{64}$/), start_line: 1, end_line: 1 });
+    expect(canonicalAnchor.source_ref.startsWith("canonical-review-materials/")).toBe(true);
+    expect(canonicalAnchor).not.toHaveProperty("shard_id");
+    expect(bundle.files).not.toContain("context/covered-anchor.txt");
+    expect(index.changes.find(({ path }) => path === "runtime.mjs")?.shards[0].delivery).toBe("included");
+    const contextShard = index.changes.find(({ path }) => path === "context-change.txt").shards[0];
+    const semanticDiff = readFileSync(join(bundle.bundleRoot, "diff-shards", `${contextShard.shard_id}.diff`), "utf8");
+    expect(semanticDiff).toContain("diff --git");
+    expect(semanticDiff).toContain("@@");
+    expect(semanticDiff).toContain("-line-6");
+    expect(semanticDiff).toContain("+changed-line-6");
+    expect(semanticDiff).not.toContain(" line-5");
+    expect(index.changes.find(({ path }) => path === "tests/large.test.mjs")?.shards[0].delivery).toBe("summary_only");
+    expect(readFileSync(join(f.data, index.full_diff.ref))).toHaveLength(index.full_diff.bytes);
+    expect(bundle.manifest.some(({ path }) => path === "tests/large.test.mjs")).toBe(false);
+    const selected = index.changes.flatMap(({ shards }) => shards).find(({ delivery }) => delivery === "included");
+    writeFileSync(join(bundle.bundleRoot, "diff-shards", `${selected.shard_id}.diff`), "tampered\n");
+    expect(() => validateDiffIndexBundle(bundle.bundleRoot)).toThrow(/missing or tampered/);
+    const invalid = structuredClone(materials);
+    invalid.acceptance_map.entries[0].anchors[0].end_line = 999999;
+    expect(() => buildReviewMaterials({
+      task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
+      stage: "build-code", phaseId: "phase-large", materials: invalid,
+    })).toThrow(/no valid spec verification excerpt/);
+    const summaryAnchor = structuredClone(materials);
+    summaryAnchor.reuse_map.entries[0].anchors[0] = {
+      id: "summary-anchor", path: "tests/base.test.mjs", start_line: 12, end_line: 12,
+      role: "reuse", reason: "summary-only changed test", outside_diff_reason: "outside changed hunk",
+    };
+    expect(() => buildReviewMaterials({
+      task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
+      stage: "build-code", phaseId: "phase-large", materials: summaryAnchor,
+    })).toThrow(/changed-path anchor summary-anchor has no included shard/);
+  });
+
   it("captures only the immutable phase commit range named by current phase evidence", () => {
     const f = fixture();
     writeFileSync(join(f.source, "upstream.txt"), "upstream\n");
@@ -427,6 +517,8 @@ describe("review materials", () => {
       .toThrow(/overlaps a candidate hunk.*changes\.diff is the only authority/);
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", phaseId: "phase-1", strictV2Maps: true,
       materials: { ...base, acceptance_map } });
+    expect(bundle.files).toContain("changes.diff");
+    expect(bundle.packetPlan.delivery_mode).toBe("inline_complete");
     expect(bundle.files).toContain("requirements/acceptance_map.json");
     const changeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
     expect(changeMap).toMatchObject({ schema_version: "wh-review-change-map.v1", phase_id: "phase-1", base_tree: source.baseTree, candidate_tree: source.snapshotTree, changes: expect.arrayContaining([expect.objectContaining({ change_id: changeIds[0] })]) });

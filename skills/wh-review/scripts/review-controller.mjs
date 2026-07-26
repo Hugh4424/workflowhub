@@ -8,7 +8,24 @@ const RESPONSE_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk"]
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const NON_STRUCTURAL_STAGES = new Set(["build-spec", "build-plan", "verify-code"]);
+const NON_STRUCTURAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "verify-code"]);
+const CHANGE_CLASSIFICATION_VERSION = "wh-review-change-classification.v1";
+const MATERIAL_CATEGORY = Object.freeze({
+  raw_requirement: "decision", objective_facts: "evidence", approved_direction: "decision",
+  approved_decision: "decision", draft_spec_or_acceptance: "contract", draft_spec: "contract",
+  approved_spec: "contract", draft_plan: "plan", draft_tasks: "plan",
+  acceptance_criteria: "acceptance", acceptance_map: "acceptance", acceptance_evidence: "evidence",
+  test_evidence: "evidence", evidence_map: "evidence", context_map: "structured_context",
+  phase_map: "structured_context", impact_map: "structured_context", reuse_map: "structured_context",
+  phase_coverage: "structured_context", seam_index: "structured_context", ac_trace: "acceptance",
+  open_exceptions: "evidence", notes: "explanation", explanation: "explanation",
+});
+const CATEGORY_DIMENSIONS = Object.freeze({
+  decision: ["direction"], contract: ["interface"], plan: ["phase_order"],
+  acceptance: ["acceptance_criteria"], schema: ["schema"],
+  structured_context: ["interface", "state"], evidence: ["test_strategy"],
+  unknown: ["direction"], explanation: [],
+});
 
 function nonEmpty(value, label) {
   if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`);
@@ -58,11 +75,59 @@ function responseLedger(value) {
       ...(entry.status === "accepted_risk" ? { accepted_snapshot_tree: entry.accepted_snapshot_tree, affected_paths: [...entry.affected_paths] } : {}),
     };
   });
+  let change;
+  if (value.change !== undefined) {
+    if (!value.change || typeof value.change !== "object" || Array.isArray(value.change)) {
+      throw new TypeError("response_ledger.change must be an object");
+    }
+    if (!Array.isArray(value.change.changed_dimensions)
+        || value.change.changed_dimensions.some((dimension) => !MATERIAL_CHANGE_DIMENSIONS.has(dimension))) {
+      throw new TypeError("response_ledger.change.changed_dimensions is invalid");
+    }
+    nonEmpty(value.change.rationale, "response_ledger.change.rationale");
+    if (!Array.isArray(value.change.evidence_refs)
+        || value.change.evidence_refs.some((ref) => typeof ref !== "string"
+          || !/^(?:receipts|reviews\/results|evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref))) {
+      throw new TypeError("response_ledger.change.evidence_refs is invalid");
+    }
+    change = {
+      changed_dimensions: [...value.change.changed_dimensions],
+      rationale: value.change.rationale,
+      evidence_refs: [...value.change.evidence_refs],
+    };
+  }
+  let machineClassification;
+  if (value.change_classification !== undefined) {
+    const candidate = value.change_classification;
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)
+        || candidate.version !== CHANGE_CLASSIFICATION_VERSION || candidate.source !== "frozen_bundle_manifest"
+        || candidate.previous_snapshot_tree !== value.previous_snapshot_tree
+        || candidate.current_snapshot_tree !== value.current_snapshot_tree
+        || !SHA256.test(candidate.source_diff_sha256 ?? "")
+        || typeof candidate.structural !== "boolean"
+        || !Array.isArray(candidate.changed_dimensions)
+        || candidate.changed_dimensions.some((dimension) => !MATERIAL_CHANGE_DIMENSIONS.has(dimension))
+        || candidate.structural !== (candidate.changed_dimensions.length > 0)) {
+      throw new TypeError("response_ledger.change_classification is invalid or unbound");
+    }
+    machineClassification = {
+      version: candidate.version, source: candidate.source,
+      previous_snapshot_tree: candidate.previous_snapshot_tree,
+      current_snapshot_tree: candidate.current_snapshot_tree,
+      source_diff_sha256: candidate.source_diff_sha256,
+      previous_manifest: candidate.previous_manifest,
+      current_manifest: candidate.current_manifest,
+      changed_dimensions: [...candidate.changed_dimensions],
+      structural: candidate.structural,
+    };
+  }
   return {
     version: value.version,
     previous_result_ref: value.previous_result_ref,
     previous_snapshot_tree: value.previous_snapshot_tree,
     current_snapshot_tree: value.current_snapshot_tree,
+    ...(change === undefined ? {} : { change }),
+    ...(machineClassification === undefined ? {} : { change_classification: machineClassification }),
     responses,
   };
 }
@@ -86,12 +151,101 @@ function boundActionableLedger(previousResult, ledger, currentSnapshotTree) {
   return checked;
 }
 
-function resolutionState(previousResult, ledger, currentSnapshotTree) {
+function changeClassification(value, previousResult, currentSnapshotTree) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.version !== CHANGE_CLASSIFICATION_VERSION
+      || value.source !== "frozen_bundle_manifest"
+      || value.previous_snapshot_tree !== previousResult.snapshot_tree
+      || value.current_snapshot_tree !== currentSnapshotTree
+      || !SHA256.test(value.source_diff_sha256 ?? "")
+      || typeof value.structural !== "boolean"
+      || !Array.isArray(value.changed_dimensions)
+      || value.changed_dimensions.some((dimension) => !MATERIAL_CHANGE_DIMENSIONS.has(dimension))
+      || value.structural !== (value.changed_dimensions.length > 0)) {
+    throw new TypeError("machine change classification is invalid or unbound");
+  }
+  const recomputed = deriveChangeClassification({
+    previousSnapshotTree: value.previous_snapshot_tree,
+    currentSnapshotTree: value.current_snapshot_tree,
+    previousManifest: value.previous_manifest,
+    currentManifest: value.current_manifest,
+  });
+  if (canonicalJson(recomputed) !== canonicalJson(value)) throw new TypeError("machine change classification is not reproducible");
+  return value;
+}
+
+export function deriveChangeClassification({ previousSnapshotTree, currentSnapshotTree, previousManifest = null, currentManifest } = {}) {
+  oid(previousSnapshotTree, "change classification previousSnapshotTree");
+  oid(currentSnapshotTree, "change classification currentSnapshotTree");
+  const current = classificationManifest(currentManifest, "current classification manifest");
+  const previous = previousManifest === null ? null : classificationManifest(previousManifest, "previous classification manifest");
+  const priorByIdentity = new Map((previous?.entries ?? []).map((entry) => [entry.identity, entry]));
+  const currentByIdentity = new Map(current.entries.map((entry) => [entry.identity, entry]));
+  const changedCategories = new Set();
+  for (const identity of new Set([...priorByIdentity.keys(), ...currentByIdentity.keys()])) {
+    const prior = priorByIdentity.get(identity); const next = currentByIdentity.get(identity);
+    if (!prior || !next || prior.sha256 !== next.sha256 || prior.category !== next.category) {
+      changedCategories.add(next?.category ?? prior?.category ?? "unknown");
+    }
+  }
+  if (previous === null) changedCategories.add("unknown");
+  const changedDimensions = [...new Set([...changedCategories].flatMap((category) =>
+    CATEGORY_DIMENSIONS[category] ?? CATEGORY_DIMENSIONS.unknown))].sort();
+  return Object.freeze({
+    version: CHANGE_CLASSIFICATION_VERSION,
+    source: "frozen_bundle_manifest",
+    previous_snapshot_tree: previousSnapshotTree,
+    current_snapshot_tree: currentSnapshotTree,
+    source_diff_sha256: createHash("sha256").update(canonicalJson({ previous, current })).digest("hex"),
+    previous_manifest: previous,
+    current_manifest: current,
+    changed_dimensions: changedDimensions,
+    structural: changedDimensions.length > 0,
+  });
+}
+
+function classificationManifest(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.version !== "wh-review-classification-manifest.v1" || !Array.isArray(value.entries)) {
+    throw new TypeError(`${label} is invalid`);
+  }
+  const identities = new Set();
+  const entries = value.entries.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || typeof entry.identity !== "string" || entry.identity.trim() === "" || identities.has(entry.identity)
+        || typeof entry.category !== "string" || !SHA256.test(entry.sha256 ?? "")) {
+      throw new TypeError(`${label}.entries[${index}] is invalid`);
+    }
+    identities.add(entry.identity);
+    return { identity: entry.identity, category: entry.category, sha256: entry.sha256 };
+  }).sort((left, right) => left.identity.localeCompare(right.identity));
+  return { version: value.version, entries };
+}
+
+export function buildClassificationManifest(materials = {}) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) throw new TypeError("classification materials must be an object");
+  const entries = Object.entries(materials)
+    .filter(([key]) => !["review_instructions", "response_ledger", "previous_review"].includes(key))
+    .map(([identity, value]) => ({
+      identity,
+      category: MATERIAL_CATEGORY[identity] ?? "unknown",
+      sha256: createHash("sha256").update(canonicalJson(value)).digest("hex"),
+    }))
+    .sort((left, right) => left.identity.localeCompare(right.identity));
+  return Object.freeze({ version: "wh-review-classification-manifest.v1", entries: Object.freeze(entries) });
+}
+
+function resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification = null) {
   const checked = boundActionableLedger(previousResult, ledger, currentSnapshotTree);
-  const hasStructuralChange = checked.responses.some(({ changed_dimensions }) => changed_dimensions.length > 0);
+  const classification = changeClassification(machineClassification ?? checked.change_classification ?? null, previousResult, currentSnapshotTree);
+  const hasStructuralChange = classification?.structural ?? (
+    (checked.change?.changed_dimensions.length ?? 0) > 0
+      || checked.responses.some(({ changed_dimensions }) => changed_dimensions.length > 0)
+  );
   const hasRejectedFinding = checked.responses.some(({ status }) => status === "rejected_invalid");
   const expiredRisk = checked.responses.some((entry) => entry.status === "accepted_risk" && entry.accepted_snapshot_tree !== currentSnapshotTree);
-  return { checked, hasStructuralChange, hasRejectedFinding, expiredRisk };
+  return { checked, classification, hasStructuralChange, hasRejectedFinding, expiredRisk };
 }
 
 export function responseLedgerSha256(ledger) {
@@ -103,10 +257,12 @@ export function responseLedgerSha256(ledger) {
  * is useful audit evidence, never a pass gate: absent or invalid evidence is
  * recorded as unverified instead of blocking the stage or claiming a repair.
  */
-export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = null, previousResult, previousResultSha256, ledger = null, currentSnapshotTree } = {}) {
+export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = null, previousResult, previousResultSha256, ledger = null, currentSnapshotTree, changeClassification: machineClassification = null } = {}) {
   if (typeof taskId !== "string" || taskId.trim() === "") throw new TypeError("resolution taskId must be non-empty");
   if (!NON_STRUCTURAL_STAGES.has(stage)) throw new TypeError("non-gate review response is not allowed for this stage");
-  if (reviewTrack !== null) throw new TypeError("non-gate review response review_track must be null");
+  if (stage === "make-decision") {
+    if (!["direction", "detail"].includes(reviewTrack)) throw new TypeError("make-decision resolution requires direction or detail review_track");
+  } else if (reviewTrack !== null) throw new TypeError("non-gate review response review_track must be null");
   if (!SHA256.test(previousResultSha256 ?? "")) throw new TypeError("resolution previousResultSha256 must be sha256");
   const base = {
     version: "wh-review-resolution.v1",
@@ -119,14 +275,19 @@ export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = 
     previous_snapshot_tree: previousResult.snapshot_tree,
     snapshot_tree: currentSnapshotTree,
   };
+  const assertedClassification = changeClassification(machineClassification, previousResult, currentSnapshotTree);
   try {
-    const state = resolutionState(previousResult, ledger, currentSnapshotTree);
+    const state = resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification);
     return {
       ...base, evidence_state: "verified", response_ledger: state.checked,
       response_ledger_sha256: responseLedgerSha256(state.checked), unverified_reason: null,
       accepted_risk_count: state.checked.responses.filter(({ status }) => status === "accepted_risk").length,
+      ...(state.classification ? { change_classification: state.classification } : {}),
     };
-  } catch {
+  } catch (error) {
+    if (assertedClassification?.structural) {
+      throw new Error(`structural change requires a complete bound response ledger: ${error.message}`);
+    }
     return {
       ...base, evidence_state: "unverified", response_ledger: null,
       response_ledger_sha256: null, unverified_reason: ledger === null ? "no_response_ledger" : "ledger_invalid_or_unbound",
@@ -174,33 +335,43 @@ export function buildReviewChain({ previousResult = null, ledger = null, current
   };
 }
 
-export function selectReviewRound({ stage, route, previousResult = null, ledger = null, closureFailures = 0, structuralFullAlreadyRecorded = false, currentSnapshotTree = null } = {}) {
+export function selectReviewRound({ stage, route, previousResult = null, ledger = null, closureFailures = 0, structuralFullAlreadyRecorded = false, currentSnapshotTree = null, changeClassification: machineClassification = null } = {}) {
   if (!["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(stage)) throw new TypeError("stage is invalid");
   if (!route || typeof route !== "object") return { round: "legacy", reason: "legacy_3rd_review" };
   if (!Number.isSafeInteger(closureFailures) || closureFailures < 0) throw new TypeError("review progress counters are invalid");
   if (typeof structuralFullAlreadyRecorded !== "boolean") throw new TypeError("structural full-review audit flag is invalid");
-  if (stage === "make-decision" || route.mode === "single_round") {
+  if (route.mode === "single_round") {
     return previousResult === null
       ? { round: "initial", reason: "single_round" }
       : { round: "none", reason: "single_round_already_completed" };
   }
   if (previousResult === null) return { round: "initial", reason: "first_review" };
-  if (previousResult.verdict === "pass") return { round: "none", reason: "prior_result_passed" };
-  if (previousResult.verdict !== "revise_required") throw new TypeError("previous result must be semantic");
   if (stage === "build-code" || route.mode === "full_only") {
+    if (previousResult.verdict === "pass") return { round: "none", reason: "prior_result_passed" };
+    if (previousResult.verdict !== "revise_required") throw new TypeError("previous result must be semantic");
     boundActionableLedger(previousResult, ledger, currentSnapshotTree);
     return { round: "full", reason: "build_code_requires_fresh_full_review" };
   }
   if (route.mode === "full_on_structural_rework") {
-    if (structuralFullAlreadyRecorded || previousResult.review_chain?.round === "full") return { round: "none", reason: "structural_rework_already_reviewed" };
+    if (!["pass", "revise_required"].includes(previousResult.verdict)) throw new TypeError("previous result must be semantic");
     let state = null;
-    try { state = resolutionState(previousResult, ledger, currentSnapshotTree); }
-    catch { /* Response evidence is optional quality data, never a gate. */ }
+    try { state = resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification); }
+    catch (error) {
+      if (machineClassification?.structural) {
+        throw new Error(`structural change requires a complete bound response ledger: ${error.message}`);
+      }
+      /* Response evidence is optional quality data, never a gate. */
+    }
     if (state?.hasStructuralChange) {
+      if (structuralFullAlreadyRecorded || previousResult.review_chain?.round === "full") {
+        return { round: "none", reason: "post_full_non_gate_recorded" };
+      }
       return { round: "full", reason: "structural_rework" };
     }
     return { round: "none", reason: "review_non_gate_recorded" };
   }
+  if (previousResult.verdict === "pass") return { round: "none", reason: "prior_result_passed" };
+  if (previousResult.verdict !== "revise_required") throw new TypeError("previous result must be semantic");
   let state;
   try { state = resolutionState(previousResult, ledger, currentSnapshotTree); }
   catch (error) {

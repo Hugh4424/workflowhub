@@ -301,9 +301,15 @@ Before the Stage completes, report Stage-owned component facts using
 canonical `wh-review` refs. Reviewer-owned diagnostic lenses appear only
 through their review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, human-readable
-artifact names, test and review conclusions, downstream dependencies, unresolved
-risks, next owner, and user action. Do not copy artifacts or raw logs. The
+The official Stage handler is the only completion-facts producer. Publish both
+completion views only through `core/stage-completion-facts.mjs`: the public
+surface receives its user renderer and the downstream surface receives its
+system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
+The shared result, risks, next owner, user action, and artifact labels must stay
+identical; only the system view carries formal refs, hashes, review details,
+dependencies, recovery conditions, and the downstream lookup rule.
+
+Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
 invoking host must deliver the same concise facts to its close handoff surface
 and parent progress surface. If verification returns invalid upstream input,
 the host must return the finding and completion condition to the upstream owner
@@ -323,3 +329,16 @@ warn-only.
 ```json
 {"stage":"verify-code","skill_or_stage":"verify-code"}
 ```
+
+## Serious review exception
+
+The verify-code quality review is a distinct official input; the accepted
+build-code integration review cannot stand in for it. If that quality review
+contains an authenticated `actionable` `major|blocking` finding, show one
+plain-language card at a time with the problem, evidence, consequences,
+affected scope, and mutually exclusive “repair first” (recommended) and
+“accept risk and continue” choices. Wait for the real host reply and use only
+`accept-review-risk`. Minor, invalid-anchor/evidence, unavailable, timeout, and
+adapter failures do not open this override. Accepted risk preserves the review
+verdict and does not replace verify-code's normal final confirmation, test
+evidence, acceptance evidence, or close authorization.

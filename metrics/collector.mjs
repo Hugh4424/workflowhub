@@ -24,6 +24,14 @@ import { assertTaskHandle } from "../core/task-handle.mjs";
 import { assertWorkspace } from "../core/stage-context.mjs";
 
 const GAP = "gap";
+const OWN_RESULTS = new Set([
+  "entry",
+  "success",
+  "structural-fail",
+  "serious-pause",
+  "risk-override",
+  "omission-accept",
+]);
 const METRICS_LAUNCHER_CONFIGS = new WeakSet();
 const COLLECTOR_CONFIGS = new WeakSet();
 
@@ -113,6 +121,12 @@ function upsertTask(executionId, patch, cfg) {
 
 function warn(cfg, message) {
   if (cfg && typeof cfg.onWarn === "function") cfg.onWarn(message);
+}
+
+function ownResult(value, cfg, fallback = null) {
+  if (OWN_RESULTS.has(value)) return value;
+  warn(cfg, `metrics own_result ignored: ${String(value)}`);
+  return fallback;
 }
 
 // Read all records from a jsonl store; missing file => empty list.
@@ -214,6 +228,7 @@ export function recordSkeleton(seed, cfg) {
     friction_ref: seed.friction_ref ?? null,
     action_count: actionCount(seed.actions),
     stage_unit: seed.stage_unit ?? null,
+    own_result: ownResult(seed.own_result ?? "entry", cfg, "entry"),
   };
   upsertTask(record.execution_id, record, cfg);
   upsertGlobal(record.execution_id, toGlobalRow(record, cfg), cfg);
@@ -226,6 +241,11 @@ export function recordSkeleton(seed, cfg) {
  */
 export function updateOwnResult(execution_id, patch, cfg) {
   const resolved = { ...patch };
+  if ("own_result" in resolved) {
+    const normalized = ownResult(resolved.own_result, cfg);
+    if (normalized === null) delete resolved.own_result;
+    else resolved.own_result = normalized;
+  }
   if ("tokens" in resolved || cfg.tokenSourceReachable === false) {
     resolved.tokens = resolveTokens(resolved.tokens, cfg);
   }

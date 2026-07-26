@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNonGateReviewResponseRecord, buildReviewChain, selectReviewRound } from "../review-controller.mjs";
+import { buildNonGateReviewResponseRecord, buildReviewChain, deriveChangeClassification, selectReviewRound } from "../review-controller.mjs";
 
 const route = { mode: "adaptive", initial: ["claude-code/opus", "kimi/k3"], closure: ["kimi/coding", "antigravity/flash"] };
 const previous = {
@@ -31,6 +31,52 @@ describe("review round controller", () => {
     expect(unverified).toMatchObject({ outcome: "recorded_non_gate_response", evidence_state: "verified" });
   });
 
+  it("records a passed review's ordinary delta without a provider and allows one structural full review", () => {
+    const passed = {
+      ...previous,
+      verdict: "pass",
+      adjudication: { clusters: [] },
+    };
+    const ordinaryDelta = {
+      version: "wh-review-response-ledger.v1",
+      previous_result_ref: passed.result_ref,
+      previous_snapshot_tree: passed.snapshot_tree,
+      current_snapshot_tree: ledger.current_snapshot_tree,
+      change: {
+        changed_dimensions: [],
+        rationale: "clarified wording without changing the contract",
+        evidence_refs: ["evidence/fix.json"],
+      },
+      responses: [],
+    };
+    expect(selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: passed,
+      ledger: ordinaryDelta, currentSnapshotTree: ordinaryDelta.current_snapshot_tree,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+    expect(buildNonGateReviewResponseRecord({
+      taskId: "task", stage: "build-spec", previousResult: passed,
+      previousResultSha256: "f".repeat(64), ledger: ordinaryDelta,
+      currentSnapshotTree: ordinaryDelta.current_snapshot_tree,
+    })).toMatchObject({
+      evidence_state: "verified",
+      response_ledger: { change: { changed_dimensions: [] }, responses: [] },
+    });
+
+    const structuralDelta = {
+      ...ordinaryDelta,
+      change: { ...ordinaryDelta.change, changed_dimensions: ["schema"] },
+    };
+    expect(selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: passed,
+      ledger: structuralDelta, currentSnapshotTree: structuralDelta.current_snapshot_tree,
+    })).toEqual({ round: "full", reason: "structural_rework" });
+    expect(selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: passed,
+      ledger: structuralDelta, currentSnapshotTree: structuralDelta.current_snapshot_tree,
+      structuralFullAlreadyRecorded: true,
+    })).toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
+  });
+
   it("keeps absent or invalid response evidence non-blocking and caps structural follow-up at one full review", () => {
     expect(selectReviewRound({ stage: "verify-code", route: structuralRoute, previousResult: previous, currentSnapshotTree: ledger.current_snapshot_tree }))
       .toEqual({ round: "none", reason: "review_non_gate_recorded" });
@@ -38,7 +84,7 @@ describe("review round controller", () => {
       .toMatchObject({ evidence_state: "unverified", unverified_reason: "no_response_ledger" });
     const structural = { ...previous, review_chain: { round: "full" } };
     expect(selectReviewRound({ stage: "build-plan", route: structuralRoute, previousResult: structural, ledger, currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toEqual({ round: "none", reason: "structural_rework_already_reviewed" });
+      .toEqual({ round: "none", reason: "review_non_gate_recorded" });
     expect(selectReviewRound({ stage: "build-plan", route: structuralRoute, previousResult: previous, ledger: { ...ledger, responses: [{ ...ledger.responses[0], status: "accepted_risk", accepted_snapshot_tree: ledger.current_snapshot_tree, affected_paths: ["src/a.mjs"] }] }, currentSnapshotTree: ledger.current_snapshot_tree }))
       .toEqual({ round: "none", reason: "review_non_gate_recorded" });
   });
@@ -50,7 +96,7 @@ describe("review round controller", () => {
     expect(selectReviewRound({ stage: "verify-code", route: structuralRoute, previousResult: previous, ledger: structuralLedger, currentSnapshotTree: ledger.current_snapshot_tree }))
       .toEqual({ round: "full", reason: "structural_rework" });
     expect(selectReviewRound({ stage: "verify-code", route: structuralRoute, previousResult: { ...previous, review_chain: { round: "full" } }, ledger: structuralLedger, currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toEqual({ round: "none", reason: "structural_rework_already_reviewed" });
+      .toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
   });
 
   it("never sends build-code to closure or stops after repeated full reviews", () => {
@@ -80,5 +126,111 @@ describe("review round controller", () => {
   it("rejects a second single-round review even when its prior result needs revision", () => {
     expect(selectReviewRound({ stage: "make-decision", route: { mode: "single_round", initial: ["kimi/k3"] }, previousResult: previous }))
       .toEqual({ round: "none", reason: "single_round_already_completed" });
+  });
+
+  it("derives structural change only from frozen material manifests and ignores caller dimension claims", () => {
+    const ordinary = deriveChangeClassification({
+      previousSnapshotTree: "a".repeat(40),
+      currentSnapshotTree: "b".repeat(40),
+      previousManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "notes", category: "explanation", sha256: "1".repeat(64) }] },
+      currentManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "notes", category: "explanation", sha256: "2".repeat(64) }] },
+    });
+    const structural = deriveChangeClassification({
+      previousSnapshotTree: "a".repeat(40),
+      currentSnapshotTree: "b".repeat(40),
+      previousManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "结构", category: "schema", sha256: "1".repeat(64) }] },
+      currentManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "结构", category: "schema", sha256: "2".repeat(64) }] },
+    });
+    expect(ordinary).toMatchObject({ structural: false, changed_dimensions: [] });
+    expect(structural).toMatchObject({ structural: true, changed_dimensions: ["schema"] });
+    expect(() => selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: previous,
+      ledger: null, currentSnapshotTree: ledger.current_snapshot_tree,
+      changeClassification: structural,
+    })).toThrow(/structural.*ledger|ledger.*structural/i);
+    expect(selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: previous,
+      ledger: { ...ledger, responses: [{ ...ledger.responses[0], changed_dimensions: ["schema"] }] },
+      currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: ordinary,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+  });
+
+  it("lets make-decision record ordinary deltas, perform one structural full, then record another ordinary delta", () => {
+    const ordinary = deriveChangeClassification({
+      previousSnapshotTree: previous.snapshot_tree,
+      currentSnapshotTree: ledger.current_snapshot_tree,
+      previousManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "说明", category: "explanation", sha256: "1".repeat(64) }] },
+      currentManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "说明", category: "explanation", sha256: "2".repeat(64) }] },
+    });
+    const structural = deriveChangeClassification({
+      previousSnapshotTree: previous.snapshot_tree,
+      currentSnapshotTree: ledger.current_snapshot_tree,
+      previousManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "决策", category: "decision", sha256: "1".repeat(64) }] },
+      currentManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "决策", category: "decision", sha256: "2".repeat(64) }] },
+    });
+    expect(selectReviewRound({
+      stage: "make-decision", route: structuralRoute, previousResult: previous, ledger,
+      currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: ordinary,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+    expect(selectReviewRound({
+      stage: "make-decision", route: structuralRoute, previousResult: previous, ledger,
+      currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: structural,
+    })).toEqual({ round: "full", reason: "structural_rework" });
+    expect(selectReviewRound({
+      stage: "make-decision", route: structuralRoute,
+      previousResult: { ...previous, review_chain: { round: "full" } }, ledger,
+      currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: ordinary,
+      structuralFullAlreadyRecorded: true,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+  });
+
+  it("records a complete post-full structural ledger but rejects missing or partial ledgers", () => {
+    const postFull = {
+      ...previous,
+      review_chain: { round: "full" },
+      adjudication: { clusters: [
+        { id: "F-123456789abc", disposition: "actionable" },
+        { id: "F-abcdef123456", disposition: "actionable" },
+      ] },
+    };
+    const completeLedger = {
+      ...ledger,
+      responses: [
+        ledger.responses[0],
+        {
+          finding_id: "F-abcdef123456", status: "accepted_risk",
+          rationale: "historical evidence cannot be reconstructed",
+          changed_dimensions: [], evidence_refs: [],
+          accepted_snapshot_tree: ledger.current_snapshot_tree,
+          affected_paths: ["specs/feature/spec.md"],
+        },
+      ],
+    };
+    const structural = deriveChangeClassification({
+      previousSnapshotTree: previous.snapshot_tree,
+      currentSnapshotTree: ledger.current_snapshot_tree,
+      previousManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "spec", category: "contract", sha256: "1".repeat(64) }] },
+      currentManifest: { version: "wh-review-classification-manifest.v1", entries: [{ identity: "spec", category: "contract", sha256: "2".repeat(64) }] },
+    });
+    expect(selectReviewRound({
+      stage: "build-spec", route: structuralRoute, previousResult: postFull, ledger: completeLedger,
+      currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: structural,
+      structuralFullAlreadyRecorded: true,
+    })).toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
+    for (const invalidLedger of [null, { ...completeLedger, responses: completeLedger.responses.slice(0, 1) }, {
+      ...ledger,
+      responses: [{ ...ledger.responses[0], finding_id: "F-ffffffffffff" }],
+    }]) {
+      expect(() => selectReviewRound({
+        stage: "build-spec", route: structuralRoute, previousResult: postFull, ledger: invalidLedger,
+        currentSnapshotTree: ledger.current_snapshot_tree, changeClassification: structural,
+        structuralFullAlreadyRecorded: true,
+      })).toThrow(/ledger|finding/i);
+    }
+    expect(selectReviewRound({
+      stage: "build-code", route: { mode: "full_only", initial: ["kimi/coding"] },
+      previousResult: postFull, ledger: completeLedger, currentSnapshotTree: ledger.current_snapshot_tree,
+      changeClassification: structural, structuralFullAlreadyRecorded: true,
+    })).toEqual({ round: "full", reason: "build_code_requires_fresh_full_review" });
   });
 });

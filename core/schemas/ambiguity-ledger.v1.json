@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ambiguity-ledger.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_content_hash", "items", "unresolved_material_count"],
+  "properties": {
+    "spec_content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "items": { "type": "array", "items": { "type": "object" } },
+    "unresolved_material_count": { "type": "integer", "minimum": 0 }
+  }
+}

@@ -52,6 +52,44 @@ function uniqueEvidenceRefs(refs) {
   return [...new Map(refs.map((ref) => [`${ref.kind}\u0000${ref.uri_or_path}\u0000${ref.content_hash ?? ""}`, ref])).values()];
 }
 
+function stageContentFacts(auditContext, stageSlug, workflowRunId, facts) {
+  const requiredKinds = Array.isArray(auditContext.required_content_kinds)
+    ? auditContext.required_content_kinds
+    : [];
+  const records = Array.isArray(auditContext.content_evidence)
+    ? auditContext.content_evidence
+    : [];
+  const refs = [];
+  const byKind = new Map();
+  for (const [index, record] of records.entries()) {
+    const value = record?.value;
+    const kind = value?.kind;
+    if (!nonEmptyString(kind) || !nonEmptyString(record?.ref) || !/^[a-f0-9]{64}$/.test(record?.hash ?? "")) {
+      facts.unknown.push({ type: "INVALID_STAGE_CONTENT_EVIDENCE", index });
+      continue;
+    }
+    const sameKind = byKind.get(kind) ?? [];
+    sameKind.push(index);
+    byKind.set(kind, sameKind);
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    if (createHash("sha256").update(raw).digest("hex") !== record.hash) {
+      facts.tampered_hash.push({ type: "STAGE_CONTENT_HASH_MISMATCH", kind, ref: record.ref });
+    }
+    if (auditContext.task_id !== value.task_id) facts.unknown.push({ type: "STAGE_CONTENT_TASK_MISMATCH", kind });
+    if (value.stage !== stageSlug) facts.unknown.push({ type: "STAGE_CONTENT_STAGE_MISMATCH", kind });
+    if (value.workflow_run_id !== workflowRunId) facts.unknown.push({ type: "STAGE_CONTENT_RUN_MISMATCH", kind });
+    if (auditContext.snapshot_tree !== value.snapshot_tree) facts.unknown.push({ type: "STAGE_CONTENT_TREE_MISMATCH", kind });
+    refs.push({ kind, ref: record.ref, hash: record.hash });
+  }
+  for (const [kind, indexes] of byKind) {
+    if (indexes.length > 1) facts.duplicate.push({ type: "DUPLICATE_STAGE_CONTENT_KIND", kind, count: indexes.length });
+  }
+  for (const kind of requiredKinds) {
+    if (!byKind.has(kind)) facts.missing.push({ type: "REQUIRED_STAGE_CONTENT_KIND_MISSING", kind });
+  }
+  return refs;
+}
+
 /**
  * Manifest and ledger are required authority inputs.  This function never
  * promotes observed entries into expected work and never calculates coverage
@@ -70,6 +108,7 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
   const ledgerResult = validateRequirementLedger(auditContext.ledger);
   const requirement_coverage = ledgerResult.ok ? calculateCoverage(auditContext.ledger) : { covered: 0, total: 0, withdrawn: 0, missing_ids: [] };
   if (!ledgerResult.ok) facts.unknown.push({ type: "LEDGER_REQUIRED_OR_INVALID", errors: ledgerResult.errors });
+  const contentEvidenceRefs = stageContentFacts(auditContext, stageSlug, workflowRunId, facts);
 
   const entries = []; const exits = []; const evidenceRefs = [];
   events.forEach((event, index) => {
@@ -139,7 +178,23 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
   });
   const hasFindings = Object.values(facts).some((items) => items.length > 0);
   const verdict = !hasFindings && requirement_coverage.total > 0 && requirement_coverage.covered === requirement_coverage.total ? "pass" : "fail";
-  const unsigned = { schema_version: "v1", workflow_run_id: workflowRunId, expected_steps: expectedSteps, observed_steps, requirement_coverage, facts, verdict, evidence_refs: uniqueEvidenceRefs(evidenceRefs), ledger_hash: auditContext.ledger?.ledger_hash ?? null, manifest_hash: auditContext.manifest?.manifest_hash ?? null };
+  const unsigned = {
+    schema_version: "v1",
+    ...(nonEmptyString(auditContext.task_id) ? { task_id: auditContext.task_id } : {}),
+    stage_slug: stageSlug,
+    workflow_run_id: workflowRunId,
+    ...(nonEmptyString(auditContext.snapshot_tree) ? { snapshot_tree: auditContext.snapshot_tree } : {}),
+    journal_hash: createHash("sha256").update(events.map((event) => JSON.stringify(event)).join("\n")).digest("hex"),
+    content_evidence_refs: contentEvidenceRefs,
+    expected_steps: expectedSteps,
+    observed_steps,
+    requirement_coverage,
+    facts,
+    verdict,
+    evidence_refs: uniqueEvidenceRefs(evidenceRefs),
+    ledger_hash: auditContext.ledger?.ledger_hash ?? null,
+    manifest_hash: auditContext.manifest?.manifest_hash ?? null,
+  };
   return { audit_summary: { ...unsigned, summary_hash: hashSummary(unsigned) }, warnings: [] };
 }
 

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "interaction-completion.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["interaction_type", "rounds", "grill", "workspace_tree"],
+  "properties": {
+    "interaction_type": { "enum": ["talk", "grill", "spec-clarify", "aggregate"] },
+    "rounds": { "type": "array", "items": { "type": "object" } },
+    "grill": { "type": ["object", "null"] },
+    "workspace_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "decision_ref": { "type": "string", "minLength": 1 },
+    "decision_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "interaction_type": { "const": "aggregate" } },
+        "required": ["interaction_type"]
+      },
+      "then": { "required": ["decision_ref", "decision_hash"] }
+    },
+    {
+      "if": {
+        "properties": { "interaction_type": { "enum": ["talk", "grill", "spec-clarify"] } },
+        "required": ["interaction_type"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["decision_ref"] },
+            { "required": ["decision_hash"] }
+          ]
+        }
+      }
+    }
+  ]
+}

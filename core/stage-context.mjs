@@ -7,6 +7,7 @@ import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-iden
 import { openTask } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { assertTaskRunnerIdentity } from "./runner-identity.mjs";
+import { authenticateOfficialInvocation } from "./invocation-identity.mjs";
 import {
   assertWorkspace,
   openAcceptedWorkspace,
@@ -27,9 +28,11 @@ function bindCandidateWorkspace(context, candidate) {
   if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
     throw new TypeError("unprepared make-decision StageContext required");
   }
+  const kernel = createTaskKernel(context.task, { candidateWorkspace: candidate });
   return Object.freeze({
     ...context,
-    kernel: createTaskKernel(context.task, { candidateWorkspace: candidate }),
+    kernel,
+    workflowRunId: kernel.deriveStageWorkflowRunId(context.stage),
     candidateWorkspace: candidate,
   });
 }
@@ -119,7 +122,10 @@ export function bootstrapStage(
   }
 
   const taskHandle = openTask(resolvedTaskPath, project, task);
-  if (taskHandle.manifest.runner_root !== undefined) {
+  let invocation;
+  if (taskHandle.manifest.execution_mode === "per_invocation") {
+    invocation = authenticateOfficialInvocation(taskHandle, { runnerRoot, stage: normalizedStage });
+  } else if (taskHandle.manifest.runner_root !== undefined) {
     assertTaskRunnerIdentity(taskHandle, { runnerRoot, stage: normalizedStage });
   }
   if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
@@ -139,20 +145,24 @@ export function bootstrapStage(
     throw new TypeError(`unsupported make-decision workspaceLifecycle: ${workspaceLifecycle}`);
   }
   const kernel = createTaskKernel(taskHandle, { candidateWorkspace: candidate });
+  let localDecision;
+  if (normalizedStage !== "make-decision") {
+    try { localDecision = kernel.readAccepted("make-decision"); } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (!localDecision) throw new Error("stage requires the current task's accepted make-decision result");
+  }
   const base = {
     stage: normalizedStage,
     task: taskHandle,
     identity: taskHandle.identity,
     manifest: taskHandle.manifest,
     kernel,
+    workflowRunId: kernel.deriveStageWorkflowRunId(normalizedStage),
+    ...(invocation ? { invocation } : {}),
   };
 
   if (normalizedStage === "make-decision") return Object.freeze({ ...base, ...(candidate ? { candidateWorkspace: candidate } : {}) });
-  let localDecision;
-  try { localDecision = kernel.readAccepted("make-decision"); } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  if (!localDecision) throw new Error("stage requires the current task's accepted make-decision result");
   const workspace = openAcceptedWorkspace(taskHandle, localDecision);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
@@ -164,5 +174,5 @@ export function bootstrapStage(
       throw new Error(`build-code requires current accepted spec and plan: ${error.message}`);
     }
   }
-  return Object.freeze({ ...base, kernel: stageKernel, workspace, artifacts });
+  return Object.freeze({ ...base, kernel: stageKernel, workflowRunId: stageKernel.deriveStageWorkflowRunId(normalizedStage), workspace, artifacts });
 }

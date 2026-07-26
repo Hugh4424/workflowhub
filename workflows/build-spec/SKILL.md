@@ -43,19 +43,39 @@ Use this complete public sequence without inventing flags or input shapes:
    `node scripts/stage-runtime.mjs artifact --stage=build-spec
    --project=<project> --task=<task> --name=spec.md
    --input=$TMP_DIR/draft-spec.md`.
-2. After review is finished and without changing `spec.md`, create the official
+2. For the exact current `spec.md`, publish its ambiguity ledger:
+   `node scripts/stage-runtime.mjs publish-content-evidence --stage=build-spec
+   --project=<project> --task=<task> --kind=ambiguity-ledger.v1
+   --input=$TMP_DIR/ambiguity-ledger.json`.
+   The returned canonical ref/hash is the only ambiguity-ledger evidence used
+   by review and publication. If clarification or review changes even one
+   `spec.md` byte, the old ledger is stale: rebuild and republish it for the new
+   content before continuing.
+3. After review is finished and without changing `spec.md`, create the official
    receipt once:
    `node scripts/stage-runtime.mjs receipt --stage=build-spec
    --project=<project> --task=<task> --component=spec
    --input=$TMP_DIR/spec-receipt.json`.
    The input shape is exactly
    `{"content":"<exact final spec markdown>"}`.
-3. Create `$TMP_DIR/run.json` with exactly:
+4. Create `$TMP_DIR/run.json` with the final spec receipt and canonical review
+   head:
    `{"receipts":{"spec":"receipts/spec.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
-4. Publish and automatically accept the stage:
+   Do not add `workflow_run_id`: the trusted runtime derives the authenticated
+   review-flow identity from the accepted make-decision lineage, locks that
+   flow, and requires the consumed semantic result to be its exact current
+   head/root/hash.
+   The review must bind the exact current Workspace snapshot. When a normal
+   post-review edit is covered by a canonical verified delta resolution, add
+   `"review_resolution":"reviews/resolutions/<sha256>.json"` under `receipts`;
+   its prior result ref/hash/snapshot and current snapshot must match. A
+   structural follow-up instead supplies its current full result as `review`;
+   the runtime verifies that result's canonical parent ref/hash. A stale review
+   without either binding fails before a stage attempt is published.
+5. Publish and automatically accept the stage:
    `node scripts/stage-runtime.mjs run --stage=build-spec
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
-5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
+6. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
    a stage artifact, evidence ref, or handoff item.
 
@@ -91,7 +111,31 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    controlled writer for `spec.md`. Present one host-visible draft brief covering
    the proposed goal, boundaries, major requirements, acceptance shape, and the
    next check.
-4. Always perform a material ambiguity scan over the current `spec.md`.
+4. Always build an `ambiguity-ledger.v1` over the current `spec.md`; an empty
+   or skipped ledger is invalid. Classify every relevant statement as exactly
+   one of `locked upstream decision`, `upstream explicitly unresolved`, or
+   `new ambiguity`. One ledger item represents one decision axis. If two
+   behaviors can vary independently, create two items even when they affect the
+   same field or feature.
+
+   Every item records all six possible impact dimensions separately: scope,
+   acceptance, interfaces, data, security, and operations. It also records
+   whether it is material, its source facts, affected requirements, status,
+   conclusion, and factual reason. A material item may close only as a real
+   user decision bound to its clarification interaction, a spec-local fact
+   uniquely derived from a locked upstream decision, or an unresolved blocker.
+   A non-material item may be skipped only when its record explains with
+   checkable facts why none of the six dimensions can change. When there are no
+   material ambiguities, retain the classified items and this factual
+   no-material reason; never replace the ledger with “nothing important found”.
+
+   Compute `spec_content_hash` from the exact UTF-8 bytes of the current
+   `spec.md`. `unresolved_material_count` must equal the number of material
+   items whose status is `unresolved blocker`. The content-evidence writer
+   injects task, Stage, run, producer and Workspace snapshot bindings; the
+   component must not supply identity, root, task path, cwd or repository
+   discovery fields.
+
    `spec-clarify` is conditional with trigger `clarification`: invoke it with
    the current content and the same named writer only when an ambiguity can
    change scope, acceptance, interfaces, data, security, or operations. Clarify
@@ -107,38 +151,63 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    end the current invocation, and wait for the answer. Do not publish another
    clarification card, update the draft, or start review before a new invocation
    receives the real reply bound to the current card. Each remaining axis
-   requires its own ask → wait → resume cycle. When no material unresolved or new
-   ambiguity exists, record
-   `spec-clarify: trigger=false — no material ambiguity` and continue.
-5. Apply the constitutional checklist. Record findings; do not silently rewrite
+   requires its own ask → wait → resume cycle. After every real answer,
+   reclassify every remaining axis and rebuild the ledger against the updated
+   exact draft. When no material unresolved or new ambiguity exists, record
+   `spec-clarify: trigger=false — no material ambiguity` together with the
+   ledger's factual six-dimension reason and continue.
+5. Before constitution checking or review, enforce the ambiguity gate. Any
+   material `unresolved blocker`, a merged independent axis, a missing
+   six-dimension assessment, a mismatched `spec_content_hash`, or an incorrect
+   `unresolved_material_count` stops the Stage. Do not create the spec receipt,
+   start review, publish a successful attempt, or show a completion card.
+   Publish the current canonical `ambiguity-ledger.v1` ref/hash only after the
+   exact draft passes this gate.
+6. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
-6. Run the initial review using a frozen packet built from `spec.md`, decision
-   facts, and relevant evidence. Present one review brief for its effective
-   result using the review-card contract below.
-7. If the current review has actionable findings, revise the draft, publish the
-   changed `spec.md`, and run formal review again. Repeat for every changed draft
-   until the current exact draft has no unresolved actionable finding. There is
-   no numeric review limit. Never repeat review for unchanged snapshot/material:
-   `wh-review` reuses the existing result for that exact identity. After each
-   changed draft receives a new effective result, present one changed-result
-   review brief; never republish an unchanged reused result.
-8. Before the create-only receipt, reconcile the exact final `spec.md` bytes
+7. Run one initial full review using a frozen packet built from the exact
+   `spec.md`, its matching ambiguity-ledger ref/hash, decision facts, and
+   relevant evidence. Present one review brief for its effective result using
+   the review-card contract below.
+8. If clarification or review causes `spec.md` to change, first republish the
+   artifact, rebuild the ledger, rerun the ambiguity gate, and publish new
+   content evidence. TaskKernel then classifies the change inside the same
+   authenticated review flow:
+
+   - an ordinary change uses a canonical verified delta/resolution bound to the
+     prior result, prior spec/ledger hashes, current spec/ledger hashes, and
+     current snapshot; provider calls remain zero;
+   - a material structural change may append at most one fresh full review,
+     whose canonical parent is the prior result;
+   - unchanged snapshot/material reuses its existing result and must not call a
+     provider again.
+
+   A stale ledger, a resolution from another flow, a delta that does not cover
+   the actual change, or a second structural follow-up review stops the Stage.
+   Do not loop reviews to manufacture a pass. If the single permitted
+   structural follow-up still leaves an actionable material finding, report the
+   blocker and its completion condition instead of publishing.
+9. Before the create-only receipt, reconcile the exact final `spec.md` bytes
    against every review finding and the planned completion card. Resolve every
    finding that alleges an internal contradiction, unresolved cross-reference,
    missing acceptance criterion, or mismatch between claimed and written
    coverage, even when the provider verdict is `pass`. Enumerate the actual FR
    and AC identifiers and verify that every stated range and downstream coverage
-   claim resolves to them. If reconciliation changes the draft, return to Step 7.
-   Stop before acceptance until that changed current draft is formally reviewed
-   with no unresolved actionable finding; never publish a completion card that
-   claims more than the artifact contains.
-9. After that reconciliation finishes, without changing `spec.md`, create one final create-only receipt
+   claim resolves to them. If reconciliation changes the draft, return to Step
+   8's same-flow classification; do not start a new review flow. Stop before
+   acceptance while the ledger or review resolution is stale, or an actionable
+   material finding remains; never publish a completion card that claims more
+   than the artifact contains.
+10. After that reconciliation finishes, verify once more that the exact final
+   spec bytes, `spec_content_hash`, canonical ambiguity-ledger ref/hash, review
+   head or same-flow resolution, and Workspace snapshot all agree. Without
+   changing `spec.md`, create one final create-only receipt
    from its exact content. The normal path must not use a revision receipt
    or create an official receipt from a draft. Publish the append-only stage
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and
    provenance; never describe it as a pass or invent a result.
-10. Present a plain-language completion brief covering what the specification
+11. Present a plain-language completion brief covering what the specification
    will deliver, explicit non-goals, major functional requirements, acceptance
    criteria, interfaces or operational boundaries, remaining risks, and the
    exact input handed to build-plan. The trusted runtime immediately runs
@@ -190,9 +259,15 @@ cross-check consistently against that list. 正式产物、审查引用与该清
 Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, human-readable
-artifact names, test and review conclusions, downstream dependencies, unresolved
-risks, next owner, and user action. Do not copy artifacts or raw logs. The
+The official Stage handler is the only completion-facts producer. Publish both
+completion views only through `core/stage-completion-facts.mjs`: the public
+surface receives its user renderer and the downstream surface receives its
+system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
+The shared result, risks, next owner, user action, and artifact labels must stay
+identical; only the system view carries formal refs, hashes, review details,
+dependencies, recovery conditions, and the downstream lookup rule.
+
+Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
 invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
 input, the host must return the finding and completion condition to the upstream owner
@@ -212,3 +287,14 @@ warn-only.
 ```json
 {"stage":"build-spec","skill_or_stage":"build-spec"}
 ```
+
+## Serious review exception
+
+After the formal review, pause only for an authenticated `actionable`
+`major|blocking` finding. Show one plain-language card at a time with the
+problem, evidence, consequences, affected scope, and mutually exclusive
+“repair first” (recommended) and “accept risk and continue” choices. Wait for
+the real host reply and use only the official `accept-review-risk` command.
+Minor, invalid-anchor/evidence, unavailable, timeout, and adapter failures do
+not open a risk override. With no serious finding build-spec remains automatic;
+accepted risk never changes the verdict or excuses missing structural evidence.

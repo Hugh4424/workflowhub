@@ -9,17 +9,21 @@
 
 ## 决策
 
-同任务 runner 恢复与 Phase 0 恢复是两条独立、可分别验收的追加恢复路径。两者复用同一种一次性恢复门禁，但门禁按恢复目标独立记账：一条路径的失败或已使用状态绝不影响另一条。每条路径都必须绑定同一任务身份、目标仓、来源、真实收据和工作树；任一不匹配立即拒绝。runner 恢复以已接受的上游业务快照为唯一业务基线，runner 自身只能通过可核验的来源关系替换。Phase 0 恢复保留旧通过结果，以追加记录承接新快照的真实凭证；只有重新完成正式证据与审查后，新结果才成为当前结果。恢复期间不得推进 Phase 1 或 Phase 2。
+Phase 0 的 `phase-pointer` 恢复继续采用追加记录：保留旧通过结果，以追加记录承接新快照的真实凭证；只有重新完成正式证据与审查后，新结果才成为当前结果。恢复期间不得推进 Phase 1 或 Phase 2。
+
+原 runner replacement 决策降为 `legacy_pinned` 任务迁移前的只读兼容，不再是正常工具升级路径。新任务使用 `execution_mode=per_invocation`，任务清单不保存 `runner_root`、`runner_oid` 或当前 replacement 指针。每次正式调用对显式 runner 做 Git 顶层、branch、HEAD、clean 状态和合同内容认证，并把 task/stage/run/来源写入 create-only 调用身份。升级 WorkflowHub 只产生下一次调用身份，不复制 checkout、不改任务清单、不追加 runner recovery generation。
+
+旧任务必须通过一次受控迁移进入 `per_invocation`：迁移以原始 `task.json` hash 做 CAS，追加确定性迁移记录，保留既有 migration/replacement lineage 供历史读取，并从当前 manifest 移除 live runner 绑定。相同输入 replay 只有在迁移记录与当前 manifest 均精确匹配时幂等；旧 hash 不同或并发变化必须失败。没有 `execution_mode` 的任务一律按 `legacy_pinned` 解释，禁止静默升级。
 
 ## 考虑过的选项
 
-- 保留原 runner 或旧 Phase 结果：拒绝，因为无法解除已证实的阻塞。
+- 永久保留 runner 绑定：拒绝，因为正常工具升级会制造无业务价值的 runner 目录和 replacement 长链。
 - 直接覆盖任务或 Phase 记录：拒绝，因为会破坏不可变证据与追溯。
 - 新建独立任务链：拒绝，因为会丢失原任务的已接受输入和证据关系。
 
 ## 后果
 
-需要新增受控入口、严格校验、单元和集成测试，以及清楚的错误信息与宿主文档。恢复能力只解决两类已知阻塞；不允许手工修改记录、伪造前置审查、猜分支、手工 checkout 冒充认证基线，或绕过正式 review/verify。
+需要一次遗留迁移和按调用认证；历史 runner lineage 仍可读，但不能继续增长。Phase 恢复规则保持有效。不得手改任务记录、让 dirty 工作树冒充 HEAD、把调用身份冒充质量审查，或绕过正式 review/verify。
 
 ## 受限增补：历史 PASS lineage（2026-07-25）
 

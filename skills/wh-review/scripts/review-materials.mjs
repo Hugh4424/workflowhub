@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { closeSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,9 @@ function sha256(bytes) {
 }
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
+export const PHASE_DIFF_INLINE_LIMIT_BYTES = 320 * 1024;
+export const SELECTED_CONTEXT_PACKET_LIMIT_BYTES = 330 * 1024;
+const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
 
 function sha256File(path) {
   const hash = createHash("sha256");
@@ -384,7 +387,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const roundInstruction = reviewRound === "closure"
     ? "This is a bounded closure review. Review only the prior actionable findings and response ledger, whether each claimed repair is complete, and whether a non-fix has a stated reason. Do not reopen a full design/code review unless the supplied delta proves a material change."
     : "This is a full review of the supplied stage subject.";
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff as the complete phase change authority when supplied, and context/ only for the direct map-selected dependencies needed to judge it. ${blind} ${roundInstruction} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the included diff-shards/ and summaries as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${blind} ${roundInstruction} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -448,6 +451,260 @@ function changeMapFor({ source, phaseId, diffIndex }) {
   return { schema_version: "wh-review-change-map.v1", phase_id: phaseId, base_tree: source.baseTree, candidate_tree: source.snapshotTree, changes };
 }
 
+function canonicalDiffArchive({ reviewDataRoot, source }) {
+  const root = resolve(reviewDataRoot, "canonical-phase-diffs");
+  mkdirSync(root, { recursive: true });
+  const name = `${source.diffSha256}.diff`;
+  const target = join(root, name);
+  if (!existsSync(target)) {
+    const temporary = join(root, `.${name}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`);
+    source.copyDiffTo(temporary);
+    try { renameSync(temporary, target); } catch (error) {
+      rmSync(temporary, { force: true });
+      if (!existsSync(target)) throw error;
+    }
+  }
+  if (statSync(target).size !== source.diffBytes || sha256File(target) !== source.diffSha256) {
+    throw new Error("MATERIAL_INCOMPLETE: canonical Phase diff archive is missing or tampered");
+  }
+  return { ref: `canonical-phase-diffs/${name}`, sha256: source.diffSha256, bytes: source.diffBytes };
+}
+
+function canonicalMaterialArchive({ reviewDataRoot, label, bytes }) {
+  const hash = sha256(bytes);
+  const root = resolve(reviewDataRoot, "canonical-review-materials");
+  mkdirSync(root, { recursive: true });
+  const name = `${label}-${hash}.json`;
+  const target = join(root, name);
+  if (!existsSync(target)) writeFileSync(target, bytes, { flag: "wx" });
+  if (statSync(target).size !== bytes.length || sha256File(target) !== hash) {
+    throw new Error(`MATERIAL_INCOMPLETE: canonical ${label} archive is missing or tampered`);
+  }
+  return { ref: `canonical-review-materials/${name}`, sha256: hash, bytes: bytes.length };
+}
+
+function compactAuthorityMap(map, archive) {
+  return {
+    schema_version: "wh-review-compact-map.v1",
+    full: archive,
+    state: map.state,
+    ...(map.acceptance_ids ? { acceptance_ids: map.acceptance_ids } : {}),
+    entries: map.entries.map((entry) => ({
+      id: entry.id,
+      disposition: entry.disposition,
+      ...(entry.change_ids ? { change_ids: entry.change_ids } : {}),
+      ...(entry.implementation_anchor_ids ? { implementation_anchor_ids: entry.implementation_anchor_ids } : {}),
+      ...(entry.verification_anchor_ids ? { verification_anchor_ids: entry.verification_anchor_ids } : {}),
+      ...(entry.anchors ? { anchors: entry.anchors.map(({ id, path, start_line, end_line, role }) => ({ id, path, start_line, end_line, role })) } : {}),
+      ...(entry.reason_code ? { reason_code: entry.reason_code } : {}),
+    })),
+  };
+}
+
+function requirementIds(value) {
+  return new Set(String(value ?? "").match(/\b(?:FR|AC)-\d+\b/g) ?? []);
+}
+
+function compactApprovedSpec(spec, acceptanceCriteria, acceptanceMap, archive) {
+  if (acceptanceMap?.acceptance_ids?.length) {
+    const lines = String(spec).split("\n");
+    const entries = new Map(acceptanceMap.entries.map((entry) => [entry.id, entry]));
+    const excerpts = acceptanceMap.acceptance_ids.map((acceptanceId) => {
+      const entry = entries.get(acceptanceId);
+      const verificationIds = new Set(entry?.verification_anchor_ids ?? []);
+      const anchor = (entry?.anchors ?? []).find((candidate) =>
+        verificationIds.has(candidate.id) && /(?:^|\/)spec\.md$/i.test(candidate.path ?? ""));
+      if (!anchor || !Number.isSafeInteger(anchor.start_line) || !Number.isSafeInteger(anchor.end_line)
+          || anchor.start_line < 1 || anchor.end_line < anchor.start_line || anchor.end_line > lines.length) {
+        throw new Error(`MATERIAL_INCOMPLETE: acceptance ${acceptanceId} has no valid spec verification excerpt`);
+      }
+      const text = lines.slice(anchor.start_line - 1, anchor.end_line).join("\n");
+      if (!text.includes(acceptanceId)) {
+        throw new Error(`MATERIAL_INCOMPLETE: spec verification excerpt does not contain ${acceptanceId}`);
+      }
+      return { acceptance_id: acceptanceId, path: anchor.path, start_line: anchor.start_line, end_line: anchor.end_line, text };
+    });
+    return {
+      schema_version: "wh-review-spec-excerpts.v1",
+      full: archive,
+      selected_ids: [...acceptanceMap.acceptance_ids],
+      excerpts,
+    };
+  }
+  const ids = requirementIds(acceptanceCriteria);
+  for (const id of acceptanceMap?.acceptance_ids ?? []) ids.add(id);
+  for (const entry of acceptanceMap?.entries ?? []) {
+    for (const id of requirementIds(JSON.stringify(entry))) ids.add(id);
+  }
+  const blocks = String(spec).split(/\n{2,}/);
+  const selected = blocks.filter((block) => [...ids].some((id) => block.includes(id)));
+  return {
+    schema_version: "wh-review-spec-excerpts.v1",
+    full: archive,
+    selected_ids: [...ids].sort(),
+    excerpts: selected,
+  };
+}
+
+function canonicalAnchorSource({ reviewDataRoot, source, anchor }) {
+  const temporaryRoot = mkdtempSync(join(resolve(reviewDataRoot), "anchor-source-"));
+  try {
+    const snapshot = snapshotContext({ source, anchor, temporaryRoot });
+    const bytes = Buffer.from(`${snapshot.content}\n`, "utf8");
+    const archive = canonicalMaterialArchive({
+      reviewDataRoot, label: `anchor-${sha256(anchor.id).slice(0, 16)}`, bytes,
+    });
+    return {
+      anchor_id: anchor.id,
+      source_ref: archive.ref,
+      source_sha256: archive.sha256,
+      start_line: anchor.start_line,
+      end_line: anchor.end_line,
+    };
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+function diffSections(source) {
+  const bytes = readFileSync(source.diffPath);
+  const starts = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const next = bytes.indexOf(Buffer.from("diff --git "), offset);
+    if (next < 0) break;
+    if (next === 0 || bytes[next - 1] === 10) starts.push(next);
+    offset = next + 10;
+  }
+  if (starts.length === 0 && bytes.length > 0) throw new Error("MATERIAL_INCOMPLETE: Phase diff has no unified diff sections");
+  return starts.map((start, index) => {
+    const end = starts[index + 1] ?? bytes.length;
+    const body = bytes.subarray(start, end);
+    const firstLineEnd = body.indexOf(10);
+    const header = body.subarray(0, firstLineEnd < 0 ? body.length : firstLineEnd).toString("utf8");
+    const path = diffPathFromHeader(header);
+    if (!path) throw new Error("MATERIAL_INCOMPLETE: Phase diff section has an invalid header");
+    return { path, bytes: body };
+  });
+}
+
+function isSummaryEligiblePath(path) {
+  return /(^|\/)(?:test|tests|__tests__|fixtures|evidence|receipts)(?:\/|$)/i.test(path)
+    || /\.(?:snap|golden|log)$/i.test(path);
+}
+
+function semanticDiffBytes(bytes) {
+  const text = bytes.toString("utf8");
+  const trailing = text.endsWith("\n");
+  const lines = text.split("\n");
+  if (trailing) lines.pop();
+  const kept = lines.filter((line) => !line.startsWith(" "));
+  return Buffer.from(`${kept.join("\n")}${trailing ? "\n" : ""}`, "utf8");
+}
+
+function semanticAnchorRanges(change, anchor) {
+  let delta = 0;
+  for (const hunk of change.hunks) {
+    const match = hunk.header?.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (!match) continue;
+    const oldStart = Number(match[1]), oldCount = match[2] === undefined ? 1 : Number(match[2]);
+    const newStart = Number(match[3]), newCount = match[4] === undefined ? 1 : Number(match[4]);
+    const newEnd = newCount === 0 ? newStart : newStart + newCount - 1;
+    if (anchor.start_line <= newEnd && newStart <= anchor.end_line) {
+      return {
+        old: { start_line: oldStart, end_line: oldCount === 0 ? oldStart : oldStart + oldCount - 1 },
+        new: { start_line: anchor.start_line, end_line: anchor.end_line },
+      };
+    }
+    if (newEnd < anchor.start_line) delta += newCount - oldCount;
+  }
+  return {
+    old: { start_line: anchor.start_line - delta, end_line: anchor.end_line - delta },
+    new: { start_line: anchor.start_line, end_line: anchor.end_line },
+  };
+}
+
+function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials }) {
+  const archive = canonicalDiffArchive({ reviewDataRoot, source });
+  const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
+  const shards = [];
+  let ordinal = 0;
+  for (const section of diffSections(source)) {
+    const change = changesByPath.get(section.path);
+    if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
+    const semanticBytes = semanticDiffBytes(section.bytes);
+    for (let offset = 0; offset < semanticBytes.length; offset += PHASE_DIFF_SHARD_TARGET_BYTES) {
+      const body = semanticBytes.subarray(offset, Math.min(semanticBytes.length, offset + PHASE_DIFF_SHARD_TARGET_BYTES));
+      const shardId = `S-${String(++ordinal).padStart(4, "0")}`;
+      const selected = !isSummaryEligiblePath(section.path);
+      const path = `diff-shards/${shardId}.diff`;
+      if (selected) write(bundleRoot, path, body);
+      shards.push({
+        shard_id: shardId,
+        _source_path: section.path,
+        offset,
+        bytes: body.length,
+        sha256: sha256(body),
+        delivery: selected ? "included" : "summary_only",
+      });
+    }
+  }
+  const indexedChanges = [...new Set(diffSections(source).map(({ path }) => changesByPath.get(path)?.change_id).filter(Boolean))];
+  const covered = new Set(indexedChanges);
+  const missing = changeMap.changes.map(({ change_id }) => change_id).filter((id) => !covered.has(id));
+  if (missing.length > 0) throw new Error(`MATERIAL_INCOMPLETE: diff index misses change_ids ${missing.join(",")}`);
+  const compactChanges = changeMap.changes.map((change) => ({
+    change_id: change.change_id,
+    path: change.path,
+    hunk_ids: change.hunks.map(({ hunk_id }) => hunk_id),
+    shards: shards.filter((shard) => shard._source_path === change.path)
+      .map(({ _source_path, ...shard }) => shard),
+  }));
+  const index = {
+    schema_version: "wh-review-diff-index.v1",
+    delivery_mode: "selected_context",
+    full_diff: { ...archive, lines: (() => { let count = 0; forEachTextLine(source.diffPath, () => { count += 1; }); return count; })() },
+    coverage: { change_ids_total: changeMap.changes.length, change_ids_indexed: covered.size },
+    changes: compactChanges,
+    anchors: selectedAnchors(materials).map((anchor) => {
+      const change = compactChanges.find(({ path }) => path === anchor.path);
+      if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
+      const shard = change.shards.find(({ delivery }) => delivery === "included");
+      if (!shard) throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
+      const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
+      return { anchor_id: anchor.id, shard_id: shard.shard_id, source_lines: semanticAnchorRanges(fullChange, anchor) };
+    }),
+  };
+  write(bundleRoot, "diff-index.json", Buffer.from(`${JSON.stringify(index)}\n`));
+  return index;
+}
+
+export function validateDiffIndexBundle(bundleRoot) {
+  const indexPath = join(bundleRoot, "diff-index.json");
+  if (!existsSync(indexPath)) return;
+  let index;
+  try { index = JSON.parse(readFileSync(indexPath, "utf8")); } catch {
+    throw new Error("MATERIAL_INCOMPLETE: diff-index.json is invalid");
+  }
+  if (index.schema_version !== "wh-review-diff-index.v1" || index.delivery_mode !== "selected_context") {
+    throw new Error("MATERIAL_INCOMPLETE: diff index contract mismatch");
+  }
+  const covered = new Set();
+  for (const change of index.changes ?? []) {
+    covered.add(change.change_id);
+    for (const shard of change.shards ?? []) {
+    if (shard.delivery !== "included") continue;
+    const path = join(bundleRoot, "diff-shards", `${shard.shard_id}.diff`);
+    if (!existsSync(path) || statSync(path).size !== shard.bytes || sha256File(path) !== shard.sha256) {
+      throw new Error(`MATERIAL_INCOMPLETE: selected diff shard ${shard.shard_id} is missing or tampered`);
+    }
+    }
+  }
+  if (covered.size !== index.coverage?.change_ids_total || covered.size !== index.coverage?.change_ids_indexed) {
+    throw new Error("MATERIAL_INCOMPLETE: diff index change_id coverage is incomplete");
+  }
+}
+
 /**
  * Build the small AC-to-change/test declaration that becomes immutable Phase
  * evidence after the formal review is written.  It is deliberately derived
@@ -498,6 +755,8 @@ export function derivePhaseAcceptanceTrace({ source, phaseId, materials, strictV
 function packetAuthority(path, rule) {
   if (path === "source.json") return { authority: "required", inclusion_reason: "immutable_snapshot_identity" };
   if (path === "changes.diff") return { authority: "required", inclusion_reason: "complete_phase_diff" };
+  if (path === "diff-index.json") return { authority: "required", inclusion_reason: "complete_phase_diff_index" };
+  if (path.startsWith("diff-shards/")) return { authority: "required", inclusion_reason: "selected_phase_diff_shard" };
   if (path === "change-map.json") return { authority: "required", inclusion_reason: "deterministic_phase_change_map" };
   if (path.startsWith("context/")) return { authority: "context", inclusion_reason: "map_selected_direct_context" };
   if (path === "evidence/test-summary.json") return { authority: "evidence", inclusion_reason: "structured_test_receipt_summary" };
@@ -560,22 +819,25 @@ function compactPacketEntries(entries) {
   return Object.fromEntries(Object.entries(included).filter(([, entriesForAuthority]) => entriesForAuthority.length > 0));
 }
 
-function packetPlanBytes({ stage, reviewTrack, reviewScope, included, excluded }) {
-  return Buffer.from(`${JSON.stringify({
+function packetPlanBytes({ stage, reviewTrack, reviewScope, included, excluded, deliveryMode }) {
+  const value = {
     schema_version: "wh-review-packet-plan.v1",
     stage,
     review_track: reviewTrack,
     review_scope: reviewScope,
+    delivery_mode: deliveryMode,
     included: compactPacketEntries(included),
     excluded,
-  }, null, 2)}\n`, "utf8");
+  };
+  return Buffer.from(`${deliveryMode === "selected_context" ? JSON.stringify(value) : JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, rule }) {
   const payload = packetEntries(bundleRoot, rule);
   const excluded = excludedPacketMaterial(rule, stage);
   const included = [...payload, { path: "packet-plan.json", authority: "metadata" }, { path: "manifest.json", authority: "metadata" }];
-  const planBytes = packetPlanBytes({ stage, reviewTrack, reviewScope, included, excluded });
+  const deliveryMode = filesUnder(bundleRoot).includes("diff-index.json") ? "selected_context" : "inline_complete";
+  const planBytes = packetPlanBytes({ stage, reviewTrack, reviewScope, included, excluded, deliveryMode });
   write(bundleRoot, "packet-plan.json", planBytes);
   return JSON.parse(planBytes.toString("utf8"));
 }
@@ -604,6 +866,7 @@ function selectedAnchors(materials) {
 
 function validateBuildCodeContextSelection({ source, materials, diffIndex }) {
   for (const anchor of selectedAnchors(materials)) {
+    if (anchor.map === "acceptance_map" && /(?:^|\/)spec\.md$/i.test(anchor.path)) continue;
     const changed = source.changedFiles.find((item) => item.path === anchor.path);
     if (!changed) continue;
     if (typeof anchor.outside_diff_reason !== "string" || anchor.outside_diff_reason.trim() === "") {
@@ -629,14 +892,16 @@ function snapshotContext({ source, anchor, temporaryRoot }) {
   return { ...snapshot, content: lines.join("\n") };
 }
 
-function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials }) {
+function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, canonicalOnly = false }) {
   const temporaryRoot = mkdtempSync(join(resolve(reviewDataRoot), "context-capture-"));
   try {
     for (const anchor of selectedAnchors(materials)) {
       const changed = source.changedFiles.some((item) => item.path === anchor.path);
       const snapshot = snapshotContext({ source, anchor, temporaryRoot });
       const header = { schema_version: "wh-review-context.v1", id: anchor.id, path: anchor.path, start_line: anchor.start_line, end_line: anchor.end_line, role: anchor.role, reason: anchor.reason, outside_diff_reason: anchor.outside_diff_reason ?? null, map: anchor.map, entry_id: anchor.entry_id, change_ids: anchor.change_ids, changed_file: changed, snapshot_sha256: snapshot.sha256 };
-      write(bundleRoot, `context/${anchor.id}.txt`, Buffer.from(`${JSON.stringify(header)}\n${snapshot.content}\n`, "utf8"));
+      const bytes = Buffer.from(`${JSON.stringify(header)}\n${snapshot.content}\n`, "utf8");
+      if (canonicalOnly) canonicalMaterialArchive({ reviewDataRoot, label: `context-${sha256(anchor.id).slice(0, 16)}`, bytes });
+      else write(bundleRoot, `context/${anchor.id}.txt`, bytes);
     }
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
@@ -681,7 +946,26 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const acEvidenceSummary = stage === "verify-code"
     ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
     : null;
-  const providerMaterials = Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence"));
+  let providerMaterials = Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence"));
+  const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
+  if (selectedContextDelivery) {
+    const compacted = { ...providerMaterials };
+    for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
+      if (!compacted[key]) continue;
+      const bytes = materialBytes(compacted[key]);
+      compacted[key] = compactAuthorityMap(compacted[key], canonicalMaterialArchive({ reviewDataRoot, label: key, bytes }));
+    }
+    if (compacted.approved_spec) {
+      const bytes = materialBytes(compacted.approved_spec);
+      compacted.approved_spec = compactApprovedSpec(
+        compacted.approved_spec,
+        compacted.acceptance_criteria,
+        materials.acceptance_map,
+        canonicalMaterialArchive({ reviewDataRoot, label: "approved-spec", bytes }),
+      );
+    }
+    providerMaterials = compacted;
+  }
   if (acEvidenceSummary !== null) providerMaterials.ac_evidence_summary = acEvidenceSummary;
 
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
@@ -695,15 +979,32 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       captured_head: source.capturedHead,
       snapshot_tree: source.snapshotTree
     })}\n`));
-    const copiedDiff = source.copyDiffTo(join(bundleRoot, "changes.diff"));
-    if (copiedDiff.bytes !== source.diffBytes || copiedDiff.sha256 !== source.diffSha256) {
-      throw new Error("MATERIAL_INCOMPLETE: copied complete diff does not match frozen source bytes");
+    if (source.diffBytes <= PHASE_DIFF_INLINE_LIMIT_BYTES) {
+      write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(changeMap, null, 2)}\n`));
+      const copiedDiff = source.copyDiffTo(join(bundleRoot, "changes.diff"));
+      if (copiedDiff.bytes !== source.diffBytes || copiedDiff.sha256 !== source.diffSha256) {
+        throw new Error("MATERIAL_INCOMPLETE: copied complete diff does not match frozen source bytes");
+      }
+    } else {
+      const fullChangeMap = materialBytes(changeMap);
+      const archive = canonicalMaterialArchive({ reviewDataRoot, label: "change-map", bytes: fullChangeMap });
+      const compactChangeMap = {
+        schema_version: "wh-review-compact-change-map.v1",
+        full: archive,
+        phase_id: changeMap.phase_id,
+        base_tree: changeMap.base_tree,
+        candidate_tree: changeMap.candidate_tree,
+        changes: changeMap.changes.map(({ change_id, path, status, hunks }) => ({
+          change_id, path, status, hunk_ids: hunks.map(({ hunk_id }) => hunk_id),
+        })),
+      };
+      write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
+      const index = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials });
     }
-    write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(changeMap, null, 2)}\n`));
   }
   // Context is never inferred from repository size or file membership. Every
   // provider-visible source excerpt is named by a validated stage map anchor.
-  writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials });
+  writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, canonicalOnly: selectedContextDelivery });
 
   const stagePlan = stagePlanFor(stage, reviewTrack);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${reviewTrack ?? "default"}`);
@@ -722,6 +1023,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   freezeCanonicalEvidence({ bundleRoot, task, stage, materials });
   writeTestSummary({ bundleRoot, task, materials });
+  validateDiffIndexBundle(bundleRoot);
   const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, rule });
   const payloadFiles = filesUnder(bundleRoot);
   const entries = payloadFiles.map((path) => {
@@ -734,6 +1036,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
+  if (selectedContextDelivery && deliveryBytes > SELECTED_CONTEXT_PACKET_LIMIT_BYTES) {
+    throw new Error(`MATERIAL_TOO_LARGE: selected_context packet is ${deliveryBytes} bytes; limit is ${SELECTED_CONTEXT_PACKET_LIMIT_BYTES}`);
+  }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
   return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes }) });
 }

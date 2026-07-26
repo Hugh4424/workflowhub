@@ -57,6 +57,13 @@ Use this complete public sequence without inventing flags or input shapes:
    --input=$TMP_DIR/decision-receipt.json`.
 3. Put the run input under `$TMP_DIR` with exactly:
    `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
+   When the latest authenticated action for a track is a verified resolution,
+   add only that track's dedicated field:
+   `direction_review_resolution` for direction and
+   `detail_review_resolution` for detail. Each value must be the canonical
+   resolution ref that is the latest action in that same track's review flow.
+   Never use the untracked `review_resolution` field for make-decision and
+   never use one track's resolution for the other track.
 4. Publish the attempt with
    `node scripts/stage-runtime.mjs run --stage=make-decision
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
@@ -111,7 +118,10 @@ only through `wh-review`; it is not a second review runner.
    ordered by whether its answer could change direction. The queue may contain zero, one,
    or several items; never manufacture questions or enforce a fixed minimum or
    maximum. Ask only the highest-ranked open
-   question, wait for the user's answer, then reorder the remaining queue before
+   question as a host-visible ask, persist the host-supplied ask ref/hash, then
+   stop the current invocation and wait. Resume only with the real reply bound
+   to the same card, Round, and question number; persist its host-visible
+   ref/hash, then reorder the remaining queue before
    asking again. Never write or infer the user's answer on their behalf. End the
    round only when no direction-changing question remains, and present the
    round's resolved decisions, remaining risks, question count, and end reason
@@ -164,6 +174,10 @@ only through `wh-review`; it is not a second review runner.
    Present those conclusions on the host-visible surface, including whether
    `CONTEXT.md` changed and whether an ADR was created or not needed, with the
    plain-language reason.
+   A direction-changing grill question follows the same
+   `ask → wait/pause → real reply → re-rank` boundary. Code/document facts may
+   close a mechanical item without a question only when the grill records the
+   factual reason.
 8. Use `decision-log` to produce the structured decision draft. For every
    load-bearing decision, record the decision; source as an exact supplied user
    answer, original requirement, research/code fact, grill result, or review
@@ -187,6 +201,37 @@ only through `wh-review`; it is not a second review runner.
     and unresolved items without copying the full decision-log. Wait for the user's explicit response, then record
     accepted or rejected with `confirm` and pass only an accepted confirmation
     record to `accept`.
+
+### Canonical interaction publication
+
+After each talk Round and the grill completes, pass only its content payload to
+the TaskKernel-controlled Stage content writer as
+`interaction-completion.v1`. Components never supply task/stage/run/producer,
+canonical ref/hash, snapshot/tree, root, task path, cwd, or repository
+discovery. The writer minimizes the payload, rejects caller identity fields,
+injects authenticated bindings, and returns the canonical ref/hash.
+
+Each Round payload contains its complete candidate queue, item impact/status,
+question number, and:
+
+`current_total = questions_already_asked + open_direction_changing_questions`
+
+Any total change records the real reply that caused it and the factual reason
+for each added or removed question. Every question records card hash and format
+checks, then host-visible ask ref/hash, the bound real reply ref/hash, and the
+following re-rank in order. Agent-generated answers, defaults, stale replies,
+or a decision-log self-report are invalid. A full card, secret, token,
+password, credential, cookie, or authorization value is never placed in
+long-lived evidence.
+
+After all three separately published talk records and the grill record exist,
+publish one aggregate `interaction-completion.v1` payload containing only their
+canonical refs/hashes, order, each Round's queue result/end conclusion, the
+grill exit facts, and the final decision ref/hash plus CandidateWorkspace tree.
+Missing, duplicate, out-of-order, cross-Round, or cross-run refs fail before the
+make-decision attempt can be published. A host-visible ref proves delivery to a
+host-visible surface only; it is not proof of the speaker's identity or that a
+human read the message.
 
 Quality facts are recorded, not converted into automatic quality gates.
 Contradictory identity, missing physical workspace facts, or an invalid context
@@ -243,9 +288,15 @@ cross-check consistently against that list. 正式产物、审查引用与该清
 Reviewer-owned lenses appear only through those
 review refs and are never invoked a second time by the Stage.
 
-Publish one concise completion handoff containing the stage result, human-readable
-artifact names, test and review conclusions, downstream dependencies, unresolved
-risks, next owner, and user action. Do not copy artifacts or raw logs. The
+The official Stage handler is the only completion-facts producer. Publish both
+completion views only through `core/stage-completion-facts.mjs`: the public
+surface receives its user renderer and the downstream surface receives its
+system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
+The shared result, risks, next owner, user action, and artifact labels must stay
+identical; only the system view carries formal refs, hashes, review details,
+dependencies, recovery conditions, and the downstream lookup rule.
+
+Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
 invoking host must deliver the same concise facts to its downstream handoff
 surface and parent progress surface. If downstream reports invalid upstream
 input, the host must return the finding and completion condition to the upstream owner
@@ -265,3 +316,16 @@ surface warnings.
 ```json
 {"stage":"make-decision","skill_or_stage":"make-decision"}
 ```
+
+## Serious review exception
+
+After each formal review, pause only for an authenticated finding whose
+disposition is `actionable` and severity is `major` or `blocking`. Present one
+finding at a time in plain language: the concrete problem, verifiable evidence,
+likely consequences, affected scope, and two mutually exclusive choices.
+Recommend “repair first”; “accept risk and continue” is the only override
+choice. Wait for the real host reply, then use the official
+`accept-review-risk` command with the exact card/reply bindings. Minor,
+invalid-anchor/evidence, unavailable, timeout, or adapter failures never open
+this override. A risk acceptance does not change the review verdict, excuse a
+structural/audit failure, or replace make-decision's normal final confirmation.

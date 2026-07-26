@@ -140,6 +140,15 @@ describe("stage-runner capability unit", () => {
     const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: failureHash }] } }));
     const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
     expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" })).toThrow(/reopen already exists/i);
+    const revisionIdentity = verifyContext.kernel.deriveReviewFlowIdentity({
+      stage: "build-code", review_track: null, subject_kind: "worktree",
+      phase_id: null, review_scope: "integration", revision_ref: reopen.reopen_ref,
+    });
+    expect(revisionIdentity.workflow_run_id).toContain(`:reopen:${reopen.reopen_hash}`);
+    expect(() => verifyContext.kernel.deriveReviewFlowIdentity({
+      stage: "build-spec", review_track: null, subject_kind: "worktree",
+      phase_id: null, review_scope: null, revision_ref: reopen.reopen_ref,
+    })).toThrow(/only valid.*build-code reopen/i);
     const revisedContext = context("build-code");
     const revisedHandler = async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage(tree) } });
     const revised = await runStage("build-code", revisedContext, revisedHandler, { reopenProvenance: reopen });

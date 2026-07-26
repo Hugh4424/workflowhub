@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
+import { aggregateCanonicalProviderResults } from "../../../core/canonical-review-result.mjs";
 
 function safePart(value, label) {
   if (typeof value !== "string" || !/^[a-zA-Z0-9._-]+$/.test(value)) throw new TypeError(`${label} is invalid`);
@@ -122,12 +123,7 @@ function adjudicate(valid) {
 }
 
 export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [] } = {}) {
-  if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be a positive integer");
-  const valid = prioritizedValidResults(providerResults, profilePriority);
-  const adjudication = adjudicate(valid);
-  if (valid.length < minimumReviewers) return { status: "unavailable", verdict: null, valid, adjudication };
-  if (adjudication.actionable.length) return { status: "semantic", verdict: "revise_required", valid, adjudication };
-  return { status: "semantic", verdict: "pass", valid, adjudication };
+  return aggregateCanonicalProviderResults(providerResults, minimumReviewers, { profilePriority });
 }
 
 export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-coverage-audit.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_log_ref", "decision_log_hash", "items", "summary"],
+  "properties": {
+    "decision_log_ref": { "type": "string", "minLength": 1 },
+    "decision_log_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_item_ref", "source_item_hash", "coverage_status", "decision_location"],
+        "properties": {
+          "source_item_ref": { "type": "string", "minLength": 1 },
+          "source_item_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "coverage_status": { "enum": ["covered", "accepted_omission", "missing"] },
+          "decision_location": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "ref", "entry_index"],
+                "properties": {
+                  "kind": { "enum": ["main", "appendix"] },
+                  "ref": { "type": "string", "minLength": 1 },
+                  "entry_index": { "type": "integer", "minimum": 0 }
+                }
+              },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["covered", "accepted_omission", "missing"],
+      "properties": {
+        "covered": { "type": "integer", "minimum": 0 },
+        "accepted_omission": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

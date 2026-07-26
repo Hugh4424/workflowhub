@@ -40,6 +40,7 @@ function workerContext(ctx, publication = {}) {
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
+    workflowRunId: ctx.workflowRunId,
     manifest: ctx.manifest,
     ...(ctx.candidateWorkspace ? { candidateWorkspace: ctx.candidateWorkspace } : {}),
     ...(ctx.workspace ? { workspace: ctx.workspace } : {}),
@@ -112,10 +113,76 @@ export async function runStage(stage, context, handler, publication = {}) {
   return attempt;
 }
 
-function officialWorkerContext(ctx, publication = {}) {
+function reviewSubjectKey(value) {
+  return JSON.stringify([
+    value.stage,
+    value.review_track ?? null,
+    value.subject_kind,
+    value.phase_id ?? null,
+    value.review_scope ?? null,
+  ]);
+}
+
+function reviewFlowSubjectsForStage(stage) {
+  if (stage === "make-decision") return ["direction", "detail"].map((reviewTrack) => ({
+    stage, review_track: reviewTrack, subject_kind: "worktree", phase_id: null, review_scope: null,
+  }));
+  if (stage === "verify-code") return [
+    { stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: "integration" },
+    { stage: "verify-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: null },
+  ];
+  return [{
+    stage,
+    review_track: null,
+    subject_kind: "worktree",
+    phase_id: null,
+    review_scope: stage === "build-code" ? "integration" : null,
+  }];
+}
+
+function trustedReviewFlowIdentities(ctx, publication = {}) {
+  let revision = null;
+  if (ctx.stage === "build-code" && publication.reopenProvenance) {
+    revision = publication.reopenProvenance;
+  } else if (ctx.stage === "verify-code") {
+    revision = ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode: true }).attempt.reopen_provenance ?? null;
+  }
+  return reviewFlowSubjectsForStage(ctx.stage).map((subject) => {
+    if (revision === null || subject.stage !== "build-code") return ctx.kernel.deriveReviewFlowIdentity(subject);
+    return ctx.kernel.deriveReviewFlowIdentity({ ...subject, revision_ref: revision.reopen_ref });
+  });
+}
+
+function withReviewFlowLocks(kernel, identities, operation, index = 0) {
+  if (index >= identities.length) return operation();
+  return kernel.withReviewFlowLock(identities[index], () => withReviewFlowLocks(kernel, identities, operation, index + 1));
+}
+
+function sameReviewFlowIdentities(left, right) {
+  return left.length === right.length && left.every((identity, index) =>
+    JSON.stringify(identity) === JSON.stringify(right[index]));
+}
+
+function withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, publication, operation) {
+  const upstreamStage = UPSTREAM_STAGE[ctx.stage];
+  if (upstreamStage === null) return operation();
+  const slot = UPSTREAM_INPUT[ctx.stage];
+  if (slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot)) return operation();
+  return ctx.task.withRecordLock(`locks/${upstreamStage}.publication.lock`, () => {
+    const currentIdentities = trustedReviewFlowIdentities(ctx, publication);
+    if (!sameReviewFlowIdentities(reviewFlowIdentities, currentIdentities)) {
+      throw new Error("trusted upstream acceptance changed while acquiring the review publication boundary; retry the stage");
+    }
+    return operation();
+  });
+}
+
+function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = []) {
+  const trustedFlows = new Map(reviewFlowIdentities.map((identity) => [reviewSubjectKey(identity), identity]));
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
+    workflowRunId: ctx.workflowRunId,
     accepted: Object.freeze({ readInput: (slot) => ctx.kernel.readInput(slot) }),
     readReceipt: (ref) => {
       const raw = ctx.task.readRecord(ref);
@@ -131,6 +198,11 @@ function officialWorkerContext(ctx, publication = {}) {
     readReviewAudit: (ref) => {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
+    },
+    readAuthenticatedReviewFlow: (subject) => {
+      const identity = trustedFlows.get(reviewSubjectKey(subject ?? {}));
+      if (!identity) throw new Error("review subject is not authorized for this stage consumer");
+      return ctx.kernel.readReviewFlow(identity);
     },
     ...(ctx.stage === "verify-code" ? {
       // Verify must be able to turn a legacy accepted build into an explicit
@@ -156,7 +228,7 @@ function officialWorkerContext(ctx, publication = {}) {
 
 function verifyEvidenceReference(ctx, entry, label = "evidence") {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new TypeError(`${label} must be an authenticated reference`);
-  if (typeof entry.ref !== "string" || !entry.ref.startsWith("evidence/") && !entry.ref.startsWith("receipts/") && !entry.ref.startsWith("reviews/results/") && !entry.ref.startsWith("reviews/attempts/")) {
+  if (typeof entry.ref !== "string" || !entry.ref.startsWith("evidence/") && !entry.ref.startsWith("receipts/") && !entry.ref.startsWith("reviews/results/") && !entry.ref.startsWith("reviews/attempts/") && !entry.ref.startsWith("reviews/resolutions/")) {
     throw new Error(`${label} is outside a canonical namespace`);
   }
   if (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new TypeError(`${label} sha256 is required`);
@@ -219,7 +291,14 @@ export function runOfficialStage(stage, context, invocation, publication) {
   assertOfficialRevisionAuthorization(stage, ctx, invocation, publication);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
-  return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input)), publication);
+  const reviewFlowIdentities = trustedReviewFlowIdentities(ctx, publication);
+  return withReviewFlowLocks(ctx.kernel, reviewFlowIdentities, () =>
+    withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, publication, () => runStage(
+      stage,
+      ctx,
+      async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication, reviewFlowIdentities), input)),
+      publication,
+    )));
 }
 
 /** Re-run the official verifier after a revised build without replacing the accepted verify result. */
@@ -227,19 +306,25 @@ export async function publishOfficialVerifyPassing(context, invocation) {
   const ctx = assertContext(context, "verify-code");
   const handler = officialStageHandler("verify-code");
   const input = Object.freeze(structuredClone(invocation));
-  const result = plainResult(verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)));
-  if (result.verification_failure) {
-    if (result.reason?.includes("acceptance criterion(s) failed")) {
-      throw new Error("verify-code passing publication requires acceptance-evidence.v1 with result=pass");
+  const reviewFlowIdentities = trustedReviewFlowIdentities(ctx);
+  return withReviewFlowLocks(ctx.kernel, reviewFlowIdentities, () =>
+    withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, {}, async () => {
+    const result = plainResult(
+      verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, {}, reviewFlowIdentities), input)),
+    );
+    if (result.verification_failure) {
+      if (result.reason?.includes("acceptance criterion(s) failed")) {
+        throw new Error("verify-code passing publication requires acceptance-evidence.v1 with result=pass");
+      }
+      throw new Error(result.reason ?? "verify-code verification failed");
     }
-    throw new Error(result.reason ?? "verify-code verification failed");
-  }
-  return ctx.kernel.publishVerifyPassingFromAccepted({
-    facts: result.facts,
-    evidenceRefs: result.evidence_refs ?? [],
-    missingItems: result.missing_items ?? [],
-    ...(result.reason !== undefined ? { reason: result.reason } : {}),
-  });
+    return ctx.kernel.publishVerifyPassingFromAccepted({
+      facts: result.facts,
+      evidenceRefs: result.evidence_refs ?? [],
+      missingItems: result.missing_items ?? [],
+      ...(result.reason !== undefined ? { reason: result.reason } : {}),
+    });
+    }));
 }
 
 /** Persist the user's explicit decision before acceptance. */

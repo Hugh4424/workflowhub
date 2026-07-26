@@ -9,18 +9,30 @@ import { validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../..
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
 import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha256, assertSafeRecoveryRef, recoveryError } from "../../core/task-recovery.mjs";
 import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
+import { assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
 const REOPEN = /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/;
+const ADJUDICATION_CORRECTION = /^results\/build-code\/revisions\/adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
   "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "review_result_ref", "reopen_ref",
-  "repair_review_result_ref", "recovery_ref", "recovery_hash",
+  "repair_review_result_ref", "adjudication_correction_ref", "recovery_ref", "recovery_hash",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
+
+export function requiresSameAdjudicationCorrection(current, input) {
+  return current?.phase_id === input.phase_id
+    && current?.adjudication_correction_ref !== undefined
+    && input.adjudication_correction_ref !== current.adjudication_correction_ref;
+}
+
+export function predecessorAdjudicationCorrection(current, nextPhaseId) {
+  return current?.phase_id !== nextPhaseId ? current?.adjudication_correction_ref : undefined;
+}
 
 function safeRef(value, pattern, label) {
   if (typeof value !== "string" || !pattern.test(value) || value.includes("..")) throw new TypeError(`${label} is invalid`);
@@ -64,7 +76,21 @@ function readTestReceipt(task, ref, { green }) {
   return { ...receipt, ref };
 }
 
-function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}) {
+function authenticateKernelReviewHead(kernel, review, ref, expected, { revisionRef, adjudicationCorrectionRef } = {}) {
+  return assertAuthenticatedReviewHead({
+    readFlow: (subject) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity({
+      ...subject,
+      ...(revisionRef === undefined ? {} : { revision_ref: revisionRef }),
+      ...(adjudicationCorrectionRef === undefined ? {} : { adjudication_correction_ref: adjudicationCorrectionRef }),
+    })),
+    reviewRef: ref,
+    reviewHash: review.hash,
+    result: review.value,
+    expected,
+  });
+}
+
+function readFormalPhaseReview(task, kernel, ref, expected, { requirePass = false, revisionRef, adjudicationCorrectionRef } = {}) {
   safeRef(ref, /^reviews\/results\/[A-Za-z0-9._-]+\.json$/, "review result ref");
   const review = readJson(task, ref, "formal phase review result");
   validateSchema("result", review.value);
@@ -77,6 +103,10 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
     throw new Error("formal phase review identity does not match the Phase evidence");
   }
   if (requirePass && value.verdict !== "pass") throw new Error(`previous Phase review must be PASS (got ${value.verdict})`);
+  authenticateKernelReviewHead(kernel, review, ref, {
+    stage: "build-code", review_track: null, subject_kind: "phase",
+    phase_id: expected.phaseId, review_scope: "phase",
+  }, { revisionRef, adjudicationCorrectionRef });
   const attempt = readJson(task, value.attempt_ref, "formal phase review attempt");
   validateSchema("attempt", attempt.value);
   for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
@@ -85,7 +115,7 @@ function readFormalPhaseReview(task, ref, expected, { requirePass = false } = {}
   return { ...review, ref, attempt_ref: value.attempt_ref, attempt };
 }
 
-function readPreAcceptRepairReview(task, ref, expectedCandidateTree) {
+function readPreAcceptRepairReview(task, kernel, ref, expectedCandidateTree) {
   safeRef(ref, /^reviews\/results\/[A-Za-z0-9._-]+\.json$/, "repair review result ref");
   const review = readJson(task, ref, "pre-accept repair review result");
   validateSchema("result", review.value);
@@ -96,6 +126,10 @@ function readPreAcceptRepairReview(task, ref, expectedCandidateTree) {
     || value.verdict !== "revise_required") {
     throw new Error("pre-accept repair review identity does not match the current Phase");
   }
+  authenticateKernelReviewHead(kernel, review, ref, {
+    stage: "build-code", review_track: null, subject_kind: "worktree",
+    phase_id: null, review_scope: "integration",
+  });
   const attempt = readJson(task, value.attempt_ref, "pre-accept repair review attempt");
   validateSchema("attempt", attempt.value);
   for (const key of ["task_id", "stage", "subject_kind", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
@@ -189,19 +223,26 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
   if (current.phase_id !== input.phase_id) {
     if (input.repair_review_result_ref !== undefined) throw new Error("pre-accept repair review must target the current Phase");
     if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("next Phase requires the current previous_phase_review_ref");
-    readFormalPhaseReview(task, input.previous_phase_review_ref, previous.subject, { requirePass: true });
+    readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
+      requirePass: true,
+      ...(current.reopen_ref === undefined ? {} : { revisionRef: current.reopen_ref }),
+      ...(predecessorAdjudicationCorrection(current, input.phase_id) === undefined ? {}
+        : { adjudicationCorrectionRef: predecessorAdjudicationCorrection(current, input.phase_id) }),
+    });
     return previous.scan.implementation_commit;
   }
   if (input.repair_review_result_ref !== undefined) {
     if (input.reopen_ref !== undefined) throw new Error("pre-accept repair review cannot be combined with reopen_ref");
     if (current.status !== "done") throw new Error("pre-accept repair review requires the current PASS Phase");
     if (hasAcceptedBuildCode(task)) throw new Error("pre-accept repair review is unavailable after build-code acceptance");
-    readPreAcceptRepairReview(task, input.repair_review_result_ref, previous.scan.snapshot_tree);
+    readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, previous.scan.snapshot_tree);
     return previous.scan.baseline_commit;
   }
   if (input.previous_phase_review_ref === undefined) return previous.scan.baseline_commit;
   if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("same-Phase repair review reference mismatch");
-  const review = readFormalPhaseReview(task, input.previous_phase_review_ref, previous.subject);
+  const review = readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
+    ...((input.reopen_ref ?? current.reopen_ref) === undefined ? {} : { revisionRef: input.reopen_ref ?? current.reopen_ref }),
+  });
   if (review.value.verdict !== "revise_required") throw new Error("a changed same-Phase identity requires a revise_required review");
   return previous.scan.baseline_commit;
 }
@@ -282,11 +323,25 @@ function publishIdempotently(task, kernel, ref, raw, label) {
   }
 }
 
+function reviewIdentityKey(identity) {
+  return JSON.stringify([
+    identity.stage, identity.review_track, identity.subject_kind,
+    identity.phase_id, identity.review_scope,
+  ]);
+}
+
+function withReviewFlowLocks(kernel, identities, operation, index = 0) {
+  if (index >= identities.length) return operation();
+  return kernel.withReviewFlowLock(identities[index], () => withReviewFlowLocks(kernel, identities, operation, index + 1));
+}
+
 export function validatePhaseEvidenceInput(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)
     || Object.keys(input).some((key) => !INPUT_KEYS.has(key))) throw new TypeError("phase evidence input contains unknown fields");
   if (!PHASE.test(input.phase_id ?? "")) throw new TypeError("phase_id is invalid");
   if (input.reopen_ref !== undefined && !REOPEN.test(input.reopen_ref)) throw new TypeError("reopen_ref is invalid");
+  if (input.adjudication_correction_ref !== undefined && !ADJUDICATION_CORRECTION.test(input.adjudication_correction_ref)) throw new TypeError("adjudication_correction_ref is invalid");
+  if (input.reopen_ref !== undefined && input.adjudication_correction_ref !== undefined) throw new TypeError("reopen_ref and adjudication_correction_ref are mutually exclusive");
   if ((input.recovery_ref === undefined) !== (input.recovery_hash === undefined)) throw new TypeError("recovery_ref and recovery_hash must be provided together");
   if (input.recovery_ref !== undefined) {
     assertSafeRecoveryRef(input.recovery_ref, "recovery_ref");
@@ -323,6 +378,11 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
 
   const publishLocked = () => task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
     const reopen = input.reopen_ref === undefined ? null : kernel.buildCodeReopenProvenance(input.reopen_ref);
+    const adjudicationCorrection = input.adjudication_correction_ref === undefined ? null
+      : kernel.readBuildCodeAdjudicationCorrection(input.adjudication_correction_ref, {
+        phaseId: input.phase_id,
+        snapshotTree: implementation.value.snapshot_tree,
+      });
     const before = captureWorkspaceSnapshot(workspace);
     if (input.recovery_ref === undefined) assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
@@ -345,13 +405,16 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     }
     if (input.repair_review_result_ref !== undefined) {
       const currentSubject = phaseSubject(task, workspace, current);
-      readPreAcceptRepairReview(task, input.repair_review_result_ref, currentSubject.scan.snapshot_tree);
+      readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, currentSubject.scan.snapshot_tree);
     }
     if (reopen && (!current || current.phase_id !== input.phase_id)) {
       throw new Error("reopen_ref may repair only the current PASS Phase");
     }
     if (current?.reopen_ref !== undefined && input.reopen_ref !== current.reopen_ref) {
       throw new Error("reopened Phase publication requires the same reopen_ref");
+    }
+    if (requiresSameAdjudicationCorrection(current, input)) {
+      throw new Error("corrected Phase publication requires the same adjudication_correction_ref");
     }
     const recoveryBootstrap = current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined;
     if (current?.phase_id === input.phase_id && !recoveryBootstrap) {
@@ -418,6 +481,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       needs_human: false,
       ...(input.recovery_ref === undefined ? {} : { recovery_ref: input.recovery_ref, recovery_hash: input.recovery_hash }),
       ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
+      ...(adjudicationCorrection === null ? {} : { adjudication_correction_ref: adjudicationCorrection.ref }),
       ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
       tests: {
         ...(red ? { red: { path: input.red_evidence_ref } } : {}),
@@ -440,8 +504,11 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
 
     let review;
     if (input.review_result_ref !== undefined) {
-      review = readFormalPhaseReview(task, input.review_result_ref, {
+      review = readFormalPhaseReview(task, kernel, input.review_result_ref, {
         phaseId: input.phase_id, baseTree, candidateTree: scan.snapshot_tree,
+      }, {
+        ...(input.reopen_ref === undefined ? {} : { revisionRef: input.reopen_ref }),
+        ...(input.adjudication_correction_ref === undefined ? {} : { adjudicationCorrectionRef: input.adjudication_correction_ref }),
       });
       const trace = phaseMapTrace({
         scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash,
@@ -462,6 +529,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       base_tree: baseTree, snapshot_tree: scan.snapshot_tree, diff_scan_ref: scanRef,
       canonical_phase_evidence_ref: canonicalEvidenceRef,
       ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
+      ...(input.adjudication_correction_ref === undefined ? {} : { adjudication_correction_ref: input.adjudication_correction_ref }),
       ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
       ...(review ? {
         review_result_ref: input.review_result_ref, review_verdict: review.value.verdict,
@@ -469,7 +537,30 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       } : {}),
     });
   });
-  return input.reopen_ref === undefined
+  const flowIdentities = [kernel.deriveReviewFlowIdentity({
+    stage: "build-code", review_track: null, subject_kind: "phase",
+    phase_id: input.phase_id, review_scope: "phase",
+    ...(input.reopen_ref === undefined ? {} : { revision_ref: input.reopen_ref }),
+    ...(input.adjudication_correction_ref === undefined ? {} : { adjudication_correction_ref: input.adjudication_correction_ref }),
+  })];
+  if (input.previous_phase_review_ref !== undefined) {
+    const previous = readJson(task, input.previous_phase_review_ref, "previous Phase review result").value;
+    flowIdentities.push(kernel.deriveReviewFlowIdentity({
+      stage: "build-code", review_track: null, subject_kind: "phase",
+      phase_id: previous.phase_id, review_scope: "phase",
+      ...(input.reopen_ref === undefined ? {} : { revision_ref: input.reopen_ref }),
+    }));
+  }
+  if (input.repair_review_result_ref !== undefined) {
+    flowIdentities.push(kernel.deriveReviewFlowIdentity({
+      stage: "build-code", review_track: null, subject_kind: "worktree",
+      phase_id: null, review_scope: "integration",
+    }));
+  }
+  const uniqueFlowIdentities = [...new Map(flowIdentities.map((identity) => [reviewIdentityKey(identity), identity])).values()]
+    .sort((left, right) => reviewIdentityKey(left).localeCompare(reviewIdentityKey(right)));
+  const runLocked = () => input.reopen_ref === undefined
     ? publishLocked()
     : task.withRecordLock("locks/build-code.publication.lock", publishLocked);
+  return withReviewFlowLocks(kernel, uniqueFlowIdentities, runLocked);
 }

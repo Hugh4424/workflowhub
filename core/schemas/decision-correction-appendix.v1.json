@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-correction-appendix.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_decision_ref", "source_decision_hash", "corrections", "reason", "impact_scope", "does_not_rewrite_upstream"],
+  "properties": {
+    "source_decision_ref": { "type": "string", "minLength": 1 },
+    "source_decision_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "corrections": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "enum": ["D1", "D2", "D3", "D4", "D5", "D6", "D7"] },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "reason": { "type": "string", "minLength": 1 },
+    "impact_scope": { "type": "array", "items": { "type": "string" } },
+    "does_not_rewrite_upstream": { "const": true }
+  }
+}
