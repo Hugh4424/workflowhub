@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask, createTaskKernel } from "../core/task-handle.mjs";
+import { validateReplayRecordSet } from "../scripts/validate-stage-replay.mjs";
 
 const temporary = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -175,5 +176,68 @@ describe("append-only stage continuation", () => {
       previous_attempt_ref: "../attempt-0001.json",
     })).toThrow(/same task and stage/i);
     expect(readFileSync(paths.attemptPath)).toBeTruthy();
+  });
+});
+
+describe("complete stage replay validation", () => {
+  function completeRecords() {
+    const runId = "make-decision:0002:fixture";
+    const tree = "a".repeat(40);
+    const continuationRef = "results/make-decision/revisions/continuation-0001.json";
+    const continuationRaw = "{}\n";
+    const decisionReceiptRef = `receipts/revisions/decision/${"b".repeat(64)}.json`;
+    const markdown = "# Decision\n";
+    const evidence = (kind, payload = {}) => ({
+      kind, task_id: "legacy-task", stage: "make-decision", workflow_run_id: runId,
+      snapshot_tree: tree, payload,
+    });
+    return {
+      taskId: "legacy-task", continuationRef, continuationHash: sha256(continuationRaw),
+      continuation: { schema_version: "stage-continuation.v1", task_id: "legacy-task", stage: "make-decision" },
+      run: { schema_version: "stage-run.v1", task_id: "legacy-task", stage: "make-decision", workflow_run_id: runId, continuation_ref: continuationRef, continuation_hash: sha256(continuationRaw) },
+      talks: [1, 2, 3].map((round) => evidence("interaction-completion.v1", { rounds: [{ round }] })),
+      grill: evidence("interaction-completion.v1", { rounds: [{ question_number: 1 }] }),
+      aggregate: evidence("interaction-completion.v1", { workspace_tree: tree, decision_ref: decisionReceiptRef, decision_hash: "c".repeat(64) }),
+      aggregateRef: "evidence/stage-content/root/interaction-completion.aggregate.json",
+      coverage: evidence("decision-coverage-audit.v1", { decision_log_ref: decisionReceiptRef, summary: { missing: 0 } }),
+      coverageRef: "evidence/stage-content/root/decision-coverage-audit.v1.json",
+      decisionReceiptRef, decisionReceiptHash: "c".repeat(64),
+      decisionReceipt: { decision_ref: "receipts/decision-log/final.md", decision_hash: sha256(markdown) },
+      decisionMarkdownRef: "receipts/decision-log/final.md", decisionMarkdownHash: sha256(markdown), decisionMarkdown: markdown,
+      reviews: {
+        direction: { task_id: "legacy-task", stage: "make-decision", review_track: "direction", snapshot_tree: tree },
+        detail: { task_id: "legacy-task", stage: "make-decision", review_track: "detail", snapshot_tree: tree },
+      },
+      reviewRuns: { direction: runId, detail: runId },
+      attemptRef: "results/make-decision/attempt-0002.json",
+      attempt: {
+        task_id: "legacy-task", stage: "make-decision",
+        facts: {
+          snapshot_tree: tree, decision_ref: decisionReceiptRef, audit_summary_ref: "evidence/audits/make-decision/a.json",
+          content_evidence_refs: [
+            { ref: "evidence/stage-content/root/interaction-completion.aggregate.json" },
+            { ref: "evidence/stage-content/root/decision-coverage-audit.v1.json" },
+          ],
+        },
+      },
+      auditRef: "evidence/audits/make-decision/a.json",
+      audit: { workflow_run_id: runId, snapshot_tree: tree, verdict: "pass" },
+      confirmation: { task_id: "legacy-task", stage: "make-decision", attempt_ref: "attempt-0002.json", decision: "accepted" },
+    };
+  }
+
+  it("accepts only one complete same-run and same-snapshot replay", () => {
+    expect(validateReplayRecordSet(completeRecords())).toMatchObject({ status: "pass" });
+  });
+
+  it.each([
+    ["missing talk", (value) => value.talks.pop(), /exactly three talk/],
+    ["cross-run detail review", (value) => { value.reviewRuns.detail = "other-run"; }, /detail review run binding mismatch/],
+    ["cross-tree coverage", (value) => { value.coverage.snapshot_tree = "d".repeat(40); }, /coverage tree binding mismatch/],
+    ["missing coverage", (value) => { value.coverage.payload.summary.missing = 1; }, /coverage still has missing/],
+  ])("fails loud on %s", (_name, mutate, expected) => {
+    const records = completeRecords();
+    mutate(records);
+    expect(() => validateReplayRecordSet(records)).toThrow(expected);
   });
 });
