@@ -248,6 +248,8 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     ["stage", "verify-code"],
     ["workflow_run_id", "forged-run"],
     ["producer", { component: "forged" }],
+    ["ref", "evidence/forged.json"],
+    ["hash", "a".repeat(64)],
     ["snapshot_tree", "c".repeat(40)],
     ["root", "/tmp/forged-root"],
     ["task_path", "/tmp/forged-task"],
@@ -261,6 +263,31 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       payload: completionPayload({ [key]: value }),
     }))).rejects.toThrow(/caller|identity|binding|root|task.?path|cwd|forbidden/i);
     expect(existsSync(join(state.task.taskPath, "evidence", "stage-content"))).toBe(false);
+  });
+
+  it("allows the schema-declared decision_location.ref only for decision coverage", async () => {
+    requireApi();
+    const state = fixture("decision-coverage-location");
+    const published = await invoke(() => writerFor(state).publish({
+      kind: "decision-coverage-audit.v1",
+      payload: {
+        decision_log_ref: "receipts/decision.json",
+        decision_log_hash: "a".repeat(64),
+        items: [{
+          source_item_ref: "requirements/R1",
+          source_item_hash: "b".repeat(64),
+          coverage_status: "covered",
+          decision_location: {
+            kind: "main",
+            ref: "receipts/decision.json",
+            entry_index: 0,
+          },
+        }],
+        summary: { covered: 1, accepted_omission: 0, missing: 0 },
+      },
+    }));
+
+    expect(published.ref).toMatch(/decision-coverage-audit\.v1\.json$/);
   });
 
   it("injects authenticated identity and rejects wrong hash, run, stage, or tree on read", async () => {

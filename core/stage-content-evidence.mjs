@@ -90,7 +90,9 @@ function rejectIdentityKeys(value, label, allowEvidenceBinding = false) {
     const isAggregateRoundBinding = allowEvidenceBinding
       && (/^payload\.rounds\[\d+\]$/.test(label) || label === "payload.grill")
       && (key === "ref" || key === "hash");
-    if (FORBIDDEN_IDENTITY_KEYS.has(key) && !isAggregateRoundBinding) {
+    const isDecisionCoverageLocation = /^payload\.items\[\d+\]\.decision_location$/.test(label)
+      && key === "ref";
+    if (FORBIDDEN_IDENTITY_KEYS.has(key) && !isAggregateRoundBinding && !isDecisionCoverageLocation) {
       throw new TypeError(`${label}.${key} is a caller-forbidden identity or path field`);
     }
     rejectIdentityKeys(child, `${label}.${key}`, allowEvidenceBinding);
