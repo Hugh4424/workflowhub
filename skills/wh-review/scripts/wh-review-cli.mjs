@@ -28,6 +28,23 @@ function previousResult(task, ref, stage, reviewTrack) {
   return { ...result, result_ref: ref, result_sha256: createHash("sha256").update(raw).digest("hex") };
 }
 
+function reviewBindingInvalidated(task, ref) {
+  const raw = task.readRecord(ref);
+  const resultHash = createHash("sha256").update(raw).digest("hex");
+  let record;
+  try { record = JSON.parse(task.readRecord(`reviews/binding-invalidations/${resultHash}.json`)); }
+  catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw new Error(`review binding invalidation cannot be read: ${error.message}`);
+  }
+  if (record?.schema_version !== "review-binding-invalidation.v1"
+      || record.status !== "binding_invalid" || record.result_ref !== ref
+      || record.result_hash !== resultHash) {
+    throw new Error("review binding invalidation does not bind the canonical result");
+  }
+  return true;
+}
+
 export function reviewFlowIdentity({ kernel, assertedWorkflowRunId, stage, reviewTrack = null, phaseId = null, snapshotTree = null, revisionRef = null, adjudicationCorrectionRef = null } = {}) {
   const identity = kernel.deriveReviewFlowIdentity({
     stage,
@@ -58,6 +75,7 @@ export function resolveReviewFlowHead({ task, kernel, identity, previousResultRe
   if (previousResultRef !== undefined && previousResultRef !== headRef) {
     throw new Error("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
   }
+  if (headRef !== null && reviewBindingInvalidated(task, headRef)) return { flow, prior: null };
   return {
     flow,
     prior: headRef === null ? null : previousResult(task, headRef, identity.stage, identity.review_track),
