@@ -1361,6 +1361,23 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         throw new Error("review flow CAS failed: expected flow event is stale");
       }
       if (current?.head_result_ref === resultRef) return current;
+      let lineageCurrent = current;
+      if (current?.head_result_ref) {
+        const currentRaw = task.readRecord(current.head_result_ref);
+        const currentHash = hash(currentRaw);
+        try {
+          const invalidation = parseJson(task.readRecord(`reviews/binding-invalidations/${currentHash}.json`), "review binding invalidation");
+          if (invalidation.schema_version !== "review-binding-invalidation.v1"
+              || invalidation.status !== "binding_invalid"
+              || invalidation.result_ref !== current.head_result_ref
+              || invalidation.result_hash !== currentHash) {
+            throw new Error("review binding invalidation does not bind the current flow head");
+          }
+          lineageCurrent = null;
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+      }
       let raw; let result;
       try { raw = task.readRecord(resultRef); result = parseJson(raw, "review flow semantic result"); }
       catch (error) { throw new Error(`review flow result cannot be read: ${error.message}`); }
@@ -1374,12 +1391,12 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         throw new Error("review flow result is non-semantic or does not match the authenticated flow");
       }
       const chain = result.review_chain ?? null;
-      const round = chain?.round ?? (current === null ? "initial" : null);
+      const round = chain?.round ?? (lineageCurrent === null ? "initial" : null);
       if (!["initial", "closure", "full", "legacy"].includes(round)) {
         throw new Error("review flow result has no valid canonical round");
       }
       let externalLineageRoot = null;
-      if (current?.head_result_ref == null) {
+      if (lineageCurrent?.head_result_ref == null) {
         const snapshotScopedPhase = identity.stage === "build-code" && identity.subject_kind === "phase"
           && identity.snapshot_tree !== undefined;
         const externalParent = snapshotScopedPhase && chain
@@ -1404,10 +1421,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           throw new Error("review flow initial result attempts to create a second root");
         }
       } else if (!["closure", "full"].includes(round) || !chain
-          || chain.parent_result_ref !== current.head_result_ref || chain.root_result_ref !== current.root_result_ref) {
+          || chain.parent_result_ref !== lineageCurrent.head_result_ref || chain.root_result_ref !== lineageCurrent.root_result_ref) {
         throw new Error("review flow result parent/root does not match the unique current head");
       }
-      const structuralFullReviews = (current?.structural_full_reviews ?? 0) + (round === "full" ? 1 : 0);
+      const structuralFullReviews = (lineageCurrent?.structural_full_reviews ?? 0) + (round === "full" ? 1 : 0);
       if (identity.stage !== "build-code" && structuralFullReviews > 1) {
         throw new Error("review flow structural full-review budget is already exhausted");
       }
@@ -1421,15 +1438,15 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         sequence,
         event_ref: eventRef,
         previous_event_ref: current?.event_ref ?? null,
-        root_result_ref: current?.root_result_ref ?? externalLineageRoot ?? resultRef,
+        root_result_ref: lineageCurrent?.root_result_ref ?? externalLineageRoot ?? resultRef,
         previous_head_ref: current?.head_result_ref ?? null,
         head_result_ref: resultRef,
         result_sha256: hash(raw),
         verdict: result.verdict,
         round,
-        semantic_result_count: (current?.semantic_result_count ?? 0) + 1,
+        semantic_result_count: (lineageCurrent?.semantic_result_count ?? 0) + 1,
         structural_full_reviews: structuralFullReviews,
-        provider_calls: (current?.provider_calls ?? 0) + (() => {
+        provider_calls: (lineageCurrent?.provider_calls ?? 0) + (() => {
           if (!ATTEMPT_REF_FOR_FLOW.test(result.attempt_ref ?? "")) return result.provider_results.length;
           try {
             const attempt = parseJson(task.readRecord(result.attempt_ref), "review flow semantic attempt");
