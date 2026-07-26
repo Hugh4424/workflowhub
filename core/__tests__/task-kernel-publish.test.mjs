@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -949,5 +949,64 @@ describe("TaskKernel append-only publication", () => {
     expect(publish.stdout === "ok" || /accepted|closed/i.test(publish.stdout)).toBe(true);
     expect(() => kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "c".repeat(40) } }))
       .toThrow(/accepted|closed/i);
+  });
+
+  it("invalidates only the active stage run and falls back without reusing its physical sequence", () => {
+    const { kernel } = fixture();
+    const first = kernel.startStageRun("make-decision", { reason: "first" });
+    const second = kernel.startStageRun("make-decision", { reason: "second" });
+    expect(kernel.deriveStageWorkflowRunId("make-decision")).toBe(second.run.workflow_run_id);
+    expect(() => kernel.invalidateStageRun("make-decision", {
+      run_ref: first.ref, run_hash: first.hash, reason: "stale",
+    })).toThrow(/CAS failed/);
+    const invalidation = kernel.invalidateStageRun("make-decision", {
+      run_ref: second.ref, run_hash: second.hash, reason: "bad replay binding",
+    });
+    expect(invalidation.record.run_ref).toBe(second.ref);
+    expect(kernel.activeStageRun("make-decision").ref).toBe(first.ref);
+    expect(kernel.deriveReviewFlowIdentity({
+      stage: "make-decision", review_track: "direction", subject_kind: "worktree",
+      review_scope: "worktree",
+    }).workflow_run_id).toBe(first.run.workflow_run_id);
+    expect(() => kernel.invalidateStageRun("make-decision", {
+      run_ref: second.ref, run_hash: second.hash, reason: "again",
+    })).toThrow(/CAS failed/);
+    const third = kernel.startStageRun("make-decision", { reason: "third" });
+    expect(third.ref).toMatch(/run-0003\.json$/);
+    expect(third.run.previous_run_ref).toBe(second.ref);
+  });
+
+  it("records a legacy review binding invalidation without changing the result", () => {
+    const { task, candidate, kernel } = fixture();
+    const active = kernel.startStageRun("make-decision", { reason: "replay" });
+    const snapshot = candidate.captureSnapshot();
+    const resultRef = `reviews/results/legacy-${snapshot.tree}.json`;
+    const result = {
+      version: "canonical-review-result.v1", task_id: task.identity.taskId,
+      stage: "make-decision", review_track: "direction", snapshot_tree: snapshot.tree,
+    };
+    const resultRaw = `${JSON.stringify(result, null, 2)}\n`;
+    kernel.publishCanonicalRecord(resultRef, resultRaw);
+    const resultHash = createHash("sha256").update(resultRaw).digest("hex");
+    const eventRef = `reviews/flows/${"a".repeat(64)}/event-0001.json`;
+    const eventPath = join(task.taskPath, ...eventRef.split("/"));
+    mkdirSync(dirname(eventPath), { recursive: true });
+    writeFileSync(eventPath, `${JSON.stringify({
+      identity: {
+        task_id: task.identity.taskId, stage: "make-decision", review_track: "direction",
+        workflow_run_id: "task-created:2026-07-16T00:00:00.000Z",
+      },
+      head_result_ref: resultRef, result_sha256: resultHash,
+    }, null, 2)}\n`);
+    const invalidation = kernel.invalidateReviewBinding("make-decision", {
+      result_ref: resultRef, flow_event_ref: eventRef,
+      reason: "legacy-task-created-not-active-stage-run",
+    });
+    expect(invalidation.record.status).toBe("binding_invalid");
+    expect(invalidation.record.active_workflow_run_id).toBe(active.run.workflow_run_id);
+    expect(task.readRecord(resultRef)).toBe(resultRaw);
+    expect(() => kernel.invalidateReviewBinding("make-decision", {
+      result_ref: resultRef, flow_event_ref: eventRef, reason: "wrong",
+    })).toThrow(/reason is invalid/);
   });
 });

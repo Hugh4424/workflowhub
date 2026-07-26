@@ -589,6 +589,37 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     }
     return latest;
   };
+  const stageRunInvalidation = (stage, run) => {
+    const name = stageName(stage);
+    const ref = `runs/${name}/invalidations/${run.hash}.json`;
+    let raw;
+    try { raw = task.readRecord(ref); }
+    catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+    const record = parseJson(raw, `${name} stage run invalidation`);
+    if (record.schema_version !== "stage-run-invalidation.v1"
+        || record.task_id !== task.identity.taskId || record.stage !== name
+        || record.invalidation_ref !== ref || record.run_ref !== run.ref
+        || record.run_hash !== run.hash || !nonemptyString(record.reason, "stage run invalidation reason")
+        || !Number.isFinite(Date.parse(record.created_at))) {
+      throw new Error(`${name} stage run invalidation is invalid`);
+    }
+    return { ref, hash: hash(raw), record, raw };
+  };
+  const trustedActiveStageRun = (stage) => {
+    const name = stageName(stage);
+    let current = latestStageRun(name);
+    while (current !== null && stageRunInvalidation(name, current) !== null) {
+      if (current.run.previous_run_ref === null) return null;
+      const raw = task.readRecord(current.run.previous_run_ref);
+      if (hash(raw) !== current.run.previous_run_hash) throw new Error(`${name} stage run fallback hash mismatch`);
+      const run = parseJson(raw, `${name} previous stage run`);
+      current = { ref: current.run.previous_run_ref, hash: current.run.previous_run_hash, run, raw };
+    }
+    return current;
+  };
   const createStageContinuation = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "stage continuation input");
@@ -698,9 +729,83 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     });
   };
   const activeStageRun = (stage, { required = true } = {}) => {
-    const run = latestStageRun(stage);
+    const run = trustedActiveStageRun(stage);
     if (required && run === null) throw new Error(`${stageName(stage)} requires start-run before producing evidence or publishing`);
     return run;
+  };
+  const invalidateStageRun = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "stage run invalidation input");
+    rejectUnknown(input, new Set(["run_ref", "run_hash", "reason"]), "stage run invalidation input");
+    const runRef = nonemptyString(input.run_ref, "stage run invalidation run_ref");
+    const runHash = nonemptyString(input.run_hash, "stage run invalidation run_hash");
+    if (!HASH.test(runHash)) throw new TypeError("stage run invalidation run_hash is invalid");
+    const reason = nonemptyString(input.reason, "stage run invalidation reason");
+    return task.withRecordLock(`locks/${name}.run.lock`, () => {
+      const active = trustedActiveStageRun(name);
+      if (active === null || active.ref !== runRef || active.hash !== runHash) {
+        throw new Error("stage run invalidation CAS failed: target is not the active trusted run");
+      }
+      const ref = `runs/${name}/invalidations/${runHash}.json`;
+      const record = {
+        schema_version: "stage-run-invalidation.v1",
+        task_id: task.identity.taskId,
+        stage: name,
+        invalidation_ref: ref,
+        run_ref: runRef,
+        run_hash: runHash,
+        reason,
+        created_at: now(),
+      };
+      const raw = `${JSON.stringify(record, null, 2)}\n`;
+      createKernelRecord(ref, raw);
+      return deepFreeze({ ref, hash: hash(raw), record, active_run: activeStageRun(name, { required: false }) });
+    });
+  };
+  const invalidateReviewBinding = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "review binding invalidation input");
+    rejectUnknown(input, new Set(["result_ref", "flow_event_ref", "reason"]), "review binding invalidation input");
+    if (name !== "make-decision") throw new Error("review binding invalidation is only supported for make-decision legacy bindings");
+    const resultRef = nonemptyString(input.result_ref, "review binding invalidation result_ref");
+    const eventRef = nonemptyString(input.flow_event_ref, "review binding invalidation flow_event_ref");
+    const reason = nonemptyString(input.reason, "review binding invalidation reason");
+    if (!RESULT_REF_FOR_FLOW.test(resultRef) || !/^reviews\/flows\/[a-f0-9]{64}\/event-[0-9]{4}\.json$/.test(eventRef)) {
+      throw new TypeError("review binding invalidation refs are invalid");
+    }
+    if (reason !== "legacy-task-created-not-active-stage-run") throw new Error("review binding invalidation reason is invalid");
+    const active = activeStageRun(name);
+    const resultRaw = task.readRecord(resultRef);
+    const result = parseJson(resultRaw, "review result");
+    const eventRaw = task.readRecord(eventRef);
+    const event = parseJson(eventRaw, "review flow event");
+    const activeWorkspace = candidate ?? workspace;
+    if (!activeWorkspace) throw new Error("review binding invalidation requires an active Workspace");
+    const snapshot = typeof activeWorkspace.captureSnapshot === "function"
+      ? activeWorkspace.captureSnapshot() : captureGitWorktreeSnapshot(activeWorkspace.worktreeRoot);
+    if (result.task_id !== task.identity.taskId || result.stage !== name
+        || !new Set(["direction", "detail"]).has(result.review_track) || result.snapshot_tree !== snapshot.tree) {
+      throw new Error("review binding invalidation result task/stage/snapshot mismatch");
+    }
+    if (event.head_result_ref !== resultRef || event.result_sha256 !== hash(resultRaw)
+        || event.identity?.task_id !== task.identity.taskId || event.identity?.stage !== name
+        || event.identity?.review_track !== result.review_track
+        || event.identity?.workflow_run_id === active.run.workflow_run_id
+        || !String(event.identity?.workflow_run_id ?? "").startsWith("task-created:")) {
+      throw new Error("review binding invalidation does not bind a legacy flow for a different active run");
+    }
+    const ref = `reviews/binding-invalidations/${hash(resultRaw)}.json`;
+    const record = {
+      schema_version: "review-binding-invalidation.v1", task_id: task.identity.taskId, stage: name,
+      status: "binding_invalid", reason, result_ref: resultRef, result_hash: hash(resultRaw),
+      flow_event_ref: eventRef, flow_event_hash: hash(eventRaw),
+      invalid_workflow_run_id: event.identity.workflow_run_id,
+      active_run_ref: active.ref, active_run_hash: active.hash,
+      active_workflow_run_id: active.run.workflow_run_id, snapshot_tree: snapshot.tree, created_at: now(),
+    };
+    const raw = `${JSON.stringify(record, null, 2)}\n`;
+    createKernelRecord(ref, raw);
+    return deepFreeze({ ref, hash: hash(raw), record });
   };
   const publishRequirementsLedger = (stage, input = {}) => {
     const name = stageName(stage);
@@ -786,7 +891,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   };
   const deriveStageWorkflowRunId = (stage) => {
     const name = stageName(stage);
-    const active = latestStageRun(name);
+    const active = trustedActiveStageRun(name);
     if (active !== null) return active.run.workflow_run_id;
     if (name === "make-decision") return `task-created:${nonemptyString(task.manifest.created_at, "task created_at")}`;
     const upstreamStage = EXPECTED_UPSTREAM[name];
@@ -1463,7 +1568,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
-      workflowRunId = `task-created:${nonemptyString(task.manifest.created_at, "task created_at")}`;
+      workflowRunId = nonemptyString(activeStageRun(stage).run.workflow_run_id, "make-decision active stage workflow_run_id");
     } else {
       const upstreamStage = EXPECTED_UPSTREAM[stage];
       const upstream = readAcceptedLocal(upstreamStage, { allowLegacyBuildCode: upstreamStage === "build-code" });
@@ -1646,6 +1751,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     recordReviewAttempt,
     recordReviewResolution,
     startStageRun,
+    invalidateStageRun,
+    invalidateReviewBinding,
     createStageContinuation,
     activeStageRun,
     publishRequirementsLedger,
