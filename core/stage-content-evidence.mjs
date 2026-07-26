@@ -21,8 +21,16 @@ const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code
 const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40}$/i;
 const EVIDENCE_REF = /^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.json$/;
+const REVISIONABLE_KINDS = new Set([
+  "ambiguity-ledger.v1", "decision-entry.v1", "decision-coverage-audit.v1",
+  "decision-omission-acceptance.v1", "decision-correction-appendix.v1",
+  "decision-log-contract.v1", "plan-task-contract.v1", "stage-completion-facts.v1",
+  "risk-acceptance.v1",
+]);
+const revisionable = (kind, payload) => REVISIONABLE_KINDS.has(kind)
+  || (kind === "interaction-completion.v1" && payload?.interaction_type === "aggregate");
 const FORBIDDEN_IDENTITY_KEYS = new Set([
-  "task_id", "stage", "workflow_run_id", "producer", "ref", "hash",
+  "task_id", "stage", "workflow_run_id", "producer",
   "snapshot_head", "snapshot_tree", "snapshot_commit",
   "root", "task_path", "taskPath", "cwd", "repository", "repo_root",
 ]);
@@ -188,13 +196,44 @@ export function createStageContentEvidenceWriter(options = {}) {
   const ref = (kind, payload) => kind === "interaction-completion.v1"
     ? interactionRef(payload)
     : `${refRoot}/${kind}.json`;
+  const latestRef = (kind) => `${refRoot}/${kind}.latest.json`;
+  const revisionRef = (kind, number) => `${refRoot}/${kind}.revision-${String(number).padStart(4, "0")}.json`;
+
+  function parseLatest(kind) {
+    const pointerRef = latestRef(kind);
+    const raw = readOptional(task, pointerRef);
+    if (raw === undefined) return undefined;
+    let value;
+    try { value = JSON.parse(raw); } catch { throw new Error(`stage content latest pointer is invalid: ${pointerRef}`); }
+    if (value?.schema_version !== "stage-content-latest.v1"
+      || value.task_id !== task.identity.taskId || value.stage !== stage
+      || value.workflow_run_id !== workflowRunId || value.kind !== kind
+      || !Number.isInteger(value.revision) || value.revision < 1
+      || !EVIDENCE_REF.test(value.ref ?? "") || !HASH.test(value.hash ?? "")
+      || !value.ref.startsWith(`${refRoot}/`)) {
+      throw new Error(`stage content latest pointer binding is invalid: ${pointerRef}`);
+    }
+    const target = verifyStageContentEvidence({
+      task, ref: value.ref, hash: value.hash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedKind: kind,
+    });
+    return { ref: pointerRef, raw, value, target };
+  }
 
   return Object.freeze({
     publish(input = {}) {
       plain(input, "stage content publish input");
-      const unexpectedInput = Object.keys(input).filter((key) => !new Set(["kind", "payload"]).has(key));
+      const unexpectedInput = Object.keys(input).filter((key) => !new Set(["kind", "payload", "revision"]).has(key));
       if (unexpectedInput.length) throw new TypeError(`stage content publish caller fields are forbidden: ${unexpectedInput.join(", ")}`);
       if (!payloadSchemas.has(input.kind)) throw new TypeError(`unknown stage content evidence kind: ${input.kind}`);
+      if (input.revision !== undefined
+        && (!Number.isInteger(input.revision) || input.revision < 2 || !revisionable(input.kind, input.payload))) {
+        throw new TypeError("trusted stage content revision is invalid or forbidden for this kind");
+      }
+      if (input.kind === "interaction-completion.v1"
+        && input.payload.interaction_type !== "aggregate" && input.revision !== undefined) {
+        throw new TypeError("talk/grill interaction evidence is create-only and cannot be revised");
+      }
       plain(input.payload, "stage content payload");
       const aggregate = input.kind === "interaction-completion.v1"
         && input.payload.interaction_type === "aggregate";
@@ -205,6 +244,25 @@ export function createStageContentEvidenceWriter(options = {}) {
       const snapshot = captureSnapshot(workspace);
       const createdAt = now();
       if (!Number.isFinite(Date.parse(createdAt))) throw new TypeError("stage content created_at must be an ISO timestamp");
+      const baseRef = ref(input.kind, payload);
+      let previous;
+      let evidenceRef = baseRef;
+      if (input.revision !== undefined) {
+        const latest = parseLatest(input.kind);
+        if (latest) {
+          if (latest.value.revision !== input.revision - 1) throw new Error("stage content revision CAS is stale");
+          previous = { ref: latest.value.ref, hash: latest.value.hash, pointer: latest };
+        } else {
+          const baseRaw = readOptional(task, baseRef);
+          if (input.revision !== 2 || baseRaw === undefined) throw new Error("stage content revision has no trusted predecessor");
+          previous = { ref: baseRef, hash: sha256(baseRaw) };
+          verifyStageContentEvidence({
+            task, ref: baseRef, hash: previous.hash, expectedStage: stage,
+            expectedRunId: workflowRunId, expectedKind: input.kind,
+          });
+        }
+        evidenceRef = revisionRef(input.kind, input.revision);
+      }
       const value = {
         schema_version: "stage-content-evidence.v1",
         kind: input.kind,
@@ -216,12 +274,16 @@ export function createStageContentEvidenceWriter(options = {}) {
         snapshot_head: snapshot.head,
         snapshot_tree: snapshot.tree,
         created_at: createdAt,
+        ...(previous ? { revision: {
+          number: input.revision,
+          previous_ref: previous.ref,
+          previous_hash: previous.hash,
+        } } : {}),
         payload,
       };
       validateValue(value);
       const after = captureSnapshot(workspace);
       if (after.head !== snapshot.head || after.tree !== snapshot.tree) throw new Error("Workspace changed before stage content publication");
-      const evidenceRef = ref(input.kind, payload);
       const raw = `${JSON.stringify(value, null, 2)}\n`;
       const existing = readOptional(task, evidenceRef);
       if (existing !== undefined) {
@@ -229,9 +291,60 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new Error(`create-only stage content evidence already exists with conflicting content: ${evidenceRef}`);
       }
       kernel.publishCanonicalRecord(evidenceRef, raw);
+      if (revisionable(input.kind, payload)) {
+        const recordHash = sha256(raw);
+        const pointerValue = {
+          schema_version: "stage-content-latest.v1",
+          task_id: task.identity.taskId,
+          stage,
+          workflow_run_id: workflowRunId,
+          kind: input.kind,
+          revision: input.revision ?? 1,
+          ref: evidenceRef,
+          hash: recordHash,
+        };
+        const pointerRaw = `${JSON.stringify(pointerValue, null, 2)}\n`;
+        const pointerRef = latestRef(input.kind);
+        if (previous?.pointer) {
+          kernel.replaceStageContentLatestPointer(pointerRef, pointerRaw, {
+            expectedPriorRaw: previous.pointer.raw,
+            validator: (phase) => {
+              const current = parseLatest(input.kind);
+              const expected = phase === "post" ? pointerRaw : previous.pointer.raw;
+              if (current?.raw !== expected) throw new Error("stage content latest pointer CAS is stale");
+            },
+          });
+        } else if (readOptional(task, pointerRef) === undefined) {
+          kernel.publishCanonicalRecord(pointerRef, pointerRaw);
+        } else {
+          throw new Error("stage content latest pointer CAS is stale");
+        }
+      }
       return Object.freeze({ ref: evidenceRef, hash: sha256(raw), value: Object.freeze(value) });
     },
   });
+}
+
+export function readLatestStageContentEvidence({ task, stage, workflowRunId, kind } = {}) {
+  const safeTask = assertTaskHandle(task);
+  if (!STAGES.has(stage) || !payloadSchemas.has(kind) || kind === "interaction-completion.v1") {
+    throw new TypeError("latest stage content lookup requires a revisionable kind");
+  }
+  const root = `evidence/stage-content/${sha256(`${safeTask.identity.taskId}\0${stage}\0${validateRunId(workflowRunId)}`)}`;
+  const pointerRef = `${root}/${kind}.latest.json`;
+  const pointerRaw = safeTask.readRecord(pointerRef);
+  let pointer;
+  try { pointer = JSON.parse(pointerRaw); } catch { throw new Error("stage content latest pointer is invalid"); }
+  if (pointer?.schema_version !== "stage-content-latest.v1" || pointer.task_id !== safeTask.identity.taskId
+    || pointer.stage !== stage || pointer.workflow_run_id !== workflowRunId || pointer.kind !== kind
+    || !pointer.ref?.startsWith(`${root}/`) || !HASH.test(pointer.hash ?? "")) {
+    throw new Error("stage content latest pointer binding is invalid");
+  }
+  const value = verifyStageContentEvidence({
+    task: safeTask, ref: pointer.ref, hash: pointer.hash,
+    expectedStage: stage, expectedRunId: workflowRunId, expectedKind: kind,
+  });
+  return Object.freeze({ ref: pointer.ref, hash: pointer.hash, value, pointer_ref: pointerRef });
 }
 
 export function verifyStageContentEvidence({

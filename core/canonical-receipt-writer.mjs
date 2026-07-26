@@ -13,7 +13,7 @@ import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
 import { carryAuditSummary } from "./audit-summary-carrier.mjs";
-import { requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
+import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -77,13 +77,18 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
   const kinds = requiredStageContentKinds(stage);
   const contentEvidence = kinds.map((kind) => {
     const bucket = sha256(`${safeTask.identity.taskId}\0${stage}\0${workflowRunId}`);
+    if (kind !== "interaction-completion.v1") {
+      const latest = readLatestStageContentEvidence({
+        task: safeTask, stage, workflowRunId, kind,
+      });
+      if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
+      return { ref: latest.ref, hash: latest.hash, value: latest.value };
+    }
     const ref = `evidence/stage-content/${bucket}/${kind}.json`;
     const raw = safeTask.readRecord(ref);
     const recordHash = sha256(raw);
-    const value = verifyStageContentEvidence({
-      task: safeTask, ref, hash: recordHash, expectedStage: stage,
-      expectedRunId: workflowRunId, expectedTree: snapshot.tree, expectedKind: kind,
-    });
+    const value = verifyStageContentEvidence({ task: safeTask, ref, hash: recordHash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedTree: snapshot.tree, expectedKind: kind });
     return { ref, hash: recordHash, value };
   });
   const ledgerRaw = safeTask.readRecord("requirements/ledger.json");

@@ -28,6 +28,7 @@ const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "ut
 
 let createStageContentEvidenceWriter;
 let verifyStageContentEvidence;
+let readLatestStageContentEvidence;
 let moduleLoadError;
 
 beforeAll(async () => {
@@ -35,6 +36,7 @@ beforeAll(async () => {
     ({
       createStageContentEvidenceWriter,
       verifyStageContentEvidence,
+      readLatestStageContentEvidence,
     } = await import("../core/stage-content-evidence.mjs"));
   } catch (error) {
     moduleLoadError = error;
@@ -49,6 +51,7 @@ function requireApi() {
   expect(moduleLoadError, "core/stage-content-evidence.mjs must load").toBeUndefined();
   expect(createStageContentEvidenceWriter).toBeTypeOf("function");
   expect(verifyStageContentEvidence).toBeTypeOf("function");
+  expect(readLatestStageContentEvidence).toBeTypeOf("function");
 }
 
 function prepareOfficialRun(kernel, taskId) {
@@ -343,6 +346,74 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       payload: completionPayload({ user_action: "approve" }),
     }))).rejects.toThrow(/already|conflict|duplicate|create.?only/i);
     expect(state.task.readRecord(first.ref)).toBe(firstRaw);
+  });
+
+  it("publishes trusted post-interaction revisions with exact lineage and latest-pointer CAS", async () => {
+    requireApi();
+    const state = fixture("content-revision");
+    const writer = writerFor(state);
+    const first = await invoke(() => writer.publish({
+      kind: "stage-completion-facts.v1",
+      payload: completionPayload(),
+    }));
+    const second = await invoke(() => writer.publish({
+      kind: "stage-completion-facts.v1",
+      revision: 2,
+      payload: completionPayload({ user_action: "approve" }),
+    }));
+    expect(second.ref).toMatch(/stage-completion-facts\.v1\.revision-0002\.json$/);
+    expect(second.value.revision).toEqual({ number: 2, previous_ref: first.ref, previous_hash: first.hash });
+    expect(readLatestStageContentEvidence({
+      task: state.task, stage: "make-decision", workflowRunId: RUN_ID,
+      kind: "stage-completion-facts.v1",
+    })).toMatchObject({ ref: second.ref, hash: second.hash });
+    await expect(invoke(() => writer.publish({
+      kind: "stage-completion-facts.v1",
+      revision: 2,
+      payload: completionPayload({ user_action: "stale" }),
+    }))).rejects.toThrow(/CAS|stale/i);
+  });
+
+  it("never permits talk or grill revision and never discovers latest by scanning revisions", async () => {
+    requireApi();
+    const state = fixture("interaction-revision-forbidden");
+    const writer = writerFor(state);
+    const talk = {
+      interaction_type: "talk", rounds: [{ selected: "A" }], grill: null,
+      workspace_tree: "a".repeat(40),
+    };
+    await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk }));
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1", revision: 2, payload: talk,
+    }))).rejects.toThrow(/create-only|cannot be revised|forbidden/i);
+    expect(() => readLatestStageContentEvidence({
+      task: state.task, stage: "make-decision", workflowRunId: RUN_ID,
+      kind: "interaction-completion.v1",
+    })).toThrow(/revisionable kind/i);
+  });
+
+  it("accepts canonical ref/hash bindings inside a revised decision coverage payload", async () => {
+    requireApi();
+    const state = fixture("coverage-revision");
+    const writer = writerFor(state);
+    const coverage = (hash) => ({
+      decision_log_ref: "receipts/decision-log/example.md",
+      decision_log_hash: hash,
+      items: [{
+        source_item_ref: "evidence/source.json",
+        source_item_hash: hash,
+        coverage_status: "covered",
+        decision_location: { kind: "main", ref: "receipts/decision-log/example.md", entry_index: 0 },
+      }],
+      summary: { covered: 1, accepted_omission: 0, missing: 0 },
+    });
+    await invoke(() => writer.publish({
+      kind: "decision-coverage-audit.v1", payload: coverage("a".repeat(64)),
+    }));
+    const revised = await invoke(() => writer.publish({
+      kind: "decision-coverage-audit.v1", revision: 2, payload: coverage("b".repeat(64)),
+    }));
+    expect(revised.ref).toMatch(/decision-coverage-audit\.v1\.revision-0002\.json$/);
   });
 
   it("publishes three talk rounds and the aggregate under separate writer-derived refs", async () => {

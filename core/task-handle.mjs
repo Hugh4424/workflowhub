@@ -35,6 +35,7 @@ const TASK_HANDLES = new WeakSet();
 const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
+const STAGE_CONTENT_POINTER_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const RUNNER_ROOT_MIGRATORS = new WeakMap();
 const RECOVERY_CREDENTIAL_WRITERS = new WeakMap();
@@ -1225,6 +1226,17 @@ function makeTaskHandle(taskPath, manifest) {
     }
     return result;
   });
+  STAGE_CONTENT_POINTER_REPLACERS.set(frozen, (relativePath, data, options = {}) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    if (!/^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.latest\.json$/.test(relativePath ?? "")) {
+      throw new Error("stage content latest pointer path is invalid");
+    }
+    if (typeof options.validator !== "function" || typeof options.expectedPriorRaw !== "string") {
+      throw new Error("stage content latest pointer replacement requires CAS binding");
+    }
+    return writeAtomicAt(realTaskPath, relativePath, data, options);
+  });
   TARGET_REPO_ROOT_MIGRATORS.set(frozen, ({ recordRef, recordRaw, manifestRaw, testHooks } = {}) => {
     if (!TARGET_REPO_ROOT_MIGRATION_REF.test(recordRef ?? "")) throw new Error("target repository migration record path is invalid");
     verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -1577,6 +1589,12 @@ export function createTaskKernel(taskHandle, options) {
       assertTaskHandle(task);
       const replacer = CANONICAL_ACCEPTED_REPLACERS.get(task);
       if (typeof replacer !== "function") throw new TypeError("authentic TaskHandle accepted-record replacer required");
+      return replacer;
+    },
+    replaceStageContentPointerFor(task) {
+      assertTaskHandle(task);
+      const replacer = STAGE_CONTENT_POINTER_REPLACERS.get(task);
+      if (typeof replacer !== "function") throw new TypeError("authentic stage content pointer replacer required");
       return replacer;
     },
   }));

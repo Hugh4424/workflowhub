@@ -24,6 +24,16 @@
     "snapshot_head": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "created_at": { "type": "string", "format": "date-time" },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "previous_ref", "previous_hash"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 2 },
+        "previous_ref": { "type": "string", "minLength": 1 },
+        "previous_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "payload": { "type": "object" }
   }
 }

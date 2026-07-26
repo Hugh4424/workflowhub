@@ -48,7 +48,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
   if (Object.prototype.hasOwnProperty.call(values, "runner-root")) throw new TypeError("--runner-root is forbidden; stage-runtime authenticates its own repository root");
-  if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
+  if (!new Set(["receipt", "publish-content-evidence"]).has(command)
+      && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) {
+    throw new TypeError("--revision is only valid for receipt or trusted stage-content publication");
+  }
+  if (command === "publish-content-evidence" && values.recover !== undefined) throw new TypeError("--recover is only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   if (command === "publish-content-evidence" && (!values.kind || !values.input)) throw new TypeError("publish-content-evidence requires --kind and --input=<payload.json>");
@@ -81,7 +85,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "reopen") && (command !== "run" || values.stage !== "build-code")) throw new TypeError("--reopen is only valid for build-code run");
   if (Object.prototype.hasOwnProperty.call(values, "baseline-rebind") && (command !== "run" || values.stage !== "build-plan")) throw new TypeError("--baseline-rebind is only valid for build-plan run");
   if (command === "rebind" && values.stage !== "build-plan") throw new TypeError("rebind is only valid for build-plan");
-  if (Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
+  if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
   if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
   if (command === "receipt" && values.revision === "true" && !values.recover) throw new TypeError("receipt revision requires --recover=<previous-receipt-ref>");
   if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
@@ -232,7 +236,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     return { receipt_ref: result.ref, receipt_hash: result.sha256, revision: result.revision, ...(result.revision ? { previous_receipt_ref: result.previous_ref, previous_receipt_hash: result.previous_hash, content_hash: result.content_hash } : {}) };
   }
   if (command === "publish-content-evidence") {
-    const allowed = new Set(["stage", "project", "task", "kind", "input"]);
+    const allowed = new Set(["stage", "project", "task", "kind", "input", "revision"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-content-evidence accepts only --stage, --project, --task, --kind, and --input");
     const writer = createStageContentEvidenceWriter({
       task: context.task,
@@ -240,7 +244,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       stage: values.stage,
       workflowRunId: context.kernel.deriveStageWorkflowRunId(values.stage),
     });
-    const published = writer.publish({ kind: values.kind, payload: input });
+    const revision = values.revision === undefined ? undefined : Number(values.revision);
+    const published = writer.publish({ kind: values.kind, payload: input, ...(revision === undefined ? {} : { revision }) });
     return { evidence_ref: published.ref, evidence_hash: published.hash, kind: values.kind };
   }
   if (command === "run") {

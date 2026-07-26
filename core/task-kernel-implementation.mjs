@@ -490,10 +490,12 @@ export function validateAccepted(accepted, expected = {}) {
 }
 
 export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString(), workspace, artifacts, candidateWorkspace, attemptPublicationTestHooks, acceptedReplacementTestHooks } = {}, authority) {
-  const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor } = authority;
+  const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor, replaceStageContentPointerFor } = authority;
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
   const replaceKernelAccepted = typeof replaceKernelAcceptedFor === "function" ? replaceKernelAcceptedFor(task) : undefined;
+  const replaceStageContentPointer = typeof replaceStageContentPointerFor === "function"
+    ? replaceStageContentPointerFor(task) : undefined;
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const verifyCandidateSnapshot = (facts) => {
     if (!candidate) return;
@@ -1633,6 +1635,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (relativePath.startsWith("reviews/resolutions/")) throw new Error("review resolutions require TaskKernel review-flow authority");
       if (relativePath.startsWith("evidence/risk-acceptances/")) throw new Error("risk acceptance records require TaskKernel review-risk authority");
       return createKernelRecord(relativePath, data);
+    },
+    replaceStageContentLatestPointer(relativePath, data, options) {
+      if (typeof replaceStageContentPointer !== "function") throw new Error("stage content pointer replacement authority is required");
+      return replaceStageContentPointer(relativePath, data, options);
     },
     readReviewFlow,
     readReviewFlowHistory,
