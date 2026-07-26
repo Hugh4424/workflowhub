@@ -53,6 +53,22 @@ function fixture(prefix = "simple-review-") {
   } });
   return { root, attachmentRoot, task };
 }
+function dualV2Policy() {
+  return {
+    source: "wh_review.v2", mode: "full_only", minimum_heterologous: 1,
+    requested_profiles: ["pi/k3", "cursor/grok"],
+    requested_profile_specs: [
+      { provider: "pi/k3", model: "kimi-k3", effort: null, thinking: true, priority: 10 },
+      { provider: "cursor/grok", model: "grok", effort: null, thinking: null, priority: 20 },
+    ],
+    eligible_profiles: ["pi/k3", "cursor/grok"], same_source_exclusions: [],
+    effective_profiles: [
+      { provider: "pi/k3", adapter: "pi", model: "kimi-k3", effort: null, thinking: true },
+      { provider: "cursor/grok", adapter: "cursor", model: "grok", effort: null, thinking: null },
+    ],
+    round: "initial",
+  };
+}
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("review output", () => {
@@ -271,11 +287,13 @@ describe("aggregation and runner", () => {
   it("records a missing integration trace as one canonical unavailable attempt without provider dispatch", async () => {
     const { attachmentRoot, task } = fixture("simple-review-integration-material-incomplete-");
     const calls = [];
+    const reviewPolicy = dualV2Policy();
     // Material compilers conventionally report their public failure code in
     // the message; they are not required to attach a JavaScript error.code.
     const incomplete = new Error("MATERIAL_INCOMPLETE: no continuous PASS Phase coverage chain reaches the final tree");
     const options = {
-      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex",
+      providers: reviewPolicy.requested_profiles, reviewPolicy,
       providerClient: { run: async () => { calls.push(true); throw new Error("provider must not be called"); } },
       captureSource: () => source,
       buildIntegrationSubject: () => { throw incomplete; },
@@ -294,6 +312,39 @@ describe("aggregation and runner", () => {
     const second = await runReviewFixture(options);
     expect(second).toMatchObject({ status: "unavailable", attemptRef: first.attemptRef, reused: true });
     expect(calls).toHaveLength(0);
+  });
+
+  it("keeps the undispatched material-preflight exemption narrower than all other v2 evidence", async () => {
+    const mutations = [
+      (attempt) => { attempt.terminal_status = "semantic"; },
+      (attempt) => { attempt.error.code = "PROVIDER_UNAVAILABLE"; },
+      (attempt) => { attempt.policy_snapshot_hash = "0".repeat(64); },
+      (attempt) => { attempt.provider_attempts = [{
+        provider: "pi/k3", status: "failed", session_id: null, runtime_id: "runtime",
+        execution: null, unavailable_diagnostics: null, output_ref: null,
+        error: { code: "AUTH", message: "no" },
+      }]; },
+    ];
+    for (const [index, mutate] of mutations.entries()) {
+      const { root, attachmentRoot, task } = fixture(`simple-review-v2-preflight-boundary-${index}-`);
+      const calls = [];
+      const reviewPolicy = dualV2Policy();
+      const options = {
+        task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex",
+        providers: reviewPolicy.requested_profiles, reviewPolicy,
+        providerClient: { run: async () => { calls.push(true); throw new Error("provider must not be called"); } },
+        captureSource: () => source,
+        buildIntegrationSubject: () => { throw new Error("MATERIAL_FORBIDDEN: frozen preflight"); },
+        buildMaterials: () => { throw new Error("material assembly must not run"); },
+      };
+      const first = await runReviewFixture(options);
+      const attemptPath = join(root, "Projects", "Demo", "tasks", "task", first.attemptRef);
+      const attempt = JSON.parse(readFileSync(attemptPath, "utf8"));
+      mutate(attempt);
+      writeFileSync(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`);
+      await expect(runReviewFixture(options)).rejects.toThrow(/REVIEW_EVIDENCE_INVALID/);
+      expect(calls).toHaveLength(0);
+    }
   });
 
   it("withholds a generic absolute material-preflight diagnostic from canonical public evidence", async () => {

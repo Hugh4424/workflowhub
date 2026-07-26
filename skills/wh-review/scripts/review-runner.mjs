@@ -205,13 +205,20 @@ function hasExactProviderSet(providers, requestedProfiles) {
   return expected.size === requestedProfiles.length && actual.size === expected.size && [...expected].every((provider) => actual.has(provider));
 }
 
-function verifiedPolicyForAttempt(attempt, providers) {
+function isUndispatchedMaterialPreflightAttempt(attempt) {
+  return attempt.terminal_status === "unavailable"
+    && attempt.provider_attempts.length === 0
+    && ["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(attempt.error?.code);
+}
+
+function verifiedPolicyForAttempt(attempt, providers, { allowUndispatchedMaterialPreflight = false } = {}) {
   const policy = reviewPolicyRecord(attempt.review_policy ?? null);
   if (policy?.source !== "wh_review.v2") return policy;
   if (attempt.policy_snapshot_hash !== hashCanonical(policy)) {
     throw invalidEvidence("wh_review.v2 policy snapshot hash does not match its persisted policy");
   }
-  if (!hasExactProviderSet(providers, policy.requested_profiles)) {
+  if (!(allowUndispatchedMaterialPreflight && providers.length === 0)
+      && !hasExactProviderSet(providers, policy.requested_profiles)) {
     throw invalidEvidence("wh_review.v2 provider attempts do not exactly match requested profiles");
   }
   return policy;
@@ -346,7 +353,11 @@ function validateAttemptIdentity(attempt, attemptRef, identity) {
 }
 
 function validateUnavailableAttemptEvidence(task, attempt, bundle) {
-  const policy = verifiedPolicyForAttempt(attempt, attempt.provider_attempts.map(({ provider }) => provider));
+  const policy = verifiedPolicyForAttempt(
+    attempt,
+    attempt.provider_attempts.map(({ provider }) => provider),
+    { allowUndispatchedMaterialPreflight: isUndispatchedMaterialPreflightAttempt(attempt) },
+  );
   const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
