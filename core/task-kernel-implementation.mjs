@@ -762,6 +762,64 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       return deepFreeze({ ref, hash: hash(raw), record, active_run: activeStageRun(name, { required: false }) });
     });
   };
+  const invalidateStageStepAttempt = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "stage step attempt invalidation input");
+    rejectUnknown(input, new Set(["attempt_id", "reason"]), "stage step attempt invalidation input");
+    const attemptId = nonemptyString(input.attempt_id, "stage step attempt invalidation attempt_id");
+    const reason = nonemptyString(input.reason, "stage step attempt invalidation reason");
+    const active = activeStageRun(name);
+    const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean)
+      .map((line) => parseJson(line, "journal event"))
+      .filter((event) => event.workflow_run_id === active.run.workflow_run_id
+        && event.stage_slug === name && event.attempt_id === attemptId);
+    if (events.length === 0) throw new Error("stage step attempt invalidation target is missing");
+    const identityHash = hash(`${active.run.workflow_run_id}\0${attemptId}`);
+    const ref = `runs/${name}/journal-invalidations/${identityHash}.json`;
+    const record = {
+      schema_version: "stage-step-attempt-invalidation.v1",
+      task_id: task.identity.taskId,
+      stage: name,
+      workflow_run_id: active.run.workflow_run_id,
+      attempt_id: attemptId,
+      events_hash: hash(canonicalJson(events)),
+      reason,
+      created_at: now(),
+    };
+    const raw = `${JSON.stringify(record, null, 2)}\n`;
+    createKernelRecord(ref, raw);
+    return deepFreeze({ ref, hash: hash(raw), record });
+  };
+  const invalidateStageAttempt = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "stage attempt invalidation input");
+    rejectUnknown(input, new Set(["attempt_ref", "attempt_hash", "reason"]), "stage attempt invalidation input");
+    const attemptRef = nonemptyString(input.attempt_ref, "stage attempt invalidation attempt_ref");
+    const attemptHash = nonemptyString(input.attempt_hash, "stage attempt invalidation attempt_hash");
+    const reason = nonemptyString(input.reason, "stage attempt invalidation reason");
+    if (!new RegExp(`^results/${name}/attempt-[0-9]{4}\\.json$`).test(attemptRef) || !HASH.test(attemptHash)) {
+      throw new TypeError("stage attempt invalidation target is invalid");
+    }
+    const raw = task.readRecord(attemptRef);
+    if (hash(raw) !== attemptHash) throw new Error("stage attempt invalidation hash mismatch");
+    const attempt = validateAttempt(parseJson(raw, "stage attempt invalidation target"), {
+      taskId: task.identity.taskId, stage: name, allowLegacyAuditRead: true,
+    });
+    const active = activeStageRun(name);
+    const audit = parseJson(task.readRecord(attempt.facts.audit_summary_ref), "stage attempt audit");
+    if (audit.workflow_run_id !== active.run.workflow_run_id || audit.stage_slug !== name) {
+      throw new Error("stage attempt invalidation target does not belong to the active run");
+    }
+    const ref = `results/${name}/invalidations/${attemptHash}.json`;
+    const record = {
+      schema_version: "stage-attempt-invalidation.v1", task_id: task.identity.taskId, stage: name,
+      attempt_ref: attemptRef, attempt_hash: attemptHash, attempt_id: attempt.attempt_id,
+      workflow_run_id: active.run.workflow_run_id, reason, created_at: now(),
+    };
+    const recordRaw = `${JSON.stringify(record, null, 2)}\n`;
+    createKernelRecord(ref, recordRaw);
+    return deepFreeze({ ref, hash: hash(recordRaw), record });
+  };
   const invalidateReviewBinding = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "review binding invalidation input");
@@ -1239,6 +1297,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         && event.result_sha256 === (prior?.result_sha256 ?? null)
         && event.verdict === (prior?.verdict ?? null);
       if (eventKind === "semantic_result") {
+        let resetFromInvalidatedHead = false;
+        if (prior?.head_result_ref && event.head_result_ref !== prior.head_result_ref) {
+          const priorRaw = task.readRecord(prior.head_result_ref);
+          const priorHash = hash(priorRaw);
+          try {
+            const invalidation = parseJson(task.readRecord(`reviews/binding-invalidations/${priorHash}.json`), "review binding invalidation");
+            resetFromInvalidatedHead = invalidation.schema_version === "review-binding-invalidation.v1"
+              && invalidation.status === "binding_invalid"
+              && invalidation.result_ref === prior.head_result_ref
+              && invalidation.result_hash === priorHash;
+            if (!resetFromInvalidatedHead) throw new Error("review binding invalidation does not bind the prior flow head");
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+        }
+        const semanticPrior = resetFromInvalidatedHead ? null : prior;
         let resultRaw; let result;
         try {
           resultRaw = task.readRecord(event.head_result_ref);
@@ -1251,7 +1325,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             || (result.review_scope ?? null) !== identity.review_scope
             || (identity.snapshot_tree !== undefined && result.snapshot_tree !== identity.snapshot_tree)
             || result.verdict !== event.verdict || !Array.isArray(result.provider_results)
-            || event.semantic_result_count !== (prior?.semantic_result_count ?? 0) + 1) {
+            || event.semantic_result_count !== (semanticPrior?.semantic_result_count ?? 0) + 1) {
           throw new Error("review flow result bytes or identity do not match the authoritative event");
         }
         let actualProviderCalls = result.provider_results.length;
@@ -1261,10 +1335,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             if (Array.isArray(attempt.provider_attempts)) actualProviderCalls = attempt.provider_attempts.length;
           } catch { /* Legacy semantic fixtures may omit their attempt record. */ }
         }
-        if (event.provider_calls !== (prior?.provider_calls ?? 0) + actualProviderCalls) {
+        if (event.provider_calls !== (semanticPrior?.provider_calls ?? 0) + actualProviderCalls) {
           throw new Error("review flow semantic provider-call cost is invalid");
         }
-        if (prior?.head_result_ref == null) {
+        if (semanticPrior?.head_result_ref == null) {
           const chain = result.review_chain ?? null;
           let authenticatedContinuation = false;
           if (identity.stage === "build-code" && identity.subject_kind === "phase"
@@ -1287,13 +1361,14 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
               && event.previous_head_ref === null
               && event.structural_full_reviews === (event.round === "full" ? 1 : 0);
           }
-          if (!authenticatedContinuation && (event.root_result_ref !== event.head_result_ref || event.previous_head_ref !== null
+          if (!authenticatedContinuation && (event.root_result_ref !== event.head_result_ref
+              || (!resetFromInvalidatedHead && event.previous_head_ref !== null)
               || event.structural_full_reviews !== 0 || !["initial", "legacy"].includes(event.round))) {
             throw new Error("review flow has multiple roots or an invalid initial head");
           }
-        } else if (event.root_result_ref !== prior.root_result_ref
+        } else if (event.root_result_ref !== semanticPrior.root_result_ref
             || !["closure", "full"].includes(event.round)
-            || event.structural_full_reviews !== prior.structural_full_reviews + (event.round === "full" ? 1 : 0)) {
+            || event.structural_full_reviews !== semanticPrior.structural_full_reviews + (event.round === "full" ? 1 : 0)) {
           throw new Error("review flow root, head, or budget regressed");
         }
       } else {
@@ -1769,6 +1844,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     recordReviewResolution,
     startStageRun,
     invalidateStageRun,
+    invalidateStageStepAttempt,
+    invalidateStageAttempt,
     invalidateReviewBinding,
     createStageContinuation,
     activeStageRun,

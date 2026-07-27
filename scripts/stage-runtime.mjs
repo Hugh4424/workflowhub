@@ -36,7 +36,7 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
@@ -59,6 +59,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "start-run" && !values.reason) throw new TypeError("start-run requires --reason");
   if (command === "continue-stage" && !values.input) throw new TypeError("continue-stage requires --input=<continuation.json>");
   if (command === "invalidate-run" && !values.input) throw new TypeError("invalidate-run requires --input=<invalidation.json>");
+  if (command === "invalidate-step-attempt" && !values.input) throw new TypeError("invalidate-step-attempt requires --input=<invalidation.json>");
+  if (command === "invalidate-stage-attempt" && !values.input) throw new TypeError("invalidate-stage-attempt requires --input=<invalidation.json>");
   if (command === "invalidate-review-binding" && !values.input) throw new TypeError("invalidate-review-binding requires --input=<invalidation.json>");
   if (new Set(["publish-requirements-ledger", "record-step-entry", "record-step-exit"]).has(command) && !values.input) throw new TypeError(`${command} requires --input`);
   if (command === "publish-phase-evidence") {
@@ -97,7 +99,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["continue-stage", "invalidate-run", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -125,6 +127,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-run accepts only --stage, --project, --task, and --input");
     return context.kernel.invalidateStageRun(values.stage, input);
+  }
+  if (command === "invalidate-step-attempt") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-step-attempt accepts only --stage, --project, --task, and --input");
+    return context.kernel.invalidateStageStepAttempt(values.stage, input);
+  }
+  if (command === "invalidate-stage-attempt") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-stage-attempt accepts only --stage, --project, --task, and --input");
+    return context.kernel.invalidateStageAttempt(values.stage, input);
   }
   if (command === "invalidate-review-binding") {
     const allowed = new Set(["stage", "project", "task", "input"]);

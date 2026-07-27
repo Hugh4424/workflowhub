@@ -32,6 +32,12 @@ function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function canonicalHashJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalHashJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalHashJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
 function receiptProvenance(value, { taskId, stage, component }) {
   if (!value || typeof value !== "object" || Array.isArray(value)
     || value.schema_version !== "workflowhub-receipt.v1"
@@ -62,6 +68,33 @@ function journalEvents(task) {
   });
 }
 
+function auditableJournalEvents(task, stage, workflowRunId) {
+  const events = journalEvents(task).filter((event) =>
+    event.workflow_run_id === workflowRunId && event.stage_slug === stage);
+  const byAttempt = new Map();
+  for (const event of events) {
+    const bucket = byAttempt.get(event.attempt_id) ?? [];
+    bucket.push(event);
+    byAttempt.set(event.attempt_id, bucket);
+  }
+  const invalidated = new Set();
+  for (const [attemptId, attemptEvents] of byAttempt) {
+    const identityHash = sha256(`${workflowRunId}\0${attemptId}`);
+    const ref = `runs/${stage}/journal-invalidations/${identityHash}.json`;
+    const raw = readCanonicalRecord(task, ref);
+    if (raw === undefined) continue;
+    const record = JSON.parse(raw);
+    if (record.schema_version !== "stage-step-attempt-invalidation.v1"
+        || record.task_id !== task.identity.taskId || record.stage !== stage
+        || record.workflow_run_id !== workflowRunId || record.attempt_id !== attemptId
+        || record.events_hash !== sha256(canonicalHashJson(attemptEvents))) {
+      throw new Error("stage step attempt invalidation binding mismatch");
+    }
+    invalidated.add(attemptId);
+  }
+  return events.filter((event) => !invalidated.has(event.attempt_id));
+}
+
 /** Build and publish the only audit summary from canonical task records. */
 export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
   const safeTask = assertTaskHandle(task);
@@ -76,26 +109,17 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
   const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
   const kinds = requiredStageContentKinds(stage);
   const contentEvidence = kinds.map((kind) => {
-    const bucket = sha256(`${safeTask.identity.taskId}\0${stage}\0${workflowRunId}`);
-    if (kind !== "interaction-completion.v1") {
-      const latest = readLatestStageContentEvidence({
-        task: safeTask, stage, workflowRunId, kind,
-      });
-      if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
-      return { ref: latest.ref, hash: latest.hash, value: latest.value };
-    }
-    const ref = `evidence/stage-content/${bucket}/${kind}.json`;
-    const raw = safeTask.readRecord(ref);
-    const recordHash = sha256(raw);
-    const value = verifyStageContentEvidence({ task: safeTask, ref, hash: recordHash, expectedStage: stage,
-      expectedRunId: workflowRunId, expectedTree: snapshot.tree, expectedKind: kind });
-    return { ref, hash: recordHash, value };
+    const latest = readLatestStageContentEvidence({
+      task: safeTask, stage, workflowRunId, kind,
+    });
+    if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
+    return { ref: latest.ref, hash: latest.hash, value: latest.value };
   });
   const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
   const ledger = JSON.parse(ledgerRaw);
   const manifest = loadStageManifest(stage, fileURLToPath(new URL("../", import.meta.url)));
   const summary = buildAuditSummaryFromJournalEvents(
-    journalEvents(safeTask).filter((event) => event.workflow_run_id === workflowRunId && event.stage_slug === stage),
+    auditableJournalEvents(safeTask, stage, workflowRunId),
     stage,
     workflowRunId,
     {

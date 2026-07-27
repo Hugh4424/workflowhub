@@ -199,7 +199,7 @@ describe("complete stage replay validation", () => {
       grill: evidence("interaction-completion.v1", { rounds: [{ question_number: 1 }] }),
       aggregate: evidence("interaction-completion.v1", { workspace_tree: tree, decision_ref: decisionReceiptRef, decision_hash: "c".repeat(64) }),
       aggregateRef: "evidence/stage-content/root/interaction-completion.aggregate.json",
-      coverage: evidence("decision-coverage-audit.v1", { decision_log_ref: decisionReceiptRef, summary: { missing: 0 } }),
+      coverage: evidence("decision-coverage-audit.v1", { decision_log_ref: "receipts/decision-log/final.md", summary: { missing: 0 } }),
       coverageRef: "evidence/stage-content/root/decision-coverage-audit.v1.json",
       decisionReceiptRef, decisionReceiptHash: "c".repeat(64),
       decisionReceipt: { decision_ref: "receipts/decision-log/final.md", decision_hash: sha256(markdown) },

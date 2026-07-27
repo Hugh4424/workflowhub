@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { verifyStageContentEvidence } from "../core/stage-content-evidence.mjs";
+import { readLatestStageContentEvidence, verifyStageContentEvidence } from "../core/stage-content-evidence.mjs";
 import { createTaskKernel, openTask } from "../core/task-handle.mjs";
 import { resolveStorageRoot } from "../core/storage-root.mjs";
 
@@ -109,7 +109,7 @@ export function validateReplayRecordSet(records) {
 
   same(records.coverage.workflow_run_id, run.workflow_run_id, "coverage run");
   same(records.coverage.snapshot_tree, tree, "coverage tree");
-  same(records.coverage.payload?.decision_log_ref, records.decisionReceiptRef, "coverage decision ref");
+  same(records.coverage.payload?.decision_log_ref, records.decisionMarkdownRef, "coverage decision log ref");
   if (records.coverage.payload?.summary?.missing !== 0) throw new Error("decision coverage still has missing items");
 
   for (const track of ["direction", "detail"]) {
@@ -154,8 +154,11 @@ export function validateStageReplay({ task, kernel, continuationRef: suppliedRef
   };
   const talks = [1, 2, 3].map((number) => evidence(`interaction-completion.talk-${String(number).padStart(4, "0")}.json`, "interaction-completion.v1"));
   const grill = evidence("interaction-completion.grill.json", "interaction-completion.v1");
-  const aggregate = evidence("interaction-completion.aggregate.json", "interaction-completion.v1");
-  const coverage = evidence("decision-coverage-audit.v1.json", "decision-coverage-audit.v1");
+  const latest = (kind) => readLatestStageContentEvidence({
+    task, stage: "make-decision", workflowRunId: run.workflow_run_id, kind,
+  });
+  const aggregate = latest("interaction-completion.v1");
+  const coverage = latest("decision-coverage-audit.v1");
   const tree = aggregate.value.snapshot_tree;
   for (const item of [...talks, grill, coverage]) same(item.value.snapshot_tree, tree, `${item.ref} snapshot`);
   const decisionReceiptRef = aggregate.value.payload.decision_ref;
@@ -178,7 +181,22 @@ export function validateStageReplay({ task, kernel, continuationRef: suppliedRef
   }
 
   const previousAttemptRef = continuation.previous_attempt.ref;
-  const candidates = task.listStageAttemptRefs("make-decision").filter((ref) => ref !== previousAttemptRef);
+  const candidates = task.listStageAttemptRefs("make-decision").filter((ref) => {
+    if (ref === previousAttemptRef) return false;
+    const raw = task.readRecord(ref);
+    const invalidationRef = `results/make-decision/invalidations/${sha256(raw)}.json`;
+    try {
+      const invalidation = JSON.parse(task.readRecord(invalidationRef));
+      if (invalidation.schema_version !== "stage-attempt-invalidation.v1"
+          || invalidation.attempt_ref !== ref || invalidation.attempt_hash !== sha256(raw)) {
+        throw new Error("stage attempt invalidation binding mismatch");
+      }
+      return false;
+    } catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw error;
+    }
+  });
   if (candidates.length !== 1) throw new Error("continued replay must publish exactly one new make-decision attempt");
   const attemptRef = candidates[0];
   const attempt = readJson(task, attemptRef, "new make-decision attempt");

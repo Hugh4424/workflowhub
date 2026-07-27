@@ -47,9 +47,13 @@ const payloadSchemas = new Map([
   ["plan-task-contract.v1", planTaskSchema],
   ["stage-completion-facts.v1", completionSchema],
 ]);
-const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze(Object.fromEntries(
-  [...STAGES].map((stage) => [stage, Object.freeze([])]),
-));
+const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
+  "make-decision": Object.freeze(["interaction-completion.v1", "decision-coverage-audit.v1"]),
+  "build-spec": Object.freeze([]),
+  "build-plan": Object.freeze([]),
+  "build-code": Object.freeze([]),
+  "verify-code": Object.freeze([]),
+});
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validateEnvelope = ajv.compile(envelopeSchema);
 const payloadValidators = new Map([...payloadSchemas].map(([kind, schema]) => [kind, ajv.compile(schema)]));
@@ -327,7 +331,7 @@ export function createStageContentEvidenceWriter(options = {}) {
 
 export function readLatestStageContentEvidence({ task, stage, workflowRunId, kind } = {}) {
   const safeTask = assertTaskHandle(task);
-  if (!STAGES.has(stage) || !payloadSchemas.has(kind) || kind === "interaction-completion.v1") {
+  if (!STAGES.has(stage) || !payloadSchemas.has(kind)) {
     throw new TypeError("latest stage content lookup requires a revisionable kind");
   }
   const root = `evidence/stage-content/${sha256(`${safeTask.identity.taskId}\0${stage}\0${validateRunId(workflowRunId)}`)}`;
@@ -344,6 +348,9 @@ export function readLatestStageContentEvidence({ task, stage, workflowRunId, kin
     task: safeTask, ref: pointer.ref, hash: pointer.hash,
     expectedStage: stage, expectedRunId: workflowRunId, expectedKind: kind,
   });
+  if (kind === "interaction-completion.v1" && value.payload?.interaction_type !== "aggregate") {
+    throw new Error("latest interaction completion must be the aggregate");
+  }
   return Object.freeze({ ref: pointer.ref, hash: pointer.hash, value, pointer_ref: pointerRef });
 }
 
