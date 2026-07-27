@@ -13,18 +13,16 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 ## 启动前的 WorkflowHub 任务
 
-工头在创建或恢复五阶段链前，先为**当前任务根**确认一份可用的 WorkflowHub task：它必须对应当前项目仓库，并且能被当前配置的 WorkflowHub runner 打开。
+工头在创建或恢复五阶段链前，先为**当前任务根**确认一份可用的 WorkflowHub task。task 只保存任务事实、阶段记录和每次执行的代码身份；不长期绑定本机目录、固定 commit 或 runner replacement。
 
-- **runner 与业务仓分开 checkout**：先用 `multica repo list` 找到 workspace 已登记的 WorkflowHub runner 仓库，再用 `multica repo checkout <runner URL>` 取得 runner checkout；当前项目 `github_repo` resource 的 checkout 才是业务目标仓。两者是同一仓库和 ref 时才可复用一个 checkout。若 runner URL 与当前项目 resource URL 相同，必须先读取 `.multica/project/resources.json`，并使用 `multica repo checkout <runner URL> --ref=<resource_ref.ref>`；不能省略 ref 而拿默认分支。不能扫描本机目录、猜路径，或因为业务仓恰好也有脚本就把它当 runner。
-- 工头每次准备或恢复都重写根 Issue description 末尾的隐藏 `workflowhub-context`：格式必须是 `<!-- workflowhub-context: root=<当前根 UUID>; project=<项目>; task=<任务>; task_path=<TaskHandle 路径> -->`，只包含这四项。`project`、`task`、`task_path` 必须从 bootstrap JSON **原样复制**，不得手工改写或凭记忆重填；更新后重新读取根 Issue，把这三项与 bootstrap 输出逐字比对。不要把这份上下文写进 Issue metadata；`task_path` 只供正式审查读取 TaskHandle，绝不写进公开评论。复用前先确认 task 仍能被当前 runner 打开；已有且身份匹配时复用，打不开按准备失败处理；没有时，用项目已配置的 runner 创建一次 task。
-- 从 runner checkout 的 Git 顶层执行一次 `node scripts/task-bootstrap.mjs --project=<目标 checkout 顶层目录名> --task=multica-<当前根 Issue 标识> --target-repo=<目标 checkout 顶层> --issues=<当前根 UUID>`。`project` 必须是目标 checkout 顶层目录名这种安全单段名称，不能使用带空格的 Multica 项目展示名。**这一步只创建 TaskHandle，不代表运行环境已准备好。** runner 没有该脚本时，只能使用项目明确配置的等价 bootstrap 命令；不能靠扫描本机目录猜命令或任务身份。
-- **首次绑定 runner 身份是启动的最后一道必做检查**：从刚才的 bootstrap JSON 原样取 `task_path`、`project`、`task`。设当前 runner Git 顶层为 `runner_checkout`，在它的同级目录创建一个新的 Git worktree，分支必须精确为 `task/<project>/<task>`；然后只在这个新 worktree 执行 `node scripts/task-migrate-runner-root.mjs --task-path=<task_path> --project=<project> --task=<task> --runner-root=<这个新 worktree> --stage=make-decision`。紧接着在同一个新 worktree 执行 `node scripts/task-bootstrap.mjs --task-path=<task_path> --project=<project> --task=<task> --runner-root=<这个新 worktree> --stage=make-decision` 回读。第二个命令必须成功并返回 `runner_identity`；没有它或没有 `migration_ref`，一律视为“运行环境未准备好”。同名 branch 或 worktree 已存在时不得删除或静默复用；只有上述既有 task 回读成功且 `task_path` 一致时才能复用，否则按准备失败处理。不能只写一段“已绑定 runner”的文字，也不能用 `agent/...` checkout 代替这个首次绑定 worktree。
-- 只有 bootstrap、迁移和回读三步都成功后，才把 bootstrap 输出的 `project`、`task`、`task_path` 写进隐藏上下文；公开卡片只说“运行环境已准备好”。其中任一步失败，都不要创建、重置或唤醒任何 Stage Issue；按准备失败处理。
-- 如果这个 runner checkout 有 `package-lock.json`，先确认锁定依赖可用；缺失时只在这个 runner checkout 执行 `npm ci`。依赖准备、task bootstrap、runner 迁移或回读任一失败，都不要创建或唤醒 Stage Issue；按准备失败处理。绝不在业务目标仓安装、删除或猜测依赖。
+- **执行仓与业务仓分开**：按项目配置取得 WorkflowHub launcher-owned runtime 和业务目标仓。不能扫描本机目录、猜路径，或因为业务仓恰好也有脚本就把它当宿主运行环境。
+- 工头每次准备或恢复都重写根 Issue description 末尾的隐藏 `workflowhub-context`：格式必须是 `<!-- workflowhub-context: root=<当前根 UUID>; project=<项目>; task=<任务>; task_path=<TaskHandle 路径> -->`，只包含这四项。`project`、`task`、`task_path` 必须从 bootstrap JSON **原样复制**，不得手工改写或凭记忆重填；更新后重新读取根 Issue，把这三项与 bootstrap 输出逐字比对。不要把这份上下文写进 Issue metadata；`task_path` 只供正式审查读取 TaskHandle，绝不写进公开评论。
+- 从 launcher-owned runtime 执行正式 `task-bootstrap`。这一步只创建或读取 TaskHandle，不要求 `runner_root`、`runner_oid` 或 `migration_ref`，也不代表质量结果。`execution_mode=per_invocation` 时，每次正式入口独立认证当前运行代码，并把 commit/tree、合同版本和能力写入审计事实。
+- `legacy_pinned` 仅用于读取旧任务的历史证据。旧 runner 字段、分支、脏状态和迁移历史不能决定当前阶段业务结果；不得为日常升级创建 replacement，也不得把旧字段伪装成新执行身份。无法安全读取旧记录时，报告具体存储错误并停止。
+- bootstrap 或 launcher 不可用时，不创建或唤醒 Stage Issue；按准备失败处理。runner 元数据缺失、分支变化或旧 replacement 记录本身不是业务阻塞。
 - task 准备好后才创建或复用五个 Stage Issue；新建时把同一份隐藏注释写入 description，复用时覆盖旧注释。注释只供 Agent 读取，公开评论不展示路径、哈希或内部编号。
-- Stage Agent 先确认隐藏注释的根 Issue 与自己的当前根一致、并能打开对应的正式 WorkflowHub task，才使用它做审查或交接；不一致时不得使用旧上下文，要在上游 Issue @工头 请求覆盖修复，不从 cwd、Issue 编号或目录扫描猜身份，也不在业务仓复制 runner 文件。
-- **Stage 运行入口**：首次准备任务时，只有工头可按项目 resource 的 ref 取得 runner。后续每个 Stage Agent 必须从隐藏上下文给出的现有 `task_path` 读取已绑定 task 的 `runner_oid`，再用 `multica repo checkout <runner URL> --ref=<runner_oid>` 取得 runner checkout；项目 resource 的移动分支不能替换已绑定任务的 runner。只在返回 checkout 中执行已绑定 Stage Skill 明确写出的公共命令。Stage Skill 声明 `wh-review` 时，可以且只能按该 Skill 的正式 stdin 命令调用它；审查路由始终由受信配置决定，Agent 不选 provider。不得调用未被当前 Stage Skill 声明的审查脚本，不得用 `task-bootstrap.mjs --task-path` 或 `--runner-root` 重新准备已存在 task，不得手工拼 task 路径或借用其他 Agent 的工作目录。runner checkout 或公开入口自身报告 task、身份或存储不可用时，才在上游 Issue @工头 说明“官方入口失败”和重试条件；这不是用户决策。
-- task 或 runner 准备失败时，工头不得创建或启动 Stage Issue。它要在当前根 Issue 发一张问题卡并 @ 用户：说明“任务运行环境还没准备好”、推荐先修项目配置、影响是流程尚未开始、风险是强行启动会在审查或交接时卡住。
+- Stage Agent 先确认隐藏注释的根 Issue 与自己的当前根一致、并能打开对应的正式 WorkflowHub task，才使用它做审查或交接；不一致时不得使用旧上下文，要在上游 Issue @工头 请求覆盖修复，不从 cwd、Issue 编号或目录扫描猜身份，也不在业务仓复制宿主文件。
+- **Stage 运行入口**：Stage Agent 只能执行已绑定 Stage Skill 写出的公共命令。launcher-owned runtime 负责解析 `scripts/`、`core/` 和 `metrics/`；审查路由始终由受信配置决定，Agent 不选 provider。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task，不得手工拼 task 路径或借用其他 Agent 的工作目录。每次入口都记录执行身份，但该身份只用于审计和可追溯，不参与需求、质量或阶段放行裁决。
 
 ## 谁负责什么
 
@@ -56,7 +54,7 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 ## 问题处理和恢复
 
-1. 能安全自行修复，就修复、测试并在下一张进度或完成卡说明结果。正式 `wh-review` 返回 `unavailable`、`OUTPUT_INVALID` 或没有正式结论时，先保留原始结果，再用**同一份冻结材料**重跑正式审查；这是审查输出或传输问题，不是用户、runner、provider、模型或需求决策。重跑时按当前 Stage Skill 的正式步骤，从未变的正式 drafts/records 重新生成新的临时 review 输入；不得复用已被回收的临时文件。“同一份冻结材料”指内容和审查范围不变，不是临时文件路径不变。当前任务的 runner 已在同一条活动链验证过时，不要为这次审查重跑 bootstrap、依赖、runner 或 repo 检查。不得改 runner/ref、provider/model、计划或文档来“修复”这类结果；审查出现有效 finding 后才改相应材料并按现有规则复审。没有人为次数上限。
+1. 能安全自行修复，就修复、测试并在下一张进度或完成卡说明结果。正式 `wh-review` 返回 `unavailable`、`OUTPUT_INVALID` 或没有正式结论时，先保留原始结果，再用**同一份冻结材料**重跑正式审查；这是审查输出或传输问题，不是用户、执行身份、provider、模型或需求决策。重跑时按当前 Stage Skill 的正式步骤，从未变的正式 drafts/records 重新生成新的临时 review 输入；不得复用已被回收的临时文件。“同一份冻结材料”指内容和审查范围不变，不是临时文件路径不变。launcher/runtime 已验证且代码快照未变时，不要为这次审查重复准备依赖、仓库或执行环境。不得改执行身份、provider/model、计划或文档来“修复”这类结果；审查出现有效 finding 后才改相应材料并按现有规则复审。没有人为次数上限。
 2. 需要上游产物或决定时，在**上游 Issue** @ 上游 Agent，并明确缺什么、补齐条件和当前阶段如何等待。工头收到后负责重新接力。修复一个已 `blocked` 的 Stage 时，先确认阻塞条件已消失；然后必须把**同一个** Stage Issue 按 `blocked → backlog → todo` 依次更新并回读，最后在该 Issue 用真实 UUID @ 原 Stage Agent。不能只改成 `in_progress`、只写“等待重试”，或以一条无 mention 的评论代替唤醒。
 3. 只有用户能决定时，才在**当前 Issue** @ 用户并发用户决策卡。等待用户期间保持可读状态，不能无留言退出。
 4. `waiting_local_directory` 是路径互斥：不要把它当成用户决策或重复启动；等待锁释放后继续。
