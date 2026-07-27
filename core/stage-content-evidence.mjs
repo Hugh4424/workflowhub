@@ -5,17 +5,20 @@ import Ajv2020 from "ajv/dist/2020.js";
 import envelopeSchema from "./schemas/stage-content-evidence.v1.json" with { type: "json" };
 import interactionSchema from "./schemas/interaction-completion.v1.json" with { type: "json" };
 import ambiguitySchema from "./schemas/ambiguity-ledger.v1.json" with { type: "json" };
+import ambiguityV2Schema from "./schemas/ambiguity-ledger.v2.json" with { type: "json" };
 import decisionEntrySchema from "./schemas/decision-entry.v1.json" with { type: "json" };
 import decisionCoverageSchema from "./schemas/decision-coverage-audit.v1.json" with { type: "json" };
 import omissionSchema from "./schemas/decision-omission-acceptance.v1.json" with { type: "json" };
 import correctionSchema from "./schemas/decision-correction-appendix.v1.json" with { type: "json" };
 import decisionLogSchema from "./schemas/decision-log-contract.v1.json" with { type: "json" };
 import planTaskSchema from "./schemas/plan-task-contract.v1.json" with { type: "json" };
+import planTaskV2Schema from "./schemas/plan-task-contract.v2.json" with { type: "json" };
 import completionSchema from "./schemas/stage-completion-facts.v1.json" with { type: "json" };
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
+import { validateAmbiguityLedgerV2 } from "./stage-content-contracts.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const HASH = /^[a-f0-9]{64}$/;
@@ -28,9 +31,9 @@ const HOST_VISIBLE_REF = Object.freeze({
   rerank: /^host-message:\/\/rerank\/[a-zA-Z0-9][a-zA-Z0-9._~/-]*$/,
 });
 const REVISIONABLE_KINDS = new Set([
-  "ambiguity-ledger.v1", "decision-entry.v1", "decision-coverage-audit.v1",
+  "ambiguity-ledger.v1", "ambiguity-ledger.v2", "decision-entry.v1", "decision-coverage-audit.v1",
   "decision-omission-acceptance.v1", "decision-correction-appendix.v1",
-  "decision-log-contract.v1", "plan-task-contract.v1", "stage-completion-facts.v1",
+  "decision-log-contract.v1", "plan-task-contract.v1", "plan-task-contract.v2", "stage-completion-facts.v1",
 ]);
 const revisionable = (kind, payload) => REVISIONABLE_KINDS.has(kind)
   || (kind === "interaction-completion.v1" && payload?.interaction_type === "aggregate");
@@ -44,18 +47,20 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const payloadSchemas = new Map([
   ["interaction-completion.v1", interactionSchema],
   ["ambiguity-ledger.v1", ambiguitySchema],
+  ["ambiguity-ledger.v2", ambiguityV2Schema],
   ["decision-entry.v1", decisionEntrySchema],
   ["decision-coverage-audit.v1", decisionCoverageSchema],
   ["decision-omission-acceptance.v1", omissionSchema],
   ["decision-correction-appendix.v1", correctionSchema],
   ["decision-log-contract.v1", decisionLogSchema],
   ["plan-task-contract.v1", planTaskSchema],
+  ["plan-task-contract.v2", planTaskV2Schema],
   ["stage-completion-facts.v1", completionSchema],
 ]);
 const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
   "make-decision": Object.freeze(["interaction-completion.v1", "decision-coverage-audit.v1"]),
-  "build-spec": Object.freeze([]),
-  "build-plan": Object.freeze([]),
+  "build-spec": Object.freeze(["ambiguity-ledger.v2"]),
+  "build-plan": Object.freeze(["plan-task-contract.v2"]),
   "build-code": Object.freeze([]),
   "verify-code": Object.freeze([]),
 });
@@ -134,6 +139,10 @@ function validatePayload(kind, payload) {
   if (!validate) throw new TypeError(`unknown stage content evidence kind: ${kind}`);
   if (!validate(payload)) throw new TypeError(`${kind} payload does not match its schema: ${schemaErrors(validate)}`);
   if (kind === "interaction-completion.v1") validateInteractionSemantics(payload);
+  if (kind === "ambiguity-ledger.v2") {
+    const contract = validateAmbiguityLedgerV2(payload);
+    if (!contract.ok) throw new TypeError(`${kind} payload violates identity contract: ${contract.errors.join("; ")}`);
+  }
 }
 
 function requireBinding(value, label) {

@@ -54,6 +54,12 @@ invent flags, hide a gate exit code in a display pipeline, or prescribe broad
 testing by default. Use the narrow accepted command and add only regressions
 justified by a named compatibility boundary.
 
+In v2, each task card is authoritative for `Phase`, `goal`, complete
+`versioned_refs` (`artifact_kind`/`ref`/`hash`/`id`), `Knowledge`, `boundary`,
+`action`, test/acceptance command, `design_state` (`ready` or
+`blocked-by-design`), `STOP`, `recovery`, and task risk. Missing or stale
+bindings stop execution; they are never repaired by scanning the repository.
+
 `Knowledge` records verified facts needed for execution. It never requires a
 fixed path. `None` requires a factual reason. Missing interfaces, failed RED,
 an undeclared dependency, a need to weaken tests, or a new architecture choice

@@ -63,6 +63,15 @@
 > Repeat the complete 13-field block for every task. A field may say `None`
 > only with a task-specific reason.
 
+For the v2 contract, add these authoritative card fields to every task:
+
+- **Phase**：{owning Phase}
+- **goal**：{one observable task goal}
+- **versioned_refs**：`[{"artifact_kind":"spec|plan|tasks|evidence","ref":"{ref}","hash":"{sha256}","id":"{stable ID}"}]`
+- **Knowledge** / **boundary**：{minimum read context and exact change boundary}
+- **design_state**：`ready` or `blocked-by-design`
+- **STOP** / **recovery** / **task risk**：{fail-loud condition, recovery owner, and concrete risk}
+
 ### Verify
 
 - **Target**：{FR / AC / invariant}

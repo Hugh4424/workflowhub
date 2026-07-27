@@ -28,6 +28,10 @@ role、reason）；`not_applicable` 或 `unknown` entry 必须有受限 `reason_
 并发、拓扑、phase 顺序或测试策略时，才最多再做一次首轮高强度完整审查；第二轮 finding
 同样只供改进，不循环也不阻断 stage 推进。
 
+人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
+`accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
+provider verdict 转成“审查通过”。
+
 ## 审查重点
 
 - 每项原始需求和批准决策是否进入 spec。

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020.js";
 
 let validatePlanTaskContract;
@@ -231,10 +231,13 @@ describe("accepted stage-content-contracts artifacts", () => {
 
   it("validates the real accepted spec, plan, and tasks without omissions", () => {
     requireApi();
+    const root = existsSync("specs/stage-content-contracts/spec.md")
+      ? "specs/stage-content-contracts"
+      : "specs/archive/stage-content-contracts";
     const result = validatePlanTaskContract({
-      spec: readFileSync("specs/stage-content-contracts/spec.md", "utf8"),
-      plan: readFileSync("specs/stage-content-contracts/plan.md", "utf8"),
-      tasks: readFileSync("specs/stage-content-contracts/tasks.md", "utf8"),
+      spec: readFileSync(`${root}/spec.md`, "utf8"),
+      plan: readFileSync(`${root}/plan.md`, "utf8"),
+      tasks: readFileSync(`${root}/tasks.md`, "utf8"),
     });
     expect(result).toMatchObject({
       ok: true,

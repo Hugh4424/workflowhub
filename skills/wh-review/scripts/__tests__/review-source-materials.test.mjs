@@ -468,6 +468,7 @@ describe("review materials", () => {
     const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec",
       materials: { raw_requirement: "x".repeat(128 * 1024), approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") } });
     expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(128 * 1024);
+    expect(bundle.packetPlan.delivery_ref_count).toBe(bundle.deliveryManifest.length);
     expect(bundle.packetPlan).not.toHaveProperty("budget_bytes");
   });
 
@@ -506,6 +507,13 @@ describe("review materials", () => {
     const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const base = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
     expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true, materials: base }))
+      .toThrow(/wh_review\.v2 requires context_map/);
+    const planBase = { approved_spec: "spec", acceptance_criteria: "AC-1", draft_plan: "plan", draft_tasks: "tasks", review_instructions: reviewInstructionsFor("build-plan") };
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-plan", strictV2Maps: true, materials: planBase }))
+      .toThrow(/wh_review\.v2 requires context_map/);
+    const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
+    const verifyBase = { acceptance_criteria: "AC-1", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") };
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", strictV2Maps: true, materials: verifyBase }))
       .toThrow(/wh_review\.v2 requires context_map/);
     const map = { state: "complete", summary: "one checked authority", entries: [{ id: "ctx-1", subject: "existing contract", rationale: "it defines the public boundary", disposition: "complete", anchors: [{ id: "ctx-1-source", path: "keep.txt", start_line: 1, end_line: 1, role: "existing_contract", reason: "direct boundary" }] }] };
     const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", strictV2Maps: true,

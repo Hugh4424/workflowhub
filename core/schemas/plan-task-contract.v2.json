@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plan-task-contract.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "spec", "plan", "tasks", "task_rows", "fr_coverage", "ac_coverage", "dependency_validation", "errors"],
+  "properties": {
+    "schema_version": { "const": "plan-task-contract.v2" },
+    "spec": { "$ref": "#/$defs/artifact" },
+    "plan": { "$ref": "#/$defs/artifact" },
+    "tasks": { "$ref": "#/$defs/artifact" },
+    "task_rows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/task" } },
+    "fr_coverage": { "$ref": "#/$defs/coverage" },
+    "ac_coverage": { "$ref": "#/$defs/coverage" },
+    "dependency_validation": { "$ref": "#/$defs/check" },
+    "errors": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "ref", "hash", "id"],
+      "properties": {
+        "artifact_kind": { "enum": ["spec", "plan", "tasks", "evidence"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "hash": { "$ref": "#/$defs/hash" },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted_count", "covered_count", "accepted_ids", "covered_ids"],
+      "properties": {
+        "accepted_count": { "type": "integer", "minimum": 1 },
+        "covered_count": { "type": "integer", "minimum": 0 },
+        "accepted_ids": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "covered_ids": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "phase", "goal", "versioned_refs", "knowledge", "boundary", "action", "command", "design_state", "stop", "recovery", "risk"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^T[0-9]+$" },
+        "phase": { "type": "string", "minLength": 1 },
+        "goal": { "type": "string", "minLength": 1 },
+        "versioned_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifact" } },
+        "knowledge": { "type": "string", "minLength": 1 },
+        "boundary": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "design_state": { "enum": ["ready", "blocked-by-design"] },
+        "stop": { "type": "string", "minLength": 1 },
+        "recovery": { "type": "string", "minLength": 1 },
+        "risk": { "type": "string", "minLength": 1 }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid"],
+      "properties": { "valid": { "const": true } }
+    }
+  }
+}
