@@ -27,7 +27,12 @@ node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs format-correct < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs adopt-legacy-root < input.json
+node skills/wh-review/scripts/wh-review-cli.mjs doctor
 ```
+
+`doctor` 只读扫描宿主 `wh_review` 的全部 stage/track 路由；任一 profile、
+priority、重复项或模式错误都以非零退出。正常 review 热路径只严格校验当前
+请求的 stage×track，其他路由错误输出 warning，不阻断当前请求。
 
 Send the input JSON over stdin. Never place a transient review-input file in
 the runner, target repository, CandidateWorkspace, or TaskHandle. If the host

@@ -8,7 +8,7 @@ import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
 import { capturePhaseReviewSource } from "./review-source.mjs";
 import { buildClassificationManifest, buildNonGateReviewResponseRecord, buildReviewChain, deriveChangeClassification, selectReviewRound } from "./review-controller.mjs";
-import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection } from "./third-review-host-config.mjs";
+import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
 import { openTask } from "../../../core/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../../core/git-worktree-snapshot.mjs";
@@ -263,8 +263,8 @@ export function adoptLegacyReviewRoot(input) {
   });
 }
 
-function providerClient() {
-  const thirdReview = loadTrustedThirdReviewConfig();
+function providerClient(stage = null, reviewTrack = null) {
+  const thirdReview = loadTrustedThirdReviewConfig({ requestedStage: stage, requestedTrack: reviewTrack });
   return { thirdReview, client: new ReviewProviderClient({ command: thirdReview.command, config: thirdReview.config }) };
 }
 
@@ -283,7 +283,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   if (formatCorrection && (input.previous_result_ref !== undefined || input.previousResultRef !== undefined || input.materials?.response_ledger !== undefined)) {
     throw new TypeError("format-correct cannot select a follow-up review chain");
   }
-  const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient();
+  const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null);
   const hostProvider = input.host_provider ?? input.hostProvider;
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack);
@@ -408,6 +408,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     report_ref: result.reportRef,
     snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
     subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
+    ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
   };
   });
 }
@@ -415,15 +416,25 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
 export function verifyFinalReview(input) {
   const trusted = resolveTrustedReviewSubject(input);
   const result = verifyFinal({
-    ...trusted, attachmentRoot: providerClient().thirdReview.attachmentRoot, resultRef: input.result_ref ?? input.resultRef,
+    ...trusted, attachmentRoot: providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null).thirdReview.attachmentRoot, resultRef: input.result_ref ?? input.resultRef,
     taskId: trusted.taskId, stage: input.stage, reviewTrack: input.review_track ?? input.reviewTrack,
   });
   return { status: result.status, snapshot_tree: result.snapshotTree };
 }
 
+export function doctorThirdReviewConfig() {
+  const trusted = loadTrustedThirdReviewConfig();
+  validateAllWhReviewRoutes(trusted.whReview);
+  return { status: "ok", config: trusted.config, stages: Object.keys(trusted.whReview?.stages ?? {}) };
+}
+
 async function main() {
   const command = process.argv[2];
-  if (!new Set(["run", "format-correct", "verify-final", "adopt-legacy-root"]).has(command)) throw new Error("usage: wh-review-cli.mjs <run|format-correct|verify-final|adopt-legacy-root> [input.json]");
+  if (!new Set(["run", "format-correct", "verify-final", "adopt-legacy-root", "doctor"]).has(command)) throw new Error("usage: wh-review-cli.mjs <run|format-correct|verify-final|adopt-legacy-root|doctor> [input.json]");
+  if (command === "doctor") {
+    process.stdout.write(`${JSON.stringify(doctorThirdReviewConfig())}\n`);
+    return;
+  }
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
   const result = command === "run"
     ? await runReviewRound(input)
