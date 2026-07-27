@@ -267,6 +267,15 @@ idempotent. Other attempts against a closed stage remain rejected.
    requires the same Git common directory as the accepted workspace, records
    immutable migration lineage, atomically updates the target identity, and must
    finish before a fresh `prepare` run.
+   If the later `merge-task-branch` step reports a planned merge conflict, do
+   not reopen build-code and do not create a new verify attempt. Invoke the
+   local `skills/resolving-merge-conflicts` skill on the task worktree. It
+   merges the frozen target baseline into the task branch, resolves the
+   conflict there, and commits the resolution. Then rerun the same close
+   `execute` command. The target checkout, push, branch deletion, and remaining
+   close actions stay owned by `task-close`.
+   If close reports that the frozen target baseline changed, do not invoke the
+   skill; stop and create a fresh close plan for the new target baseline.
 10. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.

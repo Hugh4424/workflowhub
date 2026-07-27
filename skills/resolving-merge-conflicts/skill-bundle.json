@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "skill": "resolving-merge-conflicts",
+  "files": ["SKILL.md"],
+  "sources": []
+}

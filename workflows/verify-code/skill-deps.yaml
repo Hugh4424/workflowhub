@@ -3,6 +3,7 @@ skills:
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: fresh_verification_evidence, bundle: skills/wh-review/skill-bundle.json }
   - { name: qa-only, path: skills/qa-only/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_qa_lens, bundle: skills/qa-only/skill-bundle.json }
   - { name: verify-change, path: skills/verify-change/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_verify_change_lens, bundle: skills/verify-change/skill-bundle.json }
+  - { name: resolving-merge-conflicts, path: skills/resolving-merge-conflicts/SKILL.md, execution: inline, invocation: conditional, trigger: close_merge_conflict, bundle: skills/resolving-merge-conflicts/skill-bundle.json }
   - { name: test-strategy, path: skills/test-strategy/SKILL.md, execution: independent, invocation: conditional, trigger: accepted_test_routing_requires_strategy, bundle: skills/test-strategy/skill-bundle.json }
   - { name: isolated-browser-qa, path: skills/isolated-browser-qa/SKILL.md, execution: independent, invocation: conditional, trigger: ui_acceptance, bundle: skills/isolated-browser-qa/skill-bundle.json }
 runtime_capabilities:
