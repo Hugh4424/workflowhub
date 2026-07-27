@@ -125,7 +125,8 @@ export function validateReplayRecordSet(records) {
   same(attempt.task_id, records.taskId, "attempt task");
   same(attempt.stage, "make-decision", "attempt stage");
   same(attempt.facts?.snapshot_tree, tree, "attempt tree");
-  same(attempt.facts?.decision_ref, records.decisionReceiptRef, "attempt decision ref");
+  same(attempt.facts?.decision_ref, records.decisionMarkdownRef, "attempt decision ref");
+  same(attempt.facts?.decision_hash, records.decisionMarkdownHash, "attempt decision hash");
   same(attempt.facts?.audit_summary_ref, records.auditRef, "attempt audit ref");
   if (!attempt.facts?.content_evidence_refs?.some((entry) => entry.ref === records.aggregateRef)
       || !attempt.facts?.content_evidence_refs?.some((entry) => entry.ref === records.coverageRef)) {

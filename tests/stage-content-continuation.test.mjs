@@ -213,7 +213,8 @@ describe("complete stage replay validation", () => {
       attempt: {
         task_id: "legacy-task", stage: "make-decision",
         facts: {
-          snapshot_tree: tree, decision_ref: decisionReceiptRef, audit_summary_ref: "evidence/audits/make-decision/a.json",
+          snapshot_tree: tree, decision_ref: "receipts/decision-log/final.md", decision_hash: sha256(markdown),
+          audit_summary_ref: "evidence/audits/make-decision/a.json",
           content_evidence_refs: [
             { ref: "evidence/stage-content/root/interaction-completion.aggregate.json" },
             { ref: "evidence/stage-content/root/decision-coverage-audit.v1.json" },
