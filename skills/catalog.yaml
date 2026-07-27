@@ -107,15 +107,15 @@ skills:
     update_policy: 随内存研究接口变更审查
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 80952ebce4c0be1dbd7acca22a9b3f35a20396090d4ac15ed3c9abefbf4b3a90
+    local_version: 1.1.0
+    local_bundle_hash: 05be4a6278d69ac57d0b87f84c194483691e93557d93b480abfdc2e8c3595b81
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
-    local_changes: task-id 定位；内置模板；接 workflowhub metrics
+    local_changes: 去 task identity；内置可读模板；PFACT/SCN/FR/AC/OPEN typed closure；接 workflowhub metrics
     dependency_closure: [skills/spec-specify]
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
@@ -133,8 +133,8 @@ skills:
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 434a500dd858df5e7c5e5ea34def65e0b342565a4750d331e8b9d4cb4ca60286
+    local_version: 1.1.0
+    local_bundle_hash: f61333401a5d94442e13c38b4cff9bb1d2879ed152a39c0c20a7bf9b57c627d7
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -143,13 +143,13 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 去分支耦合；接可选冻结研究内容；内置模板；吸收 right-sizing/global constraints/interfaces
+    local_changes: 去分支耦合；接可选冻结研究内容；重排可读模板；保留八段 Phase/风险/宪法；吸收条件接口合同
     dependency_closure: [skills/spec-plan]
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 60f9a5f6358e31b9846b836623a3f599a8a6b0bbdd507f3cf41a258252b7620d
+    local_version: 1.1.0
+    local_bundle_hash: 49d27980b96c93a349d9e4525ed63b79e4e85a9601907a0a1845f6f44da9fd25
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -158,7 +158,7 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 去 .specify/git 耦合；内置模板；适配 workflowhub phase 合同
+    local_changes: 去 .specify/git 耦合；唯一四组任务卡；适配 v3 phase/验证/文件边界合同
     dependency_closure: [skills/spec-tasks]
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze

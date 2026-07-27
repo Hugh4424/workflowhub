@@ -114,20 +114,32 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    the proposed goal, boundaries, major requirements, acceptance shape, and the
    next check.
 4. Always build an `ambiguity-ledger.v2` over the current `spec.md`; an empty
-   or skipped ledger is invalid. Classify every relevant statement as exactly
+   or skipped ledger is invalid. A spec generated from the current template
+   must publish `content_profile: "spec-content.v3"` and pass the deterministic
+   generated-Markdown cleanliness and Spec-Purity check before publication.
+   The typed payload must include scenario cards, FR `scenario_refs`, AC
+   `failure_condition`, and OPEN cards. Every PFACT carries only the field for
+   its selected status; an unknown PFACT binds a RISK or OPEN card. An unknown
+   content profile fails loud.
+
+   Legacy `ambiguity-ledger.v2` without `content_profile` remains read-only
+   compatible: it may be consumed without the new fields, but must never be
+   rewritten or published as if it were new current-template content.
+
+   Classify every relevant statement as exactly
    one of `locked upstream decision`, `upstream explicitly unresolved`, or
    `new ambiguity`. One ledger item represents one decision axis. If two
    behaviors can vary independently, create two items even when they affect the
    same field or feature.
 
    The v2 ledger is the deterministic identity summary for the exact spec bytes:
-   it binds the spec ref/hash, PFACT/FR/AC IDs and their relations, fact status,
-   and every risk's affected IDs, trigger, consequence, mitigation-or-STOP,
-   handling Stage, and verification. It never copies product prose into a
-   second artifact. `verified` PFACT requires formal evidence; `inferred`,
-   `unknown`, and `not_applicable` require their corresponding limit, owner, or
-   reason. Code paths, symbols, code anchors, and engineering options are
-   forbidden in the v2 payload.
+   it binds the spec ref/hash, SCN/PFACT/FR/AC/OPEN IDs and their relations,
+   fact status, and every risk's affected IDs, trigger, consequence,
+   mitigation-or-STOP, handling Stage, and verification. It never copies
+   product prose into a second artifact. `verified` PFACT requires formal
+   evidence; `inferred`, `unknown`, and `not_applicable` require their
+   corresponding limit, owner, or reason. Code paths, symbols, code anchors,
+   and engineering options are forbidden in the v2 payload.
 
    Every ambiguity item records all six possible impact dimensions separately: scope,
    acceptance, interfaces, data, security, and operations. It also records

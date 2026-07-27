@@ -338,11 +338,20 @@ export function validateAmbiguityLedgerV2(value) {
     errors.push("subject_binding must identify the exact task-relative spec bytes");
   }
 
+  const scenarioIds = addUniqueIds(value.scenarios ?? [], "SCN", errors);
   const pfactIds = addUniqueIds(value.pfacts, "PFACT", errors);
   const frIds = addUniqueIds(value.frs, "FR", errors);
   const acIds = addUniqueIds(value.acs, "AC", errors);
+  addUniqueIds(value.open_questions ?? [], "OPEN", errors);
   const allIds = new Set([...pfactIds, ...frIds, ...acIds]);
 
+  if (value.content_profile === "spec-content.v3") {
+    for (const id of frIds) {
+      if (!/^FR-[A-Z][A-Z0-9]*-[0-9]{3}$/.test(id)) {
+        errors.push(`new content profile FR must use FR-{DOMAIN}-{NNN}: ${id}`);
+      }
+    }
+  }
   for (const pfact of value.pfacts) {
     for (const evidence of pfact.evidence ?? []) {
       if (!taskRelativeRef(evidence.ref)) errors.push(`PFACT ${pfact.id} evidence ref must be task-relative`);
@@ -352,6 +361,7 @@ export function validateAmbiguityLedgerV2(value) {
   }
   for (const fr of value.frs) {
     for (const reference of fr.pfact_refs) validateBoundSpecReference(reference, pfactIds, subject, `FR ${fr.id} PFACT reference`, errors);
+    for (const reference of fr.scenario_refs ?? []) validateBoundSpecReference(reference, scenarioIds, subject, `FR ${fr.id} scenario reference`, errors);
     for (const reference of fr.ac_refs) validateBoundSpecReference(reference, acIds, subject, `FR ${fr.id} AC reference`, errors);
   }
   for (const ac of value.acs) {
@@ -359,6 +369,93 @@ export function validateAmbiguityLedgerV2(value) {
   }
   for (const risk of value.risks) {
     for (const id of risk.affected_ids) if (!allIds.has(id)) errors.push(`risk ${risk.id} affects unknown ID: ${id}`);
+  }
+  for (const question of value.open_questions ?? []) {
+    for (const id of question.affected_ids) if (!allIds.has(id)) errors.push(`open question ${question.id} affects unknown ID: ${id}`);
+  }
+  if (value.content_profile === "spec-content.v3") {
+    const referencedScenarios = new Set(value.frs.flatMap((fr) => (fr.scenario_refs ?? []).map((reference) => reference.id)));
+    for (const id of scenarioIds) if (!referencedScenarios.has(id)) errors.push(`scenario has no FR coverage: ${id}`);
+    const unresolvedIds = new Set([
+      ...value.risks.flatMap((risk) => risk.affected_ids),
+      ...(value.open_questions ?? []).flatMap((question) => question.affected_ids),
+    ]);
+    for (const pfact of value.pfacts) {
+      if (pfact.status === "unknown" && !unresolvedIds.has(pfact.id)) {
+        errors.push(`unknown PFACT must be bound to a RISK or OPEN card: ${pfact.id}`);
+      }
+    }
+  }
+  return result(errors);
+}
+
+const SPEC_CONTENT_V3_SECTIONS = Object.freeze([
+  /^速读卡(?:（30 秒）)?$/,
+  /^1\.\s+问题与紧迫性$/,
+  /^2\.\s+背景、目标与范围$/,
+  /^3\.\s+用户场景与状态覆盖$/,
+  /^4\.\s+产品事实与假设（PFACT）$/,
+  /^5\.\s+功能需求$/,
+  /^6\.\s+条件式业务合同$/,
+  /^7\.\s+明确不做与默认必须成立$/,
+  /^8\.\s+业务影响与回归范围$/,
+  /^9\.\s+验收标准$/,
+  /^10\.\s+风险、未决与交接$/,
+]);
+
+export function validateSpecContentProfile(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return result(["spec markdown is required"]);
+  const errors = markdownStructureErrors(markdown, "spec");
+  const residueText = withoutProgrammingFencedCode(markdown).replace(/`[^`\n]*`/g, "");
+  if (/\{[^{}"':,\n]{1,120}\}/.test(residueText)) errors.push("spec contains an unresolved placeholder");
+  if (/<!--[\s\S]*?-->/.test(markdown)) errors.push("spec contains an authoring comment");
+  if (/^\s*(?:待补充|TBD|TODO)\s*$/mi.test(markdown)) errors.push("spec contains filler");
+  if ((markdown.match(/^###\s+明确不做\s*$/gm) ?? []).length !== 1) {
+    errors.push("spec must contain exactly one authoritative 明确不做 section");
+  }
+  if (/^###\s+假设\s*$/m.test(markdown)) errors.push("assumptions must be represented only as inferred PFACT");
+
+  const sectionHeadings = markdownSections(markdown, 2).map(({ heading }) => heading);
+  for (const expected of SPEC_CONTENT_V3_SECTIONS) {
+    if (!sectionHeadings.some((heading) => expected.test(heading))) {
+      errors.push(`spec-content.v3 section missing: ${expected.source}`);
+    }
+  }
+  for (const [label, pattern] of [
+    ["SCN card", /^###\s+SCN-\d{3}(?:\s*[:：].*)?$/m],
+    ["PFACT card", /^\s*-\s+\*\*PFACT-[A-Z0-9]+\*\*\s*[:：]/m],
+    ["FR card", /^\s*-\s+\*\*FR-[A-Z][A-Z0-9]*-\d{3}\*\*\s*[:：]/m],
+    ["AC card", /^\s*-\s+\[[ xX]\]\s+\*\*AC-[A-Z0-9]+\*\*\s*[:：]/m],
+  ]) {
+    if (!pattern.test(markdown)) errors.push(`spec-content.v3 is missing a ${label}`);
+  }
+
+  const tableBlocks = [];
+  let current = [];
+  for (const line of markdown.split(/\r?\n/)) {
+    if (/^\s*\|.*\|\s*$/.test(line)) current.push(line);
+    else if (current.length) {
+      tableBlocks.push(current);
+      current = [];
+    }
+  }
+  if (current.length) tableBlocks.push(current);
+  for (const table of tableBlocks) {
+    if (table.length < 3) errors.push("spec contains an empty table");
+    const widths = table.map((line) => line.split("|").length);
+    if (new Set(widths).size !== 1) errors.push("spec contains an inconsistent table");
+    if (Math.max(...widths) - 2 > 5) errors.push("spec table exceeds five columns");
+  }
+
+  const engineeringPatterns = [
+    /^##+\s+(?:Code Anchors?|Implementation (?:Plan|Steps?)|工程方案|实现步骤)\b/im,
+    /\b(?:gate_cmd|expected_exit|display_cmd|design_state)\b/,
+    /`(?:src|core|lib|skills|tests)\/[^`]+`/,
+    /`[^`\n]+\.(?:js|mjs|cjs|ts|tsx|py|go|rs)(?::[^`]*)?`/,
+    /\breuse\s*(?:→|->)\s*extend\s*(?:→|->)\s*new\b/i,
+  ];
+  if (engineeringPatterns.some((pattern) => pattern.test(markdown))) {
+    errors.push("spec contains plan/task engineering material");
   }
   return result(errors);
 }
@@ -374,21 +471,60 @@ const PLAN_SECTIONS = Object.freeze([
   "Constitution Check",
   "Complexity Trade-offs",
 ]);
+const PLAN_SECTIONS_V3 = Object.freeze([
+  "Quick Read",
+  "Technical Context",
+  "Code Anchors",
+  "Solution Design",
+  "File Boundary",
+  "Technical Decisions",
+  "Test Strategy",
+  "Rollback and Recovery",
+  "Implementation Order",
+  "Dependencies and Parallelism",
+  "Requirement and Verification Traceability",
+  "Governance Synchronization Matrix",
+  "Constitution Check",
+]);
 const PLAN_SECTION_ALIASES = Object.freeze({
+  "Quick Read": [/速读卡/, /Quick Read/i],
   "Technical Context": [/Technical Context/i],
   "Global Constraints": [/Global Constraints/i, /全局约束/],
+  "Code Anchors": [/Code Anchors/i, /代码锚点/],
+  "Solution Design": [/Solution Design/i, /方案设计/],
+  "File Boundary": [/File Boundary/i, /文件边界/],
+  "Technical Decisions": [/Technical Decisions/i, /技术决策/],
   "Modules, Interfaces, and Data Contracts": [/Modules.*Interfaces.*Data Contracts/i, /模块职责与接口/],
   "Implementation Order": [/Implementation Order/i, /依赖与并行/, /实施顺序/],
+  "Dependencies and Parallelism": [/Dependencies and Parallelism/i, /依赖与并行/],
   "Test Strategy": [/Test Strategy/i, /场景优先级与独立测试/, /测试策略/],
   "Rollback and Recovery": [/Rollback and Recovery/i, /风险与回滚/],
   "FR to AC to Step Traceability": [/FR to AC to Step Traceability/i, /FR.*AC.*Step.*追踪/i],
+  "Requirement and Verification Traceability": [/Requirement and Verification Traceability/i, /需求与验证追踪/],
+  "Governance Synchronization Matrix": [/Governance Synchronization Matrix/i, /治理同步矩阵/],
   "Constitution Check": [/Constitution Check/i, /宪法逐项检查/],
   "Complexity Trade-offs": [/Complexity Trade-offs/i, /候选方案.*取舍.*复杂度/],
 });
 const PHASE_FIELDS = Object.freeze(["Goal", "Files", "Tasks", "Verify", "Knowledge", "STOP"]);
+const PHASE_FIELDS_V3 = Object.freeze([
+  "Goal", "Files", "Tasks", "Verify", "Knowledge", "STOP", "Done", "Risks and rollback",
+]);
 const TASK_FIELDS = Object.freeze([
   "ID", "动作", "精确文件", "输入", "输出", "依赖", "并行",
   "FR", "AC", "gate_cmd", "expected_exit", "oracle", "evidence_path",
+]);
+const TASK_FIELDS_V3 = Object.freeze([
+  "ID", "Phase", "goal", "design_state", "versioned_refs", "输入", "依赖", "并行",
+  "FR", "AC", "动作", "精确文件", "boundary", "输出", "Knowledge",
+  "verification_role", "paired_task", "gate_cmd", "expected_exit", "oracle",
+  "evidence_path", "STOP", "recovery", "task risk",
+]);
+const PLAN_TASK_V3 = "plan-task.v3";
+const CURRENT_CONSTITUTION_CLAUSE_IDS = Object.freeze([
+  // Deliberate governance snapshot: update this list with constitution-checklist.md.
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10",
+  "Q1", "Q2", "Q3",
+  "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
 ]);
 
 function markdownSections(document, level, prefix = "") {
@@ -406,16 +542,37 @@ function markdownSections(document, level, prefix = "") {
 }
 
 function taskBlocks(document) {
-  return markdownSections(document, 4)
-    .filter(({ heading }) => /^T\d+\b/.test(heading))
-    .map(({ heading, body }) => {
-      const fields = {};
-      for (const line of body.split(/\r?\n/)) {
-        const match = line.match(/^\s*-\s+\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/);
-        if (match) fields[match[1].trim()] = match[2].trim();
+  const lines = document.split(/\r?\n/);
+  const starts = [];
+  let phase = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const phaseMatch = lines[index].match(/^##\s+(Phase\s+.+?)\s*$/);
+    if (phaseMatch) phase = phaseMatch[1];
+    const taskMatch = lines[index].match(/^####\s+(T\d+\b.*?)\s*$/);
+    if (taskMatch) starts.push({ index, heading: taskMatch[1], phase });
+  }
+  return starts.map((entry) => {
+    let end = lines.length;
+    for (let index = entry.index + 1; index < lines.length; index += 1) {
+      if (/^#{1,4}\s+/.test(lines[index])) {
+        end = index;
+        break;
       }
-      return { heading, heading_id: heading.match(/^(T\d+)/)?.[1], fields };
-    });
+    }
+    const body = lines.slice(entry.index + 1, end).join("\n").trim();
+    const fields = {};
+    for (const line of body.split(/\r?\n/)) {
+      const match = line.match(/^\s*-\s+\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/);
+      if (match) fields[match[1].trim()] = match[2].trim();
+    }
+    return {
+      heading: entry.heading,
+      heading_id: entry.heading.match(/^(T\d+)/)?.[1],
+      phase: entry.phase,
+      body,
+      fields,
+    };
+  });
 }
 
 function identifiers(text, pattern) {
@@ -425,6 +582,122 @@ function identifiers(text, pattern) {
 function hasExecutableCommand(value) {
   const command = value.trim().replace(/^`([\s\S]*)`$/, "$1");
   return /^(?:mkdir\b|npx\b|npm\b|pnpm\b|yarn\b|bun\b|node\b|python\b|pytest\b|go\b|cargo\b|make\b|bash\b|sh\b|git\b|\.\/)/.test(command);
+}
+
+function templateVersion(document) {
+  return document.match(/^\s*(?:-\s+)?\*\*Template version\*\*\s*[:：]\s*`?([^`\s]+)`?\s*$/mi)?.[1] ?? null;
+}
+
+function placeholderOrTemplateNoise(document) {
+  if (/<!--[\s\S]*?-->/.test(document)) return true;
+  const prose = withoutProgrammingFencedCode(document)
+    .replace(/`[^`\n]*`/g, "");
+  return /\{[^{}\n]{1,120}\}|^\s*(?:待补充|TBD|TODO)\s*$/mi.test(prose);
+}
+
+function withoutFencedCode(document) {
+  return document.replace(/^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)\s*$/gm, "");
+}
+
+function withoutProgrammingFencedCode(document) {
+  return document.replace(
+    /^(?:```|~~~)(?:javascript|js|jsx|typescript|ts|tsx|python|py|go|rust|rs|java|c|cpp|csharp|cs|ruby|rb|php|swift|kotlin|kt|shell|sh|bash|zsh|powershell|ps1|json|yaml|yml|toml|sql|html|css|scss|xml)\s*\n[\s\S]*?^(?:```|~~~)\s*$/gmi,
+    "",
+  );
+}
+
+function markdownStructureErrors(document, label) {
+  const errors = [];
+  const lines = withoutFencedCode(document).split(/\r?\n/);
+  let previousLevel = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const heading = lines[index].match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (!heading) continue;
+    const level = heading[1].length;
+    if (previousLevel && level > previousLevel + 1) {
+      errors.push(`${label} heading level jumps from ${previousLevel} to ${level}: ${heading[2]}`);
+    }
+    previousLevel = level;
+    let next = index + 1;
+    while (next < lines.length && lines[next].trim() === "") next += 1;
+    const nextHeading = lines[next]?.match(/^(#{1,6})\s+/);
+    if (nextHeading && nextHeading[1].length <= level) {
+      errors.push(`${label} heading is empty: ${heading[2]}`);
+    }
+  }
+  return errors;
+}
+
+function parseConstitutionBinding(document) {
+  const value = document.match(/^\s*-\s+\*\*Constitution binding\*\*\s*[:：]\s*`(\{.*\})`\s*$/mi)?.[1];
+  if (!value) return null;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function phaseRows(document, fields, errors, label) {
+  const phases = markdownSections(document, 2, "Phase ");
+  if (phases.length === 0) errors.push(`${label} must contain at least one Phase`);
+  return phases.map((phase) => {
+    const sections = new Map(markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+      .map((section) => [section.heading, section.body]));
+    for (const field of fields) {
+      const body = sections.get(field);
+      if (body === undefined || body.trim() === "") errors.push(`${label} ${phase.heading} is missing ${field}`);
+      else if (/^(?:None|N\/A)\.?$/i.test(body.trim())) errors.push(`${label} ${phase.heading} ${field} uses unexplained N/A`);
+    }
+    return {
+      phase: phase.heading,
+      fields: Object.fromEntries(fields.map((field) => [field, sections.get(field) ?? null])),
+    };
+  });
+}
+
+function inlinePaths(value) {
+  return [...new Set([...String(value ?? "").matchAll(/`([^`\n]+)`/g)].map((match) => match[1]))];
+}
+
+function phaseChangePaths(filesBody) {
+  return new Set(String(filesBody ?? "").split(/\r?\n/)
+    .filter((line) => /\*\*(?:NEW|MODIFY)\*\*/i.test(line))
+    .flatMap((line) => inlinePaths(line)));
+}
+
+function globalChangePaths(fileBoundaryBody) {
+  const sections = markdownSections(`## File Boundary\n${fileBoundaryBody ?? ""}`, 3);
+  return new Set(sections
+    .filter(({ heading }) => /^(?:NEW|MODIFY)$/i.test(heading))
+    .flatMap(({ body }) => inlinePaths(body)));
+}
+
+function boundaryPaths(value) {
+  const declared = String(value ?? "").match(/(?:^|;)\s*(?:files|路径)\s*[:：]\s*([^;]+)/i)?.[1] ?? "";
+  return inlinePaths(declared);
+}
+
+function oracleIdentity(value) {
+  return String(value ?? "").replace(/^`|`$/g, "").match(/^([A-Z][A-Z0-9_-]+)\b/)?.[1] ?? null;
+}
+
+function normalizedCommand(value) {
+  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+}
+
+function sameIds(left, right) {
+  return [...left].sort().join("\0") === [...right].sort().join("\0");
+}
+
+function nAWithReason(value, kind = "") {
+  const text = String(value ?? "").trim();
+  if (!/^N\/A\s+[—-]\s+\S/i.test(text)) return false;
+  return !kind || new RegExp(kind, "i").test(text);
+}
+
+function fieldValue(body, field) {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(body ?? "").match(new RegExp(
+    `^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
+    "mi",
+  ))?.[1]?.trim() ?? null;
 }
 
 function cycleIn(tasks) {
@@ -450,32 +723,104 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
 
+  const planVersion = templateVersion(plan);
+  const tasksVersion = templateVersion(tasks);
+  const isV3 = planVersion === PLAN_TASK_V3 || tasksVersion === PLAN_TASK_V3;
+  for (const [label, version] of [["plan", planVersion], ["tasks", tasksVersion]]) {
+    if (version !== null && version !== PLAN_TASK_V3) {
+      errors.push(`${label} uses unsupported explicit template version: ${version}`);
+    }
+  }
+  if (isV3 && (planVersion !== PLAN_TASK_V3 || tasksVersion !== PLAN_TASK_V3)) {
+    errors.push("plan and tasks must use the same plan-task.v3 template version");
+  }
+  if (isV3 && (placeholderOrTemplateNoise(plan) || placeholderOrTemplateNoise(tasks))) {
+    errors.push("generated plan/tasks must not retain placeholders, template comments, or filler");
+  }
+  if (isV3) {
+    errors.push(...markdownStructureErrors(plan, "plan"), ...markdownStructureErrors(tasks, "tasks"));
+  }
+
   const planSections = markdownSections(plan, 2);
   const findPlanSection = (name) => planSections.find(({ heading }) =>
     PLAN_SECTION_ALIASES[name].some((pattern) => pattern.test(heading)));
-  for (const heading of PLAN_SECTIONS) {
+  for (const heading of isV3 ? PLAN_SECTIONS_V3 : PLAN_SECTIONS) {
     const section = findPlanSection(heading);
     const body = section?.body ?? (heading === "Rollback and Recovery" && /风险与回滚/.test(plan) ? "declared per Phase" : undefined);
     if (body === undefined || body.trim() === "") errors.push(`plan section missing or empty: ${heading}`);
   }
   const constitution = findPlanSection("Constitution Check")?.body ?? "";
   const constitutionIds = identifiers(constitution, /\b(?:F(?:10|[1-9])|Q[1-3]|S[1-8])\b/g);
-  if (constitutionIds.length !== 21) errors.push(`Constitution Check must enumerate all 21 clauses; found ${constitutionIds.length}`);
-
-  const phases = markdownSections(plan, 2, "Phase ");
-  if (phases.length === 0) errors.push("plan must contain at least one Phase");
-  const phaseRows = phases.map((phase) => {
-    const fields = new Map(markdownSections(`## ${phase.heading}\n${phase.body}`, 3).map((section) => [section.heading, section.body]));
-    for (const field of PHASE_FIELDS) {
-      const body = fields.get(field);
-      if (body === undefined || body.trim() === "") errors.push(`${phase.heading} is missing ${field}`);
-      else if (/^None\.?$/i.test(body.trim())) errors.push(`${phase.heading} ${field} uses unexplained None`);
+  if (isV3) {
+    const binding = parseConstitutionBinding(plan);
+    if (!binding || binding.artifact_kind !== "constitution"
+        || typeof binding.ref !== "string" || binding.ref.trim() === ""
+        || !HASH.test(binding.hash ?? "") || typeof binding.id !== "string"
+        || typeof binding.version !== "string" || !Number.isInteger(binding.clause_count)) {
+      errors.push("Constitution Check requires a complete ref/hash/id/version/clause_count binding");
+    } else {
+      const expectedClauseCount = CURRENT_CONSTITUTION_CLAUSE_IDS.length;
+      const missingClauseIds = CURRENT_CONSTITUTION_CLAUSE_IDS.filter((id) => !constitutionIds.includes(id));
+      if (binding.clause_count !== expectedClauseCount
+          || constitutionIds.length !== expectedClauseCount
+          || missingClauseIds.length > 0) {
+        errors.push(
+          `Constitution Check must preserve the current clause snapshot (${CURRENT_CONSTITUTION_CLAUSE_IDS.join(", ")}); `
+          + `binding declares ${binding.clause_count}, document contains ${constitutionIds.length}, `
+          + `missing ${missingClauseIds.join(", ") || "none"}`,
+        );
+      }
     }
-    return Object.freeze({
-      phase: phase.heading,
-      fields: Object.freeze(Object.fromEntries(PHASE_FIELDS.map((field) => [field, fields.get(field) ?? null]))),
-    });
-  });
+    const quickRead = findPlanSection("Quick Read")?.body ?? "";
+    if (!/^\s*-\s+\*\*Non-goals\*\*\s*[:：]/mi.test(quickRead)
+        || !/来源\s*[:：]|source\s*[:：]/i.test(quickRead)) {
+      errors.push("plan Non-goals must preserve accepted source refs");
+    }
+    if (/^##\s+Verification Mapping\s*$/mi.test(plan)) {
+      errors.push("plan-task.v3 uses one Requirement and Verification Traceability authority");
+    }
+    const globalConstraints = markdownSections(
+      `## Technical Context\n${findPlanSection("Technical Context")?.body ?? ""}`,
+      3,
+    ).find(({ heading }) => /^Global Constraints$/i.test(heading));
+    if (!globalConstraints || globalConstraints.body.trim() === "") {
+      errors.push("Technical Context is missing a non-empty Global Constraints subsection");
+    }
+    const decisions = markdownSections(
+      `## Technical Decisions\n${findPlanSection("Technical Decisions")?.body ?? ""}`,
+      3,
+    ).filter(({ heading }) => /^DEC-[A-Z0-9]+/i.test(heading));
+    for (const decision of decisions) {
+      const selected = fieldValue(decision.body, "Selected");
+      if (!selected) {
+        errors.push(`${decision.heading} is missing Selected`);
+        continue;
+      }
+      if (/\bnew\b/i.test(selected)) {
+        for (const question of ["F10 real threat", "F10 existing cover", "F10 bypassable", "F10 maintenance cost"]) {
+          if (!fieldValue(decision.body, question)) errors.push(`${decision.heading} new mechanism is missing ${question}`);
+        }
+      }
+    }
+    const rollback = findPlanSection("Rollback and Recovery")?.body ?? "";
+    const riskHandoff = markdownSections(
+      `## Rollback and Recovery\n${rollback}`,
+      3,
+    ).find(({ heading }) => /^Engineering Risk Handoff$/i.test(heading))?.body;
+    if (!riskHandoff) errors.push("Rollback and Recovery is missing Engineering Risk Handoff");
+    for (const field of [
+      "Affected IDs", "Trigger", "Consequence", "Mitigation or STOP",
+      "Handling Stage", "Verification",
+    ]) {
+      if (!riskHandoff || !fieldValue(riskHandoff, field)) {
+        errors.push(`Engineering Risk Handoff is missing ${field}`);
+      }
+    }
+  } else if (constitutionIds.length !== CURRENT_CONSTITUTION_CLAUSE_IDS.length) {
+    errors.push(`Constitution Check must enumerate all ${CURRENT_CONSTITUTION_CLAUSE_IDS.length} clauses; found ${constitutionIds.length}`);
+  }
+
+  const planPhaseRows = phaseRows(plan, isV3 ? PHASE_FIELDS_V3 : PHASE_FIELDS, errors, "plan");
 
   const parsedTasks = taskBlocks(tasks);
   if (parsedTasks.length === 0) errors.push("tasks document has no task blocks");
@@ -483,7 +828,7 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
   const duplicateIds = headingIds.filter((id, index) => headingIds.indexOf(id) !== index);
   if (duplicateIds.length) errors.push(`duplicate task ID: ${[...new Set(duplicateIds)].join(", ")}`);
   const taskRows = parsedTasks.map((task, index) => {
-    for (const field of TASK_FIELDS) {
+    for (const field of isV3 ? TASK_FIELDS_V3 : TASK_FIELDS) {
       if (!(field in task.fields) || task.fields[field].trim() === "") errors.push(`${task.heading_id ?? `task ${index + 1}`} is missing ${field}`);
     }
     if (task.fields.ID && task.fields.ID !== task.heading_id) errors.push(`task heading/ID mismatch: ${task.heading_id} != ${task.fields.ID}`);
@@ -495,6 +840,7 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
     return Object.freeze({
       id: task.heading_id,
       order: index,
+      phase: task.phase,
       fields: Object.freeze({ ...task.fields }),
       dependencies: Object.freeze(dependencies),
       frs: Object.freeze(frs),
@@ -503,18 +849,120 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
   });
   const knownTasks = new Set(taskRows.map(({ id }) => id));
   for (const task of taskRows) {
-    for (const dependency of task.dependencies) if (!knownTasks.has(dependency)) errors.push(`${task.id} has unknown dependency ${dependency}`);
+    for (const dependency of task.dependencies) {
+      if (!knownTasks.has(dependency)) errors.push(`${task.id} has unknown dependency ${dependency}`);
+      else if (isV3 && taskRows.find(({ id }) => id === dependency).order >= task.order) {
+        errors.push(`${task.id} dependency ${dependency} must appear before its consumer`);
+      }
+    }
   }
   if (cycleIn(taskRows)) errors.push("task dependency graph contains a cycle");
 
-  const redIndexes = taskRows.filter((task) => /\bRED\b/i.test(parsedTasks[task.order].heading) && task.fields.expected_exit === "1").map(({ order }) => order);
-  const greenIndexes = taskRows.filter((task) => /\bGREEN\b/i.test(parsedTasks[task.order].heading) && task.fields.expected_exit === "0").map(({ order }) => order);
-  if (redIndexes.length === 0 || greenIndexes.length === 0 || Math.min(...redIndexes) >= Math.max(...greenIndexes)) {
-    errors.push("behavior-changing work must show explicit RED before GREEN");
+  if (isV3) {
+    const tasksPhaseRows = phaseRows(tasks, PHASE_FIELDS_V3, errors, "tasks");
+    if (planPhaseRows.length !== tasksPhaseRows.length) {
+      errors.push("plan/tasks Phase counts must match");
+    }
+    for (const [index, planPhase] of planPhaseRows.entries()) {
+      const taskPhase = tasksPhaseRows[index];
+      if (!taskPhase || taskPhase.phase !== planPhase.phase) {
+        errors.push(`tasks Phase must match plan Phase at position ${index + 1}`);
+        continue;
+      }
+      if (taskPhase.fields.Files !== planPhase.fields.Files) {
+        errors.push(`${planPhase.phase} Files must be copied byte-for-byte from plan to tasks`);
+      }
+    }
+    const planPhaseByName = new Map(planPhaseRows.map((row) => [row.phase, row]));
+    const taskPathsById = new Map();
+    for (const task of taskRows) {
+      if (task.fields.Phase !== task.phase) errors.push(`${task.id} Phase field must match its owning Phase heading`);
+      const allowed = phaseChangePaths(planPhaseByName.get(task.phase)?.fields.Files);
+      const taskPaths = new Set([
+        ...inlinePaths(task.fields["精确文件"]),
+        ...boundaryPaths(task.fields.boundary),
+      ]);
+      if (taskPaths.size === 0) errors.push(`${task.id} must declare at least one exact backticked file`);
+      taskPathsById.set(task.id, taskPaths);
+      for (const file of taskPaths) {
+        if (!allowed.has(file)) errors.push(`${task.id} file/boundary is outside ${task.phase} NEW/MODIFY: ${file}`);
+      }
+    }
+    const phaseUnion = new Set(planPhaseRows.flatMap((row) => [...phaseChangePaths(row.fields.Files)]));
+    const globalUnion = globalChangePaths(findPlanSection("File Boundary")?.body);
+    for (const file of phaseUnion) {
+      if (!globalUnion.has(file)) errors.push(`global File Boundary is missing Phase NEW/MODIFY file: ${file}`);
+    }
+    for (const file of globalUnion) {
+      if (!phaseUnion.has(file)) errors.push(`global File Boundary adds a file outside Phase NEW/MODIFY: ${file}`);
+    }
+    for (const phase of planPhaseRows) {
+      for (const file of phaseChangePaths(phase.fields.Files)) {
+        const owners = taskRows.filter((task) =>
+          task.phase === phase.phase && taskPathsById.get(task.id)?.has(file));
+        if (owners.length === 0) errors.push(`${phase.phase} planned file has no owning task: ${file}`);
+      }
+    }
+    for (let left = 0; left < taskRows.length; left += 1) {
+      if (!/(?:^|\s)(?:是|\[P\]|yes)(?:\s|$)/i.test(taskRows[left].fields.并行 ?? "")) continue;
+      const leftFiles = taskPathsById.get(taskRows[left].id) ?? new Set();
+      for (let right = left + 1; right < taskRows.length; right += 1) {
+        if (taskRows[right].phase !== taskRows[left].phase
+            || !/(?:^|\s)(?:是|\[P\]|yes)(?:\s|$)/i.test(taskRows[right].fields.并行 ?? "")) continue;
+        const overlap = [...(taskPathsById.get(taskRows[right].id) ?? [])].filter((file) => leftFiles.has(file));
+        if (overlap.length) errors.push(`parallel tasks ${taskRows[left].id}/${taskRows[right].id} overlap files: ${overlap.join(", ")}`);
+      }
+    }
+    for (const task of taskRows) {
+      const roleValue = task.fields.verification_role;
+      const role = ["RED", "GREEN"].includes(roleValue)
+        ? roleValue
+        : nAWithReason(roleValue, "(?:non-behavior|非行为变更)") ? "N/A" : null;
+      if (!role) errors.push(`${task.id} verification_role must be RED, GREEN, or N/A — non-behavior change: reason`);
+      if (role === "RED" && (!/^-?\d+$/.test(task.fields.expected_exit ?? "") || Number(task.fields.expected_exit) === 0)) {
+        errors.push(`${task.id} RED expected_exit must be a non-zero integer`);
+      }
+      if (role === "GREEN" && task.fields.expected_exit !== "0") errors.push(`${task.id} GREEN expected_exit must be 0`);
+      if (role === "N/A") {
+        if (!nAWithReason(task.fields.paired_task)) errors.push(`${task.id} non-behavior task paired_task requires N/A — reason`);
+        if (task.fields.expected_exit !== "0") errors.push(`${task.id} non-behavior task expected_exit must be 0`);
+      }
+      if (role === "RED" || role === "GREEN") {
+        const pair = taskRows.find(({ id }) => id === task.fields.paired_task);
+        const expectedRole = role === "RED" ? "GREEN" : "RED";
+        if (!pair || pair.fields.verification_role !== expectedRole || pair.fields.paired_task !== task.id) {
+          errors.push(`${task.id} must have a reciprocal ${expectedRole} paired_task`);
+        } else {
+          if (normalizedCommand(task.fields.gate_cmd) !== normalizedCommand(pair.fields.gate_cmd)) {
+            errors.push(`${task.id}/${pair.id} RED/GREEN must use the same gate_cmd`);
+          }
+          const taskOracle = oracleIdentity(task.fields.oracle);
+          const pairOracle = oracleIdentity(pair.fields.oracle);
+          if (!taskOracle || taskOracle !== pairOracle) {
+            errors.push(`${task.id}/${pair.id} RED/GREEN must use the same oracle identity`);
+          }
+          if (task.phase !== pair.phase) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same Phase`);
+          if (!sameIds(task.frs, pair.frs)) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same FR IDs`);
+          if (!sameIds(task.acs, pair.acs)) errors.push(`${task.id}/${pair.id} RED/GREEN must use the same AC IDs`);
+          if (role === "RED" && !pair.dependencies.includes(task.id)) {
+            errors.push(`${pair.id} GREEN must depend on ${task.id} RED`);
+          }
+          if (role === "RED" && task.order >= pair.order) errors.push(`${task.id} RED must appear before ${pair.id} GREEN`);
+        }
+      }
+    }
+  } else {
+    const redIndexes = taskRows.filter((task) => /\bRED\b/i.test(parsedTasks[task.order].heading) && Number(task.fields.expected_exit) !== 0).map(({ order }) => order);
+    const greenIndexes = taskRows.filter((task) => /\bGREEN\b/i.test(parsedTasks[task.order].heading) && task.fields.expected_exit === "0").map(({ order }) => order);
+    if (redIndexes.length === 0 || greenIndexes.length === 0 || Math.min(...redIndexes) >= Math.max(...greenIndexes)) {
+      errors.push("behavior-changing work must show explicit RED before GREEN");
+    }
   }
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
   const acceptedAcs = identifiers(spec, /\bAC-?\d+\b/g);
+  if (isV3 && acceptedFrs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted FR");
+  if (isV3 && acceptedAcs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted AC");
   const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
   const referencedAcs = [...new Set(taskRows.flatMap(({ acs }) => acs))];
   for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
@@ -523,9 +971,13 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
   for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
 
   const facts = Object.freeze({
-    phase_count: phaseRows.length,
+    template_version: isV3 ? PLAN_TASK_V3 : "legacy-v1",
+    phase_count: planPhaseRows.length,
     task_count: taskRows.length,
-    phase_rows: Object.freeze(phaseRows),
+    phase_rows: Object.freeze(planPhaseRows.map((row) => Object.freeze({
+      phase: row.phase,
+      fields: Object.freeze(row.fields),
+    }))),
     task_rows: Object.freeze(taskRows),
     fr_coverage: Object.freeze({
       accepted_count: acceptedFrs.length,
@@ -540,7 +992,9 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
       covered_ids: Object.freeze(referencedAcs.filter((id) => acceptedAcs.includes(id))),
     }),
     dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|cycle/.test(error)) }),
-    command_oracle_checks: Object.freeze({ valid: !errors.some((error) => /gate_cmd|expected_exit|RED before GREEN/.test(error)) }),
+    command_oracle_checks: Object.freeze({
+      valid: !errors.some((error) => /gate_cmd|expected_exit|RED before GREEN|oracle|paired_task|RED\/GREEN|GREEN must depend/.test(error)),
+    }),
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }
@@ -585,7 +1039,8 @@ function parseReferenceList(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string" || value.trim() === "") return [];
   try {
-    const parsed = JSON.parse(value);
+    const normalized = value.trim().replace(/^`([\s\S]*)`$/, "$1");
+    const parsed = JSON.parse(normalized);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -640,6 +1095,10 @@ export function validatePlanTaskContractV2({ spec, plan, tasks, specRef, specHas
   for (const [name, ref, hash] of [["spec", specRef, specHash], ["plan", planRef, planHash], ["tasks", tasksRef, tasksHash]]) {
     if (typeof ref !== "string" || ref.trim() === "" || !HASH.test(hash ?? "")) errors.push(`${name} artifact ref/hash is required`);
     else if (sha256(({ spec, plan, tasks })[name] ?? "") !== hash) errors.push(`${name} content hash binding mismatch`);
+  }
+  if (templateVersion(plan ?? "") === PLAN_TASK_V3 || templateVersion(tasks ?? "") === PLAN_TASK_V3) {
+    const structural = validatePlanTaskContract({ spec, plan, tasks });
+    for (const error of structural.errors) errors.push(`plan-task.v3: ${error}`);
   }
   const acceptedFrs = identifiers(spec ?? "", V2_FR);
   const acceptedAcs = identifiers(spec ?? "", V2_AC);

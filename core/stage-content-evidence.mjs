@@ -18,7 +18,8 @@ import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { validateAmbiguityLedgerV2 } from "./stage-content-contracts.mjs";
+import { ArtifactDir } from "./artifact-dir.mjs";
+import { validateAmbiguityLedgerV2, validateSpecContentProfile } from "./stage-content-contracts.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const HASH = /^[a-f0-9]{64}$/;
@@ -438,6 +439,23 @@ export function createStageContentEvidenceWriter(options = {}) {
       rejectIdentityKeys(input.payload, "payload", aggregate);
       const payload = minimize(structuredClone(input.payload));
       validatePayload(input.kind, payload);
+      if (stage === "build-spec" && input.kind === "ambiguity-ledger.v2") {
+        if (payload.content_profile !== "spec-content.v3") {
+          throw new TypeError("new build-spec publication requires spec-content.v3; legacy ledgers are read-only");
+        }
+        const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+        const spec = artifacts.read("spec.md");
+        const specHash = sha256(spec);
+        if (payload.subject_binding.ref !== artifacts.reference("spec.md")
+            || payload.spec_content_hash !== specHash
+            || payload.subject_binding.hash !== specHash) {
+          throw new TypeError("spec-content.v3 ledger must bind the exact canonical spec.md bytes");
+        }
+        const profile = validateSpecContentProfile(spec);
+        if (!profile.ok) {
+          throw new TypeError(`spec-content.v3 Markdown violates its content profile: ${profile.errors.join("; ")}`);
+        }
+      }
       validateAggregateBindings(payload);
       const snapshot = captureSnapshot(workspace);
       if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {

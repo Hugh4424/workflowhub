@@ -5,13 +5,57 @@
   "additionalProperties": false,
   "required": ["spec_content_hash", "subject_binding", "pfacts", "frs", "acs", "risks"],
   "properties": {
+    "content_profile": { "enum": ["spec-content.v3"] },
     "spec_content_hash": { "$ref": "#/$defs/hash" },
     "subject_binding": { "$ref": "#/$defs/reference" },
+    "scenarios": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/scenario" } },
     "pfacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pfact" } },
     "frs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fr" } },
     "acs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ac" } },
-    "risks": { "type": "array", "items": { "$ref": "#/$defs/risk" } }
+    "risks": { "type": "array", "items": { "$ref": "#/$defs/risk" } },
+    "open_questions": { "type": "array", "items": { "$ref": "#/$defs/open_question" } }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "content_profile": { "const": "spec-content.v3" } }, "required": ["content_profile"] },
+      "then": {
+        "required": ["scenarios", "open_questions"],
+        "properties": {
+          "pfacts": {
+            "items": {
+              "allOf": [
+                { "$ref": "#/$defs/pfact" },
+                {
+                  "oneOf": [
+                    { "properties": { "status": { "const": "verified" } }, "required": ["evidence"], "not": { "anyOf": [{ "required": ["inference"] }, { "required": ["unknown"] }, { "required": ["not_applicable_reason"] }] } },
+                    { "properties": { "status": { "const": "inferred" } }, "required": ["inference"], "not": { "anyOf": [{ "required": ["evidence"] }, { "required": ["unknown"] }, { "required": ["not_applicable_reason"] }] } },
+                    { "properties": { "status": { "const": "unknown" } }, "required": ["unknown"], "not": { "anyOf": [{ "required": ["evidence"] }, { "required": ["inference"] }, { "required": ["not_applicable_reason"] }] } },
+                    { "properties": { "status": { "const": "not_applicable" } }, "required": ["not_applicable_reason"], "not": { "anyOf": [{ "required": ["evidence"] }, { "required": ["inference"] }, { "required": ["unknown"] }] } }
+                  ]
+                }
+              ]
+            }
+          },
+          "frs": {
+            "items": {
+              "allOf": [
+                { "$ref": "#/$defs/fr" },
+                { "required": ["scenario_refs"] }
+              ]
+            }
+          },
+          "acs": {
+            "items": {
+              "allOf": [
+                { "$ref": "#/$defs/ac" },
+                { "required": ["failure_condition"] }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "reference": {
@@ -23,6 +67,18 @@
         "ref": { "type": "string", "minLength": 1 },
         "hash": { "$ref": "#/$defs/hash" },
         "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "given", "when", "then"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^SCN-[0-9]{3}$" },
+        "role": { "type": "string", "minLength": 1 },
+        "given": { "type": "string", "minLength": 1 },
+        "when": { "type": "string", "minLength": 1 },
+        "then": { "type": "string", "minLength": 1 }
       }
     },
     "pfact": {
@@ -68,10 +124,11 @@
       "additionalProperties": false,
       "required": ["id", "behavior", "scope_boundary", "pfact_refs", "ac_refs"],
       "properties": {
-        "id": { "type": "string", "pattern": "^FR-[A-Z0-9]+$" },
+        "id": { "type": "string", "pattern": "^FR-(?:[A-Z0-9]+|[A-Z][A-Z0-9]*-[0-9]{3})$" },
         "behavior": { "type": "string", "minLength": 1 },
         "scope_boundary": { "type": "string", "minLength": 1 },
         "pfact_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reference" } },
+        "scenario_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reference" } },
         "ac_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reference" } }
       }
     },
@@ -85,6 +142,7 @@
         "fr_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reference" } },
         "verification_method": { "type": "string", "minLength": 1 },
         "pass_condition": { "type": "string", "minLength": 1 },
+        "failure_condition": { "type": "string", "minLength": 1 },
         "evidence_type": { "type": "string", "minLength": 1 }
       }
     },
@@ -94,12 +152,25 @@
       "required": ["id", "affected_ids", "trigger_condition", "consequence", "mitigation_or_stop", "handling_stage", "verification"],
       "properties": {
         "id": { "type": "string", "pattern": "^RISK-[A-Z0-9]+$" },
-        "affected_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^(?:PFACT-[A-Z0-9]+|FR-[A-Z0-9]+|AC-?[0-9]+)$" } },
+        "affected_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^(?:PFACT-[A-Z0-9]+|FR-(?:[A-Z0-9]+|[A-Z][A-Z0-9]*-[0-9]{3})|AC-?[0-9]+)$" } },
         "trigger_condition": { "type": "string", "minLength": 1 },
         "consequence": { "type": "string", "minLength": 1 },
         "mitigation_or_stop": { "type": "string", "minLength": 1 },
         "handling_stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
         "verification": { "type": "string", "minLength": 1 }
+      }
+    },
+    "open_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "affected_ids", "owner", "impact", "handling_stage", "close_condition_or_stop"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^OPEN-[A-Z0-9]+$" },
+        "affected_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^(?:PFACT-[A-Z0-9]+|FR-(?:[A-Z0-9]+|[A-Z][A-Z0-9]*-[0-9]{3})|AC-?[0-9]+)$" } },
+        "owner": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "handling_stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+        "close_condition_or_stop": { "type": "string", "minLength": 1 }
       }
     }
   }

@@ -21,24 +21,30 @@ describe("m12 template files exist", () => {
   });
 });
 
-// --- plan-template.md: all 7 required section headings (spec §6 + plan.md) ---
+// --- plan-template.md: readable v3 structure without contract loss ---
 
 describe("plan-template.md contains all required sections", () => {
   const planPath = join(REPO_ROOT, "skills", "spec-plan", "templates", "plan-template.md");
 
-  test("plan-template.md contains ## Summary heading", () => {
+  test("plan-template.md starts with a quick-read section", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Summary"), "plan-template.md must contain '## Summary' heading");
+    assert.ok(content.includes("## 1. 速读卡"));
+    assert.ok(content.includes("- **Non-goals**"));
+    assert.ok(content.includes("- **Before**"));
+    assert.ok(content.includes("- **After**"));
   });
 
-  test("plan-template.md contains ## Technical Context heading", () => {
+  test("plan-template.md keeps technical context and exact file authority", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Technical Context"), "plan-template.md must contain '## Technical Context' heading");
+    assert.ok(content.includes("## 2. Technical Context and Constraints"));
+    assert.ok(content.includes("## 5. File Boundary"));
+    assert.ok(content.includes("Phase.Files"));
   });
 
-  test("plan-template.md contains ## Constitution Check heading", () => {
+  test("plan-template.md keeps a bound constitution appendix", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Constitution Check"), "plan-template.md must contain '## Constitution Check' heading");
+    assert.ok(content.includes("## Appendix A. Constitution Check"));
+    for (const field of ["ref", "hash", "version", "clause_count"]) assert.ok(content.includes(`\"${field}\"`));
   });
 
   test("plan-template.md contains F, Q, S clause groups for 21-clause coverage", () => {
@@ -50,26 +56,23 @@ describe("plan-template.md contains all required sections", () => {
       "plan-template.md must define F (Framework), Q (Quality), S (Skill) clause groups for 21-clause coverage");
   });
 
-  test("plan-template.md contains ## Project Structure heading", () => {
+  test("plan-template.md keeps solution, decisions, tests, and recovery", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Project Structure"), "plan-template.md must contain '## Project Structure' heading");
+    for (const heading of [
+      "## 4. Solution Design",
+      "## 6. Technical Decisions",
+      "## 7. Test Strategy",
+      "## 8. Rollback and Recovery",
+      "## Phase 1",
+    ]) assert.ok(content.includes(heading), `missing ${heading}`);
   });
 
-  test("plan-template.md contains ## Implementation Steps heading", () => {
+  test("plan-template.md keeps the complete engineering risk handoff", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Implementation Steps"), "plan-template.md must contain '## Implementation Steps' heading");
-  });
-
-  test("plan-template.md contains ## F10 Anti-Over-Engineering Gate heading", () => {
-    const content = readFileSync(planPath, "utf8");
-    assert.ok(
-      content.includes("## F10 Anti-Over-Engineering Gate") || content.includes("## F10"),
-      "plan-template.md must contain F10 gate heading");
-  });
-
-  test("plan-template.md contains ## Verification Mapping heading", () => {
-    const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Verification Mapping"), "plan-template.md must contain '## Verification Mapping' heading");
+    for (const field of [
+      "Affected IDs", "Trigger", "Consequence", "Mitigation or STOP",
+      "Handling Stage", "Verification",
+    ]) assert.ok(content.includes(`**${field}**`), `missing ${field}`);
   });
 
   test("plan-template.md contains F10 4-question gate table columns", () => {
@@ -81,39 +84,45 @@ describe("plan-template.md contains all required sections", () => {
     assert.ok(hasThreat && hasCover && hasBypass && hasMaint,
       "plan-template.md must list all 4 F10 gate questions: real threat, existing cover, bypassable, maintenance cost");
   });
+
+  test("plan-template.md uses one traceability authority", () => {
+    const content = readFileSync(planPath, "utf8");
+    assert.ok(content.includes("## 11. Requirement and Verification Traceability"));
+    assert.ok(!content.includes("## Verification Mapping"));
+  });
+
+  test("plan-template.md keeps all eight Phase sections", () => {
+    const content = readFileSync(planPath, "utf8");
+    for (const heading of [
+      "### Goal", "### Files", "### Tasks", "### Verify", "### Knowledge",
+      "### STOP", "### Done", "### Risks and rollback",
+    ]) assert.ok(content.includes(heading), `missing ${heading}`);
+  });
 });
 
-// --- tasks-template.md: phases, [P] marker, FR mapping, stage-block syntax ---
+// --- tasks-template.md: one v3 card, eight-section phases, read-only legacy ---
 
 describe("tasks-template.md contains all required elements", () => {
   const tasksPath = join(REPO_ROOT, "skills", "spec-tasks", "templates", "tasks-template.md");
 
-  test("tasks-template.md contains Setup phase heading", () => {
+  test("tasks-template.md contains a plan-derived Phase", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("Phase 1: Setup") || content.includes("## Phase 1"),
-      "tasks-template.md must contain Setup phase (Phase 1)");
+    assert.ok(content.includes("## Phase 1"));
+    assert.ok(content.includes("逐字一致"));
   });
 
-  test("tasks-template.md contains Foundational phase heading", () => {
+  test("tasks-template.md contains one four-group authoritative card", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("Phase 2: Foundational") || content.includes("## Phase 2"),
-      "tasks-template.md must contain Foundational phase (Phase 2)");
+    for (const group of ["身份", "追溯", "执行", "验证与失败"]) {
+      assert.ok(content.includes(`##### T001 ${group}`), `missing ${group}`);
+    }
+    assert.ok(!content.includes("For the v2 contract, add"));
   });
 
-  test("tasks-template.md contains User Story phase pattern", () => {
+  test("tasks-template.md documents reasoned non-behavior N/A without weakening RED/GREEN", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("User Story") || content.includes("US"),
-      "tasks-template.md must contain User Story phase pattern");
-  });
-
-  test("tasks-template.md contains Polish phase heading", () => {
-    const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("Polish") || content.includes("Cross-Cutting"),
-      "tasks-template.md must contain Polish phase");
+    assert.ok(content.includes("N/A — non-behavior change"));
+    assert.ok(content.includes("仍须提供真实 gate_cmd"));
   });
 
   test('tasks-template.md documents [P] parallel marker convention', () => {
@@ -121,24 +130,23 @@ describe("tasks-template.md contains all required elements", () => {
     assert.ok(content.includes("[P]"), "tasks-template.md must document [P] parallel marker convention");
   });
 
-  test("tasks-template.md documents FR mapping per task convention", () => {
+  test("tasks-template.md preserves FR/AC and versioned references", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("FR:") || content.includes("FR mapping") || content.includes("FR-MIG"),
-      "tasks-template.md must document FR mapping per task");
+    for (const field of ["**versioned_refs**", "**FR**", "**AC**"]) assert.ok(content.includes(field));
   });
 
-  test("tasks-template.md documents ## Stage N block syntax", () => {
+  test("tasks-template.md keeps all eight Phase sections", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("## Stage") || content.includes("Stage N") || content.includes("stage block"),
-      "tasks-template.md must document ## Stage N block syntax");
+    for (const heading of [
+      "### Goal", "### Files", "### Tasks", "### Verify", "### Knowledge",
+      "### STOP", "### Done", "### Risks and rollback",
+    ]) assert.ok(content.includes(heading), `missing ${heading}`);
   });
 
-  test("tasks-template.md documents (stage:N, depends:...) annotation format", () => {
+  test("tasks-template.md marks Stage syntax read-only", () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(
-      content.includes("stage:") && content.includes("depends:"),
-      "tasks-template.md must document stage annotation with (stage:N, depends:...) format");
+    assert.ok(content.includes("## Stage N"));
+    assert.ok(content.includes("stage:N") && content.includes("depends:"));
+    assert.ok(content.includes("只读导入"));
   });
 });

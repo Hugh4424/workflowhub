@@ -16,6 +16,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { writeCanonicalAuditSummary } from "../core/canonical-receipt-writer.mjs";
 import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
@@ -321,7 +322,7 @@ function writerFor(state, overrides = {}) {
   });
 }
 
-function ambiguityLedgerV2(overrides = {}) {
+function ambiguityLedgerV2(overrides = {}, frId = "FR-SPEC-001") {
   const specHash = "a".repeat(64);
   const binding = (id, artifact_kind = "spec") => ({
     artifact_kind,
@@ -337,11 +338,11 @@ function ambiguityLedgerV2(overrides = {}) {
       statement: "The accepted direction requires a versioned specification.",
       status: "verified",
       evidence: [binding("D1", "decision")],
-      affects_frs: [binding("FR-01")],
+      affects_frs: [binding(frId)],
       affects_acs: [binding("AC-01")],
     }],
     frs: [{
-      id: "FR-01",
+      id: frId,
       behavior: "The specification exposes stable requirement identity.",
       scope_boundary: "This requirement does not select an implementation mechanism.",
       pfact_refs: [binding("PFACT-01")],
@@ -350,14 +351,14 @@ function ambiguityLedgerV2(overrides = {}) {
     acs: [{
       id: "AC-01",
       behavior: "A reader can resolve the stable requirement identity.",
-      fr_refs: [binding("FR-01")],
+      fr_refs: [binding(frId)],
       verification_method: "Run the focused content-contract test.",
       pass_condition: "The reference resolves in the bound specification.",
       evidence_type: "test",
     }],
     risks: [{
       id: "RISK-01",
-      affected_ids: ["FR-01", "AC-01"],
+      affected_ids: [frId, "AC-01"],
       trigger_condition: "A binding is missing or stale.",
       consequence: "The downstream task can load the wrong requirement.",
       mitigation_or_stop: "Stop and request corrected accepted input.",
@@ -365,6 +366,101 @@ function ambiguityLedgerV2(overrides = {}) {
       verification: "The focused content-contract test rejects the payload.",
     }],
     ...overrides,
+  };
+}
+
+const currentSpec = `# 功能规格：内容合同
+
+## 速读卡（30 秒）
+读者可以快速确认规格范围。
+
+## 1. 问题与紧迫性
+现有规格缺少稳定、可验证的内容结构。
+
+## 2. 背景、目标与范围
+本次只加强产品规格的内容质量。
+
+## 3. 用户场景与状态覆盖
+### SCN-001：读取规格
+- **角色**：规格读者
+- **Given**：规格已发布
+- **When**：读者检查产品行为
+- **Then**：范围和结果可直接确认
+### 状态覆盖
+| 状态 | 结论 | 场景 | 理由 |
+| --- | --- | --- | --- |
+| 默认 | 适用 | SCN-001 | 主路径 |
+
+## 4. 产品事实与假设（PFACT）
+- **PFACT-01**：已接受方向要求稳定规格身份
+  - **status**：verified
+
+## 5. 功能需求
+- **FR-SPEC-001**：规格公开稳定需求身份
+
+## 6. 条件式业务合同
+N/A — 没有跨模块业务合同。
+
+## 7. 明确不做与默认必须成立
+### 明确不做
+- 不选择实现机制。
+
+## 8. 业务影响与回归范围
+既有读取路径保持可用。
+
+## 9. 验收标准
+- [ ] **AC-01**：读者能解析稳定需求身份
+
+## 10. 风险、未决与交接
+N/A — 已检查范围与验收，未发现未决项。
+`;
+
+function currentLedgerForSpec(spec, ref) {
+  const specHash = sha256(spec);
+  const binding = (id, artifact_kind = "spec") => ({
+    artifact_kind,
+    ref: artifact_kind === "decision" ? "receipts/decision-log/source.md" : ref,
+    hash: artifact_kind === "decision" ? "b".repeat(64) : specHash,
+    id,
+  });
+  return {
+    content_profile: "spec-content.v3",
+    spec_content_hash: specHash,
+    subject_binding: binding("SPEC-001"),
+    scenarios: [{
+      id: "SCN-001",
+      role: "reader",
+      given: "the spec is published",
+      when: "the reader checks it",
+      then: "the behavior is clear",
+    }],
+    pfacts: [{
+      id: "PFACT-01",
+      statement: "The accepted direction requires stable identity.",
+      status: "verified",
+      evidence: [binding("D1", "decision")],
+      affects_frs: [binding("FR-SPEC-001")],
+      affects_acs: [binding("AC-01")],
+    }],
+    frs: [{
+      id: "FR-SPEC-001",
+      behavior: "The specification exposes stable requirement identity.",
+      scope_boundary: "No implementation mechanism is selected.",
+      pfact_refs: [binding("PFACT-01")],
+      scenario_refs: [binding("SCN-001")],
+      ac_refs: [binding("AC-01")],
+    }],
+    acs: [{
+      id: "AC-01",
+      behavior: "A reader resolves the stable requirement identity.",
+      fr_refs: [binding("FR-SPEC-001")],
+      verification_method: "Read the published specification.",
+      pass_condition: "The identity resolves.",
+      failure_condition: "The identity is missing.",
+      evidence_type: "manual",
+    }],
+    risks: [],
+    open_questions: [],
   };
 }
 
@@ -394,7 +490,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       ] }),
       ambiguityLedgerV2({ pfacts: [{ ...ambiguityLedgerV2().pfacts[0], status: "claimed" }] }),
       ambiguityLedgerV2({ frs: [{ ...ambiguityLedgerV2().frs[0], pfact_refs: [{ artifact_kind: "spec", ref: "artifacts/spec.md", hash: "0".repeat(64), id: "PFACT-01" }] }] }),
-      ambiguityLedgerV2({ risks: [{ id: "RISK-01", affected_ids: ["FR-01"] }] }),
+      ambiguityLedgerV2({ risks: [{ id: "RISK-01", affected_ids: ["FR-SPEC-001"] }] }),
       ambiguityLedgerV2({ code_anchors: ["core/forbidden.mjs"] }),
     ]) {
       await expect(invoke(() => writer.publish({ kind: "ambiguity-ledger.v2", payload: invalid }))).rejects.toThrow(/schema|identity|binding|risk|status|reference|hash/i);
@@ -406,6 +502,57 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(after.filter(([path]) => path.includes("ambiguity-ledger.v1")).length).toBe(
       before.filter(([path]) => path.includes("ambiguity-ledger.v1")).length,
     );
+  });
+
+  it("accepts canonical domain FR IDs and keeps legacy numeric FR IDs readable", async () => {
+    requireApi();
+    for (const [name, payload] of [
+      ["canonical-fr-id", ambiguityLedgerV2()],
+      ["legacy-fr-id", ambiguityLedgerV2({}, "FR-01")],
+    ]) {
+      const state = fixture(name);
+      await expect(invoke(() => writerFor(state).publish({
+        kind: "ambiguity-ledger.v2",
+        payload,
+      }))).resolves.toBeDefined();
+    }
+
+    const state = fixture("malformed-fr-id");
+    await expect(invoke(() => writerFor(state).publish({
+      kind: "ambiguity-ledger.v2",
+      payload: ambiguityLedgerV2({}, "FR-SPEC-01"),
+    }))).rejects.toThrow(/schema|pattern|FR/i);
+  });
+
+  it("fails closed on dirty or hash-drifted spec-content.v3 before publication", () => {
+    requireApi();
+    const state = fixture("spec-content-v3-publication");
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("spec.md", currentSpec);
+    const ref = artifacts.reference("spec.md");
+    const writer = writerFor(state, { stage: "build-spec" });
+
+    expect(() => writer.publish({
+      kind: "ambiguity-ledger.v2",
+      payload: ambiguityLedgerV2(),
+    })).toThrow(/spec-content\.v3|legacy ledgers are read-only/);
+
+    expect(() => writer.publish({
+      kind: "ambiguity-ledger.v2",
+      payload: currentLedgerForSpec(`${currentSpec}\n<!-- dirty -->\n`, ref),
+    })).toThrow(/exact canonical spec\.md bytes/);
+
+    artifacts.writeAtomic("spec.md", `${currentSpec}\n<!-- dirty -->\n`);
+    expect(() => writer.publish({
+      kind: "ambiguity-ledger.v2",
+      payload: currentLedgerForSpec(`${currentSpec}\n<!-- dirty -->\n`, ref),
+    })).toThrow(/content profile|authoring comment/);
+
+    artifacts.writeAtomic("spec.md", currentSpec);
+    expect(() => writer.publish({
+      kind: "ambiguity-ledger.v2",
+      payload: currentLedgerForSpec(currentSpec, ref),
+    })).not.toThrow();
   });
 
   it("rejects an unknown kind without creating an evidence namespace", async () => {
