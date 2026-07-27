@@ -733,6 +733,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     if (required && run === null) throw new Error(`${stageName(stage)} requires start-run before producing evidence or publishing`);
     return run;
   };
+  const allowsAcceptedMakeDecisionContinuation = (current) => {
+    if (!current) return false;
+    const active = trustedActiveStageRun("make-decision");
+    if (!active?.run?.continuation_ref) return false;
+    const raw = task.readRecord(active.run.continuation_ref);
+    const continuation = parseJson(raw, "make-decision stage continuation");
+    const previous = continuation.previous_accepted;
+    return continuation.schema_version === "stage-continuation.v1"
+      && continuation.task_id === task.identity.taskId
+      && continuation.stage === "make-decision"
+      && previous?.ref === current.accepted_ref
+      && previous.sha256 === current.accepted_hash
+      && continuation.previous_attempt?.ref === `results/make-decision/${current.accepted.attempt_ref}`
+      && continuation.previous_attempt?.sha256 === hash(task.readRecord(`results/make-decision/${current.accepted.attempt_ref}`))
+      && continuation.previous_attempt?.attempt_id === current.attempt.attempt_id;
+  };
   const invalidateStageRun = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "stage run invalidation input");
@@ -1654,11 +1670,14 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     }
     let workflowRunId;
     if (stage === "make-decision") {
+      let accepted;
       try {
-        readAcceptedLocal("make-decision");
-        throw new Error("make-decision review revision is not authorized after stage acceptance");
+        accepted = readAcceptedLocal("make-decision");
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
+      }
+      if (accepted && !allowsAcceptedMakeDecisionContinuation(accepted)) {
+        throw new Error("make-decision review revision is not authorized after stage acceptance");
       }
       workflowRunId = nonemptyString(activeStageRun(stage).run.workflow_run_id, "make-decision active stage workflow_run_id");
     } else {
@@ -2208,7 +2227,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         const controlledVerifyFailure = data.verify_failure_publication !== undefined;
         const controlledVerifyPassing = data.verify_passing_publication !== undefined;
         const baselineRebind = name === "build-plan" && data.baseline_rebind_ref !== undefined;
-        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing && !baselineRebind) throw new Error(`${name} is accepted and closed`);
+        const continuationPublication = name === "make-decision" && allowsAcceptedMakeDecisionContinuation(current);
+        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing && !baselineRebind && !continuationPublication) throw new Error(`${name} is accepted and closed`);
         let baselineRebindAuthorization;
         if (baselineRebind) baselineRebindAuthorization = assertBaselineRebind(data.baseline_rebind_ref, current);
         if (controlledVerifyFailure) {

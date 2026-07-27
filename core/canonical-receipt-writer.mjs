@@ -112,6 +112,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
     const latest = readLatestStageContentEvidence({
       task: safeTask, stage, workflowRunId, kind,
     });
+    if (!latest) throw new Error(`${stage} canonical audit is missing required stage content evidence: ${kind}`);
     if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
     return { ref: latest.ref, hash: latest.hash, value: latest.value };
   });

@@ -25,7 +25,6 @@ const REVISIONABLE_KINDS = new Set([
   "ambiguity-ledger.v1", "decision-entry.v1", "decision-coverage-audit.v1",
   "decision-omission-acceptance.v1", "decision-correction-appendix.v1",
   "decision-log-contract.v1", "plan-task-contract.v1", "stage-completion-facts.v1",
-  "risk-acceptance.v1",
 ]);
 const revisionable = (kind, payload) => REVISIONABLE_KINDS.has(kind)
   || (kind === "interaction-completion.v1" && payload?.interaction_type === "aggregate");
@@ -104,7 +103,8 @@ function rejectIdentityKeys(value, label, allowEvidenceBinding = false) {
       && (key === "ref" || key === "hash");
     const isDecisionCoverageLocation = /^payload\.items\[\d+\]\.decision_location$/.test(label)
       && key === "ref";
-    if (FORBIDDEN_IDENTITY_KEYS.has(key) && !isAggregateRoundBinding && !isDecisionCoverageLocation) {
+    if ((FORBIDDEN_IDENTITY_KEYS.has(key) || ((key === "ref" || key === "hash") && label === "payload"))
+      && !isAggregateRoundBinding && !isDecisionCoverageLocation) {
       throw new TypeError(`${label}.${key} is a caller-forbidden identity or path field`);
     }
     rejectIdentityKeys(child, `${label}.${key}`, allowEvidenceBinding);
@@ -336,7 +336,8 @@ export function readLatestStageContentEvidence({ task, stage, workflowRunId, kin
   }
   const root = `evidence/stage-content/${sha256(`${safeTask.identity.taskId}\0${stage}\0${validateRunId(workflowRunId)}`)}`;
   const pointerRef = `${root}/${kind}.latest.json`;
-  const pointerRaw = safeTask.readRecord(pointerRef);
+  const pointerRaw = readOptional(safeTask, pointerRef);
+  if (pointerRaw === undefined) return undefined;
   let pointer;
   try { pointer = JSON.parse(pointerRaw); } catch { throw new Error("stage content latest pointer is invalid"); }
   if (pointer?.schema_version !== "stage-content-latest.v1" || pointer.task_id !== safeTask.identity.taskId

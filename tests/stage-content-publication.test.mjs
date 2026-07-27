@@ -50,16 +50,29 @@ function ledger() {
 
 function completionPayload() {
   return {
+    schema_version: "stage-completion-facts.v1",
     result: "completed",
-    human_readable_artifacts: [],
-    tests: { conclusion: "passed", refs: [] },
-    review: { conclusion: "passed", refs: [] },
-    verification_limits: [],
+    objective: "Complete the stage",
+    approach: "Use the official workflow",
+    effect: "Stage facts are available",
+    verification: { conclusion: "passed", limits: [] },
+    artifacts: [],
+    review: {
+      conclusion: "passed",
+      status: "semantic",
+      providers: ["fixture/provider"],
+      duration_ms: null,
+      tokens: null,
+      findings: [],
+      refs: [],
+    },
+    missing_items: [],
     risks: [],
-    downstream_dependencies: [],
+    dependencies: [],
+    recovery_conditions: [],
+    downstream_read_rule: "Read the accepted stage record",
     next_owner: "build-spec",
     user_action: "none",
-    formal_refs: [],
   };
 }
 

@@ -182,8 +182,11 @@ export function validateStageReplay({ task, kernel, continuationRef: suppliedRef
   }
 
   const previousAttemptRef = continuation.previous_attempt.ref;
+  const previousAttemptSequence = Number(previousAttemptRef.match(/attempt-(\d{4})\.json$/)?.[1] ?? 0);
   const candidates = task.listStageAttemptRefs("make-decision").filter((ref) => {
     if (ref === previousAttemptRef) return false;
+    const sequence = Number(ref.match(/attempt-(\d{4})\.json$/)?.[1] ?? 0);
+    if (sequence <= previousAttemptSequence) return false;
     const raw = task.readRecord(ref);
     const invalidationRef = `results/make-decision/invalidations/${sha256(raw)}.json`;
     try {

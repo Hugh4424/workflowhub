@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -22,7 +23,6 @@ import { loadStageManifest } from "../core/step-manifest.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];
-const RUN_ID = "run-stage-content-001";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
@@ -54,6 +54,22 @@ function requireApi() {
   expect(readLatestStageContentEvidence).toBeTypeOf("function");
 }
 
+function evidenceNamespaceSnapshot(task) {
+  const root = join(task.taskPath, "evidence", "stage-content");
+  if (!existsSync(root)) return [];
+  const files = [];
+  const visit = (directory, prefix = "") => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) visit(path, relative);
+      else files.push([relative, readFileSync(path, "utf8")]);
+    }
+  };
+  visit(root);
+  return files;
+}
+
 function prepareOfficialRun(kernel, taskId) {
   const stage = "make-decision";
   const source = createCanonicalSource({
@@ -75,7 +91,7 @@ function prepareOfficialRun(kernel, taskId) {
       stale: false,
     }],
   }).manifest;
-  kernel.startStageRun(stage, { reason: "content-evidence writer fixture" });
+  const run = kernel.startStageRun(stage, { reason: "content-evidence writer fixture" });
   kernel.publishRequirementsLedger(stage, {
     source_manifest: sourceManifest,
     mappings: {
@@ -100,6 +116,7 @@ function prepareOfficialRun(kernel, taskId) {
       completion_evidence: { kind: "fixture", uri_or_path: `evidence/${stage}-step-${step.step_id}-exit.json` },
     });
   }
+  return run.run.workflow_run_id;
 }
 
 function fixture(taskId = "stage-content-evidence") {
@@ -128,7 +145,43 @@ function fixture(taskId = "stage-content-evidence") {
   });
   const candidate = prepareTaskWorkspace(task);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
-  prepareOfficialRun(kernel, taskId);
+  const setupRunId = prepareOfficialRun(kernel, taskId);
+  const setupWriter = createStageContentEvidenceWriter({
+    task,
+    workspace: candidate,
+    stage: "make-decision",
+    workflowRunId: setupRunId,
+    now: () => "2026-07-26T00:00:30.000Z",
+  });
+  const setupTree = candidate.captureSnapshot().tree;
+  const setupTalk = setupWriter.publish({
+    kind: "interaction-completion.v1",
+    payload: { interaction_type: "talk", rounds: [{ selected: "A" }], grill: null, workspace_tree: setupTree },
+  });
+  const setupGrill = setupWriter.publish({
+    kind: "interaction-completion.v1",
+    payload: { interaction_type: "grill", rounds: [], grill: { conclusion: "passed" }, workspace_tree: setupTree },
+  });
+  setupWriter.publish({
+    kind: "interaction-completion.v1",
+    payload: {
+      interaction_type: "aggregate",
+      rounds: [{ ref: setupTalk.ref, hash: setupTalk.hash }],
+      grill: { ref: setupGrill.ref, hash: setupGrill.hash },
+      workspace_tree: setupTree,
+      decision_ref: "receipts/decision.json",
+      decision_hash: "b".repeat(64),
+    },
+  });
+  setupWriter.publish({
+    kind: "decision-coverage-audit.v1",
+    payload: {
+      decision_log_ref: "receipts/decision.json",
+      decision_log_hash: "b".repeat(64),
+      items: [],
+      summary: { covered: 0, accepted_omission: 0, missing: 0 },
+    },
+  });
   const audit = writeCanonicalAuditSummary({
     task,
     workspace: candidate,
@@ -149,7 +202,8 @@ function fixture(taskId = "stage-content-evidence") {
   const confirmation = kernel.confirmAttempt("make-decision", attempt.attempt_ref, "accepted");
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, confirmation.ref);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
-  return { root, task, workspace };
+  const nextRun = kernel.startStageRun("make-decision", { reason: "content-evidence test run" });
+  return { root, task, workspace, workflowRunId: nextRun.run.workflow_run_id };
 }
 
 function completionPayload(overrides = {}) {
@@ -186,7 +240,7 @@ function writerFor(state, overrides = {}) {
     task: state.task,
     workspace: state.workspace,
     stage: "make-decision",
-    workflowRunId: RUN_ID,
+    workflowRunId: state.workflowRunId,
     now: () => "2026-07-26T01:02:03.000Z",
     ...overrides,
   });
@@ -200,12 +254,13 @@ describe("stage-content-evidence.v1 controlled writer", () => {
   it("rejects an unknown kind without creating an evidence namespace", async () => {
     requireApi();
     const state = fixture("unknown-kind");
+    const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
       kind: "not-a-stage-content-kind.v1",
       payload: completionPayload(),
     }))).rejects.toThrow(/unknown|allowlist|kind/i);
-    expect(existsSync(join(state.task.taskPath, "evidence", "stage-content"))).toBe(false);
+    expect(evidenceNamespaceSnapshot(state.task)).toEqual(before);
   });
 
   it.each([
@@ -216,11 +271,12 @@ describe("stage-content-evidence.v1 controlled writer", () => {
   ])("rejects caller-supplied %s", async (_label, injected) => {
     requireApi();
     const state = fixture(`constructor-injection-${roots.length}`);
+    const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state, injected))).rejects.toThrow(
       /caller|unknown|identity|root|task.?path|cwd|forbidden/i,
     );
-    expect(existsSync(join(state.task.taskPath, "evidence", "stage-content"))).toBe(false);
+    expect(evidenceNamespaceSnapshot(state.task)).toEqual(before);
   });
 
   it.each([
@@ -237,13 +293,14 @@ describe("stage-content-evidence.v1 controlled writer", () => {
   ])("rejects caller-supplied publish field %s before writing", async (key, value) => {
     requireApi();
     const state = fixture(`publish-injection-${key.replaceAll("_", "-")}`);
+    const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
       kind: "stage-completion-facts.v1",
       payload: completionPayload(),
       [key]: value,
     }))).rejects.toThrow(/caller|unknown|identity|binding|root|task.?path|cwd|forbidden/i);
-    expect(existsSync(join(state.task.taskPath, "evidence", "stage-content"))).toBe(false);
+    expect(evidenceNamespaceSnapshot(state.task)).toEqual(before);
   });
 
   it.each([
@@ -260,12 +317,13 @@ describe("stage-content-evidence.v1 controlled writer", () => {
   ])("rejects identity or path field %s hidden inside payload", async (key, value) => {
     requireApi();
     const state = fixture(`payload-injection-${key.replaceAll("_", "-")}`);
+    const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
       kind: "stage-completion-facts.v1",
       payload: completionPayload({ [key]: value }),
     }))).rejects.toThrow(/caller|identity|binding|root|task.?path|cwd|forbidden/i);
-    expect(existsSync(join(state.task.taskPath, "evidence", "stage-content"))).toBe(false);
+    expect(evidenceNamespaceSnapshot(state.task)).toEqual(before);
   });
 
   it("allows the schema-declared decision_location.ref only for decision coverage", async () => {
@@ -307,7 +365,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       kind: "stage-completion-facts.v1",
       task_id: state.task.identity.taskId,
       stage: "make-decision",
-      workflow_run_id: RUN_ID,
+      workflow_run_id: state.workflowRunId,
       snapshot_head: snapshot.head,
       snapshot_tree: snapshot.tree,
     });
@@ -320,7 +378,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       ref: published.ref,
       hash: published.hash,
       expectedStage: "make-decision",
-      expectedRunId: RUN_ID,
+      expectedRunId: state.workflowRunId,
       expectedTree: snapshot.tree,
       ...overrides,
     }));
@@ -364,7 +422,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(second.ref).toMatch(/stage-completion-facts\.v1\.revision-0002\.json$/);
     expect(second.value.revision).toEqual({ number: 2, previous_ref: first.ref, previous_hash: first.hash });
     expect(readLatestStageContentEvidence({
-      task: state.task, stage: "make-decision", workflowRunId: RUN_ID,
+      task: state.task, stage: "make-decision", workflowRunId: state.workflowRunId,
       kind: "stage-completion-facts.v1",
     })).toMatchObject({ ref: second.ref, hash: second.hash });
     await expect(invoke(() => writer.publish({
@@ -386,10 +444,10 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1", revision: 2, payload: talk,
     }))).rejects.toThrow(/create-only|cannot be revised|forbidden/i);
-    expect(() => readLatestStageContentEvidence({
-      task: state.task, stage: "make-decision", workflowRunId: RUN_ID,
+    expect(readLatestStageContentEvidence({
+      task: state.task, stage: "make-decision", workflowRunId: state.workflowRunId,
       kind: "interaction-completion.v1",
-    })).toThrow(/revisionable kind/i);
+    })).toBeUndefined();
   });
 
   it("accepts canonical ref/hash bindings inside a revised decision coverage payload", async () => {

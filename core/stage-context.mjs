@@ -10,6 +10,7 @@ import { assertTaskRunnerIdentity } from "./runner-identity.mjs";
 import { authenticateOfficialInvocation } from "./invocation-identity.mjs";
 import {
   assertWorkspace,
+  openAcceptedCandidateWorkspace,
   openAcceptedWorkspace,
   prepareTaskWorkspace,
   validateTaskWorkspaceAttempt,
@@ -39,7 +40,22 @@ function bindCandidateWorkspace(context, candidate) {
 
 /** Prepare only after the official invocation input has been loaded successfully. */
 export function prepareMakeDecisionWorkspace(context) {
-  return bindCandidateWorkspace(context, prepareTaskWorkspace(context?.task));
+  const task = context?.task;
+  if (!task) throw new TypeError("unprepared make-decision StageContext required");
+  const kernel = createTaskKernel(task);
+  const activeRun = kernel.activeStageRun("make-decision", { required: false });
+  if (activeRun?.run?.continuation_ref !== undefined) {
+    const accepted = kernel.readAccepted("make-decision");
+    const candidate = openAcceptedCandidateWorkspace(task, accepted);
+    const continuationKernel = createTaskKernel(task, { candidateWorkspace: candidate });
+    return Object.freeze({
+      ...context,
+      kernel: continuationKernel,
+      workflowRunId: continuationKernel.deriveStageWorkflowRunId(context.stage),
+      candidateWorkspace: candidate,
+    });
+  }
+  return bindCandidateWorkspace(context, prepareTaskWorkspace(task));
 }
 
 /** Revalidate the published attempt immediately before acceptance. */
