@@ -50,6 +50,8 @@ lineage. Pass that exact build-code review ref in the verify run input; the
 runtime authenticates its `review_scope=integration`, provider evidence, and
 current snapshot. A Phase result, legacy unscoped worktree result, or verify-code
 quality review never replaces, upgrades, or becomes this `receipts.review` fact.
+Its human-facing review card lists findings and their disposition, not a second
+pass/fail decision for the stage.
 
 After fresh tests and every acceptance-evidence leaf are complete, normal
 verify-code must run configured `wh-review` with `stage: "verify-code"`. It
@@ -77,8 +79,13 @@ canonical test output. If parameterized or unchanged tests make a static
 `test()` source count differ, explain the difference instead of treating that
 source count as executed evidence.
 
+Alignment consumes the accepted design projection and current evidence; it does
+not create a second review or replace the formal acceptance gate.
+
 Declared runtime components: required post-evidence `wh-review`; conditional
-`test-strategy`; and conditional `isolated-browser-qa`.
+`test-strategy`, `isolated-browser-qa`, and `resolving-merge-conflicts`.
+`qa-only` and `verify-change` remain reviewer-owned lenses and appear only
+through the corresponding `wh-review` refs.
 
 ## Inputs and outputs
 
@@ -152,6 +159,16 @@ idempotent. Other attempts against a closed stage remain rejected.
    coverage table, every affected AC remains `unknown`; verification cannot
    claim full coverage or pass. Never infer coverage from a green aggregate
    test run.
+   Before presenting the verification result, align only the accepted
+   spec/plan/tasks IDs selected for this delivery with current AC, Phase, test,
+   and integration-review evidence. Every gap must name its affected ID,
+   existing evidence refs (or none), and a recovery condition. Missing,
+   unknown, duplicate, stale-snapshot, or unauthorized DEC/CTRL evidence stays
+   a gap; never scan the repository, load a complete diff, or infer coverage to
+   fill it. This alignment is not a second code review and does not rerun
+   `simplicity-guard` or `wh-review`. When formal packet/token/rework data is
+   unavailable, report the DEC-05 observation as `unknown`, with no threshold
+   or delivery gate.
 3. Take the fresh test command only from accepted build-code facts. Missing
    command is a fail-loud lineage error; never reuse an older command. Capture
    it through the only public path:
@@ -198,15 +215,18 @@ idempotent. Other attempts against a closed stage remain rejected.
    quality fact. Do not put it in `$TMP_DIR/run.json`, acceptance-evidence
    leaves, or `facts.review`.
 
-   If that first review is `revise_required`, normal repair records a bound
-   response ledger and does not call a provider again. Only a complete ledger
+   If that first review is `revise_required`, ordinary repair records a bound
+   response ledger and does not call a provider again. The review card lists
+   each finding with `fixed`, `rejected_invalid`, or `accepted_risk`; if no
+   bound ledger exists it says `unverified`, never that repair passed. Only a complete ledger
    that explicitly declares structural changes to direction, ACs, interface,
    schema, state, security, concurrency, topology, phase order, or test
-   strategy permits one fresh full re-review. That re-review uses the configured
+   strategy permits at most one fresh full review. That re-review uses the configured
    initial route, does not receive the ledger, is capped at one, and remains a
    non-gate quality fact. Missing, invalid, or unavailable review evidence is
    recorded honestly and goes to the human verify summary; it never blocks or
-   silently passes the stage.
+   silently passes the stage. A second structural re-review stops before
+   provider dispatch.
 8. After evidence assembly, create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"tests":"receipts/verify-tests.json","review":"<active accepted build-code final review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
    Publish the append-only pass or fail attempt with
@@ -249,6 +269,15 @@ idempotent. Other attempts against a closed stage remain rejected.
    requires the same Git common directory as the accepted workspace, records
    immutable migration lineage, atomically updates the target identity, and must
    finish before a fresh `prepare` run.
+   If the later `merge-task-branch` step reports a planned merge conflict, do
+   not reopen build-code and do not create a new verify attempt. Invoke the
+   local `skills/resolving-merge-conflicts` skill on the task worktree. It
+   merges the frozen target baseline into the task branch, resolves the
+   conflict there, and commits the resolution. Then rerun the same close
+   `execute` command. The target checkout, push, branch deletion, and remaining
+   close actions stay owned by `task-close`.
+   If close reports that the frozen target baseline changed, do not invoke the
+   skill; stop and create a fresh close plan for the new target baseline.
 10. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.

@@ -1041,7 +1041,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     throw new Error(`MATERIAL_TOO_LARGE: selected_context packet is ${deliveryBytes} bytes; limit is ${SELECTED_CONTEXT_PACKET_LIMIT_BYTES}`);
   }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
-  return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes }) });
+  return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
 }
 
 function freezeCanonicalEvidence({ bundleRoot }) {

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "skill": "workflowhub-multica-sync",
+  "files": [
+    "SKILL.md",
+    "scripts/multica-skill-sync.mjs"
+  ],
+  "runtime_dependencies": [
+    {
+      "name": "js-yaml",
+      "version": "4.1.0",
+      "source": "workflowhub/package.json"
+    }
+  ]
+}

@@ -228,6 +228,10 @@ describe("simple wh-review contracts", () => {
     expect(matrix.stages["build-code"].profiles.phase.source_bundle).toBe("diff");
     expect(matrix.stages["build-code"].profiles.integration.source_bundle).toBe("none");
     expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "ac_trace"]));
+    for (const stage of ["build-spec", "build-plan", "verify-code"])
+      expect(matrix.stages[stage].v2_required_maps).toEqual(["context_map", "evidence_map"]);
+    expect(matrix.stages["make-decision"].tracks.direction.v2_required_maps).toEqual([]);
+    expect(matrix.stages["make-decision"].tracks.detail.v2_required_maps).toEqual(["context_map", "evidence_map"]);
     const missingIntegrationTrace = structuredClone(matrix);
     missingIntegrationTrace.stages["build-code"].profiles.integration.required = missingIntegrationTrace.stages["build-code"].profiles.integration.required.filter((key) => key !== "ac_trace");
     expect(validate(missingIntegrationTrace)).toBe(false);

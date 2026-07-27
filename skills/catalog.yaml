@@ -27,7 +27,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b012862a25c7bd3ed8ebf1223453f5cd87361292269b807325fc93181ae27dab
+    local_bundle_hash: 68c3f3a6be4c2953dfc58b62492c5a8b026c9943613c3bde4ef9e7b558a3ea98
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
@@ -40,7 +40,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9d4bc6985f65b14d88a731fc5b07ca815b4abaad73624ab3f51a11ead51eb19e
+    local_bundle_hash: b966baea047b65314719a1aec8190bbc5da55b8ff5cbe6301b5fc0294343cf78
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -82,7 +82,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 75c40ba69fef6243a644f9a355c6c0aa72ac3444f73e1f651c9cdeda7f8130b4
+    local_bundle_hash: f2cb46ec55c11d2e842ee8434b2a85feeeea948dc56fc9d4dd8d51b4e1c1fedb
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -134,7 +134,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ac900c3617befec6e9a5a07b8278130121db0c6250d2b01e504cf94c583f18b8
+    local_bundle_hash: 434a500dd858df5e7c5e5ea34def65e0b342565a4750d331e8b9d4cb4ca60286
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -149,7 +149,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 053c7c352f1440ba601fc72b30a754f64444ccb96a2d25464a03a395acf9589c
+    local_bundle_hash: 60f9a5f6358e31b9846b836623a3f599a8a6b0bbdd507f3cf41a258252b7620d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -219,7 +219,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.0
-    local_bundle_hash: 5cb67dd2ca98280c6c437a986c61c51f0595eb61a0a81bab83be82c70ef37f8a
+    local_bundle_hash: a314c58bd6dfdb5b6ac20281a0c41459f7829e6311684c25465914c9617de0bf
     last_reviewed_at: "2026-07-14"
     status: native
     standalone: true
@@ -230,10 +230,24 @@ skills:
     local_changes: 当前作为独立宿主协议草案保存，未接入五个阶段依赖
     dependency_closure: [skills/workflowhub-host-protocol]
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
+  - name: workflowhub-multica-sync
+    path: skills/workflowhub-multica-sync/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 65ebe8bf1e0b45b4e07b5bf2875e5ad83c8c186a02782a13efcd96c7a506a937
+    last_reviewed_at: "2026-07-14"
+    status: native
+    standalone: true
+    purpose: 审计本机 WorkflowHub 技能与 Multica 技能和 agent 提示词的一致性
+    design_idea: 固定 main 快照，先生成差异报告，用户确认后才同步
+    used_by_stages: []
+    upstream: []
+    local_changes: 只读审计和显式确认后的 Multica CLI 同步；不改运行时
+    dependency_closure: [skills/workflowhub-multica-sync]
+    update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d3090cc4af8e158195add64decbe5b46c45791ffe17879d2dbdf21235ba2af90
+    local_bundle_hash: 5292e51352c7d020a1d3806ab6ad97304f2095675bb365e94f09f940fa177eeb
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -272,7 +286,7 @@ skills:
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ae1d4863de9398b422fc4049d6736bd8ec1bdaa305220ee116d930ea1c8876c6
+    local_bundle_hash: eac176f53236dffdaf6877442f3d94ecce36e29746e730cede5bc3e1812cd7db
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
@@ -321,6 +335,19 @@ skills:
     local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
     dependency_closure: [skills/verify-change]
     update_policy: 仅同步验收检查规则，不恢复旧 lifecycle
+  - name: resolving-merge-conflicts
+    path: skills/resolving-merge-conflicts/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 5aa9176b84f89a3cf51520adfa735e679594ebf626f4f5d7af2b6c6fe4a5afe7
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
+    design_idea: 只恢复 task 分支，不接管 target 合并和推送
+    used_by_stages: [verify-code]
+    upstream: []
+    local_changes: WorkflowHub close 冲突恢复约束
+    dependency_closure: [skills/resolving-merge-conflicts]
+    update_policy: 随 verify-code close 合同变更审查
   - name: test-strategy
     path: skills/test-strategy/SKILL.md
     local_version: 1.0.0

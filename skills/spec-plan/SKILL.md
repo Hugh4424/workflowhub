@@ -37,6 +37,15 @@ Each Phase must have meaningful `Goal`, `Files`, `Tasks`, `Verify`,
 only with a factual applicability reason. Files are exact paths; wildcards and
 directory-wide ownership are forbidden.
 
+For the v2 plan-task contract, every cross-artifact reference is a complete
+`ReferenceBinding` with `artifact_kind`, `ref`, SHA-256 `hash`, and stable `id`.
+The plan may reference accepted spec bindings but must not copy PFACT prose.
+Record `read_now` separately from `must_read_before_task`; record Lite/Full or
+not-applicable engineering rationale and explicit risk/recovery facts.
+
+Keep accepted artifact bindings explicit so downstream task projection stops on
+stale or overwide context instead of discovering extra files.
+
 ## Verification design
 
 Behavior changes use a real RED before GREEN. Every verification target states:

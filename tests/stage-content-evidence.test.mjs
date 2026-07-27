@@ -29,6 +29,7 @@ const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "ut
 let createStageContentEvidenceWriter;
 let verifyStageContentEvidence;
 let readLatestStageContentEvidence;
+let requiredStageContentKinds;
 let moduleLoadError;
 
 beforeAll(async () => {
@@ -37,6 +38,7 @@ beforeAll(async () => {
       createStageContentEvidenceWriter,
       verifyStageContentEvidence,
       readLatestStageContentEvidence,
+      requiredStageContentKinds,
     } = await import("../core/stage-content-evidence.mjs"));
   } catch (error) {
     moduleLoadError = error;
@@ -52,6 +54,7 @@ function requireApi() {
   expect(createStageContentEvidenceWriter).toBeTypeOf("function");
   expect(verifyStageContentEvidence).toBeTypeOf("function");
   expect(readLatestStageContentEvidence).toBeTypeOf("function");
+  expect(requiredStageContentKinds).toBeTypeOf("function");
 }
 
 function talkPayload(roundNumber, workspaceTree, {
@@ -318,11 +321,93 @@ function writerFor(state, overrides = {}) {
   });
 }
 
+function ambiguityLedgerV2(overrides = {}) {
+  const specHash = "a".repeat(64);
+  const binding = (id, artifact_kind = "spec") => ({
+    artifact_kind,
+    ref: artifact_kind === "decision" ? "receipts/decision-log/source.md" : "artifacts/spec.md",
+    hash: artifact_kind === "decision" ? "b".repeat(64) : specHash,
+    id,
+  });
+  return {
+    spec_content_hash: specHash,
+    subject_binding: binding("SPEC-001"),
+    pfacts: [{
+      id: "PFACT-01",
+      statement: "The accepted direction requires a versioned specification.",
+      status: "verified",
+      evidence: [binding("D1", "decision")],
+      affects_frs: [binding("FR-01")],
+      affects_acs: [binding("AC-01")],
+    }],
+    frs: [{
+      id: "FR-01",
+      behavior: "The specification exposes stable requirement identity.",
+      scope_boundary: "This requirement does not select an implementation mechanism.",
+      pfact_refs: [binding("PFACT-01")],
+      ac_refs: [binding("AC-01")],
+    }],
+    acs: [{
+      id: "AC-01",
+      behavior: "A reader can resolve the stable requirement identity.",
+      fr_refs: [binding("FR-01")],
+      verification_method: "Run the focused content-contract test.",
+      pass_condition: "The reference resolves in the bound specification.",
+      evidence_type: "test",
+    }],
+    risks: [{
+      id: "RISK-01",
+      affected_ids: ["FR-01", "AC-01"],
+      trigger_condition: "A binding is missing or stale.",
+      consequence: "The downstream task can load the wrong requirement.",
+      mitigation_or_stop: "Stop and request corrected accepted input.",
+      handling_stage: "build-plan",
+      verification: "The focused content-contract test rejects the payload.",
+    }],
+    ...overrides,
+  };
+}
+
 async function invoke(operation) {
   return operation();
 }
 
 describe("stage-content-evidence.v1 controlled writer", () => {
+  it("requires an identity-closed ambiguity-ledger.v2 and keeps v1 records untouched", async () => {
+    requireApi();
+    const state = fixture("ambiguity-ledger-v2");
+    const writer = writerFor(state);
+    const before = evidenceNamespaceSnapshot(state.task);
+
+    expect(requiredStageContentKinds("build-spec")).toContain("ambiguity-ledger.v2");
+    const published = await invoke(() => writer.publish({
+      kind: "ambiguity-ledger.v2",
+      payload: ambiguityLedgerV2(),
+    }));
+    expect(published.value.payload.subject_binding.hash).toBe(published.value.payload.spec_content_hash);
+
+    for (const invalid of [
+      ambiguityLedgerV2({ subject_binding: { artifact_kind: "spec", ref: "artifacts/spec.md", hash: "a".repeat(64) } }),
+      ambiguityLedgerV2({ pfacts: [
+        ...ambiguityLedgerV2().pfacts,
+        { ...ambiguityLedgerV2().pfacts[0] },
+      ] }),
+      ambiguityLedgerV2({ pfacts: [{ ...ambiguityLedgerV2().pfacts[0], status: "claimed" }] }),
+      ambiguityLedgerV2({ frs: [{ ...ambiguityLedgerV2().frs[0], pfact_refs: [{ artifact_kind: "spec", ref: "artifacts/spec.md", hash: "0".repeat(64), id: "PFACT-01" }] }] }),
+      ambiguityLedgerV2({ risks: [{ id: "RISK-01", affected_ids: ["FR-01"] }] }),
+      ambiguityLedgerV2({ code_anchors: ["core/forbidden.mjs"] }),
+    ]) {
+      await expect(invoke(() => writer.publish({ kind: "ambiguity-ledger.v2", payload: invalid }))).rejects.toThrow(/schema|identity|binding|risk|status|reference|hash/i);
+    }
+    const after = evidenceNamespaceSnapshot(state.task);
+    for (const entry of before) {
+      expect(after).toContainEqual(entry);
+    }
+    expect(after.filter(([path]) => path.includes("ambiguity-ledger.v1")).length).toBe(
+      before.filter(([path]) => path.includes("ambiguity-ledger.v1")).length,
+    );
+  });
+
   it("rejects an unknown kind without creating an evidence namespace", async () => {
     requireApi();
     const state = fixture("unknown-kind");

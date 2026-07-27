@@ -2,6 +2,7 @@
   "schema_version": 1,
   "skill": "decision-log",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "templates/decision-log-template.md"
   ]
 }
