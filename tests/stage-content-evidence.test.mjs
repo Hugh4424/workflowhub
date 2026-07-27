@@ -548,8 +548,8 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     requireApi();
     const state = fixture("interaction-components");
     const writer = writerFor(state);
-    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
-    const interaction = (roundNumber, selected) => talkPayload(roundNumber, tree, { selected });
+    const preGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const interaction = (roundNumber, selected) => talkPayload(roundNumber, preGrillTree, { selected });
 
     const round1 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
@@ -567,9 +567,11 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       kind: "interaction-completion.v1",
       payload: interaction(3, "C"),
     }));
+    writeFileSync(join(state.workspace.worktreeRoot, "CONTEXT.md"), "# Post-grill context\n");
+    const postGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const grill = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: grillPayload(tree),
+      payload: grillPayload(postGrillTree),
     }));
     const aggregate = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
@@ -581,7 +583,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
           { ref: round3.ref, hash: round3.hash },
         ],
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: tree,
+        workspace_tree: postGrillTree,
         decision_ref: state.decisionRef,
         decision_hash: state.decisionHash,
       },
@@ -594,6 +596,49 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(round3.ref).toMatch(/interaction-completion\.talk-0003\.json$/);
     expect(grill.ref).toMatch(/interaction-completion\.grill\.json$/);
     expect(aggregate.ref).toMatch(/interaction-completion\.aggregate\.json$/);
+    expect(round1.value.snapshot_tree).toBe(preGrillTree);
+    expect(grill.value.snapshot_tree).toBe(postGrillTree);
+    expect(postGrillTree).not.toBe(preGrillTree);
+  });
+
+  it("rejects mixed pre-grill talk trees and a grill that does not bind the final tree", async () => {
+    requireApi();
+    const state = fixture("interaction-tree-lineage-negative");
+    const writer = writerFor(state);
+    const preGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const round1 = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: talkPayload(1, preGrillTree),
+    }));
+    writeFileSync(join(state.workspace.worktreeRoot, "CONTEXT.md"), "# Changed by grill\n");
+    const postGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const round2 = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: talkPayload(2, postGrillTree),
+    }));
+    const round3 = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: talkPayload(3, postGrillTree, { zeroQuestion: true }),
+    }));
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillPayload(preGrillTree),
+    }))).rejects.toThrow(/current Workspace|tree/i);
+    const grill = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillPayload(postGrillTree),
+    }));
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: {
+        interaction_type: "aggregate",
+        rounds: [round1, round2, round3].map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: grill.ref, hash: grill.hash },
+        workspace_tree: postGrillTree,
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(/common pre-grill tree/i);
   });
 
   it("rejects incomplete, wrong-type, and out-of-order interaction aggregates", async () => {

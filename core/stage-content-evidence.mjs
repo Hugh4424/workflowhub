@@ -319,6 +319,7 @@ export function createStageContentEvidenceWriter(options = {}) {
     if (payload.interaction_type !== "aggregate") return;
     const questionIds = new Set();
     const hostMessageRefs = new Set();
+    let preGrillTree;
     const bindings = [
       ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, "talk", index + 1]),
       ["grill", payload.grill, "grill", null],
@@ -336,7 +337,7 @@ export function createStageContentEvidenceWriter(options = {}) {
         hash: binding.hash,
         expectedStage: stage,
         expectedRunId: workflowRunId,
-        expectedTree: payload.workspace_tree,
+        ...(expectedType === "grill" ? { expectedTree: payload.workspace_tree } : {}),
         expectedKind: "interaction-completion.v1",
       });
       if (child.payload?.interaction_type !== expectedType) {
@@ -345,10 +346,14 @@ export function createStageContentEvidenceWriter(options = {}) {
       if (expectedRound !== null && child.payload.rounds?.[0]?.round_number !== expectedRound) {
         throw new Error(`aggregate ${label} is out of order`);
       }
-      if (child.payload?.workspace_tree !== payload.workspace_tree) {
-        throw new Error(`aggregate ${label} payload tree binding mismatch`);
-      }
       if (expectedType === "talk") {
+        if (child.payload?.workspace_tree !== child.snapshot_tree) {
+          throw new Error(`aggregate ${label} payload tree binding mismatch`);
+        }
+        if (preGrillTree === undefined) preGrillTree = child.snapshot_tree;
+        else if (child.snapshot_tree !== preGrillTree) {
+          throw new Error("interaction aggregate talk rounds must bind one common pre-grill tree");
+        }
         for (const question of child.payload.rounds[0].questions) {
           if (questionIds.has(question.question_id)) {
             throw new Error("interaction aggregate question_id values must be globally unique");
@@ -362,6 +367,8 @@ export function createStageContentEvidenceWriter(options = {}) {
             hostMessageRefs.add(hostRef);
           }
         }
+      } else if (child.payload?.workspace_tree !== payload.workspace_tree) {
+        throw new Error("aggregate grill must bind the final post-grill tree");
       }
     }
     const decisionMatch = DECISION_LOG_REF.exec(payload.decision_ref ?? "");
