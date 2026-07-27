@@ -49,6 +49,7 @@
 - `spec-tasks` — adapted；build-plan。来源 [Spec Kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a) tasks 与 Superpowers `writing-plans`，MIT。补 Goal/Files/Tasks/Verify/Knowledge/STOP 映射。
 - `spec-analyze` — native；build-plan。report-only 一致性 lens。`upstream=[]`；历史吸收 Spec Kit analyze 思路。
 - `wh-review` — native；全部五阶段。唯一异源审查调度层。`upstream=[]`；禁止第二 review flow。
+- `workflowhub-host-protocol` — standalone native draft；宿主适配层规则。未接入任何 Stage skill-deps，不参与 WorkflowHub 阶段门禁。
 - `plan-ceo-review` — adapted；make-decision/build-spec。来源 gstack [`plan-ceo-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review)，MIT。裁为 report-only lens，去 runtime/gbrain/telemetry。
 - `plan-design-review` — adapted；build-spec UI 条件。来源 gstack [`plan-design-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review)，MIT。去浏览器 daemon。
 - `plan-eng-review` — adapted；build-plan。来源 gstack [`plan-eng-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review)，MIT。裁为 report-only lens。

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "workflowhub-host-protocol",
+  "files": [
+    "SKILL.md"
+  ]
+}

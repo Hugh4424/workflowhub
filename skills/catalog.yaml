@@ -216,6 +216,20 @@ skills:
     local_changes: make-decision audit P0 原生合同；由 canonical requirements artifacts 消费
     dependency_closure: [skills/requirement-lineage]
     update_policy: 随 requirement ledger/coverage schema 变更审查
+  - name: workflowhub-host-protocol
+    path: skills/workflowhub-host-protocol/SKILL.md
+    local_version: 0.1.0
+    local_bundle_hash: 5cb67dd2ca98280c6c437a986c61c51f0595eb61a0a81bab83be82c70ef37f8a
+    last_reviewed_at: "2026-07-14"
+    status: native
+    standalone: true
+    purpose: 记录宿主把 WorkflowHub 阶段事实投影到外部任务系统的规则
+    design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
+    used_by_stages: []
+    upstream: []
+    local_changes: 当前作为独立宿主协议草案保存，未接入五个阶段依赖
+    dependency_closure: [skills/workflowhub-host-protocol]
+    update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
