@@ -8,6 +8,7 @@ import {
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
 } from "../core/stage-review-disposition.mjs";
+import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const read = (path) => readFileSync(resolve(root, path), "utf8");
@@ -270,6 +271,52 @@ describe("risk acceptance binding", () => {
   });
 });
 
+describe("verified non-gate review resolution", () => {
+  it("records a complete fixed-finding resolution without accepting risk", () => {
+    const previous = {
+      ...structuredClone(serious),
+      stage: "make-decision",
+      review_track: "direction",
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      result_ref: "reviews/results/make-decision-direction.json",
+      snapshot_tree: tree,
+    };
+    const ledger = {
+      version: "wh-review-response-ledger.v1",
+      previous_result_ref: previous.result_ref,
+      previous_snapshot_tree: tree,
+      current_snapshot_tree: tree,
+      responses: [{
+        finding_id: "F-123456789abc",
+        status: "fixed",
+        rationale: "The finding was corrected and the focused evidence was rerun.",
+        changed_dimensions: [],
+        evidence_refs: ["evidence/resolution.json"],
+      }],
+    };
+    const resolution = buildNonGateReviewResponseRecord({
+      taskId: "task-one",
+      stage: "make-decision",
+      reviewTrack: "direction",
+      previousResult: previous,
+      previousResultSha256: hash,
+      ledger,
+      currentSnapshotTree: tree,
+    });
+    expect(resolution).toMatchObject({
+      outcome: "recorded_non_gate_response",
+      evidence_state: "verified",
+      accepted_risk_count: 0,
+      previous_result_ref: previous.result_ref,
+      previous_snapshot_tree: tree,
+      snapshot_tree: tree,
+    });
+    expect(resolution.response_ledger.responses).toEqual(ledger.responses);
+  });
+});
+
 describe("official serious-risk wiring", () => {
   it("keeps the risk writer exclusive to TaskKernel and exposes only the narrow CLI", () => {
     const kernel = read("core/task-kernel-implementation.mjs");
@@ -284,7 +331,7 @@ describe("official serious-risk wiring", () => {
 
   it("makes verify-code consume its own quality review instead of hiding it behind build-code review", () => {
     const handlers = read("core/stage-handlers.mjs");
-    expect(handlers).toMatch(/quality_review[\s\S]*quality_risk_acceptance/);
+    expect(handlers).toMatch(/quality_review[\s\S]*quality_review_resolution[\s\S]*quality_risk_acceptance/);
     expect(handlers).toMatch(/reviewFacts\(worker,\s*input,\s*"quality_review",\s*undefined,\s*"verify-code"\)/);
     expect(handlers).toMatch(/verify-code quality review does not bind the current verification snapshot/);
   });

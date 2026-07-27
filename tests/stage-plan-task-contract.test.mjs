@@ -178,6 +178,14 @@ function removeTaskField(document, field) {
 }
 
 describe("plan-task-contract.v1 complete fixture", () => {
+  it("accepts short FR-001/AC-001 identifiers as well as long identifiers", () => {
+    const shortSpec = spec.replaceAll("FR-DEMO-001", "FR-001").replaceAll("FR-DEMO-002", "FR-002").replaceAll("AC1", "AC-001").replaceAll("AC2", "AC-002");
+    const shortPlan = plan.replaceAll("FR-DEMO-001", "FR-001").replaceAll("FR-DEMO-002", "FR-002").replaceAll("AC1", "AC-001").replaceAll("AC2", "AC-002");
+    const shortTasks = tasks.replaceAll("FR-DEMO-001", "FR-001").replaceAll("FR-DEMO-002", "FR-002").replaceAll("AC1", "AC-001").replaceAll("AC2", "AC-002");
+    expect(validatePlanTaskContract({ spec: shortSpec, plan: shortPlan, tasks: shortTasks })).toMatchObject({ ok: true });
+    expect(validatePlanTaskContract({ spec, plan, tasks })).toMatchObject({ ok: true });
+  });
+
   it("accepts a complete plan, two ordered tasks, and bidirectional FR/AC coverage", () => {
     expect(validate()).toMatchObject({
       ok: true,

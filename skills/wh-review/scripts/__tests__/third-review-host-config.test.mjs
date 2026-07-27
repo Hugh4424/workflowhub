@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, selectTrustedReviewProviders } from "../third-review-host-config.mjs";
+import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, selectTrustedReviewProviders, validateAllWhReviewRoutes } from "../third-review-host-config.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -79,13 +79,17 @@ describe("trusted third-review host configuration", () => {
     broker.providers["codex/terra"] = { enabled: true };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
-    host.wh_review = { version: 2, stages: {
+    host.wh_review = { version: 2, profiles: {
+      "codex/terra": { model: null, effort: null, thinking: null, priority: 1 },
+      kimi: { model: null, effort: null, thinking: null, priority: 1 },
+      opencode: { model: null, effort: null, thinking: null, priority: 2 },
+    }, stages: {
       "build-code": { initial: ["codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     const route = resolveTrustedReviewRoute(trusted.whReview, "build-code");
-    expect(route).toEqual({ initial: ["codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 });
+    expect(route).toMatchObject({ initial: ["codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 });
     expect(selectTrustedReviewProviders(brokerConfig, "codex", route)).toEqual(["codex/terra", "kimi"]);
     expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", route)).toMatchObject({
       requestedProfiles: ["codex/terra", "kimi"],
@@ -213,5 +217,42 @@ describe("trusted third-review host configuration", () => {
   it("uses the legacy tier when wh_review or the current stage is absent", () => {
     expect(resolveTrustedReviewRoute(null, "build-code")).toBeNull();
     expect(resolveTrustedReviewRoute({ version: 2, stages: {} }, "build-code")).toBeNull();
+  });
+
+  it("keeps non-current route errors as warnings while doctor remains strict", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["claude-code/opus"] = { enabled: true, model: "claude-opus-4-8", effort: "high" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, profiles: {
+      kimi: { model: null, effort: null, thinking: null, priority: 20 },
+      "claude-code/opus": { model: "claude-opus-4-8", effort: "high", thinking: null, priority: 10 },
+    }, stages: {
+      "build-code": { initial: ["kimi"], mode: "full_only" },
+      "build-plan": { initial: ["claude-code/opus", "kimi"], mode: "full_on_structural_rework" },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
+    expect(trusted.routeWarnings).toEqual([]);
+    host.wh_review.stages["build-plan"].initial = ["kimi", "claude-code/opus"];
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const hot = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
+    expect(hot.routeWarnings).toHaveLength(1);
+    expect(() => validateAllWhReviewRoutes(hot.whReview)).toThrow(/ascending/i);
+  });
+
+  it("returns the validated current route without mutating provider order", () => {
+    const { hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, profiles: {
+      kimi: { model: null, effort: null, thinking: null, priority: 1 },
+      opencode: { model: null, effort: null, thinking: null, priority: 2 },
+    }, stages: {
+      "build-code": { initial: ["kimi", "opencode"], mode: "full_only", minimum_heterologous: 1 },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
+    expect(trusted.whReview.stages["build-code"].initial).toEqual(["kimi", "opencode"]);
   });
 });

@@ -110,7 +110,35 @@ function requireStageReviewMode(stage, configuredRoute, label) {
   if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
 }
 
-function whReviewPolicy(value) {
+function routeEntries(stages) {
+  return Object.entries(stages).flatMap(([stage, configured]) => stage === "make-decision"
+    ? Object.entries(configured).map(([track, route]) => ({ stage, track, route }))
+    : [{ stage, track: null, route: configured }]);
+}
+
+export function validateWhReviewRoute(whReview, stage, reviewTrack = null) {
+  if (!whReview) return null;
+  const configured = whReview.stages[stage];
+  if (!configured) return null;
+  const route = stage === "make-decision" ? configured[reviewTrack] : configured;
+  if (!route) return null;
+  const label = `workflowhub host wh_review.stages.${stage}${stage === "make-decision" ? `.${reviewTrack}` : ""}`;
+  requireStageReviewMode(stage, route, label);
+  validateRouteProfiles(route, whReview.profiles, label);
+  return route;
+}
+
+export function validateAllWhReviewRoutes(whReview) {
+  if (!whReview) return [];
+  for (const { stage, track, route } of routeEntries(whReview.stages)) {
+    const label = `workflowhub host wh_review.stages.${stage}${track ? `.${track}` : ""}`;
+    requireStageReviewMode(stage, route, label);
+    validateRouteProfiles(route, whReview.profiles, label);
+  }
+  return [];
+}
+
+function whReviewPolicy(value, { requestedStage = null, requestedTrack = null } = {}) {
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
   for (const key of Object.keys(value)) if (!["version", "profiles", "stages"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
@@ -119,28 +147,39 @@ function whReviewPolicy(value) {
   for (const [stage, configured] of Object.entries(value.stages)) {
     if (!REVIEW_STAGES.has(stage)) throw new Error("workflowhub host wh_review.stages." + stage + " is unsupported");
     if (stage === "make-decision") {
-      if (!configured || typeof configured !== "object" || Array.isArray(configured)) throw new Error("workflowhub host wh_review.stages.make-decision must be an object");
-      for (const track of Object.keys(configured)) if (!DECISION_TRACKS.has(track)) throw new Error("workflowhub host wh_review.stages.make-decision." + track + " is unsupported");
-      stages[stage] = Object.fromEntries(Object.entries(configured).map(([track, item]) => {
-        const parsed = route(item, "workflowhub host wh_review.stages." + stage + "." + track);
-        return [track, parsed.mode === "single_round" ? { ...parsed, mode: "full_on_structural_rework" } : parsed];
-      }));
-    } else stages[stage] = route(configured, "workflowhub host wh_review.stages." + stage);
-  }
-  for (const [stage, configured] of Object.entries(stages)) {
-    if (stage === "make-decision") {
-      for (const [track, route] of Object.entries(configured)) {
-        const label = `workflowhub host wh_review.stages.${stage}.${track}`;
-        requireStageReviewMode(stage, route, label);
-        validateRouteProfiles(route, profiles, label);
+      if (!configured || typeof configured !== "object" || Array.isArray(configured)) {
+        if (requestedStage === stage) throw new Error("workflowhub host wh_review.stages.make-decision must be an object");
+        stages[stage] = { __invalid_route: "must be an object" };
+        continue;
+      }
+      stages[stage] = {};
+      for (const [track, item] of Object.entries(configured)) {
+        const label = "workflowhub host wh_review.stages." + stage + "." + track;
+        if (!DECISION_TRACKS.has(track)) {
+          if (requestedStage === stage) throw new Error(label + " is unsupported");
+          stages[stage][track] = { __invalid_route: "unsupported track" };
+          continue;
+        }
+        try {
+          const parsed = route(item, label);
+          stages[stage][track] = parsed.mode === "single_round" ? { ...parsed, mode: "full_on_structural_rework" } : parsed;
+        } catch (error) {
+          if (requestedStage === null || (requestedStage === stage && (requestedTrack === null || requestedTrack === track))) throw error;
+          stages[stage][track] = { __invalid_route: error.message };
+        }
       }
     } else {
-      const label = `workflowhub host wh_review.stages.${stage}`;
-      requireStageReviewMode(stage, configured, label);
-      validateRouteProfiles(configured, profiles, label);
+      try { stages[stage] = route(configured, "workflowhub host wh_review.stages." + stage); }
+      catch (error) {
+        if (requestedStage === null || requestedStage === stage) throw error;
+        stages[stage] = { __invalid_route: error.message };
+      }
     }
   }
-  return { version: 2, profiles, stages };
+  const policy = { version: 2, profiles, stages };
+  if (requestedStage === null) validateAllWhReviewRoutes(policy);
+  else validateWhReviewRoute(policy, requestedStage, requestedTrack);
+  return policy;
 }
 
 function verifyPacketAllowlist(configPath, attachmentRoot) {
@@ -162,9 +201,14 @@ function validateProfileDeclaration(provider, declaration, config) {
   }
 }
 
-function validateWhReviewProfileDeclarations(whReview, config) {
+function validateWhReviewProfileDeclarations(whReview, config, { requestedStage = null, requestedTrack = null } = {}) {
   if (!whReview) return;
-  for (const [provider, declaration] of Object.entries(whReview.profiles)) validateProfileDeclaration(provider, declaration, config);
+  const providers = requestedStage === null
+    ? Object.keys(whReview.profiles)
+    : [...new Set(routeEntries(whReview.stages)
+      .filter(({ stage, track }) => stage === requestedStage && track === requestedTrack)
+      .flatMap(({ route }) => [...(route.initial ?? []), ...(route.closure ?? [])]))];
+  for (const provider of providers) validateProfileDeclaration(provider, whReview.profiles[provider], config);
 }
 
 /**
@@ -172,7 +216,7 @@ function validateWhReviewProfileDeclarations(whReview, config) {
  * CLI/workflow input has no authority to replace command, broker config, or
  * the fixed packet root.
  */
-export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = hostConfigPath() } = {}) {
+export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = hostConfigPath(), requestedStage = null, requestedTrack = null } = {}) {
   const path = regularFile(configuredPath, "workflowhub host config");
   const config = readJson(path, "workflowhub host config");
   const thirdReview = config?.third_review;
@@ -181,9 +225,16 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   const attachmentRoot = realDirectory(thirdReview.attachment_root, "workflowhub host third_review.attachment_root");
   verifyPacketAllowlist(configPath, attachmentRoot);
   const broker = brokerConfig(configPath);
-  const whReview = whReviewPolicy(config.wh_review);
-  validateWhReviewProfileDeclarations(whReview, broker);
-  return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, ...(whReview ? { whReview } : {}) };
+  const whReview = whReviewPolicy(config.wh_review, { requestedStage, requestedTrack });
+  validateWhReviewProfileDeclarations(whReview, broker, { requestedStage, requestedTrack });
+  const routeWarnings = whReview && requestedStage !== null
+    ? routeEntries(whReview.stages).flatMap(({ stage, track }) => {
+      if (stage === requestedStage && track === requestedTrack) return [];
+      try { validateWhReviewRoute(whReview, stage, track); return []; }
+      catch (error) { return [{ stage, ...(track ? { track } : {}), message: error.message }]; }
+    })
+    : [];
+  return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, ...(whReview ? { whReview } : {}), ...(requestedStage !== null ? { routeWarnings } : {}) };
 }
 
 function routeWithProfilePriorities(route, profiles) {
@@ -198,9 +249,14 @@ export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null) {
   if (!whReview) return null;
   const configured = whReview.stages[stage];
   if (!configured) return null;
-  if (stage !== "make-decision") return routeWithProfilePriorities(configured, whReview.profiles);
+  if (stage !== "make-decision") {
+    validateWhReviewRoute(whReview, stage, null);
+    return routeWithProfilePriorities(configured, whReview.profiles);
+  }
   if (!DECISION_TRACKS.has(reviewTrack)) throw new Error("make-decision wh_review route requires direction or detail review_track");
-  return configured[reviewTrack] ? routeWithProfilePriorities(configured[reviewTrack], whReview.profiles) : null;
+  if (!configured[reviewTrack]) return null;
+  validateWhReviewRoute(whReview, stage, reviewTrack);
+  return routeWithProfilePriorities(configured[reviewTrack], whReview.profiles);
 }
 
 /**

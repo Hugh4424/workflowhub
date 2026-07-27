@@ -4,7 +4,8 @@
   "commands": {
     "run": "scripts/wh-review-cli.mjs run",
     "format-correct": "scripts/wh-review-cli.mjs format-correct",
-    "verify-final": "scripts/wh-review-cli.mjs verify-final"
+    "verify-final": "scripts/wh-review-cli.mjs verify-final",
+    "doctor": "scripts/wh-review-cli.mjs doctor"
   },
   "stage_materials": "stage-materials.json",
   "stage_skill_plan": "stage-skill-plan.json",

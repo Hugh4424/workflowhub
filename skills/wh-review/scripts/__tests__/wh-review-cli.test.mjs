@@ -91,7 +91,12 @@ describe("wh-review production CLI", () => {
     };
     const task = {
       identity: { taskId: "task" },
-      readRecord: () => `${JSON.stringify(result)}\n`,
+      readRecord: (recordRef) => {
+        if (recordRef === ref) return `${JSON.stringify(result)}\n`;
+        const error = new Error("missing canonical record");
+        error.code = "ENOENT";
+        throw error;
+      },
     };
     const kernel = { readReviewFlow: () => ({ head_result_ref: ref }) };
     expect(resolveReviewFlowHead({ task, kernel, identity })).toMatchObject({
@@ -116,7 +121,7 @@ describe("wh-review production CLI", () => {
 
   it("uses the simple runner and no V4 facade or legacy argv", () => {
     const source = readFileSync(cli, "utf8");
-    expect(source).toContain('new Set(["run", "format-correct", "verify-final", "adopt-legacy-root"])');
+    expect(source).toContain('new Set(["run", "format-correct", "verify-final", "adopt-legacy-root", "doctor"])');
     expect(source).toContain("ReviewProviderClient");
     expect(source).toContain("runReview");
     for (const forbidden of ["ReviewRoundFacade", "BrokerClient", "resetReviewFlow", "recoverReviewProjections", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);

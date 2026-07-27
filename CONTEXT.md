@@ -139,6 +139,15 @@ WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态�
 **wh-review**：
 workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05）。承接原来分散在 3rd-review 下的 workflowhub 专属知识：五个 stage 的正式审查，以及按需调用的独立诊断合同；build-spec、build-plan、verify-code 的正常修复不做小型二审，build-code 仍对每个 Phase 完整审查至 pass。wh-review 在内部调用 3rd-review 完成实际异源派发，对需要审查的 stage executor 暴露统一入口；3rd-review 只负责派发，不解释 WorkflowHub 的 stage 语义。
 
+**审查路径（review route）**：
+某个工作阶段的一种审查类型及其模型调用顺序。“当前审查路径”只指本次任务正在执行的“阶段 + 审查类型”；其他已经配置但本次没有使用的路径属于非当前路径。当前路径配置错误时停止；非当前路径配置错误时明确告警，但不阻断当前任务。
+
+**审查执行结果（review attempt outcome）**：
+一次模型调用是否产生了可用审查结果。统一分类为：完成、输出格式错误、模型不可用、超时、同源排除、取消和未知。外部系统返回的原始错误码必须原样保留；分类只用于汇总，不能覆盖原始事实。没有产生可用审查结果时，不生成审查发现，也不进入模型质量统计。
+
+**审查发现结果（review finding outcome）**：
+只描述可用审查结果里发现的问题，例如有效问题、证据位置无效、需要其他来源佐证或非阻断小问题。它与审查执行结果是两层事实：模型调用失败不能被记成“没有发现问题”，发现证据无效也不能反过来改写模型调用状态。
+
 **审查材料地图（review material map）**：
 每个 stage 明确列出的最小充分审查材料及其锚点、未知项和不适用项；它是 reviewer 的导航和可核查边界，不是把整个项目或原始日志重新投递给 provider。
 
