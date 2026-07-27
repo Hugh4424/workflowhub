@@ -83,7 +83,9 @@ Alignment consumes the accepted design projection and current evidence; it does
 not create a second review or replace the formal acceptance gate.
 
 Declared runtime components: required post-evidence `wh-review`; conditional
-`test-strategy`; and conditional `isolated-browser-qa`.
+`test-strategy`, `isolated-browser-qa`, and `resolving-merge-conflicts`.
+`qa-only` and `verify-change` remain reviewer-owned lenses and appear only
+through the corresponding `wh-review` refs.
 
 ## Inputs and outputs
 
