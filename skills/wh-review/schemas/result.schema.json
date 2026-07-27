@@ -17,6 +17,20 @@
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "classification_manifest": {
+      "type": "object", "required": ["version", "entries"],
+      "properties": {
+        "version": { "const": "wh-review-classification-manifest.v1" },
+        "entries": { "type": "array", "items": {
+          "type": "object", "required": ["identity", "category", "sha256"],
+          "properties": {
+            "identity": { "type": "string", "minLength": 1 },
+            "category": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }, "additionalProperties": false
+        } }
+      }, "additionalProperties": false
+    },
     "attempt_ref": { "type": "string", "minLength": 1 },
     "review_chain": {
       "type": "object",

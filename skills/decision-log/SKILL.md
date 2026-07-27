@@ -9,13 +9,20 @@ Receive original requirement, confirmed direction, constraints, rejected
 alternatives, risks, and a controlled TaskHandle record callback from
 make-decision. Do not accept or derive any filesystem root or task path.
 
-Produce these sections: goal, scope, decisions, alternatives, constraints,
-risks, documentation and exit checks, and unresolved items. Return the content
-to the parent, which records it through TaskHandle/TaskKernel. Missing
-load-bearing reasoning is reported rather than invented.
+Produce the human-readable `decision-log.md` from
+[`templates/decision-log-template.md`](./templates/decision-log-template.md).
+The main document and every accepted omission use the same
+`decision-entry.v1` shape; there is no shorter appendix-only decision shape.
+Return the content to the parent, which records it through TaskHandle/TaskKernel.
+Missing load-bearing reasoning is reported rather than invented.
 
 Record every load-bearing decision separately. Each entry must state:
 
+- **Question and final option**: the plain-language question and the option
+  actually selected.
+- **Recommendation**: whether the selected option was recommended and why.
+- **Plain-language meaning**: what the option means without internal IDs or
+  workflow terms.
 - **Decision**: the exact choice that now governs downstream work.
 - **Source**: a specific original requirement, actual user answer, research
   result, code fact, grill result, or independent-review finding. Preserve the
@@ -30,16 +37,24 @@ Record every load-bearing decision separately. Each entry must state:
 - **Rejected alternatives**: each rejected option and its rejection reason.
 - **Unresolved items**: what remains undecided, why, and who must resolve it.
 - **Supersedes**: the exact earlier decision replaced, or `none`.
+- **Approval binding**: approval status plus the supplied host-visible
+  reference and hash. The hash is delivery binding, not proof of human identity.
 
 Preserve actual user wording when it defines an interface or boundary. If a
 later answer changes an earlier decision, retain both entries and make the new
 entry's `supersedes` relationship explicit; never rewrite history as if the old
 decision did not exist.
 
-Before final confirmation, reconcile every actual user answer and every adopted
-grill or review choice against the entries. Each must map to one decision entry
-or be explicitly marked as a non-decision fact. This is a text completeness
-check, not a new ledger or schema.
+Before final confirmation, run the automatic coverage audit over every original
+requirement, actual user answer, adopted grill/review choice, and load-bearing
+decision. Each source item must map exactly once to the main document or to one
+`decision-omission-acceptance.v1` appendix. Show every missing item to the user
+and wait for a real choice before continuing. A review risk record cannot stand
+in for omission acceptance.
+
+Publish a `decision-correction-appendix.v1` for D1-D7. It points to the original
+decision ref/hash, uses the accepted literal correction text, and sets
+`does_not_rewrite_upstream=true`; never edit the old bytes.
 
 The documentation and exit-check section must record the supplied
 `grill-with-docs` result: `CONTEXT.md` changed/no-change with reason and file

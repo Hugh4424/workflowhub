@@ -6,13 +6,16 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
 import { createCanonicalReviewWriter } from "../../core/canonical-receipt-writer.mjs";
+import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
 import { createPhaseDiffScan } from "../../workflows/build-code/diff-scanner.mjs";
 import { inspectRunnerIdentity } from "../../core/runner-identity.mjs";
 import { createTask, migrateTaskRunnerRoot, openTask } from "../../core/task-handle.mjs";
 import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../core/workspace.mjs";
-import { normalizedRecoveryRecordHash, sha256, writeRecoveryCredentialForTest } from "../../core/task-recovery.mjs";
+import { canonical, normalizedRecoveryRecordHash, sha256, writeRecoveryCredentialForTest } from "../../core/task-recovery.mjs";
 import { readPhaseMapTrace } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
 import { publishBuildCodePhaseEvidence } from "../../workflows/build-code/phase-evidence.mjs";
 import { publishPhaseTraceLineage, runRecovery, supersedePhaseTraceLineage } from "../task-recovery.mjs";
@@ -27,6 +30,47 @@ function git(cwd, args) {
 function commit(cwd, message) {
   git(cwd, ["add", "."]);
   git(cwd, ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", message]);
+}
+
+function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunId, data }) {
+  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const kind = `${stage}-recovery-fixture`;
+  const content = {
+    schema_version: "stage-content-evidence.v1",
+    kind,
+    task_id: task.identity.taskId,
+    stage,
+    workflow_run_id: workflowRunId,
+    snapshot_tree: snapshot.tree,
+  };
+  const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+  const contentHash = sha256(contentRaw);
+  const contentRef = `evidence/stage-content/${contentHash}/${stage}-recovery-fixture.json`;
+  kernel.publishCanonicalRecord(contentRef, contentRaw);
+  const contentEvidenceRefs = [{ kind, ref: contentRef, hash: contentHash }];
+  const unsignedSummary = {
+    schema_version: "stage-audit-summary.v1",
+    task_id: task.identity.taskId,
+    stage_slug: stage,
+    workflow_run_id: workflowRunId,
+    snapshot_tree: snapshot.tree,
+    verdict: "pass",
+    content_evidence_refs: contentEvidenceRefs,
+  };
+  const summaryHash = hashAuditSummary(unsignedSummary);
+  const summaryRef = `evidence/audits/${stage}/${summaryHash}.json`;
+  kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  return kernel.publishAttempt(stage, {
+    ...data,
+    facts: {
+      ...data.facts,
+      audit_contract_version: "v1",
+      audit_summary_ref: summaryRef,
+      audit_summary_hash: summaryHash,
+      audit_verdict: "pass",
+      content_evidence_refs: contentEvidenceRefs,
+    },
+  });
 }
 
 function fixture() {
@@ -56,11 +100,53 @@ function fixture() {
   } });
   const candidate = prepareTaskWorkspace(task);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
-  const attempt = kernel.publishAttempt("make-decision", { facts: {
-    worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
-    snapshot_tree: git(candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]),
-  } });
+  const attempt = publishAuditedAttempt({
+    kernel,
+    task,
+    stage: "make-decision",
+    worktreeRoot: candidate.worktreeRoot,
+    workflowRunId: `task-created:${task.manifest.created_at}`,
+    data: { facts: {
+      worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
+      snapshot_tree: git(candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]),
+    } },
+  });
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
+  const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+  const bound = createTaskKernel(task, { workspace, artifacts });
+  artifacts.writeAtomic("spec.md", "# Recovery spec\n");
+  const specCheckpoint = bound.createCheckpoint("build-spec");
+  const spec = publishAuditedAttempt({
+    kernel: bound,
+    task,
+    stage: "build-spec",
+    worktreeRoot: workspace.worktreeRoot,
+    workflowRunId: attempt.attempt.attempt_id,
+    data: {
+      facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: specCheckpoint },
+      upstream_refs: [{ task_id: task.identity.taskId, stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
+    },
+  });
+  bound.acceptAttempt("build-spec", spec.attempt_ref);
+  artifacts.writeAtomic("plan.md", "# Recovery plan\n");
+  artifacts.writeAtomic("tasks.md", "# Recovery tasks\n");
+  const planCheckpoint = bound.createCheckpoint("build-plan");
+  const plan = publishAuditedAttempt({
+    kernel: bound,
+    task,
+    stage: "build-plan",
+    worktreeRoot: workspace.worktreeRoot,
+    workflowRunId: spec.attempt.attempt_id,
+    data: {
+      facts: {
+        plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"),
+        checkpoint: planCheckpoint,
+      },
+      upstream_refs: [{ task_id: task.identity.taskId, stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+    },
+  });
+  bound.acceptAttempt("build-plan", plan.attempt_ref, writeHumanConfirmation(bound, "build-plan", plan));
   const migrated = migrateTaskRunnerRoot({
     taskPath: task.taskPath, projectName: "workflowhub", taskId: "recovery-cli",
     runnerRoot: realpathSync(oldRunner), stage: "build-code",
@@ -280,6 +366,123 @@ describe("task recovery CLI integration", () => {
     expect(generation.after.hash).toBe(normalizedRecoveryRecordHash("runner-replacement", {
       ...recovered.manifest, runner_replacement: { ref: output.recovery_ref, integrity_hash: output.recovery_hash },
     }));
+  });
+
+  it("appends a second authenticated runner generation and keeps the full history immutable", () => {
+    const f = fixture();
+    const original = JSON.parse(f.task.readRecord(f.task.manifest.runner_root_migration.ref)).runner_identity;
+    const runner2 = inspectRunnerIdentity({
+      runnerRoot: f.nextRunner,
+      projectName: "workflowhub",
+      taskId: "recovery-cli",
+      stage: "build-code",
+    });
+    const accepted = createTaskKernel(f.task).readAccepted("make-decision");
+    const businessSnapshot = {
+      accepted_ref: accepted.accepted_ref,
+      accepted_hash: accepted.accepted_hash,
+      baseline_commit: accepted.facts.baseline_commit,
+      snapshot_tree: git(f.task.manifest.target_repo_root, ["rev-parse", `${accepted.facts.baseline_commit}^{tree}`]),
+      target_repo_root: f.task.manifest.target_repo_root,
+    };
+    const credential1 = {
+      schema_version: "workflowhub-recovery-credential.v1",
+      project_name: "workflowhub",
+      task_id: "recovery-cli",
+      recovery_kind: "runner-replacement",
+      nonce: "runner-generation-1",
+      issued_at: "2026-07-25T00:00:00.000Z",
+      decision: "accepted",
+      accepted_business_snapshot: businessSnapshot,
+      runner_subject: {
+        previous_runner: original,
+        new_runner: runner2,
+        previous_manifest_hash: sha256(f.task.readRecord("task.json")),
+        stage: "build-code",
+      },
+    };
+    const written1 = writeRecoveryCredentialForTest(f.task, credential1);
+    const output1 = JSON.parse(runCli([
+      "runner-replacement",
+      `--task-path=${f.task.taskPath}`,
+      "--project=workflowhub",
+      "--task=recovery-cli",
+      `--runner-root=${f.nextRunner}`,
+      "--stage=build-code",
+      `--credential-ref=${written1.ref}`,
+      `--credential-hash=${written1.hash}`,
+    ]));
+    expect(output1.recovery_ref).toBe("identity/recoveries/runner-replacement-0001.json");
+
+    const afterFirst = openTask(f.task.taskPath, "workflowhub", "recovery-cli");
+    const generation1Raw = afterFirst.readRecord(output1.recovery_ref);
+    const generation1Hash = sha256(generation1Raw);
+    const manifest1Raw = afterFirst.readRecord("task.json");
+    const runner3Root = join(f.root, "third-runner");
+    git(f.root, ["clone", "-q", f.nextRunner, runner3Root]);
+    writeFileSync(join(runner3Root, "generation-3.txt"), "third runner\n");
+    commit(runner3Root, "third runner");
+    const runner3 = inspectRunnerIdentity({
+      runnerRoot: realpathSync(runner3Root),
+      projectName: "workflowhub",
+      taskId: "recovery-cli",
+      stage: "build-code",
+    });
+    const credential2 = {
+      ...credential1,
+      nonce: "runner-generation-2",
+      issued_at: "2026-07-25T00:01:00.000Z",
+      runner_subject: {
+        previous_runner: runner2,
+        new_runner: runner3,
+        previous_manifest_hash: sha256(manifest1Raw),
+        stage: "build-code",
+      },
+    };
+    const written2 = writeRecoveryCredentialForTest(afterFirst, credential2);
+    const output2 = JSON.parse(runCli([
+      "runner-replacement",
+      `--task-path=${afterFirst.taskPath}`,
+      "--project=workflowhub",
+      "--task=recovery-cli",
+      `--runner-root=${runner3.runner_root}`,
+      "--stage=build-code",
+      `--credential-ref=${written2.ref}`,
+      `--credential-hash=${written2.hash}`,
+    ]));
+
+    expect(output2.recovery_ref).toBe("identity/recoveries/runner-replacement-0002.json");
+    const recovered = openTask(afterFirst.taskPath, "workflowhub", "recovery-cli");
+    expect(recovered.manifest).toMatchObject({
+      runner_root: runner3.runner_root,
+      runner_oid: runner3.runner_oid,
+      runner_replacement: {
+        ref: output2.recovery_ref,
+        integrity_hash: output2.recovery_hash,
+      },
+    });
+    const generation2 = JSON.parse(recovered.readRecord(output2.recovery_ref));
+    expect(generation2).toMatchObject({
+      generation: 2,
+      previous_generation_ref: output1.recovery_ref,
+      previous_generation_hash: generation1Hash,
+      before: { identity: runner2 },
+      after: { identity: runner3 },
+    });
+    expect(recovered.readRecord(output1.recovery_ref)).toBe(generation1Raw);
+
+    expect(() => runCli([
+      "runner-replacement",
+      `--task-path=${recovered.taskPath}`,
+      "--project=workflowhub",
+      "--task=recovery-cli",
+      `--runner-root=${runner3.runner_root}`,
+      "--stage=build-code",
+      `--credential-ref=${written1.ref}`,
+      `--credential-hash=${written1.hash}`,
+    ])).toThrow(/RECOVERY_(?:CREDENTIAL_INVALID|RUNNER_PROVENANCE_MISMATCH)/);
+    expect(recovered.readRecord(output1.recovery_ref)).toBe(generation1Raw);
+    expect(recovered.readRecord(output2.recovery_ref)).toBe(canonical(generation2));
   });
 
   it("keeps both commands strict at the process boundary", () => {

@@ -76,6 +76,11 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 
 ### 3. 每答重排
 
+每题必须严格执行 `ask → wait/pause → real reply → re-rank`：提问交给宿主可见会话后，
+当前调用立即暂停；只有宿主返回与这张卡、当前 Round 和题号绑定的真实回复，恢复调用
+才可继续。Agent 生成的答案、默认选择、旧回复或 decision-log 自报都不能充当 reply，
+也不能据此进入下一题、改稿或审查。
+
 只把用户真实回复视为答案。每收到一个回答，都必须：
 
 1. 记录回答及其来源；
@@ -85,6 +90,13 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 5. 更新下一张卡的题号和当前总数，再决定是否询问新的最高项；不展示完整重排表。
 
 不要沿旧列表机械向下走。Agent 不得模拟、补写或代替用户回答。
+
+下一张卡的总数必须按下面的同一公式重算：
+
+`当前总数 = 本轮已经提出的问题数 + 重排后仍会改变方向的开放问题数`
+
+总数只有在真实回答新增或消除开放问题时才能变化，并记录新增或移除的问题及事实原因。
+只把题号机械写成 `2/2`、让分母始终跟着分子走，在仍有开放问题时属于失败。
 
 ### 4. 收敛阈值
 
@@ -152,6 +164,22 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 
 四维结论、四选一裁决、推翻条件、每条结论的「证据/主观」标注，都以结构化字段显式保留，落到决策记录里。
 
+### 11. 最小 typed interaction facts
+
+每个 Round 返回一个 `interaction-completion.v1` 内容 payload，由调用方交给受控 writer
+发布；本技能不能填写 task、stage、run、producer、ref、hash、tree、root、task path 或
+cwd。payload 至少保留：
+
+- Round、完整候选队列及每项的影响和 `待回答` / `已由事实回答` / `不适用` 状态；
+- 题号、按公式计算的当前总数、每次总数变化原因和本轮结束结论；
+- `card_hash` 和单轴、2–3 互斥项、推荐及理由、逐项含义/后果/风险的格式检查结果；
+- ask、reply、re-rank 的顺序，以及宿主提供的 ask/reply 可见消息 ref/hash；
+- 选中的选项和重排前后的队列变化。
+
+长期记录不得保存完整问题卡原文，也不得保存 secret、token、password、credential、
+cookie 或其他秘密；卡片只以内容 hash 和格式检查事实进入记录。ref/hash 只证明宿主
+确认消息已投递到可见表面，不证明作者身份、真人阅读或客户端渲染。
+
 ## 输出
 
 ```text
@@ -184,3 +212,18 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 - 三个 Round 的职责、开始队列、每答重排和结束结论均须保留；一轮的结果不能冒充另一轮已执行。
 - 核心层不触碰任何具体工作流的私有路径。
 - 不修改与对话无关的文件；丢弃任一需求条目必须登记理由。
+
+## Sources
+
+- 固定来源：AgentHub historical import，`multica-agenthub` 的
+  `packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md`；该文件最后变更 commit
+  `2468b5e6907c67d7518583982c5729dcc98e414a`。WorkflowHub 已把宿主适配移除并演进为
+  native Skill，不再运行时依赖 AgentHub。
+- 更新检查：2026-07-26。检查时 AgentHub repository HEAD 为
+  `fabc82100b3dde2678a5fb81484bab3149c1e72d`，该来源文件在上述 commit 后没有更新；
+  保留 WorkflowHub 当前版本。
+- 替代候选：Matt Pocock `grilling`（commit
+  `66898f60e8c744e269f8ce06c2b2b99ce7660d5f`）和本地 `deep-interview`。
+  前者适合广泛拷问，后者适合深访，但都没有本 Skill 已锁定的三轮职责、每答重排、
+  有意义的题目总数和 WorkflowHub 四维范围判定，因此不替换；仅保留其“一次一问、
+  不替用户回答”的共同原则。

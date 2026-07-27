@@ -1,15 +1,20 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { validateAcceptanceEvidence, validatePhaseCompletion } from "./task-kernel-implementation.mjs";
-import { assertWorkspace } from "./workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
+import { buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
+import { carryAuditSummary } from "./audit-summary-carrier.mjs";
+import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
+import { loadStageManifest } from "./step-manifest.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
@@ -25,6 +30,12 @@ const OFFICIAL_COMPONENTS = Object.freeze({
 
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function canonicalHashJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalHashJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalHashJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
 }
 
 function receiptProvenance(value, { taskId, stage, component }) {
@@ -46,6 +57,92 @@ function readCanonicalRecord(task, ref) {
     if (error?.code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+function journalEvents(task) {
+  const raw = readCanonicalRecord(task, "journal.jsonl");
+  if (raw === undefined) return [];
+  return raw.split("\n").filter(Boolean).map((line, index) => {
+    try { return JSON.parse(line); }
+    catch (error) { throw new Error(`journal line ${index + 1} is invalid JSON: ${error.message}`); }
+  });
+}
+
+function auditableJournalEvents(task, stage, workflowRunId) {
+  const events = journalEvents(task).filter((event) =>
+    event.workflow_run_id === workflowRunId && event.stage_slug === stage);
+  const byAttempt = new Map();
+  for (const event of events) {
+    const bucket = byAttempt.get(event.attempt_id) ?? [];
+    bucket.push(event);
+    byAttempt.set(event.attempt_id, bucket);
+  }
+  const invalidated = new Set();
+  for (const [attemptId, attemptEvents] of byAttempt) {
+    const identityHash = sha256(`${workflowRunId}\0${attemptId}`);
+    const ref = `runs/${stage}/journal-invalidations/${identityHash}.json`;
+    const raw = readCanonicalRecord(task, ref);
+    if (raw === undefined) continue;
+    const record = JSON.parse(raw);
+    if (record.schema_version !== "stage-step-attempt-invalidation.v1"
+        || record.task_id !== task.identity.taskId || record.stage !== stage
+        || record.workflow_run_id !== workflowRunId || record.attempt_id !== attemptId
+        || record.events_hash !== sha256(canonicalHashJson(attemptEvents))) {
+      throw new Error("stage step attempt invalidation binding mismatch");
+    }
+    invalidated.add(attemptId);
+  }
+  return events.filter((event) => !invalidated.has(event.attempt_id));
+}
+
+/** Build and publish the only audit summary from canonical task records. */
+export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
+  const safeTask = assertTaskHandle(task);
+  let safeWorkspace;
+  if (stage === "make-decision") safeWorkspace = assertCandidateWorkspace(workspace);
+  else safeWorkspace = assertWorkspace(workspace);
+  const kernel = createTaskKernel(safeTask, stage === "make-decision"
+    ? { candidateWorkspace: safeWorkspace }
+    : { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
+  const activeRun = kernel.activeStageRun(stage);
+  const workflowRunId = activeRun.run.workflow_run_id;
+  const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
+  const kinds = requiredStageContentKinds(stage);
+  const contentEvidence = kinds.map((kind) => {
+    const latest = readLatestStageContentEvidence({
+      task: safeTask, stage, workflowRunId, kind,
+    });
+    if (!latest) throw new Error(`${stage} canonical audit is missing required stage content evidence: ${kind}`);
+    if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
+    return { ref: latest.ref, hash: latest.hash, value: latest.value };
+  });
+  const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
+  const ledger = JSON.parse(ledgerRaw);
+  const manifest = loadStageManifest(stage, fileURLToPath(new URL("../", import.meta.url)));
+  const summary = buildAuditSummaryFromJournalEvents(
+    auditableJournalEvents(safeTask, stage, workflowRunId),
+    stage,
+    workflowRunId,
+    {
+      task_id: safeTask.identity.taskId,
+      snapshot_tree: snapshot.tree,
+      manifest,
+      ledger,
+      required_content_kinds: kinds,
+      content_evidence: contentEvidence,
+    },
+  ).audit_summary;
+  if (summary.verdict !== "pass") throw new Error(`${stage} canonical audit did not pass`);
+  const ref = `evidence/audits/${stage}/${summary.summary_hash}.json`;
+  const raw = canonicalJson(summary);
+  publishIdempotently({
+    task: safeTask, write: kernel.publishCanonicalRecord, ref, raw,
+    label: `${stage} canonical audit summary`,
+  });
+  return Object.freeze({
+    ...carryAuditSummary(ref, summary),
+    content_evidence_refs: summary.content_evidence_refs,
+  });
 }
 
 function publishIdempotently({ task, write, ref, raw, label }) {
@@ -120,10 +217,33 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   const producer = { stage, component, version };
   let value;
   if (registration.kind === "decision-log") {
-    if (Object.keys(payload).some((key) => key !== "decision_log") || typeof payload.decision_log !== "string" || payload.decision_log.trim() === "") {
+    if (Object.keys(payload).some((key) => !new Set(["decision_log", "contract_refs"]).has(key))
+        || typeof payload.decision_log !== "string" || payload.decision_log.trim() === "") {
       throw new TypeError("decision_log payload required");
     }
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, decision_log: payload.decision_log, content_hash: sha256(payload.decision_log) };
+    if (payload.contract_refs !== undefined && (!Array.isArray(payload.contract_refs)
+        || payload.contract_refs.some((entry) => !entry || typeof entry.ref !== "string" || !/^[a-f0-9]{64}$/.test(entry.hash ?? "")))) {
+      throw new TypeError("decision contract_refs must contain canonical ref/hash pairs");
+    }
+    const decisionHash = sha256(payload.decision_log);
+    const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+    publishIdempotently({
+      task: safeTask,
+      write,
+      ref: decisionRef,
+      raw: payload.decision_log,
+      label: "human-readable decision log",
+    });
+    value = {
+      schema_version: "workflowhub-receipt.v1",
+      task_id: safeTask.identity.taskId,
+      stage,
+      producer,
+      decision_ref: decisionRef,
+      decision_hash: decisionHash,
+      contract_refs: structuredClone(payload.contract_refs ?? []),
+      content_hash: decisionHash,
+    };
   } else if (registration.kind === "content") {
     if (Object.keys(payload).some((key) => key !== "content") || typeof payload.content !== "string" || payload.content.trim() === "") throw new TypeError(`${component} content payload required`);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };

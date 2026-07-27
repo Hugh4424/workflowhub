@@ -26,12 +26,21 @@ Production callers use only:
 node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs format-correct < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
+node skills/wh-review/scripts/wh-review-cli.mjs adopt-legacy-root < input.json
 ```
 
 Send the input JSON over stdin. Never place a transient review-input file in
 the runner, target repository, CandidateWorkspace, or TaskHandle. If the host
 cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
 file in the same foreground command; task storage is only for canonical output.
+
+`adopt-legacy-root` is the approved bootstrap-only bridge for a canonical
+semantic initial result that predates the TaskKernel review-flow event stream.
+Its input contains only the normal TaskHandle locator, `stage`, and
+`result_ref`. TaskKernel derives the workflow identity and accepts exactly one
+same-subject root while the stage is still open. It fails loud on ambiguous,
+stale, cross-subject, malformed, or already-followed results, never calls a
+provider, and forbids caller-supplied `workflow_run_id`.
 
 `format-correct` is available only for one immutable unavailable attempt whose
 provider completed with invalid reviewer JSON. It rebuilds and verifies the
@@ -146,6 +155,10 @@ AC, interface, schema, state, security, concurrency, topology, phase order or
 test strategy, it runs at most one
 fresh full review through the initial high-strength group. That second finding
 set is also a quality fact: it neither loops nor decides stage acceptance.
+After that one structural full review, a complete ledger may mark its findings
+`fixed` or `accepted_risk`; WorkflowHub records only a zero-provider resolution
+action. It does not review again, move the semantic head, change the persisted
+verdict, or claim `pass`.
 The ledger is controller/audit data and is never sent in a full-review packet.
 `accepted_risk` is recorded and must be shown at the build-plan or verify-code
 human boundary; it does not auto-escalate or block. Callers cannot select a
@@ -185,12 +198,23 @@ The provider receives only the frozen bundle. It must not read the source reposi
 
 Each bundle also contains `packet-plan.json`: a compact material-category plan
 with selected context and exclusion reasons. `manifest.json` is the only
-complete provider-visible file byte/hash list. Delivery bytes are telemetry
-only: there is no packet cap, size rejection, truncation, phase-splitting,
-token, duration, or output-count admission rule. A Phase review carries the
-complete frozen Phase diff, deterministic `change-map.json`, and only
-map-selected direct-context excerpts; raw evidence logs remain canonical audit
-records. For Phase material, anchors default to unmodified direct dependencies.
+complete provider-visible file byte/hash list. A Phase diff up to 320 KiB keeps
+the existing complete `changes.diff` delivery. A larger diff is stored in the
+runner's hash-addressed canonical archive and delivered through
+`diff-index.json` plus selected shards. The index binds the full
+ref/hash/bytes/lines, every change/hunk ID and shard hash. Missing or tampered
+selected shards and incomplete change-ID coverage fail before dispatch.
+Code/contract shards are included; test, fixture and evidence shards may be
+summarized with anchors. `packet-plan.delivery_mode` and the manifest report
+the actual delivery. Selected-context packets are capped at 330 KiB and fail
+before dispatch when the compact, self-contained packet exceeds that limit.
+The full approved spec and authority maps remain hash-addressed canonical audit
+material; providers receive Phase-relevant requirement excerpts and compact
+ID/anchor/test-reference maps. For Phase material, anchors default to unmodified direct dependencies.
+Selected-context delivery keeps context excerpts in canonical audit storage
+and does not send separate context files. The diff index keeps only compact
+`anchor_id -> shard_id,line` references. The provider change map is compact;
+its full form remains canonical audit material.
 A changed-file anchor needs `outside_diff_reason` and may contain only candidate
 lines outside every unified-diff hunk; an overlap fails loud instead of
 duplicating changed code. An integration packet carries no `changes.diff`,

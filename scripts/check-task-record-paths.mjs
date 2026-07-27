@@ -58,6 +58,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "scripts/__tests__/ci-chain-check.test.mjs",
   "scripts/__tests__/canonical-archive-skill-dispatch.test.mjs",
   "scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs",
+  "scripts/__tests__/stage-runtime-spec-recovery.test.mjs",
   "scripts/__tests__/task-bootstrap.test.mjs",
   "scripts/__tests__/task-recovery.test.mjs",
   "scripts/__tests__/migrate-task-v2.test.mjs",

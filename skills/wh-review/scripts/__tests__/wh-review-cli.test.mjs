@@ -35,10 +35,11 @@ async function runnerBoundFixture() {
 }
 
 describe("wh-review production CLI", () => {
-  it("exports only run, format-correct, and verify-final operations", async () => {
+  it("exports the narrow legacy-root adoption operation with the normal review operations", async () => {
     const mod = await import(cli.href);
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.verifyFinalReview).toBe("function");
+    expect(typeof mod.adoptLegacyReviewRoot).toBe("function");
     expect(typeof mod.providerVisibleMaterialsForRound).toBe("function");
     expect(mod.resetReviewFlow).toBeUndefined();
     expect(mod.recoverReviewProjections).toBeUndefined();
@@ -57,12 +58,75 @@ describe("wh-review production CLI", () => {
     } })).toMatchObject({ draft_spec: "spec.md", response_ledger: materials.response_ledger, previous_review: { result_ref: "reviews/results/prior.json" } });
   });
 
+  it("uses the TaskKernel head when previous_result_ref is omitted and treats a supplied ref only as CAS", async () => {
+    const { reviewFlowIdentity, resolveReviewFlowHead } = await import(cli.href);
+    const identityKernel = {
+      deriveReviewFlowIdentity: (subject) => ({ task_id: "task", workflow_run_id: "run-1", ...subject }),
+    };
+    const identity = reviewFlowIdentity({
+      kernel: identityKernel, assertedWorkflowRunId: "run-1",
+      stage: "build-spec", reviewTrack: null, phaseId: null,
+    });
+    expect(identity).toMatchObject({
+      task_id: "task", workflow_run_id: "run-1", stage: "build-spec", review_track: null,
+      subject_kind: "worktree", phase_id: null, review_scope: null,
+    });
+    expect(() => reviewFlowIdentity({
+      kernel: identityKernel, assertedWorkflowRunId: "forged", stage: "build-spec",
+    })).toThrow(/workflow_run_id|lineage/i);
+    const phaseA = reviewFlowIdentity({
+      kernel: identityKernel, stage: "build-code", phaseId: "phase-1", snapshotTree: "a".repeat(40),
+    });
+    const phaseB = reviewFlowIdentity({
+      kernel: identityKernel, stage: "build-code", phaseId: "phase-1", snapshotTree: "b".repeat(40),
+    });
+    expect(phaseA.snapshot_tree).toBe("a".repeat(40));
+    expect(phaseB.snapshot_tree).toBe("b".repeat(40));
+    expect(phaseA).not.toEqual(phaseB);
+    const ref = "reviews/results/current.json";
+    const result = {
+      version: "wh-review-result.v1", task_id: "task", stage: "build-spec",
+      review_track: null, subject_kind: "worktree", phase_id: null,
+      snapshot_tree: "a".repeat(40), verdict: "pass",
+    };
+    const task = {
+      identity: { taskId: "task" },
+      readRecord: () => `${JSON.stringify(result)}\n`,
+    };
+    const kernel = { readReviewFlow: () => ({ head_result_ref: ref }) };
+    expect(resolveReviewFlowHead({ task, kernel, identity })).toMatchObject({
+      flow: { head_result_ref: ref },
+      prior: { result_ref: ref, verdict: "pass" },
+    });
+    const oldPhaseResult = { ...result, stage: "build-code", subject_kind: "phase", phase_id: "phase-1", review_scope: "phase" };
+    const oldPhaseTask = { identity: { taskId: "task" }, readRecord: () => `${JSON.stringify(oldPhaseResult)}\n` };
+    const newPhaseIdentity = { ...phaseB, review_track: null };
+    expect(resolveReviewFlowHead({
+      task: oldPhaseTask, kernel: { readReviewFlow: () => null }, identity: newPhaseIdentity,
+      previousResultRef: ref,
+    })).toMatchObject({ flow: null, prior: { result_ref: ref, snapshot_tree: "a".repeat(40) } });
+    expect(() => resolveReviewFlowHead({
+      task: oldPhaseTask, kernel: { readReviewFlow: () => null }, identity: phaseA,
+      previousResultRef: ref,
+    })).toThrow(/CAS failed/);
+    expect(() => resolveReviewFlowHead({
+      task, kernel, identity, previousResultRef: "reviews/results/stale.json",
+    })).toThrow(/CAS|stale|head/i);
+  });
+
   it("uses the simple runner and no V4 facade or legacy argv", () => {
     const source = readFileSync(cli, "utf8");
-    expect(source).toContain('new Set(["run", "format-correct", "verify-final"])');
+    expect(source).toContain('new Set(["run", "format-correct", "verify-final", "adopt-legacy-root"])');
     expect(source).toContain("ReviewProviderClient");
     expect(source).toContain("runReview");
     for (const forbidden of ["ReviewRoundFacade", "BrokerClient", "resetReviewFlow", "recoverReviewProjections", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
+  });
+
+  it("forbids caller-reported workflow identity during legacy adoption", async () => {
+    const { adoptLegacyReviewRoot } = await import(cli.href);
+    expect(() => adoptLegacyReviewRoot({
+      workflow_run_id: "forged", result_ref: "reviews/results/root.json",
+    })).toThrow(/workflow_run_id.*forbidden|TaskKernel derives/i);
   });
 
   it("requires an absolute task tracking root before loading host config", async () => {
@@ -206,6 +270,53 @@ describe("wh-review production CLI", () => {
     };
     expect(structuralFullAlreadyRecorded(task, root)).toBe(true);
     expect(selectCanonicalReviewRound({ task, stage: "build-spec", route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] }, previousResult: root, ledger, currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toEqual({ round: "none", reason: "structural_rework_already_reviewed" });
+      .toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
+  });
+
+  it("uses the current flow budget instead of unrelated historical attempts", async () => {
+    const { selectCanonicalReviewRound } = await import(cli.href);
+    const prior = {
+      version: "wh-review-result.v1", task_id: "task", stage: "build-spec",
+      review_track: null, subject_kind: "worktree", phase_id: null,
+      result_ref: "reviews/results/root.json", snapshot_tree: "a".repeat(40),
+      verdict: "pass", adjudication: { clusters: [] },
+    };
+    const ledger = {
+      version: "wh-review-response-ledger.v1",
+      previous_result_ref: prior.result_ref,
+      previous_snapshot_tree: prior.snapshot_tree,
+      current_snapshot_tree: "b".repeat(40),
+      change: {
+        changed_dimensions: ["schema"], rationale: "changed the public schema",
+        evidence_refs: ["evidence/schema.json"],
+      },
+      responses: [],
+    };
+    const task = {
+      listCanonicalReviewResultRefs: () => { throw new Error("must not scan another workflow run"); },
+    };
+    expect(selectCanonicalReviewRound({
+      task, stage: "build-spec",
+      route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] },
+      previousResult: prior, ledger, currentSnapshotTree: ledger.current_snapshot_tree,
+      flow: { structural_full_reviews: 0 },
+    })).toEqual({ round: "full", reason: "structural_rework" });
+  });
+
+  it("treats a prior Phase PASS as lineage for a new snapshot, not as the new flow head", async () => {
+    const { selectCanonicalReviewRound } = await import(cli.href);
+    const prior = {
+      subject_kind: "phase", phase_id: "phase-6", snapshot_tree: "a".repeat(40),
+      verdict: "pass", result_ref: "reviews/results/prior-phase.json",
+    };
+    const route = { mode: "full_only", initial: ["pi/coding"] };
+    expect(selectCanonicalReviewRound({
+      task: {}, stage: "build-code", route, previousResult: prior,
+      currentSnapshotTree: "b".repeat(40), flow: null, ledger: { version: "wh-review-response-ledger.v1" },
+    })).toEqual({ round: "initial", reason: "first_review" });
+    expect(selectCanonicalReviewRound({
+      task: {}, stage: "build-code", route, previousResult: prior,
+      currentSnapshotTree: prior.snapshot_tree, flow: { head_result_ref: prior.result_ref },
+    })).toEqual({ round: "none", reason: "prior_result_passed" });
   });
 });

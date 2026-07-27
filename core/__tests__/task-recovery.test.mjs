@@ -1,6 +1,6 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask } from "../task-handle.mjs";
@@ -53,6 +53,47 @@ function fixture() {
     schema_version: "1.0.0", project_name: "workflowhub", task_id: "recovery-test",
     created_at: "2026-07-25T00:00:00.000Z", target_repo_root: "/target", issue_ids: [], inputs: {},
   } });
+}
+
+function runnerIdentity(suffix) {
+  return {
+    runner_root: `/runner-${suffix}`,
+    runner_oid: suffix.repeat(40).slice(0, 40),
+    runner_branch: "task/workflowhub/recovery-test",
+    project: "workflowhub",
+    task: "recovery-test",
+    stage: "build-code",
+  };
+}
+
+function replacementGeneration(generation, before, after, previous = null) {
+  const value = {
+    schema_version: "workflowhub-recovery-generation.v1",
+    project_name: "workflowhub",
+    task_id: "recovery-test",
+    recovery_kind: "runner-replacement",
+    generation,
+    credential_ref: `identity/recovery-credentials/runner-replacement/generation-${generation}.json`,
+    credential_hash: String(generation).repeat(64).slice(0, 64),
+    before: { ref: "task.json", hash: "a".repeat(64), identity: before },
+    after: { ref: "task.json", hash: "b".repeat(64), identity: after },
+    created_at: `2026-07-25T00:00:0${generation}.000Z`,
+    result: "accepted",
+  };
+  if (previous !== null) {
+    value.previous_generation_ref = previous.ref;
+    value.previous_generation_hash = previous.hash;
+  }
+  return value;
+}
+
+function installGeneration(task, value) {
+  const ref = generationRef("runner-replacement", value.generation);
+  const raw = canonical(value);
+  const path = join(task.taskPath, ref);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, raw);
+  return { ref, raw, hash: sha256(raw), value };
 }
 
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -111,6 +152,46 @@ describe("recovery contracts", () => {
     expect(generationRef("runner-replacement")).toBe("identity/recoveries/runner-replacement-0001.json");
     expect(() => validateRecoveryGeneration({ ...valid, extra: true })).toThrow(/RECOVERY_RECORD_CONFLICT/);
     expect(readRecoveryGeneration(fixture(), "phase-pointer")).toBeNull();
+  });
+
+  it("reads the complete consecutive runner replacement chain and reports the next generation", () => {
+    const task = fixture();
+    const first = installGeneration(task, replacementGeneration(1, runnerIdentity("d"), runnerIdentity("e")));
+    const second = installGeneration(task, replacementGeneration(2, runnerIdentity("e"), runnerIdentity("f"), first));
+
+    expect(validateRecoveryGeneration(second.value)).toBe(second.value);
+    const latest = readRecoveryGeneration(task, "runner-replacement");
+    expect(latest.value.generation).toBe(2);
+    expect(latest.next_generation).toBe(3);
+    expect(latest.history.map(({ ref, hash }) => ({ ref, hash }))).toEqual([
+      { ref: first.ref, hash: first.hash },
+      { ref: second.ref, hash: second.hash },
+    ]);
+  });
+
+  it("rejects a missing generation instead of accepting a later record as a new root", () => {
+    const task = fixture();
+    const missing = {
+      ref: generationRef("runner-replacement", 1),
+      hash: "9".repeat(64),
+    };
+    installGeneration(task, replacementGeneration(2, runnerIdentity("e"), runnerIdentity("f"), missing));
+    expect(() => readRecoveryGeneration(task, "runner-replacement")).toThrow(/RECOVERY_RECORD_CONFLICT.*gap/i);
+  });
+
+  it("rejects a fork whose before identity is not the previous generation after identity", () => {
+    const task = fixture();
+    const first = installGeneration(task, replacementGeneration(1, runnerIdentity("d"), runnerIdentity("e")));
+    installGeneration(task, replacementGeneration(2, runnerIdentity("9"), runnerIdentity("f"), first));
+    expect(() => readRecoveryGeneration(task, "runner-replacement")).toThrow(/RECOVERY_RECORD_CONFLICT.*(?:fork|lineage)/i);
+  });
+
+  it("authenticates every historical generation hash and detects old-record tampering", () => {
+    const task = fixture();
+    const first = installGeneration(task, replacementGeneration(1, runnerIdentity("d"), runnerIdentity("e")));
+    installGeneration(task, replacementGeneration(2, runnerIdentity("e"), runnerIdentity("f"), first));
+    writeFileSync(join(task.taskPath, first.ref), canonical({ ...first.value, created_at: "2026-07-25T00:01:00.000Z" }));
+    expect(() => readRecoveryGeneration(task, "runner-replacement")).toThrow(/RECOVERY_RECORD_CONFLICT.*(?:hash|tamper)/i);
   });
 
   it("keeps the official CLI explicit and documents both commands", () => {

@@ -96,6 +96,21 @@ describe("trusted third-review host configuration", () => {
     });
   });
 
+  it("loads legacy make-decision single_round routes as bounded delta/full semantics", () => {
+    const { hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: {
+      "make-decision": {
+        direction: { initial: ["kimi"], mode: "single_round" },
+        detail: { initial: ["opencode"], mode: "single_round" },
+      },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "make-decision", "direction"))
+      .toMatchObject({ initial: ["kimi"], mode: "full_on_structural_rework" });
+  });
+
   it("counts distinct adapters, while retaining all configured profiles for broker attestation", () => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));

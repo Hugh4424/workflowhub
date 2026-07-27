@@ -16,7 +16,12 @@ verify-code lineage。
 ## Phase 审查必需材料
 
 - `review-instructions.md`：stage、审查问题和输出格式。
-- `source.json`、完整 phase `changes.diff` 与生成的 `change-map.json`。change map 必须绑定 phase_id、base/candidate tree、每个变更文件和每个 hunk 的确定性 ID，是完整的变更文件索引；diff 是本 phase 全部改动的唯一完整代码权威；不得默认附带变更文件全文。
+- `source.json`、`change-map.json`，以及完整 `changes.diff` 或 `diff-index.json` + 选中
+  `diff-shards/`。不超过 320 KiB 时保持完整 diff 交付。超过阈值时，全量 diff 以 hash
+  命名存入 runner canonical archive；index 绑定完整 ref/hash/bytes/lines、全部
+  change/hunk ID、每个 shard 的 hash 和交付状态。代码与合同 shard 必须交付；测试、
+  fixture 和证据 shard 可只保留摘要和 anchor。缺 shard、hash 不符或 change ID 覆盖
+  不全必须在 provider 调用前失败。
 - 已批准 spec 和验收标准。
 - 与当前 `snapshot_tree` 对应的、已由 runner 验证哈希的测试 receipt 引用和结构化测试摘要。完整 receipt 与原始测试日志只留在 canonical storage 追溯，不递归交给 provider。
 - 与本次审查有关的 reviewer 技能文件。
@@ -41,9 +46,15 @@ runner 只从这些 anchors 生成 `context/<id>.txt`：默认 anchor 只能指�
 直接依赖文件。若必须引用变更文件，anchor 必须写非空 `outside_diff_reason`，且声明的
 candidate 行区间不得与任何 unified diff hunk 相交；否则 runner 直接失败，不会静默把
 已在 `changes.diff` 出现的代码再次整段交付。context header 会记录该例外理由。未被 map
-选中的当前文件、间接依赖和原始日志禁止入包。这不是按字节截断：完整 diff 永远保留，
-直接上下文按合同显式选择；provider-facing `packet-plan` 只保留材料类别、选中 anchor 与排除理由，完整文件 byte/hash 清单由 `manifest.json` 提供。不存在大小上限
-或按大小拒绝。
+选中的当前文件、间接依赖和原始日志禁止入包。大 diff 使用可审计的索引交付，不是静默
+截断；`packet-plan.delivery_mode` 必须诚实写 `inline_complete` 或 `selected_context`。
+完整 provider 可见文件 byte/hash 清单由 `manifest.json` 提供。`selected_context` 包含
+Phase 相关 FR/AC/合同摘录、compact maps、测试摘要和 anchors；全文 spec/maps 仅保留
+canonical ref/hash/bytes。总交付超过 330 KiB 时必须在 dispatch 前失败。
+大 Phase 的 full change-map 也只存 canonical audit；provider 版本只保留
+change ID、path、status 和 hunk IDs。`selected_context` 不交付独立
+`context/<anchor>.txt`；context 仅存 canonical audit，`diff-index.anchors` 用
+`anchor_id → shard_id,line` 短引用定位。
 
 `phase_map` 必须覆盖 `change-map.json` 的全部 `change_id`；`impact_map` 也必须
 覆盖全部 change_id。`reuse_map` 和 `acceptance_map` 的每个 entry 必须关联至少一个

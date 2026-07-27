@@ -9,6 +9,8 @@
 - `material_id` 由 WorkflowHub 根据 canonical manifest 计算，绑定全部 provider 可见文件的相对路径、byte size 和 SHA-256；它不包含宿主路径、provider、session、runtime 或时间。
 - 3rd-review 负责附件复制和文件完整性。WorkflowHub 不读取 3rd-review 的 private workspace、`state.json`、raw 文件或内部 attestation。
 - 材料缺失、不可读、传输失败或 hash 不符都不是语义 verdict。
+- Phase 大 diff 可使用 `diff-index.v1`。provider 只能读取 manifest 内的 index、已选
+  shard、摘要和 anchors；材料必须自足完成审查，不存在二次补取或包外工具入口。
 
 ## 3rd-review 公共结果：workflowhub-result.v2
 

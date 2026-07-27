@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createTask } from "../core/task-handle.mjs";
+import { createTaskKernel } from "../core/task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
+import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { loadStageManifest } from "../core/step-manifest.mjs";
 import { writeFormalReviewFixture } from "./helpers/formal-review.mjs";
 
 const roots = [];
@@ -19,6 +22,67 @@ function linkedWorktrees(repo) {
     .filter((line) => line.startsWith("worktree "))
     .map((line) => realpathSync(line.slice("worktree ".length)))
     .filter((path) => path !== realpathSync(repo));
+}
+
+function registerReviewHead(task, resultRef) {
+  const result = JSON.parse(task.readRecord(resultRef));
+  const kernel = createTaskKernel(task);
+  const identity = kernel.deriveReviewFlowIdentity({
+    stage: result.stage,
+    review_track: result.review_track,
+    subject_kind: result.subject_kind,
+    phase_id: result.phase_id,
+    review_scope: result.review_scope,
+  });
+  kernel.advanceReviewFlow(identity, { expected_head_ref: null, result_ref: resultRef });
+}
+
+function prepareOfficialRun(task, stage, reason) {
+  const kernel = createTaskKernel(task);
+  const source = createCanonicalSource({
+    source_type: "offline_fixture",
+    source_id: `${task.manifest.task_id}-${stage}`,
+    revision: "r1",
+    requirements: ["R1"],
+  });
+  const sourceManifest = createSourceManifest({
+    canonical_source: source,
+    atoms: [{
+      requirement_id: "R1",
+      text: "The official make-decision execution must remain auditable.",
+      owner: "product",
+      authority: "test",
+      derived_from: [],
+      supersedes: [],
+      status: "accepted",
+      stale: false,
+    }],
+  }).manifest;
+  kernel.startStageRun(stage, { reason });
+  kernel.publishRequirementsLedger(stage, {
+    source_manifest: sourceManifest,
+    mappings: {
+      R1: {
+        decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+        artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+        acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+      },
+    },
+  });
+  for (const step of loadStageManifest(stage, realpathSync(join(import.meta.dirname, ".."))).steps) {
+    const entry = kernel.writeStageStepEntry(stage, {
+      step_id: step.step_id,
+      attempt_id: "attempt-1",
+      entry_evidence: { kind: "fixture", uri_or_path: `evidence/${stage}-step-${step.step_id}-entry.json` },
+    });
+    kernel.writeStageStepExit(stage, {
+      step_id: step.step_id,
+      attempt_id: "attempt-1",
+      entry_journal_entry_id: entry.journal_entry_id,
+      terminal_status: "success",
+      completion_evidence: { kind: "fixture", uri_or_path: `evidence/${stage}-step-${step.step_id}-exit.json` },
+    });
+  }
 }
 
 describe("official make-decision CLI", () => {
@@ -39,6 +103,8 @@ describe("official make-decision CLI", () => {
     const snapshotTree = String(execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: repo })).trim();
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "detail" });
+    registerReviewHead(task, direction.resultRef);
+    registerReviewHead(task, detail.resultRef);
     const input = join(inputRoot, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
     const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
@@ -54,10 +120,13 @@ describe("official make-decision CLI", () => {
     expect(badInput.stderr).toMatch(/ENOENT|missing\.json/i);
     expect(linkedWorktrees(repo)).toEqual([]);
     const decisionRaw = task.readRecord(decision.receipt_ref);
+    const decisionReceipt = JSON.parse(decisionRaw);
+    expect(task.readRecord(decisionReceipt.decision_ref)).toBe("# Decision\n\nGo.");
+    prepareOfficialRun(task, "make-decision", "official decision CLI execution");
     const result = JSON.parse(invoke(["run", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--input=${input}`]));
     const worktree = realpathSync(`${repo}-decision-task`);
     expect(result.attempt.facts).toMatchObject({
-      decision_ref: "receipts/decision.json", decision_hash: createHash("sha256").update(decisionRaw).digest("hex"),
+      decision_ref: decisionReceipt.decision_ref, decision_hash: decisionReceipt.decision_hash,
       worktree_root: worktree, baseline_commit: head,
     });
     expect(linkedWorktrees(repo)).toEqual([worktree]);
@@ -102,7 +171,10 @@ describe("official make-decision CLI", () => {
     const snapshotTree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "detail" });
+    registerReviewHead(task, direction.resultRef);
+    registerReviewHead(task, detail.resultRef);
     const input = join(inputRoot, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: decision.receipt_ref, direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
+    prepareOfficialRun(task, "make-decision", "official grill-with-docs execution");
     const result = JSON.parse(invoke(["run", "--stage=make-decision", "--project=Demo", "--task=grill-task", `--input=${input}`]));
     expect(result.attempt.facts.snapshot_tree).toMatch(/^[a-f0-9]{40}$/);
     writeFileSync(contextFile, "tampered after publication\n");

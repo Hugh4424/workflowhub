@@ -8,8 +8,9 @@ import { buildIntegrationReviewSubject as buildIntegrationSubjectDefault } from 
 import { buildReviewMaterials as buildMaterialsDefault, derivePhaseAcceptanceTrace, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
-import { validateResponseLedger } from "./review-controller.mjs";
+import { buildClassificationManifest, validateResponseLedger } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
+import { authenticateCanonicalReviewResult } from "../../../core/canonical-review-result.mjs";
 
 const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUABLE_SESSION"]);
 const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
@@ -19,6 +20,7 @@ const providerPrompt = "Read bundle/review-instructions.md and the complete froz
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const localReviewLocks = new Map();
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const ATTEMPT_REF = /^reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 
@@ -500,10 +502,40 @@ function ensureReviewReport(task, reportRef, attempt, result) {
   }
 }
 
-function reusableOutcome(task, identity, bundle) {
+function reusableResults(task, identity) {
+  const candidateResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
+  const invalidatedAttemptRefs = new Set();
+  const results = candidateResults.filter(({ ref, record }) => {
+    const raw = task.readRecord(ref);
+    const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
+    let invalidation;
+    try { invalidation = JSON.parse(task.readRecord(invalidationRef)); }
+    catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw invalidEvidence(`review binding invalidation cannot be read: ${error.message}`);
+    }
+    if (invalidation?.schema_version !== "review-binding-invalidation.v1"
+        || invalidation.status !== "binding_invalid" || invalidation.result_ref !== ref
+        || invalidation.result_hash !== createHash("sha256").update(raw).digest("hex")
+        || invalidation.task_id !== record.task_id || invalidation.stage !== record.stage) {
+      throw invalidEvidence("review binding invalidation does not bind the canonical result");
+    }
+    invalidatedAttemptRefs.add(record.attempt_ref);
+    return false;
+  });
+  return { results, invalidatedAttemptRefs };
+}
+
+function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, claimedUnavailableAttemptRefs = [] } = {}) {
   const { taskId, stage, reviewTrack } = identity;
-  const matchingResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
-  const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+  if (!Array.isArray(claimedUnavailableAttemptRefs)
+      || claimedUnavailableAttemptRefs.some((ref) => !ATTEMPT_REF.test(ref))) {
+    throw new TypeError("claimedUnavailableAttemptRefs must contain canonical review attempt refs");
+  }
+  const claimedUnavailable = new Set(claimedUnavailableAttemptRefs);
+  const { results: matchingResults, invalidatedAttemptRefs } = reusableResults(task, identity);
+  const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+    .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
   if (matchingResults.length > 1) throw invalidEvidence("multiple canonical semantic results exist for the same review identity");
   // Transport failures are immutable evidence, not a permanent ban on another
   // formal review of the same draft. Validate every historical attempt before
@@ -538,43 +570,39 @@ function reusableOutcome(task, identity, bundle) {
         (attempt.review_scope ?? null) !== (result.review_scope ?? null) ||
         attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree ||
         !isDeepStrictEqual(attempt.phase_evidence ?? null, result.phase_evidence ?? null) ||
-        !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) {
+        !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null) ||
+        !isDeepStrictEqual(attempt.classification_manifest ?? null, result.classification_manifest ?? null)) {
       throw invalidEvidence("attempt and result identities differ");
     }
-    const policy = verifiedPolicyForAttempt(attempt, attempt.provider_attempts.map(({ provider }) => provider));
-    const parsed = [];
-    const providers = new Set();
-    const expectedProfiles = new Map((policy?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
-    let chainValid = true;
-    for (const providerResult of result.provider_results) {
-      if (providers.has(providerResult.provider)) { chainValid = false; break; }
-      providers.add(providerResult.provider);
-      const providerAttempt = [...attempt.provider_attempts].reverse().find((entry) => entry.provider === providerResult.provider && entry.status === "completed" && typeof entry.output_ref === "string");
-      if (!providerAttempt) { chainValid = false; break; }
-      if (expectedProfiles.has(providerResult.provider) && !pinnedProfileMatches(expectedProfiles.get(providerResult.provider), providerAttempt.execution)) { chainValid = false; break; }
+    const providerOutputs = [];
+    for (const providerAttempt of attempt.provider_attempts) {
+      if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+      const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
       try {
-        const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
-        if (!providerAttempt.output_ref.startsWith(outputPrefix) || !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) { chainValid = false; break; }
+        if (!providerAttempt.output_ref.startsWith(outputPrefix)
+            || !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) {
+          throw new Error("provider output ref is outside its attempt");
+        }
         const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
         const review = parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined });
-        if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== taskId || output.stage !== stage ||
-            output.attempt_id !== attempt.attempt_id || output.provider !== providerResult.provider ||
-            output.content_hash !== createHash("sha256").update(output.content).digest("hex") || !isDeepStrictEqual(review, providerResult.output)) { chainValid = false; break; }
-        parsed.push({ provider: providerResult.provider, review });
-      } catch { chainValid = false; break; }
+        if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== taskId || output.stage !== stage
+            || output.attempt_id !== attempt.attempt_id || output.provider !== providerAttempt.provider
+            || output.content_hash !== createHash("sha256").update(output.content).digest("hex")) {
+          throw new Error("provider output wrapper is misbound");
+        }
+        providerOutputs.push({ ref: providerAttempt.output_ref, provider: providerAttempt.provider, review });
+      } catch (error) {
+        throw invalidEvidence(`completed provider output is invalid: ${error.message}`);
+      }
     }
-    const aggregation = aggregateProviderResults(evidenceAnchorsFor(parsed, bundle), minimumReviewersForPolicy(policy, attempt.stage, attempt.review_track), { profilePriority: policy?.requested_profiles ?? profilePriorityForAttempt(attempt) });
-    const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-    const expectedFindings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
-    const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
-    const legacyFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
-    const legacyVerdict = expectedProviderResults.some(({ output }) => output.verdict === "revise_required") ? "revise_required" : "pass";
-    if (!chainValid || (result.adjudication === undefined ? legacyVerdict !== result.verdict : (aggregation.status !== "semantic" || aggregation.verdict !== result.verdict)) ||
-        !isDeepStrictEqual(result.provider_results, expectedProviderResults) ||
-        (result.adjudication === undefined
-          ? (result.verdict !== legacyVerdict || !isDeepStrictEqual(result.findings, legacyFindings))
-          : (!isDeepStrictEqual(result.findings, expectedFindings) || !isDeepStrictEqual(result.adjudication, expectedAdjudication)))) {
-      throw invalidEvidence("semantic result does not match its provider evidence and aggregation");
+    try {
+      authenticateCanonicalReviewResult({
+        attempt, result, providerOutputs,
+        fallbackMinimumReviewers: minimumReviewersForAttempt(attempt),
+        assess: (items) => evidenceAnchorsFor(items, bundle),
+      });
+    } catch (error) {
+      throw invalidEvidence(error.message);
     }
     const refs = reviewRefs({ attemptId: attempt.attempt_id, stage: attempt.stage, reviewTrack: attempt.review_track, snapshotTree: attempt.snapshot_tree });
     const hasResultReportRef = result.report_ref !== undefined;
@@ -606,6 +634,22 @@ function reusableOutcome(task, identity, bundle) {
       throw invalidEvidence(`attempt without a semantic result is not unavailable: ${attemptRef}`);
     }
   }
+  if (reuseUnavailable) {
+    const unclaimed = matchingAttempts.filter(({ ref, record }) =>
+      record.terminal_status === "unavailable" && !claimedUnavailable.has(ref));
+    if (unclaimed.length > 1) throw invalidEvidence("multiple unclaimed unavailable attempts exist for the same review identity");
+    if (unclaimed.length === 1) {
+      const { ref: attemptRef, record: attempt } = unclaimed[0];
+      const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
+      return {
+        status: "unavailable", verdict: null, attemptRef, resultRef: null,
+        reportRef: attempt.report_ref ?? null, snapshotTree: attempt.snapshot_tree,
+        materialId: attempt.material_id, runtimeIds, subjectKind: attempt.subject_kind,
+        phaseId: attempt.phase_id, reviewScope: attempt.review_scope ?? null,
+        baseTree: attempt.base_tree, candidateTree: attempt.candidate_tree, reused: true,
+      };
+    }
+  }
   return null;
 }
 
@@ -615,7 +659,9 @@ function unavailableDispatchSequence(task, identity) {
   // managed request ID; otherwise the broker can only replay the old terminal
   // cancellation forever. Revalidate every matching attempt before deriving
   // this sequence, so a damaged record never changes dispatch identity.
-  const attempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+  const { invalidatedAttemptRefs } = reusableResults(task, identity);
+  const attempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+    .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
   for (const item of attempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
     if (item.record.terminal_status !== "unavailable") throw invalidEvidence(`attempt without a semantic result is not unavailable: ${item.ref}`);
@@ -943,7 +989,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed });
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -972,7 +1018,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   const source = phaseId
     ? capturePhaseSource({ sourceRoot, task: taskHandle, phaseId, reviewDataRoot: attachmentRoot })
     : captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: !(stage === "build-code") });
-  let integrationSubject; let subject; let chain; let bundle; let phaseAcceptanceTrace;
+  let integrationSubject; let subject; let chain; let bundle; let phaseAcceptanceTrace; let classificationManifest;
   try {
     const isIntegration = stage === "build-code" && phaseId === null;
     // A production final build-code review is an integration review, not a
@@ -997,6 +1043,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
       ...(integrationSubject ? integrationMaterialFacts(integrationSubject) : {}),
       review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveReviewRound, subject.review_scope),
     };
+    classificationManifest = buildClassificationManifest(fixedMaterials);
     phaseAcceptanceTrace = subject.review_scope === "phase"
       ? derivePhaseAcceptanceTrace({ source, phaseId, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2" })
       : null;
@@ -1022,7 +1069,8 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   }
   const lockRef = reviewLockRef({ stage, reviewTrack, reviewScope: subject.review_scope, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain });
   const identity = { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain };
-  const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle)));
+  const reuseOptions = { reuseUnavailable, claimedUnavailableAttemptRefs };
+  const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle, reuseOptions)));
   const existing = await reusable();
   if (existing) return existing;
   const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
@@ -1038,7 +1086,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
     allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
   }), policy);
   return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
-    const reused = reusableOutcome(taskHandle, identity, bundle);
+    const reused = reusableOutcome(taskHandle, identity, bundle, reuseOptions);
     if (reused) return reused;
     const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
     const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
@@ -1062,6 +1110,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
       error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` },
       ...(policy ? { review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"), coverage } : {}),
       ...(chain ? { review_chain: chain } : {}),
+      ...(classificationManifest ? { classification_manifest: classificationManifest } : {}),
       ...(phaseAcceptanceTrace ? { phase_ac_trace: phaseAcceptanceTrace } : {})
     };
     validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
@@ -1077,6 +1126,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
       verdict: aggregation.verdict, findings,
       adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
       ...(chain ? { review_chain: chain } : {}),
+      ...(classificationManifest ? { classification_manifest: classificationManifest } : {}),
     };
     validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
     return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };

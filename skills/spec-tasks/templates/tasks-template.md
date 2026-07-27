@@ -1,192 +1,142 @@
-# Tasks: {task-id}
+# Tasks：{task-name}
 
-**Input**: Design documents supplied as frozen named artifacts
-**Prerequisites**: spec.md (authoritative, 3rd-reviewed), plan.md
-<!-- 生成时替换 {task-id} 为实际的 task-id 字面量 -->
+**Input**：受控命名产物 `spec.md`、`plan.md`
+**Status**：Draft
 
-**Tests**: <!-- 测试说明，如 "Vitest (`npm test`)" -->
-
-**Organization**: Tasks grouped by user story to enable independent implementation and testing of each story.
+> 生成时替换花括号内容并删除说明注释。任务按依赖排序，不按文件类型堆叠。
+> `[P]` 表示输入和文件所有权都独立、可真实并行；仅名称不同不算并行。
+> 每个 task 的 `FR:` / `FR` 字段必须映射 accepted FR，并同时列出 AC。
 
 ## Global Constraints
 
-<!-- 从 plan.md 原样继承，不改写。 -->
+- {从 accepted plan 原样继承范围、依赖、命名、兼容性和测试红线}
+- 行为改动必须先有真实 RED，再做 GREEN。
+- 命令必须可执行；display 输出不能充当判定结果。
+- 文件必须是精确路径，不使用通配符。
 
-## Format: `- [ ] [TaskID] [P?] [Story] Description`
+## Phase 1：{phase-name}
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (US1, US2, etc.)
-- Include exact file paths in descriptions
-- Every task references at least one FR from spec.md
+### Goal
 
-## Path Conventions
+{本 Phase 完成后可独立观察和验证的行为}
 
-- **Workflow skills**: `workflows/<skill-name>/SKILL.md`
-- **Templates**: `workflows/<skill-name>/templates/`
-- **Registry**: `reuse-registry.md`
-- **Artifacts**: managed by the parent StageContext ArtifactDir
-- **Constitution**: `constitution-checklist.md`, `CONSTITUTION.md`
+### Files
 
----
+- **NEW**：`{exact path}`
+- **MODIFY**：`{exact path}`
+- **DO NOT TOUCH**：`{exact protected path}`
 
-## Phase 1: Setup (Shared Infrastructure)
+### Tasks
 
-**Purpose**: Project initialization and scaffold
+#### T001 — {short action title}
 
-- [ ] T001 Create ... FR: <!-- FR 映射 -->
-- [ ] T002 [P] Create ... FR: <!-- FR 映射 -->
+- **ID**：T001
+- **动作**：{单一、可执行动作；行为改动的首项是 RED}
+- **精确文件**：`{exact path}`、`{exact path}`
+- **输入**：{accepted artifact section, anchor, prior task output}
+- **输出**：{artifact, behavior, or evidence}
+- **依赖**：{earlier task IDs or `None — first task in this Phase`}
+- **并行**：{是/否；说明文件和输入为何独立}
+- **FR**：{valid FR IDs}
+- **AC**：{valid AC IDs}
+- **gate_cmd**：`{verified executable command}`
+- **expected_exit**：{0 or non-zero}
+- **oracle**：{可观察的成功或预期失败信号}
+- **evidence_path**：`apply/evidence/{stable-name}.stdout`、`apply/evidence/{stable-name}.stderr`
 
----
+#### T002 — {short action title}
 
-## Phase 2: Foundational (Blocking Prerequisites)
+- **ID**：T002
+- **动作**：{使 T001 的同一行为 oracle 变绿}
+- **精确文件**：`{exact path}`
+- **输入**：T001 RED fixture 和 {accepted anchors}
+- **输出**：{GREEN behavior}
+- **依赖**：T001
+- **并行**：否；消费 T001 输出
+- **FR**：{valid FR IDs}
+- **AC**：{valid AC IDs}
+- **gate_cmd**：`{same narrow behavioral command}`
+- **expected_exit**：0
+- **oracle**：{正例通过，反例仍失败}
+- **evidence_path**：`apply/evidence/{stable-name}.stdout`
 
-**Purpose**: Core files that ALL downstream phases depend on
+> Repeat the complete 13-field block for every task. A field may say `None`
+> only with a task-specific reason.
 
-- [ ] T003 Create ... FR: <!-- FR 映射 -->
-- [ ] T004 [P] Create ... FR: <!-- FR 映射 -->
+### Verify
 
-**Checkpoint**: <!-- 此阶段完成后的检查点说明 -->
+- **Target**：{FR / AC / invariant}
+- **gate_cmd**：`{verified executable command}`
+- **expected_exit**：{0 or non-zero}
+- **evidence_path**：`apply/evidence/{stable-name}`
+- **display_cmd**：`{optional summary-only command}`
+- **Oracle**：{observable result}
 
----
+### Knowledge
 
-## Phase 3: User Story 1 — [Story Name] (Priority: P1)
+- {verified interface, source, or repository fact used by this Phase}
+- {if none: `None — deterministic local contract; no external fact is needed`}
 
-**Goal**: <!-- 本用户故事的目标 -->
+### STOP
 
-**Independent Test**: <!-- 如何独立测试本用户故事 -->
+- {RED cannot be reproduced}
+- {GREEN would require weakening the accepted test}
+- {an undeclared file, dependency, interface, or architecture choice is required}
+- {an irreversible or user-authority decision appears}
 
-**FR Coverage**: <!-- 覆盖的 FR 列表 -->
+### Done
 
-**Files**: <!-- 精确 create/modify/test 路径 -->
+- {exact behavior and artifacts}
+- {RED/GREEN evidence and remaining boundary}
 
-**Interfaces**:
+### Risks and rollback
 
-- Consumes: <!-- 精确签名/schema -->
-- Produces: <!-- 精确签名/schema -->
+- **Risk**：{risk}
+- **Prevention**：{prevention}
+- **Rollback / recovery**：{smallest recoverable action}
 
-**Knowledge**: <!-- 已核实外部事实/文档；无则 None -->
+> Repeat the full Phase block for each accepted plan Phase.
 
-**STOP**: <!-- 人工或不可逆边界；无则 None -->
+### Phase naming examples
 
-### Implementation for User Story 1
+按实际 plan 命名，不强制凑阶段；常见结构可写为 `## Phase 1: Setup`、
+`## Phase 2: Foundational`、`## Phase 3: User Story`，最后按需使用
+`Polish / Cross-Cutting`。这些只是命名示例，不能替代完整八段或制造空阶段。
 
-- [ ] T005 [US1] Create ... FR: <!-- FR 映射 -->
-- [ ] T006 [US1] Verify ... FR: <!-- FR 映射 -->
+## Dependency Graph
 
-**Verify**: <!-- 精确命令 + 预期 RED/GREEN 信号 -->
+```text
+T001 → T002
+T001 → T003
+T002 + T003 → T004
+```
 
-**Gate**: <!-- 门禁条件 -->
+- Parallel tasks must have independent inputs and file ownership.
+- Every dependency exists, is ordered before its consumer, and the graph is acyclic.
 
----
+## Bidirectional FR / Task / AC Traceability
 
-## Phase 4: User Story 2 — [Story Name] (Priority: P1/P2)
+| FR | Task IDs | AC IDs | Phase | Gate evidence |
+|---|---|---|---|---|
+| {FR-ID} | {T-IDs} | {AC-IDs} | {Phase} | {evidence refs} |
 
-**Goal**: <!-- 同上 -->
+Checks:
 
-**Independent Test**: <!-- 同上 -->
+- every accepted FR appears at least once;
+- every task references valid FR and AC IDs;
+- every AC claimed by the plan has an implementing task;
+- there are no orphan requirements, tasks, acceptance criteria, or duplicate IDs.
 
-**FR Coverage**: <!-- 同上 -->
+## Final Boundary Check
 
-### Implementation for User Story 2
+- [ ] Every Phase has Goal/Files/Tasks/Verify/Knowledge/STOP/Done/Risks and rollback.
+- [ ] Every task has all 13 fields.
+- [ ] Every behavior change has RED before GREEN.
+- [ ] Every gate is an executable narrow command with an explicit oracle.
+- [ ] The DAG and FR/task/AC mappings are complete.
+- [ ] No host identity, fixed artifact root, unrelated project rule, or undeclared file entered the tasks.
 
-- [ ] T007 [US2] Create ... FR: <!-- FR 映射 -->
-- [ ] T008 [P] [US2] Verify ... FR: <!-- FR 映射 -->
+## Imported Stage syntax compatibility
 
-**Gate**: <!-- 门禁条件 -->
-
----
-
-<!-- 按需补充更多 User Story Phase：Phase 5, Phase 6, ... -->
-
----
-
-## Phase N: Polish & Cross-Cutting Concerns
-
-**Purpose**: Final verification, cleanup, and scope boundary checks
-
-- [ ] T020 [P] Verify scope boundary: ... FR: <!-- FR 映射 -->
-- [ ] T021 [P] Run full test suite: ... FR: <!-- FR 映射 -->
-
----
-
-## Dependencies & Execution Order
-
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies — can start immediately
-- **Foundational (Phase 2)**: Depends on Setup (Phase 1)
-- **User Story 1 (Phase 3)**: Depends on Foundational (Phase 2)
-- **User Story 2 (Phase 4)**: Depends on Foundational (Phase 2)
-- **Polish (Phase N)**: Depends on all prior phases complete
-
-### User Story Dependencies
-
-- **US1 (P1)**: Can start after Foundational
-- **US2 (P1/P2)**: Can start after Foundational — independent of US1
-
-### Parallel Opportunities
-
-- Tasks marked **[P]** can run in parallel
-- Independent user stories can be implemented concurrently after Foundational
-
-### Within Each User Story
-
-- SKILL.md creation before verification tasks
-- Contract verification tasks can run after SKILL.md is written
-
----
-
-## Implementation Strategy
-
-### MVP First
-
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational
-3. Complete the highest-priority User Story
-4. **STOP and VALIDATE**: Independent test passes
-5. Minimal viable: core functionality works
-
-### Incremental Delivery
-
-1. Setup + Foundational -> shared infrastructure ready
-2. Add US1 -> first capability
-3. Add US2 -> second capability (can parallel with US1)
-4. Polish -> final verification
-
----
-
-## Notes
-
-- [P] tasks = different files, no dependencies
-- [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- Every task references at least one FR from spec.md (FR column or inline)
-- Do NOT touch scope-red-line files listed in the plan
-
----
-
-## Stage Block Syntax
-
-<!--
-  当 spec-tasks 被调用时传入 `--stage N` 参数（N >= 1），tasks.md 可选产出阶段分块。
-  每个阶段以 `## Stage N` 二级标题起块，块内任务标注所属阶段和依赖关系。
-
-  示例：
-
-  ## Stage 1
-
-  - [ ] T001 Create directory structure... (stage:1, depends:无)
-
-  ## Stage 2
-
-  - [ ] T002 Create core template file... (stage:2, depends:T001)
-  - [ ] T003 [P] Create another file... (stage:2, depends:T001)
-
-  约束规则（FR-MIG-003）：
-  - N 为正整数，阶段序号从 1 连续递增，不跳跃
-  - 每个任务必须标注 `(stage:N, depends:<task-ids>)` 格式
-  - depends 中被依赖的任务必须存在，且其 stage <= 当前任务 stage
-  - 实际阶段块数不得大于 N，依赖深度不足时块数可小于 N（不强制凑齐 N 块）
-  - 未传入 `--stage` 参数时，不输出 `## Stage N` 阶段块标题，但仍按依赖排序
-  - 同阶段内任务可并行
--->
+历史输入若使用 `## Stage N` 和 `(stage:N, depends:T001,T002)`，导入器只能把它正规化为
+上面的 Phase、13 字段和 DAG；新模板不靠 Stage 注解表达身份，也不得保留两套依赖真相。

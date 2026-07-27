@@ -25,6 +25,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
 import { inspectRunnerIdentity } from "./runner-identity.mjs";
 import { buildTaskKernel } from "./task-kernel-implementation.mjs";
+import { canonical } from "./canonical-utils.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
   "status", "stage_map", "updated_at", "lock", "worktree", "worktree_root",
@@ -34,6 +35,7 @@ const TASK_HANDLES = new WeakSet();
 const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
+const STAGE_CONTENT_POINTER_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const RUNNER_ROOT_MIGRATORS = new WeakMap();
 const RECOVERY_CREDENTIAL_WRITERS = new WeakMap();
@@ -41,6 +43,8 @@ const RECOVERY_MANIFEST_REPLACERS = new WeakMap();
 const RECOVERY_POINTER_REPLACERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_WRITERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS = new WeakMap();
+const INVOCATION_IDENTITY_WRITERS = new WeakMap();
+const INVOCATION_MODE_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -84,10 +88,22 @@ function validateManifest(manifest) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
+  if (manifest.execution_mode !== undefined && manifest.execution_mode !== "per_invocation") {
+    throw new TypeError('task manifest execution_mode must be "per_invocation" when present');
+  }
+  if (manifest.execution_mode === "per_invocation" && manifest.execution_mode_migration !== undefined) {
+    assertPlainObject(manifest.execution_mode_migration, "task manifest execution_mode_migration");
+    if (!/^identity\/migrations\/per-invocation\/[a-f0-9]{64}\.json$/.test(manifest.execution_mode_migration.ref ?? "")
+      || !HASH.test(manifest.execution_mode_migration.integrity_hash ?? "")) {
+      throw new TypeError("task manifest execution_mode_migration is invalid");
+    }
+  } else if (manifest.execution_mode_migration !== undefined) {
+    throw new TypeError("task manifest execution_mode_migration requires per_invocation mode");
+  }
   const hasRunnerRoot = Object.prototype.hasOwnProperty.call(manifest, "runner_root");
   const hasRunnerOid = Object.prototype.hasOwnProperty.call(manifest, "runner_oid");
   const hasRunnerMigration = Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration");
-  if (hasRunnerRoot !== hasRunnerOid || hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root, runner_oid, and runner_root_migration must be present together");
+  if (hasRunnerRoot !== hasRunnerOid || (manifest.execution_mode !== "per_invocation" && hasRunnerRoot !== hasRunnerMigration)) throw new TypeError("task manifest runner_root, runner_oid, and runner_root_migration must be present together");
   if (hasRunnerRoot) {
     if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) throw new TypeError("task manifest runner_root must be an absolute path");
     if (!/^[a-f0-9]{40}$/.test(manifest.runner_oid ?? "")) throw new TypeError("task manifest runner_oid must be a full Git commit OID");
@@ -178,6 +194,20 @@ function validateTargetRepoRootMigration(task, manifest) {
 }
 
 function validateRunnerRootMigration(task, manifest, manifestRaw) {
+  let unboundPerInvocation = false;
+  if (manifest.execution_mode === "per_invocation" && manifest.execution_mode_migration) {
+    const unbindingRaw = task.readRecord(manifest.execution_mode_migration.ref);
+    if (sha256(unbindingRaw) !== manifest.execution_mode_migration.integrity_hash) throw new Error("per-invocation migration integrity hash mismatch");
+    const unbinding = JSON.parse(unbindingRaw);
+    manifest = unbinding.previous_manifest;
+    manifestRaw = `${JSON.stringify(manifest, null, 2)}\n`;
+    if (sha256(manifestRaw) !== unbinding.previous_manifest_hash) throw new Error("per-invocation migration previous manifest hash mismatch");
+    // The old runner lineage remains readable audit history only. It is no
+    // longer the task's identity authority, so do not require its legacy
+    // current-manifest hash to match the post-unbinding manifest.
+    unboundPerInvocation = true;
+  }
+  if (unboundPerInvocation) return;
   const pointer = manifest.runner_root_migration;
   if (!pointer) return;
   const raw = task.readRecord(pointer.ref);
@@ -190,18 +220,80 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
       record.task_id !== task.identity.taskId || !HASH.test(record.previous_manifest_hash ?? "") || !HASH.test(record.new_manifest_hash ?? "")) {
     throw new Error("runner root migration record is invalid");
   }
+  if (unboundPerInvocation) return;
   const identity = record.runner_identity;
   const identityKeys = new Set(["runner_root", "runner_oid", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
   let expectedRunnerRoot = manifest.runner_root;
   let expectedRunnerOid = manifest.runner_oid;
   if (manifest.runner_replacement) {
     try {
-      const replacementRaw = task.readRecord(manifest.runner_replacement.ref);
-      if (sha256(replacementRaw) !== manifest.runner_replacement.integrity_hash) throw new Error("runner replacement generation integrity mismatch");
-      const replacement = JSON.parse(replacementRaw);
-      expectedRunnerRoot = replacement.before?.identity?.runner_root;
-      expectedRunnerOid = replacement.before?.identity?.runner_oid;
-      if (replacement.after?.identity?.runner_root !== manifest.runner_root || replacement.after?.identity?.runner_oid !== manifest.runner_oid) throw new Error("runner replacement current identity mismatch");
+      const latestMatch = /^identity\/recoveries\/runner-replacement-([0-9]{4})\.json$/.exec(manifest.runner_replacement.ref);
+      const latestGeneration = Number.parseInt(latestMatch?.[1] ?? "", 10);
+      if (!Number.isSafeInteger(latestGeneration) || latestGeneration < 1) throw new Error("runner replacement generation pointer is invalid");
+      const recoveriesRoot = resolve(task.taskPath, "identity", "recoveries");
+      const listed = existsSync(recoveriesRoot)
+        ? readdirSync(recoveriesRoot, { withFileTypes: true })
+          .filter((entry) => /^runner-replacement-[0-9]{4}\.json$/.test(entry.name))
+          .map((entry) => {
+            const candidate = resolve(recoveriesRoot, entry.name);
+            const stat = lstatSync(candidate);
+            if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) throw new Error("runner replacement generation must be a regular file");
+            return `identity/recoveries/${entry.name}`;
+          })
+          .sort()
+        : [];
+      if (listed.length !== latestGeneration) throw new Error("runner replacement lineage contains a gap or unpointed fork");
+      let previous = null;
+      const credentials = new Set();
+      for (let generation = 1; generation <= latestGeneration; generation += 1) {
+        const ref = `identity/recoveries/runner-replacement-${String(generation).padStart(4, "0")}.json`;
+        if (listed[generation - 1] !== ref) throw new Error("runner replacement lineage is not consecutive");
+        const replacementRaw = task.readRecord(ref);
+        const replacementHash = sha256(replacementRaw);
+        const replacement = JSON.parse(replacementRaw);
+        if (replacement.schema_version !== "workflowhub-recovery-generation.v1"
+            || replacement.recovery_kind !== "runner-replacement"
+            || replacement.project_name !== task.identity.projectName
+            || replacement.task_id !== task.identity.taskId
+            || replacement.generation !== generation
+            || replacement.before?.ref !== "task.json" || replacement.after?.ref !== "task.json"
+            || !replacement.before?.identity || !replacement.after?.identity) {
+          throw new Error("runner replacement generation is invalid");
+        }
+        if (credentials.has(replacement.credential_ref)) throw new Error("runner replacement credential is reused");
+        credentials.add(replacement.credential_ref);
+        if (generation === 1) {
+          if (replacement.previous_generation_ref !== undefined || replacement.previous_generation_hash !== undefined) {
+            throw new Error("runner replacement generation 1 has a previous pointer");
+          }
+          expectedRunnerRoot = replacement.before.identity.runner_root;
+          expectedRunnerOid = replacement.before.identity.runner_oid;
+        } else if (replacement.previous_generation_ref !== previous.ref
+            || replacement.previous_generation_hash !== previous.hash
+            || JSON.stringify(replacement.before.identity) !== JSON.stringify(previous.value.after.identity)) {
+          throw new Error("runner replacement lineage fork or historical hash mismatch");
+        }
+        const archiveRef = `identity/recovery-archives/runner-manifest-${replacement.before.hash}.json`;
+        const archiveRaw = task.readRecord(archiveRef);
+        if (sha256(archiveRaw) !== replacement.before.hash) throw new Error("runner replacement manifest archive hash mismatch");
+        const archive = JSON.parse(archiveRaw);
+        if (archive.runner_root !== replacement.before.identity.runner_root
+            || archive.runner_oid !== replacement.before.identity.runner_oid
+            || (generation === 1 && archive.runner_replacement !== undefined)
+            || (generation > 1 && (archive.runner_replacement?.ref !== previous.ref
+              || archive.runner_replacement?.integrity_hash !== previous.hash
+              || normalizedRunnerReplacementManifestHash(archive) !== previous.value.after.hash))) {
+          throw new Error("runner replacement archived manifest does not bind the previous generation");
+        }
+        previous = { ref, hash: replacementHash, value: replacement };
+      }
+      if (previous.ref !== manifest.runner_replacement.ref
+          || previous.hash !== manifest.runner_replacement.integrity_hash
+          || previous.value.after.identity.runner_root !== manifest.runner_root
+          || previous.value.after.identity.runner_oid !== manifest.runner_oid
+          || normalizedRunnerReplacementManifestHash(manifest) !== previous.value.after.hash) {
+        throw new Error("runner replacement current manifest pointer or identity mismatch");
+      }
     } catch (error) { throw new Error(`runner replacement lineage is invalid: ${error.message}`); }
   }
   if (!identity || typeof identity !== "object" || Array.isArray(identity) || Object.keys(identity).some((key) => !identityKeys.has(key)) ||
@@ -243,6 +335,28 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
   delete previousManifest.runner_replacement;
   const reconstructedPreviousRaw = `${JSON.stringify(previousManifest, null, 2)}\n`;
   if (sha256(reconstructedPreviousRaw) !== record.previous_manifest_hash) throw new Error("runner root migration previous manifest hash mismatch");
+}
+
+function validateInvocationModeMigration(task, manifest) {
+  const pointer = manifest.execution_mode_migration;
+  if (!pointer) return;
+  const raw = task.readRecord(pointer.ref);
+  if (sha256(raw) !== pointer.integrity_hash) throw new Error("per-invocation migration integrity hash mismatch");
+  const record = JSON.parse(raw);
+  if (record?.schema_version !== "workflowhub-runner-unbinding-migration.v1"
+    || record.project_name !== task.identity.projectName
+    || record.task_id !== task.identity.taskId
+    || !HASH.test(record.previous_manifest_hash ?? "")
+    || typeof record.legacy_runner !== "object"
+    || !Number.isFinite(Date.parse(record.migrated_at))) {
+    throw new Error("per-invocation migration record is invalid");
+  }
+}
+
+function normalizedRunnerReplacementManifestHash(value) {
+  const copy = structuredClone(value);
+  if (copy.runner_replacement) copy.runner_replacement.integrity_hash = "";
+  return sha256(canonical(copy));
 }
 
 function expectedIdentity(expected = {}, expectedTaskId) {
@@ -493,7 +607,8 @@ function relativeSegments(relativePath, label) {
 
 function assertPublicRecordWritable(relativePath) {
   if (/^identity\//.test(relativePath)) throw new Error(`record is identity-owned and cannot be written through TaskHandle: ${relativePath}`);
-  if (relativePath === "task.json" || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)\.json$/.test(relativePath) || /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/.test(relativePath) || /^confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}\.json$/.test(relativePath)) {
+  if (/^runs\//.test(relativePath)) throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
+  if (relativePath === "task.json" || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)\.json$/.test(relativePath) || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}\.json$/.test(relativePath) || /^results\/build-code\/revisions\/(?:reopen-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)\.json$/.test(relativePath) || /^confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}\.json$/.test(relativePath)) {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
   if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
@@ -686,6 +801,35 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate one append-only recovery generation namespace in sequence order. */
+    listRecoveryGenerationRefs(kind) {
+      if (!new Set(["runner-replacement", "phase-pointer"]).has(kind)) throw new TypeError("unsupported recovery generation kind");
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const identityRoot = resolve(realTaskPath, "identity");
+      const recoveriesRoot = resolve(identityRoot, "recoveries");
+      assertInside(realTaskPath, identityRoot, "identity directory");
+      assertInside(realTaskPath, recoveriesRoot, "recovery generations directory");
+      if (!existsSync(recoveriesRoot)) return Object.freeze([]);
+      const identitySnapshot = directorySnapshot(realTaskPath, identityRoot);
+      const recoveriesSnapshot = directorySnapshot(realTaskPath, recoveriesRoot);
+      const pattern = new RegExp(`^${kind}-[0-9]{4}\\.json$`);
+      const refs = readdirSync(recoveriesRoot, { withFileTypes: true })
+        .filter((entry) => pattern.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(recoveriesRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) {
+            throw new Error(`recovery generation must be a regular non-symlink file: ${entry.name}`);
+          }
+          return `identity/recoveries/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(recoveriesSnapshot);
+      verifyDirectorySnapshot(identitySnapshot);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate only canonical wh-review result records. */
     listCanonicalReviewResultRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -709,6 +853,35 @@ function makeTaskHandle(taskPath, manifest) {
         })
         .sort((left, right) => left.localeCompare(right));
       verifyDirectorySnapshot(resultsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate one TaskKernel-owned append-only review-flow event stream. */
+    listCanonicalReviewFlowEventRefs(flowId) {
+      if (typeof flowId !== "string" || !/^[a-f0-9]{64}$/.test(flowId)) throw new TypeError("review flow id must be sha256");
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const flowsRoot = resolve(reviewsRoot, "flows");
+      const flowRoot = resolve(flowsRoot, flowId);
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, flowsRoot, "review flows directory");
+      assertInside(realTaskPath, flowRoot, "review flow directory");
+      if (!existsSync(flowRoot)) return Object.freeze([]);
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const flowsIdentity = directorySnapshot(realTaskPath, flowsRoot);
+      const flowIdentity = directorySnapshot(realTaskPath, flowRoot);
+      const refs = readdirSync(flowRoot, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(flowRoot, entry.name);
+        const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile() || !/^event-[0-9]{4}\.json$/.test(entry.name)) {
+          throw new Error(`canonical review flow event must be a regular numbered JSON file: ${entry.name}`);
+        }
+        return `reviews/flows/${flowId}/${entry.name}`;
+      }).sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(flowIdentity);
+      verifyDirectorySnapshot(flowsIdentity);
       verifyDirectorySnapshot(reviewsIdentity);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
@@ -922,6 +1095,11 @@ function makeTaskHandle(taskPath, manifest) {
       if (typeof writer !== "function") throw new TypeError("authentic phase trace lineage supersession writer required");
       return writer(relativePath, data);
     },
+    createInvocationIdentityRecord(relativePath, data) {
+      const writer = INVOCATION_IDENTITY_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic invocation identity writer required");
+      return writer(relativePath, data);
+    },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical attempts/accepted records only through TaskKernel.
     withRecordLock(relativePath, operation, options) {
@@ -954,7 +1132,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}|results\/build-code\/revisions\/(?:reopen-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:run-[0-9]{4}\.json|invalidations\/[a-f0-9]{64}\.json|journal-invalidations\/[a-f0-9]{64}\.json)|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
@@ -975,6 +1153,30 @@ function makeTaskHandle(taskPath, manifest) {
     if (typeof data !== "string" || data.length === 0) throw new TypeError("phase trace lineage supersession data is required");
     verifyDirectoryIdentity(taskRootIdentity, "task root"); verifyManifest();
     return createOnlyAt(realTaskPath, relativePath, data);
+  });
+  INVOCATION_IDENTITY_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/executions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$/.test(relativePath ?? "")) {
+      throw new Error("invocation identity path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("invocation identity data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    return createOnlyAt(realTaskPath, relativePath, data);
+  });
+  INVOCATION_MODE_MIGRATORS.set(frozen, ({ previousManifestRaw, manifestRaw, recordRef, recordRaw, testHooks } = {}) => {
+    if (!/^identity\/migrations\/per-invocation\/[a-f0-9]{64}\.json$/.test(recordRef ?? "")) throw new Error("per-invocation migration record path is invalid");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    createOnlyAt(realTaskPath, recordRef, recordRaw);
+    try {
+      writeAtomicAt(realTaskPath, "task.json", manifestRaw, {
+        expectedPriorRaw: previousManifestRaw,
+        validator: testHooks?.validateManifestReplace,
+      });
+    } catch (error) {
+      try { unlinkSync(resolveRecord(realTaskPath, recordRef).candidate); } catch {}
+      throw error;
+    }
   });
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -1030,6 +1232,17 @@ function makeTaskHandle(taskPath, manifest) {
       throw error;
     }
     return result;
+  });
+  STAGE_CONTENT_POINTER_REPLACERS.set(frozen, (relativePath, data, options = {}) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    if (!/^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.latest\.json$/.test(relativePath ?? "")) {
+      throw new Error("stage content latest pointer path is invalid");
+    }
+    if (typeof options.validator !== "function" || typeof options.expectedPriorRaw !== "string") {
+      throw new Error("stage content latest pointer replacement requires CAS binding");
+    }
+    return writeAtomicAt(realTaskPath, relativePath, data, options);
   });
   TARGET_REPO_ROOT_MIGRATORS.set(frozen, ({ recordRef, recordRaw, manifestRaw, testHooks } = {}) => {
     if (!TARGET_REPO_ROOT_MIGRATION_REF.test(recordRef ?? "")) throw new Error("target repository migration record path is invalid");
@@ -1180,6 +1393,50 @@ export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) 
   return openTask(derived, identity);
 }
 
+/** One-way CAS migration from the readable legacy pinned-runner manifest. */
+export function migrateTaskToPerInvocation({ taskPath, projectName, taskId, expectedManifestHash, now = () => new Date().toISOString(), testHooks } = {}) {
+  const task = openTask(taskPath, projectName, taskId);
+  if (task.manifest.execution_mode === "per_invocation") {
+    const ref = task.manifest.execution_mode_migration?.ref;
+    if (!ref) throw new Error("per-invocation task has no migration record");
+    const value = JSON.parse(task.readRecord(ref));
+    if (expectedManifestHash !== value.previous_manifest_hash) throw new Error("per-invocation migration manifest CAS mismatch");
+    return Object.freeze({ ...value, migration_ref: ref });
+  }
+  const previousManifestRaw = task.readRecord("task.json");
+  const previousManifestHash = sha256(previousManifestRaw);
+  if (!HASH.test(expectedManifestHash ?? "") || expectedManifestHash !== previousManifestHash) {
+    throw new Error("per-invocation migration manifest CAS mismatch");
+  }
+  const previous = JSON.parse(previousManifestRaw);
+  const legacy = {
+    runner_root: previous.runner_root,
+    runner_oid: previous.runner_oid,
+    runner_root_migration: previous.runner_root_migration,
+    runner_replacement: previous.runner_replacement,
+  };
+  const record = {
+    schema_version: "workflowhub-runner-unbinding-migration.v1",
+    project_name: task.identity.projectName,
+    task_id: task.identity.taskId,
+    previous_manifest_hash: previousManifestHash,
+    previous_manifest: previous,
+    legacy_runner: legacy,
+    migrated_at: now(),
+    status: "migrated",
+  };
+  const recordRaw = `${canonical(record)}\n`;
+  const recordRef = `identity/migrations/per-invocation/${sha256(recordRaw)}.json`;
+  const next = { ...previous, execution_mode: "per_invocation", execution_mode_migration: { ref: recordRef, integrity_hash: sha256(recordRaw) } };
+  delete next.runner_root;
+  delete next.runner_oid;
+  delete next.runner_replacement;
+  const manifestRaw = `${canonical(next)}\n`;
+  const migrator = INVOCATION_MODE_MIGRATORS.get(task);
+  migrator({ previousManifestRaw, manifestRaw, recordRef, recordRaw, testHooks });
+  return Object.freeze({ ...record, migration_ref: recordRef });
+}
+
 /** Open a task after path, expected identity, and manifest agree. */
 export function openTask(taskPath, expected, expectedTaskId) {
   const wanted = expectedIdentity(expected, expectedTaskId);
@@ -1200,6 +1457,7 @@ export function openTask(taskPath, expected, expectedTaskId) {
   const handle = makeTaskHandle(realTaskPath, manifest);
   validateTargetRepoRootMigration(handle, manifest);
   validateRunnerRootMigration(handle, manifest, manifestRaw);
+  validateInvocationModeMigration(handle, manifest);
   return handle;
 }
 
@@ -1339,6 +1597,12 @@ export function createTaskKernel(taskHandle, options) {
       assertTaskHandle(task);
       const replacer = CANONICAL_ACCEPTED_REPLACERS.get(task);
       if (typeof replacer !== "function") throw new TypeError("authentic TaskHandle accepted-record replacer required");
+      return replacer;
+    },
+    replaceStageContentPointerFor(task) {
+      assertTaskHandle(task);
+      const replacer = STAGE_CONTENT_POINTER_REPLACERS.get(task);
+      if (typeof replacer !== "function") throw new TypeError("authentic stage content pointer replacer required");
       return replacer;
     },
   }));

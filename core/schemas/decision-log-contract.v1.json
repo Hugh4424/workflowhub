@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-log-contract.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["main_ref", "main_hash", "omission_appendix_refs", "accepted_decision_coverage", "section_checks", "question_mappings", "source_refs", "unresolved_items", "supersedes"],
+  "properties": {
+    "main_ref": { "type": "string", "minLength": 1 },
+    "main_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "omission_appendix_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "hash"],
+        "properties": {
+          "ref": { "type": "string", "minLength": 1 },
+          "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "accepted_decision_coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_item_ref", "source_item_hash", "coverage_status", "decision_ref"],
+        "properties": {
+          "source_item_ref": { "type": "string", "minLength": 1 },
+          "source_item_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "coverage_status": { "enum": ["covered", "accepted_omission"] },
+          "decision_ref": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "section_checks": { "type": "object" },
+    "question_mappings": { "type": "array", "items": { "type": "object" } },
+    "source_refs": { "type": "array", "items": { "type": "object" } },
+    "unresolved_items": { "type": "array", "items": { "type": "string" } },
+    "supersedes": { "type": "array", "items": { "type": "object" } }
+  }
+}

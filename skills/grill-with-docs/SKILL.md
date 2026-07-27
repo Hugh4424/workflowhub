@@ -12,6 +12,11 @@ Ask the questions one at a time, waiting for feedback on each question before co
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+发现会改变目标、方向、范围、方案、风险或长期规则的决策轴时，必须执行
+`ask → wait/pause → real reply → re-rank`：发布一张单轴卡后当前调用立即暂停，只有宿主
+返回与该卡绑定的真实回复才可恢复并重排剩余问题。Agent 生成、默认、旧回复或文档自报
+都不能替代 reply。纯事实核实或机械文档修正可以零问题，但必须记录“不提问”的事实理由。
+
 需要用户决定时使用大白话单轴决策卡，每张卡只问一个决策轴：只写当前状态（`grill-with-docs`、问题序号和
 当前总数）、问题、影响范围、2～3 个互斥选项、推荐项与理由，以及每项的直接后果和
 主要风险。不得添加“刚完成”“下一步”“需要你处理吗”等重复段落，不得展示内部
@@ -44,6 +49,13 @@ decision-log 使用：
 3. ADR 三项判据分别为真或假：难以反转、无背景会意外、存在真实取舍；
 4. 与现有术语或 ADR 的冲突，以及处理结果；
 5. 四项退出检查逐项的 `pass` 或未解决结果及事实依据。
+
+结束记录同时形成 `interaction-completion.v1` 内容 payload：保留候选队列状态、问题
+序号与动态总数、`card_hash` 和格式检查、ask/reply/re-rank 顺序、宿主提供的可见消息
+ref/hash、选中项，以及上述 CONTEXT、ADR、冲突、实际文件引用和四项退出事实。调用方
+把 payload 交给受控 writer 发布；本技能不得填写 task/stage/run/producer/ref/hash/tree
+等身份字段。长期记录不得保存完整问题卡原文或 secret、token、password、credential、
+cookie 等秘密。
 
 `CONTEXT.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
 真时才创建。即使没有文件变化，也必须记录 `no change` / `not needed` 及理由；不能只写
@@ -142,3 +154,12 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 - Matt Pocock `domain-modeling`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md>
 
 All three upstream files are MIT licensed. Domain-modeling ideas are absorbed here; this skill does not invoke or require a separate domain-modeling skill.
+
+- 更新检查：2026-07-26。上游 repository HEAD 已前进到
+  `ed37663cc5fbef691ddfecd080dff42f7e7e350d`，但上述三个文件与固定 commit
+  `66898f60e8c744e269f8ce06c2b2b99ce7660d5f` 的 bytes 分别完全一致，因此不升级
+  pinned source。
+- 替代候选：AgentHub `grill-with-docs-lite`（检查时 repository HEAD
+  `fabc82100b3dde2678a5fb81484bab3149c1e72d`）。拒绝替换：lite 版本缺少当前完整
+  Skill 的 CONTEXT/ADR 判据、术语冲突处理、四项客观退出检查和真实方向问答边界；
+  采用它会重新产生“读完文档就自报完成”的缺口。

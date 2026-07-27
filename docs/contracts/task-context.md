@@ -22,27 +22,33 @@ Launcher 唯一允许读取全局配置和 `WORKFLOWHUB_TASK_DIR` 覆盖并派�
 storage root。独立官方 sidecar 只接绝对 `--task-path` 并验证 manifest；provider/worker
 只收材料内容、父进程解析的绝对路径或受控回调。
 
-## 既有任务 runner 迁移
+## 每次调用认证与遗留迁移
 
-既有任务只能通过 `scripts/task-migrate-runner-root.mjs` 写入 `runner_root`。调用方必须显式提供
-绝对 `task-path`、project、task、runner root 和 stage。入口不从 cwd、target repository 或主
-checkout 推断 runner。runner 必须是 Git 顶层，当前 branch 必须精确等于
-`task/<project>/<task>`，并具有可读的根级 `AGENTS.md` 与对应
-`workflows/<stage>/SKILL.md`。迁移后的 stage bootstrap 必须显式传入实际 runner root，不能用
-manifest 中的期望值代替实际值完成自证。
+新任务必须声明 `execution_mode=per_invocation`，且 `task.json` 不含 `runner_root`、
+`runner_oid` 或 `runner_replacement`。Launcher 每次只接受显式绝对 runner root、stage 和
+可选 run id；不得从 cwd、target repository、remote 或任务记录猜 runner。
 
-迁移写 create-only identity ref，记录替换前后 manifest SHA-256 与 runner identity，再原子替换
-`task.json`。既有 task 的只读认证使用 `task-bootstrap.mjs --task-path=... --runner-root=...
---stage=...`；该模式不读取 storage 配置，也不创建任务。
+runner 必须是 canonical Git 顶层、符合任务 branch，HEAD 是完整提交，工作树 clean，并含
+普通文件形式的 `AGENTS.md`、`CONSTITUTION.md` 和 `workflows/<stage>/SKILL.md`。认证计算
+提交与合同内容身份，create-only 写入 `identity/executions/<run>.json` 后才建立
+StageContext。任务清单不保存 runner 绝对路径；同一 run/同一 bytes 可幂等 replay，同一 run
+不同来源或内容必须冲突。该认证只证明执行来源，不是 Q3 的质量审查。
+
+没有 `execution_mode` 的旧任务一律按 `legacy_pinned` 读取。它可以验证历史 runner 与
+replacement lineage，但新正式调用必须先执行一次 `migrateTaskToPerInvocation`。迁移要求
+显式 task identity 和调用方已读取的原始 `task.json` SHA-256；同一把任务 manifest lock 内
+重读并做 CAS，追加
+`identity/migrations/per-invocation/<previous-manifest-hash>.json`，保留历史
+`runner_root_migration` 与 replacement records，再原子发布
+`execution_mode=per_invocation` 且不含 live runner 绑定的新 manifest。
+
+迁移 replay 仅在 migration record、旧 hash 与当前新 manifest 精确闭合时返回原结果；错误
+hash、并发变化、缺失历史或同 ref 不同 bytes 均 fail-loud，且不得部分改写 task.json。
 
 ## 同 task 恢复
 
-受信宿主可使用 `scripts/task-recovery.mjs` 的两个一次性入口：
+受信宿主可使用 `scripts/task-recovery.mjs` 的 Phase 恢复入口：
 
-- `runner-replacement`：显式提供 task identity、clean 的新 runner、stage 和
-  `workflowhub-recovery-credential.v1` 凭证引用。新 runner 必须是精确 task branch，且
-  能证明旧 runner OID 是其祖先。成功后追加 runner generation 并原子切换当前 manifest；
-  旧 `task.json` 与旧 migration record 永不覆盖。
 - `phase-pointer`：只接受 `--stage=build-code`，只允许当前 `phase-1` 回到目标 `phase-0`。
   凭证必须绑定当前权威 pointer、旧 Phase 0 canonical evidence 与 matching formal PASS
   review，以及新的 receipts/snapshot。恢复前必须验证这些记录存在、可读、hash/ref 匹配且
@@ -71,18 +77,20 @@ gate；同一把 `build-code-phase-evidence` lock 内必须重读 gate 和 point
 不同；同一新材料重试只能复用该新结果。只有 fresh PASS 才能续走 Phase 1。
 
 恢复 generation 的 `before/after.hash` 是可复现的完整记录哈希：记录中的单向自引用字段
-（runner manifest 的 `runner_replacement.integrity_hash` 或 phase pointer 的
-`recovery_hash`）在计算时规范化为空字符串，再由读取方按同一规则重算；这不是循环哈希，
+（phase pointer 的 `recovery_hash`）在计算时规范化为空字符串，再由读取方按同一规则重算；这不是循环哈希，
 也不允许用占位值或只哈希 runner identity 冒充最终记录。
 
 两条入口只接受 task-local canonical credential ref/hash，不接受 inline JSON；每个 kind
 独立消费一次 gate。缺凭证、身份/来源/快照/记录不一致返回稳定 `RECOVERY_*` 错误，失败不
-消费 gate。intent 缺失/错值/用途错误、权威 pointer 或来源失配、闭合不完整、replay、CAS
-冲突与持久化失败保持可区分；任何提交前拒绝均不改变 pointer、gate、历史或 review 调度。
+消费 gate。目标 Phase 0 snapshot 未变化返回
+`RECOVERY_PHASE_SNAPSHOT_ALREADY_CURRENT`，不改变任何指针或记录。intent 缺失/错值/用途
+错误、权威 pointer 或来源失配、闭合不完整、replay、CAS 冲突与持久化失败保持可区分；
+任何提交前拒绝均不改变 pointer、gate、历史或 review 调度。
 
 恢复期间禁止手改 `task.json`、`phase-result.json`、accepted、receipt、test 或 review；
-不得删除或改写 recovery generation/gate，不得创建新 task、直接调用 provider，或用
-recovery archive、旧 Phase evidence、旧 review 旁路正式 evidence/review。
+不得删除或改写 recovery generation/gate，不得创建新 task、调用 provider 或用 recovery
+archive、旧 Phase evidence、旧 review 旁路正式 evidence/review。历史 `runner-replacement`
+记录只用于验证旧证据，不得在 `per_invocation` 模式继续追加。
 
 ## StageContext
 

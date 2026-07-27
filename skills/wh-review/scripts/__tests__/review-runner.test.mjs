@@ -398,7 +398,7 @@ describe("aggregation and runner", () => {
     expect(report).toContain("PROFILE_MISMATCH");
   });
 
-  it("persists a non-gate repair audit without a second provider call or a stage receipt", async () => {
+  it("rejects direct non-gate audit writes outside TaskKernel flow authority without a second provider call", async () => {
     const { attachmentRoot, task } = fixture("simple-review-resolution-");
     const reviewPolicy = {
       source: "wh_review.v2", mode: "full_on_structural_rework", minimum_heterologous: 1,
@@ -428,11 +428,7 @@ describe("aggregation and runner", () => {
       previousResultSha256: createHash("sha256").update(priorRaw).digest("hex"), ledger, currentSnapshotTree: repairedTree,
     });
     const ref = resolutionRef(resolution);
-    writeReviewResolution(task, ref, resolution);
-    expect(JSON.parse(task.readRecord(ref))).toMatchObject({
-      outcome: "recorded_non_gate_response", evidence_state: "verified",
-      previous_result_ref: first.resultRef, snapshot_tree: repairedTree,
-    });
+    expect(() => writeReviewResolution(task, ref, resolution)).toThrow(/TaskKernel review-flow authority/i);
     expect(providerCalls).toBe(1);
   });
 
@@ -634,9 +630,36 @@ describe("aggregation and runner", () => {
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
+    const claimed = await runReviewFixture({ ...options, reuseUnavailable: true });
+    expect(claimed).toMatchObject({ reused: true, attemptRef: first.attemptRef });
+    expect(calls).toHaveLength(1);
     const second = await runReviewFixture(options);
     expect(second).toMatchObject({ reused: true, attemptRef: first.attemptRef, resultRef: first.resultRef });
     expect(calls).toHaveLength(1);
+  });
+
+  it("does not reuse a result or semantic attempt with a binding invalidation", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-binding-invalid-"); const calls = [];
+    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: `session-${calls.length}`, output: pass, error: null } }; } };
+    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const first = await runReviewFixture(options);
+    const resultRaw = task.readRecord(first.resultRef);
+    const resultHash = createHash("sha256").update(resultRaw).digest("hex");
+    const invalidationDir = join(root, "Projects", "Demo", "tasks", "task", "reviews", "binding-invalidations");
+    mkdirSync(invalidationDir, { recursive: true });
+    writeFileSync(join(invalidationDir, `${resultHash}.json`), `${JSON.stringify({
+      schema_version: "review-binding-invalidation.v1",
+      task_id: "task",
+      stage: "build-code",
+      status: "binding_invalid",
+      result_ref: first.resultRef,
+      result_hash: resultHash,
+    }, null, 2)}\n`);
+    const second = await runReviewFixture(options);
+    expect(second).not.toMatchObject({ reused: true });
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(calls).toHaveLength(2);
   });
 
   it("recovers a semantic attempt interrupted before its result and report publication", async () => {
@@ -735,16 +758,33 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("retries an unchanged unavailable attempt and preserves both attempts", async () => {
+  it("claims only an orphan unavailable attempt and never loops through flow-claimed attempts", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-unavailable-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }; } };
     const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = await runReviewFixture(options);
-    const second = await runReviewFixture(options);
-    expect(second).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    const orphan = await runReviewFixture({
+      ...options, reuseUnavailable: true, claimedUnavailableAttemptRefs: [],
+    });
+    expect(orphan).toMatchObject({
+      status: "unavailable", verdict: null, resultRef: null,
+      attemptRef: first.attemptRef, reused: true,
+    });
+    expect(calls).toHaveLength(1);
+    const second = await runReviewFixture({
+      ...options, reuseUnavailable: true, claimedUnavailableAttemptRefs: [first.attemptRef],
+    });
     expect(second.attemptRef).not.toBe(first.attemptRef);
     expect(calls).toHaveLength(2);
+    const third = await runReviewFixture({
+      ...options, reuseUnavailable: true,
+      claimedUnavailableAttemptRefs: [first.attemptRef, second.attemptRef],
+    });
+    expect(third).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(third.attemptRef).not.toBe(first.attemptRef);
+    expect(third.attemptRef).not.toBe(second.attemptRef);
+    expect(calls).toHaveLength(3);
   });
 
   it("uses a new managed request identity after an unavailable group attempt", async () => {

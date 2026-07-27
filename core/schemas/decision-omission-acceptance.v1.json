@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-omission-acceptance.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_item_ref", "source_item_hash", "coverage_audit_ref", "coverage_audit_hash", "omission_reason", "card_ref", "card_hash", "selected_option", "reply_ref", "reply_hash", "decision_log_ref", "decision_log_hash", "accepted_at", "decision_entry"],
+  "properties": {
+    "source_item_ref": { "type": "string", "minLength": 1 },
+    "source_item_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "coverage_audit_ref": { "type": "string", "minLength": 1 },
+    "coverage_audit_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "omission_reason": { "type": "string", "minLength": 1 },
+    "card_ref": { "type": "string", "minLength": 1 },
+    "card_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "selected_option": { "type": "string", "minLength": 1 },
+    "reply_ref": { "type": "string", "minLength": 1 },
+    "reply_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "decision_log_ref": { "type": "string", "minLength": 1 },
+    "decision_log_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "accepted_at": { "type": "string", "format": "date-time" },
+    "decision_entry": { "$ref": "decision-entry.v1" }
+  }
+}

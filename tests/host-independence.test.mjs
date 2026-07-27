@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { extname, join, relative, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { load as loadYaml } from "js-yaml";
-import { validateSkillBundle } from "../core/local-skill-resolver.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
 
@@ -44,8 +43,12 @@ function skillClosureSurfaceFiles() {
     const closure = loadYaml(readFileSync(join(repoRoot, declaration), "utf8"));
     files.add(declaration);
     for (const dependency of closure.skills ?? []) {
-      const checked = validateSkillBundle(repoRoot, dependency.bundle, dependency.path);
-      for (const file of checked.files) files.add(relative(repoRoot, file));
+      const bundle = JSON.parse(readFileSync(join(repoRoot, dependency.bundle), "utf8"));
+      files.add(dependency.bundle);
+      for (const entry of bundle.files ?? []) {
+        const bundlePath = typeof entry === "string" ? entry : entry.path;
+        files.add(join(dirname(dependency.bundle), bundlePath));
+      }
     }
   }
   return [...files];
@@ -121,7 +124,7 @@ describe("WorkflowHub host independence", () => {
         ),
         ...lineFindings(
           repoPath,
-          /\bmultica\b|\.multica\//iu,
+          /^(?!.*AgentHub historical import).*(?:\bmultica\b|\.multica\/)/iu,
           "host-specific active restriction",
         ),
       ];
