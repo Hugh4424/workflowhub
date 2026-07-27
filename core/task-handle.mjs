@@ -194,6 +194,7 @@ function validateTargetRepoRootMigration(task, manifest) {
 }
 
 function validateRunnerRootMigration(task, manifest, manifestRaw) {
+  let unboundPerInvocation = false;
   if (manifest.execution_mode === "per_invocation" && manifest.execution_mode_migration) {
     const unbindingRaw = task.readRecord(manifest.execution_mode_migration.ref);
     if (sha256(unbindingRaw) !== manifest.execution_mode_migration.integrity_hash) throw new Error("per-invocation migration integrity hash mismatch");
@@ -201,6 +202,10 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
     manifest = unbinding.previous_manifest;
     manifestRaw = `${JSON.stringify(manifest, null, 2)}\n`;
     if (sha256(manifestRaw) !== unbinding.previous_manifest_hash) throw new Error("per-invocation migration previous manifest hash mismatch");
+    // The old runner lineage remains readable audit history only. It is no
+    // longer the task's identity authority, so do not require its legacy
+    // current-manifest hash to match the post-unbinding manifest.
+    unboundPerInvocation = true;
   }
   const pointer = manifest.runner_root_migration;
   if (!pointer) return;
@@ -214,6 +219,7 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
       record.task_id !== task.identity.taskId || !HASH.test(record.previous_manifest_hash ?? "") || !HASH.test(record.new_manifest_hash ?? "")) {
     throw new Error("runner root migration record is invalid");
   }
+  if (unboundPerInvocation) return;
   const identity = record.runner_identity;
   const identityKeys = new Set(["runner_root", "runner_oid", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
   let expectedRunnerRoot = manifest.runner_root;
