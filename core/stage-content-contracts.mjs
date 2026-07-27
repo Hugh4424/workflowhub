@@ -427,8 +427,8 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
     if (task.fields.gate_cmd && !hasExecutableCommand(task.fields.gate_cmd)) errors.push(`${task.heading_id} gate_cmd is not an executable command`);
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
-    const frs = identifiers(task.fields.FR ?? "", /\bFR-[A-Z][A-Z0-9]*-\d{3}\b/g);
-    const acs = identifiers(task.fields.AC ?? "", /\bAC\d+\b/g);
+    const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-)?\d{3}\b/g);
+    const acs = identifiers(task.fields.AC ?? "", /\bAC-?\d+\b/g);
     return Object.freeze({
       id: task.heading_id,
       order: index,
@@ -450,8 +450,8 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
     errors.push("behavior-changing work must show explicit RED before GREEN");
   }
 
-  const acceptedFrs = identifiers(spec, /\bFR-[A-Z][A-Z0-9]*-\d{3}\b/g);
-  const acceptedAcs = identifiers(spec, /\bAC\d+\b/g);
+  const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-)?\d{3}\b/g);
+  const acceptedAcs = identifiers(spec, /\bAC-?\d+\b/g);
   const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
   const referencedAcs = [...new Set(taskRows.flatMap(({ acs }) => acs))];
   for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);

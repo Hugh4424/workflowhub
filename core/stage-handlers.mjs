@@ -67,14 +67,20 @@ function completionReview(records) {
 function addCompletion(stage, result, { artifacts, reviews, verification }) {
   const copy = COMPLETION_COPY[stage];
   const missing = result.missing_items ?? [];
+  // Keep the canonical attempt's exact diagnostic in the stage result, but do
+  // not expose provider/attempt/receipt internals through the user completion
+  // view when an external review is unavailable.
+  const userSafeMissing = missing.map((item) => /(?:\bprovider\b|\btoken\b|\battempt\b|\breviews?\/|receipts?\/|[a-f0-9]{64})/i.test(item)
+    ? "正式审查结果暂不可用，原始原因已保留在系统记录"
+    : item);
   const completion = buildStageCompletion(stage, {
     result: missing.length ? "completed_with_open_items" : "passed",
     ...copy,
     verification: { conclusion: verification, limits: missing.length ? ["仍有未完成项，不能当作无条件通过"] : [] },
     artifacts,
     review: completionReview(reviews),
-    missing_items: missing,
-    risks: missing,
+    missing_items: userSafeMissing,
+    risks: userSafeMissing,
     dependencies: stage === "make-decision" ? [] : ["读取上一阶段的 accepted 结果"],
     recovery_conditions: ["若下游证明输入无效，返回当前阶段修复后重新发布"],
     downstream_read_rule: `只读取 results/${stage}/accepted.json 中的正式事实`,
@@ -627,7 +633,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final review");
   return addCompletion("build-plan", {
     facts: { plan_ref: worker.artifactRef("plan.md"), tasks_ref: worker.artifactRef("tasks.md"), checkpoint, review: review.facts, ...audit.facts },
-    evidence_refs: [plan.evidence, tasks.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...binding.evidence],
+    evidence_refs: [plan.evidence, tasks.evidence, review.evidence, audit.evidence, ...(review.risk_evidence ?? []), ...binding.evidence],
     missing_items: [...review.missing_items, ...acceptedRiskAuditNotices(worker, "build-plan")],
   }, {
     artifacts: [
