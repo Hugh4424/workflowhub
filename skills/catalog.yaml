@@ -233,7 +233,7 @@ skills:
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ae094ead957f3dc5b4e5b33cf7c9d33c06a2086d398ffd99da972a5e9014f278
+    local_bundle_hash: 65ebe8bf1e0b45b4e07b5bf2875e5ad83c8c186a02782a13efcd96c7a506a937
     last_reviewed_at: "2026-07-14"
     status: native
     standalone: true
