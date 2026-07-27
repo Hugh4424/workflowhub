@@ -9,6 +9,33 @@ node scripts/run-wh-review-audit-e2e.mjs --output=/absolute/evidence-directory
 This runs all five stages, including both `make-decision` tracks, and writes
 `audit-e2e-evidence.json`. It does not call a real provider.
 
+## 三层部署验证清单
+
+这不是新的 smoke 命令。修复登记时复用现有官方登记测试，在三处各执行一次：
+
+```text
+tests/official-component-receipts.test.mjs
+tests/official-make-decision-cli.test.mjs
+```
+
+记录必须包含：
+
+```json
+{
+  "source_repo": { "cwd": "/absolute/source", "command": "...", "exit_code": 0, "started_at": "...", "finished_at": "...", "runner_commit": "...", "config_path": "...", "NODE_PATH": "..." },
+  "active_runners": [
+    { "cwd": "/absolute/runner", "command": "...", "exit_code": 0, "started_at": "...", "finished_at": "...", "runner_commit": "...", "config_path": "...", "NODE_PATH": "..." }
+  ],
+  "fresh_stage_runtime": { "cwd": "/absolute/runtime", "command": "...", "exit_code": 0, "started_at": "...", "finished_at": "...", "runner_commit": "...", "config_path": "...", "NODE_PATH": "..." },
+  "conclusion": "部署验证未完成"
+}
+```
+
+缺少任一层时，必须保留 `部署验证未完成`，不得把 `node --check` 单独当作修复证明。
+runner 目录中的配置解析路径和源仓不同，正是这项验证要覆盖的差异。
+
+本组实施的结论口径固定为：三层证据齐全才可写“部署验证完成”；任一层没有真实回读，就只写“部署验证未完成”，不推断线上效果。
+
 Real-provider smoke requires an explicit JSON input. The harness has no repository,
 provider, config, or output defaults and never edits the source repository.
 

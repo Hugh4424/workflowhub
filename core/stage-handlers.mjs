@@ -34,7 +34,7 @@ const REVIEW_ATTEMPT_REF = /^reviews\/attempts\/([a-zA-Z0-9._-]+)\/attempt\.json
 const REVIEW_RESOLUTION_REF = /^reviews\/resolutions\/[a-f0-9]{64}\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
-const REVIEW_RESOLUTION_NAMES = new Set(["review_resolution", "direction_review_resolution", "detail_review_resolution"]);
+const REVIEW_RESOLUTION_NAMES = new Set(["review_resolution", "direction_review_resolution", "detail_review_resolution", "quality_review_resolution"]);
 const COMPLETION_COPY = Object.freeze({
   "make-decision": { objective: "把方向和取舍整理成可执行的最终决定", approach: "核对真实交互、文档拷问和正式审查后发布最终决定", effect: "下一阶段只需读取已接受的最终决定", next_owner: "build-spec" },
   "build-spec": { objective: "把已接受的决定写成完整需求规格", approach: "解决重大歧义并用正式审查验证最终规格", effect: "实施计划可以从稳定规格继续", next_owner: "build-plan" },
@@ -47,7 +47,7 @@ const RECEIPT_KEYS = Object.freeze({
   "build-spec": new Set(["spec", "review", "review_resolution", "risk_acceptance", "audit"]),
   "build-plan": new Set(["plan", "tasks", "review", "review_resolution", "risk_acceptance", "audit"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit"]),
-  "verify-code": new Set(["tests", "review", "quality_review", "quality_risk_acceptance", "evidence", "risk_acceptance", "audit"]),
+  "verify-code": new Set(["tests", "review", "quality_review", "quality_review_resolution", "quality_risk_acceptance", "evidence", "risk_acceptance", "audit"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
@@ -369,6 +369,7 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
       evidence: item.evidence,
       value: item.value,
       scope,
+      risk_evidence: [],
       missing_items: [`review unavailable: ${code}: ${message}`],
     };
   }
@@ -385,7 +386,37 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
       || authenticatedFlow.result_sha256 !== item.evidence.sha256) {
     throw new Error(`${name} is not the authenticated review-flow head`);
   }
-  const pause = deriveSeriousReviewPause({
+  const resolutionName = expectedTrack !== undefined
+    ? `${expectedTrack}_review_resolution`
+    : (name === "review" ? "review_resolution" : `${name.replace(/_review$/, "")}_review_resolution`);
+  let verifiedResolution = null;
+  const resolutionRef = invocation.receipts?.[resolutionName];
+  if (resolutionRef !== undefined) {
+    try {
+      const candidate = reviewResolution(worker, invocation, { stage: producerStage, reviewTrack: expectedTrack ?? null, receiptName: resolutionName });
+      const currentTree = worker.candidateWorkspace?.captureSnapshot?.().tree
+        ?? worker.snapshotWorkspace?.().tree
+        ?? worker.workspace?.captureSnapshot?.().tree
+        ?? null;
+      const expectedResolution = currentTree
+        ? buildNonGateReviewResponseRecord({
+          taskId: worker.identity.taskId,
+          stage: producerStage,
+          reviewTrack: expectedTrack ?? null,
+          previousResult: { ...item.value, result_ref: item.ref },
+          previousResultSha256: item.evidence.sha256,
+          ledger: candidate.value.response_ledger,
+          currentSnapshotTree: currentTree,
+        })
+        : null;
+      if (expectedResolution && isDeepStrictEqual(candidate.value, expectedResolution) && candidate.value.accepted_risk_count === 0) {
+        verifiedResolution = candidate;
+      }
+    } catch {
+      // bindFinalReview below remains the authoritative fail-loud validator.
+    }
+  }
+  const pause = verifiedResolution ? { status: "cleared_by_verified_resolution" } : deriveSeriousReviewPause({
     taskId: worker.identity.taskId,
     stage: producerStage,
     reviewRef: item.ref,
@@ -417,7 +448,9 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     scope,
     risk_evidence: riskEvidence,
     missing_items: item.value.verdict === "revise_required"
-      ? [pause.status === "paused" ? "serious review finding accepted as explicit risk; verdict remains revise_required" : "review findings recorded; response evidence: unknown/unverified"]
+      ? (verifiedResolution
+        ? []
+        : [pause.status === "paused" ? "serious review finding accepted as explicit risk; verdict remains revise_required" : "review findings recorded; response evidence: unknown/unverified"])
       : [],
   };
 }

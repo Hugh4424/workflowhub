@@ -23,7 +23,8 @@ describe("simple wh-review contracts", () => {
     expect(manifest.commands).toEqual({
       run: "scripts/wh-review-cli.mjs run",
       "format-correct": "scripts/wh-review-cli.mjs format-correct",
-      "verify-final": "scripts/wh-review-cli.mjs verify-final"
+      "verify-final": "scripts/wh-review-cli.mjs verify-final",
+      doctor: "scripts/wh-review-cli.mjs doctor"
     });
     expect(manifest).toMatchObject({
       stage_materials: "stage-materials.json",
@@ -34,6 +35,14 @@ describe("simple wh-review contracts", () => {
     expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
     expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`[^\n]*`revise_required`/);
     expect(providerProtocol).toMatch(/`revise_required`[^\n]*至少包含一条具体 finding/);
+    const sop = readFileSync(join(root, "..", "docs", "multica-monitoring-sop.md"), "utf8");
+    expect(sop).toMatch(/--profile desktop-api\.multica\.ai/);
+    expect(sop).toMatch(/--workspace-id/);
+    expect(sop).toMatch(/部署验证未完成/);
+    const e2e = readFileSync(join(root, "..", "docs", "wh-review-e2e.md"), "utf8");
+    expect(e2e).toMatch(/source_repo/);
+    expect(e2e).toMatch(/active_runners/);
+    expect(e2e).toMatch(/fresh_stage_runtime/);
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
     for (const file of [
       "contracts/workflowhub-result.v1.json",
@@ -74,6 +83,12 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/Send the input JSON over stdin/);
     expect(skill).toMatch(/Never place a transient review-input file in/);
     for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
+  });
+
+  it("keeps monitoring evidence explicit when live deployment proof is absent", () => {
+    const sop = readFileSync(join(root, "..", "docs", "multica-monitoring-sop.md"), "utf8");
+    expect(sop).toMatch(/workspace-id.*Issue.*run.*评论 ID/s);
+    expect(sop).toMatch(/没有同一环境的实际回读证据[\s\S]*部署验证未完成/);
   });
 
   it("keeps the stage skill plan limited to provider-visible lenses", () => {

@@ -145,3 +145,12 @@ closure provider：普通修复不再二审，只写外置 `wh-review-resolution
 phase 审查，不进入上述任何捷径。
 
 不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误时只能请求同一冻结材料的协议恢复；公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都不得提升为 pass；后续正式调用可在同一公共合同下再次尝试，不能因为次数耗尽而伪造或阻断语义审查。
+## 失败分类
+
+WorkflowHub 只在报告投影层分类，不改 provider 的原始 attempt/result：
+
+- attempt：`completed`、`OUTPUT_INVALID`、`PROVIDER_UNAVAILABLE`、`TIMEOUT`、`SAME_SOURCE`；
+- finding：有效、`invalid_anchor`、重复、未采纳；
+- 未知错误码归 `UNKNOWN` 并告警。
+
+失败 attempt 的耗时单独统计，不进入有效审查质量分母；失败不会自动重试。

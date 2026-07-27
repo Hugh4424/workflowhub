@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "../review-output.mjs";
-import { aggregateProviderResults } from "../review-result.mjs";
+import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
 import { resolutionRef, writeReviewResolution } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject } from "../review-runner.mjs";
@@ -19,6 +19,23 @@ const source = { targetCommit: "1".repeat(40), baseCommit: "2".repeat(40), baseT
 const pass = JSON.stringify({ verdict: "pass", summary: "ok", findings: [] });
 const revise = JSON.stringify({ verdict: "revise_required", summary: "fix", findings: [{ severity: "major", path: "a.js", line: 1, issue: "bug", root_cause: "missing guard", recommendation: "fix it", evidence_kind: "direct", evidence: "a.js line 1 calls the unsafe branch" }] });
 const temporary = [];
+
+describe("review result classification", () => {
+  it("keeps attempt failures separate from finding quality facts", () => {
+    const attempt = { provider_attempts: [
+      { provider: "kimi", status: "completed", error: null, execution: { timing: { duration_ms: 10 } } },
+      { provider: "opencode", status: "failed", error: { code: "OUTPUT_INVALID" }, execution: { timing: { duration_ms: 20 } } },
+      { provider: "grok", status: "failed", error: { code: "NEW_BROKER_CODE" }, execution: { timing: { duration_ms: 30 } } },
+    ] };
+    expect(classifyAttempt(attempt.provider_attempts[0])).toBe("completed");
+    expect(classifyAttempt(attempt.provider_attempts[1])).toBe("OUTPUT_INVALID");
+    expect(classifyAttempt(attempt.provider_attempts[2])).toBe("UNKNOWN");
+    expect(classificationSummary(attempt, { adjudication: { clusters: [{ disposition: "invalid_evidence" }] } })).toMatchObject({
+      attempt: { completed: 1, OUTPUT_INVALID: 1, UNKNOWN: 1 }, failed_duration_ms: 50, quality_denominator: 1,
+      finding: { invalid_anchor: 1 },
+    });
+  });
+});
 function publicProvider(provider, { status = "completed", material = materialId, sessionId = "s", output = pass, error = null } = {}) {
   return {
     result_protocol: "workflowhub-result.v2", provider, adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,

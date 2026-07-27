@@ -26,6 +26,11 @@ describe("final cutover guard contracts", () => {
       findings: aggregation ? aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })) : (verdict === "invented" ? [{ provider: "fixture-provider", severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []),
       ...(aggregation ? { adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters } } : {}) };
   };
+  const qualityReviewReceipt = (snapshotTree = tree) => ({
+    ...reviewReceipt("build-code", "pass", snapshotTree),
+    stage: "verify-code", review_scope: null, phase_id: null,
+    attempt_ref: "reviews/attempts/quality-attempt/attempt.json",
+  });
   const reviewFlow = (resultRef, result, overrides = {}) => ({
     version: "wh-review-flow-event.v1",
     event_kind: "semantic_result",
@@ -41,6 +46,37 @@ describe("final cutover guard contracts", () => {
     ...overrides,
   });
   const workerFor = (stage, values, currentTree = tree) => {
+    const workflowRunId = "fixture:attempt-0001";
+    const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
+    if (!values[auditRef]) {
+      const audit = {
+        schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass",
+        summary_hash: sha, workflow_run_id: workflowRunId, snapshot_tree: currentTree,
+        content_evidence_refs: [],
+      };
+      if (stage === "make-decision" && values["receipts/decision.json"]?.decision_ref && values["receipts/decision.json"]?.decision_hash) {
+        const decision = values["receipts/decision.json"];
+        const payload = {
+          interaction_type: "aggregate", workspace_tree: currentTree,
+          decision_ref: decision.decision_ref, decision_hash: decision.decision_hash,
+        };
+        if (!values["evidence/interaction.json"]) values["evidence/interaction.json"] = {
+          schema_version: "stage-content-evidence.v1", kind: "interaction-completion.v1",
+          task_id: "task", stage, workflow_run_id: workflowRunId, snapshot_tree: currentTree,
+          content_hash: createHash("sha256").update(JSON.stringify(payload)).digest("hex"), payload,
+        };
+        audit.content_evidence_refs = [{ kind: "interaction-completion.v1", ref: "evidence/interaction.json", hash: sha }];
+        values[decision.decision_ref] = "# Decision fixture\n";
+      }
+      values[auditRef] = audit;
+    }
+    let qualityReviewRef = null;
+    if (stage === "verify-code" && !values["reviews/results/quality.json"]) {
+      qualityReviewRef = "reviews/results/quality.json";
+      values[qualityReviewRef] = qualityReviewReceipt(currentTree);
+    } else if (stage === "verify-code") {
+      qualityReviewRef = "reviews/results/quality.json";
+    }
     for (const result of Object.values(values).filter((value) => value?.version === "wh-review-result.v1")) {
       const attemptId = result.attempt_ref.split("/")[2], outputRef = `reviews/attempts/${attemptId}/providers/fixture-provider.output.json`;
       const content = JSON.stringify(result.provider_results[0].output);
@@ -54,8 +90,10 @@ describe("final cutover guard contracts", () => {
     }
     return {
       stage,
+      workflowRunId,
       identity: { taskId: "task" },
       readReceipt: (ref) => ({ value: values[ref], sha256: sha }),
+      readEvidence: (ref) => ({ bytes: values[ref] ?? "# Decision fixture\n", sha256: values[ref]?.decision_hash ?? sha }),
       readEvidence: (ref) => ({ value: values[ref], sha256: values[`${ref}:sha256`] ?? sha }),
       readAuthenticatedReviewFlow: (subject) => {
         const entry = Object.entries(values).find(([ref, value]) => ref.startsWith("reviews/results/")
@@ -85,6 +123,8 @@ describe("final cutover guard contracts", () => {
       },
       snapshotWorkspace: () => ({ tree: currentTree }),
       readAcceptedBuildCode: () => ({ facts: { tests: { snapshot_tree: tree }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [] }, review: { result_ref: "reviews/results/review.json", result_hash: sha, snapshot_tree: tree, subject_kind: "worktree", phase_id: null, review_scope: "integration" } } }),
+      auditRef,
+      qualityReviewRef,
     };
   };
 
@@ -106,8 +146,10 @@ describe("final cutover guard contracts", () => {
   });
 
   it("requires receipt schema and producer provenance instead of accepting shape-only JSON", async () => {
-    const worker = { stage: "build-spec", identity: { taskId: "task" }, writeArtifact() {}, createCheckpoint() { return {}; }, readReceipt: () => ({ value: { content: "fake" }, sha256: "a".repeat(64) }) };
-    await expect(officialStageHandler("build-spec")(worker, { receipts: { spec: "receipts/spec.json" } }))
+    const auditRef = `evidence/audits/build-spec/${"f".repeat(64)}.json`;
+    const audit = { schema_version: "v1", task_id: "task", stage_slug: "build-spec", verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [] };
+    const worker = { stage: "build-spec", identity: { taskId: "task" }, writeArtifact() {}, createCheckpoint() { return {}; }, readReceipt: (ref) => ({ value: ref === auditRef ? audit : { content: "fake" }, sha256: "a".repeat(64) }) };
+    await expect(officialStageHandler("build-spec")(worker, { receipts: { spec: "receipts/spec.json", audit: auditRef } }))
       .rejects.toThrow(/schema|producer|provenance/i);
   });
 
@@ -120,6 +162,9 @@ describe("final cutover guard contracts", () => {
       producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
       content: "content\n", content_hash: "unused",
     })]));
+    const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
+    values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [] };
+    receipts.audit = auditRef;
     const worker = { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }) };
     await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/review.*receipt ref/i);
   });
@@ -173,6 +218,7 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: (name) => `specs/task/${name}`,
     };
+    receipts.audit = worker.auditRef;
     await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/artifact.*receipt|differ/i);
     expect(writeCalls).toBe(0);
     expect(checkpointCalls).toBe(0);
@@ -191,8 +237,8 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } }))
-      .rejects.toThrow(/current.*snapshot|snapshot.*resolution|review.*final spec/i);
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json", audit: worker.auditRef } }))
+      .rejects.toThrow(/current.*snapshot|snapshot.*resolution|review.*final spec|SERIOUS_REVIEW_PAUSE/i);
     expect(checkpointCalls).toBe(0);
   });
 
@@ -228,7 +274,7 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => ({}),
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef, review_resolution: resolutionRef } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef, review_resolution: resolutionRef, audit: worker.auditRef } }))
       .resolves.toMatchObject({
         facts: { review: { result_ref: reviewRef } },
         evidence_refs: expect.arrayContaining([{ ref: resolutionRef, sha256: sha }]),
@@ -267,7 +313,7 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => ({}),
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef, review_resolution: resolutionRef } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef, review_resolution: resolutionRef, audit: worker.auditRef } }))
       .rejects.toThrow(/prior review ref\/hash\/snapshot/i);
   });
 
@@ -295,7 +341,7 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => ({}),
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: fullRef } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: fullRef, audit: worker.auditRef } }))
       .resolves.toMatchObject({
         facts: { review: { result_ref: fullRef, snapshot_tree: currentTree } },
         evidence_refs: expect.arrayContaining([{ ref: priorRef, sha256: sha }]),
@@ -321,8 +367,8 @@ describe("final cutover guard contracts", () => {
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef } }))
-      .rejects.toThrow(error);
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: reviewRef, audit: worker.auditRef } }))
+      .rejects.toThrow(/authenticated (?:review-)?flow head|authenticated flow hash|authenticated flow root/i);
     expect(checkpointCalls).toBe(0);
   });
 
@@ -339,7 +385,7 @@ describe("final cutover guard contracts", () => {
       listReviewAuditRefs: () => [auditRef],
       readReviewAudit: () => ({ value: { version: "wh-review-resolution.v1", task_id: "task", stage, outcome: "recorded_non_gate_response", accepted_risk_count: 1 }, sha256: sha }),
     };
-    const outcome = await officialStageHandler(stage)(worker, { receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" } });
+    const outcome = await officialStageHandler(stage)(worker, { receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json", audit: worker.auditRef } });
     expect(outcome.facts).not.toHaveProperty("review_audit");
     expect(outcome.missing_items).toContain(`accepted risk recorded in external wh-review audit: ${auditRef}; present it to the human confirmer`);
   });
@@ -367,8 +413,8 @@ describe("final cutover guard contracts", () => {
       artifactRef: (name) => `specs/task/${name}`,
     };
     await expect(officialStageHandler(stage)(worker, {
-      receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef },
-    })).rejects.toThrow(/authenticated flow head/i);
+      receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
+    })).rejects.toThrow(/authenticated (?:review-)?flow head/i);
   });
 
   it("rejects build-plan publication when a newer authenticated flow action is not consumed", async () => {
@@ -393,7 +439,7 @@ describe("final cutover guard contracts", () => {
       artifactRef: (name) => `specs/task/${name}`,
     };
     await expect(officialStageHandler(stage)(worker, {
-      receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef },
+      receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
     })).rejects.toThrow(/latest authenticated flow action|resolution/i);
   });
 
@@ -423,7 +469,9 @@ describe("final cutover guard contracts", () => {
     const values = {
       "receipts/decision.json": canonical(stage, {
         producer: { stage, component: "decision", version: "1" },
-        decision_log: decisionLog, content_hash: createHash("sha256").update(decisionLog).digest("hex"),
+        decision_ref: `receipts/decision-log/${createHash("sha256").update(decisionLog).digest("hex")}.md`,
+        decision_hash: createHash("sha256").update(decisionLog).digest("hex"),
+        content_hash: createHash("sha256").update(decisionLog).digest("hex"), contract_refs: [],
       }),
       [directionRef]: direction,
       [detailRef]: detail,
@@ -431,6 +479,7 @@ describe("final cutover guard contracts", () => {
     };
     const worker = {
       ...workerFor(stage, values, currentTree),
+      readEvidence: () => ({ bytes: decisionLog, sha256: createHash("sha256").update(decisionLog).digest("hex") }),
       readAuthenticatedReviewFlow: (subject) => subject.review_track === "direction"
         ? reviewFlow(directionRef, direction, {
           event_kind: "resolution", event_ref: `reviews/flows/${"f".repeat(64)}/event-0002.json`,
@@ -448,10 +497,35 @@ describe("final cutover guard contracts", () => {
         direction_review: directionRef,
         direction_review_resolution: directionResolutionRef,
         detail_review: detailRef,
+        audit: worker.auditRef,
       },
     })).resolves.toMatchObject({
       evidence_refs: expect.arrayContaining([{ ref: directionResolutionRef, sha256: sha }]),
     });
+  });
+
+  it("clears a make-decision revise finding only after verified same-flow resolution", async () => {
+    const stage = "make-decision", currentTree = "c".repeat(40), workflowRunId = "fixture:make-decision-resolution";
+    const decisionLog = "# Decision\n\nGo.\n", decisionHash = createHash("sha256").update(decisionLog).digest("hex");
+    const directionRef = "reviews/results/direction-resolution.json", detailRef = "reviews/results/detail-resolution.json";
+    const direction = reviewReceipt(stage, "revise_required", currentTree); direction.review_track = "direction"; direction.attempt_ref = "reviews/attempts/direction-resolution-attempt/attempt.json";
+    const detail = reviewReceipt(stage, "pass", currentTree); detail.review_track = "detail"; detail.attempt_ref = "reviews/attempts/detail-resolution-attempt/attempt.json";
+    const findingId = direction.findings[0].id;
+    const ledger = { version: "wh-review-response-ledger.v1", previous_result_ref: directionRef, previous_snapshot_tree: currentTree, current_snapshot_tree: currentTree, responses: [{ finding_id: findingId, status: "fixed", rationale: "Focused resolution evidence was rerun and verified.", changed_dimensions: [], evidence_refs: ["evidence/resolution.json"] }] };
+    const directionResolution = buildNonGateReviewResponseRecord({ taskId: "task", stage, reviewTrack: "direction", previousResult: { ...direction, result_ref: directionRef }, previousResultSha256: sha, ledger, currentSnapshotTree: currentTree });
+    const directionResolutionRef = `reviews/resolutions/${"d".repeat(64)}.json`;
+    const interactionPayload = { interaction_type: "aggregate", workspace_tree: currentTree, decision_ref: `receipts/decision-log/${decisionHash}.md`, decision_hash: decisionHash };
+    const interaction = { schema_version: "stage-content-evidence.v1", kind: "interaction-completion.v1", task_id: "task", stage, workflow_run_id: workflowRunId, snapshot_tree: currentTree, content_hash: createHash("sha256").update(JSON.stringify(interactionPayload)).digest("hex"), payload: interactionPayload };
+    const audit = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: workflowRunId, snapshot_tree: currentTree, content_evidence_refs: [{ kind: "interaction-completion.v1", ref: "evidence/interaction.json", hash: sha }] };
+    const values = {
+      "receipts/decision.json": canonical(stage, { producer: { stage, component: "decision", version: "1" }, decision_ref: `receipts/decision-log/${decisionHash}.md`, decision_hash: decisionHash, content_hash: decisionHash, contract_refs: [] }),
+      "evidence/interaction.json": interaction,
+      [`evidence/audits/make-decision/${"e".repeat(64)}.json`]: audit,
+      [directionRef]: direction, [detailRef]: detail, [directionResolutionRef]: directionResolution,
+    };
+    const worker = { ...workerFor(stage, values, currentTree), workflowRunId, candidateWorkspace: { worktreeRoot: "/tmp/candidate", baselineCommit: tree, captureSnapshot: () => ({ tree: currentTree }) }, readEvidence: (ref) => ref === `receipts/decision-log/${decisionHash}.md` ? { bytes: decisionLog, sha256: decisionHash } : { bytes: "interaction", sha256: sha }, readAuthenticatedReviewFlow: (subject) => subject.review_track === "direction" ? reviewFlow(directionRef, direction, { event_kind: "resolution", event_ref: `reviews/flows/${"f".repeat(64)}/event-0002.json`, action_ref: directionResolutionRef, action_sha256: sha, identity: { task_id: "task", workflow_run_id: workflowRunId, stage, review_track: "direction", subject_kind: "worktree", phase_id: null, review_scope: null } }) : reviewFlow(detailRef, detail, { identity: { task_id: "task", workflow_run_id: workflowRunId, stage, review_track: "detail", subject_kind: "worktree", phase_id: null, review_scope: null } }) };
+    const result = await officialStageHandler(stage)(worker, { receipts: { decision: "receipts/decision.json", audit: `evidence/audits/make-decision/${"e".repeat(64)}.json`, direction_review: directionRef, direction_review_resolution: directionResolutionRef, detail_review: detailRef } });
+    expect(result).toMatchObject({ missing_items: [], facts: { reviews: { direction: { verdict: "revise_required" } } } });
   });
 
   it("records a real failing test command as a quality fact", async () => {
@@ -462,17 +536,19 @@ describe("final cutover guard contracts", () => {
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     values["receipts/tests.json"].exit_code = 1;
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } }))
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } }))
       .resolves.toMatchObject({ facts: { tests: { exit_code: 1 } } });
   });
 
-  it("keeps a revise_required build-code review as a verify quality fact", async () => {
+  it("pauses when a revise_required build-code review has no verified resolution", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).resolves.toMatchObject({ facts: { review: { verdict: "revise_required" } } });
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/SERIOUS_REVIEW_PAUSE/);
   });
 
   it("rejects an unavailable build-code review from final verify publication", async () => {
@@ -500,8 +576,9 @@ describe("final cutover guard contracts", () => {
       },
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), {
-      receipts: { tests: "receipts/tests.json", review: attemptRef, evidence: "evidence/manifest.json" },
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { tests: "receipts/tests.json", review: attemptRef, quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef },
     })).resolves.toMatchObject({ verification_failure: true, facts: { review: { status: "unavailable" } } });
   });
 
@@ -524,8 +601,9 @@ describe("final cutover guard contracts", () => {
       },
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), {
-      receipts: { tests: "receipts/tests.json", review: attemptRef, evidence: "evidence/manifest.json" },
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { tests: "receipts/tests.json", review: attemptRef, quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef },
     })).rejects.toThrow(/claims unavailable.*semantic result/i);
   });
 
@@ -535,7 +613,8 @@ describe("final cutover guard contracts", () => {
       "reviews/results/review.json": reviewReceipt(stage, "invented"),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/SCHEMA_VALIDATION_FAILED.*verdict/i);
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/SCHEMA_VALIDATION_FAILED.*verdict/i);
   });
 
   it("rejects a review result detached from its attempt/provider evidence chain", async () => {
@@ -545,7 +624,7 @@ describe("final cutover guard contracts", () => {
     };
     const worker = workerFor(stage, values);
     values[values["reviews/results/review.json"].attempt_ref].material_id = "0".repeat(64);
-    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/attempt\/result material_id mismatch/i);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/attempt\/result material_id mismatch/i);
   });
 
   it("rejects a worktree result backed by a Phase review attempt", async () => {
@@ -559,7 +638,7 @@ describe("final cutover guard contracts", () => {
     attempt.subject_kind = "phase";
     attempt.phase_id = "phase-1";
     attempt.review_scope = "phase";
-    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef } }))
       .rejects.toThrow(/attempt\/result (subject_kind|phase_id) mismatch/i);
   });
 
@@ -571,7 +650,7 @@ describe("final cutover guard contracts", () => {
     };
     const worker = workerFor(stage, values);
     values[values["reviews/results/review.json"].attempt_ref].review_scope = null;
-    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef } }))
       .rejects.toThrow(/attempt\/result review_scope mismatch/i);
   });
 
@@ -584,7 +663,7 @@ describe("final cutover guard contracts", () => {
     const output = values[attempt.provider_attempts[0].output_ref];
     output.content = JSON.stringify({ verdict: "revise_required", summary: "must revise", findings: [{ severity: "major", path: "src/a.js", issue: "bug", recommendation: "fix it" }] });
     output.content_hash = createHash("sha256").update(output.content).digest("hex");
-    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/semantic output mismatch|verdict does not match|OUTPUT_INVALID/i);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/semantic output mismatch|verdict does not match|OUTPUT_INVALID/i);
   });
 
   it("rejects build-code receipts bound to different snapshot trees", async () => {
@@ -593,7 +672,8 @@ describe("final cutover guard contracts", () => {
       "receipts/tests.json": testsReceipt(stage, "c".repeat(40)),
       "reviews/results/review.json": reviewReceipt(stage),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" } })).rejects.toThrow(/same.*snapshot|snapshot.*tree/i);
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef } })).rejects.toThrow(/same.*snapshot|snapshot.*tree/i);
   });
 
   it("rejects a Phase review as the final build-code review", async () => {
@@ -602,7 +682,8 @@ describe("final cutover guard contracts", () => {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage, "pass", tree, "phase"),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
       .rejects.toThrow(/MATERIAL_INCOMPLETE.*integration review.*build-code/i);
   });
 
@@ -613,7 +694,8 @@ describe("final cutover guard contracts", () => {
       "reviews/results/review.json": reviewReceipt(stage),
     };
     delete values["reviews/results/review.json"].review_scope;
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
       .rejects.toThrow(/MATERIAL_INCOMPLETE.*integration review.*build-code/i);
   });
 
@@ -623,7 +705,8 @@ describe("final cutover guard contracts", () => {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json" }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] } }))
       .resolves.toMatchObject({ facts: { review: { subject_kind: "worktree", phase_id: null, review_scope: "integration" } } });
   });
 
@@ -635,7 +718,7 @@ describe("final cutover guard contracts", () => {
     };
     const worker = workerFor(stage, values);
     worker.readAcceptedBuildCode = () => ({ facts: { tests: { snapshot_tree: tree }, review: { result_ref: "reviews/results/review.json", result_hash: sha, snapshot_tree: tree } } });
-    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } }))
       .resolves.toMatchObject({ verification_failure: true, missing_items: expect.arrayContaining([expect.stringMatching(/accepted build-code lacks.*integration review/i)]) });
   });
 
@@ -645,7 +728,8 @@ describe("final cutover guard contracts", () => {
       "reviews/results/review.json": reviewReceipt(stage),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values, "c".repeat(40)), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).resolves.toMatchObject({ verification_failure: true, missing_items: [expect.stringMatching(/snapshot/i)] });
+    const worker = workerFor(stage, values, "c".repeat(40));
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).resolves.toMatchObject({ verification_failure: true, missing_items: [expect.stringMatching(/snapshot/i)] });
   });
 
   it("rejects acceptance evidence without stable criterion identity and schema", async () => {
@@ -655,7 +739,8 @@ describe("final cutover guard contracts", () => {
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [{ ref: "evidence/ac.txt", sha256: sha }] }),
       "evidence/ac.txt": { result: "pass", refs: [] },
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(/acceptance_criterion_id|acceptance.*schema|criterion identity/i);
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/acceptance_criterion_id|acceptance.*schema|criterion identity/i);
   });
 
   it.each([
@@ -666,7 +751,8 @@ describe("final cutover guard contracts", () => {
       "receipts/tests.json": testsReceipt(stage), "reviews/results/review.json": reviewReceipt(stage),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs }), ...entities,
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).rejects.toThrow(error);
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(error);
   });
 
   it("records a failed acceptance criterion without blocking verification publication", async () => {
@@ -676,7 +762,8 @@ describe("final cutover guard contracts", () => {
       "evidence/ac-1.json": { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "fail", refs: [{ ref: "evidence/proof.txt", sha256: sha }] },
       "evidence/proof.txt": "proof",
     };
-    await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).resolves.toMatchObject({ facts: { evidence_refs: [{ ref: "evidence/ac-1.json" }] } });
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).resolves.toMatchObject({ facts: { evidence_refs: [{ ref: "evidence/ac-1.json" }] } });
   });
 
   it("verifies every referenced file exists and matches its declared hash", () => {

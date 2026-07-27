@@ -198,6 +198,42 @@ function latestAttempts(attempt) {
   return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
+const ATTEMPT_CLASS_CODES = new Set(["OUTPUT_INVALID", "PROVIDER_UNAVAILABLE", "TIMEOUT", "SAME_SOURCE"]);
+
+export function classifyAttempt(providerAttempt) {
+  const code = providerAttempt?.error?.code ?? (providerAttempt?.status === "completed" ? "completed" : null);
+  if (code === "completed") return "completed";
+  if (ATTEMPT_CLASS_CODES.has(code)) return code;
+  return "UNKNOWN";
+}
+
+export function classifyFinding(cluster) {
+  if (cluster?.disposition === "invalid_evidence" || cluster?.evidence_status === "invalid_anchor") return "invalid_anchor";
+  if (cluster?.disposition === "nonblocking_minor") return "minor";
+  if (cluster?.disposition === "actionable") return "valid";
+  return "not_adopted";
+}
+
+export function classificationSummary(attempt, result = null) {
+  const providerAttempts = latestAttempts(attempt);
+  const attemptBuckets = Object.fromEntries(["completed", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE", "TIMEOUT", "SAME_SOURCE", "UNKNOWN"].map((key) => [key, 0]));
+  let failedDurationMs = 0;
+  for (const providerAttempt of providerAttempts) {
+    const bucket = classifyAttempt(providerAttempt);
+    attemptBuckets[bucket] += 1;
+    const duration = providerAttempt.execution?.timing?.duration_ms;
+    if (bucket !== "completed" && Number.isFinite(duration)) failedDurationMs += duration;
+  }
+  const findingBuckets = Object.fromEntries(["valid", "invalid_anchor", "minor", "not_adopted"].map((key) => [key, 0]));
+  for (const cluster of result?.adjudication?.clusters ?? []) findingBuckets[classifyFinding(cluster)] += 1;
+  return {
+    attempt: attemptBuckets,
+    finding: findingBuckets,
+    failed_duration_ms: failedDurationMs,
+    quality_denominator: providerAttempts.filter((entry) => classifyAttempt(entry) === "completed" && entry.error == null).length,
+  };
+}
+
 export function renderReviewReport({ attempt, result = null }) {
   const lines = [
     `# wh-review report — ${attempt.stage}`,
@@ -222,6 +258,9 @@ export function renderReviewReport({ attempt, result = null }) {
     lines.push(`- same-source exclusions: ${attempt.review_policy.same_source_exclusions.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
   }
   if (attempt.coverage) lines.push(`- coverage: \`${attempt.coverage.mode}\`; ${attempt.coverage.valid_provider_count}/${attempt.coverage.minimum_required} valid reviewers`);
+  const classification = classificationSummary(attempt, result);
+  lines.push(`- attempt classification: ${Object.entries(classification.attempt).map(([key, value]) => `${key}=${value}`).join(", ")}`);
+  lines.push(`- finding classification: ${Object.entries(classification.finding).map(([key, value]) => `${key}=${value}`).join(", ")}; quality denominator=${classification.quality_denominator}; failed duration=${classification.failed_duration_ms} ms`);
   lines.push("", "## Provider runs", "", "| Provider | Model / thinking | Duration | Token usage | Runtime / session state | Status |", "| --- | --- | ---: | --- | --- | --- |");
   for (const providerAttempt of latestAttempts(attempt)) {
     const execution = providerAttempt.execution;
