@@ -31,6 +31,7 @@
 | stage-step-receipts | 自研 | skills/stage-step-receipts/SKILL.md | P0 canonical receipt contract；审计任务保留 |
 | audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract；审计任务保留 |
 | requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract；审计任务保留 |
+| workflowhub-multica-sync | 自研 | none | 固定 main 快照审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
 
 ## 仓内运行技能
 

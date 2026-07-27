@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "workflowhub-multica-sync",
+  "files": [
+    "SKILL.md",
+    "scripts/multica-skill-sync.mjs"
+  ]
+}
