@@ -54,6 +54,71 @@ function requireApi() {
   expect(readLatestStageContentEvidence).toBeTypeOf("function");
 }
 
+function talkPayload(roundNumber, workspaceTree, {
+  selected = "A",
+  zeroQuestion = false,
+} = {}) {
+  const questions = zeroQuestion ? [] : [{
+    question_id: `q-${roundNumber}`,
+    question_number: 1,
+    card_hash: sha256(`card-${roundNumber}`),
+    ask: { ref: `host-message://ask/round-${roundNumber}-question-1`, hash: sha256(`ask-${roundNumber}`) },
+    reply: { ref: `host-message://reply/round-${roundNumber}-question-1`, hash: sha256(`reply-${roundNumber}`) },
+    rerank: { ref: `host-message://rerank/round-${roundNumber}-question-1`, hash: sha256(`rerank-${roundNumber}`) },
+    selected,
+  }];
+  const candidateQueue = zeroQuestion
+    ? [{
+        item_id: `candidate-${roundNumber}`,
+        impact: "medium",
+        status: "evidence-resolved",
+        reason: `round ${roundNumber} input already resolves this decision axis`,
+      }]
+    : [{
+        item_id: `candidate-${roundNumber}`,
+        impact: "high",
+        status: "answered",
+        reason: `round ${roundNumber} host-visible reply resolved this decision axis`,
+      }];
+  return {
+    interaction_type: "talk",
+    rounds: [{
+      round_number: roundNumber,
+      candidate_queue: candidateQueue,
+      questions,
+      questions_already_asked: questions.length,
+      open_direction_changing_questions: 0,
+      current_total: questions.length,
+      end_reason: zeroQuestion
+        ? `round ${roundNumber} candidate queue was factually resolved without a question`
+        : `round ${roundNumber} host-visible reply resolved the final direction-changing question`,
+      zero_question_reason: zeroQuestion ? `round ${roundNumber} queue was empty after factual re-ranking` : null,
+    }],
+    grill: null,
+    workspace_tree: workspaceTree,
+  };
+}
+
+function grillPayload(workspaceTree) {
+  return {
+    interaction_type: "grill",
+    rounds: [],
+    grill: {
+      context: { status: "no-change", reason: "Existing domain language remains accurate" },
+      adr: { status: "not-needed", reason: "No durable architecture decision changed" },
+      conflicts: { status: "none", reason: "No document conflict was found" },
+      file_references: ["CONTEXT.md"],
+      exit_checks: {
+        context_checked: true,
+        adr_checked: true,
+        conflicts_checked: true,
+        file_references_checked: true,
+      },
+    },
+    workspace_tree: workspaceTree,
+  };
+}
+
 function evidenceNamespaceSnapshot(task) {
   const root = join(task.taskPath, "evidence", "stage-content");
   if (!existsSync(root)) return [];
@@ -154,30 +219,34 @@ function fixture(taskId = "stage-content-evidence") {
     now: () => "2026-07-26T00:00:30.000Z",
   });
   const setupTree = candidate.captureSnapshot().tree;
-  const setupTalk = setupWriter.publish({
+  const setupDecisionLog = "# Fixture decision\n";
+  const setupDecisionHash = sha256(setupDecisionLog);
+  const setupDecisionRef = `receipts/decision-log/${setupDecisionHash}.md`;
+  kernel.publishCanonicalRecord(setupDecisionRef, setupDecisionLog);
+  const setupTalks = [1, 2, 3].map((roundNumber) => setupWriter.publish({
     kind: "interaction-completion.v1",
-    payload: { interaction_type: "talk", rounds: [{ selected: "A" }], grill: null, workspace_tree: setupTree },
-  });
+    payload: talkPayload(roundNumber, setupTree, { zeroQuestion: roundNumber !== 1 }),
+  }));
   const setupGrill = setupWriter.publish({
     kind: "interaction-completion.v1",
-    payload: { interaction_type: "grill", rounds: [], grill: { conclusion: "passed" }, workspace_tree: setupTree },
+    payload: grillPayload(setupTree),
   });
   setupWriter.publish({
     kind: "interaction-completion.v1",
     payload: {
       interaction_type: "aggregate",
-      rounds: [{ ref: setupTalk.ref, hash: setupTalk.hash }],
+      rounds: setupTalks.map(({ ref, hash }) => ({ ref, hash })),
       grill: { ref: setupGrill.ref, hash: setupGrill.hash },
       workspace_tree: setupTree,
-      decision_ref: "receipts/decision.json",
-      decision_hash: "b".repeat(64),
+      decision_ref: setupDecisionRef,
+      decision_hash: setupDecisionHash,
     },
   });
   setupWriter.publish({
     kind: "decision-coverage-audit.v1",
     payload: {
-      decision_log_ref: "receipts/decision.json",
-      decision_log_hash: "b".repeat(64),
+      decision_log_ref: setupDecisionRef,
+      decision_log_hash: setupDecisionHash,
       items: [],
       summary: { covered: 0, accepted_omission: 0, missing: 0 },
     },
@@ -203,7 +272,10 @@ function fixture(taskId = "stage-content-evidence") {
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, confirmation.ref);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const nextRun = kernel.startStageRun("make-decision", { reason: "content-evidence test run" });
-  return { root, task, workspace, workflowRunId: nextRun.run.workflow_run_id };
+  return {
+    root, task, workspace, workflowRunId: nextRun.run.workflow_run_id,
+    decisionRef: setupDecisionRef, decisionHash: setupDecisionHash,
+  };
 }
 
 function completionPayload(overrides = {}) {
@@ -436,10 +508,8 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     requireApi();
     const state = fixture("interaction-revision-forbidden");
     const writer = writerFor(state);
-    const talk = {
-      interaction_type: "talk", rounds: [{ selected: "A" }], grill: null,
-      workspace_tree: "a".repeat(40),
-    };
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const talk = talkPayload(1, tree);
     await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk }));
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1", revision: 2, payload: talk,
@@ -478,37 +548,28 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     requireApi();
     const state = fixture("interaction-components");
     const writer = writerFor(state);
-    const interaction = (selected) => ({
-      interaction_type: "talk",
-      rounds: [{ selected }],
-      grill: null,
-      workspace_tree: "a".repeat(40),
-    });
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const interaction = (roundNumber, selected) => talkPayload(roundNumber, tree, { selected });
 
     const round1 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: interaction("A"),
+      payload: interaction(1, "A"),
     }));
     const repeated = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: interaction("A"),
+      payload: interaction(1, "A"),
     }));
     const round2 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: interaction("B"),
+      payload: interaction(2, "B"),
     }));
     const round3 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: interaction("C"),
+      payload: interaction(3, "C"),
     }));
     const grill = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: {
-        interaction_type: "grill",
-        rounds: [],
-        grill: { conclusion: "passed" },
-        workspace_tree: "a".repeat(40),
-      },
+      payload: grillPayload(tree),
     }));
     const aggregate = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
@@ -520,9 +581,9 @@ describe("stage-content-evidence.v1 controlled writer", () => {
           { ref: round3.ref, hash: round3.hash },
         ],
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: "a".repeat(40),
-        decision_ref: "receipts/decision.json",
-        decision_hash: "b".repeat(64),
+        workspace_tree: tree,
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
       },
     }));
 
@@ -535,30 +596,174 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(aggregate.ref).toMatch(/interaction-completion\.aggregate\.json$/);
   });
 
+  it("rejects incomplete, wrong-type, and out-of-order interaction aggregates", async () => {
+    requireApi();
+    const state = fixture("interaction-aggregate-negative");
+    const writer = writerFor(state);
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const talks = [];
+    for (const roundNumber of [1, 2, 3]) {
+      talks.push(await invoke(() => writer.publish({
+        kind: "interaction-completion.v1",
+        payload: talkPayload(roundNumber, tree, { zeroQuestion: roundNumber === 3 }),
+      })));
+    }
+    const grill = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillPayload(tree),
+    }));
+    const aggregate = (rounds, grillBinding) => ({
+      interaction_type: "aggregate",
+      rounds: rounds.map(({ ref, hash }) => ({ ref, hash })),
+      grill: grillBinding,
+      workspace_tree: tree,
+      decision_ref: state.decisionRef,
+      decision_hash: state.decisionHash,
+    });
+
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: aggregate(talks.slice(0, 2), { ref: grill.ref, hash: grill.hash }),
+    }))).rejects.toThrow(/exactly three|three ordered/i);
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: aggregate(talks, null),
+    }))).rejects.toThrow(/aggregate grill|ref.*hash/i);
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: aggregate([grill, talks[1], talks[2]], { ref: grill.ref, hash: grill.hash }),
+    }))).rejects.toThrow(/wrong interaction type/i);
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: aggregate([talks[1], talks[0], talks[2]], { ref: grill.ref, hash: grill.hash }),
+    }))).rejects.toThrow(/out of order/i);
+  });
+
+  it.each([
+    ["question ids", (round) => { round.questions[0].question_id = "q-1"; }, /question_id.*globally unique/i],
+    ["host-message refs", (round) => { round.questions[0].ask.ref = "host-message://ask/round-1-question-1"; }, /host-message refs.*globally unique/i],
+  ])("rejects duplicate %s across talk rounds", async (_label, mutate, expected) => {
+    requireApi();
+    const state = fixture(`interaction-aggregate-duplicate-${roots.length}`);
+    const writer = writerFor(state);
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const payloads = [1, 2, 3].map((roundNumber) => talkPayload(roundNumber, tree, {
+      zeroQuestion: roundNumber === 3,
+    }));
+    mutate(payloads[1].rounds[0]);
+    const talks = [];
+    for (const payload of payloads) {
+      talks.push(await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload })));
+    }
+    const grill = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillPayload(tree),
+    }));
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: {
+        interaction_type: "aggregate",
+        rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: grill.ref, hash: grill.hash },
+        workspace_tree: tree,
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(expected);
+  });
+
+  it("requires real ask/reply/rerank bindings or explicit zero-question facts and complete grill exits", async () => {
+    requireApi();
+    const state = fixture("interaction-facts-negative");
+    const writer = writerFor(state);
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const incompleteTalk = talkPayload(1, tree);
+    delete incompleteTalk.rounds[0].questions[0].reply;
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: incompleteTalk,
+    }))).rejects.toThrow(/reply/i);
+    const nonVisibleTalk = talkPayload(1, tree);
+    nonVisibleTalk.rounds[0].questions[0].ask.ref = "internal://ask/1";
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: nonVisibleTalk,
+    }))).rejects.toThrow(/host-message:\/\/ask/i);
+    const incompleteZeroQuestion = talkPayload(1, tree, { zeroQuestion: true });
+    delete incompleteZeroQuestion.rounds[0].candidate_queue;
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: incompleteZeroQuestion,
+    }))).rejects.toThrow(/candidate_queue/i);
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: talkPayload(1, tree, { zeroQuestion: true }),
+    }))).resolves.toMatchObject({ value: { payload: { interaction_type: "talk" } } });
+    const incompleteGrill = grillPayload(tree);
+    delete incompleteGrill.grill.exit_checks.file_references_checked;
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: incompleteGrill,
+    }))).rejects.toThrow(/four exit checks/i);
+    const unreferencedGrill = grillPayload(tree);
+    unreferencedGrill.grill.file_references = [];
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: unreferencedGrill,
+    }))).rejects.toThrow(/file_references|no_file_reason/i);
+  });
+
+  it("binds an aggregate to the exact canonical decision-log bytes", async () => {
+    requireApi();
+    const state = fixture("interaction-decision-artifact");
+    const writer = writerFor(state);
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const talks = [];
+    for (const roundNumber of [1, 2, 3]) {
+      talks.push(await invoke(() => writer.publish({
+        kind: "interaction-completion.v1",
+        payload: talkPayload(roundNumber, tree, { zeroQuestion: roundNumber !== 1 }),
+      })));
+    }
+    const grill = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillPayload(tree),
+    }));
+    await expect(invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: {
+        interaction_type: "aggregate",
+        rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: grill.ref, hash: grill.hash },
+        workspace_tree: tree,
+        decision_ref: state.decisionRef,
+        decision_hash: "0".repeat(64),
+      },
+    }))).rejects.toThrow(/decision_ref\/hash|decision-log artifact/i);
+  });
+
   it("requires the final decision only on aggregate and rejects a fourth talk round", async () => {
     requireApi();
     const state = fixture("interaction-decision-boundary");
     const writer = writerFor(state);
-    const talk = (selected, extra = {}) => ({
-      interaction_type: "talk",
-      rounds: [{ selected }],
-      grill: null,
-      workspace_tree: "a".repeat(40),
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const talk = (roundNumber, selected, extra = {}) => ({
+      ...talkPayload(roundNumber, tree, { selected }),
       ...extra,
     });
 
-    for (const selected of ["A", "B", "C"]) {
-      await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk(selected) }));
+    for (const [index, selected] of ["A", "B", "C"].entries()) {
+      await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk(index + 1, selected) }));
     }
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: talk("D"),
+      payload: talk(3, "D"),
     }))).rejects.toThrow(/sequence|complete/i);
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: talk("A", {
-        decision_ref: "receipts/decision.json",
-        decision_hash: "b".repeat(64),
+      payload: talk(1, "A", {
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
       }),
     }))).rejects.toThrow(/schema|must not|not/i);
     await expect(invoke(() => writer.publish({
@@ -567,7 +772,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
         interaction_type: "aggregate",
         rounds: [],
         grill: null,
-        workspace_tree: "a".repeat(40),
+        workspace_tree: tree,
       },
     }))).rejects.toThrow(/decision_ref|decision_hash|required/i);
   });

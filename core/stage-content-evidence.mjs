@@ -21,6 +21,12 @@ const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code
 const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40}$/i;
 const EVIDENCE_REF = /^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.json$/;
+const DECISION_LOG_REF = /^receipts\/decision-log\/([a-f0-9]{64})\.md$/;
+const HOST_VISIBLE_REF = Object.freeze({
+  ask: /^host-message:\/\/ask\/[a-zA-Z0-9][a-zA-Z0-9._~/-]*$/,
+  reply: /^host-message:\/\/reply\/[a-zA-Z0-9][a-zA-Z0-9._~/-]*$/,
+  rerank: /^host-message:\/\/rerank\/[a-zA-Z0-9][a-zA-Z0-9._~/-]*$/,
+});
 const REVISIONABLE_KINDS = new Set([
   "ambiguity-ledger.v1", "decision-entry.v1", "decision-coverage-audit.v1",
   "decision-omission-acceptance.v1", "decision-correction-appendix.v1",
@@ -127,6 +133,142 @@ function validatePayload(kind, payload) {
   const validate = payloadValidators.get(kind);
   if (!validate) throw new TypeError(`unknown stage content evidence kind: ${kind}`);
   if (!validate(payload)) throw new TypeError(`${kind} payload does not match its schema: ${schemaErrors(validate)}`);
+  if (kind === "interaction-completion.v1") validateInteractionSemantics(payload);
+}
+
+function requireBinding(value, label) {
+  if (!value || typeof value !== "object"
+    || typeof value.ref !== "string" || value.ref.trim() === ""
+    || !HASH.test(value.hash ?? "")) {
+    throw new TypeError(`${label} must contain a non-empty ref and sha256 hash`);
+  }
+}
+
+function requireHostVisibleBinding(value, event, label) {
+  requireBinding(value, label);
+  if (!HOST_VISIBLE_REF[event].test(value.ref)) {
+    throw new TypeError(`${label}.ref must use the host-message://${event}/ scheme`);
+  }
+}
+
+function validateCandidateQueue(queue, label) {
+  if (!Array.isArray(queue)) throw new TypeError(`${label} candidate_queue must be an array`);
+  const seen = new Set();
+  for (const [index, item] of queue.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+      || typeof item.item_id !== "string" || item.item_id.trim() === ""
+      || !new Set(["high", "medium", "low"]).has(item.impact)
+      || !new Set(["asked", "answered", "evidence-resolved", "not-applicable", "non-blocking", "open"]).has(item.status)
+      || typeof item.reason !== "string" || item.reason.trim() === "") {
+      throw new TypeError(`${label} candidate_queue item ${index + 1} is incomplete`);
+    }
+    if (seen.has(item.item_id)) throw new TypeError(`${label} candidate_queue contains a duplicate item_id`);
+    seen.add(item.item_id);
+  }
+}
+
+function validateTalkQuestion(question, label) {
+  if (!question || typeof question !== "object" || Array.isArray(question)
+    || typeof question.question_id !== "string" || question.question_id.trim() === ""
+    || !Number.isInteger(question.question_number) || question.question_number < 1
+    || !HASH.test(question.card_hash ?? "")) {
+    throw new TypeError(`${label} must bind a question id, question number, and card hash`);
+  }
+  for (const event of ["ask", "reply", "rerank"]) {
+    requireHostVisibleBinding(question[event], event, `${label}.${event}`);
+  }
+}
+
+function validateGrillFacts(grill) {
+  if (!grill || typeof grill !== "object" || Array.isArray(grill)) {
+    throw new TypeError("grill interaction requires complete exit facts");
+  }
+  if (!new Set(["changed", "no-change"]).has(grill.context?.status)
+    || typeof grill.context?.reason !== "string" || grill.context.reason.trim() === "") {
+    throw new TypeError("grill context exit fact is incomplete");
+  }
+  if (!new Set(["created", "not-needed"]).has(grill.adr?.status)
+    || typeof grill.adr?.reason !== "string" || grill.adr.reason.trim() === "") {
+    throw new TypeError("grill ADR exit fact is incomplete");
+  }
+  if (!new Set(["resolved", "none"]).has(grill.conflicts?.status)
+    || typeof grill.conflicts?.reason !== "string" || grill.conflicts.reason.trim() === "") {
+    throw new TypeError("grill conflict exit fact is incomplete");
+  }
+  if (!Array.isArray(grill.file_references)
+    || grill.file_references.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
+    throw new TypeError("grill file reference exit fact is incomplete");
+  }
+  if (grill.file_references.length === 0
+    && (typeof grill.no_file_reason !== "string" || grill.no_file_reason.trim() === "")) {
+    throw new TypeError("grill requires file_references or an explicit no_file_reason");
+  }
+  const checks = grill.exit_checks;
+  if (!checks || typeof checks !== "object"
+    || checks.context_checked !== true || checks.adr_checked !== true
+    || checks.conflicts_checked !== true || checks.file_references_checked !== true) {
+    throw new TypeError("grill requires all four exit checks");
+  }
+}
+
+function validateInteractionSemantics(payload) {
+  if (payload.interaction_type === "talk") {
+    if (!Array.isArray(payload.rounds) || payload.rounds.length !== 1) {
+      throw new TypeError("talk interaction must contain exactly one round");
+    }
+    const round = payload.rounds[0];
+    if (!round || typeof round !== "object" || Array.isArray(round)
+      || !Number.isInteger(round.round_number) || round.round_number < 1 || round.round_number > 3
+      || !Array.isArray(round.questions)) {
+      throw new TypeError("talk interaction round number/questions are invalid");
+    }
+    validateCandidateQueue(round.candidate_queue, `talk round ${round.round_number}`);
+    if (!Number.isInteger(round.questions_already_asked) || round.questions_already_asked < 0
+      || !Number.isInteger(round.open_direction_changing_questions) || round.open_direction_changing_questions < 0
+      || !Number.isInteger(round.current_total) || round.current_total < 0
+      || round.current_total !== round.questions_already_asked + round.open_direction_changing_questions
+      || typeof round.end_reason !== "string" || round.end_reason.trim() === "") {
+      throw new TypeError(`talk round ${round.round_number} queue totals/end_reason are incomplete`);
+    }
+    const openItems = round.candidate_queue.filter((item) => item.status === "open").length;
+    if (openItems !== round.open_direction_changing_questions) {
+      throw new TypeError(`talk round ${round.round_number} candidate_queue/open count mismatch`);
+    }
+    if (round.questions.length === 0) {
+      if (typeof round.zero_question_reason !== "string" || round.zero_question_reason.trim() === "") {
+        throw new TypeError("zero-question talk round requires an explicit factual reason");
+      }
+      if (round.questions_already_asked !== 0 || round.open_direction_changing_questions !== 0
+        || round.current_total !== 0) {
+        throw new TypeError("zero-question talk round requires a closed zero-total candidate queue");
+      }
+    } else {
+      if (round.zero_question_reason !== null) {
+        throw new TypeError("answered talk round cannot claim a zero-question reason");
+      }
+      round.questions.forEach((question, index) => validateTalkQuestion(question, `talk question ${index + 1}`));
+      if (round.questions_already_asked !== round.questions.length
+        || round.questions.some((question, index) => question.question_number !== index + 1)) {
+        throw new TypeError("talk round question count/order does not match queue facts");
+      }
+    }
+    if (payload.grill !== null) throw new TypeError("talk interaction cannot contain grill facts");
+    return;
+  }
+  if (payload.interaction_type === "grill") {
+    if (!Array.isArray(payload.rounds) || payload.rounds.length !== 0) {
+      throw new TypeError("grill interaction cannot contain talk rounds");
+    }
+    validateGrillFacts(payload.grill);
+    return;
+  }
+  if (payload.interaction_type === "aggregate") {
+    if (!Array.isArray(payload.rounds) || payload.rounds.length !== 3) {
+      throw new TypeError("interaction aggregate requires exactly three ordered talk rounds");
+    }
+    payload.rounds.forEach((binding, index) => requireBinding(binding, `aggregate talk round ${index + 1}`));
+    requireBinding(payload.grill, "aggregate grill");
+  }
 }
 
 function validateValue(value) {
@@ -175,25 +317,61 @@ export function createStageContentEvidenceWriter(options = {}) {
 
   function validateAggregateBindings(payload) {
     if (payload.interaction_type !== "aggregate") return;
+    const questionIds = new Set();
+    const hostMessageRefs = new Set();
     const bindings = [
-      ...payload.rounds.map((binding, index) => [`round ${index}`, binding]),
-      ...(payload.grill === null ? [] : [["grill", payload.grill]]),
+      ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, "talk", index + 1]),
+      ["grill", payload.grill, "grill", null],
     ];
-    for (const [label, binding] of bindings) {
+    for (const [label, binding, expectedType, expectedRound] of bindings) {
       if (!binding || typeof binding !== "object"
         || Object.keys(binding).some((key) => key !== "ref" && key !== "hash")
         || !EVIDENCE_REF.test(binding.ref ?? "")
         || !HASH.test(binding.hash ?? "")) {
         throw new TypeError(`aggregate ${label} binding must contain only a canonical ref and hash`);
       }
-      verifyStageContentEvidence({
+      const child = verifyStageContentEvidence({
         task,
         ref: binding.ref,
         hash: binding.hash,
         expectedStage: stage,
         expectedRunId: workflowRunId,
+        expectedTree: payload.workspace_tree,
         expectedKind: "interaction-completion.v1",
       });
+      if (child.payload?.interaction_type !== expectedType) {
+        throw new Error(`aggregate ${label} binds the wrong interaction type`);
+      }
+      if (expectedRound !== null && child.payload.rounds?.[0]?.round_number !== expectedRound) {
+        throw new Error(`aggregate ${label} is out of order`);
+      }
+      if (child.payload?.workspace_tree !== payload.workspace_tree) {
+        throw new Error(`aggregate ${label} payload tree binding mismatch`);
+      }
+      if (expectedType === "talk") {
+        for (const question of child.payload.rounds[0].questions) {
+          if (questionIds.has(question.question_id)) {
+            throw new Error("interaction aggregate question_id values must be globally unique");
+          }
+          questionIds.add(question.question_id);
+          for (const event of ["ask", "reply", "rerank"]) {
+            const hostRef = question[event].ref;
+            if (hostMessageRefs.has(hostRef)) {
+              throw new Error("interaction aggregate host-message refs must be globally unique");
+            }
+            hostMessageRefs.add(hostRef);
+          }
+        }
+      }
+    }
+    const decisionMatch = DECISION_LOG_REF.exec(payload.decision_ref ?? "");
+    if (!decisionMatch || decisionMatch[1] !== payload.decision_hash) {
+      throw new Error("interaction aggregate decision_ref/hash binding is invalid");
+    }
+    const decisionLog = readOptional(task, payload.decision_ref);
+    if (decisionLog === undefined || decisionLog.trim() === ""
+      || sha256(decisionLog) !== payload.decision_hash) {
+      throw new Error("interaction aggregate decision-log artifact is missing or hash-mismatched");
     }
   }
 
@@ -246,6 +424,9 @@ export function createStageContentEvidenceWriter(options = {}) {
       validatePayload(input.kind, payload);
       validateAggregateBindings(payload);
       const snapshot = captureSnapshot(workspace);
+      if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {
+        throw new Error("interaction completion workspace tree does not match the current Workspace");
+      }
       const createdAt = now();
       if (!Number.isFinite(Date.parse(createdAt))) throw new TypeError("stage content created_at must be an ISO timestamp");
       const baseRef = ref(input.kind, payload);

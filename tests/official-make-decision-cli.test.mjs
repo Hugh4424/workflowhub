@@ -14,6 +14,7 @@ import { writeFormalReviewFixture } from "./helpers/formal-review.mjs";
 
 const roots = [];
 const runtime = new URL("../scripts/stage-runtime.mjs", import.meta.url).pathname;
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 function linkedWorktrees(repo) {
@@ -85,7 +86,160 @@ function prepareOfficialRun(task, stage, reason) {
   }
 }
 
+function interactionTalkPayload(roundNumber, tree) {
+  const hasQuestion = roundNumber === 1;
+  const questions = hasQuestion ? [{
+    question_id: "scope-boundary",
+    question_number: 1,
+    card_hash: sha256("fixture scope question card"),
+    ask: { ref: "host-message://ask/fixture-scope-boundary", hash: sha256("fixture visible ask") },
+    reply: { ref: "host-message://reply/fixture-scope-boundary", hash: sha256("fixture visible reply") },
+    rerank: { ref: "host-message://rerank/fixture-scope-boundary", hash: sha256("fixture visible rerank") },
+  }] : [];
+  return {
+    interaction_type: "talk",
+    rounds: [{
+      round_number: roundNumber,
+      candidate_queue: [{
+        item_id: `fixture-axis-${roundNumber}`,
+        impact: hasQuestion ? "high" : "medium",
+        status: hasQuestion ? "answered" : "evidence-resolved",
+        reason: hasQuestion
+          ? "The host-visible reply fixed the scope boundary"
+          : `Round ${roundNumber} inputs already resolve the only candidate axis`,
+      }],
+      questions,
+      questions_already_asked: questions.length,
+      open_direction_changing_questions: 0,
+      current_total: questions.length,
+      end_reason: hasQuestion
+        ? "The host-visible reply resolved the final direction-changing question"
+        : `Round ${roundNumber} candidate queue was resolved from existing facts`,
+      zero_question_reason: hasQuestion ? null : `round ${roundNumber} had no remaining direction-changing questions`,
+    }],
+    grill: null,
+    workspace_tree: tree,
+  };
+}
+
+function interactionGrillPayload(tree) {
+  return {
+    interaction_type: "grill",
+    rounds: [],
+    grill: {
+      context: { status: "no-change", reason: "Fixture context remains accurate" },
+      adr: { status: "not-needed", reason: "Fixture changes no architecture decision" },
+      conflicts: { status: "none", reason: "Fixture has no document conflicts" },
+      file_references: ["CONTEXT.md"],
+      exit_checks: {
+        context_checked: true,
+        adr_checked: true,
+        conflicts_checked: true,
+        file_references_checked: true,
+      },
+    },
+    workspace_tree: tree,
+  };
+}
+
+function publishMakeDecisionContent({ invoke, inputRoot, task, tree, decisionReceipt }) {
+  const publish = (name, payload) => {
+    const input = join(inputRoot, `${name}.json`);
+    writeFileSync(input, `${JSON.stringify(payload)}\n`);
+    return JSON.parse(invoke([
+      "publish-content-evidence", "--stage=make-decision", `--project=${task.manifest.project_name}`,
+      `--task=${task.identity.taskId}`, "--kind=interaction-completion.v1", `--input=${input}`,
+    ]));
+  };
+  const talks = [1, 2, 3].map((roundNumber) => publish(`talk-${roundNumber}`, interactionTalkPayload(roundNumber, tree)));
+  const grill = publish("grill", interactionGrillPayload(tree));
+  publish("interaction-aggregate", {
+    interaction_type: "aggregate",
+    rounds: talks.map((item) => ({ ref: item.evidence_ref, hash: item.evidence_hash })),
+    grill: { ref: grill.evidence_ref, hash: grill.evidence_hash },
+    workspace_tree: tree,
+    decision_ref: decisionReceipt.decision_ref,
+    decision_hash: decisionReceipt.decision_hash,
+  });
+  const coverageInput = join(inputRoot, "decision-coverage.json");
+  writeFileSync(coverageInput, `${JSON.stringify({
+    decision_log_ref: decisionReceipt.decision_ref,
+    decision_log_hash: decisionReceipt.decision_hash,
+    items: [],
+    summary: { covered: 0, accepted_omission: 0, missing: 0 },
+  })}\n`);
+  invoke([
+    "publish-content-evidence", "--stage=make-decision", `--project=${task.manifest.project_name}`,
+    `--task=${task.identity.taskId}`, "--kind=decision-coverage-audit.v1", `--input=${coverageInput}`,
+  ]);
+}
+
 describe("official make-decision CLI", () => {
+  it("rejects an interaction aggregate bound to a different canonical decision artifact", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-decision-aggregate-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
+    const taskPath = join(root, "Projects", "Demo", "tasks", "aggregate-decision-task");
+    const task = createTask({
+      storageRoot: root,
+      taskPath,
+      manifest: {
+        schema_version: "1.0.0",
+        project_name: "Demo",
+        task_id: "aggregate-decision-task",
+        created_at: new Date().toISOString(),
+        target_repo_root: repo,
+        issue_ids: [],
+        inputs: {},
+      },
+    });
+    prepareOfficialRun(task, "make-decision", "aggregate decision binding rejection");
+    const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
+    const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+    const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
+    const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=aggregate-decision-task"]));
+    const decisionPayload = join(inputRoot, "decision.json");
+    writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Official decision\n\nShip B." })}\n`);
+    const decision = JSON.parse(invoke([
+      "receipt", "--stage=make-decision", "--project=Demo", "--task=aggregate-decision-task",
+      "--component=decision", `--input=${decisionPayload}`,
+    ]));
+    const officialDecision = JSON.parse(task.readRecord(decision.receipt_ref));
+    const otherDecision = "# Other canonical decision\n\nShip A.";
+    const otherHash = sha256(otherDecision);
+    const otherRef = `receipts/decision-log/${otherHash}.md`;
+    createTaskKernel(task).publishCanonicalRecord(otherRef, otherDecision);
+    const tree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
+    publishMakeDecisionContent({
+      invoke,
+      inputRoot,
+      task,
+      tree,
+      decisionReceipt: { decision_ref: otherRef, decision_hash: otherHash },
+    });
+    const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: tree, reviewTrack: "direction" });
+    const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: tree, reviewTrack: "detail" });
+    registerReviewHead(task, direction.resultRef);
+    registerReviewHead(task, detail.resultRef);
+    const input = join(inputRoot, "run.json");
+    writeFileSync(input, `${JSON.stringify({
+      receipts: {
+        decision: decision.receipt_ref,
+        direction_review: direction.resultRef,
+        detail_review: detail.resultRef,
+      },
+    })}\n`);
+    const result = spawnSync(process.execPath, [
+      runtime, "run", "--stage=make-decision", "--project=Demo", "--task=aggregate-decision-task", `--input=${input}`,
+    ], { cwd: repo, env, encoding: "utf8" });
+    expect(officialDecision.decision_ref).not.toBe(otherRef);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/interaction aggregate decision binding differs/i);
+  });
+
   it("binds canonical decision receipt ref and exact byte hash into facts", () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-decision-cli-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
@@ -97,6 +251,7 @@ describe("official make-decision CLI", () => {
     const head = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo })).trim();
     const taskPath = join(root, "Projects", "Demo", "tasks", "decision-task");
     const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "decision-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
+    prepareOfficialRun(task, "make-decision", "official decision CLI execution");
     const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
     const missingDecisionLogPayload = join(inputRoot, "decision-missing-log.json"); writeFileSync(missingDecisionLogPayload, `${JSON.stringify({ content: "go" })}\n`);
     const decisionPayload = join(inputRoot, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
@@ -122,7 +277,14 @@ describe("official make-decision CLI", () => {
     const decisionRaw = task.readRecord(decision.receipt_ref);
     const decisionReceipt = JSON.parse(decisionRaw);
     expect(task.readRecord(decisionReceipt.decision_ref)).toBe("# Decision\n\nGo.");
-    prepareOfficialRun(task, "make-decision", "official decision CLI execution");
+    const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=decision-task"]));
+    publishMakeDecisionContent({
+      invoke,
+      inputRoot,
+      task,
+      tree: captureGitWorktreeSnapshot(prepared.worktree_root).tree,
+      decisionReceipt,
+    });
     const result = JSON.parse(invoke(["run", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--input=${input}`]));
     const worktree = realpathSync(`${repo}-decision-task`);
     expect(result.attempt.facts).toMatchObject({
@@ -164,17 +326,24 @@ describe("official make-decision CLI", () => {
     const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
     const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=grill-task"]));
+    prepareOfficialRun(task, "make-decision", "official grill-with-docs execution");
     const contextFile = join(prepared.worktree_root, "CONTEXT.md");
     writeFileSync(contextFile, "# Resolved domain language\n");
     const decisionPayload = join(inputRoot, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
     const decision = JSON.parse(invoke(["receipt", "--stage=make-decision", "--project=Demo", "--task=grill-task", "--component=decision", `--input=${decisionPayload}`]));
     const snapshotTree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
+    publishMakeDecisionContent({
+      invoke,
+      inputRoot,
+      task,
+      tree: snapshotTree,
+      decisionReceipt: JSON.parse(task.readRecord(decision.receipt_ref)),
+    });
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree, reviewTrack: "detail" });
     registerReviewHead(task, direction.resultRef);
     registerReviewHead(task, detail.resultRef);
     const input = join(inputRoot, "input.json"); writeFileSync(input, `${JSON.stringify({ receipts: { decision: decision.receipt_ref, direction_review: direction.resultRef, detail_review: detail.resultRef } })}\n`);
-    prepareOfficialRun(task, "make-decision", "official grill-with-docs execution");
     const result = JSON.parse(invoke(["run", "--stage=make-decision", "--project=Demo", "--task=grill-task", `--input=${input}`]));
     expect(result.attempt.facts.snapshot_tree).toMatch(/^[a-f0-9]{40}$/);
     writeFileSync(contextFile, "tampered after publication\n");

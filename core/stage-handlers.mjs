@@ -104,6 +104,7 @@ function auditFacts(worker, invocation) {
     throw new Error("audit summary is not an authenticated passing summary for this stage");
   }
   return {
+    value,
     facts: {
       audit_contract_version: "v1",
       audit_summary_ref: ref,
@@ -113,6 +114,39 @@ function auditFacts(worker, invocation) {
     },
     evidence: { ref, sha256: record.sha256 },
   };
+}
+
+function makeDecisionInteractionAggregate(worker, audit, decision, snapshotTree) {
+  const refs = audit.value.content_evidence_refs.filter(({ kind }) => kind === "interaction-completion.v1");
+  if (refs.length !== 1) {
+    throw new Error("make-decision audit must bind exactly one interaction aggregate");
+  }
+  const binding = refs[0];
+  if (typeof binding.ref !== "string" || typeof binding.hash !== "string" || !SHA256.test(binding.hash)) {
+    throw new Error("make-decision interaction aggregate audit binding is invalid");
+  }
+  const record = object(worker.readReceipt(binding.ref), "make-decision interaction aggregate");
+  const value = object(record.value, "make-decision interaction aggregate value");
+  const payload = object(value.payload, "make-decision interaction aggregate payload");
+  if (record.sha256 !== binding.hash
+      || value.schema_version !== "stage-content-evidence.v1"
+      || value.kind !== "interaction-completion.v1"
+      || value.task_id !== worker.identity.taskId
+      || value.stage !== "make-decision"
+      || value.workflow_run_id !== worker.workflowRunId
+      || value.workflow_run_id !== audit.value.workflow_run_id
+      || value.snapshot_tree !== snapshotTree
+      || value.snapshot_tree !== audit.value.snapshot_tree
+      || payload.interaction_type !== "aggregate"
+      || payload.workspace_tree !== snapshotTree
+      || value.content_hash !== hashText(JSON.stringify(payload))) {
+    throw new Error("make-decision interaction aggregate task/stage/run/tree/ref/hash binding mismatch");
+  }
+  if (payload.decision_ref !== decision.value.decision_ref
+      || payload.decision_hash !== decision.value.decision_hash) {
+    throw new Error("make-decision interaction aggregate decision binding differs from the official decision receipt");
+  }
+  return { ref: binding.ref, hash: binding.hash, value };
 }
 function receipt(worker, invocation, name, producerStage = worker.stage) {
   const ref = text(object(invocation.receipts, "receipts")[name], `${name} receipt ref`);
@@ -524,6 +558,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
+  const interactionAggregate = makeDecisionInteractionAggregate(worker, audit, item, snapshot.tree);
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, {
     stage: "make-decision", reviewTrack: "direction", resolutionName: "direction_review_resolution",
   });
@@ -545,6 +580,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       item.evidence,
       { ref: item.value.decision_ref, sha256: item.value.decision_hash },
       ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
+      { ref: interactionAggregate.ref, sha256: interactionAggregate.hash },
       direction.evidence, detail.evidence, audit.evidence, ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
     ],
     missing_items: [...direction.missing_items, ...detail.missing_items],
