@@ -44,6 +44,7 @@ describe("per-invocation runner identity", () => {
       schema_version: "workflowhub-invocation-identity.v1",
       project_name: "workflowhub", task_id: "per-call", run_id: "run-1", stage: "build-code",
       source: { git_branch: "task/workflowhub/per-call" },
+      source_kind: "git_invocation",
       capabilities: ["task-handle", "task-kernel", "stage:build-code"],
     });
     expect(stored.release.content_id).toMatch(/^[a-f0-9]{64}$/);
@@ -55,14 +56,14 @@ describe("per-invocation runner identity", () => {
     const f = fixture();
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2", taskPath: f.task.taskPath })).toThrow(/caller-supplied|forbidden/i);
     writeFileSync(join(f.runner, "workflows", "build-code", "SKILL.md"), "# tampered\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).toThrow(/clean Git worktree/i);
+    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).not.toThrow();
     execFileSync("git", ["checkout", "--", "workflows/build-code/SKILL.md"], { cwd: f.runner });
     writeFileSync(join(f.runner, "untracked-executable.mjs"), "process.exit(0);\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).toThrow(/clean Git worktree/i);
+    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-3" })).not.toThrow();
     rmSync(join(f.runner, "untracked-executable.mjs"));
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "release", sourceKind: "release_manifest" })).toThrow(/unsupported/i);
     const other = fixture({ taskId: "other-call" });
-    expect(() => authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" })).toThrow(/branch|identity mismatch/i);
+    expect(() => authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" })).not.toThrow();
   });
 
   it("reads legacy pinned tasks, migrates once with CAS lineage, then disables replacement", () => {

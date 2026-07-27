@@ -14,8 +14,10 @@ and TaskKernel. Product artifacts use ArtifactDir. Test and Git commands run
 only in `ctx.workspace.worktreeRoot` supplied by the accepted decision.
 Never derive task identity or paths from cwd, a repository, or an issue
 identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
-locators from its authenticated `runner_root`; never search for or copy those
-runner files into the target repository.
+locators from the launcher-owned runtime; available runner Git facts are audit
+metadata only. Runner branch, dirty state, and old runner migration history
+never decide the stage result. Never search for or copy runner files into the
+target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
 --project=<project> --task=<task>

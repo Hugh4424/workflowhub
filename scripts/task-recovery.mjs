@@ -1140,8 +1140,10 @@ export function supersedePhaseTraceLineage({ task, workspace } = {}, input = {})
 
 function phaseTraceLineage(values) {
   const task = openTask(values["task-path"], values.project, values.task);
-  try { inspectRunnerIdentity({ runnerRoot: values["runner-root"], projectName: task.identity.projectName, taskId: task.identity.taskId, stage: "build-code" }); }
-  catch (error) { throw recoveryError("RECOVERY_RUNNER_IDENTITY_INVALID", error.message); }
+  if (task.manifest.execution_mode !== "per_invocation") {
+    try { inspectRunnerIdentity({ runnerRoot: values["runner-root"], projectName: task.identity.projectName, taskId: task.identity.taskId, stage: "build-code" }); }
+    catch (error) { throw recoveryError("RECOVERY_RUNNER_IDENTITY_INVALID", error.message); }
+  }
   const sources = readLineageSources(task, values);
   const trace = phaseTraceFromSources(sources);
   const traceRaw = canonical(trace);
@@ -1169,8 +1171,10 @@ function phasePointer(values) {
   const task = openTask(values["task-path"], values.project, values.task);
   const credential = readRecoveryCredential(task, values["credential-ref"], values["credential-hash"], "phase-pointer");
   assertRecoveryUnused(task, "phase-pointer");
-  try { inspectRunnerIdentity({ runnerRoot: values["runner-root"], projectName: task.identity.projectName, taskId: task.identity.taskId, stage: "build-code" }); }
-  catch (error) { throw recoveryError("RECOVERY_RUNNER_IDENTITY_INVALID", error.message); }
+  if (task.manifest.execution_mode !== "per_invocation") {
+    try { inspectRunnerIdentity({ runnerRoot: values["runner-root"], projectName: task.identity.projectName, taskId: task.identity.taskId, stage: "build-code" }); }
+    catch (error) { throw recoveryError("RECOVERY_RUNNER_IDENTITY_INVALID", error.message); }
+  }
   const pointer = readJson(task, "phase-result.json", undefined, "current Phase pointer");
   const subject = credential.value.phase_subject;
   if (pointer.value.phase_id !== "phase-1" || subject.current_pointer_hash !== pointer.hash) throw recoveryError("RECOVERY_PHASE_POINTER_MISMATCH", "current pointer is not the credentialed Phase 1 pointer");

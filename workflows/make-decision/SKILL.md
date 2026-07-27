@@ -16,8 +16,10 @@ version: 2.0.0
 absent because no design artifact has been accepted yet.
 Consume only that launcher-supplied StageContext. Never derive task identity or
 paths from cwd, a repository, or an issue identifier. The launcher resolves all
-`scripts/`, `core/`, and `metrics/` locators from its authenticated `runner_root`;
-never search for or copy those runner files into the target repository.
+`scripts/`, `core/`, and `metrics/` locators; available runner Git facts are
+audit metadata only. Runner branch, dirty state, and old runner migration
+history never decide the business result. Never search for or copy runner files
+into the target repository.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=make-decision
 --project=<project> --task=<task> --input=<component-receipts.json>`. The official

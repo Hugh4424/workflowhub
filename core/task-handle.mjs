@@ -207,6 +207,7 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
     // current-manifest hash to match the post-unbinding manifest.
     unboundPerInvocation = true;
   }
+  if (unboundPerInvocation) return;
   const pointer = manifest.runner_root_migration;
   if (!pointer) return;
   const raw = task.readRecord(pointer.ref);
