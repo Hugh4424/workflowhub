@@ -29,6 +29,12 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 同样只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须在本阶段的
 人类确认摘要中显式展示。
 
+人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
+`accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
+provider verdict 转成“审查通过”。
+
+审查结果用于暴露问题和记录处置；阶段是否推进由正式 stage contract 与证据决定。
+
 ## 审查重点
 
 - 每项需求是否落到具体任务和可判断的验证。

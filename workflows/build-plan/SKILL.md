@@ -124,14 +124,18 @@ planning step.
    bytes. It must report complete Phase rows, task rows, executable
    command/oracle checks, an acyclic dependency graph, and full bidirectional
    FR/AC coverage. Publish those facts through the controlled content writer as
-   `plan-task-contract.v1`, bound to the exact `plan.md` and `tasks.md` content
-   hashes. Any structural error stops before review; a provider cannot override
-   it.
+   `plan-task-contract.v2`, bound to exact `spec.md`, `plan.md`, and `tasks.md`
+   ReferenceBindings. Each task card must expose its authoritative v2 fields;
+   legacy v1 facts remain read-only compatibility input. Any structural error
+   stops before review; a provider cannot override it.
 6. Run one initial full review over the frozen complete `spec.md`, `plan.md`,
-   `tasks.md`, and matching `plan-task-contract.v1` facts. `spec-analyze` and
+   `tasks.md`, and matching `plan-task-contract.v2` facts. `spec-analyze` and
    `plan-eng-review` are provider-visible lenses loaded only by `wh-review`, not
    separate planning or verdict steps. Components do not locate files
-   themselves. Present one review brief for the effective result.
+   themselves. Present one review brief for the effective result. It lists
+   findings and one disposition for each: `fixed`, `rejected_invalid`,
+   `accepted_risk`, or `unverified` when no bound response ledger exists; it is
+   review evidence, not a synthetic stage pass.
 7. If a finding changes either draft, first republish both exact artifacts and
    regenerate the deterministic contract facts. TaskKernel classifies the
    change inside the same authenticated review flow:

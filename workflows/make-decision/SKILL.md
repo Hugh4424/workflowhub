@@ -153,6 +153,10 @@ only through `wh-review`; it is not a second review runner.
    problem. Do not rerun unrelated CLI diagnostics, repeat an unchanged review,
    or ask the user to choose how to repair a valid review result. Present one
    review brief for the effective result using the review-card contract below.
+   Direction stays blind and never merges with detail. Both track briefs show
+   findings with `fixed`, `rejected_invalid`, `accepted_risk`, or `unverified`
+   when no bound response ledger exists; a verdict is review evidence, not a
+   replacement for the final decision confirmation.
 6. Run `talk-with-zhipeng` round 3 with the blind findings. Its queue covers
    contradictions, load-bearing assumptions, unresolved findings, and residual
    risks. Apply the same internal queue, short question-card, wait, reorder, and
@@ -189,7 +193,8 @@ only through `wh-review`; it is not a second review runner.
    as "confirmed in discussion". Include the grill documentation outcome, then
    run the `wh-review` detail track over the candidate direction and draft.
    `wh-review` remains the only component that invokes review providers.
-   Present one review brief for the effective detail result.
+   Present one review brief for the effective detail result without combining it
+   with the direction-track result.
 9. Bind the CandidateWorkspace's exact post-grill `snapshot_tree`, absolute root,
    and baseline commit into the attempt. Acceptance must recapture the tree and
    fail loud if it changed after the attempt was published.

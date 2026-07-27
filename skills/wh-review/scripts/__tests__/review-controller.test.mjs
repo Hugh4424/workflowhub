@@ -78,10 +78,12 @@ describe("review round controller", () => {
   });
 
   it("keeps absent or invalid response evidence non-blocking and caps structural follow-up at one full review", () => {
-    expect(selectReviewRound({ stage: "verify-code", route: structuralRoute, previousResult: previous, currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toEqual({ round: "none", reason: "review_non_gate_recorded" });
-    expect(buildNonGateReviewResponseRecord({ taskId: "task", stage: "verify-code", previousResult: previous, previousResultSha256: "f".repeat(64), currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toMatchObject({ evidence_state: "unverified", unverified_reason: "no_response_ledger" });
+    for (const stage of ["build-spec", "build-plan", "verify-code"]) {
+      expect(selectReviewRound({ stage, route: structuralRoute, previousResult: previous, currentSnapshotTree: ledger.current_snapshot_tree }))
+        .toEqual({ round: "none", reason: "review_non_gate_recorded" });
+      expect(buildNonGateReviewResponseRecord({ taskId: "task", stage, previousResult: previous, previousResultSha256: "f".repeat(64), currentSnapshotTree: ledger.current_snapshot_tree }))
+        .toMatchObject({ evidence_state: "unverified", unverified_reason: "no_response_ledger" });
+    }
     const structural = { ...previous, review_chain: { round: "full" } };
     expect(selectReviewRound({ stage: "build-plan", route: structuralRoute, previousResult: structural, ledger, currentSnapshotTree: ledger.current_snapshot_tree }))
       .toEqual({ round: "none", reason: "review_non_gate_recorded" });

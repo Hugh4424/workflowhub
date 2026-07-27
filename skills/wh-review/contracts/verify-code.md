@@ -39,6 +39,10 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 再做一次完整审查。第二轮使用配置的 initial route，不带 response ledger；其 finding
 不循环也不阻断推进。`accepted_risk` 仅记录，必须在 verify-code 人类确认摘要中显式展示。
 
+人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
+`accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
+provider verdict 转成“审查通过”。
+
 UI scope 还必须包含真实浏览器证据，包括被验证流程、关键状态、结果、是否复用登录态和清理结果。缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。
 
 ## 审查重点

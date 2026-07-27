@@ -29,16 +29,16 @@ const structural = {
 };
 
 describe("non-code review cost policy", () => {
-  it.each(["build-spec", "build-plan"])("%s documents one initial review and bounded change handling", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s documents findings-only review and bounded change handling", (stage) => {
     const skill = readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
-    expect(skill).toMatch(/one initial full review/i);
-    expect(skill).toMatch(/ordinary (?:change|edit)[\s\S]{0,160}(?:zero provider|provider calls remain zero)/i);
-    expect(skill).toMatch(/structural change[\s\S]{0,160}at most one fresh full review/i);
+    expect(skill).toMatch(/finding(?:s)?[\s\S]{0,200}(?:fixed|rejected_invalid|accepted_risk|unverified)/i);
+    expect(skill).toMatch(/ordinary (?:change|edit|repair)[\s\S]{0,160}(?:zero provider|provider calls remain zero|does not call a provider)/i);
+    expect(skill).toMatch(/structural (?:change|re-review)[\s\S]{0,160}(?:at most one|only one|capped at one).*?(?:full|complete) review/i);
     expect(skill).toMatch(/second structural[\s\S]{0,120}stop/i);
     expect(skill).not.toMatch(/there is no numeric review limit|repeat for every changed draft|until .* no unresolved actionable/i);
   });
 
-  it.each(["build-spec", "build-plan"])("%s ordinary edit dispatches no provider", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s ordinary edit dispatches no provider", (stage) => {
     expect(selectReviewRound({
       stage,
       route,
@@ -48,7 +48,7 @@ describe("non-code review cost policy", () => {
     })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
   });
 
-  it.each(["build-spec", "build-plan"])("%s allows one structural full and blocks the second before dispatch", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s allows one structural full and blocks the second before dispatch", (stage) => {
     expect(selectReviewRound({
       stage,
       route,

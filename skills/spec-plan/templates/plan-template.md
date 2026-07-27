@@ -55,6 +55,13 @@ the accepted task has another real governance surface.
 
 ## Code Anchors and Reuse Decisions
 
+### Versioned identity and context projection
+
+- **Spec binding**：`{"artifact_kind":"spec","ref":"{accepted ref}","hash":"{sha256}","id":"{spec ID}"}`
+- **read_now**：{only the exact anchors needed to design the plan}
+- **must_read_before_task**：{task-specific anchors that cannot be projected earlier}
+- **Risk ledger**：{affected IDs, trigger, consequence, mitigation or STOP, handling Stage, verification}
+
 ### Verified anchors
 
 | Anchor | Path and symbol | Current responsibility | Intended use | Forbidden change |

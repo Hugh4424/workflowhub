@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { readCommand, assembleVerifyAttempt } from "../workflows/verify-code/facts-assembly.mjs";
+import { createTaskProjection } from "../workflows/verify-code/design-alignment.mjs";
 
 describe("verify-code accepted-input and append-only attempt facts", () => {
   it("reads the fresh command only from the accepted build-code attempt facts", () => {
@@ -33,5 +34,21 @@ describe("verify-code accepted-input and append-only attempt facts", () => {
       expect(() => assembleVerifyAttempt({ ...base, evidenceRefs: [evidenceRef] }))
         .toThrow(/evidence|relative|traversal|specs/i);
     }
+  });
+
+  it("requires the task projection to use accepted versioned reference bindings", () => {
+    const ref = {
+      artifact_kind: "spec",
+      ref: "specs/demo/spec.md",
+      hash: "a".repeat(64),
+      id: "AC-15",
+    };
+    const result = createTaskProjection({
+      task: { id: "T008", versioned_refs: [ref] },
+      selectedRefs: [ref],
+      acceptedRefs: [ref],
+    });
+
+    expect(result).toMatchObject({ status: "ready", selected_refs: [ref] });
   });
 });

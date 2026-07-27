@@ -176,6 +176,13 @@ order, evidence, or authority boundaries.
    formal card record and must not appear in the user-visible description.
    Present one Stage progress brief after the Phase breakdown is frozen: each
    Phase's human-readable goal, ordering/dependencies, and the first Phase to run.
+   Before an individual task starts, resolve a temporary task projection from
+   that task's declared versioned refs only. Each selected item must exactly
+   match an accepted `artifact_kind` + `ref` + `hash` + `id` binding; do not
+   discover extra files, scan the repository, or copy complete spec/plan/tasks
+   text. A missing, stale, duplicate, or overwide binding stops that task with
+   its affected ID and recovery condition. The projection is execution input
+   only: discard it after the task and never publish it as an accepted fact.
 3. Start only the current Phase. When Phase execution returns, run the Phase
    gate against the canonical result, its formal PASS review, and the live
    Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkFreshness, getAnomalyFlagsText } from '../workflows/verify-code/freshness.mjs';
+import { alignCurrentEvidence } from '../workflows/verify-code/design-alignment.mjs';
 
 describe('checkFreshness', () => {
   it('should return empty anomaly_flags and warnings when sha matches', () => {
@@ -64,5 +65,24 @@ describe('falsifiability guard', () => {
     // If someone comments out the warnings generation, this fails
     expect(result.anomaly_flags.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe('current evidence alignment', () => {
+  it('does not treat a stale current snapshot as fresh verification evidence', () => {
+    const result = alignCurrentEvidence({
+      acceptedDesign: { alignment_id: 'FR-15', acceptance_criteria: [], design_ids: ['FR-15'] },
+      currentEvidence: {
+        snapshot_tree: 'a'.repeat(40),
+        acceptance_coverage: { snapshot_tree: 'a'.repeat(40), items: [] },
+        phase_evidence: { snapshot_tree: 'a'.repeat(40), ref: 'evidence/phase.json' },
+        test_evidence: { snapshot_tree: 'a'.repeat(40), ref: 'receipts/tests.json' },
+        review_evidence: { snapshot_tree: 'b'.repeat(40), ref: 'reviews/results/review.json' },
+      },
+    });
+
+    expect(result.gaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ affected_id: 'FR-15', reason: 'stale_current_review_evidence' }),
+    ]));
   });
 });

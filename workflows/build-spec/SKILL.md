@@ -45,10 +45,10 @@ Use this complete public sequence without inventing flags or input shapes:
    `node scripts/stage-runtime.mjs artifact --stage=build-spec
    --project=<project> --task=<task> --name=spec.md
    --input=$TMP_DIR/draft-spec.md`.
-2. For the exact current `spec.md`, publish its ambiguity ledger:
+2. For the exact current `spec.md`, publish its v2 ambiguity and identity ledger:
    `node scripts/stage-runtime.mjs publish-content-evidence --stage=build-spec
-   --project=<project> --task=<task> --kind=ambiguity-ledger.v1
-   --input=$TMP_DIR/ambiguity-ledger.json`.
+   --project=<project> --task=<task> --kind=ambiguity-ledger.v2
+   --input=$TMP_DIR/ambiguity-ledger-v2.json`.
    The returned canonical ref/hash is the only ambiguity-ledger evidence used
    by review and publication. If clarification or review changes even one
    `spec.md` byte, the old ledger is stale: rebuild and republish it for the new
@@ -113,14 +113,23 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    controlled writer for `spec.md`. Present one host-visible draft brief covering
    the proposed goal, boundaries, major requirements, acceptance shape, and the
    next check.
-4. Always build an `ambiguity-ledger.v1` over the current `spec.md`; an empty
+4. Always build an `ambiguity-ledger.v2` over the current `spec.md`; an empty
    or skipped ledger is invalid. Classify every relevant statement as exactly
    one of `locked upstream decision`, `upstream explicitly unresolved`, or
    `new ambiguity`. One ledger item represents one decision axis. If two
    behaviors can vary independently, create two items even when they affect the
    same field or feature.
 
-   Every item records all six possible impact dimensions separately: scope,
+   The v2 ledger is the deterministic identity summary for the exact spec bytes:
+   it binds the spec ref/hash, PFACT/FR/AC IDs and their relations, fact status,
+   and every risk's affected IDs, trigger, consequence, mitigation-or-STOP,
+   handling Stage, and verification. It never copies product prose into a
+   second artifact. `verified` PFACT requires formal evidence; `inferred`,
+   `unknown`, and `not_applicable` require their corresponding limit, owner, or
+   reason. Code paths, symbols, code anchors, and engineering options are
+   forbidden in the v2 payload.
+
+   Every ambiguity item records all six possible impact dimensions separately: scope,
    acceptance, interfaces, data, security, and operations. It also records
    whether it is material, its source facts, affected requirements, status,
    conclusion, and factual reason. A material item may close only as a real
@@ -163,14 +172,17 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    six-dimension assessment, a mismatched `spec_content_hash`, or an incorrect
    `unresolved_material_count` stops the Stage. Do not create the spec receipt,
    start review, publish a successful attempt, or show a completion card.
-   Publish the current canonical `ambiguity-ledger.v1` ref/hash only after the
+   Publish the current canonical `ambiguity-ledger.v2` ref/hash only after the
    exact draft passes this gate.
 6. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
 7. Run one initial full review using a frozen packet built from the exact
-   `spec.md`, its matching ambiguity-ledger ref/hash, decision facts, and
+   `spec.md`, its matching ambiguity-ledger.v2 ref/hash, decision facts, and
    relevant evidence. Present one review brief for its effective result using
-   the review-card contract below.
+   the review-card contract below. The brief lists findings and one disposition
+   for each: `fixed`, `rejected_invalid`, `accepted_risk`, or `unverified` when
+   no bound response ledger exists. This is review evidence, never a synthetic
+   stage pass.
 8. If clarification or review causes `spec.md` to change, first republish the
    artifact, rebuild the ledger, rerun the ambiguity gate, and publish new
    content evidence. TaskKernel then classifies the change inside the same
@@ -190,10 +202,12 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    structural follow-up still leaves an actionable material finding, report the
    blocker and its completion condition instead of publishing.
 9. Before the create-only receipt, reconcile the exact final `spec.md` bytes
-   against every review finding and the planned completion card. Resolve every
-   finding that alleges an internal contradiction, unresolved cross-reference,
-   missing acceptance criterion, or mismatch between claimed and written
-   coverage, even when the provider verdict is `pass`. Enumerate the actual FR
+   against every review finding and the planned completion card. For each
+   finding, record `fixed`, `rejected_invalid`, or `accepted_risk`; without a
+   bound ledger record `unverified` and do not claim it was repaired. Resolve a
+   factual internal contradiction, unresolved cross-reference, missing
+   acceptance criterion, or mismatch between claimed and written coverage even
+   when the provider verdict is `pass`. Enumerate the actual FR
    and AC identifiers and verify that every stated range and downstream coverage
    claim resolves to them. If reconciliation changes the draft, return to Step
    8's same-flow classification; do not start a new review flow. Stop before
@@ -201,7 +215,7 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    material finding remains; never publish a completion card that claims more
    than the artifact contains.
 10. After that reconciliation finishes, verify once more that the exact final
-   spec bytes, `spec_content_hash`, canonical ambiguity-ledger ref/hash, review
+   spec bytes, `spec_content_hash`, canonical ambiguity-ledger.v2 ref/hash, review
    head or same-flow resolution, and Workspace snapshot all agree. Without
    changing `spec.md`, create one final create-only receipt
    from its exact content. The normal path must not use a revision receipt
