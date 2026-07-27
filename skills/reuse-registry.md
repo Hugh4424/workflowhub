@@ -57,6 +57,7 @@
 - `review` — adapted；make-decision/build-spec/build-plan。来源 gstack [`review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review)，MIT。只作为 wh-review lens。
 - `qa-only` — adapted；verify-code。来源 gstack [`qa-only`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only)，MIT。去浏览器 daemon，只消费 sealed packet。
 - `verify-change` — adapted；verify-code。来源 AgentHub [`verify-change`](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change)，MIT。裁为 lens；full/close 由 verify-code 承接。
+- `resolving-merge-conflicts` — native；verify-code close 冲突恢复。只在 task 分支解决冲突，不接管 target 合并、推送或清理。
 - `test-strategy` — adapted；verify-code。来源 AgentHub 固定快照，MIT。适配 workflowhub AC-to-test-route 和 L2/L3 证据合同。
 - `debate` — adopted；make-decision 条件增强。来源 [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md)，MIT。仓内路径；失败记录 diagnostic 后继续。
 - `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。

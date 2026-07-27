@@ -335,6 +335,19 @@ skills:
     local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
     dependency_closure: [skills/verify-change]
     update_policy: 仅同步验收检查规则，不恢复旧 lifecycle
+  - name: resolving-merge-conflicts
+    path: skills/resolving-merge-conflicts/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 5aa9176b84f89a3cf51520adfa735e679594ebf626f4f5d7af2b6c6fe4a5afe7
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
+    design_idea: 只恢复 task 分支，不接管 target 合并和推送
+    used_by_stages: [verify-code]
+    upstream: []
+    local_changes: WorkflowHub close 冲突恢复约束
+    dependency_closure: [skills/resolving-merge-conflicts]
+    update_policy: 随 verify-code close 合同变更审查
   - name: test-strategy
     path: skills/test-strategy/SKILL.md
     local_version: 1.0.0

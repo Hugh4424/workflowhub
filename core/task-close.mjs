@@ -227,8 +227,18 @@ function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
   if (git(root, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("target repository must be clean");
+  if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
   if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
+}
+
+function plannedMergePreflight(delivery) {
+  const tip = branchOid(delivery.target_repo_root, delivery.task_branch);
+  if (!tip) throw new Error("task branch does not exist before merge");
+  const result = gitResult(delivery.target_repo_root, ["merge-tree", "--write-tree", delivery.target_baseline, tip]);
+  if (result.ok) return Object.freeze({ target_baseline: delivery.target_baseline, task_tip: tip, conflict: false });
+  if (result.status === 1) throw new Error("planned merge has conflicts; run skills/resolving-merge-conflicts on the task branch, then retry close");
+  throw new Error(`planned merge preflight failed: ${result.stderr || result.stdout || "git merge-tree failed"}`);
 }
 
 function validateDeliveryPlan(plan, task, kernel) {
@@ -481,9 +491,14 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   const mergeState = () => {
     const archive = findArchive();
     const target = branchOid(root, delivery.target_branch);
+    const taskTip = branchOid(root, delivery.task_branch);
     const parents = target ? gitResult(root, ["rev-list", "--parents", "-n", "1", target]).stdout.split(" ").slice(1) : [];
-    const satisfied = Boolean(archive.commit) && parents.length === 2 && parents[0] === delivery.target_baseline && parents[1] === archive.commit;
-    return { satisfied, target_oid: target, archive_commit: archive.commit };
+    const taskParents = taskTip ? gitResult(root, ["rev-list", "--parents", "-n", "1", taskTip]).stdout.split(" ").slice(1) : [];
+    const taskTipIsArchived = taskTip === archive.commit;
+    const taskTipIsResolved = taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;
+    const satisfied = Boolean(archive.commit && taskTip && (taskTipIsArchived || taskTipIsResolved))
+      && parents.length === 2 && parents[0] === delivery.target_baseline && parents[1] === taskTip;
+    return { satisfied, target_oid: target, task_tip: taskTip, archive_commit: archive.commit, resolved: taskTipIsResolved };
   };
   let removal;
   const registry = {
@@ -530,7 +545,14 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         execute: async () => {
           targetPreflight(delivery);
           if (!archived().satisfied) throw new Error("spec archive is incomplete");
-          git(root, ["merge", "--no-ff", "--no-edit", delivery.task_branch]);
+          plannedMergePreflight(delivery);
+          targetPreflight(delivery);
+          try {
+            git(root, ["merge", "--no-ff", "--no-edit", delivery.task_branch]);
+          } catch (error) {
+            if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) gitResult(root, ["merge", "--abort"]);
+            throw new Error(`merge-task-branch failed; target merge was aborted: ${error.message}`);
+          }
         },
         verify: async (value) => value.satisfied && value.archive_commit !== null,
       };
