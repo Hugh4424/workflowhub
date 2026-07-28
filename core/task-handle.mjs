@@ -1181,10 +1181,10 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!new Set(["results/build-plan/accepted.json", "results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
-      throw new Error("only controlled build-plan, build-code, or verify-code canonical accepted records may be replaced");
+    if (!new Set(["results/build-spec/accepted.json", "results/build-plan/accepted.json", "results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
+      throw new Error("only controlled build-spec, build-plan, build-code, or verify-code canonical accepted records may be replaced");
     }
-    if (new Set(["results/build-plan/accepted.json", "results/verify-code/accepted.json"]).has(relativePath) && (typeof options?.validator !== "function" || typeof options?.expectedPriorRaw !== "string")) {
+    if (new Set(["results/build-spec/accepted.json", "results/build-plan/accepted.json", "results/verify-code/accepted.json"]).has(relativePath) && (typeof options?.validator !== "function" || typeof options?.expectedPriorRaw !== "string")) {
       throw new Error("controlled canonical accepted replacement requires validator and prior record binding");
     }
     const { candidate } = resolveRecord(realTaskPath, relativePath);
@@ -1197,15 +1197,16 @@ function makeTaskHandle(taskPath, manifest) {
       throw new Error("canonical accepted replacement archive path is invalid");
     }
     if (options.archiveRaw !== prior) throw new Error("canonical accepted replacement archive does not match the prior record");
-    const { candidate: archiveCandidate, parent: archiveParent } = resolveRecord(realTaskPath, options.archiveRef);
+    const { candidate: archiveCandidate } = resolveRecord(realTaskPath, options.archiveRef);
     const archiveExisted = existsSync(archiveCandidate);
     if (archiveExisted && readRegularFileNoFollow(archiveCandidate, "canonical accepted archive", taskRootIdentity.real) !== prior) {
       throw new Error("canonical accepted replacement archive conflicts with the prior record");
     }
+    if (!archiveExisted) createOnlyAt(realTaskPath, options.archiveRef, options.archiveRaw);
+    options?.testHooks?.afterArchiveBeforeReplace?.();
     let result;
     try {
       result = writeAtomicAt(realTaskPath, relativePath, data, options);
-      if (!archiveExisted) createOnlyAt(realTaskPath, options.archiveRef, options.archiveRaw);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
     } catch (error) {
       let current;
@@ -1221,13 +1222,6 @@ function makeTaskHandle(taskPath, manifest) {
         }
       } catch (rollbackError) {
         throw new Error("canonical accepted replacement failed and rollback did not restore the prior record", { cause: rollbackError });
-      }
-      if (!archiveExisted && existsSync(archiveCandidate)) {
-        const archiveCurrent = readRegularFileNoFollow(archiveCandidate, "canonical accepted rollback archive", taskRootIdentity.real);
-        if (archiveCurrent === prior) {
-          unlinkSync(archiveCandidate);
-          fsyncDirectory(archiveParent);
-        }
       }
       throw error;
     }

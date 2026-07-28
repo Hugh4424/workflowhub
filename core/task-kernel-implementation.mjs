@@ -203,6 +203,35 @@ function validateBaselineRebindProvenance(value) {
   if (!HASH.test(value.authorization_hash ?? "")) throw new Error("baseline_rebind_provenance.authorization_hash invalid");
 }
 
+function validateBuildSpecContinuationProvenance(value, { requireArchive = false } = {}) {
+  if (value === undefined) return;
+  plain(value, "build_spec_continuation_provenance");
+  rejectUnknown(value, new Set([
+    "continuation_ref", "continuation_hash", "invalidation_ref", "invalidation_hash",
+    "previous_accepted_ref", "previous_accepted_hash", "previous_attempt_ref", "previous_attempt_hash",
+    "previous_accepted_archive_ref", "previous_accepted_archive_hash",
+  ]), "build_spec_continuation_provenance");
+  if (!/^results\/build-spec\/revisions\/continuation-[0-9]{4}\.json$/.test(value.continuation_ref ?? "")) {
+    throw new Error("build_spec_continuation_provenance.continuation_ref invalid");
+  }
+  if (!/^results\/build-spec\/invalidations\/[a-f0-9]{64}\.json$/.test(value.invalidation_ref ?? "")) {
+    throw new Error("build_spec_continuation_provenance.invalidation_ref invalid");
+  }
+  if (value.previous_accepted_ref !== "results/build-spec/accepted.json"
+      || !/^results\/build-spec\/attempt-[0-9]{4}\.json$/.test(value.previous_attempt_ref ?? "")) {
+    throw new Error("build_spec_continuation_provenance previous acceptance binding invalid");
+  }
+  for (const key of ["continuation_hash", "invalidation_hash", "previous_accepted_hash", "previous_attempt_hash"]) {
+    if (!HASH.test(value[key] ?? "")) throw new Error(`build_spec_continuation_provenance.${key} must be sha256`);
+  }
+  const hasArchive = value.previous_accepted_archive_ref !== undefined || value.previous_accepted_archive_hash !== undefined;
+  if (hasArchive && (!/^results\/build-spec\/accepted-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?\.json$/.test(value.previous_accepted_archive_ref ?? "")
+      || !HASH.test(value.previous_accepted_archive_hash ?? ""))) {
+    throw new Error("build_spec_continuation_provenance archive binding invalid");
+  }
+  if (requireArchive && !hasArchive) throw new Error("accepted build-spec continuation provenance requires archive binding");
+}
+
 function validateVerifyFailurePublication(value) {
   if (value === undefined) return;
   plain(value, "verify_failure_publication");
@@ -451,9 +480,11 @@ export function validateAttempt(attempt, expected = {}) {
   validateUpstreamAcceptances(attempt.upstream_acceptances);
   validateReopenProvenance(attempt.reopen_provenance);
   validateBaselineRebindProvenance(attempt.baseline_rebind_provenance);
+  validateBuildSpecContinuationProvenance(attempt.build_spec_continuation_provenance);
   validateVerifyFailurePublication(attempt.verify_failure_publication);
   validateVerifyPassingPublication(attempt.verify_passing_publication);
   if (attempt.baseline_rebind_provenance !== undefined && stage !== "build-plan") throw new Error("baseline_rebind_provenance is only valid for build-plan");
+  if (attempt.build_spec_continuation_provenance !== undefined && stage !== "build-spec") throw new Error("build_spec_continuation_provenance is only valid for build-spec");
   if (attempt.reopen_provenance !== undefined && stage !== "build-code") throw new Error("reopen_provenance is only valid for build-code");
   if (attempt.verify_failure_publication !== undefined && stage !== "verify-code") throw new Error("verify_failure_publication is only valid for verify-code");
   if (attempt.verify_passing_publication !== undefined && stage !== "verify-code") throw new Error("verify_passing_publication is only valid for verify-code");
@@ -472,6 +503,7 @@ export function validateAccepted(accepted, expected = {}) {
     "schema_version", "task_id", "stage", "attempt_ref", "integrity_hash",
     "acceptance_mode", "human_confirmation_ref", "accepted_at", "upstream_refs",
     "checkpoint", "baseline_rebind_provenance",
+    "build_spec_continuation_provenance",
     "full_audit_ref", "full_audit_hash", "full_audit_summary_hash", "full_audit_verdict",
   ]), "accepted");
   if (accepted.schema_version !== "task-accepted.v2") throw new Error("accepted schema_version must be task-accepted.v2");
@@ -507,7 +539,11 @@ export function validateAccepted(accepted, expected = {}) {
   validateRefs(accepted.upstream_refs, "accepted upstream_refs");
   if (["build-spec", "build-plan"].includes(stage)) validateCheckpoint(accepted.checkpoint);
   validateBaselineRebindProvenance(accepted.baseline_rebind_provenance);
+  validateBuildSpecContinuationProvenance(accepted.build_spec_continuation_provenance, {
+    requireArchive: stage === "build-spec" && accepted.build_spec_continuation_provenance !== undefined,
+  });
   if (accepted.baseline_rebind_provenance !== undefined && stage !== "build-plan") throw new Error("baseline_rebind_provenance is only valid for build-plan");
+  if (accepted.build_spec_continuation_provenance !== undefined && stage !== "build-spec") throw new Error("build_spec_continuation_provenance is only valid for build-spec");
   if (expected.taskId && accepted.task_id !== expected.taskId) throw new Error("accepted task identity mismatch");
   if (expected.stage && stage !== expected.stage) throw new Error("accepted stage identity mismatch");
   return accepted;
@@ -547,6 +583,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   const readAcceptedAt = (name, acceptedFile, {
     allowLegacyBuildCode = false,
     allowLegacyAuditRead = true,
+    liveCheckpoint = true,
   } = {}) => {
     if (!ACCEPTED_FILE.test(acceptedFile)) throw new Error("invalid accepted record name");
     const acceptedRef = `results/${name}/${acceptedFile}`;
@@ -594,9 +631,55 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       }
     }
     if (accepted.upstream_refs.length !== attempt.upstream_refs.length || JSON.stringify(accepted.upstream_refs) !== JSON.stringify(attempt.upstream_refs)) throw new Error(`${name} accepted upstream refs mismatch`);
-    if (["build-spec", "build-plan"].includes(name)) verifyCheckpoint(name, accepted.checkpoint);
+    if (accepted.build_spec_continuation_provenance !== undefined) {
+      const provenance = accepted.build_spec_continuation_provenance;
+      const {
+        previous_accepted_archive_ref: _archiveRef,
+        previous_accepted_archive_hash: _archiveHash,
+        ...attemptProvenance
+      } = provenance;
+      if (JSON.stringify(attemptProvenance) !== JSON.stringify(attempt.build_spec_continuation_provenance)) {
+        throw new Error(`${name} accepted build-spec continuation provenance mismatch`);
+      }
+      const continuationRaw = task.readRecord(provenance.continuation_ref);
+      const invalidationRaw = task.readRecord(provenance.invalidation_ref);
+      const previousAttemptRaw = task.readRecord(provenance.previous_attempt_ref);
+      const archiveRaw = task.readRecord(provenance.previous_accepted_archive_ref);
+      const continuation = parseJson(continuationRaw, "accepted build-spec continuation authorization");
+      const invalidation = parseJson(invalidationRaw, "accepted build-spec invalidation authorization");
+      const unsignedInvalidation = { ...invalidation };
+      delete unsignedInvalidation.content_hash;
+      const previousAttempt = validateAttempt(parseJson(previousAttemptRaw, "accepted build-spec previous attempt"), {
+        taskId: task.identity.taskId, stage: "build-spec",
+      });
+      const previousAccepted = validateAccepted(parseJson(archiveRaw, "accepted build-spec previous accepted archive"), {
+        taskId: task.identity.taskId, stage: "build-spec",
+      });
+      const previousAudit = readBoundAttemptAudit("build-spec", previousAttempt, "accepted build-spec previous audit");
+      if (hash(continuationRaw) !== provenance.continuation_hash
+          || hash(invalidationRaw) !== provenance.invalidation_hash
+          || hash(previousAttemptRaw) !== provenance.previous_attempt_hash
+          || hash(archiveRaw) !== provenance.previous_accepted_archive_hash
+          || provenance.previous_accepted_archive_hash !== provenance.previous_accepted_hash
+          || continuation.previous_accepted?.ref !== provenance.previous_accepted_ref
+          || continuation.previous_accepted?.sha256 !== provenance.previous_accepted_hash
+          || continuation.previous_attempt?.ref !== provenance.previous_attempt_ref
+          || continuation.previous_attempt?.sha256 !== provenance.previous_attempt_hash
+          || continuation.previous_attempt?.attempt_id !== previousAttempt.attempt_id
+          || previousAccepted.attempt_ref !== provenance.previous_attempt_ref.split("/").at(-1)
+          || String(previousAccepted.integrity_hash).replace(/^sha256:/, "") !== provenance.previous_attempt_hash
+          || invalidation.attempt_ref !== provenance.previous_attempt_ref
+          || invalidation.attempt_hash !== provenance.previous_attempt_hash
+          || invalidation.attempt_id !== previousAttempt.attempt_id
+          || invalidation.workflow_run_id !== previousAudit.workflow_run_id
+          || invalidation.content_hash !== hash(`${JSON.stringify(unsignedInvalidation, null, 2)}\n`)) {
+        throw new Error("build-spec continuation authorization changed");
+      }
+    }
+    if (["build-spec", "build-plan"].includes(name)) verifyCheckpoint(name, accepted.checkpoint, { live: liveCheckpoint });
     const facts = accepted.checkpoint ? { ...structuredClone(attempt.facts), checkpoint: structuredClone(accepted.checkpoint) } : attempt.facts;
     const legacyAudit = AUDIT_FACT_KEYS.every((key) => !Object.prototype.hasOwnProperty.call(attempt.facts, key));
+    if (!legacyAudit) readBoundAttemptAudit(name, attempt, `${name} accepted attempt audit`);
     return deepFreeze({
       accepted_ref: acceptedRef,
       accepted_hash: hash(acceptedRaw),
@@ -612,6 +695,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const name = stageName(stage);
     return readAcceptedAt(name, "accepted.json", options);
   };
+  const readAcceptedBuildSpecForContinuation = () => readAcceptedAt("build-spec", "accepted.json", {
+    liveCheckpoint: false,
+  });
   const latestStageRun = (stage) => {
     const name = stageName(stage);
     let latest = null;
@@ -886,19 +972,112 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       taskId: task.identity.taskId, stage: name, allowLegacyAuditRead: true,
     });
     const active = activeStageRun(name);
-    const audit = parseJson(task.readRecord(attempt.facts.audit_summary_ref), "stage attempt audit");
+    const audit = readBoundAttemptAudit(name, attempt, "stage attempt audit");
     if (audit.workflow_run_id !== active.run.workflow_run_id || audit.stage_slug !== name) {
       throw new Error("stage attempt invalidation target does not belong to the active run");
     }
     const ref = `results/${name}/invalidations/${attemptHash}.json`;
-    const record = {
+    const unsignedRecord = {
       schema_version: "stage-attempt-invalidation.v1", task_id: task.identity.taskId, stage: name,
       attempt_ref: attemptRef, attempt_hash: attemptHash, attempt_id: attempt.attempt_id,
       workflow_run_id: active.run.workflow_run_id, reason, created_at: now(),
     };
+    const record = { ...unsignedRecord, content_hash: hash(`${JSON.stringify(unsignedRecord, null, 2)}\n`) };
     const recordRaw = `${JSON.stringify(record, null, 2)}\n`;
     createKernelRecord(ref, recordRaw);
     return deepFreeze({ ref, hash: hash(recordRaw), record });
+  };
+  const readBoundAttemptAudit = (stage, attempt, label) => {
+    const raw = task.readRecord(attempt.facts.audit_summary_ref);
+    const audit = parseJson(raw, label);
+    const unsigned = { ...audit };
+    delete unsigned.summary_hash;
+    if (attempt.facts.audit_summary_ref !== `evidence/audits/${stage}/${attempt.facts.audit_summary_hash}.json`
+        || audit.summary_hash !== attempt.facts.audit_summary_hash
+        || hashAuditSummary(unsigned) !== audit.summary_hash
+        || audit.task_id !== task.identity.taskId
+        || audit.stage_slug !== stage
+        || audit.verdict !== "pass") {
+      throw new Error(`${label} binding mismatch`);
+    }
+    return audit;
+  };
+  const assertNoAcceptedBuildSpecDownstream = () => {
+    for (const stage of ["build-plan", "build-code", "verify-code"]) {
+      try {
+        task.readRecord(`results/${stage}/accepted.json`);
+        throw new Error(`accepted build-spec continuation is blocked by accepted downstream stage ${stage}`);
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+  };
+  const assertAcceptedBuildSpecContinuation = (current, attempt) => {
+    if (!current || current.accepted.stage !== "build-spec") {
+      throw new Error("accepted build-spec continuation requires the current accepted specification");
+    }
+    const active = activeStageRun("build-spec");
+    const continuationRef = active.run.continuation_ref;
+    if (!continuationRef) throw new Error("accepted build-spec continuation requires an active continuation run");
+    const continuationRaw = task.readRecord(continuationRef);
+    const continuation = parseJson(continuationRaw, "accepted build-spec continuation");
+    const previousAttemptRef = `results/build-spec/${current.accepted.attempt_ref}`;
+    const previousAttemptHash = String(current.accepted.integrity_hash).replace(/^sha256:/, "");
+    if (continuation.schema_version !== "stage-continuation.v1"
+        || continuation.task_id !== task.identity.taskId
+        || continuation.stage !== "build-spec"
+        || continuation.previous_accepted?.ref !== current.accepted_ref
+        || continuation.previous_accepted?.sha256 !== current.accepted_hash
+        || continuation.previous_attempt?.ref !== previousAttemptRef
+        || continuation.previous_attempt?.sha256 !== previousAttemptHash
+        || continuation.previous_attempt?.attempt_id !== current.attempt.attempt_id) {
+      throw new Error("accepted build-spec continuation does not bind the current accepted specification");
+    }
+    const invalidationRef = `results/build-spec/invalidations/${previousAttemptHash}.json`;
+    let invalidationRaw;
+    try { invalidationRaw = task.readRecord(invalidationRef); }
+    catch (error) {
+      if (error?.code === "ENOENT") throw new Error("accepted build-spec continuation requires prior attempt invalidation");
+      throw error;
+    }
+    const invalidation = parseJson(invalidationRaw, "accepted build-spec attempt invalidation");
+    const unsignedInvalidation = { ...invalidation };
+    delete unsignedInvalidation.content_hash;
+    assertNoAcceptedBuildSpecDownstream();
+    const previousAudit = readBoundAttemptAudit("build-spec", current.attempt, "accepted build-spec prior audit");
+    if (invalidation.schema_version !== "stage-attempt-invalidation.v1"
+        || invalidation.task_id !== task.identity.taskId
+        || invalidation.stage !== "build-spec"
+        || invalidation.attempt_ref !== previousAttemptRef
+        || invalidation.attempt_hash !== previousAttemptHash
+        || invalidation.attempt_id !== current.attempt.attempt_id
+        || invalidation.workflow_run_id !== previousAudit.workflow_run_id
+        || invalidation.content_hash !== hash(`${JSON.stringify(unsignedInvalidation, null, 2)}\n`)
+        || !nonemptyString(invalidation.reason, "accepted build-spec invalidation reason")
+        || !Number.isFinite(Date.parse(invalidation.created_at))) {
+      throw new Error("accepted build-spec prior attempt invalidation is invalid");
+    }
+    if (attempt !== undefined) {
+      const audit = readBoundAttemptAudit("build-spec", attempt, "accepted build-spec continuation audit");
+      if (audit.workflow_run_id !== active.run.workflow_run_id || audit.stage_slug !== "build-spec") {
+        throw new Error("accepted build-spec continuation attempt does not belong to the active continuation run");
+      }
+    }
+    const provenance = {
+      continuation_ref: continuationRef,
+      continuation_hash: hash(continuationRaw),
+      invalidation_ref: invalidationRef,
+      invalidation_hash: hash(invalidationRaw),
+      previous_accepted_ref: current.accepted_ref,
+      previous_accepted_hash: current.accepted_hash,
+      previous_attempt_ref: previousAttemptRef,
+      previous_attempt_hash: previousAttemptHash,
+    };
+    if (attempt?.build_spec_continuation_provenance !== undefined
+        && JSON.stringify(attempt.build_spec_continuation_provenance) !== JSON.stringify(provenance)) {
+      throw new Error("accepted build-spec continuation attempt authorization changed");
+    }
+    return deepFreeze(provenance);
   };
   const invalidateReviewBinding = (stage, input = {}) => {
     const name = stageName(stage);
@@ -1234,13 +1413,32 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   const completeMakeDecisionReceipt = (input = {}) => {
     plain(input, "make-decision receipt completion input");
     rejectUnknown(input, new Set(["receipt_ref", "receipt_hash"]), "make-decision receipt completion input");
-    if (input.receipt_ref !== DECISION_RECEIPT_REF || !HASH.test(input.receipt_hash ?? "")) {
+    const isDecisionRevision = /^receipts\/revisions\/decision\/[a-f0-9]{64}\.json$/.test(input.receipt_ref ?? "");
+    if ((input.receipt_ref !== DECISION_RECEIPT_REF && !isDecisionRevision) || !HASH.test(input.receipt_hash ?? "")) {
       throw new TypeError("make-decision receipt binding is invalid");
     }
     assertMakeDecisionProducerPredecessor(9);
     const raw = task.readRecord(input.receipt_ref);
     if (hash(raw) !== input.receipt_hash) throw new Error("make-decision receipt hash mismatch");
     const receipt = parseJson(raw, "make-decision decision receipt");
+    if (isDecisionRevision) {
+      const previousRef = receipt.revision?.previous_ref;
+      const previousHash = receipt.revision?.previous_hash;
+      if (previousRef !== DECISION_RECEIPT_REF || !HASH.test(previousHash ?? "")
+          || hash(task.readRecord(previousRef)) !== previousHash
+          || receipt.revision?.content_hash !== hash(`${JSON.stringify({
+            schema_version: receipt.schema_version,
+            task_id: receipt.task_id,
+            stage: receipt.stage,
+            producer: receipt.producer,
+            decision_ref: receipt.decision_ref,
+            decision_hash: receipt.decision_hash,
+            contract_refs: receipt.contract_refs,
+            content_hash: receipt.content_hash,
+          }, null, 2)}\n`)) {
+        throw new Error("make-decision decision revision provenance binding mismatch");
+      }
+    }
     const decisionRaw = task.readRecord(receipt.decision_ref);
     if (receipt.schema_version !== "workflowhub-receipt.v1"
         || receipt.task_id !== task.identity.taskId || receipt.stage !== "make-decision"
@@ -2674,13 +2872,27 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       }
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let current;
-        try { current = readAcceptedLocal(name, { allowLegacyBuildCode: name === "build-code" && data.reopen_provenance !== undefined }); }
+        const activeContinuation = name === "build-spec"
+          && trustedActiveStageRun(name)?.run?.continuation_ref !== undefined;
+        try {
+          current = activeContinuation
+            ? readAcceptedBuildSpecForContinuation()
+            : readAcceptedLocal(name, {
+              allowLegacyBuildCode: name === "build-code" && data.reopen_provenance !== undefined,
+            });
+        }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         const controlledVerifyFailure = data.verify_failure_publication !== undefined;
         const controlledVerifyPassing = data.verify_passing_publication !== undefined;
         const baselineRebind = name === "build-plan" && data.baseline_rebind_ref !== undefined;
         const continuationPublication = name === "make-decision" && allowsAcceptedMakeDecisionContinuation(current);
-        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing && !baselineRebind && !continuationPublication) throw new Error(`${name} is accepted and closed`);
+        const buildSpecContinuation = current && activeContinuation
+          ? assertAcceptedBuildSpecContinuation(current)
+          : null;
+        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing
+            && !baselineRebind && !continuationPublication && !buildSpecContinuation) {
+          throw new Error(`${name} is accepted and closed`);
+        }
         let baselineRebindAuthorization;
         if (baselineRebind) baselineRebindAuthorization = assertBaselineRebind(data.baseline_rebind_ref, current);
         if (controlledVerifyFailure) {
@@ -2740,6 +2952,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             upstream_refs: structuredClone(data.upstream_refs ?? []),
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
+            ...(buildSpecContinuation ? { build_spec_continuation_provenance: structuredClone(buildSpecContinuation) } : {}),
             ...(baselineRebindAuthorization ? { baseline_rebind_provenance: { authorization_ref: baselineRebindAuthorization.ref, authorization_hash: baselineRebindAuthorization.hash } } : {}),
             ...(data.verify_failure_publication ? { verify_failure_publication: structuredClone(data.verify_failure_publication) } : {}),
             ...(data.verify_passing_publication ? { verify_passing_publication: structuredClone(data.verify_passing_publication) } : {}),
@@ -2886,7 +3099,15 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           return { raw, value };
         };
         let current;
-        try { current = readAcceptedLocal(name, { allowLegacyBuildCode: name === "build-code" && attempt.reopen_provenance !== undefined }); }
+        const activeContinuation = name === "build-spec"
+          && trustedActiveStageRun(name)?.run?.continuation_ref !== undefined;
+        try {
+          current = activeContinuation
+            ? readAcceptedBuildSpecForContinuation()
+            : readAcceptedLocal(name, {
+              allowLegacyBuildCode: name === "build-code" && attempt.reopen_provenance !== undefined,
+            });
+        }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         if (name === "make-decision" && current?.accepted.attempt_ref === attemptRef) {
           if (current.accepted.human_confirmation_ref !== humanConfirmationRef) {
@@ -2909,7 +3130,13 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           return current.accepted;
         }
         const controlledBaselineRebind = name === "build-plan" && attempt.baseline_rebind_provenance !== undefined;
-        if (current && name !== "build-code" && !controlledVerifyPassing && !controlledBaselineRebind) throw new Error(`${name} is accepted and closed`);
+        const buildSpecContinuation = current && activeContinuation
+          ? assertAcceptedBuildSpecContinuation(current, attempt)
+          : null;
+        if (current && name !== "build-code" && !controlledVerifyPassing
+            && !controlledBaselineRebind && !buildSpecContinuation) {
+          throw new Error(`${name} is accepted and closed`);
+        }
         let baselineRebindAuthorization;
         if (controlledBaselineRebind) {
           baselineRebindAuthorization = assertBaselineRebind(attempt.baseline_rebind_provenance.authorization_ref, current);
@@ -2923,7 +3150,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           }
           verifyCandidateSnapshot(attempt.facts);
         }
-        verifyUpstream(name, attempt.upstream_refs);
+        const liveUpstreamAcceptances = verifyUpstream(name, attempt.upstream_refs);
+        if (JSON.stringify(attempt.upstream_acceptances ?? []) !== JSON.stringify(liveUpstreamAcceptances)) {
+          throw new Error(`${name} accepted upstream lineage changed after attempt publication`);
+        }
         let confirmation;
         let confirmationRaw;
         let revalidateControlledVerifyPassing;
@@ -3013,6 +3243,30 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           } });
           execFileSync("git", ["merge-base", "--is-ancestor", attempt.checkpoint.parent_commit, acceptedCheckpoint.commit_oid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
         }
+        let canonicalRef;
+        let priorRaw;
+        let archiveRef;
+        if (current) {
+          if (typeof replaceKernelAccepted !== "function") throw new Error("kernel canonical accepted replacement authority is required");
+          canonicalRef = `results/${name}/accepted.json`;
+          priorRaw = controlledBaselineRebind
+            ? baselineRebindAuthorization.record.previous_accepted_raw
+            : task.readRecord(canonicalRef);
+          if (buildSpecContinuation && hash(priorRaw) !== current.accepted_hash) {
+            throw new Error("build-spec canonical accepted changed before replacement");
+          }
+          archiveRef = `results/${name}/${archivedAcceptedFileFor(current.accepted.attempt_ref)}`;
+          try {
+            if (task.readRecord(archiveRef) !== priorRaw) archiveRef = `results/${name}/${collisionArchiveFileFor(current.accepted.attempt_ref, priorRaw)}`;
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+          try {
+            if (task.readRecord(archiveRef) !== priorRaw) throw new Error(`${name} accepted collision archive conflicts with canonical record`);
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+        }
         const accepted = {
           schema_version: "task-accepted.v2",
           task_id: task.identity.taskId,
@@ -3031,6 +3285,13 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           upstream_refs: structuredClone(attempt.upstream_refs),
           ...(acceptedCheckpoint ? { checkpoint: structuredClone(acceptedCheckpoint) } : {}),
           ...(attempt.baseline_rebind_provenance ? { baseline_rebind_provenance: structuredClone(attempt.baseline_rebind_provenance) } : {}),
+          ...(attempt.build_spec_continuation_provenance ? {
+            build_spec_continuation_provenance: {
+              ...structuredClone(attempt.build_spec_continuation_provenance),
+              previous_accepted_archive_ref: archiveRef,
+              previous_accepted_archive_hash: hash(priorRaw),
+            },
+          } : {}),
         };
         validateAccepted(accepted, { taskId: task.identity.taskId, stage: name });
         const acceptedRaw = `${JSON.stringify(accepted, null, 2)}\n`;
@@ -3038,27 +3299,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           createKernelRecord(`results/${name}/accepted.json`, acceptedRaw);
           return deepFreeze(accepted);
         }
-        if (typeof replaceKernelAccepted !== "function") throw new Error("kernel canonical accepted replacement authority is required");
-        const canonicalRef = `results/${name}/accepted.json`;
-        const priorRaw = controlledBaselineRebind
-          ? baselineRebindAuthorization.record.previous_accepted_raw
-          : task.readRecord(canonicalRef);
-        let archiveRef = `results/${name}/${archivedAcceptedFileFor(current.accepted.attempt_ref)}`;
-        try {
-          if (task.readRecord(archiveRef) !== priorRaw) archiveRef = `results/${name}/${collisionArchiveFileFor(current.accepted.attempt_ref, priorRaw)}`;
-        } catch (error) {
-          if (error?.code !== "ENOENT") throw error;
-        }
-        try {
-          if (task.readRecord(archiveRef) !== priorRaw) throw new Error(`${name} accepted collision archive conflicts with canonical record`);
-        } catch (error) {
-          if (error?.code !== "ENOENT") throw error;
-        }
         revalidateControlledVerifyPassing?.("pre");
         const replacementOptions = {
           ...(acceptedReplacementTestHooks === undefined ? {} : { testHooks: acceptedReplacementTestHooks }),
           archiveRef,
           archiveRaw: priorRaw,
+          ...(buildSpecContinuation ? {
+            expectedPriorRaw: priorRaw,
+            validator: () => {
+              const liveAttemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
+              if (liveAttemptRaw !== attemptRaw) throw new Error("build-spec continuation attempt changed during acceptance");
+              const authorization = assertAcceptedBuildSpecContinuation(current, attempt);
+              if (JSON.stringify(authorization) !== JSON.stringify(buildSpecContinuation)) {
+                throw new Error("build-spec continuation authorization changed during acceptance");
+              }
+            },
+          } : {}),
           ...(controlledVerifyPassing ? { validator: revalidateControlledVerifyPassing, expectedPriorRaw: priorRaw } : {}),
           ...(controlledBaselineRebind ? {
             expectedPriorRaw: priorRaw,
@@ -3076,9 +3332,12 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         replaceKernelAccepted(canonicalRef, acceptedRaw, replacementOptions);
         return deepFreeze(accepted);
       });
-      return name === "verify-code"
+      const acceptWithRelatedStageLocks = () => name === "verify-code"
         ? task.withRecordLock("locks/build-code.publication.lock", acceptWithStageLock)
         : acceptWithStageLock();
+      return ["build-spec", "build-plan", "build-code", "verify-code"].includes(name)
+        ? task.withRecordLock("locks/design-lineage.publication.lock", acceptWithRelatedStageLocks)
+        : acceptWithRelatedStageLocks();
     },
     reopenBuildCode({ verifyAttemptRef, failureEvidenceRef } = {}) {
       if (!ATTEMPT_REF.test(verifyAttemptRef ?? "")) throw new Error("valid verify-code attempt reference is required");
@@ -3122,6 +3381,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       return deepFreeze({ reopen_ref: reopen.ref, reopen_hash: reopen.hash, previous_accepted_ref: reopen.record.previous_accepted_ref, previous_accepted_hash: reopen.record.previous_accepted_hash, verify_failure_ref: reopen.record.verify_failure_ref, verify_failure_hash: reopen.record.verify_failure_hash });
     },
     readAccepted(stage, options) {
+      if (options?.liveCheckpoint !== undefined) {
+        throw new Error("liveCheckpoint is an internal build-spec continuation capability");
+      }
       return readAcceptedLocal(stage, options);
     },
     readInput(slot) {

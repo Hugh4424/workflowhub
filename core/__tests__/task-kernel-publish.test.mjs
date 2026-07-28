@@ -112,6 +112,76 @@ function fixture(inputs = {}, { deferCandidate = false } = {}) {
     kernel: createAuditedTestKernel(task, { candidateWorkspace: candidate }),
   };
 }
+function acceptedBuildSpecFixture() {
+  const { task, kernel } = fixture();
+  const decision = kernel.publishAttempt("make-decision", {
+    facts: { worktree_root: "/fixture", baseline_commit: "a".repeat(40) },
+  });
+  kernel.acceptAttempt(
+    "make-decision",
+    decision.attempt_ref,
+    confirmation(kernel, "make-decision", decision.attempt_ref),
+  );
+  const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+  const bound = createAuditedTestKernel(task, { workspace, artifacts });
+  artifacts.writeAtomic("spec.md", "# Spec v1\n");
+  const first = bound.publishAttempt("build-spec", {
+    facts: {
+      spec_ref: artifacts.reference("spec.md"),
+      checkpoint: bound.createCheckpoint("build-spec"),
+    },
+    upstream_refs: [{
+      task_id: task.identity.taskId,
+      stage: "make-decision",
+      accepted_ref: "results/make-decision/accepted.json",
+    }],
+  });
+  bound.acceptAttempt("build-spec", first.attempt_ref);
+  return { task, workspace, artifacts, bound, first };
+}
+function beginAcceptedBuildSpecContinuation(context = acceptedBuildSpecFixture()) {
+  const { task, bound, first } = context;
+  const firstAttemptRef = `results/build-spec/${first.attempt_ref}`;
+  const firstAttemptHash = createHash("sha256").update(task.readRecord(firstAttemptRef)).digest("hex");
+  const continuation = bound.createStageContinuation("build-spec", {
+    reason: "correct the accepted specification",
+    previous_attempt_ref: firstAttemptRef,
+    previous_accepted_ref: "results/build-spec/accepted.json",
+    previous_review_refs: [],
+  });
+  const invalidation = bound.invalidateStageAttempt("build-spec", {
+    attempt_ref: firstAttemptRef,
+    attempt_hash: firstAttemptHash,
+    reason: "superseded by the accepted continuation",
+  });
+  bound.startStageRun("build-spec", {
+    reason: "publish the corrected specification",
+    continuation_ref: continuation.continuation_ref,
+  });
+  return { ...context, firstAttemptRef, firstAttemptHash, continuation, invalidation };
+}
+function publishBuildSpecReplacement(context) {
+  const { task, artifacts, bound } = context;
+  artifacts.writeAtomic("spec.md", "# Spec v2\n");
+  const replacement = bound.publishAttempt("build-spec", {
+    facts: {
+      spec_ref: artifacts.reference("spec.md"),
+      checkpoint: bound.createCheckpoint("build-spec"),
+    },
+    upstream_refs: [{
+      task_id: task.identity.taskId,
+      stage: "make-decision",
+      accepted_ref: "results/make-decision/accepted.json",
+    }],
+  });
+  return { ...context, replacement };
+}
+function acceptedBuildSpecReplacementFixture() {
+  const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+  const accepted = context.bound.acceptAttempt("build-spec", context.replacement.attempt_ref);
+  return { ...context, accepted };
+}
 function publishAdoptableLegacyRoot(kernel, suffix = "legacy-root", {
   output = { verdict: "pass", summary: "legacy result", findings: [] },
   withAdjudication = false,
@@ -825,6 +895,317 @@ describe("TaskKernel append-only publication", () => {
     const acceptedPlan = boundKernel.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(boundKernel, "build-plan", planAttempt.attempt_ref));
     expect(acceptedPlan).toMatchObject({ acceptance_mode: "human" });
     expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
+  });
+
+  it("replaces an accepted build-spec after a bound continuation invalidates its prior attempt", () => {
+    const { task, artifacts, bound, first } = acceptedBuildSpecFixture();
+    const acceptedV1Raw = task.readRecord("results/build-spec/accepted.json");
+    const firstAttemptRef = `results/build-spec/${first.attempt_ref}`;
+    const firstAttemptHash = createHash("sha256").update(task.readRecord(firstAttemptRef)).digest("hex");
+    const continuation = bound.createStageContinuation("build-spec", {
+      reason: "correct the accepted specification",
+      previous_attempt_ref: firstAttemptRef,
+      previous_accepted_ref: "results/build-spec/accepted.json",
+      previous_review_refs: [],
+    });
+    bound.invalidateStageAttempt("build-spec", {
+      attempt_ref: firstAttemptRef,
+      attempt_hash: firstAttemptHash,
+      reason: "superseded by the accepted continuation",
+    });
+    bound.startStageRun("build-spec", {
+      reason: "publish the corrected specification",
+      continuation_ref: continuation.continuation_ref,
+    });
+    artifacts.writeAtomic("spec.md", "# Spec v2\n");
+
+    const replacement = bound.publishAttempt("build-spec", {
+      facts: {
+        spec_ref: artifacts.reference("spec.md"),
+        checkpoint: bound.createCheckpoint("build-spec"),
+      },
+      upstream_refs: [{
+        task_id: task.identity.taskId,
+        stage: "make-decision",
+        accepted_ref: "results/make-decision/accepted.json",
+      }],
+    });
+    const acceptedV2 = bound.acceptAttempt("build-spec", replacement.attempt_ref);
+
+    expect(acceptedV2).toMatchObject({
+      stage: "build-spec",
+      attempt_ref: replacement.attempt_ref,
+      acceptance_mode: "automatic",
+    });
+    expect(JSON.parse(task.readRecord("results/build-spec/accepted.json"))).toMatchObject({
+      attempt_ref: replacement.attempt_ref,
+    });
+    expect(task.readRecord("results/build-spec/accepted-attempt-0001.json")).toBe(acceptedV1Raw);
+  });
+
+  it("rejects an accepted build-spec continuation whose prior attempt lacks invalidation", () => {
+    const { task, artifacts, bound, first } = acceptedBuildSpecFixture();
+    const continuation = bound.createStageContinuation("build-spec", {
+      reason: "attempt replacement without invalidation",
+      previous_attempt_ref: `results/build-spec/${first.attempt_ref}`,
+      previous_accepted_ref: "results/build-spec/accepted.json",
+      previous_review_refs: [],
+    });
+    bound.startStageRun("build-spec", {
+      reason: "must fail closed",
+      continuation_ref: continuation.continuation_ref,
+    });
+
+    expect(() => bound.publishAttempt("build-spec", {
+      facts: {
+        spec_ref: artifacts.reference("spec.md"),
+        checkpoint: bound.createCheckpoint("build-spec"),
+      },
+      upstream_refs: [{
+        task_id: task.identity.taskId,
+        stage: "make-decision",
+        accepted_ref: "results/make-decision/accepted.json",
+      }],
+    })).toThrow(/invalidation|invalidated/i);
+  });
+
+  it("rejects an accepted build-spec continuation whose invalidation binding is tampered", () => {
+    const { task, artifacts, bound, first } = acceptedBuildSpecFixture();
+    const firstAttemptRef = `results/build-spec/${first.attempt_ref}`;
+    const firstAttemptHash = createHash("sha256").update(task.readRecord(firstAttemptRef)).digest("hex");
+    const continuation = bound.createStageContinuation("build-spec", {
+      reason: "replace the accepted specification",
+      previous_attempt_ref: firstAttemptRef,
+      previous_accepted_ref: "results/build-spec/accepted.json",
+      previous_review_refs: [],
+    });
+    const invalidation = bound.invalidateStageAttempt("build-spec", {
+      attempt_ref: firstAttemptRef,
+      attempt_hash: firstAttemptHash,
+      reason: "superseded by the accepted continuation",
+    });
+    bound.startStageRun("build-spec", {
+      reason: "publish the corrected specification",
+      continuation_ref: continuation.continuation_ref,
+    });
+    const invalidationRecord = JSON.parse(task.readRecord(invalidation.ref));
+    writeFileSync(task.recordPath(invalidation.ref), `${JSON.stringify({
+      ...invalidationRecord,
+      workflow_run_id: "build-spec:9999:tampered",
+    }, null, 2)}\n`);
+
+    expect(() => bound.publishAttempt("build-spec", {
+      facts: {
+        spec_ref: artifacts.reference("spec.md"),
+        checkpoint: bound.createCheckpoint("build-spec"),
+      },
+      upstream_refs: [{
+        task_id: task.identity.taskId,
+        stage: "make-decision",
+        accepted_ref: "results/make-decision/accepted.json",
+      }],
+    })).toThrow(/invalidation is invalid/i);
+  });
+
+  it("keeps non-live accepted checkpoint reads private to the build-spec continuation path", () => {
+    const { bound } = acceptedBuildSpecFixture();
+    expect(() => bound.readAccepted("build-spec", { liveCheckpoint: false })).toThrow(/internal build-spec continuation capability/i);
+  });
+
+  it("does not overwrite a concurrent build-spec accepted winner during replacement", () => {
+    const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+    const { task, workspace, artifacts, replacement } = context;
+    const priorRaw = task.readRecord("results/build-spec/accepted.json");
+    const concurrentRaw = `${JSON.stringify({
+      ...JSON.parse(priorRaw),
+      accepted_at: "2026-07-16T00:00:01.000Z",
+    }, null, 2)}\n`;
+    const racing = createAuditedTestKernel(task, {
+      workspace,
+      artifacts,
+      acceptedReplacementTestHooks: {
+        afterRevalidateBeforeRename() {
+          writeFileSync(task.recordPath("results/build-spec/accepted.json"), concurrentRaw);
+        },
+      },
+    });
+
+    expect(() => racing.acceptAttempt("build-spec", replacement.attempt_ref)).toThrow(/compare-and-swap|changed/i);
+    expect(task.readRecord("results/build-spec/accepted.json")).toBe(concurrentRaw);
+  });
+
+  it("rejects a valid-shape invalidation rewrite before build-spec publication", () => {
+    const context = beginAcceptedBuildSpecContinuation();
+    const { task, invalidation } = context;
+    const record = JSON.parse(task.readRecord(invalidation.ref));
+    writeFileSync(task.recordPath(invalidation.ref), `${JSON.stringify({
+      ...record,
+      reason: "legitimate-looking but rewritten before publication",
+    }, null, 2)}\n`);
+
+    expect(() => publishBuildSpecReplacement(context)).toThrow(/invalidation.*invalid/i);
+  });
+
+  it("rejects a valid-shape invalidation rewrite between build-spec publication and acceptance", () => {
+    const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+    const { task, bound, invalidation, replacement } = context;
+    const record = JSON.parse(task.readRecord(invalidation.ref));
+    writeFileSync(task.recordPath(invalidation.ref), `${JSON.stringify({
+      ...record,
+      reason: "legitimate-looking but rewritten authorization",
+    }, null, 2)}\n`);
+
+    expect(() => bound.acceptAttempt("build-spec", replacement.attempt_ref)).toThrow(/invalidation.*invalid|authorization changed/i);
+  });
+
+  it("rejects prior build-spec audit summary tampering during invalidation", () => {
+    const { task, bound, first } = acceptedBuildSpecFixture();
+    const firstAttemptRef = `results/build-spec/${first.attempt_ref}`;
+    const firstAttemptRaw = task.readRecord(firstAttemptRef);
+    const firstAttempt = JSON.parse(firstAttemptRaw);
+    const audit = JSON.parse(task.readRecord(firstAttempt.facts.audit_summary_ref));
+    writeFileSync(task.recordPath(firstAttempt.facts.audit_summary_ref), `${JSON.stringify({
+      ...audit,
+      verdict: "revise_required",
+    }, null, 2)}\n`);
+
+    expect(() => bound.invalidateStageAttempt("build-spec", {
+      attempt_ref: firstAttemptRef,
+      attempt_hash: createHash("sha256").update(firstAttemptRaw).digest("hex"),
+      reason: "must not trust the tampered prior audit",
+    })).toThrow(/audit.*binding mismatch/i);
+  });
+
+  it("rejects replacement build-spec audit summary tampering during acceptance", () => {
+    const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+    const { task, bound, replacement } = context;
+    const attempt = JSON.parse(task.readRecord(`results/build-spec/${replacement.attempt_ref}`));
+    const audit = JSON.parse(task.readRecord(attempt.facts.audit_summary_ref));
+    writeFileSync(task.recordPath(attempt.facts.audit_summary_ref), `${JSON.stringify({
+      ...audit,
+      verdict: "revise_required",
+    }, null, 2)}\n`);
+
+    expect(() => bound.acceptAttempt("build-spec", replacement.attempt_ref)).toThrow(/continuation audit binding mismatch/i);
+  });
+
+  it("blocks build-spec replacement after build-plan is accepted", () => {
+    const context = acceptedBuildSpecFixture();
+    const { task, artifacts, bound } = context;
+    artifacts.writeAtomic("plan.md", "# Plan\n");
+    artifacts.writeAtomic("tasks.md", "# Tasks\n");
+    const plan = bound.publishAttempt("build-plan", {
+      facts: {
+        plan_ref: artifacts.reference("plan.md"),
+        tasks_ref: artifacts.reference("tasks.md"),
+        checkpoint: bound.createCheckpoint("build-plan"),
+      },
+      upstream_refs: [{
+        task_id: task.identity.taskId,
+        stage: "build-spec",
+        accepted_ref: "results/build-spec/accepted.json",
+      }],
+    });
+    bound.acceptAttempt("build-plan", plan.attempt_ref, confirmation(bound, "build-plan", plan.attempt_ref));
+    const continuation = beginAcceptedBuildSpecContinuation(context);
+
+    expect(() => publishBuildSpecReplacement(continuation)).toThrow(/downstream stage build-plan/i);
+  });
+
+  it("rejects a stale build-plan attempt after its accepted build-spec upstream is replaced", () => {
+    const context = acceptedBuildSpecFixture();
+    const { task, artifacts, bound } = context;
+    artifacts.writeAtomic("plan.md", "# Plan from spec v1\n");
+    artifacts.writeAtomic("tasks.md", "# Tasks from spec v1\n");
+    const stalePlan = bound.publishAttempt("build-plan", {
+      facts: {
+        plan_ref: artifacts.reference("plan.md"),
+        tasks_ref: artifacts.reference("tasks.md"),
+        checkpoint: bound.createCheckpoint("build-plan"),
+      },
+      upstream_refs: [{
+        task_id: task.identity.taskId,
+        stage: "build-spec",
+        accepted_ref: "results/build-spec/accepted.json",
+      }],
+    });
+    rmSync(artifacts.path("plan.md"));
+    rmSync(artifacts.path("tasks.md"));
+
+    const replacement = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation(context));
+    replacement.bound.acceptAttempt("build-spec", replacement.replacement.attempt_ref);
+    const staleConfirmation = confirmation(bound, "build-plan", stalePlan.attempt_ref);
+
+    expect(() => bound.acceptAttempt("build-plan", stalePlan.attempt_ref, staleConfirmation)).toThrow(/upstream.*changed|acceptance.*mismatch/i);
+    expect(() => task.readRecord("results/build-plan/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("keeps the prior build-spec canonical accepted record when replacement fails after archival", () => {
+    const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+    const { task, workspace, artifacts, replacement } = context;
+    const priorRaw = task.readRecord("results/build-spec/accepted.json");
+    const failing = createAuditedTestKernel(task, {
+      workspace,
+      artifacts,
+      acceptedReplacementTestHooks: {
+        afterArchiveBeforeReplace() {
+          throw new Error("fixture failure after archive");
+        },
+      },
+    });
+
+    expect(() => failing.acceptAttempt("build-spec", replacement.attempt_ref)).toThrow(/fixture failure after archive/i);
+    expect(task.readRecord("results/build-spec/accepted.json")).toBe(priorRaw);
+    expect(task.readRecord("results/build-spec/accepted-attempt-0001.json")).toBe(priorRaw);
+  });
+
+  it("fails accepted build-spec reads after replacement authorization is changed or removed", () => {
+    const context = publishBuildSpecReplacement(beginAcceptedBuildSpecContinuation());
+    const { task, bound, replacement } = context;
+    const accepted = bound.acceptAttempt("build-spec", replacement.attempt_ref);
+    const provenance = accepted.build_spec_continuation_provenance;
+    const continuationRaw = task.readRecord(provenance.continuation_ref);
+    writeFileSync(task.recordPath(provenance.continuation_ref), `${JSON.stringify({
+      ...JSON.parse(continuationRaw),
+      reason: "tampered after acceptance",
+    }, null, 2)}\n`);
+    expect(() => bound.readAccepted("build-spec")).toThrow(/authorization changed/i);
+
+    writeFileSync(task.recordPath(provenance.continuation_ref), continuationRaw);
+    rmSync(task.recordPath(provenance.invalidation_ref));
+    expect(() => bound.readAccepted("build-spec")).toThrow(/ENOENT|not found/i);
+  });
+
+  it("fails accepted build-spec reads after the previous attempt is tampered", () => {
+    const { task, bound, accepted } = acceptedBuildSpecReplacementFixture();
+    const provenance = accepted.build_spec_continuation_provenance;
+    const previousAttempt = JSON.parse(task.readRecord(provenance.previous_attempt_ref));
+    writeFileSync(task.recordPath(provenance.previous_attempt_ref), `${JSON.stringify({
+      ...previousAttempt,
+      created_at: "2026-07-16T00:00:01.000Z",
+    }, null, 2)}\n`);
+
+    expect(() => bound.readAccepted("build-spec")).toThrow(/authorization changed|integrity hash mismatch/i);
+  });
+
+  it("fails accepted build-spec reads after the previous accepted archive is removed", () => {
+    const { task, bound, accepted } = acceptedBuildSpecReplacementFixture();
+    const provenance = accepted.build_spec_continuation_provenance;
+    rmSync(task.recordPath(provenance.previous_accepted_archive_ref));
+
+    expect(() => bound.readAccepted("build-spec")).toThrow(/ENOENT|not found/i);
+  });
+
+  it("fails accepted build-spec reads after the replacement audit summary is tampered", () => {
+    const { task, bound, replacement } = acceptedBuildSpecReplacementFixture();
+    const attempt = JSON.parse(task.readRecord(`results/build-spec/${replacement.attempt_ref}`));
+    const audit = JSON.parse(task.readRecord(attempt.facts.audit_summary_ref));
+    writeFileSync(task.recordPath(attempt.facts.audit_summary_ref), `${JSON.stringify({
+      ...audit,
+      verdict: "revise_required",
+    }, null, 2)}\n`);
+
+    expect(() => bound.readAccepted("build-spec")).toThrow(/audit.*binding mismatch/i);
   });
 
   it("rebinds an accepted build-plan to the current integration baseline without changing design bytes", () => {

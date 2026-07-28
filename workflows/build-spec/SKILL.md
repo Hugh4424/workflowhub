@@ -81,6 +81,35 @@ Use this complete public sequence without inventing flags or input shapes:
    through its normal OS temporary lifecycle. Never treat the temporary path as
    a stage artifact, evidence ref, or handoff item.
 
+If an already accepted build-spec is later proven to have skipped a material
+clarification, correct it in the same task through one bound continuation.
+Do not edit or delete the accepted record:
+
+1. Call `continue-stage` with an input containing exactly `reason`,
+   `previous_attempt_ref`, `previous_accepted_ref`, and
+   `previous_review_refs`. The accepted ref must be
+   `results/build-spec/accepted.json`; the attempt and reviews must be the
+   canonical records being superseded.
+2. Before starting another run, call `invalidate-stage-attempt` for that exact
+   prior attempt using its raw-byte SHA-256 and the clarification defect as the
+   reason.
+3. Call `start-run --continuation-ref=<returned continuation ref>`, then resume
+   this Skill from ambiguity classification and ask one decision axis at a
+   time.
+4. The replacement attempt must bind the new run's audit and exact current
+   spec. It must carry the exact continuation and invalidation refs/hashes.
+   Acceptance durably archives the previous accepted bytes before the canonical
+   compare-and-swap. A missing, stale, cross-stage, changed, or tampered
+   continuation/invalidation binding fails before replacement.
+
+Do not replace build-spec after build-plan, build-code, or verify-code has an
+accepted record. That requires a separate downstream invalidation design; fail
+closed instead of leaving accepted downstream lineage bound to the old spec.
+
+The prior accepted record remains the readable current fact until the corrected
+attempt is accepted. Continuation is recovery from a proven Stage defect, not a
+general way to reopen build-spec or add new scope.
+
 A temporary file may be authoring input, but it is never the reviewed artifact
 by itself. Do not create the official spec receipt before review is finished.
 

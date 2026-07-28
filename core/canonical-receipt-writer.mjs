@@ -96,8 +96,8 @@ function auditableJournalEvents(task, stage, workflowRunId) {
 }
 
 /** Build and publish the only audit summary from canonical task records. */
-function validateMakeDecisionAuditContent(task, contentEvidence) {
-  const decisionRaw = task.readRecord("receipts/decision.json");
+function validateMakeDecisionAuditContent(task, contentEvidence, decisionRef = "receipts/decision.json") {
+  const decisionRaw = task.readRecord(decisionRef);
   const decision = JSON.parse(decisionRaw);
   const interaction = contentEvidence.find(({ value }) => value.kind === "interaction-completion.v1")?.value;
   const coverage = contentEvidence.find(({ value }) => value.kind === "decision-coverage-audit.v1")?.value;
@@ -114,7 +114,7 @@ function validateMakeDecisionAuditContent(task, contentEvidence) {
   }
 }
 
-export function writeCanonicalAuditSummary({ task, workspace, stage, throughStepId } = {}) {
+export function writeCanonicalAuditSummary({ task, workspace, stage, throughStepId, decisionRef } = {}) {
   const safeTask = assertTaskHandle(task);
   let safeWorkspace;
   if (stage === "make-decision") safeWorkspace = assertCandidateWorkspace(workspace);
@@ -137,7 +137,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
   // A bounded make-decision audit is the official runtime path. Keep the
   // unbounded writer readable for historical records and generic fixtures.
   if (stage === "make-decision" && throughStepId !== undefined) {
-    validateMakeDecisionAuditContent(safeTask, contentEvidence);
+    validateMakeDecisionAuditContent(safeTask, contentEvidence, decisionRef);
   }
   const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
   const ledger = JSON.parse(ledgerRaw);

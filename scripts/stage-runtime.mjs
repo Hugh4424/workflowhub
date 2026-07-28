@@ -136,7 +136,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command === "start-run") {
     const allowed = new Set(["stage", "project", "task", "reason", "continuation-ref"]);
-    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("start-run accepts only --stage, --project, --task, and --reason");
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("start-run accepts only --stage, --project, --task, --reason, and optional --continuation-ref");
     const started = context.kernel.startStageRun(values.stage, {
       reason: values.reason,
       ...(values["continuation-ref"] ? { continuation_ref: values["continuation-ref"] } : {}),
@@ -365,6 +365,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       task: context.task,
       workspace: context.candidateWorkspace ?? context.workspace,
       stage: values.stage,
+      ...(values.stage === "make-decision" && input.receipts.decision_revision
+        ? { decisionRef: input.receipts.decision_revision }
+        : {}),
       ...(values.stage === "make-decision" ? { throughStepId: 10 } : {}),
     });
     const controlledInput = { ...input, receipts: { ...input.receipts, audit: audit.audit_summary_ref } };
@@ -387,10 +390,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     humanConfirmationRef: values["human-confirmation-ref"],
     ...(values.stage !== "make-decision" ? {} : {
       fullAuditWriter: () => {
+        const attemptRaw = context.task.readRecord(`results/make-decision/${values.attempt}`);
+        const attempt = JSON.parse(attemptRaw);
+        const decisionRevisionRef = attempt.evidence_refs?.find((entry) =>
+          typeof entry?.ref === "string" && entry.ref.startsWith("receipts/revisions/decision/"))?.ref;
         const audit = writeCanonicalAuditSummary({
           task: context.task,
           workspace: context.candidateWorkspace,
           stage: "make-decision",
+          ...(decisionRevisionRef ? { decisionRef: decisionRevisionRef } : {}),
           throughStepId: 12,
         });
         return {

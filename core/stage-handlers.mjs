@@ -20,6 +20,7 @@ const hashText = (value) => createHash("sha256").update(value).digest("hex");
 const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "receipts/", spec: "receipts/", plan: "receipts/", tasks: "receipts/",
+  decision_revision: "receipts/revisions/decision/",
   implementation: "receipts/", tests: "receipts/", review: "reviews/results/",
   direction_review: "reviews/results/", detail_review: "reviews/results/",
   quality_review: "reviews/results/", evidence: "evidence/",
@@ -43,7 +44,7 @@ const COMPLETION_COPY = Object.freeze({
   "verify-code": { objective: "独立验证最终实现是否满足验收条件", approach: "复用正式实现证据并执行独立质量检查", effect: "任务获得可关闭或返回修复的明确结论", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
-  "make-decision": new Set(["decision", "direction_review", "detail_review", "direction_review_resolution", "detail_review_resolution", "direction_risk_acceptance", "detail_risk_acceptance", "audit"]),
+  "make-decision": new Set(["decision", "decision_revision", "direction_review", "detail_review", "direction_review_resolution", "detail_review_resolution", "direction_risk_acceptance", "detail_risk_acceptance", "audit"]),
   "build-spec": new Set(["spec", "review", "review_resolution", "risk_acceptance", "audit"]),
   "build-plan": new Set(["plan", "tasks", "review", "review_resolution", "risk_acceptance", "audit"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit"]),
@@ -166,9 +167,17 @@ function makeDecisionInteractionAggregate(worker, audit, decision, snapshotTree)
   return { ref: binding.ref, hash: binding.hash, value };
 }
 function receipt(worker, invocation, name, producerStage = worker.stage) {
-  const ref = text(object(invocation.receipts, "receipts")[name], `${name} receipt ref`);
-  if (name === "decision" && ref !== "receipts/decision.json") {
-    throw new Error("make-decision run must bind the current canonical decision receipt");
+  const refs = object(invocation.receipts, "receipts");
+  let ref = text(refs[name], `${name} receipt ref`);
+  if (name === "decision") {
+    if (refs.decision_revision !== undefined) {
+      ref = text(refs.decision_revision, "decision revision receipt ref");
+      if (!/^receipts\/revisions\/decision\/[a-f0-9]{64}\.json$/.test(ref)) {
+        throw new Error("decision revision receipt ref is invalid");
+      }
+    } else if (ref !== "receipts/decision.json") {
+      throw new Error("make-decision run must bind the current canonical decision receipt");
+    }
   }
   const namespace = NAMESPACE[name];
   if (!validReceiptRef(name, ref)) {
