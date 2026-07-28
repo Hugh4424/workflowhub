@@ -8,5 +8,5 @@
 6. 任务 1 完成：retention map 先补职责断言；三份模板去除注释、占位符和 raw JSON，并保留 `spec-content.v3`、`plan-task.v3` 既有字段。
 7. 三份 SKILL 明确 spec 是产品真相、plan 是工程证据与取舍、tasks 是紧凑执行投影；Markdown lint 已为 0 issues。
 8. 任务 2 测试完成：focused retention 12/12、skip 0；删除 spec 的 `失败条件` 字段时 1 个专属断言失败，恢复后 GREEN。
-9. 三个受影响 bundle manifest/hash 和 catalog hash 已更新；skill closure 仅被既有 `wh-review` hash 基线阻断，见 BLOCKED.md。
+9. 三个受影响 bundle manifest/hash 和 catalog hash 已更新；发现并同步既有 `wh-review` catalog hash，未改其内容、路由或审查引擎。
 10. 审查预检完成：没有合法 TaskHandle 或 stage-bound canonical materials，未调用 `wh-review`，不伪造任务或材料；见 BLOCKED.md。
