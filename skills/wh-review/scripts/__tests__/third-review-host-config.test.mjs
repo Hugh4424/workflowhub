@@ -100,7 +100,7 @@ describe("trusted third-review host configuration", () => {
     });
   });
 
-  it("loads legacy make-decision single_round routes as bounded delta/full semantics", () => {
+  it("preserves make-decision single_round routes without widening provider dispatch", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
@@ -112,7 +112,9 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     expect(resolveTrustedReviewRoute(trusted.whReview, "make-decision", "direction"))
-      .toMatchObject({ initial: ["kimi"], mode: "full_on_structural_rework" });
+      .toMatchObject({ initial: ["kimi"], mode: "single_round" });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "make-decision", "detail"))
+      .toMatchObject({ initial: ["opencode"], mode: "single_round" });
   });
 
   it("counts distinct adapters, while retaining all configured profiles for broker attestation", () => {

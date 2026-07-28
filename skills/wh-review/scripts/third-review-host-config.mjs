@@ -161,8 +161,7 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null } 
           continue;
         }
         try {
-          const parsed = route(item, label);
-          stages[stage][track] = parsed.mode === "single_round" ? { ...parsed, mode: "full_on_structural_rework" } : parsed;
+          stages[stage][track] = route(item, label);
         } catch (error) {
           if (requestedStage === null || (requestedStage === stage && (requestedTrack === null || requestedTrack === track))) throw error;
           stages[stage][track] = { __invalid_route: error.message };
