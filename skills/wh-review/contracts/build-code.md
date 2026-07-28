@@ -5,11 +5,12 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 ## 两种审查主体
 
 `phase_id` 存在时，runner 自动派生 `review_scope=phase`。这是一份严格代码审查：
-完整当前 Phase diff 必须反复审查到正式 `pass`，不能只检查上轮 finding。
+必须审查完整当前 Phase diff，不能只检查上轮 finding；正式 verdict 原样保留为质量事实，
+不成为 stage pass gate。
 
 `phase_id` 缺失时，runner 自动派生 `review_scope=integration`，且
 `subject_kind=worktree`。它只用于所有 Phase 之后的最终集成审查，不能重放历史
-diff，也不能替代任何 Phase PASS。调用方不得提供或覆盖 scope。Phase result、legacy
+diff，也不能替代任何 Phase 审查。调用方不得提供或覆盖 scope。Phase result、legacy
 无 scope worktree result、或不同快照的 worktree result 都不能作为最终结果或
 verify-code lineage。
 
@@ -82,9 +83,10 @@ DRY/KISS/YAGNI/SoC、复杂度或可读性 finding 必须指出当前 diff 中�
 ## 最终 Integration 审查材料
 
 Integration 在调用 provider 前从 accepted build-plan checkpoint 到最终快照重建唯一、
-连续的正式 Phase PASS trace chain。每一段必须有同一树身份的 phase evidence、正式
-pass result、最小 phase-map trace、绿测 receipt 和完整 AC `change/test/evidence`
-追踪。零 Phase、缺段、分叉、重复、树或哈希不连续、历史 PASS 没有 trace、或 legacy
+连续的正式 Phase semantic-review trace chain。每一段必须有同一树身份的 phase
+evidence、正式 `pass|revise_required` result、最小 phase-map trace、绿测 receipt 和
+完整 AC `change/test/evidence` 追踪。零 Phase、缺段、分叉、重复、树或哈希不连续、
+历史正式审查没有 trace、或 legacy
 无 scope result 都是 `MATERIAL_INCOMPLETE`；它们不允许回退为全项目、累计 diff 或
 "空链"投递。
 
@@ -100,9 +102,15 @@ seam index 不是猜测器。只有 canonical trace 已认证生产者/消费者
 把共享路径或相邻 Phase 伪称为完整语义 seam。`unknown` 是给 reviewer 的风险事实，不能
 被静默补全。
 
-Integration 的正式 `pass` 必须与 implementation receipt、fresh test receipt 和最终
-snapshot 相同，才可作为 build-code final/verify-code lineage。它仍是严格 build-code
-边界，不适用 build-spec/build-plan/verify-code 的普通修复免二审规则。
+Integration 的正式结果必须与 implementation receipt、fresh test receipt 和最终
+snapshot 同树；verdict 原样保留为质量事实，不能被改写成阶段通过。它仍是严格
+build-code 边界，不适用 build-spec/build-plan/verify-code 的普通修复免二审规则。
+
+provider 无法形成 semantic result 时，认证的 `unavailable` attempt 也是原样保留的
+质量事实，不得改写成 `pass`，也不得称为“审查通过”。Phase 与 Integration 的结构
+闭包仍按各自合同继续判定；`unavailable` 本身不使用 risk acceptance。只有认证的
+semantic `revise_required` 中存在 actionable `major|blocking` serious finding 时，
+才按精确 finding/card/reply 绑定要求修复或显式接受风险。
 
 ## 输出
 

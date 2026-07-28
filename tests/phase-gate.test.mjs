@@ -27,6 +27,21 @@ function fixture(verdict = "pass") {
     tests: { red: { path: "evidence/RED.json" }, green: { path: "evidence/GREEN.json" } },
     diff_scan: { path: "evidence/diff.json" }, review: { result_ref: "reviews/results/build-code.json", snapshot_tree: tree } };
 }
+function unavailableFixture() {
+  const item = fixture();
+  const ref = "reviews/attempts/build-code-unavailable/attempt.json";
+  write(join(root, ref), {
+    version: "wh-review-attempt.v1", attempt_id: "build-code-unavailable", task_id: "fixture",
+    stage: "build-code", review_track: null,
+    source: { target_commit: tree, base_commit: baselineCommit, base_tree: baseTree, captured_head: tree },
+    snapshot_tree: tree, subject_kind: "phase", phase_id: "phase-1", review_scope: "phase",
+    base_tree: baseTree, candidate_tree: tree, material_id: "a".repeat(64),
+    provider_attempts: [{ provider: "fixture/provider", status: "failed", output_ref: null }],
+    terminal_status: "unavailable", error: { code: "PROVIDER_UNAVAILABLE", message: "down" },
+  });
+  item.review = { action_ref: ref, snapshot_tree: tree, status: "unavailable", verdict: null, risk_acceptances: [] };
+  return item;
+}
 beforeEach(() => {
   outside = null;
   root = mkdtempSync(join(tmpdir(), "phase-gate-"));
@@ -45,10 +60,38 @@ describe("phase-gate formal review result", () => {
     expect(checked.ok, checked.errors.join("; ")).toBe(true);
     expect(checked.checked).toEqual(["phase-status", "red-green-evidence", "diff-scan", "heterogeneous-review"]);
   });
-  it("blocks revise_required instead of advancing the phase", () => {
+  it("records revise_required as a quality fact without failing the structural phase gate", () => {
     const checked = validatePhaseGate(fixture("revise_required"), root, { reviewDataRoot: root });
+    expect(checked.ok, checked.errors.join("; ")).toBe(true);
+    expect(checked.warnings.join(" ")).toMatch(/revise_required.*quality fact/i);
+  });
+  it("rejects a forged risk ref for an actionable serious revise_required finding", () => {
+    const item = fixture("revise_required");
+    const reviewPath = join(root, item.review.result_ref);
+    write(reviewPath, {
+      ...result("revise_required"),
+      adjudication: {
+        version: "wh-review-adjudication.v1",
+        clusters: [{
+          id: "F-aaaaaaaaaaaa", severity: "major", path: "source.txt", issue: "serious bug",
+          root_cause: "broken logic", recommendation: "repair", providers: ["fixture/provider"],
+          adapter_count: 1, finding_count: 1, disposition: "actionable", evidence_status: "direct",
+          provider_findings: [],
+        }],
+      },
+    });
+    item.review.risk_acceptances = [{
+      ref: `evidence/risk-acceptances/${"a".repeat(64)}.json`,
+      sha256: "a".repeat(64),
+    }];
+    const checked = validatePhaseGate(item, root, { reviewDataRoot: root });
     expect(checked.ok).toBe(false);
-    expect(checked.errors.join(" ")).toMatch(/must be pass|revise_required/i);
+    expect(checked.errors.join(" ")).toMatch(/risk acceptance/i);
+  });
+  it("records an unavailable provider attempt as a non-pass quality fact without structural failure", () => {
+    const checked = validatePhaseGate(unavailableFixture(), root, { reviewDataRoot: root });
+    expect(checked.ok, checked.errors.join("; ")).toBe(true);
+    expect(checked.warnings.join(" ")).toMatch(/unavailable.*not rewritten to pass/i);
   });
   it("rejects a copied verdict and a mismatched snapshot", () => {
     expect(validatePhaseGate({ ...fixture(), review: { verdict: "pass" } }, root, { reviewDataRoot: root }).ok).toBe(false);

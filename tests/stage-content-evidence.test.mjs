@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -171,21 +172,38 @@ function prepareOfficialRun(kernel, taskId) {
       },
     },
   });
-  for (const step of loadStageManifest(stage, realpathSync(join(import.meta.dirname, ".."))).steps) {
-    const entry = kernel.writeStageStepEntry(stage, {
-      step_id: step.step_id,
-      attempt_id: "attempt-1",
-      entry_evidence: { kind: "fixture", uri_or_path: `evidence/${stage}-step-${step.step_id}-entry.json` },
-    });
-    kernel.writeStageStepExit(stage, {
-      step_id: step.step_id,
-      attempt_id: "attempt-1",
-      entry_journal_entry_id: entry.journal_entry_id,
-      terminal_status: "success",
-      completion_evidence: { kind: "fixture", uri_or_path: `evidence/${stage}-step-${step.step_id}-exit.json` },
-    });
-  }
-  return run.run.workflow_run_id;
+  return {
+    workflowRunId: run.run.workflow_run_id,
+    sourceManifest,
+    mappings: {
+      R1: {
+        decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+        artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+        acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+      },
+    },
+  };
+}
+
+function appendFixtureStep(task, workflowRunId, stepId) {
+  const journalEntryId = randomUUID();
+  const evidence = {
+    kind: "fixture",
+    uri_or_path: `evidence/make-decision-step-${stepId}.json`,
+    content_hash: sha256(`fixture-step-${stepId}`),
+  };
+  task.appendJournal({
+    schema_version: "v1", event_type: "step_entry", workflow_run_id: workflowRunId,
+    stage_slug: "make-decision", step_id: stepId, attempt_id: "attempt-1",
+    timestamp: "2026-07-26T00:00:20.000Z", journal_entry_id: journalEntryId,
+    entry_evidence: evidence, manifest_schema_version: "2.0.0",
+  });
+  task.appendJournal({
+    schema_version: "v1", event_type: "step_exit", workflow_run_id: workflowRunId,
+    stage_slug: "make-decision", step_id: stepId, attempt_id: "attempt-1",
+    timestamp: "2026-07-26T00:00:21.000Z", entry_journal_entry_id: journalEntryId,
+    terminal_status: "success", completion_evidence: evidence, manifest_schema_version: "2.0.0",
+  });
 }
 
 function fixture(taskId = "stage-content-evidence") {
@@ -214,7 +232,8 @@ function fixture(taskId = "stage-content-evidence") {
   });
   const candidate = prepareTaskWorkspace(task);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
-  const setupRunId = prepareOfficialRun(kernel, taskId);
+  const setup = prepareOfficialRun(kernel, taskId);
+  const setupRunId = setup.workflowRunId;
   const setupWriter = createStageContentEvidenceWriter({
     task,
     workspace: candidate,
@@ -227,14 +246,27 @@ function fixture(taskId = "stage-content-evidence") {
   const setupDecisionHash = sha256(setupDecisionLog);
   const setupDecisionRef = `receipts/decision-log/${setupDecisionHash}.md`;
   kernel.publishCanonicalRecord(setupDecisionRef, setupDecisionLog);
-  const setupTalks = [1, 2, 3].map((roundNumber) => setupWriter.publish({
+  const setupTalks = [];
+  setupTalks.push(setupWriter.publish({
     kind: "interaction-completion.v1",
-    payload: talkPayload(roundNumber, setupTree, { zeroQuestion: roundNumber !== 1 }),
+    payload: talkPayload(1, setupTree),
+  }));
+  appendFixtureStep(task, setupRunId, 4);
+  setupTalks.push(setupWriter.publish({
+    kind: "interaction-completion.v1",
+    payload: talkPayload(2, setupTree, { zeroQuestion: true }),
+  }));
+  appendFixtureStep(task, setupRunId, 6);
+  setupTalks.push(setupWriter.publish({
+    kind: "interaction-completion.v1",
+    payload: talkPayload(3, setupTree, { zeroQuestion: true }),
   }));
   const setupGrill = setupWriter.publish({
     kind: "interaction-completion.v1",
     payload: grillPayload(setupTree),
   });
+  appendFixtureStep(task, setupRunId, 9);
+  appendFixtureStep(task, setupRunId, 10);
   setupWriter.publish({
     kind: "interaction-completion.v1",
     payload: {
@@ -246,6 +278,8 @@ function fixture(taskId = "stage-content-evidence") {
       decision_hash: setupDecisionHash,
     },
   });
+  appendFixtureStep(task, setupRunId, 11);
+  appendFixtureStep(task, setupRunId, 12);
   setupWriter.publish({
     kind: "decision-coverage-audit.v1",
     payload: {
@@ -276,6 +310,10 @@ function fixture(taskId = "stage-content-evidence") {
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, confirmation.ref);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const nextRun = kernel.startStageRun("make-decision", { reason: "content-evidence test run" });
+  kernel.publishRequirementsLedger("make-decision", {
+    source_manifest: setup.sourceManifest,
+    mappings: setup.mappings,
+  });
   return {
     root, task, workspace, workflowRunId: nextRun.run.workflow_run_id,
     decisionRef: setupDecisionRef, decisionHash: setupDecisionHash,
@@ -787,14 +825,25 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       kind: "interaction-completion.v1",
       payload: interaction(1, "A"),
     }));
-    const repeated = await invoke(() => writer.publish({
+    const journalPath = join(state.task.taskPath, "journal.jsonl");
+    const withoutRoundOneJournal = readFileSync(journalPath, "utf8").split("\n").filter(Boolean)
+      .map(JSON.parse)
+      .filter((event) => !(event.workflow_run_id === state.workflowRunId && event.step_id === 3))
+      .map((event) => JSON.stringify(event)).join("\n");
+    writeFileSync(journalPath, `${withoutRoundOneJournal}\n`);
+    const repeated = await invoke(() => writerFor(state, {
+      now: () => "2026-07-26T02:03:04.000Z",
+    }).publish({
       kind: "interaction-completion.v1",
       payload: interaction(1, "A"),
     }));
+    expect(repeated.value.created_at).toBe(round1.value.created_at);
+    appendFixtureStep(state.task, state.workflowRunId, 4);
     const round2 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: interaction(2, "B"),
     }));
+    appendFixtureStep(state.task, state.workflowRunId, 6);
     const round3 = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: interaction(3, "C"),
@@ -805,6 +854,8 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       kind: "interaction-completion.v1",
       payload: grillPayload(postGrillTree),
     }));
+    appendFixtureStep(state.task, state.workflowRunId, 9);
+    appendFixtureStep(state.task, state.workflowRunId, 10);
     const aggregate = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: {

@@ -21,6 +21,40 @@ function fixture(name) {
 }
 
 describe("Phase 2 canonical audit summary", () => {
+  it("separates a passing pre-confirmation prefix from the incomplete full audit", () => {
+    const input = fixture("normal");
+    const [baseEntry, baseExit] = input.journal_events;
+    const steps = Array.from({ length: 12 }, (_, index) => ({
+      step_id: index + 1,
+      order: index + 1,
+      attempt_id: "attempt-1",
+      depends_on: index === 0 ? [] : [index],
+    }));
+    const events = steps.slice(0, 10).flatMap((step, index) => {
+      const entryId = `entry-${step.step_id}`;
+      return [
+        { ...baseEntry, step_id: step.step_id, journal_entry_id: entryId, timestamp: new Date(Date.parse(baseEntry.timestamp) + index * 2000).toISOString() },
+        { ...baseExit, step_id: step.step_id, entry_journal_entry_id: entryId, timestamp: new Date(Date.parse(baseEntry.timestamp) + index * 2000 + 1000).toISOString() },
+      ];
+    });
+    const context = { ...input.audit_context, manifest: { ...input.audit_context.manifest, steps } };
+    const prefix = buildAuditSummaryFromJournalEvents(events, input.stage_slug, input.workflow_run_id, {
+      ...context,
+      through_step_id: 10,
+    }).audit_summary;
+    const full = buildAuditSummaryFromJournalEvents(events, input.stage_slug, input.workflow_run_id, context).audit_summary;
+    const invalid = buildAuditSummaryFromJournalEvents(events, input.stage_slug, input.workflow_run_id, {
+      ...context,
+      through_step_id: 99,
+    }).audit_summary;
+
+    expect(prefix).toMatchObject({ verdict: "pass", through_step_id: 10 });
+    expect(full).toMatchObject({ verdict: "fail", through_step_id: 12 });
+    expect(full.facts.missing).toContainEqual(expect.objectContaining({ type: "expected_step_missing", step_id: 11 }));
+    expect(invalid.facts.unknown).toContainEqual(expect.objectContaining({ type: "INVALID_AUDIT_STEP_BOUNDARY", through_step_id: 99 }));
+    expect(prefix.summary_hash).not.toBe(full.summary_hash);
+  });
+
   it("returns the aggregator-only pass verdict, evidence references, and stable summary hash for a complete attempt", () => {
     const input = fixture("normal");
     const { audit_summary } = buildAuditSummaryFromJournalEvents(
@@ -41,6 +75,71 @@ describe("Phase 2 canonical audit summary", () => {
       evidence_refs: expect.any(Array),
     });
     expect(audit_summary.summary_hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("treats only the runtime-authorized make-decision research skip as a completed dependency", () => {
+    const input = fixture("normal");
+    const [baseEntry, baseExit] = input.journal_events;
+    const steps = Array.from({ length: 5 }, (_, index) => ({
+      step_id: index + 1,
+      order: index + 1,
+      attempt_id: "attempt-1",
+      depends_on: index === 0 ? [] : [index],
+    }));
+    const events = steps.flatMap((step, index) => {
+      const entryId = `entry-${step.step_id}`;
+      const entry = {
+        ...baseEntry,
+        stage_slug: "make-decision",
+        step_id: step.step_id,
+        journal_entry_id: entryId,
+        timestamp: new Date(Date.parse(baseEntry.timestamp) + index * 2000).toISOString(),
+      };
+      const exit = {
+        ...baseExit,
+        stage_slug: "make-decision",
+        step_id: step.step_id,
+        entry_journal_entry_id: entryId,
+        timestamp: new Date(Date.parse(baseEntry.timestamp) + index * 2000 + 1000).toISOString(),
+        ...(step.step_id === 4 ? {
+          terminal_status: "skipped",
+          skip_reason: "Existing canonical evidence is sufficient.",
+          authorized_by: "stage-runtime:record-research",
+          completion_evidence: {
+            kind: "research_skip",
+            uri_or_path: "evidence/research-basis.json",
+            content_hash: "a".repeat(64),
+          },
+        } : {}),
+      };
+      return [entry, exit];
+    });
+    const context = {
+      ...input.audit_context,
+      task_id: "task-one",
+      manifest: { ...input.audit_context.manifest, stage_slug: "make-decision", steps },
+    };
+    const authorized = buildAuditSummaryFromJournalEvents(
+      events,
+      "make-decision",
+      input.workflow_run_id,
+      context,
+    ).audit_summary;
+    expect(authorized.verdict).toBe("pass");
+    expect(authorized.facts.terminal_non_success).toEqual([]);
+    expect(authorized.facts.dependency).toEqual([]);
+
+    const unauthorizedEvents = structuredClone(events);
+    delete unauthorizedEvents.find((event) => event.event_type === "step_exit" && event.step_id === 4).authorized_by;
+    const unauthorized = buildAuditSummaryFromJournalEvents(
+      unauthorizedEvents,
+      "make-decision",
+      input.workflow_run_id,
+      context,
+    ).audit_summary;
+    expect(unauthorized.verdict).toBe("fail");
+    expect(unauthorized.facts.terminal_non_success).toContainEqual(expect.objectContaining({ step_id: 4 }));
+    expect(unauthorized.facts.dependency).toContainEqual(expect.objectContaining({ step_id: 5, dependency_id: 4 }));
   });
 
   it("records duplicate terminal exits as a non-pass finding instead of choosing one", () => {

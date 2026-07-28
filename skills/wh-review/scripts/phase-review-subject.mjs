@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../core/canonical-utils.mjs";
 
@@ -241,23 +242,27 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
   if (!refMatch) invalid("phase map trace ref is invalid");
   const traceRecord = readJson(safeTask, ref, "phase map trace");
   const trace = traceRecord.value;
+  const reviewStatus = trace?.review_status ?? (trace?.review_result === null ? "unavailable" : "semantic");
   const allowed = new Set([
     "schema_version", "phase_id", "baseline_commit", "implementation_commit", "base_tree", "snapshot_tree",
     "implementation_commit_ref",
     "allowed_files", "changed_files", "canonical_phase_evidence", "diff_scan", "implementation_receipt",
-    "green_test_receipt", "red_test_receipt", "review_result", "review_attempt", "material_id", "review_scope", "verdict", "acceptance_trace",
+    "green_test_receipt", "red_test_receipt", "review_status", "review_result", "review_attempt",
+    "material_id", "review_scope", "verdict", "risk_acceptances", "acceptance_trace",
   ]);
   const required = [
     "schema_version", "phase_id", "baseline_commit", "implementation_commit", "base_tree", "snapshot_tree",
     "implementation_commit_ref",
     "allowed_files", "changed_files", "canonical_phase_evidence", "diff_scan", "implementation_receipt",
-    "green_test_receipt", "red_test_receipt", "review_result", "review_attempt", "material_id", "review_scope", "verdict",
+    "green_test_receipt", "red_test_receipt", "review_result", "review_attempt",
+    "material_id", "review_scope", "verdict",
   ];
   if (!trace || typeof trace !== "object" || Array.isArray(trace) || required.some((key) => !Object.hasOwn(trace, key)) ||
       Object.keys(trace).some((key) => !allowed.has(key)) ||
       trace.schema_version !== "phase-map-trace.v1" || trace.phase_id !== refMatch[1] || trace.snapshot_tree !== refMatch[2] ||
       !HASH.test(refMatch[3]) || traceRecord.sha256 !== refMatch[3] || trace.review_scope !== "phase" ||
-      !["pass", "revise_required"].includes(trace.verdict)) {
+      !["semantic", "unavailable"].includes(reviewStatus) ||
+      (reviewStatus === "semantic" ? !["pass", "revise_required"].includes(trace.verdict) : trace.verdict !== null)) {
     invalid("phase map trace identity is invalid");
   }
   const phaseEvidence = boundRecord(safeTask, trace.canonical_phase_evidence, "canonical Phase evidence");
@@ -265,9 +270,9 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
   const implementation = boundRecord(safeTask, trace.implementation_receipt, "implementation receipt");
   const green = boundRecord(safeTask, trace.green_test_receipt, "GREEN test receipt");
   const red = trace.red_test_receipt === null ? null : boundRecord(safeTask, trace.red_test_receipt, "RED test receipt");
-  const review = boundRecord(safeTask, trace.review_result, "formal Phase review");
+  const review = trace.review_result === null ? null : boundRecord(safeTask, trace.review_result, "formal Phase review");
   const attempt = boundRecord(safeTask, trace.review_attempt, "formal Phase review attempt");
-  validateSchema("result", review.value);
+  if (review !== null) validateSchema("result", review.value);
   validateSchema("attempt", attempt.value);
   const phaseResult = phaseEvidence.value;
   const scan = scanRecord.value;
@@ -298,13 +303,46 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
     material_id: trace.material_id,
   };
   for (const [key, value] of Object.entries(expected)) {
-    if (review.value[key] !== value || attempt.value[key] !== value) invalid(`phase map trace review ${key} mismatch`);
+    if ((review !== null && review.value[key] !== value) || attempt.value[key] !== value) invalid(`phase map trace review ${key} mismatch`);
   }
-  if (review.value.attempt_ref !== attempt.ref || review.value.verdict !== trace.verdict ||
-      attempt.value.material_id !== trace.material_id || attempt.value.review_scope !== "phase") {
+  const semantic = reviewStatus === "semantic";
+  if ((semantic && (review === null || review.value.attempt_ref !== attempt.ref || review.value.verdict !== trace.verdict
+      || attempt.value.terminal_status !== "semantic"))
+      || (!semantic && (review !== null || attempt.value.terminal_status !== "unavailable" || !attempt.value.error))
+      || attempt.value.material_id !== trace.material_id || attempt.value.review_scope !== "phase") {
     invalid("phase map trace review linkage is invalid");
   }
-  return Object.freeze({ trace, traceRef: ref, traceSha256: traceRecord.sha256, phaseEvidence, scan: scanRecord, implementation, green, red, review, attempt, subject, acceptanceTrace });
+  const riskRecords = (trace.risk_acceptances ?? []).map((binding) => boundRecord(safeTask, binding, "Phase risk acceptance"));
+  const preliminary = deriveSeriousReviewPause({
+    taskId: safeTask.identity.taskId,
+    stage: "build-code",
+    reviewRef: semantic ? review.ref : attempt.ref,
+    reviewHash: semantic ? review.sha256 : attempt.sha256,
+    ...(semantic ? { result: review.value } : { reviewAttempt: attempt.value }),
+  });
+  if (preliminary.status !== "paused") {
+    if (riskRecords.length) invalid("Phase trace has risk acceptances without actionable serious findings");
+  } else {
+    if (!riskRecords.length) invalid("Phase trace leaves actionable serious findings unresolved");
+    const runIds = new Set(riskRecords.map(({ value }) => value?.workflow_run_id));
+    const workflowRunId = [...runIds][0];
+    if (runIds.size !== 1 || typeof workflowRunId !== "string" || workflowRunId.trim() === "") {
+      invalid("Phase trace risk acceptances do not bind one review run");
+    }
+    const pause = deriveSeriousReviewPause({
+      taskId: safeTask.identity.taskId, stage: "build-code",
+      reviewRef: review.ref, reviewHash: review.sha256, result: review.value, workflowRunId,
+    });
+    try { validateRiskAcceptanceSet({ acceptances: riskRecords.map(({ value }) => value), pause }); }
+    catch (error) { invalid(`Phase trace risk acceptance is invalid: ${error.message}`); }
+  }
+  return Object.freeze({
+    trace: Object.freeze({
+      ...trace, review_status: reviewStatus, risk_acceptances: trace.risk_acceptances ?? [],
+    }),
+    traceRef: ref, traceSha256: traceRecord.sha256, phaseEvidence, scan: scanRecord,
+    implementation, green, red, review, attempt, subject, acceptanceTrace,
+  });
 }
 
 export function validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot, phaseId } = {}) {

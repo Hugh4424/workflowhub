@@ -341,16 +341,29 @@ export function selectReviewRound({ stage, route, previousResult = null, ledger 
   if (!Number.isSafeInteger(closureFailures) || closureFailures < 0) throw new TypeError("review progress counters are invalid");
   if (typeof structuralFullAlreadyRecorded !== "boolean") throw new TypeError("structural full-review audit flag is invalid");
   if (route.mode === "single_round") {
-    return previousResult === null
-      ? { round: "initial", reason: "single_round" }
-      : { round: "none", reason: "single_round_already_completed" };
+    if (previousResult === null) return { round: "initial", reason: "single_round" };
+    if (!["pass", "revise_required"].includes(previousResult.verdict)) {
+      throw new TypeError("previous result must be semantic");
+    }
+    if (previousResult.verdict === "pass"
+        && previousResult.snapshot_tree === currentSnapshotTree
+        && ledger === null) {
+      return { round: "none", reason: "single_round_already_completed" };
+    }
+    // single_round never turns a provider finding into a review loop or a
+    // stage gate. A changed final snapshot is bound through a zero-provider
+    // resolution for either semantic verdict; the verdict itself never moves.
+    return { round: "none", reason: "review_non_gate_recorded" };
   }
   if (previousResult === null) return { round: "initial", reason: "first_review" };
   if (stage === "build-code" || route.mode === "full_only") {
-    if (previousResult.verdict === "pass") return { round: "none", reason: "prior_result_passed" };
-    if (previousResult.verdict !== "revise_required") throw new TypeError("previous result must be semantic");
-    boundActionableLedger(previousResult, ledger, currentSnapshotTree);
-    return { round: "full", reason: "build_code_requires_fresh_full_review" };
+    if (!["pass", "revise_required"].includes(previousResult.verdict)) {
+      throw new TypeError("previous result must be semantic");
+    }
+    // One frozen Phase identity receives one complete provider review. A
+    // repair creates a new snapshot-scoped identity and therefore a fresh
+    // initial review; the old quality verdict is never chased to `pass`.
+    return { round: "none", reason: "phase_quality_fact_recorded" };
   }
   if (route.mode === "full_on_structural_rework") {
     if (!["pass", "revise_required"].includes(previousResult.verdict)) throw new TypeError("previous result must be semantic");

@@ -996,13 +996,14 @@ describe("aggregation and runner", () => {
     expect(runnerSource.indexOf("reviewInstructionsFor(stage")).toBeLessThan(runnerSource.indexOf("rejectProfileMismatches(await reviewGroup"));
   });
 
-  it("keeps a real provider revise result blocked at final verification", async () => {
+  it("authenticates a real provider revise result without turning it into a stage gate", async () => {
     const { attachmentRoot, task } = fixture("simple-review-provider-revise-");
     const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
       providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: revise, error: null } }) },
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     expect(result).toMatchObject({ status: "semantic", verdict: "revise_required" });
-    expect(() => verifyFinal({ task, resultRef: result.resultRef, attachmentRoot })).toThrow(/REVIEW_NOT_APPROVED/);
+    expect(verifyFinal({ task, resultRef: result.resultRef, attachmentRoot, captureSource: () => source }))
+      .toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
   });
 
   it("requires branded CandidateWorkspace for make-decision direction review", async () => {
@@ -1202,5 +1203,35 @@ describe("verify final", () => {
     expect(revised).toMatchObject({ reused: true, resultRef });
     expect(reviseCalls).toHaveLength(0);
     expect(verifyFinal({ resultRef:revised.resultRef, task, attachmentRoot, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
+  });
+
+  it("finalizes a same-snapshot integration revise_required result without rewriting its verdict", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-final-revise-");
+    const providerClient = {
+      run: async () => ({
+        runtimeId: "runtime",
+        provider: {
+          provider: "kimi", status: "completed", session_id: "session",
+          output: revise, error: null,
+        },
+      }),
+    };
+    const run = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code",
+      materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
+    });
+    expect(run).toMatchObject({ verdict: "revise_required", reviewScope: "integration" });
+    expect(verifyFinal({
+      resultRef: run.resultRef,
+      task,
+      attachmentRoot,
+      taskId: "task",
+      stage: "build-code",
+      reviewTrack: null,
+      captureSource: () => source,
+    })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
+    expect(JSON.parse(task.readRecord(run.resultRef)).verdict).toBe("revise_required");
   });
 });

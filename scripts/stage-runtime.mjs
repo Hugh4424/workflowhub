@@ -7,7 +7,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   bootstrapStage,
   prepareMakeDecisionWorkspace,
-  validateMakeDecisionWorkspaceAttempt,
 } from "../core/stage-context.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
@@ -27,6 +26,27 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
 const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const SHA256 = /^[a-f0-9]{64}$/;
+
+function completedStep(task, workflowRunId, stepId) {
+  let raw;
+  try { raw = task.readRecord("journal.jsonl"); } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)).some((event) =>
+    event.workflow_run_id === workflowRunId && event.stage_slug === "make-decision"
+    && event.step_id === stepId && event.attempt_id === "attempt-1"
+    && event.event_type === "step_exit" && event.terminal_status === "success");
+}
+
+function requireCompletedMakeDecisionStep(context, stepId) {
+  const runId = context.kernel.activeStageRun("make-decision").run.workflow_run_id;
+  if (!completedStep(context.task, runId, stepId)) {
+    throw new Error(`make-decision canonical producer did not complete step ${stepId}`);
+  }
+}
 
 function parseArgs(argv) {
   const [command, ...raw] = argv;
@@ -36,7 +56,7 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
@@ -48,6 +68,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
   if (Object.prototype.hasOwnProperty.call(values, "runner-root")) throw new TypeError("--runner-root is forbidden; stage-runtime authenticates its own repository root");
+  if (values.stage === "make-decision" && new Set(["record-step-entry", "record-step-exit"]).has(command)) {
+    throw new TypeError("make-decision journal is runtime-owned; public record-step-entry/record-step-exit are forbidden");
+  }
   if (!new Set(["receipt", "publish-content-evidence"]).has(command)
       && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) {
     throw new TypeError("--revision is only valid for receipt or trusted stage-content publication");
@@ -62,7 +85,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "invalidate-step-attempt" && !values.input) throw new TypeError("invalidate-step-attempt requires --input=<invalidation.json>");
   if (command === "invalidate-stage-attempt" && !values.input) throw new TypeError("invalidate-stage-attempt requires --input=<invalidation.json>");
   if (command === "invalidate-review-binding" && !values.input) throw new TypeError("invalidate-review-binding requires --input=<invalidation.json>");
-  if (new Set(["publish-requirements-ledger", "record-step-entry", "record-step-exit"]).has(command) && !values.input) throw new TypeError(`${command} requires --input`);
+  if (new Set(["publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research"]).has(command) && !values.input) throw new TypeError(`${command} requires --input`);
+  if (command === "record-research" && values.stage !== "make-decision") throw new TypeError("record-research is only valid for make-decision");
   if (command === "publish-phase-evidence") {
     if (values.stage !== "build-code" || !values.input) throw new TypeError("publish-phase-evidence requires --stage=build-code --input=<phase-evidence.json>");
     const allowed = new Set(["stage", "project", "task", "input"]);
@@ -99,7 +123,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -113,10 +137,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "start-run") {
     const allowed = new Set(["stage", "project", "task", "reason", "continuation-ref"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("start-run accepts only --stage, --project, --task, and --reason");
-    return context.kernel.startStageRun(values.stage, {
+    const started = context.kernel.startStageRun(values.stage, {
       reason: values.reason,
       ...(values["continuation-ref"] ? { continuation_ref: values["continuation-ref"] } : {}),
     });
+    if (values.stage === "make-decision") {
+      context = prepareMakeDecisionWorkspace(context);
+    }
+    return started;
   }
   if (command === "continue-stage") {
     const allowed = new Set(["stage", "project", "task", "input"]);
@@ -147,17 +175,34 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "publish-requirements-ledger") {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-requirements-ledger accepts only --stage, --project, --task, and --input");
-    return context.kernel.publishRequirementsLedger(values.stage, input);
+    const published = context.kernel.publishRequirementsLedger(values.stage, input);
+    return published;
   }
   if (command === "record-step-entry") {
+    if (values.stage === "make-decision") throw new Error("make-decision journal entries are runtime-owned");
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("record-step-entry accepts only --stage, --project, --task, and --input");
     return context.kernel.writeStageStepEntry(values.stage, input);
   }
   if (command === "record-step-exit") {
+    if (values.stage === "make-decision") throw new Error("make-decision journal exits are runtime-owned");
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("record-step-exit accepts only --stage, --project, --task, and --input");
     return context.kernel.writeStageStepExit(values.stage, input);
+  }
+  if (command === "record-research") {
+    const allowed = new Set(["status", "reason", "evidence"]);
+    if (!input || typeof input !== "object" || Array.isArray(input)
+        || Object.keys(input).some((key) => !allowed.has(key))
+        || !new Set(["performed", "skipped"]).has(input.status)
+        || typeof input.reason !== "string" || input.reason.trim() === ""
+        || !input.evidence || typeof input.evidence !== "object" || Array.isArray(input.evidence)
+        || typeof input.evidence.kind !== "string" || input.evidence.kind.trim() === ""
+        || typeof input.evidence.uri_or_path !== "string" || input.evidence.uri_or_path.trim() === ""
+        || !SHA256.test(input.evidence.content_hash ?? "")) {
+      throw new TypeError("record-research requires status=performed|skipped, reason, and a canonical evidence ref");
+    }
+    return context.kernel.completeMakeDecisionResearch(input);
   }
   if (command === "rebind") return context.kernel.authorizeBuildPlanBaselineRebind();
   if (command === "artifact") {
@@ -255,9 +300,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     });
   }
   if (values.stage === "make-decision" && new Set(["run", "publish-content-evidence"]).has(command)) context = prepareMakeDecisionWorkspace(context);
-  if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
+  if (values.stage === "make-decision" && command === "accept") context = prepareMakeDecisionWorkspace(context);
   if (command === "receipt") {
     const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: input, ...(values.revision === "true" ? { revisionOf: values.recover } : {}) });
+    if (values.stage === "make-decision" && values.component === "decision") {
+      const raw = context.task.readRecord(result.ref);
+      context.kernel.completeMakeDecisionReceipt({
+        receipt_ref: result.ref,
+        receipt_hash: sha256(raw),
+      });
+    }
     return { receipt_ref: result.ref, receipt_hash: result.sha256, revision: result.revision, ...(result.revision ? { previous_receipt_ref: result.previous_ref, previous_receipt_hash: result.previous_hash, content_hash: result.content_hash } : {}) };
   }
   if (command === "publish-content-evidence") {
@@ -282,10 +334,38 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const unknownRunFields = Object.keys(input).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(input?.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
+    if (values.stage === "make-decision") {
+      const reviewEvidence = (track, stepId, ref) => {
+        const raw = context.task.readRecord(ref);
+        const review = JSON.parse(raw);
+        if (review.review_track !== track) throw new Error(`${track} review receipt does not match its track`);
+        const identity = context.kernel.deriveReviewFlowIdentity({
+          stage: "make-decision",
+          review_track: track,
+          subject_kind: review.subject_kind,
+          phase_id: review.phase_id ?? null,
+          review_scope: review.review_scope ?? null,
+        });
+        const flow = context.kernel.readReviewFlow(identity);
+        const semanticHead = review.version === "wh-review-result.v1"
+          && flow?.head_result_ref === ref && flow.result_sha256 === sha256(raw);
+        const unavailableHead = review.version === "wh-review-attempt.v1"
+          && review.terminal_status === "unavailable"
+          && flow?.event_kind === "provider_attempt"
+          && flow.action_ref === ref && flow.action_sha256 === sha256(raw);
+        if (!semanticHead && !unavailableHead) {
+          throw new Error(`${track} review receipt is not the current authenticated review-flow head`);
+        }
+        requireCompletedMakeDecisionStep(context, stepId);
+      };
+      reviewEvidence("direction", 6, input.receipts.direction_review);
+      reviewEvidence("detail", 10, input.receipts.detail_review);
+    }
     const audit = writeCanonicalAuditSummary({
       task: context.task,
       workspace: context.candidateWorkspace ?? context.workspace,
       stage: values.stage,
+      ...(values.stage === "make-decision" ? { throughStepId: 10 } : {}),
     });
     const controlledInput = { ...input, receipts: { ...input.receipts, audit: audit.audit_summary_ref } };
     const attempt = await runOfficialStage(values.stage, context, controlledInput, {
@@ -296,10 +376,30 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const accepted = acceptStageAttempt(values.stage, context, { attemptRef: attempt.attempt_ref });
     return { ...attempt, accepted };
   }
-  if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
+  if (command === "confirm") {
+    if (values.stage === "make-decision") {
+      context = prepareMakeDecisionWorkspace(context);
+    }
+    return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
+  }
   return acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
+    ...(values.stage !== "make-decision" ? {} : {
+      fullAuditWriter: () => {
+        const audit = writeCanonicalAuditSummary({
+          task: context.task,
+          workspace: context.candidateWorkspace,
+          stage: "make-decision",
+          throughStepId: 12,
+        });
+        return {
+          ref: audit.audit_summary_ref,
+          hash: audit.audit_record_hash,
+          summary_hash: audit.audit_summary_hash,
+        };
+      },
+    }),
   });
 }
 

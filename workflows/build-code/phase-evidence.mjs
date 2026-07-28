@@ -9,17 +9,21 @@ import { validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../..
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
 import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha256, assertSafeRecoveryRef, recoveryError } from "../../core/task-recovery.mjs";
 import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
-import { assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
+import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../core/stage-review-disposition.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
 const REOPEN = /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/;
 const ADJUDICATION_CORRECTION = /^results\/build-code\/revisions\/adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const REVIEW_ACTION = /^reviews\/(?:results\/[A-Za-z0-9._-]+|attempts\/[A-Za-z0-9._-]+\/attempt)\.json$/;
+const RISK_ACCEPTANCE = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
   "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "review_result_ref", "reopen_ref",
   "repair_review_result_ref", "adjudication_correction_ref", "recovery_ref", "recovery_hash",
+  "risk_acceptance_refs",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -90,25 +94,63 @@ function authenticateKernelReviewHead(kernel, review, ref, expected, { revisionR
   });
 }
 
-function readFormalPhaseReview(task, kernel, ref, expected, { requirePass = false, revisionRef, adjudicationCorrectionRef } = {}) {
-  safeRef(ref, /^reviews\/results\/[A-Za-z0-9._-]+\.json$/, "review result ref");
-  const review = readJson(task, ref, "formal phase review result");
-  validateSchema("result", review.value);
-  const value = review.value;
+function expectedPhaseReviewIdentity(task, value, expected) {
   if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
     || value.subject_kind !== "phase" || value.phase_id !== expected.phaseId
     || value.review_scope !== "phase"
     || value.base_tree !== expected.baseTree || value.candidate_tree !== expected.candidateTree
-    || value.snapshot_tree !== expected.candidateTree || !["pass", "revise_required"].includes(value.verdict)
+    || value.snapshot_tree !== expected.candidateTree
     || (expected.phaseEvidence !== undefined &&
         JSON.stringify(value.phase_evidence ?? null) !== JSON.stringify(expected.phaseEvidence))) {
     throw new Error("formal phase review identity does not match the Phase evidence");
   }
-  if (requirePass && value.verdict !== "pass") throw new Error(`previous Phase review must be PASS (got ${value.verdict})`);
-  authenticateKernelReviewHead(kernel, review, ref, {
+}
+
+function phaseReviewSubject(expected) {
+  return {
     stage: "build-code", review_track: null, subject_kind: "phase",
     phase_id: expected.phaseId, review_scope: "phase",
-  }, { revisionRef, adjudicationCorrectionRef });
+  };
+}
+
+function reviewFlowReader(kernel, { revisionRef, adjudicationCorrectionRef } = {}) {
+  return (subject) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity({
+    ...subject,
+    ...(revisionRef === undefined ? {} : { revision_ref: revisionRef }),
+    ...(adjudicationCorrectionRef === undefined ? {} : { adjudication_correction_ref: adjudicationCorrectionRef }),
+  }));
+}
+
+function readFormalPhaseReview(task, kernel, ref, expected, options = {}) {
+  safeRef(ref, REVIEW_ACTION, "review action ref");
+  const review = readJson(task, ref, "formal phase review action");
+  if (ref.startsWith("reviews/attempts/")) {
+    validateSchema("attempt", review.value);
+    const value = review.value;
+    expectedPhaseReviewIdentity(task, value, expected);
+    if (value.terminal_status !== "unavailable" || !value.error
+      || !Array.isArray(value.provider_attempts) || value.provider_attempts.length === 0) {
+      throw new Error("formal phase review attempt is not an unavailable provider attempt");
+    }
+    const authenticated = assertAuthenticatedReviewAttempt({
+      readFlow: reviewFlowReader(kernel, options),
+      attemptRef: ref,
+      attemptHash: review.hash,
+      attempt: value,
+      expected: phaseReviewSubject(expected),
+    });
+    return {
+      ...review, ref, status: "unavailable", verdict: null,
+      attempt_ref: ref, attempt: review, authenticated,
+    };
+  }
+  validateSchema("result", review.value);
+  const value = review.value;
+  expectedPhaseReviewIdentity(task, value, expected);
+  if (!["pass", "revise_required"].includes(value.verdict)) {
+    throw new Error("formal phase review semantic verdict is invalid");
+  }
+  const authenticated = authenticateKernelReviewHead(kernel, review, ref, phaseReviewSubject(expected), options);
   const attempt = readJson(task, value.attempt_ref, "formal phase review attempt");
   validateSchema("attempt", attempt.value);
   for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
@@ -117,7 +159,10 @@ function readFormalPhaseReview(task, kernel, ref, expected, { requirePass = fals
   if (JSON.stringify(attempt.value.phase_evidence ?? null) !== JSON.stringify(value.phase_evidence ?? null)) {
     throw new Error("formal phase review attempt/result phase_evidence mismatch");
   }
-  return { ...review, ref, attempt_ref: value.attempt_ref, attempt };
+  return {
+    ...review, ref, status: "semantic", verdict: value.verdict,
+    attempt_ref: value.attempt_ref, attempt, authenticated,
+  };
 }
 
 function readPreAcceptRepairReview(task, kernel, ref, expectedCandidateTree) {
@@ -153,7 +198,51 @@ function hasAcceptedBuildCode(task) {
   }
 }
 
-function phaseMapTrace({ scan, scanRef, scanHash, canonicalEvidenceRef, canonicalEvidenceHash, implementation, green, red, review, implementationCommitRef }) {
+function bindPhaseReviewRisks(task, review, refs) {
+  const supplied = refs ?? [];
+  if (!Array.isArray(supplied) || supplied.some((ref) => typeof ref !== "string")) {
+    throw new TypeError("risk_acceptance_refs must be an array of canonical refs");
+  }
+  if (review.status === "unavailable") {
+    if (supplied.length) throw new Error("unavailable Phase review cannot use a risk acceptance");
+    return [];
+  }
+  const preliminary = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef: review.ref,
+    reviewHash: review.hash,
+    result: review.value,
+  });
+  if (preliminary.status !== "paused") {
+    if (supplied.length) throw new Error("risk acceptance cannot override a Phase review without actionable serious findings");
+    return [];
+  }
+  if (!supplied.length) throw new Error("SERIOUS_REVIEW_PAUSE: actionable serious Phase findings require repair or exact risk acceptance");
+  const records = supplied.map((ref) => {
+    const match = RISK_ACCEPTANCE.exec(ref);
+    if (!match) throw new Error("Phase risk acceptance ref is outside the canonical namespace");
+    const record = readJson(task, ref, "Phase risk acceptance");
+    if (record.hash !== match[1]) throw new Error("Phase risk acceptance is not content-addressed");
+    return record;
+  });
+  const workflowRunId = review.authenticated.flow.identity.workflow_run_id;
+  const pause = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef: review.ref,
+    reviewHash: review.hash,
+    result: review.value,
+    workflowRunId,
+  });
+  validateRiskAcceptanceSet({ acceptances: records.map(({ value }) => value), pause });
+  return records.map((record, index) => ({ ref: supplied[index], sha256: record.hash }));
+}
+
+function phaseMapTrace({
+  scan, scanRef, scanHash, canonicalEvidenceRef, canonicalEvidenceHash,
+  implementation, green, red, review, implementationCommitRef, riskAcceptances,
+}) {
   const value = review.value;
   const acceptanceTrace = validatePhaseAcceptanceTrace({
     trace: review.attempt.value.phase_ac_trace,
@@ -179,11 +268,13 @@ function phaseMapTrace({ scan, scanRef, scanHash, canonicalEvidenceRef, canonica
     implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
     green_test_receipt: { ref: green.ref, sha256: green.hash },
     red_test_receipt: red === null ? null : { ref: red.ref, sha256: red.hash },
-    review_result: { ref: review.ref, sha256: review.hash },
+    review_status: review.status,
+    review_result: review.status === "semantic" ? { ref: review.ref, sha256: review.hash } : null,
     review_attempt: { ref: review.attempt_ref, sha256: review.attempt.hash },
     material_id: value.material_id,
     review_scope: "phase",
-    verdict: value.verdict,
+    verdict: review.verdict,
+    risk_acceptances: riskAcceptances,
     ...(acceptanceTrace === null ? {} : { acceptance_trace: acceptanceTrace }),
   };
 }
@@ -194,6 +285,21 @@ function currentPhaseResult(task) {
     if (/is missing/.test(error.message)) return null;
     throw error;
   }
+}
+
+function currentPhaseReviewVerdict(task, phaseResult) {
+  const ref = phaseResult?.review?.action_ref ?? phaseResult?.review?.result_ref;
+  if (ref === undefined) return null;
+  const review = readJson(task, ref, "current Phase review action").value;
+  if (review?.terminal_status === "unavailable") return "unavailable";
+  if (!["pass", "revise_required"].includes(review?.verdict)) {
+    throw new Error("current Phase review verdict is invalid");
+  }
+  return review.verdict;
+}
+
+function currentPhaseReviewRef(phaseResult) {
+  return phaseResult?.review?.action_ref ?? phaseResult?.review?.result_ref;
 }
 
 function phaseSubject(task, workspace, phaseResult) {
@@ -227,9 +333,8 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
   const previous = phaseSubject(task, workspace, current);
   if (current.phase_id !== input.phase_id) {
     if (input.repair_review_result_ref !== undefined) throw new Error("pre-accept repair review must target the current Phase");
-    if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("next Phase requires the current previous_phase_review_ref");
+    if (input.previous_phase_review_ref !== currentPhaseReviewRef(current)) throw new Error("next Phase requires the current previous_phase_review_ref");
     readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
-      requirePass: true,
       ...(current.reopen_ref === undefined ? {} : { revisionRef: current.reopen_ref }),
       ...(predecessorAdjudicationCorrection(current, input.phase_id) === undefined ? {}
         : { adjudicationCorrectionRef: predecessorAdjudicationCorrection(current, input.phase_id) }),
@@ -238,17 +343,17 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
   }
   if (input.repair_review_result_ref !== undefined) {
     if (input.reopen_ref !== undefined) throw new Error("pre-accept repair review cannot be combined with reopen_ref");
-    if (current.status !== "done") throw new Error("pre-accept repair review requires the current PASS Phase");
+    if (current.status !== "done") throw new Error("pre-accept repair review requires the current completed Phase");
     if (hasAcceptedBuildCode(task)) throw new Error("pre-accept repair review is unavailable after build-code acceptance");
     readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, previous.scan.snapshot_tree);
     return previous.scan.baseline_commit;
   }
   if (input.previous_phase_review_ref === undefined) return previous.scan.baseline_commit;
-  if (input.previous_phase_review_ref !== current.review?.result_ref) throw new Error("same-Phase repair review reference mismatch");
+  if (input.previous_phase_review_ref !== currentPhaseReviewRef(current)) throw new Error("same-Phase repair review reference mismatch");
   const review = readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
     ...((input.reopen_ref ?? current.reopen_ref) === undefined ? {} : { revisionRef: input.reopen_ref ?? current.reopen_ref }),
   });
-  if (review.value.verdict !== "revise_required") throw new Error("a changed same-Phase identity requires a revise_required review");
+  if (review.verdict !== "revise_required") throw new Error("a changed same-Phase identity requires a revise_required review");
   return previous.scan.baseline_commit;
 }
 
@@ -348,6 +453,12 @@ export function validatePhaseEvidenceInput(input) {
   if (input.adjudication_correction_ref !== undefined && !ADJUDICATION_CORRECTION.test(input.adjudication_correction_ref)) throw new TypeError("adjudication_correction_ref is invalid");
   if (input.reopen_ref !== undefined && input.adjudication_correction_ref !== undefined) throw new TypeError("reopen_ref and adjudication_correction_ref are mutually exclusive");
   if ((input.recovery_ref === undefined) !== (input.recovery_hash === undefined)) throw new TypeError("recovery_ref and recovery_hash must be provided together");
+  if (input.risk_acceptance_refs !== undefined
+    && (!Array.isArray(input.risk_acceptance_refs)
+      || input.risk_acceptance_refs.some((ref) => typeof ref !== "string" || !RISK_ACCEPTANCE.test(ref))
+      || new Set(input.risk_acceptance_refs).size !== input.risk_acceptance_refs.length)) {
+    throw new TypeError("risk_acceptance_refs must contain unique canonical risk acceptance refs");
+  }
   if (input.recovery_ref !== undefined) {
     assertSafeRecoveryRef(input.recovery_ref, "recovery_ref");
     if (!/^identity\/recoveries\/phase-pointer-[0-9]{4}\.json$/.test(input.recovery_ref) || !HASH.test(input.recovery_hash ?? "")) throw new TypeError("recovery_ref is invalid");
@@ -403,7 +514,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       throw new Error("pre-accept repair review cannot be combined with reopen_ref");
     }
     if (input.repair_review_result_ref !== undefined && (!current || current.phase_id !== input.phase_id || current.status !== "done")) {
-      throw new Error("pre-accept repair review requires the current PASS Phase");
+      throw new Error("pre-accept repair review requires the current completed Phase");
     }
     if (input.repair_review_result_ref !== undefined && hasAcceptedBuildCode(task)) {
       throw new Error("pre-accept repair review is unavailable after build-code acceptance");
@@ -413,7 +524,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, currentSubject.scan.snapshot_tree);
     }
     if (reopen && (!current || current.phase_id !== input.phase_id)) {
-      throw new Error("reopen_ref may repair only the current PASS Phase");
+      throw new Error("reopen_ref may repair only the current completed Phase");
     }
     if (current?.reopen_ref !== undefined && input.reopen_ref !== current.reopen_ref) {
       throw new Error("reopened Phase publication requires the same reopen_ref");
@@ -424,16 +535,17 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     const recoveryBootstrap = current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined;
     if (current?.phase_id === input.phase_id && !recoveryBootstrap) {
       const existing = phaseSubject(task, workspace, current);
+      const currentReviewVerdict = currentPhaseReviewVerdict(task, current);
       const sameIdentity = existing.scan.snapshot_tree === implementation.value.snapshot_tree
         && current.evidence?.implementation_receipt_ref === input.implementation_receipt_ref
         && current.evidence?.green_test_receipt_ref === input.green_test_receipt_ref
         && current.evidence?.red_evidence_ref === input.red_evidence_ref
         && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.allowed_files ?? [])) === JSON.stringify(allowedFiles);
       if (sameIdentity && reopen && current.reopen_ref === undefined) {
-        throw new Error("reopen_ref requires a changed current PASS Phase identity");
+        throw new Error("reopen_ref requires a changed current completed Phase identity");
       }
       if (sameIdentity && current.review) {
-        if (input.review_result_ref !== undefined && input.review_result_ref !== current.review.result_ref) {
+        if (input.review_result_ref !== undefined && input.review_result_ref !== currentPhaseReviewRef(current)) {
           throw new Error("the same Phase identity must reuse its existing formal review");
         }
         return Object.freeze({
@@ -441,8 +553,8 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
           implementation_commit: existing.scan.implementation_commit, base_tree: existing.subject.baseTree,
           snapshot_tree: existing.scan.snapshot_tree, diff_scan_ref: current.diff_scan.path,
           canonical_phase_evidence_ref: current.evidence.canonical_phase_evidence_ref,
-          review_result_ref: current.review.result_ref,
-          review_verdict: current.status === "done" ? "pass" : "revise_required",
+          review_result_ref: currentPhaseReviewRef(current),
+          review_verdict: currentReviewVerdict,
         });
       }
       if (sameIdentity && input.review_result_ref === undefined) {
@@ -453,12 +565,12 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
           canonical_phase_evidence_ref: current.evidence.canonical_phase_evidence_ref,
         });
       }
-      if (!sameIdentity && current.status === "done") {
+      if (!sameIdentity && current.status === "done" && currentReviewVerdict !== "revise_required") {
         if (!reopen && repairReviewRef === undefined) {
-          throw new Error("a PASS Phase identity is closed and cannot be reopened");
+          throw new Error("a completed Phase identity is closed and cannot be reopened");
         }
       }
-      if (!sameIdentity && current.status === "needs_revision" && input.previous_phase_review_ref === undefined) {
+      if (!sameIdentity && currentReviewVerdict === "revise_required" && input.previous_phase_review_ref === undefined) {
         throw new Error("a changed same-Phase identity requires previous_phase_review_ref");
       }
     }
@@ -523,9 +635,10 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         ...(input.reopen_ref === undefined ? {} : { revisionRef: input.reopen_ref }),
         ...(input.adjudication_correction_ref === undefined ? {} : { adjudicationCorrectionRef: input.adjudication_correction_ref }),
       });
+      const riskAcceptances = bindPhaseReviewRisks(task, review, input.risk_acceptance_refs);
       const trace = phaseMapTrace({
         scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash,
-        implementation, green, red, review, implementationCommitRef,
+        implementation, green, red, review, implementationCommitRef, riskAcceptances,
       });
       const traceRaw = canonical(trace);
       const traceHash = sha256(traceRaw);
@@ -533,8 +646,15 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       publishIdempotently(task, kernel, traceRef, traceRaw, "Phase map trace");
       evidence.evidence.phase_map_trace_ref = traceRef;
       evidence.evidence.phase_map_trace_hash = traceHash;
-      evidence.review = { result_ref: input.review_result_ref, snapshot_tree: scan.snapshot_tree };
-      evidence.status = review.value.verdict === "pass" ? "done" : "needs_revision";
+      evidence.review = {
+        action_ref: input.review_result_ref,
+        ...(review.status === "semantic" ? { result_ref: input.review_result_ref } : {}),
+        snapshot_tree: scan.snapshot_tree,
+        status: review.status,
+        verdict: review.verdict,
+        risk_acceptances: riskAcceptances,
+      };
+      evidence.status = "done";
     }
     task.writeRecordAtomic("phase-result.json", canonical(evidence));
     return Object.freeze({
@@ -545,7 +665,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       ...(input.adjudication_correction_ref === undefined ? {} : { adjudication_correction_ref: input.adjudication_correction_ref }),
       ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
       ...(review ? {
-        review_result_ref: input.review_result_ref, review_verdict: review.value.verdict,
+        review_result_ref: input.review_result_ref, review_status: review.status, review_verdict: review.verdict,
         phase_map_trace_ref: evidence.evidence.phase_map_trace_ref, phase_map_trace_hash: evidence.evidence.phase_map_trace_hash,
       } : {}),
     });

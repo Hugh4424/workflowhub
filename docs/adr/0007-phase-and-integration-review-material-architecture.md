@@ -1,17 +1,31 @@
 # ADR 0007 — Phase 与集成审查使用不同的最小充分材料
 
 - Status: Accepted
+- Superseded note: Phase/integration review verdicts are now preserved as
+  quality facts rather than `pass` gates. Identity, hash, snapshot, scope, and
+  material bindings remain fail-closed; serious findings use the separate
+  authenticated risk-pause contract.
 
-build-code 的单个 Phase 继续以完整冻结 diff 严格审查至 pass；最终审查改为绑定同一最终快照的集成审查，只交付连续 Phase PASS 覆盖链、自动生成的跨 Phase seam 索引（索引本身带每个 seam 的最终锚点或显式未知/不适用项），以及 AC 到改动和测试/证据的追踪。这样保留对真实代码改动的完整检查，避免把已审过的历史 diff 再次交给高成本 reviewer 重做；WorkflowHub 仍只消费 3rd-review 的公共结果，绝不读取或公开 broker 私有 state/session 文件。
+build-code 的单个 Phase 继续以完整冻结 diff 严格审查并保存 provider
+的原始质量裁决；最终审查改为绑定同一最终快照的集成审查，只交付连续
+Phase 审查覆盖链、自动生成的跨 Phase seam 索引（索引本身带每个 seam
+的最终锚点或显式未知/不适用项），以及 AC 到改动和测试/证据的追踪。
+provider 的 `pass`、`revise_required`、`unavailable` 都是质量事实，不是
+WorkflowHub 阶段通过状态。严重且可行动的发现走独立的修复/风险暂停协议；
+其他裁决不会形成反复调用 provider 的 pass loop。这样保留对真实代码改动的
+完整检查，避免把已审过的历史 diff 再次交给高成本 reviewer 重做；
+WorkflowHub 仍只消费 3rd-review 的公共结果，绝不读取或公开 broker 私有
+state/session 文件。
 
 ## Decision
 
 - `phase_id` 存在时自动派生 `review_scope=phase`：packet 必有完整
   `base_tree..candidate_tree` diff、change map、受控测试摘要和 map 选择的直接上下文。
-  每次修复都重审完整当前 Phase，直到正式 `pass`。
+  每个冻结 Phase 身份只产生一次正式质量事实。若严重可行动发现触发修复，修复后的新
+  快照是新 Phase 身份并重新完整审查；原裁决不可改写。
 - `phase_id` 缺失时自动派生 `review_scope=integration`：只接受
   `subject_kind=worktree`。在 provider 调用前，必须从 accepted build-plan checkpoint
-  到最终树重建唯一、连续的 canonical Phase PASS trace chain，并验证 fresh test 和 AC
+  到最终树重建唯一、连续的 canonical Phase review trace chain，并验证 fresh test 和 AC
   `change/test/evidence` trace。缺 Phase、缺 trace、分叉、树不连续、零 Phase 或 legacy
   无 scope record 一律为 `MATERIAL_INCOMPLETE`，不回退到全项目或累计 diff。
 - Integration packet 禁止 `changes.diff`、历史 Phase diff、cumulative diff、raw log、
@@ -24,7 +38,8 @@ build-code 的单个 Phase 继续以完整冻结 diff 严格审查至 pass；最
   不能把相邻 Phase 或共享路径伪称为完整语义 seam。
 - build-spec、build-plan、verify-code 的首轮仍是非 gate 质量事实：普通修复不二审；只有
   绑定 ledger 明确记录结构性变更时，才最多同 route 重做一次完整高强度审查。它不形成 pass
-  loop。build-code 不适用该降级。
+  loop。build-code 使用每个冻结 Phase 一次完整审查与最终集成审查；其裁决语义同样不是
+  阶段 pass gate。
 
 ## Public trace and aggregation
 
@@ -38,7 +53,8 @@ request ID 轮询公共 status，不用外层 wall-clock 预算取消健康审�
 同 adapter 去重顺序，不是模型智力权重。major/blocking finding 需要有效 direct/machine
 anchor，或两个异源 adapter 的一致 inferred evidence 才会 actionable；无效 anchor 和
 单一推断分别记录为 `invalid_evidence` 与 `needs_corroboration`。minor 非阻塞。只有
-actionable cluster 才产生 `revise_required`。
+actionable cluster 才产生 `revise_required`。该值保持为 provider 质量事实；
+严重发现是否暂停阶段由独立、可认证的风险协议决定。
 
 ## Considered Options
 

@@ -223,7 +223,7 @@ describe("build-code adjudication correction contract", () => {
     })).toThrow(/Phase evidence|repair receipt|binding/i);
   });
 
-  it("rejects a second correction for the same Phase and keeps ordinary PASS closed", () => {
+  it("rejects a second correction for the same Phase and keeps one frozen Phase review closed", () => {
     expect(reviewAuthority.validateBuildCodeAdjudicationCorrection).toBeTypeOf("function");
     expect(() => reviewAuthority.validateBuildCodeAdjudicationCorrection(boundInputs(
       correction,
@@ -234,6 +234,6 @@ describe("build-code adjudication correction contract", () => {
       route: { mode: "full_only", initial: ["external/reviewer"] },
       previousResult: { ...previous, verdict: "pass" },
       currentSnapshotTree: "b".repeat(40),
-    })).toEqual({ round: "none", reason: "prior_result_passed" });
+    })).toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
   });
 });

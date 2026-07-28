@@ -101,11 +101,11 @@ describe("review round controller", () => {
       .toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
   });
 
-  it("never sends build-code to closure or stops after repeated full reviews", () => {
+  it("records one complete review per frozen build-code Phase identity", () => {
     expect(selectReviewRound({ stage: "build-code", route: { mode: "full_only", initial: ["kimi/coding", "codex/terra"] }, previousResult: previous, ledger, currentSnapshotTree: ledger.current_snapshot_tree, noProgressCycles: 0 }))
-      .toEqual({ round: "full", reason: "build_code_requires_fresh_full_review" });
+      .toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
     expect(selectReviewRound({ stage: "build-code", route: { mode: "full_only", initial: ["kimi/coding", "codex/terra"] }, previousResult: previous, ledger, currentSnapshotTree: ledger.current_snapshot_tree, noProgressCycles: 2 }))
-      .toEqual({ round: "full", reason: "build_code_requires_fresh_full_review" });
+      .toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
   });
 
   it("expires accepted risk on a changed snapshot", () => {
@@ -125,9 +125,42 @@ describe("review round controller", () => {
     expect(() => buildReviewChain({ previousResult: previous, ledger, currentSnapshotTree: "c".repeat(40), round: "closure" })).toThrow(/current_snapshot_tree/);
   });
 
-  it("rejects a second single-round review even when its prior result needs revision", () => {
-    expect(selectReviewRound({ stage: "make-decision", route: { mode: "single_round", initial: ["kimi/k3"] }, previousResult: previous }))
-      .toEqual({ round: "none", reason: "single_round_already_completed" });
+  it("records a zero-provider resolution after a single-round result needs revision", () => {
+    expect(selectReviewRound({
+      stage: "make-decision",
+      route: { mode: "single_round", initial: ["kimi/k3"] },
+      previousResult: previous,
+      ledger,
+      currentSnapshotTree: ledger.current_snapshot_tree,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+    expect(selectReviewRound({
+      stage: "make-decision",
+      route: { mode: "single_round", initial: ["kimi/k3"] },
+      previousResult: previous,
+      ledger: null,
+      currentSnapshotTree: previous.snapshot_tree,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+    expect(buildNonGateReviewResponseRecord({
+      taskId: "task", stage: "make-decision", reviewTrack: "direction",
+      previousResult: previous, previousResultSha256: "f".repeat(64),
+      ledger: null, currentSnapshotTree: previous.snapshot_tree,
+    })).toMatchObject({ evidence_state: "unverified", unverified_reason: "no_response_ledger" });
+  });
+
+  it("keeps a passing single-round result closed", () => {
+    expect(selectReviewRound({
+      stage: "make-decision",
+      route: { mode: "single_round", initial: ["kimi/k3"] },
+      previousResult: { ...previous, verdict: "pass" },
+      currentSnapshotTree: previous.snapshot_tree,
+    })).toEqual({ round: "none", reason: "single_round_already_completed" });
+    expect(selectReviewRound({
+      stage: "make-decision",
+      route: { mode: "single_round", initial: ["kimi/k3"] },
+      previousResult: { ...previous, verdict: "pass" },
+      ledger,
+      currentSnapshotTree: ledger.current_snapshot_tree,
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
   });
 
   it("derives structural change only from frozen material manifests and ignores caller dimension claims", () => {
@@ -233,6 +266,6 @@ describe("review round controller", () => {
       stage: "build-code", route: { mode: "full_only", initial: ["kimi/coding"] },
       previousResult: postFull, ledger: completeLedger, currentSnapshotTree: ledger.current_snapshot_tree,
       changeClassification: structural, structuralFullAlreadyRecorded: true,
-    })).toEqual({ round: "full", reason: "build_code_requires_fresh_full_review" });
+    })).toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
   });
 });

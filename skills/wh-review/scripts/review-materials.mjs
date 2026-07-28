@@ -217,14 +217,22 @@ function validateIntegrationMaterials({ source, materials }) {
   const phaseIds = new Set();
   const phases = new Map();
   for (const phase of coverage.phases) {
+    const semanticReview = phase?.review_status === "semantic";
+    const unavailableReview = phase?.review_status === "unavailable";
     if (!phase || typeof phase !== "object" || Array.isArray(phase) || typeof phase.phase_id !== "string" || phase.phase_id === "" || phaseIds.has(phase.phase_id) ||
         typeof phase.base_tree !== "string" || typeof phase.snapshot_tree !== "string" || typeof phase.trace_ref !== "string" ||
         !/^evidence\/phases\/[A-Za-z0-9._/-]+\/phase-map-trace-[a-f0-9]{64}\.json$/.test(phase.trace_ref) ||
-        typeof phase.review_result?.ref !== "string" || typeof phase.green_test_receipt?.ref !== "string") {
+        typeof phase.review_action?.ref !== "string" || typeof phase.review_attempt?.ref !== "string" ||
+        !(semanticReview || unavailableReview) ||
+        (semanticReview && (typeof phase.review_result?.ref !== "string" || !["pass", "revise_required"].includes(phase.review_verdict))) ||
+        (unavailableReview && (phase.review_result !== null || phase.review_verdict !== null)) ||
+        typeof phase.green_test_receipt?.ref !== "string") {
       throw new Error("MATERIAL_INCOMPLETE: integration coverage phase identity is invalid");
     }
     hashValue(phase.trace_sha256, `phase_coverage.${phase.phase_id}.trace_sha256`);
-    hashValue(phase.review_result.sha256, `phase_coverage.${phase.phase_id}.review_result.sha256`);
+    hashValue(phase.review_action.sha256, `phase_coverage.${phase.phase_id}.review_action.sha256`);
+    hashValue(phase.review_attempt.sha256, `phase_coverage.${phase.phase_id}.review_attempt.sha256`);
+    if (semanticReview) hashValue(phase.review_result.sha256, `phase_coverage.${phase.phase_id}.review_result.sha256`);
     hashValue(phase.green_test_receipt.sha256, `phase_coverage.${phase.phase_id}.green_test_receipt.sha256`);
     phaseIds.add(phase.phase_id); phases.set(phase.phase_id, phase);
   }

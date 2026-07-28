@@ -17,6 +17,7 @@ import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../core/workspace.mjs";
 import { canonical, normalizedRecoveryRecordHash, sha256, writeRecoveryCredentialForTest } from "../../core/task-recovery.mjs";
 import { readPhaseMapTrace } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
+import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-result.mjs";
 import { publishBuildCodePhaseEvidence } from "../../workflows/build-code/phase-evidence.mjs";
 import { publishPhaseTraceLineage, runRecovery, supersedePhaseTraceLineage } from "../task-recovery.mjs";
 
@@ -162,7 +163,7 @@ function runCli(args) {
   return execFileSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-function sameSnapshotRecoveryFixture() {
+function sameSnapshotRecoveryFixture({ reviewStatus = "pass", serious = false } = {}) {
   const f = fixture();
   const target = f.task.manifest.target_repo_root;
   const accepted = createTaskKernel(f.task).readAccepted("make-decision");
@@ -202,7 +203,7 @@ function sameSnapshotRecoveryFixture() {
     evidence: { diff: baselineDiffRef, implementation_receipt_ref: implementationRef, green_test_receipt_ref: greenRef },
   }, null, 2)}\n`);
   const reviewWriter = createCanonicalReviewWriter({ task: f.task, taskId: f.task.identity.taskId, stage: "build-code" });
-  const reviewId = "phase-0-same-snapshot-pass";
+  const reviewId = `phase-0-same-snapshot-${reviewStatus.replaceAll("_", "-")}`;
   const attemptRef = `reviews/attempts/${reviewId}/attempt.json`;
   const resultRef = `reviews/results/${reviewId}.json`;
   const materialId = "c".repeat(64);
@@ -211,17 +212,36 @@ function sameSnapshotRecoveryFixture() {
     version: "wh-review-attempt.v1", attempt_id: reviewId, task_id: f.task.identity.taskId, stage: "build-code",
     review_track: null, subject_kind: "phase", phase_id: "phase-0", review_scope: "phase",
     base_tree: snapshotTree, candidate_tree: snapshotTree, source, snapshot_tree: snapshotTree, material_id: materialId,
-    provider_attempts: [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: null, error: null }],
-    terminal_status: "semantic", error: null,
+    provider_attempts: reviewStatus === "unavailable"
+      ? [{ provider: "fixture", status: "failed", session_id: null, runtime_id: null, output_ref: null, error: { code: "PROVIDER_UNAVAILABLE", message: "fixture unavailable" } }]
+      : [{ provider: "fixture", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: null, error: null }],
+    terminal_status: reviewStatus === "unavailable" ? "unavailable" : "semantic",
+    error: reviewStatus === "unavailable" ? { code: "PROVIDER_UNAVAILABLE", message: "fixture unavailable" } : null,
   });
-  reviewWriter.writeResult(resultRef, {
-    version: "wh-review-result.v1", task_id: f.task.identity.taskId, stage: "build-code", review_track: null,
-    subject_kind: "phase", phase_id: "phase-0", review_scope: "phase", base_tree: snapshotTree,
-    candidate_tree: snapshotTree, source, snapshot_tree: snapshotTree, material_id: materialId,
-    attempt_ref: attemptRef,
-    provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "baseline pass", findings: [] } }],
-    verdict: "pass", findings: [],
-  });
+  if (reviewStatus !== "unavailable") {
+    const providerFinding = {
+      severity: serious ? "major" : "minor", path: "fixture",
+      issue: "baseline review advice", root_cause: "fixture root cause",
+      recommendation: "repair fixture", evidence_kind: "direct", evidence: "fixture anchor",
+    };
+    const providerOutput = {
+      verdict: reviewStatus,
+      summary: `${reviewStatus} baseline quality fact`,
+      findings: reviewStatus === "revise_required" ? [providerFinding] : [],
+    };
+    const aggregation = aggregateProviderResults([{ provider: "fixture", review: providerOutput }], 1);
+    reviewWriter.writeResult(resultRef, {
+      version: "wh-review-result.v1", task_id: f.task.identity.taskId, stage: "build-code", review_track: null,
+      subject_kind: "phase", phase_id: "phase-0", review_scope: "phase", base_tree: snapshotTree,
+      candidate_tree: snapshotTree, source, snapshot_tree: snapshotTree, material_id: materialId,
+      attempt_ref: attemptRef,
+      provider_results: [{ provider: "fixture", output: providerOutput }],
+      verdict: aggregation.verdict,
+      findings: aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })),
+      adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+    });
+  }
+  const reviewActionRef = reviewStatus === "unavailable" ? attemptRef : resultRef;
   const pointerRaw = `${JSON.stringify({ phase_id: "phase-1", status: "needs_revision", snapshot_tree: snapshotTree }, null, 2)}\n`;
   f.task.writeRecordAtomic("phase-result.json", pointerRaw);
   const credential = {
@@ -235,7 +255,7 @@ function sameSnapshotRecoveryFixture() {
     phase_subject: {
       current_pointer_ref: "phase-result.json", current_pointer_hash: sha256(pointerRaw),
       baseline_phase0_evidence_ref: baselineEvidenceRef, baseline_phase0_evidence_hash: sha256(f.task.readRecord(baselineEvidenceRef)),
-      baseline_phase0_review_ref: resultRef, baseline_phase0_review_hash: sha256(f.task.readRecord(resultRef)),
+      baseline_phase0_review_ref: reviewActionRef, baseline_phase0_review_hash: sha256(f.task.readRecord(reviewActionRef)),
       current_phase_id: "phase-1", target_phase_id: "phase-0", baseline_commit: baselineCommit,
       snapshot_tree: snapshotTree, recovery_intent: "same-snapshot-phase0-reopen",
       implementation_receipt: { ref: implementationRef, hash: sha256(f.task.readRecord(implementationRef)) },
@@ -249,7 +269,7 @@ function sameSnapshotRecoveryFixture() {
     `--runner-root=${f.nextRunner}`, "--stage=build-code",
     `--credential-ref=${written.ref}`, `--credential-hash=${written.hash}`,
   ];
-  return { ...f, args, pointerRaw, baselineEvidenceRef, resultRef, implementationRef, greenRef, snapshotTree, baselineCommit };
+  return { ...f, args, pointerRaw, baselineEvidenceRef, resultRef: reviewActionRef, implementationRef, greenRef, snapshotTree, baselineCommit };
 }
 
 function recoveredPhaseContext(f) {
@@ -539,6 +559,29 @@ describe("task recovery CLI integration", () => {
       recovery_ref: output.recovery_ref,
       recovery_hash: output.recovery_hash,
     });
+  });
+
+  it.each(["revise_required", "unavailable"])(
+    "accepts a credentialed Phase 0 %s quality fact without rewriting it to pass",
+    (reviewStatus) => {
+      const f = sameSnapshotRecoveryFixture({ reviewStatus });
+      const output = runRecovery(f.args);
+      expect(output).toMatchObject({
+        recovery_ref: "identity/recoveries/phase-pointer-0001.json",
+        phase_id: "phase-0",
+        status: "awaiting_review",
+      });
+      expect(f.task.readRecord(f.resultRef)).toContain(
+        reviewStatus === "unavailable" ? '"terminal_status": "unavailable"' : '"verdict": "revise_required"',
+      );
+    },
+  );
+
+  it("fails closed on serious Phase 0 findings without an exact risk binding", () => {
+    const rejected = sameSnapshotRecoveryFixture({ reviewStatus: "revise_required", serious: true });
+    expect(() => runRecovery(rejected.args)).toThrow(/actionable serious findings require repair or exact risk acceptance/i);
+    expect(rejected.task.readRecord("phase-result.json")).toBe(rejected.pointerRaw);
+    expect(() => rejected.task.readRecord("identity/recoveries/phase-pointer-0001.json")).toThrow();
   });
 
   it("rejects the historical same-tree review and reuses only the fresh recovery-bound result", () => {

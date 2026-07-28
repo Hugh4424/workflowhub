@@ -23,8 +23,19 @@ function validIdentity(event, stageSlug, workflowRunId) {
     && Number.isInteger(event?.step_id) && event.step_id > 0 && nonEmptyString(event?.attempt_id)
     && nonEmptyString(event?.timestamp) && !Number.isNaN(Date.parse(event.timestamp));
 }
+function authorizedResearchSkip(event, stageSlug) {
+  return stageSlug === "make-decision" && event?.step_id === 4
+    && event?.terminal_status === "skipped"
+    && event?.authorized_by === "stage-runtime:record-research"
+    && nonEmptyString(event?.skip_reason)
+    && event?.completion_evidence?.kind === "research_skip"
+    && /^[a-f0-9]{64}$/.test(event?.completion_evidence?.content_hash ?? "");
+}
+function completedDependency(event, stageSlug) {
+  return event?.terminal_status === "success" || authorizedResearchSkip(event, stageSlug);
+}
 
-function requiredExpectedSteps(manifest, stageSlug, facts) {
+function requiredExpectedSteps(manifest, stageSlug, facts, throughStepId) {
   if (!manifest || typeof manifest !== "object") { facts.unknown.push({ type: "MANIFEST_REQUIRED" }); return []; }
   const declaredStage = manifest.stage_slug ?? stageSlug;
   if (declaredStage !== stageSlug || !Array.isArray(manifest.steps) || manifest.steps.length === 0) {
@@ -45,7 +56,14 @@ function requiredExpectedSteps(manifest, stageSlug, facts) {
     if (seen.has(key)) facts.duplicate.push({ type: "duplicate_manifest_attempt", step_id: step.step_id, attempt_id: step.attempt_id });
     seen.add(key);
   }
-  return steps.sort((a, b) => a.order - b.order || a.step_id - b.step_id);
+  const ordered = steps.sort((a, b) => a.order - b.order || a.step_id - b.step_id);
+  if (throughStepId === undefined) return ordered;
+  if (!Number.isInteger(throughStepId) || throughStepId < 1
+      || !ordered.some((step) => step.step_id === throughStepId)) {
+    facts.unknown.push({ type: "INVALID_AUDIT_STEP_BOUNDARY", through_step_id: throughStepId ?? null });
+    return ordered;
+  }
+  return ordered.filter((step) => step.order <= ordered.find((candidate) => candidate.step_id === throughStepId).order);
 }
 
 function uniqueEvidenceRefs(refs) {
@@ -104,7 +122,7 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [],
     terminal_non_success: [], retry: [], cross_attempt: [], dependency: [],
   };
-  const expectedSteps = requiredExpectedSteps(auditContext.manifest, stageSlug, facts);
+  const expectedSteps = requiredExpectedSteps(auditContext.manifest, stageSlug, facts, auditContext.through_step_id);
   const ledgerResult = validateRequirementLedger(auditContext.ledger);
   const requirement_coverage = ledgerResult.ok ? calculateCoverage(auditContext.ledger) : { covered: 0, total: 0, withdrawn: 0, missing_ids: [] };
   if (!ledgerResult.ok) facts.unknown.push({ type: "LEDGER_REQUIRED_OR_INVALID", errors: ledgerResult.errors });
@@ -122,7 +140,7 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
       if (!TERMINAL_STATUSES.has(event.terminal_status) || !evidenceRef(event.completion_evidence) || !nonEmptyString(event.entry_journal_entry_id)) facts.unknown.push({ index, type: "invalid_exit", step_id: event.step_id });
       else {
         exits.push({ event, index }); evidenceRefs.push(evidenceRef(event.completion_evidence));
-        if (event.terminal_status !== "success") facts.terminal_non_success.push({ step_id: event.step_id, attempt_id: event.attempt_id, terminal_status: event.terminal_status });
+        if (!completedDependency(event, stageSlug)) facts.terminal_non_success.push({ step_id: event.step_id, attempt_id: event.attempt_id, terminal_status: event.terminal_status });
       }
     } else if (event.event_type === "step_auto_rollback") {
       facts.unknown.push({ index, type: "rollback_observed", step_id: event.affected_step_id ?? null });
@@ -152,7 +170,7 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
       for (const dependencyId of step.depends_on) {
         const dependency = expectedSteps.find((candidate) => candidate.step_id === dependencyId);
         const dependencyExit = dependency && exitsByKey.get(expectedKey(stageSlug, dependency))?.[0];
-        if (!dependencyExit || dependencyExit.event.terminal_status !== "success" || dependencyExit.index > entry.index) {
+        if (!dependencyExit || !completedDependency(dependencyExit.event, stageSlug) || dependencyExit.index > entry.index) {
           facts.dependency.push({ type: "dependency_not_completed_before_entry", step_id: step.step_id, dependency_id: dependencyId });
         }
       }
@@ -183,6 +201,12 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     ...(nonEmptyString(auditContext.task_id) ? { task_id: auditContext.task_id } : {}),
     stage_slug: stageSlug,
     workflow_run_id: workflowRunId,
+    through_step_id: auditContext.through_step_id ?? expectedSteps.at(-1)?.step_id ?? null,
+    ...(stageSlug === "make-decision" ? {
+      audit_scope: (auditContext.through_step_id ?? expectedSteps.at(-1)?.step_id) === 10
+        ? "pre_confirmation"
+        : "full",
+    } : {}),
     ...(nonEmptyString(auditContext.snapshot_tree) ? { snapshot_tree: auditContext.snapshot_tree } : {}),
     journal_hash: createHash("sha256").update(events.map((event) => JSON.stringify(event)).join("\n")).digest("hex"),
     content_evidence_refs: contentEvidenceRefs,

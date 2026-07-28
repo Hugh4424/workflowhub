@@ -67,15 +67,14 @@ Create implementation provenance with
 `node scripts/stage-runtime.mjs receipt --stage=build-code
 --project=<project> --task=<task> --component=implementation
 --input=$TMP_DIR/implementation.json`; HEAD/tree/diff evidence is derived by the writer.
-Before build-code is accepted, a same-Phase repair after a failed pre-review
-check or review finding must preserve the old receipt and publish the repaired
-snapshot with `--revision=true --recover=<latest-implementation-receipt-ref>`.
+Before build-code is accepted, a same-Phase repair after a failed structural
+check must preserve the old receipt and publish the repaired snapshot with
+`--revision=true --recover=<latest-implementation-receipt-ref>`.
 Capture repaired tests under new receipt/output refs and pass those new refs to
-the next review and stage run. If a Phase or final integration review returns
-`revise_required`, repair the same original Phase that owns the finding,
-publish a revision receipt, capture fresh tests under new refs, and repeat the
-affected Phase review before the final integration review. This is
-append-only repair of the current open stage; it
+the next review and stage run. A Phase or final integration
+`revise_required` verdict remains the original quality fact; it does not by
+itself become a stage-pass gate or get rewritten to `pass`. This is append-only
+repair of the current open stage; it
 does not require or create a verify-code reopen authorization. After build-code
 is accepted, only the controlled verification-failure path above may create
 another build-code attempt.
@@ -104,12 +103,13 @@ when available. For
 WorkflowHub itself, `npm test` uses the repository Vitest configuration;
 verify-code reuses the final command and must not receive a Phase-only command.
 
-After every Phase has passed its Phase review, and the final implementation
+After every Phase has complete structural evidence and an authenticated Phase
+review fact, and the final implementation
 receipt and fresh complete test receipt exist, run one final independent **integration**
 review: `wh-review` without `phase_id`. The runner derives
 `review_scope=integration`; callers never supply it, paths, commits, ranges, or
 a caller-built diff. Before any independent review call, it reconstructs one unique,
-continuous formal PASS Phase-trace chain from the accepted build-plan checkpoint
+continuous formal semantic-review Phase-trace chain from the accepted build-plan checkpoint
 to the final tree, validates final test and AC trace identity, and builds only
 the integration packet. Missing/branched/stale traces, zero-Phase work, legacy
 unscoped final results, or missing AC/seam facts fail `MATERIAL_INCOMPLETE`;
@@ -149,7 +149,8 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 
 The contract has two composable parts: **Stage coordination** and **Phase
 execution**. A single executor runs Stage coordination, then performs each
-Phase execution in order, returning to Stage coordination after every PASS.
+Phase execution in order, returning to Stage coordination after every
+completed Phase.
 Splitting the parts across host workers is optional and must not change their
 order, evidence, or authority boundaries.
 
@@ -184,17 +185,19 @@ order, evidence, or authority boundaries.
    its affected ID and recovery condition. The projection is execution input
    only: discard it after the task and never publish it as an accepted fact.
 3. Start only the current Phase. When Phase execution returns, run the Phase
-   gate against the canonical result, its formal PASS review, and the live
-   Workspace tree. Missing evidence, a non-PASS verdict, identity mismatch, or
-   Workspace drift returns to the same Phase; it never advances. Present one
+   gate against the canonical result, its authenticated semantic review fact,
+   and the live Workspace tree. Missing evidence, identity/hash/snapshot/scope/
+   material mismatch, or Workspace drift returns to the same Phase; it never
+   advances. `pass` and `revise_required` remain review quality facts and do
+   not decide this structural gate. Present one
    Phase result brief after the gate decision: implemented behavior, real tests,
    Phase review conclusion, important findings/disposition, residual risk, and
    whether the next Phase may start.
 4. Start the next Phase only after the current Phase gate passes. The accepted
    plan remains the ordering authority; the mutable `phase-result.json` is only
    the current pointer because there is no machine-readable Phase index.
-5. After every planned Phase passes, verify each Phase ID has matching
-   canonical snapshot/material evidence, a formal PASS result, and a minimal
+5. After every planned Phase completes, verify each Phase ID has matching
+   canonical snapshot/material evidence, a formal semantic result, and a minimal
    phase-map trace. Reconstruct one unique continuous coverage chain from the
    accepted build-plan checkpoint to the final tree; missing/ambiguous/legacy
    facts are `MATERIAL_INCOMPLETE`. A trace that only authenticates paths and
@@ -216,7 +219,7 @@ order, evidence, or authority boundaries.
    A Phase result is gate evidence and cannot replace the final `worktree + integration` result.
 7. If verify-code later publishes an authenticated failure, use only the
    controlled `reopen` flow above. Preserve the prior accepted attempt and
-   rerun only the current, last affected PASS Phase before repeating the final
+   rerun only the current, last affected completed Phase before repeating the final
    integration review. Pass the immutable `reopen_ref` in every
    `publish-phase-evidence` input for that repair. The runtime authenticates it
    against the active accepted build and records only the ref in the new Phase
@@ -253,7 +256,7 @@ order, evidence, or authority boundaries.
    If the final full-worktree review finds a problem before build-code is
    accepted, include its formal `revise_required` result as
    `repair_review_result_ref`. The runtime binds that result to the current
-   PASS Phase and allows that append-only repair without a verify-code reopen.
+   completed Phase and allows that append-only repair without a verify-code reopen.
    This reference is invalid after build-code acceptance and cannot be mixed
    with the post-verify `reopen_ref`.
    Complete `AGENTS.md` blocks explicitly marked as auto-managed runtime
@@ -270,13 +273,13 @@ order, evidence, or authority boundaries.
    and Phase execution never invoke it directly.
    Present one Phase review brief for the effective result before returning or
    repairing findings.
-6. If the verdict is `revise_required`, verify each finding against the frozen
-   evidence, repair the same Phase, capture fresh receipts, publish a changed
-   identity, and review only that new identity. Do not return between finding
-   and repair. If independent review is unavailable, preserve the diagnostic
-   and stop as blocked without turning it into a product decision.
-7. Return once, and only after the current identity has a formal PASS result
-   and all Phase-gate material is complete. Return the Phase ID, canonical
+6. Preserve `revise_required` and its findings as quality facts. Minor,
+   invalid-anchor/evidence, and unavailable outcomes are recorded without
+   becoming a stage-pass gate; unavailable never becomes `pass` and never
+   creates a risk override. Only an authenticated `actionable`
+   `major|blocking` finding uses the existing serious-review risk-pause flow.
+7. Return once the current identity has authenticated review evidence and all
+   structural Phase-gate material is complete. Return the Phase ID, canonical
    evidence refs, test command/output refs, review result ref, changed paths,
    and unresolved facts; do not copy full artifacts or logs.
 
@@ -286,7 +289,7 @@ accepted build. That authority is validated later by the existing final
 
 ## Append-only historical Phase lineage
 
-When final integration reports that an existing formal PASS Phase branch is
+When final integration reports that an existing formally reviewed Phase branch is
 untraced, bind only an already-published canonical trace through:
 `node scripts/stage-runtime.mjs publish-phase-trace-lineage --stage=build-code
 --project=<project> --task=<task> --input=$TMP_DIR/phase-trace-lineage.json`.
@@ -294,9 +297,10 @@ The input contains exactly
 `{"trace_ref":"evidence/phases/<phase>/<tree>/phase-map-trace-<sha256>.json","trace_hash":"<sha256>"}`.
 Publish one binding per invocation. The runtime independently verifies the
 task/project, stage/Phase, tree and pinned commit, canonical evidence and
-receipt hashes, review result/attempt/material, and PASS verdict before writing
-one create-only `identity/phase-trace-lineage` generation record. Missing,
-tampered, misbound, non-PASS, or duplicate traces fail closed. This command
+receipt hashes, review result/attempt/material, and unchanged semantic verdict
+before writing one create-only `identity/phase-trace-lineage` generation
+record. Missing, tampered, misbound, non-semantic, or duplicate traces fail
+closed. This command
 never changes old records, the current Phase pointer, Phase path selection, or
 trusted review routing, and it never invokes an independent review.
 
@@ -393,13 +397,14 @@ warn-only.
 
 ## Serious review exception
 
-Phase reviews still repair and rerun a fresh full review until PASS; risk
-acceptance cannot bypass a Phase gate. Only the final integration review may
-pause for an authenticated `actionable` `major|blocking` finding. Show one
+Neither a Phase review nor the final integration review is a `pass` gate.
+Their original verdicts remain quality facts. An authenticated `actionable`
+`major|blocking` finding uses the existing serious-review pause. Show one
 plain-language card at a time with the problem, evidence, consequences,
 affected scope, and mutually exclusive “repair first” (recommended) and
 “accept risk and continue” choices. Wait for the real host reply and use only
 `accept-review-risk`. Minor, invalid-anchor/evidence, unavailable, timeout, and
-adapter failures never open this override. With no serious final finding
+adapter failures never open this override; unavailable remains unavailable and
+never produces a risk acceptance. With no serious finding
 build-code remains automatic; accepted risk keeps the original verdict and
 cannot excuse missing tests, Phase evidence, or integration structure.

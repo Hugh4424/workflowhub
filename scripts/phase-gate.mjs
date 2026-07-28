@@ -9,10 +9,11 @@
  */
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
-import { readReviewResult } from "../core/review-result-consumer.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../core/stage-review-disposition.mjs";
 import { validatePhaseReviewEvidence } from "../skills/wh-review/scripts/phase-review-subject.mjs";
 
 function readJson(path) {
@@ -26,6 +27,17 @@ function nonEmptyString(value) {
 function pathFrom(baseDir, value) {
   if (!nonEmptyString(value)) return null;
   return isAbsolute(value) ? value : resolve(baseDir, value);
+}
+
+function taskPath(root, ref, label) {
+  if (!nonEmptyString(ref) || isAbsolute(ref) || ref.includes("\\")
+    || ref.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error(`${label} must be task-relative`);
+  }
+  const path = resolve(root, ...ref.split("/"));
+  const rel = relative(root, path);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) throw new Error(`${label} escapes review data root`);
+  return path;
 }
 
 function readArtifact(baseDir, path, label, errors) {
@@ -130,12 +142,82 @@ function checkReview(phaseResult, scan, worktreeRoot, errors, warnings, checked,
   try {
     if (!scan) throw new Error("phase diff evidence is unavailable");
     const subject = validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id });
-    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true });
-    if (result.subject_kind !== "phase" || typeof result.phase_id !== "string") throw new Error("phase review identity is missing");
-    if (result.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
-    if (result.base_tree !== subject.baseTree || result.candidate_tree !== subject.candidateTree) throw new Error("phase review tree identity mismatch");
+    const ref = review.action_ref ?? review.result_ref;
+    if (!nonEmptyString(ref) || isAbsolute(ref) || ref.includes("\\") || ref.split("/").some((part) => !part || part === "." || part === "..")) {
+      throw new Error("phase review action ref must be task-relative");
+    }
+    const root = resolve(options.reviewDataRoot);
+    const path = resolve(root, ...ref.split("/"));
+    const rel = relative(root, path);
+    if (!rel || rel.startsWith("..") || isAbsolute(rel) || !existsSync(path)) throw new Error("phase review action is missing or outside the review data root");
+    const action = readJson(path);
+    const unavailable = action?.version === "wh-review-attempt.v1" && action.terminal_status === "unavailable";
+    const semantic = action?.version === "wh-review-result.v1" && ["pass", "revise_required"].includes(action.verdict);
+    if (!semantic && !unavailable) throw new Error("phase review action is neither a semantic result nor an unavailable provider attempt");
+    if (action.stage !== (options.reviewStage ?? "build-code") || (action.review_track ?? null) !== null) throw new Error("phase review stage/track mismatch");
+    if (action.subject_kind !== "phase" || typeof action.phase_id !== "string") throw new Error("phase review identity is missing");
+    if (action.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
+    if (action.base_tree !== subject.baseTree || action.candidate_tree !== subject.candidateTree
+      || action.snapshot_tree !== subject.candidateTree || review.snapshot_tree !== subject.candidateTree) {
+      throw new Error("phase review tree mismatch: identity does not match the Phase evidence");
+    }
     const liveTree = captureGitWorktreeSnapshot(worktreeRoot).tree;
     if (liveTree !== subject.candidateTree) throw new Error("live Workspace tree changed after Phase review");
+    if (unavailable) {
+      if (!action.error || !Array.isArray(action.provider_attempts) || action.provider_attempts.length === 0) {
+        throw new Error("unavailable Phase review attempt is incomplete");
+      }
+      if ((review.risk_acceptances ?? []).length) throw new Error("unavailable Phase review cannot use risk acceptance");
+      warnings.push("review provider attempt is authenticated as unavailable; it remains a quality fact and is not rewritten to pass");
+    } else if (action.verdict === "revise_required") {
+      const pause = deriveSeriousReviewPause({
+        taskId: action.task_id, stage: action.stage, reviewRef: ref,
+        reviewHash: createHash("sha256").update(readFileSync(path)).digest("hex"), result: action,
+      });
+      if (pause.status === "paused") {
+        if (!Array.isArray(review.risk_acceptances) || review.risk_acceptances.length === 0) {
+          throw new Error("actionable serious Phase findings require repair or exact risk acceptance");
+        }
+        const records = review.risk_acceptances.map((binding) => {
+          if (!binding || typeof binding !== "object" || Array.isArray(binding)
+            || Object.keys(binding).sort().join(",") !== "ref,sha256"
+            || !/^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/.test(binding.ref ?? "")
+            || !/^[a-f0-9]{64}$/.test(binding.sha256 ?? "")
+            || binding.ref.match(/^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/)[1] !== binding.sha256) {
+            throw new Error("Phase risk acceptance binding is invalid");
+          }
+          const acceptancePath = taskPath(root, binding.ref, "Phase risk acceptance");
+          let acceptanceRaw;
+          try { acceptanceRaw = readFileSync(acceptancePath, "utf8"); }
+          catch { throw new Error("Phase risk acceptance record is missing"); }
+          if (createHash("sha256").update(acceptanceRaw).digest("hex") !== binding.sha256) {
+            throw new Error("Phase risk acceptance hash mismatch");
+          }
+          return JSON.parse(acceptanceRaw);
+        });
+        const runIds = new Set(records.map((value) => value?.workflow_run_id));
+        const workflowRunId = [...runIds][0];
+        if (runIds.size !== 1 || !nonEmptyString(workflowRunId)) {
+          throw new Error("Phase risk acceptances do not bind one review run");
+        }
+        const exactPause = deriveSeriousReviewPause({
+          taskId: action.task_id, stage: action.stage, reviewRef: ref,
+          reviewHash: createHash("sha256").update(readFileSync(path)).digest("hex"),
+          result: action, workflowRunId,
+        });
+        validateRiskAcceptanceSet({ acceptances: records, pause: exactPause });
+        for (const value of records) {
+          const finding = exactPause.findings.find(({ finding_id: findingId }) => findingId === value.finding_id);
+          const cardRaw = readFileSync(taskPath(root, value.card_ref, "Phase risk card"), "utf8");
+          const replyRaw = readFileSync(taskPath(root, value.reply_ref, "Phase risk reply"), "utf8");
+          if (cardRaw !== `${JSON.stringify(finding, null, 2)}\n`
+            || createHash("sha256").update(replyRaw).digest("hex") !== value.reply_hash) {
+            throw new Error("Phase risk acceptance card/reply binding mismatch");
+          }
+        }
+      }
+      warnings.push("review verdict revise_required is preserved as a quality fact; structural Phase evidence remains valid");
+    }
   }
   catch (error) { errors.push(`review is not a formal result: ${error.message}`); }
 }

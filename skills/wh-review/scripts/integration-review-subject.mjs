@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { readPhaseMapTrace } from "./phase-review-subject.mjs";
 
@@ -11,6 +12,7 @@ const LINEAGE_KEYS = new Set([
   "schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace",
   "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt",
   "review_result", "review_attempt", "material_id", "created_at", "result",
+  "risk_acceptances",
 ]);
 const SUPERSESSION_KEYS = new Set([...LINEAGE_KEYS, "supersedes"]);
 
@@ -63,6 +65,66 @@ function sameBinding(actual, expected) {
   return actual?.ref === expected?.ref && actual?.sha256 === expected?.sha256;
 }
 
+function verifiedRiskAcceptances(task, lineage, trace, label) {
+  const reviewStatus = trace.trace.review_status
+    ?? (trace.review === null ? "unavailable" : "semantic");
+  if (trace.review === null || reviewStatus !== "semantic") {
+    incomplete(`Phase trace lineage ${label} supports semantic review results only; unavailable attempts stay bound by their canonical current Phase trace`);
+  }
+  const supplied = lineage.risk_acceptances ?? [];
+  if (!Array.isArray(supplied)) incomplete(`Phase trace lineage ${label} risk acceptances are invalid`);
+  const records = supplied.map((value) => {
+    const accepted = binding(value, `${label} risk acceptance`);
+    const match = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/.exec(accepted.ref);
+    if (!match || match[1] !== accepted.sha256) incomplete(`Phase trace lineage ${label} risk acceptance is not content-addressed`);
+    const record = readJson(task, accepted.ref, `${label} risk acceptance`);
+    if (record.sha256 !== accepted.sha256) incomplete(`Phase trace lineage ${label} risk acceptance hash mismatch`);
+    return { binding: accepted, value: record.value };
+  });
+  const reviewHash = trace.review.sha256 ?? trace.review.hash;
+  const preliminary = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef: trace.review.ref,
+    reviewHash,
+    result: trace.review.value,
+  });
+  if (preliminary.status !== "paused") {
+    if (records.length) incomplete(`Phase trace lineage ${label} has a risk override without actionable serious findings`);
+    return;
+  }
+  if (records.length === 0) incomplete(`Phase trace lineage ${label} leaves actionable serious findings unresolved`);
+  const workflowRunIds = new Set(records.map(({ value }) => value?.workflow_run_id));
+  const workflowRunId = [...workflowRunIds][0];
+  if (workflowRunIds.size !== 1 || typeof workflowRunId !== "string" || workflowRunId.trim() === "") {
+    incomplete(`Phase trace lineage ${label} risk acceptances do not bind one review run`);
+  }
+  const pause = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef: trace.review.ref,
+    reviewHash,
+    result: trace.review.value,
+    workflowRunId,
+  });
+  try { validateRiskAcceptanceSet({ acceptances: records.map(({ value }) => value), pause }); }
+  catch (error) { incomplete(`Phase trace lineage ${label} risk acceptance is invalid: ${error.message}`); }
+  for (const { value } of records) {
+    const finding = pause.findings.find(({ finding_id: findingId }) => findingId === value.finding_id);
+    let cardRaw; let replyRaw;
+    try {
+      cardRaw = task.readRecord(value.card_ref);
+      replyRaw = task.readRecord(value.reply_ref);
+    } catch {
+      incomplete(`Phase trace lineage ${label} risk acceptance card or reply is missing`);
+    }
+    if (cardRaw !== `${JSON.stringify(finding, null, 2)}\n`
+      || createHash("sha256").update(replyRaw).digest("hex") !== value.reply_hash) {
+      incomplete(`Phase trace lineage ${label} risk acceptance does not bind canonical card and reply bytes`);
+    }
+  }
+}
+
 function legacyRefOnly(value, expected, label) {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== 1 || value.ref !== expected.ref) {
     incomplete(`legacy Phase trace lineage ${label} is not the known missing-hash shape`);
@@ -112,7 +174,8 @@ function verifiedSupersessions({ task, sourceRoot, readTrace }) {
     const trace = readTrace(task, sourceRoot, traceBinding.ref);
     if (trace.traceSha256 !== traceBinding.sha256 || trace.trace.phase_id !== value.phase_id
       || trace.trace.snapshot_tree !== value.snapshot_tree || trace.trace.material_id !== value.material_id
-      || trace.trace.verdict !== "pass" || trace.review.value.verdict !== "pass"
+      || !["pass", "revise_required"].includes(trace.trace.verdict)
+      || trace.review.value.verdict !== trace.trace.verdict
       || !sameBinding(trace.trace.canonical_phase_evidence, expected.phase_evidence)
       || !sameBinding(trace.trace.diff_scan, expected.diff_scan)
       || !sameBinding(trace.trace.implementation_receipt, expected.implementation_receipt)
@@ -121,6 +184,7 @@ function verifiedSupersessions({ task, sourceRoot, readTrace }) {
       || !sameBinding(trace.trace.review_attempt, expected.review_attempt)) {
       incomplete(`Phase trace lineage supersession facts do not match its canonical trace: ${ref}`);
     }
+    verifiedRiskAcceptances(task, value, trace, `supersession ${ref}`);
     if (reviewRefs.has(expected.review_result.ref)) incomplete(`Phase trace lineage supersession duplicates a formal review binding: ${ref}`);
     reviewRefs.add(expected.review_result.ref);
     byLegacyRef.set(supersedes.ref, value);
@@ -130,7 +194,7 @@ function verifiedSupersessions({ task, sourceRoot, readTrace }) {
 
 /**
  * A lineage record never participates in path construction. It can only prove
- * that a historical formal PASS (which shares a covered tree) was already
+ * that a historical formal Phase review (which shares a covered tree) was already
  * bound to one canonical Phase trace. Any malformed or duplicate binding
  * blocks integration instead of widening the legacy fallback.
  */
@@ -170,7 +234,8 @@ export function verifiedHistoricalLineage({ task, sourceRoot, readTrace = phaseT
     const actual = trace.trace;
     if (trace.traceSha256 !== traceBinding.sha256 || actual.phase_id !== lineage.phase_id
       || actual.snapshot_tree !== lineage.snapshot_tree || actual.material_id !== lineage.material_id
-      || actual.verdict !== "pass" || trace.review.value.verdict !== "pass"
+      || !["pass", "revise_required"].includes(actual.verdict)
+      || trace.review.value.verdict !== actual.verdict
       || !sameBinding(actual.canonical_phase_evidence, expected.canonical_phase_evidence)
       || !sameBinding(actual.diff_scan, expected.diff_scan)
       || !sameBinding(actual.implementation_receipt, expected.implementation_receipt)
@@ -180,6 +245,7 @@ export function verifiedHistoricalLineage({ task, sourceRoot, readTrace = phaseT
       || !sameBinding(actual.review_attempt, expected.review_attempt)) {
       incomplete(`Phase trace lineage facts do not match its canonical trace: ${ref}`);
     }
+    verifiedRiskAcceptances(task, lineage, trace, ref);
     if (boundReviews.has(expected.review_result.ref)) {
       incomplete(`Phase trace lineage duplicates a formal review binding: ${expected.review_result.ref}`);
     }
@@ -189,6 +255,7 @@ export function verifiedHistoricalLineage({ task, sourceRoot, readTrace = phaseT
 }
 
 function traceCoverage(trace) {
+  const reviewAction = trace.review === null ? trace.attempt : trace.review;
   const coverage = {
     phase_id: trace.trace.phase_id,
     baseline_commit: trace.trace.baseline_commit,
@@ -201,7 +268,12 @@ function traceCoverage(trace) {
     diff_scan: { ref: trace.trace.diff_scan.ref, sha256: trace.trace.diff_scan.sha256 },
     implementation_receipt: { ref: trace.trace.implementation_receipt.ref, sha256: trace.trace.implementation_receipt.sha256 },
     green_test_receipt: { ref: trace.trace.green_test_receipt.ref, sha256: trace.trace.green_test_receipt.sha256 },
-    review_result: { ref: trace.trace.review_result.ref, sha256: trace.trace.review_result.sha256 },
+    review_status: trace.trace.review_status,
+    review_action: { ref: reviewAction.ref, sha256: reviewAction.sha256 },
+    review_result: trace.trace.review_result === null ? null
+      : { ref: trace.trace.review_result.ref, sha256: trace.trace.review_result.sha256 },
+    review_attempt: { ref: trace.trace.review_attempt.ref, sha256: trace.trace.review_attempt.sha256 },
+    review_verdict: trace.trace.verdict,
     material_id: trace.trace.material_id,
     allowed_files: [...trace.trace.allowed_files],
     changed_files: [...trace.trace.changed_files],
@@ -219,7 +291,7 @@ function possiblePaths(traces, commit, tree, finalTree, seen = new Set()) {
   const nextSeen = new Set(seen); nextSeen.add(key);
   const paths = [];
   for (const trace of traces) {
-    if (trace.trace.baseline_commit !== commit || trace.trace.base_tree !== tree || trace.trace.verdict !== "pass") continue;
+    if (trace.trace.baseline_commit !== commit || trace.trace.base_tree !== tree) continue;
     const coverage = traceCoverage(trace);
     if (coverage.snapshot_tree === finalTree) {
       paths.push([coverage]);
@@ -235,18 +307,18 @@ function possiblePaths(traces, commit, tree, finalTree, seen = new Set()) {
 export function assertNoUntracedFormalPhase({ task, coverage, lineageReviews } = {}) {
   if (!task || typeof task !== "object") throw new TypeError("task is required");
   if (!Array.isArray(coverage) || !(lineageReviews instanceof Map)) throw new TypeError("coverage and lineageReviews are required");
-  const coveredResults = new Set(coverage.map((phase) => phase.review_result.ref));
+  const coveredResults = new Set(coverage.flatMap((phase) => phase.review_result === null ? [] : [phase.review_result.ref]));
   const coveredTrees = new Set(coverage.flatMap((phase) => [phase.base_tree, phase.snapshot_tree]));
   for (const ref of task.listCanonicalReviewResultRefs()) {
     const reviewed = readJson(task, ref, "formal review result");
     const record = reviewed.value;
     try { validateSchema("result", record); }
     catch { incomplete(`formal review result schema is invalid: ${ref}`); }
-    if (record.stage !== "build-code" || record.subject_kind !== "phase" || record.review_scope !== "phase" || record.verdict !== "pass") continue;
+    if (record.stage !== "build-code" || record.subject_kind !== "phase" || record.review_scope !== "phase") continue;
     if (coveredResults.has(ref)) continue;
     if (lineageReviews.get(ref) === reviewed.sha256) continue;
     if (coveredTrees.has(record.base_tree) || coveredTrees.has(record.candidate_tree)) {
-      incomplete(`formal PASS Phase review has no phase-map trace: ${ref}`);
+      incomplete(`formal Phase review has no phase-map trace: ${ref}`);
     }
   }
 }
@@ -293,12 +365,12 @@ function acTrace(coverage, finalTree) {
       target.evidence.push(
         { phase_id: phase.phase_id, ref: phase.canonical_phase_evidence.ref, sha256: phase.canonical_phase_evidence.sha256 },
         { phase_id: phase.phase_id, ref: phase.implementation_receipt.ref, sha256: phase.implementation_receipt.sha256 },
-        { phase_id: phase.phase_id, ref: phase.review_result.ref, sha256: phase.review_result.sha256 },
+        { phase_id: phase.phase_id, ref: phase.review_action.ref, sha256: phase.review_action.sha256 },
       );
       target.anchors.push(...entry.anchors.map((anchor) => ({ ...anchor, id: `${phase.phase_id}:${anchor.id}` })));
     }
   }
-  if (acceptanceIds.length === 0) incomplete("continuous PASS Phase coverage declares no AC mappings");
+  if (acceptanceIds.length === 0) incomplete("continuous Phase coverage declares no AC mappings");
   for (const entry of entries.values()) {
     if (entry.change.length === 0 || entry.test.length === 0 || entry.evidence.length === 0 || entry.anchors.length === 0) {
       incomplete(`AC trace is incomplete for ${entry.acceptance_criterion_id}`);
@@ -324,8 +396,8 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
   const traces = safeTask.listCanonicalPhaseMapTraceRefs().map((ref) => phaseTrace(safeTask, sourceRoot, ref));
   if (traces.length === 0) incomplete("implementation work requires at least one canonical Phase map trace");
   const paths = possiblePaths(traces, accepted.commit, accepted.tree, finalTree);
-  if (paths.length === 0) incomplete("no continuous PASS Phase coverage chain reaches the final tree");
-  if (paths.length !== 1) incomplete(`Phase coverage is ambiguous: ${paths.length} continuous PASS chains reach the final tree`);
+  if (paths.length === 0) incomplete("no continuous Phase coverage chain reaches the final tree");
+  if (paths.length !== 1) incomplete(`Phase coverage is ambiguous: ${paths.length} continuous chains reach the final tree`);
   const coverage = paths[0];
   if (coverage.length === 0) incomplete("zero-Phase coverage is not permitted");
   assertNoUntracedFormalPhase({

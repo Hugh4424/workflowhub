@@ -30,4 +30,32 @@ describe("task-accepted.v2 acceptance provenance", () => {
     expect(validate({ ...base, stage: "make-decision", acceptance_mode: "automatic" })).toBe(false);
     expect(validate({ ...base, stage: "build-code", acceptance_mode: "human", human_confirmation_ref: "human:false" })).toBe(false);
   });
+
+  it("accepts only a complete make-decision full-audit binding", () => {
+    const fullAudit = {
+      full_audit_ref: `evidence/audits/make-decision/${"b".repeat(64)}.json`,
+      full_audit_hash: "c".repeat(64),
+      full_audit_summary_hash: "d".repeat(64),
+      full_audit_verdict: "pass",
+    };
+    const accepted = {
+      ...base,
+      acceptance_mode: "human",
+      human_confirmation_ref: "confirmations/make-decision/attempt-0001.json",
+      ...fullAudit,
+    };
+    expect(validate(accepted)).toBe(true);
+    expect(validate({ ...accepted, full_audit_hash: undefined })).toBe(false);
+    expect(validate({ ...accepted, stage: "build-code", acceptance_mode: "automatic" })).toBe(false);
+    expect(validate({ ...accepted, full_audit_verdict: "revise_required" })).toBe(false);
+  });
+
+  it("rejects unknown accepted fields", () => {
+    expect(validate({
+      ...base,
+      acceptance_mode: "human",
+      human_confirmation_ref: "confirmations/make-decision/attempt-0001.json",
+      invented: true,
+    })).toBe(false);
+  });
 });

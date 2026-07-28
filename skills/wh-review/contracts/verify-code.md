@@ -2,8 +2,9 @@
 
 本合同是标准 verify-code 的 post-evidence 外部质量审查。先完成新鲜测试、每条
 验收标准的 acceptance-evidence 和 evidence aggregate，再按配置运行一次
-`wh-review`。它认证并保留 active accepted build-code 的最终全树 **pass** 审查作为
-verify-stage acceptance lineage；本次审查绝不替代、升级或写入该 lineage。
+`wh-review`。它认证并保留 active accepted build-code 的最终全树审查 action 作为
+verify-stage acceptance lineage；该 action 可以是语义质量结果，也可以是已认证的
+`unavailable` attempt。本次审查绝不替代、升级或写入该 lineage。
 
 本次结果只是一项非 gate 质量事实：`pass`、`revise_required` 和 `unavailable` 都要
 进入 verify-code 人类确认摘要，但不能自动接受、拒绝、修复或放行阶段。verify run
@@ -43,7 +44,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
 provider verdict 转成“审查通过”。
 
-UI scope 还必须包含真实浏览器证据，包括被验证流程、关键状态、结果、是否复用登录态和清理结果。缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。
+UI scope 还必须包含真实浏览器证据，包括被验证流程、关键状态、结果、是否复用登录态和清理结果。缺少任一必需材料时，本次 attempt 返回 `unavailable`，并以已认证
+attempt action 留在当前 review flow；它没有语义 verdict，也不能写成“审查通过”。
+补齐后可在同一 flow 重跑。
 
 ## 审查重点
 

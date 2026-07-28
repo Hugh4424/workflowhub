@@ -15,6 +15,7 @@ import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
 import { aggregateCanonicalProviderResults } from "../canonical-review-result.mjs";
 import { hashAuditSummary } from "../audit-summary-carrier.mjs";
 import { captureGitWorktreeSnapshot } from "../git-worktree-snapshot.mjs";
+import { createCanonicalSource, createSourceManifest } from "../canonical-source.mjs";
 
 const temporary = [];
 const execFileAsync = promisify(execFile);
@@ -177,11 +178,86 @@ function rewriteTaskRecord(task, ref, mutate) {
   const value = JSON.parse(task.readRecord(ref));
   writeFileSync(path, `${JSON.stringify(mutate(value), null, 2)}\n`);
 }
+function completeMakeDecisionTalk(kernel, candidate, started, roundNumber) {
+  const snapshot = candidate.captureSnapshot();
+  const payload = {
+    interaction_type: "talk",
+    workspace_tree: snapshot.tree,
+    rounds: [{ round_number: roundNumber }],
+  };
+  const value = {
+    schema_version: "stage-content-evidence.v1",
+    kind: "interaction-completion.v1",
+    task_id: kernel.task.identity.taskId,
+    stage: "make-decision",
+    workflow_run_id: started.run.workflow_run_id,
+    snapshot_tree: snapshot.tree,
+    created_at: "2026-07-28T00:00:00.000Z",
+    content_hash: createHash("sha256").update(JSON.stringify(payload)).digest("hex"),
+    payload,
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const root = createHash("sha256")
+    .update(`${kernel.task.identity.taskId}\0make-decision\0${started.run.workflow_run_id}`)
+    .digest("hex");
+  const ref = `evidence/stage-content/${root}/interaction-completion.talk-${String(roundNumber).padStart(4, "0")}.json`;
+  kernel.publishCanonicalRecord(ref, raw);
+  kernel.completeMakeDecisionInteractionPublication({
+    evidence_ref: ref,
+    evidence_hash: createHash("sha256").update(raw).digest("hex"),
+  });
+}
+function startMakeDecisionThrough(kernel, candidate, throughStep = 5) {
+  const started = kernel.startStageRun("make-decision", { reason: "test review flow" });
+  const sourceManifest = createSourceManifest({
+    canonical_source: createCanonicalSource({
+      source_type: "offline_fixture",
+      source_id: "task-kernel-review-flow",
+      revision: "r1",
+      requirements: ["R1"],
+    }),
+    atoms: [{
+      requirement_id: "R1",
+      text: "Review dispatch must follow the exact make-decision predecessor.",
+      owner: "product",
+      authority: "test",
+      derived_from: [],
+      supersedes: [],
+      status: "accepted",
+      stale: false,
+    }],
+  }).manifest;
+  kernel.publishRequirementsLedger("make-decision", {
+    source_manifest: sourceManifest,
+    mappings: {
+      R1: {
+        decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+        artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+        acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+      },
+    },
+  });
+  if (throughStep >= 3) completeMakeDecisionTalk(kernel, candidate, started, 1);
+  if (throughStep >= 4) {
+    const raw = "{\"status\":\"skipped\",\"reason\":\"fixture\"}\n";
+    const ref = "evidence/make-decision-research-fixture.json";
+    const contentHash = createHash("sha256").update(raw).digest("hex");
+    kernel.publishCanonicalRecord(ref, raw);
+    kernel.completeMakeDecisionResearch({
+      status: "skipped",
+      reason: "fixture",
+      evidence: { kind: "research_fixture", uri_or_path: ref, content_hash: contentHash },
+    });
+  }
+  if (throughStep >= 5) completeMakeDecisionTalk(kernel, candidate, started, 2);
+  return started;
+}
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("TaskKernel append-only publication", () => {
   it("adopts one unique canonical legacy initial root without starting providers and is idempotent", () => {
-    const { kernel } = fixture();
+    const { kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
     const { resultRef } = publishAdoptableLegacyRoot(kernel);
     const adopted = kernel.adoptLegacyReviewRoot({ result_ref: resultRef });
     expect(adopted).toMatchObject({
@@ -192,7 +268,8 @@ describe("TaskKernel append-only publication", () => {
   });
 
   it("fails loud when legacy adoption is ambiguous or the caller supplies anything but a result ref", () => {
-    const { kernel } = fixture();
+    const { kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
     const first = publishAdoptableLegacyRoot(kernel, "legacy-one");
     publishAdoptableLegacyRoot(kernel, "legacy-two");
     expect(() => kernel.adoptLegacyReviewRoot({ result_ref: first.resultRef }))
@@ -203,7 +280,8 @@ describe("TaskKernel append-only publication", () => {
   });
 
   it("adopts historical false anchor assessments without trusting result-owned anchor flags", () => {
-    const { kernel } = fixture();
+    const { kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
     const { resultRef } = publishAdoptableLegacyRoot(kernel, "legacy-false-anchors", {
       withAdjudication: true,
       output: {
@@ -241,7 +319,8 @@ describe("TaskKernel append-only publication", () => {
       }),
     ];
     for (const [index, mutate] of mutations.entries()) {
-      const { task, kernel } = fixture();
+      const { task, kernel, candidate } = fixture();
+      startMakeDecisionThrough(kernel, candidate);
       const { resultRef } = publishAdoptableLegacyRoot(kernel, `legacy-tamper-${index}`, {
         withAdjudication: true,
         output: {
@@ -301,6 +380,18 @@ describe("TaskKernel append-only publication", () => {
     expect(task.listCanonicalReviewFlowEventRefs(head.flow_id)).toHaveLength(2);
   });
 
+  it("rejects make-decision review dispatch before its exact predecessor step", () => {
+    const { kernel, candidate } = fixture();
+    const started = startMakeDecisionThrough(kernel, candidate, 4);
+    const identity = kernel.deriveReviewFlowIdentity({
+      stage: "make-decision", review_track: "direction",
+      subject_kind: "worktree", phase_id: null, review_scope: null,
+    });
+    expect(() => kernel.assertReviewFlowReady(identity)).toThrow(/requires successful step 5/i);
+    completeMakeDecisionTalk(kernel, candidate, started, 2);
+    expect(kernel.assertReviewFlowReady(identity)).toBe(6);
+  });
+
   it("records resolutions as ordered zero-provider flow actions without moving the semantic head", () => {
     const { task, kernel, candidate } = fixture();
     const identity = {
@@ -350,6 +441,47 @@ describe("TaskKernel append-only publication", () => {
       expected_event_ref: root.event_ref,
       resolution: { ...resolution, snapshot_tree: "c".repeat(40) },
     })).toThrow(/CAS|stale|event/i);
+  });
+
+  it("replays a recorded make-decision review into a missing runtime step after a crash", () => {
+    const { task, kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
+    const { resultRef } = publishAdoptableLegacyRoot(kernel, "crash-reconcile");
+    const semantic = kernel.adoptLegacyReviewRoot({ result_ref: resultRef });
+    const identity = semantic.identity;
+    const journalPath = join(task.taskPath, "journal.jsonl");
+    const retained = task.readRecord("journal.jsonl").split("\n").filter(Boolean)
+      .map(JSON.parse)
+      .filter((event) => event.step_id !== 6);
+    writeFileSync(journalPath, `${retained.map((event) => JSON.stringify(event)).join("\n")}\n`);
+    const resolution = {
+      version: "wh-review-resolution.v1", task_id: "task-one", stage: "make-decision",
+      review_track: "direction", outcome: "recorded_non_gate_response",
+      previous_result_ref: resultRef, previous_result_sha256: semantic.result_sha256,
+      previous_snapshot_tree: "5".repeat(40), snapshot_tree: "5".repeat(40),
+      evidence_state: "verified", response_ledger: {},
+      response_ledger_sha256: "b".repeat(64), unverified_reason: null,
+      accepted_risk_count: 0,
+    };
+    const recorded = kernel.recordReviewResolution(identity, {
+      expected_head_ref: resultRef,
+      expected_event_ref: semantic.event_ref,
+      resolution,
+    });
+    expect(kernel.advanceReviewFlow(identity, {
+      expected_head_ref: resultRef,
+      expected_event_ref: recorded.flow.event_ref,
+      result_ref: resultRef,
+    })).toEqual(recorded.flow);
+    const repaired = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)
+      .find((event) => event.event_type === "step_exit" && event.step_id === 6);
+    expect(repaired).toMatchObject({
+      terminal_status: "success",
+      completion_evidence: {
+        kind: "review_flow",
+        uri_or_path: semantic.event_ref,
+      },
+    });
   });
 
   it("records unavailable provider cost without moving head or consuming the structural full budget", () => {
@@ -526,6 +658,7 @@ describe("TaskKernel append-only publication", () => {
 
   it("writes one exact serious-risk acceptance without changing the review-flow verdict", () => {
     const { task, kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
     const issue = "a required answer can be silently dropped";
     const { resultRef } = publishAdoptableLegacyRoot(kernel, "serious-risk", {
       withAdjudication: true,
@@ -907,6 +1040,36 @@ describe("TaskKernel append-only publication", () => {
     expect(() => validateAccepted(legacy, { taskId: "task-one", stage: "build-code" })).not.toThrow();
   });
 
+  it("rejects partial, cross-stage, and unknown full-audit accepted bindings", () => {
+    const base = {
+      schema_version: "task-accepted.v2",
+      task_id: "task-one",
+      stage: "make-decision",
+      attempt_ref: "attempt-0001.json",
+      integrity_hash: "a".repeat(64),
+      acceptance_mode: "human",
+      human_confirmation_ref: "confirmations/make-decision/attempt-0001.json",
+      accepted_at: "2026-07-16T00:00:00.000Z",
+      upstream_refs: [],
+    };
+    const fullAudit = {
+      full_audit_ref: `evidence/audits/make-decision/${"b".repeat(64)}.json`,
+      full_audit_hash: "c".repeat(64),
+      full_audit_summary_hash: "d".repeat(64),
+      full_audit_verdict: "pass",
+    };
+    expect(() => validateAccepted({ ...base, ...fullAudit })).not.toThrow();
+    expect(() => validateAccepted({ ...base, full_audit_ref: fullAudit.full_audit_ref })).toThrow(/full audit binding invalid/);
+    expect(() => validateAccepted({
+      ...base,
+      ...fullAudit,
+      stage: "build-code",
+      acceptance_mode: "automatic",
+      human_confirmation_ref: undefined,
+    })).toThrow(/full audit binding invalid|automatic accepted/);
+    expect(() => validateAccepted({ ...base, invented: true })).toThrow(/unknown fields/);
+  });
+
   it("resolves only declared upstream slots and keeps source read-only", () => {
     const source = fixture();
     const published = source.kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
@@ -974,6 +1137,47 @@ describe("TaskKernel append-only publication", () => {
     const third = kernel.startStageRun("make-decision", { reason: "third" });
     expect(third.ref).toMatch(/run-0003\.json$/);
     expect(third.run.previous_run_ref).toBe(second.ref);
+  });
+
+  it("does not expose a generic make-decision step completion capability", () => {
+    const { task, kernel } = fixture();
+    const started = kernel.startStageRun("make-decision", { reason: "runtime-owned progress" });
+    expect(kernel.completeRuntimeOwnedStageStep).toBeUndefined();
+    expect(() => kernel.writeStageStepEntry("make-decision", {
+      step_id: 1,
+      attempt_id: "attempt-1",
+      entry_evidence: { kind: "forged", uri_or_path: "evidence/forged.json" },
+    })).toThrow(/runtime-owned/);
+    const events = task.readRecord("journal.jsonl").trim().split("\n").map(JSON.parse);
+    expect(events.filter((event) => event.workflow_run_id === started.run.workflow_run_id)).toEqual([
+      expect.objectContaining({ event_type: "step_entry", step_id: 1 }),
+      expect.objectContaining({
+        event_type: "step_exit",
+        step_id: 1,
+        completion_evidence: expect.objectContaining({
+          kind: "stage_run",
+          uri_or_path: started.ref,
+          content_hash: started.hash,
+        }),
+      }),
+    ]);
+    expect(() => kernel.completeMakeDecisionInteractionPublication({
+      evidence_ref: `evidence/stage-content/${"a".repeat(64)}/interaction-completion.talk-0001.json`,
+      evidence_hash: "b".repeat(64),
+    })).toThrow(/ENOENT|not found/i);
+    expect(() => kernel.completeMakeDecisionReceipt({
+      receipt_ref: "receipts/forged.json",
+      receipt_hash: "b".repeat(64),
+    })).toThrow(/binding is invalid/i);
+    expect(() => kernel.completeMakeDecisionResearch({
+      status: "skipped",
+      reason: "forged",
+      evidence: {
+        kind: "fixture",
+        uri_or_path: "evidence/forged.json",
+        content_hash: "b".repeat(64),
+      },
+    })).toThrow(/requires completed step 3/i);
   });
 
   it("records a legacy review binding invalidation without changing the result", () => {

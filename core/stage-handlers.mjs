@@ -55,7 +55,9 @@ function completionReview(records) {
   const reviews = records.filter(Boolean);
   const statuses = reviews.map((entry) => entry.facts.verdict ?? entry.facts.status);
   return {
-    conclusion: statuses.every((status) => status === "pass") ? "正式审查通过" : statuses.join(", "),
+    conclusion: statuses.length
+      ? `异源质量建议已记录：${statuses.join(", ")}`
+      : "异源质量建议暂不可用",
     status: statuses.join("+"),
     providers: [...new Set(reviews.flatMap((entry) => entry.value.provider_results?.map(({ provider }) => provider) ?? []))],
     duration_ms: null,
@@ -63,6 +65,14 @@ function completionReview(records) {
     findings: reviews.flatMap((entry) => entry.value.findings ?? []),
     refs: reviews.map((entry) => ({ ref: entry.ref, hash: entry.evidence.sha256 })),
   };
+}
+function boundReviewQualityFacts(entries) {
+  return entries.filter(([, record]) => Boolean(record)).map(([label, entry]) => {
+    const fact = entry.facts.status === "unavailable"
+      ? "unavailable（认证质量事实）"
+      : `${entry.facts.verdict}（认证质量事实）`;
+    return `${label}=${fact}`;
+  }).join("；");
 }
 function addCompletion(stage, result, { artifacts, reviews, verification }) {
   const copy = COMPLETION_COPY[stage];
@@ -116,6 +126,7 @@ function auditFacts(worker, invocation) {
       audit_summary_ref: ref,
       audit_summary_hash: value.summary_hash,
       audit_verdict: value.verdict,
+      ...(worker.stage === "make-decision" ? { audit_through_step_id: value.through_step_id } : {}),
       content_evidence_refs: value.content_evidence_refs,
     },
     evidence: { ref, sha256: record.sha256 },
@@ -156,6 +167,9 @@ function makeDecisionInteractionAggregate(worker, audit, decision, snapshotTree)
 }
 function receipt(worker, invocation, name, producerStage = worker.stage) {
   const ref = text(object(invocation.receipts, "receipts")[name], `${name} receipt ref`);
+  if (name === "decision" && ref !== "receipts/decision.json") {
+    throw new Error("make-decision run must bind the current canonical decision receipt");
+  }
   const namespace = NAMESPACE[name];
   if (!validReceiptRef(name, ref)) {
     throw new Error(`${name} receipt ref is outside its canonical ${namespace ?? "unknown"} namespace`);
@@ -340,7 +354,7 @@ function scopeFacts(scope) {
 }
 function requireFinalIntegrationReview(review, label) {
   const scope = review.scope;
-  if (review.facts.status === "unavailable" || scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
+  if (scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
     throw new Error(`MATERIAL_INCOMPLETE: ${label} must be a full-worktree result and a same-snapshot formal integration review (subject_kind=worktree, review_scope=integration, phase_id=null); return to build-code`);
   }
   return scope;
@@ -585,6 +599,9 @@ function acceptedRiskAuditNotices(worker, stage) {
 
 HANDLERS.set("make-decision", async (worker, input) => {
   const audit = auditFacts(worker, input);
+  if (audit.value.through_step_id !== 10) {
+    throw new Error("make-decision run requires a passing pre-confirmation audit through step 10");
+  }
   const item = receipt(worker, input, "decision");
   const direction = reviewFacts(worker, input, "direction_review", "direction");
   const detail = reviewFacts(worker, input, "detail_review", "detail");
@@ -762,7 +779,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   }, {
     artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256, accepted_lookup: "results/verify-code/accepted.json#facts.evidence_refs" }],
     reviews: [review, qualityReview],
-    verification: mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试和独立质量审查通过",
+    verification: `${mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试已完成"}；已绑定审查质量事实：${boundReviewQualityFacts([["build-code final", review], ["verify-code independent", qualityReview]])}`,
   });
   if (mismatches.length || failedEvidence.length) {
     return { ...result, verification_failure: true, reason: "verify-code verification failed: " + [...mismatches, ...(failedEvidence.length ? [`${failedEvidence.length} acceptance criterion(s) failed`] : [])].join("; ") };

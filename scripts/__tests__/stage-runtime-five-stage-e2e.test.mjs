@@ -10,12 +10,195 @@ import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeCanonicalA
 import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { openAcceptedWorkspace } from "../../core/workspace.mjs";
 import { runWorkspaceCommand } from "../../core/workspace-runner.mjs";
+import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
 import { writeFormalReviewFixture } from "../../tests/helpers/formal-review.mjs";
 import { createCanonicalSource, createSourceManifest } from "../../core/canonical-source.mjs";
 import { loadStageManifest } from "../../core/step-manifest.mjs";
+import { buildPlanTaskContractV2 } from "../../core/stage-content-contracts.mjs";
 
 const temporary = [];
 const runtime = new URL("../stage-runtime.mjs", import.meta.url).pathname;
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+const officialSpec = `# 功能规格：官方链路
+
+## 速读卡（30 秒）
+官方链路必须保留稳定、可验证的需求身份。
+
+## 1. 问题与紧迫性
+缺少稳定身份会使下游无法确认自己实现的是哪项需求。
+
+## 2. 背景、目标与范围
+本规格只定义官方链路的可审计行为，不选择实现机制。
+
+## 3. 用户场景与状态覆盖
+### SCN-001：读取官方链路
+- **角色**：工作流使用者
+- **Given**：官方链路已接受
+- **When**：使用者检查审计记录
+- **Then**：需求身份和验收条件可直接解析
+### 状态覆盖
+| 状态 | 结论 | 场景 | 理由 |
+| --- | --- | --- | --- |
+| 默认 | 适用 | SCN-001 | 主路径 |
+
+## 4. 产品事实与假设（PFACT）
+- **PFACT-01**：已接受方向要求官方链路可审计
+  - **status**：verified
+
+## 5. 功能需求
+- **FR-SPEC-001**：官方链路公开稳定需求身份
+
+## 6. 条件式业务合同
+N/A — 没有跨模块业务合同。
+
+## 7. 明确不做与默认必须成立
+### 明确不做
+- 不选择实现机制。
+
+## 8. 业务影响与回归范围
+既有读取路径保持可用。
+
+## 9. 验收标准
+- [ ] **AC-01**：读者能解析稳定需求身份
+
+## 10. 风险、未决与交接
+N/A — 已检查范围与验收，未发现未决项。
+`;
+
+function officialSpecLedger(specRef) {
+  const specHash = sha256(officialSpec);
+  const binding = (id, artifactKind = "spec") => ({
+    artifact_kind: artifactKind,
+    ref: artifactKind === "decision" ? "receipts/decision-log/source.md" : specRef,
+    hash: artifactKind === "decision" ? "b".repeat(64) : specHash,
+    id,
+  });
+  return {
+    content_profile: "spec-content.v3",
+    spec_content_hash: specHash,
+    subject_binding: binding("SPEC-001"),
+    scenarios: [{
+      id: "SCN-001",
+      role: "workflow user",
+      given: "the official chain is accepted",
+      when: "the user inspects its audit record",
+      then: "the requirement identity and acceptance condition resolve",
+    }],
+    pfacts: [{
+      id: "PFACT-01",
+      statement: "The accepted direction requires an auditable official chain.",
+      status: "verified",
+      evidence: [binding("D1", "decision")],
+      affects_frs: [binding("FR-SPEC-001")],
+      affects_acs: [binding("AC-01")],
+    }],
+    frs: [{
+      id: "FR-SPEC-001",
+      behavior: "The official chain exposes stable requirement identity.",
+      scope_boundary: "No implementation mechanism is selected.",
+      pfact_refs: [binding("PFACT-01")],
+      scenario_refs: [binding("SCN-001")],
+      ac_refs: [binding("AC-01")],
+    }],
+    acs: [{
+      id: "AC-01",
+      behavior: "A reader resolves the stable requirement identity.",
+      fr_refs: [binding("FR-SPEC-001")],
+      verification_method: "Read the accepted specification.",
+      pass_condition: "The requirement identity resolves.",
+      failure_condition: "The requirement identity is missing.",
+      evidence_type: "manual",
+    }],
+    risks: [],
+    open_questions: [],
+  };
+}
+
+function officialPlan(revised = false) {
+  return `# Plan
+
+Implement FR-SPEC-001 for AC-01${revised ? " after review" : ""}.
+`;
+}
+
+function officialTasks({ specRef, specHash, planRef, planHash }) {
+  const refs = JSON.stringify([
+    { artifact_kind: "spec", ref: specRef, hash: specHash, id: "FR-SPEC-001" },
+    { artifact_kind: "plan", ref: planRef, hash: planHash, id: "PLAN" },
+  ]);
+  return `# Tasks
+
+## Phase 1：Contract
+
+#### T001 — Keep the official chain auditable
+- **Phase**：Phase 1：Contract
+- **goal**：Implement FR-SPEC-001 and prove AC-01.
+- **versioned_refs**：\`${refs}\`
+- **Knowledge**：The accepted specification is authoritative.
+- **boundary**：Only the official-chain fixture artifacts.
+- **动作**：Run the accepted plan.
+- **gate_cmd**：\`node --test\`
+- **design_state**：ready
+- **依赖**：N/A — first task
+- **FR**：FR-SPEC-001
+- **AC**：AC-01
+- **STOP**：Stop if the accepted bindings drift.
+- **recovery**：Restore the fixture artifact bytes.
+- **task risk**：A stale binding could target the wrong requirement.
+`;
+}
+
+function decisionTalkPayload(roundNumber, tree) {
+  const questions = roundNumber === 1 ? [{
+    question_id: "scope-boundary",
+    question_number: 1,
+    card_hash: sha256("fixture scope question"),
+    ask: { ref: "host-message://ask/scope-boundary", hash: sha256("fixture ask") },
+    reply: { ref: "host-message://reply/scope-boundary", hash: sha256("fixture reply") },
+    rerank: { ref: "host-message://rerank/scope-boundary", hash: sha256("fixture rerank") },
+  }] : [];
+  return {
+    interaction_type: "talk",
+    rounds: [{
+      round_number: roundNumber,
+      candidate_queue: [{
+        item_id: `axis-${roundNumber}`,
+        impact: roundNumber === 1 ? "high" : "medium",
+        status: roundNumber === 1 ? "answered" : "evidence-resolved",
+        reason: `round ${roundNumber} fixture evidence resolves the candidate axis`,
+      }],
+      questions,
+      questions_already_asked: questions.length,
+      open_direction_changing_questions: 0,
+      current_total: questions.length,
+      end_reason: `round ${roundNumber} has no open direction-changing question`,
+      zero_question_reason: roundNumber === 1 ? null : `round ${roundNumber} was resolved from canonical evidence`,
+    }],
+    grill: null,
+    workspace_tree: tree,
+  };
+}
+
+function decisionGrillPayload(tree) {
+  return {
+    interaction_type: "grill",
+    rounds: [],
+    grill: {
+      context: { status: "no-change", reason: "Fixture context remains accurate" },
+      adr: { status: "not-needed", reason: "Fixture changes no architecture decision" },
+      conflicts: { status: "none", reason: "Fixture has no document conflicts" },
+      file_references: ["CONTEXT.md"],
+      exit_checks: {
+        context_checked: true,
+        adr_checked: true,
+        conflicts_checked: true,
+        file_references_checked: true,
+      },
+    },
+    workspace_tree: tree,
+  };
+}
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-official-cli-")));
@@ -141,6 +324,14 @@ describe("official five-stage CLI", () => {
       }
       return runRecord;
     };
+    const publishStageContent = (stage, kind, payload, name) => {
+      const input = join(inputRoots[stage], `${name}.json`);
+      writeFileSync(input, `${JSON.stringify(payload)}\n`);
+      return run(root, repo, [
+        "publish-content-evidence", `--stage=${stage}`, "--project=Demo", "--task=official-chain",
+        `--kind=${kind}`, `--input=${input}`,
+      ]);
+    };
     const rejectBareRun = (stage, receipts) => {
       const input = join(inputRoots[stage], `${stage}-bare-input.json`);
       writeFileSync(input, `${JSON.stringify(receipts)}\n`);
@@ -152,8 +343,9 @@ describe("official five-stage CLI", () => {
       const { snapshot_tree } = JSON.parse(task.readRecord(testReceiptRef));
       return { snapshot_tree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] };
     };
-    const invoke = (stage, receipts, extra = [], callerFields = {}) => {
-      prepareOfficialRun(stage, callerFields.run_reason ?? "official fixture execution");
+    const invoke = (stage, receipts, extra = [], callerFields = {}, afterPrepare) => {
+      if (stage !== "make-decision") prepareOfficialRun(stage, callerFields.run_reason ?? "official fixture execution");
+      afterPrepare?.();
       const effectiveReceipts = { ...receipts };
       const reviewRef = receipts.review;
       if (reviewRef) {
@@ -210,21 +402,90 @@ describe("official five-stage CLI", () => {
       return { attempt, accepted };
     };
 
-    writeOfficialComponentReceipt({ task, stage: "make-decision", component: "decision", payload: { decision_log: "# Decision\n\nGo.\n" } });
-    const decisionTree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: repo, encoding: "utf8" }).trim();
+    const preparedDecision = run(root, repo, [
+      "prepare", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+    ]);
+    run(root, repo, [
+      "start-run", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+      "--reason=official fixture execution",
+    ]);
+    const decisionLedgerInput = join(inputRoots["make-decision"], "requirements-ledger.json");
+    writeFileSync(decisionLedgerInput, `${JSON.stringify(requirementsInput)}\n`);
+    run(root, repo, [
+      "publish-requirements-ledger", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+      `--input=${decisionLedgerInput}`,
+    ]);
+    const decisionTree = captureGitWorktreeSnapshot(preparedDecision.worktree_root).tree;
     const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: decisionTree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: decisionTree, reviewTrack: "detail" });
+    const publishDecisionInteraction = (name, payload) => {
+      const input = join(inputRoots["make-decision"], `${name}.json`);
+      writeFileSync(input, `${JSON.stringify(payload)}\n`);
+      return run(root, repo, [
+        "publish-content-evidence", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+        "--kind=interaction-completion.v1", `--input=${input}`,
+      ]);
+    };
+    const talkOne = publishDecisionInteraction("talk-1", decisionTalkPayload(1, decisionTree));
+    const researchInput = join(inputRoots["make-decision"], "research-skip.json");
+    writeFileSync(researchInput, `${JSON.stringify({
+      status: "skipped",
+      reason: "The canonical first-round evidence is sufficient.",
+      evidence: {
+        kind: "stage_content",
+        uri_or_path: talkOne.evidence_ref,
+        content_hash: talkOne.evidence_hash,
+      },
+    })}\n`);
+    run(root, repo, [
+      "record-research", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+      `--input=${researchInput}`,
+    ]);
+    const talkTwo = publishDecisionInteraction("talk-2", decisionTalkPayload(2, decisionTree));
     registerReviewHead(direction.resultRef);
+    const talkThree = publishDecisionInteraction("talk-3", decisionTalkPayload(3, decisionTree));
+    const grill = publishDecisionInteraction("grill", decisionGrillPayload(decisionTree));
+    const decisionInput = join(inputRoots["make-decision"], "decision.json");
+    writeFileSync(decisionInput, `${JSON.stringify({ decision_log: "# Decision\n\nGo.\n" })}\n`);
+    const decisionReceipt = run(root, repo, [
+      "receipt", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+      "--component=decision", `--input=${decisionInput}`,
+    ]);
     registerReviewHead(detail.resultRef);
-    invoke("make-decision", { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef });
+    const canonicalDecision = JSON.parse(task.readRecord(decisionReceipt.receipt_ref));
+    publishDecisionInteraction("interaction-aggregate", {
+      interaction_type: "aggregate",
+      rounds: [talkOne, talkTwo, talkThree].map((item) => ({ ref: item.evidence_ref, hash: item.evidence_hash })),
+      grill: { ref: grill.evidence_ref, hash: grill.evidence_hash },
+      workspace_tree: decisionTree,
+      decision_ref: canonicalDecision.decision_ref,
+      decision_hash: canonicalDecision.decision_hash,
+    });
+    const decisionCoverageInput = join(inputRoots["make-decision"], "decision-coverage.json");
+    writeFileSync(decisionCoverageInput, `${JSON.stringify({
+      decision_log_ref: canonicalDecision.decision_ref,
+      decision_log_hash: canonicalDecision.decision_hash,
+      items: [],
+      summary: { covered: 0, accepted_omission: 0, missing: 0 },
+    })}\n`);
+    run(root, repo, [
+      "publish-content-evidence", "--stage=make-decision", "--project=Demo", "--task=official-chain",
+      "--kind=decision-coverage-audit.v1", `--input=${decisionCoverageInput}`,
+    ]);
+    invoke("make-decision", {
+      decision: decisionReceipt.receipt_ref,
+      direction_review: direction.resultRef,
+      detail_review: detail.resultRef,
+    });
     const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
     const invalidSpecPrepare = spawnSync(process.execPath, [runtime, "prepare", "--stage=build-spec", "--project=Demo", "--task=official-chain"], { cwd: repo, env, encoding: "utf8" });
     expect(invalidSpecPrepare.status).not.toBe(0);
     expect(invalidSpecPrepare.stderr).toMatch(/prepare is only valid for make-decision/i);
 
-    writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     mkdirSync(join(workspace.worktreeRoot, "specs", "official-chain"), { recursive: true });
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec\n");
+    const specRef = "specs/official-chain/spec.md";
+    writeFileSync(join(workspace.worktreeRoot, specRef), officialSpec);
+    writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: officialSpec } });
     const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     registerReviewHead(specReview.resultRef);
     rejectBareRun("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
@@ -236,20 +497,36 @@ describe("official five-stage CLI", () => {
     const forgedBuildSpec = spawnSync(process.execPath, [runtime, "run", "--stage=build-spec", "--project=Demo", "--task=official-chain", `--input=${forgedBuildSpecInput}`], { cwd: repo, env, encoding: "utf8" });
     expect(forgedBuildSpec.status).not.toBe(0);
     expect(forgedBuildSpec.stderr).toMatch(/unknown fields.*workflow_run_id/i);
-    const buildSpec = invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
+    const buildSpec = invoke(
+      "build-spec",
+      { spec: "receipts/spec.json", review: specReview.resultRef },
+      [],
+      {},
+      () => publishStageContent("build-spec", "ambiguity-ledger.v2", officialSpecLedger(specRef), "ambiguity-ledger"),
+    );
     expect(buildSpec.attempt.attempt.missing_items).toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
     const invalidPlanPrepare = spawnSync(process.execPath, [runtime, "prepare", "--stage=build-plan", "--project=Demo", "--task=official-chain"], { cwd: repo, env, encoding: "utf8" });
     expect(invalidPlanPrepare.status).not.toBe(0);
     expect(invalidPlanPrepare.stderr).toMatch(/prepare is only valid for make-decision/i);
 
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan\n" } });
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
+    const planRef = "specs/official-chain/plan.md";
+    const tasksRef = "specs/official-chain/tasks.md";
+    const initialPlan = officialPlan();
+    const revisedPlanContent = officialPlan(true);
+    const tasksContent = officialTasks({
+      specRef,
+      specHash: sha256(officialSpec),
+      planRef,
+      planHash: sha256(revisedPlanContent),
+    });
+    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: initialPlan } });
+    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: tasksContent } });
     const revisedPlanInput = join(inputRoots["build-plan"], "revised-plan.json");
-    writeFileSync(revisedPlanInput, `${JSON.stringify({ content: "# Plan, revised after review\n" })}\n`);
+    writeFileSync(revisedPlanInput, `${JSON.stringify({ content: revisedPlanContent })}\n`);
     const revisedPlan = run(root, repo, ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true", "--recover=receipts/plan.json"]);
     expect(revisedPlan).toMatchObject({ revision: true, previous_receipt_ref: "receipts/plan.json" });
     expect(revisedPlan.receipt_ref).toMatch(/^receipts\/revisions\/plan\/[a-f0-9]{64}\.json$/);
-    expect(JSON.parse(task.readRecord("receipts/plan.json"))).toMatchObject({ content: "# Plan\n" });
+    expect(JSON.parse(task.readRecord("receipts/plan.json"))).toMatchObject({ content: initialPlan });
     for (const args of [
       ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true"],
       ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--recover=receipts/plan.json"],
@@ -258,12 +535,29 @@ describe("official five-stage CLI", () => {
       const invalid = spawnSync(process.execPath, [runtime, ...args], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
       expect(invalid.status).not.toBe(0);
     }
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
+    writeFileSync(join(workspace.worktreeRoot, planRef), revisedPlanContent);
+    writeFileSync(join(workspace.worktreeRoot, tasksRef), tasksContent);
     const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     registerReviewHead(planReview.resultRef);
     rejectBareRun("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
-    const buildPlan = invoke("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
+    const planTaskContract = () => buildPlanTaskContractV2({
+      spec: officialSpec,
+      plan: revisedPlanContent,
+      tasks: tasksContent,
+      specRef,
+      specHash: sha256(officialSpec),
+      planRef,
+      planHash: sha256(revisedPlanContent),
+      tasksRef,
+      tasksHash: sha256(tasksContent),
+    });
+    const buildPlan = invoke(
+      "build-plan",
+      { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef },
+      [],
+      {},
+      () => publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract"),
+    );
     expect(buildPlan.attempt.attempt.missing_items).toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
@@ -289,6 +583,7 @@ describe("official five-stage CLI", () => {
     const rebindInput = join(inputRoots["build-plan"], "build-plan-rebind-input.json");
     writeFileSync(rebindInput, `${JSON.stringify({ receipts: { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: rebindReview.resultRef } })}\n`);
     prepareOfficialRun("build-plan", "baseline rebind after upstream integration");
+    publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract-rebind");
     const reboundAttempt = run(root, repo, ["run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${rebindInput}`, `--baseline-rebind=${rebind.ref}`]);
     const reboundConfirmation = run(root, repo, ["confirm", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--attempt=${reboundAttempt.attempt_ref}`, "--decision=accepted"]);
     const rebound = run(root, repo, ["accept", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--attempt=${reboundAttempt.attempt_ref}`, `--human-confirmation-ref=${reboundConfirmation.ref}`]);
@@ -622,7 +917,7 @@ describe("official five-stage CLI", () => {
     writeFileSync(task.recordPath(revisedBuildReview.resultRef), `${revisedReviewMaterialRaw}drift`);
     const rejectedReviewMaterial = spawnSync(process.execPath, [runtime, "accept", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--attempt=${passing.attempt_ref}`, `--human-confirmation-ref=${passingConfirmation.ref}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
     expect(rejectedReviewMaterial.status).not.toBe(0);
-    expect(rejectedReviewMaterial.stderr).toMatch(/review result changed/i);
+    expect(rejectedReviewMaterial.stderr).toMatch(/review (?:result|quality fact) changed/i);
     expect(task.readRecord("results/verify-code/accepted.json")).toBe(verifyCanonicalBeforeAccept);
     writeFileSync(task.recordPath(revisedBuildReview.resultRef), revisedReviewMaterialRaw);
 

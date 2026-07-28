@@ -587,6 +587,7 @@ describe("review materials", () => {
           canonical_phase_evidence: { ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash },
           implementation_receipt: { ref: "receipts/implementation.json", sha256: implementationHash },
           review_result: { ref: "reviews/results/phase.json", sha256: "d".repeat(64) },
+          review_verdict: "pass",
         }],
       },
       seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },

@@ -6,6 +6,7 @@ import { officialStageHandler } from "../core/stage-handlers.mjs";
 import { validateStageFacts } from "../core/task-kernel.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause } from "../core/stage-review-disposition.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
@@ -53,6 +54,7 @@ describe("final cutover guard contracts", () => {
         schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass",
         summary_hash: sha, workflow_run_id: workflowRunId, snapshot_tree: currentTree,
         content_evidence_refs: [],
+        ...(stage === "make-decision" ? { through_step_id: 10, audit_scope: "pre_confirmation" } : {}),
       };
       if (stage === "make-decision" && values["receipts/decision.json"]?.decision_ref && values["receipts/decision.json"]?.decision_hash) {
         const decision = values["receipts/decision.json"];
@@ -163,7 +165,7 @@ describe("final cutover guard contracts", () => {
       content: "content\n", content_hash: "unused",
     })]));
     const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
-    values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [] };
+    values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [], ...(stage === "make-decision" ? { through_step_id: 10, audit_scope: "pre_confirmation" } : {}) };
     receipts.audit = auditRef;
     const worker = { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }) };
     await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/review.*receipt ref/i);
@@ -516,7 +518,7 @@ describe("final cutover guard contracts", () => {
     const directionResolutionRef = `reviews/resolutions/${"d".repeat(64)}.json`;
     const interactionPayload = { interaction_type: "aggregate", workspace_tree: currentTree, decision_ref: `receipts/decision-log/${decisionHash}.md`, decision_hash: decisionHash };
     const interaction = { schema_version: "stage-content-evidence.v1", kind: "interaction-completion.v1", task_id: "task", stage, workflow_run_id: workflowRunId, snapshot_tree: currentTree, content_hash: createHash("sha256").update(JSON.stringify(interactionPayload)).digest("hex"), payload: interactionPayload };
-    const audit = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: workflowRunId, snapshot_tree: currentTree, content_evidence_refs: [{ kind: "interaction-completion.v1", ref: "evidence/interaction.json", hash: sha }] };
+    const audit = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: workflowRunId, snapshot_tree: currentTree, through_step_id: 10, audit_scope: "pre_confirmation", content_evidence_refs: [{ kind: "interaction-completion.v1", ref: "evidence/interaction.json", hash: sha }] };
     const values = {
       "receipts/decision.json": canonical(stage, { producer: { stage, component: "decision", version: "1" }, decision_ref: `receipts/decision-log/${decisionHash}.md`, decision_hash: decisionHash, content_hash: decisionHash, contract_refs: [] }),
       "evidence/interaction.json": interaction,
@@ -551,7 +553,7 @@ describe("final cutover guard contracts", () => {
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/SERIOUS_REVIEW_PAUSE/);
   });
 
-  it("rejects an unavailable build-code review from final verify publication", async () => {
+  it("preserves an authenticated unavailable build-code review as a non-gate quality fact", async () => {
     const stage = "verify-code", attemptRef = "reviews/attempts/verify-unavailable/attempt.json";
     const earlierOutputRef = "reviews/attempts/verify-unavailable/providers/fixture-provider.output.json";
     const earlierContent = JSON.stringify({ verdict: "pass", summary: "superseded output", findings: [] });
@@ -577,9 +579,76 @@ describe("final cutover guard contracts", () => {
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     const worker = workerFor(stage, values);
-    await expect(officialStageHandler(stage)(worker, {
+    worker.readAcceptedBuildCode = () => ({ facts: {
+      tests: { snapshot_tree: tree },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [] },
+      review: {
+        status: "unavailable", attempt_ref: attemptRef, attempt_hash: sha,
+        snapshot_tree: tree, material_id: sha,
+        error: { code: "PROVIDER_UNAVAILABLE", message: "provider timed out" },
+        subject_kind: "worktree", phase_id: null, review_scope: "integration",
+      },
+    } });
+    const result = await officialStageHandler(stage)(worker, {
       receipts: { tests: "receipts/tests.json", review: attemptRef, quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef },
-    })).resolves.toMatchObject({ verification_failure: true, facts: { review: { status: "unavailable" } } });
+    });
+    expect(result).toMatchObject({
+      facts: { review: { status: "unavailable" } },
+      missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable/i)]),
+    });
+    expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=pass/i);
+    expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
+    expect(result.reason).toMatch(/snapshot/i);
+    expect(result.reason).not.toMatch(/unavailable|integration review/i);
+  });
+
+  it("describes revise_required as a bound quality fact instead of review pass", async () => {
+    const stage = "verify-code";
+    const finding = {
+      severity: "major", path: "fixture", issue: "major quality advice",
+      root_cause: "fixture detail", recommendation: "consider cleanup",
+      evidence_kind: "direct", evidence: "fixture anchor",
+    };
+    const providerOutput = { verdict: "revise_required", summary: "minor advice", findings: [finding] };
+    const aggregation = aggregateProviderResults([{ provider: "fixture-provider", review: providerOutput }], 1);
+    const quality = {
+      ...qualityReviewReceipt(),
+      provider_results: [{ provider: "fixture-provider", output: providerOutput }],
+      verdict: aggregation.verdict,
+      findings: aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })),
+      adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
+    };
+    const values = {
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+      "reviews/results/quality.json": quality,
+      "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const pause = deriveSeriousReviewPause({
+      taskId: "task", stage: "verify-code", reviewRef: "reviews/results/quality.json",
+      reviewHash: sha, result: quality, workflowRunId: "fixture:attempt-0001",
+    });
+    const riskRef = `evidence/risk-acceptances/${"e".repeat(64)}.json`;
+    values[riskRef] = buildRiskAcceptance({
+      pause,
+      findingId: pause.findings[0].finding_id,
+      cardRef: "evidence/review-risk-cards/fixture.json",
+      cardHash: pause.findings[0].card_hash,
+      selectedOption: "accept-risk",
+      replyRef: "evidence/review-risk-replies/fixture.json",
+      replyHash: "d".repeat(64),
+      acceptedAt: "2026-07-19T00:00:02.000Z",
+    });
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: {
+        tests: "receipts/tests.json", review: "reviews/results/review.json",
+        quality_review: worker.qualityReviewRef, quality_risk_acceptance: riskRef,
+        evidence: "evidence/manifest.json", audit: worker.auditRef,
+      },
+    });
+    expect(result.completion.system.verification.conclusion).toMatch(/verify-code independent=revise_required.*认证质量事实/i);
+    expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
   });
 
   it("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {

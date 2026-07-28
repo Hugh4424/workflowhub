@@ -129,6 +129,25 @@ export function structuralFullAlreadyRecorded(task, prior) {
   return false;
 }
 
+export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } = {}) {
+  if (identity?.stage !== "make-decision" || flow === null || flow === undefined) return flow;
+  if (flow.event_kind === "provider_attempt") {
+    return kernel.recordReviewAttempt(identity, {
+      expected_head_ref: flow.head_result_ref ?? null,
+      expected_event_ref: flow.event_ref,
+      attempt_ref: flow.action_ref,
+    });
+  }
+  if (flow.head_result_ref && new Set(["semantic_result", "resolution"]).has(flow.event_kind)) {
+    return kernel.advanceReviewFlow(identity, {
+      expected_head_ref: flow.head_result_ref,
+      expected_event_ref: flow.event_ref,
+      result_ref: flow.head_result_ref,
+    });
+  }
+  return flow;
+}
+
 export function selectCanonicalReviewRound({ task, stage, route, previousResult = null, ledger = null, closureFailures = 0, currentSnapshotTree = null, flow = null, changeClassification = null } = {}) {
   const freshBuildCodePhase = stage === "build-code"
     && previousResult?.subject_kind === "phase"
@@ -301,9 +320,18 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     ? input.previous_result_ref
     : Object.prototype.hasOwnProperty.call(input, "previousResultRef") ? input.previousResultRef : undefined;
   return trusted.kernel.withReviewFlowLock(flowIdentity, async () => {
+  // Ordering is a dispatch precondition, not a publication-afterthought.
+  // Fail before material capture or any provider call when the active
+  // make-decision run has not completed the exact predecessor step.
+  trusted.kernel.assertReviewFlowReady(flowIdentity);
   const { flow, prior } = resolveReviewFlowHead({
     task: trusted.task, kernel: trusted.kernel, identity: flowIdentity,
     previousResultRef: suppliedPreviousRef,
+  });
+  reconcileMakeDecisionReviewProgress({
+    kernel: trusted.kernel,
+    identity: flowIdentity,
+    flow,
   });
   const flowHistory = trusted.kernel.readReviewFlowHistory(flowIdentity);
   if (stage === "build-code" && phaseId !== null && flow === null && prior !== null

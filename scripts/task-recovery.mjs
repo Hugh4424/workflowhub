@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { inspectRunnerIdentity } from "../core/runner-identity.mjs";
 import { openTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../core/stage-review-disposition.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import {
@@ -23,6 +24,7 @@ import {
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
+const RISK_ACCEPTANCE_REF = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/;
 
 function parse(argv) {
   const [command, ...rest] = argv;
@@ -39,6 +41,7 @@ function parse(argv) {
   const allowed = new Set([
     "command", "task-path", "project", "task", "runner-root", "credential-ref", "credential-hash", "stage",
     "phase-id", "phase-evidence-ref", "phase-evidence-hash", "review-result-ref", "review-result-hash",
+    "risk-acceptance-refs", "risk-acceptance-hashes",
     "authorization-ref", "authorization-hash", "bootstrap-packet-ref", "bootstrap-packet-hash",
     "bootstrap-bundle-ref", "bootstrap-bundle-hash",
     "bootstrap-review-result-ref", "bootstrap-review-result-hash", "bootstrap-trust-mode",
@@ -57,13 +60,13 @@ export function helpText() {
     "Usage:",
     "  node scripts/task-recovery.mjs runner-replacement --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=<stage> --credential-ref=<task-relative-ref> --credential-hash=<sha256>",
     "  node scripts/task-recovery.mjs runner-replacement-bridge --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=<stage> --authorization-ref=<task-relative-ref> --authorization-hash=<sha256> --bootstrap-packet-ref=<task-relative-ref> --bootstrap-packet-hash=<sha256> --bootstrap-bundle-ref=<task-relative-ref> --bootstrap-bundle-hash=<sha256> --bootstrap-review-result-ref=<task-relative-ref> --bootstrap-review-result-hash=<sha256> --nonce=<nonce>",
-    "  node scripts/task-recovery.mjs phase-pointer --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --credential-ref=<task-relative-ref> --credential-hash=<sha256>",
-    "  node scripts/task-recovery.mjs phase-trace-lineage --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --phase-id=<phase> --phase-evidence-ref=<task-relative-ref> --phase-evidence-hash=<sha256> --review-result-ref=<task-relative-ref> --review-result-hash=<sha256>",
+    "  node scripts/task-recovery.mjs phase-pointer --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --credential-ref=<task-relative-ref> --credential-hash=<sha256> [--risk-acceptance-refs=<comma-separated refs> --risk-acceptance-hashes=<comma-separated sha256s>]",
+    "  node scripts/task-recovery.mjs phase-trace-lineage --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --phase-id=<phase> --phase-evidence-ref=<task-relative-ref> --phase-evidence-hash=<sha256> --review-result-ref=<task-relative-ref> --review-result-hash=<sha256> [--risk-acceptance-refs=<comma-separated refs> --risk-acceptance-hashes=<comma-separated sha256s>]",
     "",
     "Credentials are canonical task-local records. phase-trace-lineage binds historical Phase facts append-only and never replaces old records or pointers.",
     "phase-pointer same-snapshot recovery requires phase_subject.recovery_intent=same-snapshot-phase0-reopen; changed-snapshot recovery must omit it.",
     "The authoritative pointer, closed Phase evidence/review, receipt hashes, and snapshot tree are validated before the create-only gate and pointer CAS.",
-    "A committed same-snapshot recovery must complete recovery-bound Phase evidence and a fresh wh-review PASS; interrupted continuation resumes at stage-runtime publish-phase-evidence.",
+    "A committed same-snapshot recovery must complete recovery-bound Phase evidence and a fresh semantic wh-review result; serious findings still require repair or exact risk acceptance.",
     "Never edit task.json, phase-result.json, recovery generations, accepted records, receipts, tests, or reviews by hand.",
     "Success returns recovery_ref/recovery_hash. Continue with task-bootstrap or stage-runtime official entries.",
     "Errors distinguish missing/mismatched/misused intent, pointer or closure mismatch, replay, concurrent pointer change, and persistence conflict.",
@@ -761,7 +764,25 @@ function validateLineageInput(values) {
   if (!HASH.test(values["phase-evidence-hash"]) || !HASH.test(values["review-result-hash"])) {
     throw recoveryError("RECOVERY_INPUT_REQUIRED", "lineage hashes must be sha256 values");
   }
+  riskAcceptanceBindingsFromValues(values);
   return values;
+}
+
+function riskAcceptanceBindingsFromValues(values) {
+  const hasRiskRefs = values["risk-acceptance-refs"] !== undefined;
+  const hasRiskHashes = values["risk-acceptance-hashes"] !== undefined;
+  if (hasRiskRefs !== hasRiskHashes) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "risk acceptance refs and hashes must be supplied together");
+  }
+  if (!hasRiskRefs) return [];
+  const refs = values["risk-acceptance-refs"].split(",");
+  const hashes = values["risk-acceptance-hashes"].split(",");
+  if (refs.length === 0 || refs.length !== hashes.length
+    || refs.some((ref) => !RISK_ACCEPTANCE_REF.test(ref))
+    || hashes.some((hash) => !HASH.test(hash))) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "risk acceptance refs/hashes are invalid");
+  }
+  return refs.map((ref, index) => ({ ref, sha256: hashes[index] }));
 }
 
 function phaseEvidenceError(detail) {
@@ -817,23 +838,49 @@ function assertBaselinePhaseClosure(task, baseline, baselineSnapshot, subject) {
   }
 }
 
-function assertBaselineReviewClosure(task, subject, baselineSnapshot, review) {
-  try { validateSchema("result", review.value); } catch (error) { throw phaseEvidenceError(`baseline Phase 0 review schema is invalid: ${error.message}`); }
+function assertBaselineReviewClosure(task, subject, baselineSnapshot, review, riskAcceptances = []) {
   const value = review.value;
   let baselineTree;
   try { baselineTree = execFileSync("git", ["rev-parse", `${subject.baseline_commit}^{tree}`], { cwd: task.manifest.target_repo_root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); }
   catch { throw phaseEvidenceError("baseline commit tree cannot be verified"); }
-  if (value.verdict !== "pass" || value.subject_kind !== "phase" || value.phase_id !== "phase-0"
-    || value.review_scope !== "phase" || value.snapshot_tree !== baselineSnapshot
-    || value.base_tree !== baselineTree || value.candidate_tree !== baselineSnapshot) {
-    throw phaseEvidenceError("baseline Phase 0 review is not a matching PASS");
+
+  const matchingScope = value.task_id === task.identity.taskId && value.stage === "build-code"
+    && value.subject_kind === "phase" && value.phase_id === "phase-0"
+    && value.review_scope === "phase" && value.snapshot_tree === baselineSnapshot
+    && value.base_tree === baselineTree && value.candidate_tree === baselineSnapshot;
+  if (!matchingScope) {
+    throw phaseEvidenceError("baseline Phase 0 review quality fact does not match the credentialed Phase");
+  }
+
+  if (PHASE_REVIEW_ATTEMPT_REF.test(review.ref)) {
+    try { validateSchema("attempt", value); } catch (error) { throw phaseEvidenceError(`baseline Phase 0 review attempt schema is invalid: ${error.message}`); }
+    if (value.terminal_status !== "unavailable" || !value.error
+      || !Array.isArray(value.provider_attempts) || value.provider_attempts.length === 0) {
+      throw phaseEvidenceError("baseline Phase 0 review attempt is not an authenticated unavailable quality fact");
+    }
+    if (riskAcceptances.length) throw phaseEvidenceError("unavailable Phase review cannot use risk acceptance");
+    return { status: "unavailable", action_ref: review.ref, action_hash: review.hash };
+  }
+
+  try { validateSchema("result", value); } catch (error) { throw phaseEvidenceError(`baseline Phase 0 review schema is invalid: ${error.message}`); }
+  if (!["pass", "revise_required"].includes(value.verdict)) {
+    throw phaseEvidenceError("baseline Phase 0 review is not a semantic quality fact");
   }
   if (!PHASE_REVIEW_ATTEMPT_REF.test(value.attempt_ref ?? "")) throw phaseEvidenceError("baseline Phase 0 review attempt is outside the allowed namespace");
   const attempt = readJson(task, value.attempt_ref, undefined, "baseline Phase 0 review attempt", PHASE_REVIEW_ATTEMPT_REF);
   try { validateSchema("attempt", attempt.value); } catch (error) { throw phaseEvidenceError(`baseline Phase 0 review attempt schema is invalid: ${error.message}`); }
+  if (attempt.value.terminal_status !== "semantic" || attempt.value.error !== null) {
+    throw phaseEvidenceError("baseline Phase 0 review result does not bind a semantic attempt");
+  }
   for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
     if (attempt.value[key] !== value[key]) throw phaseEvidenceError(`baseline Phase 0 review attempt/result ${key} mismatch`);
   }
+  const accepted = reviewRiskBindingsForAction(task, {
+    reviewRef: review.ref,
+    reviewHash: review.hash,
+    result: value,
+  }, riskAcceptances);
+  return { status: "semantic", verdict: value.verdict, action_ref: review.ref, action_hash: review.hash, risk_acceptances: accepted };
 }
 
 function assertRefHashSuffix(record, match, label) {
@@ -920,8 +967,9 @@ function readLineageSources(task, values) {
   });
   const review = readJson(task, values["review-result-ref"], values["review-result-hash"], "formal Phase review", PHASE_REVIEW_RESULT_REF);
   try { validateSchema("result", review.value); } catch (error) { throw phaseEvidenceError(`formal Phase review schema is invalid: ${error.message}`); }
-  if (review.value.verdict !== "pass" || !PHASE_REVIEW_ATTEMPT_REF.test(review.value.attempt_ref ?? "")) {
-    throw phaseEvidenceError("formal Phase review is not a PASS Phase result");
+  if (!["pass", "revise_required"].includes(review.value.verdict)
+    || !PHASE_REVIEW_ATTEMPT_REF.test(review.value.attempt_ref ?? "")) {
+    throw phaseEvidenceError("formal Phase review is not a semantic Phase result");
   }
   const attempt = readJson(task, review.value.attempt_ref, undefined, "formal Phase review attempt", PHASE_REVIEW_ATTEMPT_REF);
   try { validateSchema("attempt", attempt.value); } catch (error) { throw phaseEvidenceError(`formal Phase review attempt schema is invalid: ${error.message}`); }
@@ -961,7 +1009,7 @@ function phaseTraceFromSources(sources) {
     red_test_receipt: sources.red === null ? null : { ref: sources.red.ref, sha256: sources.red.hash },
     review_result: { ref: sources.review.ref, sha256: sources.review.hash },
     review_attempt: { ref: sources.attempt.ref, sha256: sources.attempt.hash },
-    material_id: sources.review.value.material_id, review_scope: "phase", verdict: "pass",
+    material_id: sources.review.value.material_id, review_scope: "phase", verdict: sources.review.value.verdict,
     acceptance_trace: sources.acceptanceTrace,
   };
 }
@@ -978,7 +1026,7 @@ function lineageSupersessionRef(phaseId, snapshotTree, lineageHash) {
   return ref;
 }
 
-function lineageGeneration(task, sources, traceRef, traceHash) {
+function lineageGeneration(task, sources, traceRef, traceHash, riskAcceptances = []) {
   const value = {
     schema_version: "phase-trace-lineage-generation.v1", project_name: task.identity.projectName, task_id: task.identity.taskId,
     stage: "build-code", phase_id: sources.phaseId, snapshot_tree: sources.subject.candidateTree,
@@ -990,17 +1038,19 @@ function lineageGeneration(task, sources, traceRef, traceHash) {
     red_test_receipt: sources.red === null ? null : { ref: sources.red.ref, sha256: sources.red.sha256 },
     review_result: { ref: sources.review.ref, sha256: sources.review.sha256 },
     review_attempt: { ref: sources.attempt.ref, sha256: sources.attempt.sha256 },
+    risk_acceptances: riskAcceptances,
     material_id: sources.review.value.material_id, created_at: new Date().toISOString(), result: "bound",
   };
-  const allowed = new Set(["schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace", "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt", "review_result", "review_attempt", "material_id", "created_at", "result"]);
+  const allowed = new Set(["schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace", "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt", "review_result", "review_attempt", "risk_acceptances", "material_id", "created_at", "result"]);
   if (Object.keys(value).some((key) => !allowed.has(key)) || value.schema_version !== "phase-trace-lineage-generation.v1"
-    || !OID.test(value.snapshot_tree) || !HASH.test(value.material_id) || !Number.isFinite(Date.parse(value.created_at)) || value.result !== "bound") {
+    || !OID.test(value.snapshot_tree) || !HASH.test(value.material_id) || !Array.isArray(value.risk_acceptances)
+    || !Number.isFinite(Date.parse(value.created_at)) || value.result !== "bound") {
     throw recoveryError("RECOVERY_RECORD_CONFLICT", "lineage generation schema is invalid");
   }
   return value;
 }
 
-function lineageGenerationFromTrace(task, verified) {
+function lineageGenerationFromTrace(task, verified, riskAcceptances = []) {
   const { trace } = verified;
   return lineageGeneration(task, {
     phaseId: trace.phase_id,
@@ -1012,7 +1062,78 @@ function lineageGenerationFromTrace(task, verified) {
     red: verified.red,
     review: verified.review,
     attempt: verified.attempt,
-  }, verified.traceRef, verified.traceSha256);
+  }, verified.traceRef, verified.traceSha256, riskAcceptances);
+}
+
+function reviewRiskBindingsForAction(task, { reviewRef, reviewHash, result }, supplied = []) {
+  if (!Array.isArray(supplied)) throw new TypeError("risk_acceptances must be an array");
+  if (!["pass", "revise_required"].includes(result?.verdict)) {
+    throw phaseEvidenceError("Phase review action is not an exact semantic quality fact");
+  }
+  const records = supplied.map((binding) => {
+    if (!binding || typeof binding !== "object" || Array.isArray(binding)
+      || Object.keys(binding).some((key) => key !== "ref" && key !== "sha256")
+      || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) {
+      throw phaseEvidenceError("risk acceptance binding is invalid");
+    }
+    const match = RISK_ACCEPTANCE_REF.exec(binding.ref);
+    if (!match || match[1] !== binding.sha256) throw phaseEvidenceError("risk acceptance ref/hash is not content-addressed");
+    const record = readJson(task, binding.ref, binding.sha256, "risk acceptance", RISK_ACCEPTANCE_REF);
+    return { binding: { ref: record.ref, sha256: record.hash }, value: record.value };
+  });
+  const preliminary = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef,
+    reviewHash,
+    result,
+  });
+  if (preliminary.status !== "paused") {
+    if (records.length) throw phaseEvidenceError("risk acceptance cannot override a review without actionable serious findings");
+    return [];
+  }
+  if (records.length === 0) {
+    throw phaseEvidenceError("actionable serious findings require repair or exact risk acceptance");
+  }
+  const workflowRunIds = new Set(records.map(({ value }) => value?.workflow_run_id));
+  if (workflowRunIds.size !== 1 || typeof [...workflowRunIds][0] !== "string" || [...workflowRunIds][0].trim() === "") {
+    throw phaseEvidenceError("risk acceptances do not bind one authenticated review run");
+  }
+  const pause = deriveSeriousReviewPause({
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    reviewRef,
+    reviewHash,
+    result,
+    workflowRunId: [...workflowRunIds][0],
+  });
+  try { validateRiskAcceptanceSet({ acceptances: records.map(({ value }) => value), pause }); }
+  catch (error) { throw phaseEvidenceError(error.message); }
+  for (const { value } of records) {
+    const finding = pause.findings.find(({ finding_id: findingId }) => findingId === value.finding_id);
+    let cardRaw; let replyRaw;
+    try {
+      cardRaw = task.readRecord(value.card_ref);
+      replyRaw = task.readRecord(value.reply_ref);
+    } catch {
+      throw phaseEvidenceError("risk acceptance card or reply is missing");
+    }
+    if (cardRaw !== `${JSON.stringify(finding, null, 2)}\n` || sha256(replyRaw) !== value.reply_hash) {
+      throw phaseEvidenceError("risk acceptance does not bind canonical card and reply bytes");
+    }
+  }
+  return records.map(({ binding }) => binding);
+}
+
+function reviewRiskBindings(task, verified, supplied = []) {
+  if (verified.trace.verdict !== verified.review.value.verdict) {
+    throw phaseEvidenceError("canonical Phase trace does not bind an exact semantic review fact");
+  }
+  return reviewRiskBindingsForAction(task, {
+    reviewRef: verified.review.ref,
+    reviewHash: verified.review.sha256 ?? verified.review.hash,
+    result: verified.review.value,
+  }, supplied);
 }
 
 function recordExists(task, ref) {
@@ -1020,7 +1141,8 @@ function recordExists(task, ref) {
 }
 
 /**
- * Bind one already-published canonical Phase trace to its historical PASS.
+ * Bind one already-published canonical Phase trace to its historical semantic
+ * review fact. Actionable serious findings require exact risk acceptances.
  * The caller supplies no record closure of its own: readPhaseMapTrace
  * independently verifies every bound receipt, evidence record, review, tree,
  * material, and task identity before this append-only generation is written.
@@ -1031,8 +1153,8 @@ export function publishPhaseTraceLineage({ task, workspace } = {}, input = {}) {
   }
   if (!input || typeof input !== "object" || Array.isArray(input)
     || typeof input.trace_ref !== "string" || !HASH.test(input.trace_hash ?? "")
-    || Object.keys(input).some((key) => !new Set(["trace_ref", "trace_hash"]).has(key))) {
-    throw new TypeError("Phase trace lineage input requires trace_ref and trace_hash only");
+    || Object.keys(input).some((key) => !new Set(["trace_ref", "trace_hash", "risk_acceptances"]).has(key))) {
+    throw new TypeError("Phase trace lineage input requires trace_ref, trace_hash, and optional risk_acceptances");
   }
   let verified;
   try {
@@ -1041,11 +1163,9 @@ export function publishPhaseTraceLineage({ task, workspace } = {}, input = {}) {
     throw phaseEvidenceError(error.message);
   }
   if (verified.traceSha256 !== input.trace_hash) throw phaseEvidenceError("canonical Phase trace hash mismatch");
-  if (verified.trace.verdict !== "pass" || verified.review.value.verdict !== "pass") {
-    throw phaseEvidenceError("canonical Phase trace is not a PASS");
-  }
+  const riskAcceptances = reviewRiskBindings(task, verified, input.risk_acceptances ?? []);
   const generationRef = lineageGenerationRef(verified.trace.phase_id, verified.trace.snapshot_tree, verified.traceSha256);
-  const generationRaw = canonical(lineageGenerationFromTrace(task, verified));
+  const generationRaw = canonical(lineageGenerationFromTrace(task, verified, riskAcceptances));
   return task.withRecordLock("locks/phase-trace-lineage.lock", () => {
     for (const ref of task.listCanonicalPhaseTraceLineageRefs()) {
       const existing = readJson(task, ref, undefined, "Phase trace lineage", LINEAGE_REF).value;
@@ -1078,7 +1198,7 @@ function refOnly(value, expected, label) {
 
 /**
  * Supersede only the one legacy producer defect: a canonical lineage whose
- * closure refs match a PASS trace but whose binding objects omitted sha256.
+ * closure refs match a semantic trace but whose binding objects omitted sha256.
  * This creates a new immutable fact; it never changes the legacy record.
  */
 export function supersedePhaseTraceLineage({ task, workspace } = {}, input = {}) {
@@ -1087,18 +1207,19 @@ export function supersedePhaseTraceLineage({ task, workspace } = {}, input = {})
   }
   if (!input || typeof input !== "object" || Array.isArray(input)
     || typeof input.lineage_ref !== "string" || !HASH.test(input.lineage_hash ?? "")
-    || Object.keys(input).some((key) => !new Set(["lineage_ref", "lineage_hash"]).has(key))) {
-    throw new TypeError("Phase trace lineage supersession input requires lineage_ref and lineage_hash only");
+    || Object.keys(input).some((key) => !new Set(["lineage_ref", "lineage_hash", "risk_acceptances"]).has(key))) {
+    throw new TypeError("Phase trace lineage supersession input requires lineage_ref, lineage_hash, and optional risk_acceptances");
   }
   const legacy = readJson(task, input.lineage_ref, input.lineage_hash, "legacy Phase trace lineage", LINEAGE_REF);
   const value = legacy.value;
   const keys = new Set(["schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace",
     "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt",
-    "review_result", "review_attempt", "material_id", "created_at", "result"]);
+    "review_result", "review_attempt", "risk_acceptances", "material_id", "created_at", "result"]);
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !keys.has(key))
     || value.schema_version !== "phase-trace-lineage-generation.v1" || value.project_name !== task.identity.projectName
     || value.task_id !== task.identity.taskId || value.stage !== "build-code" || !/^[A-Za-z0-9._-]+$/.test(value.phase_id ?? "")
     || !OID.test(value.snapshot_tree ?? "") || !HASH.test(value.material_id ?? "") || value.result !== "bound"
+    || (value.risk_acceptances !== undefined && (!Array.isArray(value.risk_acceptances) || value.risk_acceptances.length !== 0))
     || !Number.isFinite(Date.parse(value.created_at ?? ""))) {
     throw phaseEvidenceError("legacy Phase trace lineage is not eligible for supersession");
   }
@@ -1112,10 +1233,10 @@ export function supersedePhaseTraceLineage({ task, workspace } = {}, input = {})
   try { verified = readPhaseMapTrace({ task, sourceRoot: workspace.worktreeRoot, traceRef: traceBinding.ref }); }
   catch (error) { throw phaseEvidenceError(error.message); }
   if (verified.traceSha256 !== traceBinding.sha256 || verified.trace.phase_id !== value.phase_id
-    || verified.trace.snapshot_tree !== value.snapshot_tree || verified.trace.material_id !== value.material_id
-    || verified.trace.verdict !== "pass" || verified.review.value.verdict !== "pass") {
-    throw phaseEvidenceError("legacy Phase trace lineage does not match a PASS canonical trace");
+    || verified.trace.snapshot_tree !== value.snapshot_tree || verified.trace.material_id !== value.material_id) {
+    throw phaseEvidenceError("legacy Phase trace lineage does not match its canonical trace");
   }
+  const riskAcceptances = reviewRiskBindings(task, verified, input.risk_acceptances ?? []);
   refOnly(value.phase_evidence, verified.trace.canonical_phase_evidence, "phase evidence");
   refOnly(value.diff_scan, verified.trace.diff_scan, "diff scan");
   refOnly(value.implementation_receipt, verified.trace.implementation_receipt, "implementation receipt");
@@ -1124,7 +1245,7 @@ export function supersedePhaseTraceLineage({ task, workspace } = {}, input = {})
   refOnly(value.review_result, verified.trace.review_result, "review result");
   refOnly(value.review_attempt, verified.trace.review_attempt, "review attempt");
   const corrected = {
-    ...lineageGenerationFromTrace(task, verified), schema_version: "phase-trace-lineage-supersession.v1",
+    ...lineageGenerationFromTrace(task, verified, riskAcceptances), schema_version: "phase-trace-lineage-supersession.v1",
     supersedes: { ref: legacy.ref, sha256: legacy.hash }, result: "superseded",
   };
   const ref = lineageSupersessionRef(value.phase_id, value.snapshot_tree, legacy.hash);
@@ -1168,7 +1289,13 @@ function phaseTraceLineage(values) {
   const result = publishPhaseTraceLineage({
     task,
     workspace: { worktreeRoot: task.manifest.target_repo_root },
-  }, { trace_ref: traceRef, trace_hash: traceHash });
+  }, {
+    trace_ref: traceRef,
+    trace_hash: traceHash,
+    ...(values["risk-acceptance-refs"] === undefined ? {} : {
+      risk_acceptances: riskAcceptanceBindingsFromValues(values),
+    }),
+  });
   return { ...result, next_entry: "stage-runtime receipt --revision=true + capture-tests + publish-phase-evidence + fresh wh-review" };
 }
 
@@ -1185,9 +1312,9 @@ function phasePointer(values, testHooks) {
   if (pointer.value.phase_id !== "phase-1" || subject.current_pointer_hash !== pointer.hash) throw recoveryError("RECOVERY_PHASE_POINTER_MISMATCH", "current pointer is not the credentialed Phase 1 pointer");
   const baseline = readJson(task, subject.baseline_phase0_evidence_ref, subject.baseline_phase0_evidence_hash, "baseline Phase 0 evidence", PHASE0_EVIDENCE_REF);
   const baselineSnapshot = snapshotFromEvidence(task, baseline);
-  const review = readJson(task, subject.baseline_phase0_review_ref, subject.baseline_phase0_review_hash, "baseline Phase 0 review", PHASE_REVIEW_RESULT_REF);
+  const review = readJson(task, subject.baseline_phase0_review_ref, subject.baseline_phase0_review_hash, "baseline Phase 0 review", /^(?:reviews\/results\/[A-Za-z0-9._-]+\.json|reviews\/attempts\/[A-Za-z0-9-]+\/attempt\.json)$/);
   assertBaselinePhaseClosure(task, baseline, baselineSnapshot, subject);
-  assertBaselineReviewClosure(task, subject, baselineSnapshot, review);
+  assertBaselineReviewClosure(task, subject, baselineSnapshot, review, riskAcceptanceBindingsFromValues(values));
   const sameSnapshot = subject.snapshot_tree === baselineSnapshot;
   assertPhaseRecoveryIntent({ sameSnapshot, recoveryIntent: subject.recovery_intent });
   const implementation = readPhaseReceipt(task, subject.implementation_receipt, "Phase 0 implementation receipt", { component: "implementation" });

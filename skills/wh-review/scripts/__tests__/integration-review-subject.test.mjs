@@ -15,25 +15,26 @@ const SUPERSESSION_REF = (hash) => `identity/phase-trace-lineage-supersessions/p
 function sha(raw) { return createHash("sha256").update(raw).digest("hex"); }
 function binding(ref, value = HASH) { return { ref, sha256: value }; }
 
-function reviewResult() {
+function reviewResult(verdict = "pass") {
   return {
     version: "wh-review-result.v1", task_id: "selector-lineage", stage: "build-code", review_track: null,
     subject_kind: "phase", phase_id: "phase-history", review_scope: "phase", base_tree: OID, candidate_tree: TREE,
     source: { target_commit: OID, base_commit: OID, base_tree: OID, captured_head: OID }, snapshot_tree: TREE,
     material_id: HASH, attempt_ref: ATTEMPT_REF,
-    provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "historical pass", findings: [] } }],
-    verdict: "pass", findings: [],
+    provider_results: [{ provider: "fixture", output: { verdict, summary: `historical ${verdict}`, findings: [] } }],
+    verdict, findings: [],
   };
 }
 
 function fixture(mode = "valid") {
-  const reviewRaw = `${JSON.stringify(reviewResult())}\n`;
+  const verdict = mode === "revise" ? "revise_required" : "pass";
+  const reviewRaw = `${JSON.stringify(reviewResult(verdict))}\n`;
   const reviewHash = sha(reviewRaw);
   const trace = {
     traceRef: TRACE_REF, traceSha256: HASH,
-    review: { value: { verdict: "pass" } },
+    review: { ref: REVIEW_REF, hash: reviewHash, value: reviewResult(verdict) },
     trace: {
-      phase_id: "phase-history", snapshot_tree: TREE, material_id: HASH, verdict: "pass",
+      phase_id: "phase-history", snapshot_tree: TREE, material_id: HASH, verdict,
       canonical_phase_evidence: binding("evidence/phases/phase-history/evidence.json"),
       diff_scan: binding("evidence/phases/phase-history/diff.json"),
       implementation_receipt: binding("receipts/revisions/implementation/history.json"),
@@ -87,7 +88,7 @@ function fixture(mode = "valid") {
 }
 
 describe("integration selector historical lineage", () => {
-  it("releases only a historical PASS that is bound to its exact canonical trace", () => {
+  it("releases a historical semantic review that is bound to its exact canonical trace", () => {
     const f = fixture();
     const bindings = verifiedHistoricalLineage({ task: f.task, sourceRoot: "fixture", readTrace: () => f.trace });
     expect(bindings).toEqual(new Map([[REVIEW_REF, f.reviewHash]]));
@@ -96,6 +97,12 @@ describe("integration selector historical lineage", () => {
       coverage: [{ review_result: binding("reviews/results/current-path.json"), base_tree: OID, snapshot_tree: TREE }],
       lineageReviews: bindings,
     })).not.toThrow();
+  });
+
+  it("keeps revise_required as the bound historical quality verdict", () => {
+    const f = fixture("revise");
+    expect(verifiedHistoricalLineage({ task: f.task, sourceRoot: "fixture", readTrace: () => f.trace }))
+      .toEqual(new Map([[REVIEW_REF, f.reviewHash]]));
   });
 
   for (const mode of ["tampered", "misbound", "nonpass"]) {
@@ -118,7 +125,7 @@ describe("integration selector historical lineage", () => {
       .toThrow(/MATERIAL_INCOMPLETE/);
   });
 
-  it("does not release an unbound historical PASS", () => {
+  it("does not release an unbound historical semantic review", () => {
     const f = fixture();
     f.task.listCanonicalPhaseTraceLineageRefs = () => [];
     const bindings = verifiedHistoricalLineage({ task: f.task, sourceRoot: "fixture", readTrace: () => f.trace });
@@ -126,6 +133,6 @@ describe("integration selector historical lineage", () => {
       task: f.task,
       coverage: [{ review_result: binding("reviews/results/current-path.json"), base_tree: OID, snapshot_tree: TREE }],
       lineageReviews: bindings,
-    })).toThrow(/formal PASS Phase review has no phase-map trace/);
+    })).toThrow(/formal Phase review has no phase-map trace/);
   });
 });

@@ -96,7 +96,25 @@ function auditableJournalEvents(task, stage, workflowRunId) {
 }
 
 /** Build and publish the only audit summary from canonical task records. */
-export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
+function validateMakeDecisionAuditContent(task, contentEvidence) {
+  const decisionRaw = task.readRecord("receipts/decision.json");
+  const decision = JSON.parse(decisionRaw);
+  const interaction = contentEvidence.find(({ value }) => value.kind === "interaction-completion.v1")?.value;
+  const coverage = contentEvidence.find(({ value }) => value.kind === "decision-coverage-audit.v1")?.value;
+  if (interaction?.payload?.interaction_type !== "aggregate") {
+    throw new Error("make-decision canonical audit requires the current interaction aggregate");
+  }
+  if (interaction.payload.decision_ref !== decision.decision_ref
+      || interaction.payload.decision_hash !== decision.decision_hash) {
+    throw new Error("make-decision interaction aggregate differs from the current canonical decision receipt");
+  }
+  if (coverage?.payload?.decision_log_ref !== decision.decision_ref
+      || coverage?.payload?.decision_log_hash !== decision.decision_hash) {
+    throw new Error("make-decision decision coverage audit differs from the current canonical decision receipt");
+  }
+}
+
+export function writeCanonicalAuditSummary({ task, workspace, stage, throughStepId } = {}) {
   const safeTask = assertTaskHandle(task);
   let safeWorkspace;
   if (stage === "make-decision") safeWorkspace = assertCandidateWorkspace(workspace);
@@ -116,6 +134,11 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
     if (latest.value.snapshot_tree !== snapshot.tree) throw new Error("latest stage content evidence snapshot mismatch");
     return { ref: latest.ref, hash: latest.hash, value: latest.value };
   });
+  // A bounded make-decision audit is the official runtime path. Keep the
+  // unbounded writer readable for historical records and generic fixtures.
+  if (stage === "make-decision" && throughStepId !== undefined) {
+    validateMakeDecisionAuditContent(safeTask, contentEvidence);
+  }
   const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
   const ledger = JSON.parse(ledgerRaw);
   const manifest = loadStageManifest(stage, fileURLToPath(new URL("../", import.meta.url)));
@@ -130,6 +153,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
       ledger,
       required_content_kinds: kinds,
       content_evidence: contentEvidence,
+      ...(throughStepId === undefined ? {} : { through_step_id: throughStepId }),
     },
   ).audit_summary;
   if (summary.verdict !== "pass") throw new Error(`${stage} canonical audit did not pass`);
@@ -141,6 +165,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage } = {}) {
   });
   return Object.freeze({
     ...carryAuditSummary(ref, summary),
+    audit_record_hash: sha256(raw),
     content_evidence_refs: summary.content_evidence_refs,
   });
 }

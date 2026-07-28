@@ -1163,9 +1163,11 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
   try { result = JSON.parse(taskHandle.readRecord(resultRef)); }
   catch { throw new Error("RESULT_REF_INVALID: result does not exist or is invalid"); }
   validateSchema("result", result);
-  if (result.verdict !== "pass") throw new Error("REVIEW_NOT_APPROVED: semantic result is not pass");
   if (result.subject_kind === "phase") { const error = new Error("PHASE_RESULT_NOT_FINAL: phase review results are consumed by phase-gate, not verify-final"); error.code = "PHASE_RESULT_NOT_FINAL"; throw error; }
   if (result.stage === "build-code" && result.review_scope !== "integration") { const error = new Error("INTEGRATION_RESULT_REQUIRED: build-code final review must be integration scope"); error.code = "INTEGRATION_RESULT_REQUIRED"; throw error; }
+  // A provider verdict is an authenticated quality fact, not a WorkflowHub
+  // stage-acceptance decision. Finalization authenticates the frozen subject;
+  // the owning stage contract decides how findings are disclosed or handled.
   if (taskId !== null && result.task_id !== taskId) throw new Error("RESULT_REF_INVALID: task does not match result");
   if (stage !== null && result.stage !== stage) throw new Error("RESULT_REF_INVALID: stage does not match result");
   if (reviewTrack !== undefined && result.review_track !== reviewTrack) throw new Error("RESULT_REF_INVALID: review track does not match result");

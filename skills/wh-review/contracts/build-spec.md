@@ -20,7 +20,9 @@ role、reason）；`not_applicable` 或 `unknown` entry 必须有受限 `reason_
 不能用自由文本 `not_needed_reason` 绕过 anchor。runner 仅交付 complete anchor 的片段，
 不按目录或文件全文扩张材料。
 
-缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
+缺少任一必需材料时，本次 attempt 返回 `unavailable`，并以已认证 attempt action
+留在当前 review flow；它没有语义 verdict，也不能写成“审查通过”。补齐后可在同一
+flow 重跑。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
 
 首轮 `revise_required` 是质量事实，不是 stage pass gate。主 agent 应直接修复；普通
 修复不做二审。可选 response ledger 仅写外置审计记录，缺失或不能验证时明确为

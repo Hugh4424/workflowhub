@@ -300,7 +300,12 @@ export function createStageContentEvidenceWriter(options = {}) {
   const workflowRunId = validateRunId(options.workflowRunId);
   const now = options.now ?? (() => new Date().toISOString());
   if (typeof now !== "function") throw new TypeError("stage content writer now must be a function");
-  const kernel = createTaskKernel(task);
+  let kernel;
+  try {
+    kernel = createTaskKernel(task, { candidateWorkspace: assertCandidateWorkspace(workspace) });
+  } catch {
+    kernel = createTaskKernel(task, { workspace: assertWorkspace(workspace) });
+  }
   const refRoot = `evidence/stage-content/${sha256(`${task.identity.taskId}\0${stage}\0${workflowRunId}`)}`;
 
   function interactionRef(payload) {
@@ -461,9 +466,40 @@ export function createStageContentEvidenceWriter(options = {}) {
       if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {
         throw new Error("interaction completion workspace tree does not match the current Workspace");
       }
+      const baseRef = ref(input.kind, payload);
+      if (stage === "make-decision" && input.kind === "interaction-completion.v1") {
+        kernel.prepareMakeDecisionInteractionPublication({
+          interaction_type: payload.interaction_type,
+          ...(payload.interaction_type === "talk" ? { round_number: payload.rounds[0].round_number } : {}),
+        });
+        if (input.revision === undefined) {
+          const priorRaw = readOptional(task, baseRef);
+          if (priorRaw !== undefined) {
+            let prior;
+            try { prior = JSON.parse(priorRaw); } catch {
+              throw new Error(`existing interaction evidence is invalid: ${baseRef}`);
+            }
+            validateValue(prior);
+            if (prior.task_id !== task.identity.taskId || prior.stage !== stage
+                || prior.workflow_run_id !== workflowRunId
+                || prior.snapshot_head !== snapshot.head || prior.snapshot_tree !== snapshot.tree
+                || prior.content_hash !== sha256(JSON.stringify(payload))
+                || JSON.stringify(prior.payload) !== JSON.stringify(payload)) {
+              throw new Error(`create-only stage content evidence already exists with conflicting content: ${baseRef}`);
+            }
+            const priorHash = sha256(priorRaw);
+            if (payload.interaction_type !== "aggregate") {
+              kernel.completeMakeDecisionInteractionPublication({
+                evidence_ref: baseRef,
+                evidence_hash: priorHash,
+              });
+            }
+            return Object.freeze({ ref: baseRef, hash: priorHash, value: Object.freeze(prior) });
+          }
+        }
+      }
       const createdAt = now();
       if (!Number.isFinite(Date.parse(createdAt))) throw new TypeError("stage content created_at must be an ISO timestamp");
-      const baseRef = ref(input.kind, payload);
       let previous;
       let evidenceRef = baseRef;
       if (input.revision !== undefined) {
@@ -510,6 +546,13 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new Error(`create-only stage content evidence already exists with conflicting content: ${evidenceRef}`);
       }
       kernel.publishCanonicalRecord(evidenceRef, raw);
+      if (stage === "make-decision" && input.kind === "interaction-completion.v1"
+          && payload.interaction_type !== "aggregate") {
+        kernel.completeMakeDecisionInteractionPublication({
+          evidence_ref: evidenceRef,
+          evidence_hash: sha256(raw),
+        });
+      }
       if (revisionable(input.kind, payload)) {
         const recordHash = sha256(raw);
         const pointerValue = {

@@ -170,9 +170,10 @@ human boundary; it does not auto-escalate or block. Callers cannot select a
 round. V2 host configuration fixes make-decision to `single_round`,
 build-spec/build-plan/verify-code to `full_on_structural_rework`, and
 build-code to `full_only`; therefore a V2 non-code stage cannot select a cheap
-closure review. Build-code never uses this shortcut: every repaired phase runs
-a fresh complete phase review, with its existing strict full-review behavior
-unchanged.
+closure review. Build-code never uses this shortcut: each repaired snapshot is
+a new Phase identity and receives one fresh complete phase review. Its original
+quality verdict is preserved; it does not loop on one frozen identity until
+`pass`.
 
 The runner supplies `review_instructions`; callers must not add it. A
 `build-code` phase review also adds `phase_id`. `verify-final` replaces
@@ -189,8 +190,9 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 derives `review_scope=phase`, resolves the current `phase-diff-scan.v1`, and
 regenerates the complete frozen `base_tree..candidate_tree` diff. Without
 `phase_id`, it derives `review_scope=integration` for the final worktree
-review. Integration first reconstructs one unique continuous, formal PASS
-Phase-trace chain from the accepted build-plan checkpoint to the final tree;
+review. Integration first reconstructs one unique continuous, formally
+reviewed Phase-trace chain from the accepted build-plan checkpoint to the final
+tree;
 it validates the current test identity and AC trace before it can call a
 provider. A missing, branched, stale, or legacy-only trace is
 `MATERIAL_INCOMPLETE`, not a reason to send a cumulative diff. A legacy final
@@ -253,7 +255,12 @@ CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage resu
 {"result_ref":"reviews/results/<result>.json","snapshot_tree":"<git-tree>"}
 ```
 
-Consumers open the referenced formal result and do not trust a copied verdict. `make-decision` stores separate `direction` and `detail` refs; any `revise_required` wins, both must pass, otherwise the stage is unavailable.
+Consumers open the referenced formal result and do not trust a copied verdict.
+`make-decision` stores separate `direction` and `detail` actions. Semantic
+`pass` or `revise_required`, and authenticated `unavailable`, remain provider
+quality facts; none is rewritten as a stage pass/fail result. Only an
+authenticated actionable `major|blocking` finding opens the separate
+repair-or-risk pause.
 
 ## Provider protocol
 
@@ -265,9 +272,10 @@ public diagnostics. Session reuse is an optional optimization, not proof of
 correctness. A retry always sends the complete current bundle. A format
 correction or fresh session is transport recovery, not a cap on later formal
 review attempts; every failed attempt remains immutable evidence. Build-code
-has no cycle, time, token, output-size, or repeated-finding stop rule: every
-repaired Phase is reviewed again from its complete current frozen material until
-its formal review is `pass`.
+has no cycle, time, token, output-size, or repeated-finding stop rule. Every
+repaired snapshot is a new Phase identity and receives one review from its
+complete frozen material; a single frozen identity is never reviewed repeatedly
+until its provider verdict becomes `pass`.
 
 ### Finding aggregation
 
@@ -300,6 +308,8 @@ or an integration-scope mismatch cannot authorize commit or merge. A worktree
 mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run the final integration
 review again. Phase results are consumed only by phase-gate, which compares
 their `phase_id`, `base_tree`, and `candidate_tree` with the current Phase
-evidence.
+evidence. For build-code integration, `pass` and `revise_required` are both
+authenticated quality facts; finalization preserves the original verdict and
+does not claim that the stage passed.
 
 Human risk acceptance belongs to the stage execution record. It never edits the review result, and it cannot turn `unavailable` into `pass`.

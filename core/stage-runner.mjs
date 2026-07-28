@@ -337,7 +337,7 @@ export function confirmStageAttempt(stage, context, { attemptRef, decision } = {
 /** Acceptance stays separate from execution; only decision gates require a human ref. */
 export function acceptStageAttempt(stage, context, request = {}) {
   if (Object.prototype.hasOwnProperty.call(request, "checkpoint")) throw new TypeError("caller checkpoint override is forbidden");
-  const { attemptRef, humanConfirmationRef } = request;
+  const { attemptRef, humanConfirmationRef, fullAuditWriter } = request;
   const ctx = assertContext(context, stage);
   if (requiresHumanConfirmation(stage) && (typeof humanConfirmationRef !== "string" || humanConfirmationRef.trim() === "")) {
     throw new TypeError("explicit humanConfirmationRef is required");
@@ -345,5 +345,10 @@ export function acceptStageAttempt(stage, context, request = {}) {
   if (!requiresHumanConfirmation(stage) && humanConfirmationRef !== undefined) {
     throw new TypeError(`${stage} uses automatic acceptance; omit humanConfirmationRef`);
   }
-  return ctx.kernel.acceptAttempt(stage, attemptRef, humanConfirmationRef);
+  if (fullAuditWriter !== undefined && (stage !== "make-decision" || typeof fullAuditWriter !== "function")) {
+    throw new TypeError("fullAuditWriter is an internal make-decision runtime capability");
+  }
+  return ctx.kernel.acceptAttempt(stage, attemptRef, humanConfirmationRef, {
+    ...(fullAuditWriter === undefined ? {} : { full_audit_writer: fullAuditWriter }),
+  });
 }

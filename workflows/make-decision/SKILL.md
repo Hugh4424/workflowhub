@@ -52,12 +52,39 @@ Use this complete public sequence without inventing flags or input shapes:
    `node scripts/stage-runtime.mjs prepare --stage=make-decision
    --project=<project> --task=<task>`. This is the only stage that uses
    `prepare`; it creates or reopens the deterministic CandidateWorkspace.
-2. Put the decision receipt payload under `$TMP_DIR`. Its exact shape is
+2. Start the canonical Stage run:
+   `node scripts/stage-runtime.mjs start-run --stage=make-decision
+   --project=<project> --task=<task> --reason=<reason>`. This creates the run
+   identity and completes Step 1.
+3. Publish the canonical requirements ledger with
+   `publish-requirements-ledger`; the successful publication completes Step 2.
+4. Run talk Round 1 and publish its `interaction-completion.v1` record with
+   `publish-content-evidence`; the successful publication completes Step 3.
+5. Record the performed research or explicit skip with `record-research`. Its
+   input contains only `status` (`performed|skipped`), a non-empty `reason`, and
+   an existing canonical `evidence` object with `kind`, `uri_or_path`, and
+   `content_hash`; the successful record completes Step 4 without a new research
+   schema.
+6. Run talk Round 2 and publish its `interaction-completion.v1`; this completes
+   Step 5.
+7. Run the `wh-review` direction track. Its authenticated semantic result or
+   unavailable attempt becomes the current review-flow action and completes
+   Step 6. A later resolution records disposition without repeating the Step.
+8. Run talk Round 3 and publish its `interaction-completion.v1`; this completes
+   Step 7.
+9. Run the full `grill-with-docs` flow and publish its
+   `interaction-completion.v1`; this completes Step 8.
+10. Put the decision receipt payload under `$TMP_DIR`. Its exact shape is
    `{"decision_log":"<readable decision log>"}`. Publish it with
    `node scripts/stage-runtime.mjs receipt --stage=make-decision
    --project=<project> --task=<task> --component=decision
-   --input=$TMP_DIR/decision-receipt.json`.
-3. Put the run input under `$TMP_DIR` with exactly:
+   --input=$TMP_DIR/decision-receipt.json`; this completes Step 9.
+11. Run the `wh-review` detail track. Its authenticated semantic result or
+    unavailable attempt becomes the current review-flow action and completes
+    Step 10. A later resolution does not repeat the Step.
+12. Publish the interaction aggregate and `decision-coverage-audit.v1`. They are
+    required pre-confirmation content facts, not extra manifest Steps.
+13. Put the run input under `$TMP_DIR` with exactly:
    `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
    When the latest authenticated action for a track is a verified resolution,
    add only that track's dedicated field:
@@ -66,20 +93,31 @@ Use this complete public sequence without inventing flags or input shapes:
    resolution ref that is the latest action in that same track's review flow.
    Never use the untracked `review_resolution` field for make-decision and
    never use one track's resolution for the other track.
-4. Publish the attempt with
+14. Publish the attempt with
    `node scripts/stage-runtime.mjs run --stage=make-decision
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
-5. After the last caller-owned input is consumed, let the host reclaim
-   `$TMP_DIR` through its normal OS temporary lifecycle. Never treat the
-   temporary path as a stage artifact, evidence ref, or handoff item.
-6. Record the human decision using the returned attempt ref:
+   `run` derives and binds the canonical pre-confirmation audit through Steps
+   1–10. It rejects a stale decision receipt, stale review-flow head, missing
+   interaction aggregate, or missing/misbound decision coverage audit.
+15. Present the only final decision card and wait for the real human response.
+    After the last caller-owned input is consumed, let the host reclaim
+    `$TMP_DIR` through its normal OS temporary lifecycle. Never treat the
+    temporary path as a stage artifact, evidence ref, or handoff item.
+16. Record the single final human decision using the returned attempt ref:
    `node scripts/stage-runtime.mjs confirm --stage=make-decision
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --decision=accepted|rejected`.
-7. Only for an accepted decision, pass the returned confirmation ref:
+   An accepted confirmation records Step 11. A rejected confirmation never
+   authorizes acceptance.
+17. Only for an accepted decision, pass the returned confirmation ref:
    `node scripts/stage-runtime.mjs accept --stage=make-decision
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --human-confirmation-ref=<confirmation-ref>`.
+   `accept` revalidates the CandidateWorkspace, records Step 12, publishes the
+   full Steps 1–12 canonical audit, and creates `accepted.json` last.
+
+make-decision journal entry/exit records are runtime-owned. Public
+`record-step-entry` and `record-step-exit` calls are forbidden.
 
 Missing review refs stop the official run. Missing decision-log content stops
 receipt creation. Invoking-host instructions own the

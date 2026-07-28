@@ -119,11 +119,76 @@ describe("wh-review production CLI", () => {
     })).toThrow(/CAS|stale|head/i);
   });
 
+  it("reconciles an already-recorded make-decision review action into its runtime step without another provider call", async () => {
+    const { reconcileMakeDecisionReviewProgress } = await import(cli.href);
+    const identity = {
+      task_id: "task", workflow_run_id: "run-1", stage: "make-decision",
+      review_track: "direction", subject_kind: "worktree", phase_id: null, review_scope: null,
+    };
+    const calls = [];
+    const kernel = {
+      advanceReviewFlow: (receivedIdentity, update) => {
+        calls.push(["semantic", receivedIdentity, update]);
+        return { event_ref: update.expected_event_ref };
+      },
+      recordReviewAttempt: (receivedIdentity, update) => {
+        calls.push(["attempt", receivedIdentity, update]);
+        return { event_ref: update.expected_event_ref };
+      },
+    };
+    const semantic = {
+      event_kind: "semantic_result", event_ref: "reviews/flows/f/event-0001.json",
+      head_result_ref: "reviews/results/result.json",
+    };
+    reconcileMakeDecisionReviewProgress({ kernel, identity, flow: semantic });
+    reconcileMakeDecisionReviewProgress({
+      kernel,
+      identity,
+      flow: {
+        event_kind: "resolution", event_ref: "reviews/flows/f/event-0002.json",
+        head_result_ref: "reviews/results/result.json",
+      },
+    });
+    reconcileMakeDecisionReviewProgress({
+      kernel,
+      identity,
+      flow: {
+        event_kind: "provider_attempt", event_ref: "reviews/flows/f/event-0003.json",
+        head_result_ref: null, action_ref: "reviews/attempts/a/attempt.json",
+      },
+    });
+    reconcileMakeDecisionReviewProgress({
+      kernel,
+      identity: { ...identity, stage: "build-spec" },
+      flow: semantic,
+    });
+    expect(calls).toEqual([
+      ["semantic", identity, {
+        expected_head_ref: semantic.head_result_ref,
+        expected_event_ref: semantic.event_ref,
+        result_ref: semantic.head_result_ref,
+      }],
+      ["semantic", identity, {
+        expected_head_ref: "reviews/results/result.json",
+        expected_event_ref: "reviews/flows/f/event-0002.json",
+        result_ref: "reviews/results/result.json",
+      }],
+      ["attempt", identity, {
+        expected_head_ref: null,
+        expected_event_ref: "reviews/flows/f/event-0003.json",
+        attempt_ref: "reviews/attempts/a/attempt.json",
+      }],
+    ]);
+  });
+
   it("uses the simple runner and no V4 facade or legacy argv", () => {
     const source = readFileSync(cli, "utf8");
     expect(source).toContain('new Set(["run", "format-correct", "verify-final", "adopt-legacy-root", "doctor"])');
     expect(source).toContain("ReviewProviderClient");
     expect(source).toContain("runReview");
+    const dispatchBody = source.slice(source.indexOf("export async function runReviewRound"));
+    expect(dispatchBody.indexOf("assertReviewFlowReady(flowIdentity)"))
+      .toBeLessThan(dispatchBody.indexOf("const result = await runReview"));
     for (const forbidden of ["ReviewRoundFacade", "BrokerClient", "resetReviewFlow", "recoverReviewProjections", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
   });
 
@@ -308,7 +373,7 @@ describe("wh-review production CLI", () => {
     })).toEqual({ round: "full", reason: "structural_rework" });
   });
 
-  it("treats a prior Phase PASS as lineage for a new snapshot, not as the new flow head", async () => {
+  it("treats a prior Phase quality fact as lineage for a new snapshot, not as the new flow head", async () => {
     const { selectCanonicalReviewRound } = await import(cli.href);
     const prior = {
       subject_kind: "phase", phase_id: "phase-6", snapshot_tree: "a".repeat(40),
@@ -322,6 +387,6 @@ describe("wh-review production CLI", () => {
     expect(selectCanonicalReviewRound({
       task: {}, stage: "build-code", route, previousResult: prior,
       currentSnapshotTree: prior.snapshot_tree, flow: { head_result_ref: prior.result_ref },
-    })).toEqual({ round: "none", reason: "prior_result_passed" });
+    })).toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
   });
 });

@@ -12,7 +12,11 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与这些材料一致的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-缺少必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。
+缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 的已认证
+provider-attempt action 留在 review flow 中；它没有语义 verdict，也不能写成“审查通过”。
+补齐后可在同一 track 重新调用。direction/detail flow 必须绑定当前
+make-decision run；direction 只有在 Round 2 完成后才能记录，detail 只有在
+Round 3、完整 grill 和 decision draft 完成后才能记录，不能互相替代或跳过中间步骤。
 
 ## direction
 
@@ -65,3 +69,11 @@ map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；�
 ## 输出
 
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+
+`pass` 和 `revise_required` 都只是异源 provider 的质量事实，不是 WorkflowHub
+stage 的通过/不通过。make-decision 使用 `single_round`：初次语义结果后不再调用
+provider 追求 `pass`；对 finding 的处理，以及 direction 审查后 grill/decision 产生的
+最终快照 delta，都写入同一 track 的零-provider `wh-review-resolution.v1` action。
+该 action 对原 verdict 是 `pass` 或 `revise_required` 都适用，可绑定完整 response
+ledger，也可明确写成 `unverified`，但永远不改写原 verdict、不移动语义 head，也不声称
+二审通过。

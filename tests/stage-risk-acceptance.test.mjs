@@ -345,7 +345,7 @@ describe("official serious-risk wiring", () => {
       expect(skill, stage).toMatch(/does not change|never changes|preserves|keeps the original verdict/i);
     }
     expect(read("workflows/build-spec/SKILL.md")).toMatch(/no serious finding build-spec remains automatic/i);
-    expect(read("workflows/build-code/SKILL.md")).toMatch(/Phase reviews still repair[\s\S]*until PASS/);
+    expect(read("workflows/build-code/SKILL.md")).toMatch(/Neither a Phase review nor the final integration review is a `pass` gate/);
     expect(read("workflows/verify-code/SKILL.md")).toMatch(/quality review is a distinct official input/);
   });
 });
