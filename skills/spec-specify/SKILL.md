@@ -15,6 +15,14 @@ covering user outcomes, urgency, scope, scenarios, edge states, requirements,
 assumptions, risks, acceptance, business impact, regression paths, and explicit
 exclusions. Keep the quick-read section short; put narrative before trace fields.
 
+## Artifact responsibility
+
+`spec.md` is the single source of product and behavior truth: problem, scope,
+scenarios, PFACT, FR, AC, product-boundary contracts, impact, risks, and open
+questions. It names what users must observe, not how code will be changed.
+`plan.md` owns verified engineering facts and design decisions; `tasks.md` owns
+compact execution cards. Do not copy either artifact's authority into `spec.md`.
+
 Give every scenario, PFACT, FR, AC, risk, and open question a stable ID. New
 requirements use `FR-{DOMAIN}-{NNN}`; accept `FR-{NNN}` only when reading legacy
 material. Every FR links to at least one PFACT, scenario, and AC. Every AC names
@@ -40,8 +48,8 @@ must not retain evidence, inference, unknown, or not-applicable fields belonging
 to another status. Every unknown PFACT is bound to a RISK or OPEN card.
 
 Keep product facts in `spec.md` only. Do not add code paths, symbols, code
-anchors, engineering alternatives, implementation state machines, or plan/task
-decisions. Keep explicit exclusions in one authoritative section and inherit
+anchors, engineering alternatives, implementation state machines, exact gate
+commands, or plan/task decisions. Keep explicit exclusions in one authoritative section and inherit
 each accepted upstream exclusion exactly once. Express default product
 constraints as FR/AC-linked obligations; leave engineering gates and exact test
 commands to plan/tasks.

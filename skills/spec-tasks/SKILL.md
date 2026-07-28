@@ -14,6 +14,14 @@ parameters, or add host-specific tracker conventions. Use the accepted plan's
 exact files, anchors, interfaces, Phase order, test commands, and STOP
 conditions. Never rediscover or redefine product requirements.
 
+## Artifact responsibility
+
+`tasks.md` is a compact executable projection, not a second plan: each card
+states its input, output, exact files, boundary, dependency, execution gate,
+and failure handling. It references product and engineering decisions instead
+of restating their rationale. `spec.md` remains behavior truth and `plan.md`
+remains the engineering evidence dossier.
+
 ## Reading contract
 
 Use `templates/tasks-template.md`. A human should scan each task as four short

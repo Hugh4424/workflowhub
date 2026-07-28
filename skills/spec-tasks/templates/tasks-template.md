@@ -1,138 +1,91 @@
-# Tasks：{task-name}
+# Tasks：任务名称
 
-- **Input**：受控命名产物 `spec.md`、`plan.md`
-- **Status**：Draft
-- **Template version**：`plan-task.v3`
-
-<!-- 生成时替换花括号并删除全部说明注释、空标题和空表。 -->
+- **Input**：受控命名产物 `spec.md` 和 `plan.md`。
+- **Status**：Draft、Accepted 或 Superseded。
+- **Template version**：`plan-task.v3`。
 
 ## 1. 执行摘要
 
-- **Goal**：{全部任务完成后可观察的结果}
-- **Main boundary**：{最重要的允许改动和禁止改动}
-- **Main risk**：{最可能导致 STOP 的风险}
-- **First executable task**：{T-ID}
+- **Goal**：写全部任务完成后可观察的结果。
+- **Main boundary**：写最重要的允许改动和禁止改动。
+- **Main risk**：写最可能导致 STOP 的风险。
+- **First executable task**：写首个可执行 T-ID。
 
 ## 2. Global Constraints
 
-- {绑定 accepted plan 的范围、依赖、命名、兼容性和测试红线，不复制长篇正文}
+- 绑定 accepted plan 的范围、依赖、命名、兼容性和测试红线；不复制其长篇理由。
 - 行为改动必须先有真实 RED，再做 GREEN。
 - `display_cmd` 不能充当判定结果。
 - 文件只使用精确路径，不使用通配符。
 
-## Phase 1：{phase-name}
+## Phase 1：阶段名称
 
 ### Goal
 
-{从 accepted plan 原样复制}
+从 accepted plan 原样复制本 Phase 的可观察目标。
 
 ### Files
 
-- **NEW**：`{exact path}`
-- **MODIFY**：`{exact path}`
-- **DO NOT TOUCH**：`{exact protected path}`
+- **NEW**：从 accepted plan 原样复制精确路径。
+- **MODIFY**：从 accepted plan 原样复制精确路径。
+- **DO NOT TOUCH**：从 accepted plan 原样复制精确路径。
 
-<!-- Phase 名称和以上 Files block 必须与 accepted plan 逐字一致。 -->
+Phase 名称和上述 Files 区块必须与 accepted plan 逐字一致。
 
 ### Tasks
 
-#### T001 — {short RED title}
+#### T001 — 任务短标题
 
 ##### T001 身份
 
-- **ID**：T001
-- **Phase**：Phase 1：{phase-name}
-- **goal**：{一个可观察任务目标}
-- **design_state**：ready
+- **ID**：T001。
+- **Phase**：写所属 Phase 名称。
+- **goal**：写一个可观察任务目标。
+- **design_state**：写 `ready` 或 `blocked-by-design`。
 
 ##### T001 追溯
 
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"{ref}","hash":"{sha256}","id":"{FR/PFACT/AC ID}"},{"artifact_kind":"plan","ref":"{ref}","hash":"{sha256}","id":"{plan section ID}"}]`
-- **输入**：{accepted artifact section, anchor, prior task output}
-- **依赖**：N/A — first task
-- **并行**：否 — {输入或文件依赖理由}
-- **FR**：{valid FR IDs}
-- **AC**：{valid AC IDs}
+- **versioned_refs**：逐条列出 `artifact_kind`、`ref`、SHA-256 `hash` 和稳定 `id`。
+- **输入**：写 accepted artifact section、anchor 或 prior task output。
+- **依赖**：写前置 Task ID；首个任务写 `N/A — first task`。
+- **并行**：写是或否，并说明输入和文件所有权理由。
+- **FR**：列有效 FR ID。
+- **AC**：列有效 AC ID。
 
 ##### T001 执行
 
-- **动作**：{只写一个行为变化；本任务创建真实 RED}
-- **精确文件**：`{exact path}`
-- **boundary**：files: `{exact path}`; symbols/regions: {仅允许修改的符号或区域}
-- **输出**：{RED fixture 或证据}
-- **Knowledge**：{最小已核实上下文；无则 `N/A — 具体理由`}
+- **动作**：只写一个行为变化，或明确的非行为产物变化。
+- **精确文件**：列精确路径。
+- **boundary**：列 files 和允许修改的 symbols 或 regions。
+- **输出**：写可交付的产物或行为结果。
+- **Knowledge**：写最小已核实上下文；没有时写 `N/A — 具体理由`。
 
 ##### T001 验证与失败
 
-- **verification_role**：RED
-- **paired_task**：T002
-- **gate_cmd**：`{verified executable behavioral command}`
-- **expected_exit**：{non-zero integer}
-- **oracle**：{ORACLE-ID — 哪条断言失败、应出现什么输出特征}
-- **evidence_path**：`apply/evidence/{stable-name}.stdout`、`apply/evidence/{stable-name}.stderr`
-- **STOP**：{命令不可执行、失败原因不符合 oracle 或需要越界时停止}
-- **recovery**：{恢复负责人和最小恢复动作}
-- **task risk**：{具体风险}
+- **verification_role**：行为变化写 RED 或 GREEN；非行为变化写 `N/A — non-behavior change: 具体理由`。
+- **paired_task**：写配对 Task ID；非行为变化写 `N/A — 具体理由`。
+- **gate_cmd**：写已核实可执行命令。
+- **expected_exit**：RED 写明确非零整数，GREEN 和非行为变化写 0。
+- **oracle**：写稳定 ORACLE-ID、可观察结果和必要的负例。
+- **evidence_path**：写 task-relative stdout、stderr 或结果路径。
+- **STOP**：写命令不可执行、oracle 不符、越界或需要新设计时的停止条件。
+- **recovery**：写恢复负责人和最小恢复动作。
+- **task risk**：写具体风险。
 
-#### T002 — {short GREEN title}
-
-##### T002 身份
-
-- **ID**：T002
-- **Phase**：Phase 1：{phase-name}
-- **goal**：{让 T001 的同一行为 oracle 转绿}
-- **design_state**：ready
-
-##### T002 追溯
-
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"{ref}","hash":"{sha256}","id":"{FR/PFACT/AC ID}"},{"artifact_kind":"plan","ref":"{ref}","hash":"{sha256}","id":"{plan section ID}"}]`
-- **输入**：T001 RED fixture 和 {accepted anchors}
-- **依赖**：T001
-- **并行**：否 — 消费 T001 输出
-- **FR**：{与 T001 相同的 FR IDs}
-- **AC**：{与 T001 相同的 AC IDs}
-
-##### T002 执行
-
-- **动作**：{一个实现行为}
-- **精确文件**：`{exact path}`
-- **boundary**：files: `{exact path}`; symbols/regions: {仅允许修改的符号或区域}
-- **输出**：{GREEN behavior}
-- **Knowledge**：{最小已核实上下文}
-
-##### T002 验证与失败
-
-- **verification_role**：GREEN
-- **paired_task**：T001
-- **gate_cmd**：`{与 T001 逐字相同的命令}`
-- **expected_exit**：0
-- **oracle**：{与 T001 相同 ORACLE-ID — 正例通过，指定反例仍失败}
-- **evidence_path**：`apply/evidence/{stable-name}.stdout`、`apply/evidence/{stable-name}.stderr`
-- **STOP**：{需要弱化 RED、越界或引入未声明设计时停止}
-- **recovery**：{恢复负责人和最小恢复动作}
-- **task risk**：{具体风险}
-
-<!-- 每个任务只保留这一份四组任务卡；一个任务最多一个行为变化。 -->
-<!--
-纯文档等非行为任务可写：
-verification_role: N/A — non-behavior change: 具体理由
-paired_task: N/A — 无 RED/GREEN 配对的具体理由
-expected_exit: 0
-仍须提供真实 gate_cmd、oracle 和 evidence_path。
--->
+一个任务只保留这四组卡片字段，只改变一个行为。行为任务的 RED 与 GREEN 使用相同 `gate_cmd` 和 oracle identity；RED 必须证明目标断言失败，不是环境或命令损坏。
 
 ### Verify
 
-- **Target**：{FR / AC / invariant}
-- **gate_cmd**：`{verified executable command}`
-- **expected_exit**：{0 or non-zero}
-- **evidence_path**：`apply/evidence/{stable-name}`
-- **display_cmd**：`{可选，仅供人读}`
-- **Oracle**：{observable result}
+- **Target**：写 FR、AC 或 invariant。
+- **gate_cmd**：写已核实可执行命令。
+- **expected_exit**：写 0 或预期非零。
+- **evidence_path**：写 task-relative evidence 路径。
+- **display_cmd**：可选，仅供人读。
+- **Oracle**：写可观察结果。
 
 ### Knowledge
 
-{本 Phase 使用的已核实接口、来源或仓库事实；无则 `N/A — 具体理由`}
+列本 Phase 使用的已核实接口、来源或仓库事实；没有时写 `N/A — 具体理由`。
 
 ### STOP
 
@@ -143,40 +96,35 @@ expected_exit: 0
 
 ### Done
 
-- {准确行为和产物}
-- {RED/GREEN 证据和剩余边界}
+- 列准确行为和产物。
+- 列 RED/GREEN 证据和剩余边界。
 
 ### Risks and rollback
 
-- **Risk**：{风险}
-- **Prevention**：{预防}
-- **Rollback / recovery**：{最小可恢复动作}
+- **Risk**：写风险。
+- **Prevention**：写预防。
+- **Rollback / recovery**：写最小可恢复动作。
 
-<!-- 每个 accepted plan Phase 完整重复以上八段。 -->
+每个 accepted plan Phase 完整重复以上八段。
 
 ## 3. Dependency Graph
 
-```text
-T001 → T002
-T001 → T003
-T002 + T003 → T004
-```
-
+- 用实际 Task ID 画出依赖图。
 - 每个依赖在消费者之前存在。
-- `[P]` 任务的输入和文件所有权必须独立。
+- 标为 `[P]` 的任务必须证明输入和文件所有权独立。
 - 图必须无环。
 
 ## 4. Requirement and Verification Traceability
 
 | FR | Task IDs | AC IDs | Phase | Gate / evidence |
-|---|---|---|---|---|
-| {FR-ID} | {T-IDs} | {AC-IDs} | {Phase} | {gate and evidence refs} |
+| --- | --- | --- | --- | --- |
+| 写有效 FR ID | 写 Task ID | 写有效 AC ID | 写 Phase 名称 | 写 gate 和 evidence ref |
 
-检查：每个 accepted FR、AC 和 Task 双向闭合；没有孤儿或重复 ID。
+检查每个 accepted FR、AC 和 Task 双向闭合；没有孤儿或重复 ID。
 
 ## 5. Final Boundary Check
 
-- [ ] 每个 Phase 有 Goal/Files/Tasks/Verify/Knowledge/STOP/Done/Risks and rollback。
+- [ ] 每个 Phase 有 Goal、Files、Tasks、Verify、Knowledge、STOP、Done、Risks and rollback。
 - [ ] 每个 Task 只有一张四组权威任务卡，且字段完整。
 - [ ] 每个行为变化有使用相同命令和 oracle identity 的 RED → GREEN。
 - [ ] 每个 gate 是可执行的最小命令，退出码和证据明确。
@@ -189,5 +137,4 @@ T002 + T003 → T004
 
 ## Appendix A. Legacy import
 
-旧 `## Stage N` 和 `(stage:N, depends:T001,T002)` 仅允许只读导入。导入器必须
-一次性正规化为当前 Phase、唯一任务卡和 DAG 后再验证；新产物不得保留两套依赖真相。
+旧 `## Stage N` 和 `(stage:N, depends:T001,T002)` 只允许只读导入。导入器必须一次性正规化为当前 Phase、唯一任务卡和 DAG 后再验证；新产物不得保留两套依赖真相。

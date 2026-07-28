@@ -108,7 +108,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 05be4a6278d69ac57d0b87f84c194483691e93557d93b480abfdc2e8c3595b81
+    local_bundle_hash: 905086540c1436d2d98bc2831c1ef37dceebb87030dd863855051cbdbe8f20e3
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
@@ -134,7 +134,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: f61333401a5d94442e13c38b4cff9bb1d2879ed152a39c0c20a7bf9b57c627d7
+    local_bundle_hash: 8cd21c09b0521d7c31d8bb3a0a5b71a6b97930e5f060f269e3cb62c094054ad8
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -149,7 +149,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 49d27980b96c93a349d9e4525ed63b79e4e85a9601907a0a1845f6f44da9fd25
+    local_bundle_hash: 812ac655eef472d8b0cf3fec1ad45d659c9d3c8e3fa532e48d6134c34d89a643
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务

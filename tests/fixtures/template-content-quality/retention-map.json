@@ -17,7 +17,7 @@
   "items": [
     {"id":"SS-SKILL","source":"skills/spec-specify/SKILL.md","old_marker":"# Spec Specify","target":"spec-specify.root","target_marker":"# Spec Specify","action":"retain","reason":"保留受控输入、产品事实边界和 fail-loud 写入契约。","validator_test":"baseline-heading-and-target"},
 
-    {"id":"SS-T00","source":"skills/spec-specify/templates/spec-template.md","old_marker":"# 功能规格：[功能名]","target":"spec.title","target_marker":"# 功能规格：{功能名}","action":"refine","reason":"保留规格产物的单一主标题和功能身份。","validator_test":"baseline-heading-and-target"},
+    {"id":"SS-T00","source":"skills/spec-specify/templates/spec-template.md","old_marker":"# 功能规格：[功能名]","target":"spec.title","target_marker":"# 功能规格：需求名称","action":"refine","reason":"保留规格产物的单一主标题和功能身份，去除成品占位符。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-T01","source":"skills/spec-specify/templates/spec-template.md","old_marker":"## 速读卡（30 秒看懂这个需求）","target":"spec.quick-read","target_marker":"## 速读卡（30 秒）","action":"refine","reason":"保留大白话交接入口，同时补强风险摘要。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-T02","source":"skills/spec-specify/templates/spec-template.md","old_marker":"## 1. 问题陈述","target":"spec.problem","target_marker":"## 1. 问题与紧迫性","action":"refine","reason":"保留方案无关的问题、现状、影响和紧迫性。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-T03","source":"skills/spec-specify/templates/spec-template.md","old_marker":"## 2. 背景、目标和边界","target":"spec.scope","target_marker":"## 2. 背景、目标与范围","action":"refine","reason":"保留目标、范围和背景边界。","validator_test":"baseline-heading-and-target"},
@@ -38,7 +38,7 @@
     {"id":"SP-S02","source":"skills/spec-plan/SKILL.md","old_marker":"## Verification design","target":"spec-plan.verification","target_marker":"## Verification design","action":"refine","reason":"保留真实命令、RED/GREEN 和 evidence 设计。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-S03","source":"skills/spec-plan/SKILL.md","old_marker":"## Engineering rules","target":"spec-plan.engineering","target_marker":"## Engineering rules","action":"refine","reason":"保留复用优先、精确边界和可搬运性。","validator_test":"baseline-heading-and-target"},
 
-    {"id":"SP-T00","source":"skills/spec-plan/templates/plan-template.md","old_marker":"# 实施计划：{task-name}","target":"plan.title","target_marker":"# 实施计划：{task-name}","action":"retain","reason":"保留计划产物的单一主标题。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-T00","source":"skills/spec-plan/templates/plan-template.md","old_marker":"# 实施计划：{task-name}","target":"plan.title","target_marker":"# 实施计划：任务名称","action":"refine","reason":"保留计划产物的单一主标题，去除成品占位符。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T01","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Summary","target":"plan.quick-read.summary","target_marker":"## 1. 速读卡","action":"move","reason":"把目标、非目标和前后行为摘要前置到速读卡。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T02","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Technical Context","target":"plan.context.technical","target_marker":"## 2. Technical Context and Constraints","action":"refine","reason":"合并已核实技术事实、约束和未决 STOP。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T03","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Global Constraints","target":"plan.context.constraints","target_marker":"### Global Constraints","action":"move","reason":"把 accepted spec 与宪法红线放入统一上下文区。","validator_test":"baseline-heading-and-target"},
@@ -47,12 +47,12 @@
     {"id":"SP-T06","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Modules, Interfaces, and Data Contracts","target":"plan.solution.contracts","target_marker":"## 4. Solution Design","action":"refine","reason":"统一职责、接口、schema、状态和数据流设计。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T07","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Project Structure","target":"plan.file-boundary","target_marker":"## 5. File Boundary","action":"refine","reason":"保留 NEW、MODIFY、DO NOT TOUCH 精确边界。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T08","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Complexity Trade-offs","target":"plan.decisions.tradeoffs","target_marker":"## 6. Technical Decisions","action":"refine","reason":"用逐项技术决定保留候选方案、理由和风险。","validator_test":"baseline-heading-and-target"},
-    {"id":"SP-T09","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## F10 Anti-Over-Engineering Gate","target":"plan.decisions.f10","target_marker":"- **F10 real threat**：{防止什么真实失败}","action":"move","reason":"把 F10 四问绑定到每个新增机制决定。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-T09","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## F10 Anti-Over-Engineering Gate","target":"plan.decisions.f10","target_marker":"- **F10 real threat**：说明它避免的真实失败。","action":"move","reason":"把 F10 四问绑定到每个新增机制决定。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T10","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Test Strategy","target":"plan.testing.strategy","target_marker":"## 7. Test Strategy","action":"refine","reason":"保留最窄真实命令和行为 oracle。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T11","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Rollback and Recovery","target":"plan.recovery.global","target_marker":"## 8. Rollback and Recovery","action":"refine","reason":"保留恢复规则和不可逆边界。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T12","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Implementation Order","target":"plan.order.producer-first","target_marker":"## 9. Implementation Order","action":"refine","reason":"保留生产者先于消费者和串行理由。","validator_test":"baseline-heading-and-target"},
-    {"id":"SP-T13","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Implementation Steps","target":"plan.phases.entry","target_marker":"## Phase 1：{phase-name}","action":"move","reason":"把可执行实施步骤直接收敛到权威 Phase 区块。","validator_test":"baseline-heading-and-target"},
-    {"id":"SP-T14","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Phase 1：{phase-name}","target":"plan.phase","target_marker":"## Phase 1：{phase-name}","action":"refine","reason":"保留 Phase 八段、STOP、Done 和回滚。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-T13","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Implementation Steps","target":"plan.phases.entry","target_marker":"## Phase 1：阶段名称","action":"move","reason":"把可执行实施步骤直接收敛到权威 Phase 区块。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-T14","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Phase 1：{phase-name}","target":"plan.phase","target_marker":"## Phase 1：阶段名称","action":"refine","reason":"保留 Phase 八段、STOP、Done 和回滚。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T15","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Dependencies and Parallelism","target":"plan.dependencies.graph","target_marker":"## 10. Dependencies and Parallelism","action":"refine","reason":"保留依赖图和真实并行理由。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T16","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## FR to AC to Step Traceability","target":"plan.traceability.requirements","target_marker":"## 11. Requirement and Verification Traceability","action":"refine","reason":"保留 FR、task、AC 双向闭合。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-T17","source":"skills/spec-plan/templates/plan-template.md","old_marker":"## Verification Mapping","target":"plan.traceability.gates","target_marker":"| FR | Task IDs | AC IDs | Phase | Gate / evidence |","action":"move","reason":"把步骤与精确 gate evidence 合并到同一追踪表。","validator_test":"baseline-heading-and-target"},
@@ -62,9 +62,9 @@
     {"id":"ST-S01","source":"skills/spec-tasks/SKILL.md","old_marker":"## Required task contract","target":"spec-tasks.authoritative-card","target_marker":"## One authoritative task card","action":"refine","reason":"把 Phase 和 task 执行合同收敛为唯一权威卡。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-S02","source":"skills/spec-tasks/SKILL.md","old_marker":"## Ordering and coverage","target":"spec-tasks.ordering-traceability","target_marker":"## Ordering and traceability","action":"refine","reason":"保留 DAG、文件所有权和双向覆盖。","validator_test":"baseline-heading-and-target"},
 
-    {"id":"ST-T00","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"# Tasks：{task-name}","target":"tasks.title","target_marker":"# Tasks：{task-name}","action":"retain","reason":"保留 tasks 产物的单一主标题。","validator_test":"baseline-heading-and-target"},
+    {"id":"ST-T00","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"# Tasks：{task-name}","target":"tasks.title","target_marker":"# Tasks：任务名称","action":"refine","reason":"保留 tasks 产物的单一主标题，去除成品占位符。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-T01","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Global Constraints","target":"tasks.constraints","target_marker":"## 2. Global Constraints","action":"refine","reason":"保留范围、命名、兼容和测试红线。","validator_test":"baseline-heading-and-target"},
-    {"id":"ST-T02","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Phase 1：{phase-name}","target":"tasks.phase","target_marker":"## Phase 1：{phase-name}","action":"refine","reason":"保留 Phase 八段与可独立验证目标。","validator_test":"baseline-heading-and-target"},
+    {"id":"ST-T02","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Phase 1：{phase-name}","target":"tasks.phase","target_marker":"## Phase 1：阶段名称","action":"refine","reason":"保留 Phase 八段与可独立验证目标。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-T03","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Dependency Graph","target":"tasks.dag","target_marker":"## 3. Dependency Graph","action":"refine","reason":"保留存在、顺序、无环和真实并行检查。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-T04","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Bidirectional FR / Task / AC Traceability","target":"tasks.traceability","target_marker":"## 4. Requirement and Verification Traceability","action":"refine","reason":"保留需求、任务、验收和 evidence 闭合。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-T05","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"## Final Boundary Check","target":"tasks.boundary-check","target_marker":"## 5. Final Boundary Check","action":"refine","reason":"保留交付前结构、命令和宿主边界检查。","validator_test":"baseline-heading-and-target"},
@@ -75,19 +75,19 @@
     {"id":"SS-H3-02","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 目标","target":"spec.goals","target_marker":"### 目标","action":"retain","reason":"保留可验证目标。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-03","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 非目标（明确不做）","target":"spec.non-goals","target_marker":"### 明确不做","action":"move","reason":"收敛到唯一非目标真相。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-04","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 假设","target":"spec.assumptions","target_marker":"## 4. 产品事实与假设（PFACT）","action":"move","reason":"假设进入带状态和限制的 PFACT。","validator_test":"baseline-heading-and-target"},
-    {"id":"SS-H3-05","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 场景一：[场景名]（正常路径）","target":"spec.scenario.normal","target_marker":"### SCN-001：{场景名}","action":"refine","reason":"用稳定场景 ID 表达正常路径。","validator_test":"baseline-heading-and-target"},
+    {"id":"SS-H3-05","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 场景一：[场景名]（正常路径）","target":"spec.scenario.normal","target_marker":"### SCN-001：场景名称","action":"refine","reason":"用稳定场景 ID 表达正常路径。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-06","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 场景二：[场景名]（失败/边界路径）","target":"spec.scenario.failure","target_marker":"### 状态覆盖","action":"refine","reason":"失败和边界路径进入显式状态覆盖。","validator_test":"baseline-heading-and-target"},
-    {"id":"SS-H3-07","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 域：XXX（给人读的域说明）","target":"spec.domain","target_marker":"### {功能域名称}（{DOMAIN}）","action":"refine","reason":"保留功能域叙述和稳定域标识。","validator_test":"baseline-heading-and-target"},
-    {"id":"SS-H3-08","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### [模块名]","target":"spec.module","target_marker":"#### {模块名}","action":"move","reason":"模块进入条件式业务合同。","validator_test":"baseline-heading-and-target"},
-    {"id":"SS-H3-09","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### [实体名]","target":"spec.entity","target_marker":"#### {实体名}","action":"move","reason":"实体进入条件式业务合同。","validator_test":"baseline-heading-and-target"},
+    {"id":"SS-H3-07","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 域：XXX（给人读的域说明）","target":"spec.domain","target_marker":"### 功能域名称（DOMAIN）","action":"refine","reason":"保留功能域叙述和稳定域标识。","validator_test":"baseline-heading-and-target"},
+    {"id":"SS-H3-08","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### [模块名]","target":"spec.module","target_marker":"#### 模块名称","action":"move","reason":"模块进入条件式业务合同。","validator_test":"baseline-heading-and-target"},
+    {"id":"SS-H3-09","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### [实体名]","target":"spec.entity","target_marker":"#### 实体名称","action":"move","reason":"实体进入条件式业务合同。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-10","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 明确不做","target":"spec.explicit-exclusions","target_marker":"### 明确不做","action":"retain","reason":"保留唯一明确不做清单。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-11","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 隐性必达","target":"spec.implicit-must","target_marker":"### 默认必须成立","action":"refine","reason":"保留默认必须成立的产品约束。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-12","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 验收检查（success_criteria）","target":"spec.acceptance-details","target_marker":"## 9. 验收标准","action":"move","reason":"验收字段进入统一验收标准。","validator_test":"baseline-heading-and-target"},
     {"id":"SS-H3-13","source":"skills/spec-specify/templates/spec-template.md","old_marker":"### 未决风险和问题","target":"spec.open-risks","target_marker":"## 10. 风险、未决与交接","action":"move","reason":"未决项和风险进入同一交接区。","validator_test":"baseline-heading-and-target"},
 
-    {"id":"SP-H3-01","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Goal","old_occurrence":1,"target":"plan.goal","target_marker":"- **Goal**：{做完后，用户或系统能观察到什么变化}","action":"move","reason":"把计划目标压缩进速读卡。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-H3-01","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Goal","old_occurrence":1,"target":"plan.goal","target_marker":"- **Goal**：说明完成后可观察到的行为变化。","action":"move","reason":"把计划目标压缩进速读卡。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-H3-02","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Non-goals","target":"legacy.plan.non-goals-heading","action":"delete","reason":"旧 H3 合并为速读卡中的带来源非目标字段。","replacement_target":"plan.quick-read.non-goals","validator_test":"baseline-heading-and-target"},
-    {"id":"SP-H3-03","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Before → After","target":"plan.before-after","target_marker":"- **Before**：{当前已核实行为}","action":"move","reason":"把前后行为对比压缩进速读卡。","validator_test":"baseline-heading-and-target"},
+    {"id":"SP-H3-03","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Before → After","target":"plan.before-after","target_marker":"- **Before**：记录当前已核实行为。","action":"move","reason":"把前后行为对比压缩进速读卡。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-H3-04","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Versioned identity and context projection","target":"plan.versioned-context","target_marker":"### Versioned identity and context projection","action":"retain","reason":"保留版本身份与上下文投影。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-H3-05","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Verified anchors","target":"plan.verified-anchors","target_marker":"### Verified anchors","action":"retain","reason":"保留已核实代码锚点。","validator_test":"baseline-heading-and-target"},
     {"id":"SP-H3-06","source":"skills/spec-plan/templates/plan-template.md","old_marker":"### Reuse → Extend → New","target":"plan.reuse-decision","target_marker":"### Reuse → Extend → New","action":"retain","reason":"保留复用优先决策。","validator_test":"baseline-heading-and-target"},
@@ -119,7 +119,7 @@
     {"id":"ST-H3-06","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"### STOP","target":"tasks.phase-stop","target_marker":"### STOP","action":"retain","reason":"保留 Phase 停止条件。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-H3-07","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"### Done","target":"tasks.phase-done","target_marker":"### Done","action":"retain","reason":"保留 Phase 完成条件。","validator_test":"baseline-heading-and-target"},
     {"id":"ST-H3-08","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"### Risks and rollback","target":"tasks.phase-risk","target_marker":"### Risks and rollback","action":"retain","reason":"保留 Phase 风险和回滚。","validator_test":"baseline-heading-and-target"},
-    {"id":"ST-H3-09","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"### Phase naming examples","target":"tasks.phase-naming","target_marker":"<!-- Phase 名称和以上 Files block 必须与 accepted plan 逐字一致。 -->","action":"move","reason":"保留按 accepted plan 命名 Phase 的规则。","validator_test":"baseline-heading-and-target"}
+    {"id":"ST-H3-09","source":"skills/spec-tasks/templates/tasks-template.md","old_marker":"### Phase naming examples","target":"tasks.phase-naming","target_marker":"Phase 名称和上述 Files 区块必须与 accepted plan 逐字一致。","action":"move","reason":"保留按 accepted plan 命名 Phase 的规则。","validator_test":"baseline-heading-and-target"}
   ],
   "required_rules": [
     {"id":"R-SPEC-IDS","source":"skills/spec-specify/SKILL.md","old_pattern":"Every PFACT, FR, and AC gets a stable ID","target":"rule.spec.stable-ids","target_pattern":"Give every scenario, PFACT, FR, AC, risk, and open question a stable ID","action":"refine","reason":"保留并扩展稳定身份。","validator_test":"required-rule-present"},
@@ -127,7 +127,7 @@
     {"id":"R-SPEC-AC","source":"skills/spec-specify/SKILL.md","old_pattern":"verification method, pass condition, and evidence type","target":"rule.spec.ac","target_pattern":"verification method, pass condition, failure condition, and evidence[\\s\\S]*type","action":"refine","reason":"保留验收方法、正反判据和证据。","validator_test":"required-rule-present"},
     {"id":"R-SPEC-RISK","source":"skills/spec-specify/templates/spec-template.md","old_pattern":"\\*\\*缓解或 STOP\\*\\*","target":"rule.spec.risk","target_pattern":"\\*\\*缓解或 STOP\\*\\*","action":"retain","reason":"保留风险停止字段。","validator_test":"required-rule-present"},
     {"id":"R-PLAN-BIND","source":"skills/spec-plan/SKILL.md","old_pattern":"ReferenceBinding","target":"rule.plan.binding","target_pattern":"ReferenceBinding","action":"retain","reason":"保留完整版本引用。","validator_test":"required-rule-present"},
-    {"id":"R-PLAN-NONGOALS","source":"skills/spec-plan/templates/plan-template.md","old_pattern":"### Non-goals","target":"plan.quick-read.non-goals","target_pattern":"- \\*\\*Non-goals\\*\\*：\\{明确不做什么\\}。来源：\\{accepted spec section or ID\\}","action":"move","reason":"旧非目标 H3 合并成速读卡字段并保留来源。","validator_test":"required-rule-present"},
+    {"id":"R-PLAN-NONGOALS","source":"skills/spec-plan/templates/plan-template.md","old_pattern":"### Non-goals","target":"plan.quick-read.non-goals","target_pattern":"- \\*\\*Non-goals\\*\\*：列出明确不做的事项，并标注 accepted spec 的来源。","action":"move","reason":"旧非目标 H3 合并成速读卡字段并保留来源。","validator_test":"required-rule-present"},
     {"id":"R-PLAN-READ","source":"skills/spec-plan/SKILL.md","old_pattern":"read_now.*must_read_before_task","target":"rule.plan.read-projection","target_pattern":"read_now.*must_read_before_task","action":"retain","reason":"保留两阶段最小上下文。","validator_test":"required-rule-present"},
     {"id":"R-PLAN-FILES","source":"skills/spec-plan/templates/plan-template.md","old_pattern":"NEW[\\s\\S]*MODIFY[\\s\\S]*DO NOT TOUCH","target":"rule.plan.files","target_pattern":"NEW[\\s\\S]*MODIFY[\\s\\S]*DO NOT TOUCH","action":"retain","reason":"保留三类精确文件边界。","validator_test":"required-rule-present"},
     {"id":"R-PLAN-GATE","source":"skills/spec-plan/templates/plan-template.md","old_pattern":"gate_cmd[\\s\\S]*expected_exit[\\s\\S]*evidence_path[\\s\\S]*Oracle","target":"rule.plan.gate","target_pattern":"gate_cmd[\\s\\S]*expected_exit[\\s\\S]*evidence_path[\\s\\S]*Oracle","action":"retain","reason":"保留命令、退出码、证据和 oracle。","validator_test":"required-rule-present"},
@@ -148,8 +148,31 @@
     "skills/spec-plan/templates/plan-template.md": ["plan.quick-read.summary","plan.context.technical","plan.context.constraints","plan.anchors.reuse","plan.solution.contracts","plan.file-boundary","plan.decisions.tradeoffs","plan.decisions.f10","plan.testing.strategy","plan.recovery.global","plan.order.producer-first","plan.phases.entry","plan.phase","plan.dependencies.graph","plan.traceability.requirements","plan.traceability.gates","plan.governance.matrix","plan.constitution.appendix"],
     "skills/spec-tasks/templates/tasks-template.md": ["tasks.constraints","tasks.phase","tasks.dag","tasks.traceability","tasks.boundary-check","tasks.legacy-import"]
   },
+  "content_checks": [
+    {
+      "id": "D-SPEC-RESPONSIBILITY",
+      "path": "skills/spec-specify/templates/spec-template.md",
+      "required": ["问题与紧迫性", "功能需求", "验收标准", "失败条件", "风险、未决与交接"],
+      "forbidden": ["gate_cmd", "Phase.Files", "versioned_refs"],
+      "reason": "规格只保存产品问题、行为、范围、验收和未决项。"
+    },
+    {
+      "id": "D-PLAN-RESPONSIBILITY",
+      "path": "skills/spec-plan/templates/plan-template.md",
+      "required": ["Verified anchors", "Technical Decisions", "File Boundary", "Test Strategy"],
+      "forbidden": ["##### T001 身份", "##### T001 追溯"],
+      "reason": "计划保存已核对事实、设计取舍、边界、阶段、风险和验证策略。"
+    },
+    {
+      "id": "D-TASKS-RESPONSIBILITY",
+      "path": "skills/spec-tasks/templates/tasks-template.md",
+      "required": ["T001 身份", "T001 追溯", "T001 执行", "T001 验证与失败"],
+      "forbidden": ["### Technical Decisions", "### Verified anchors"],
+      "reason": "任务只保留紧凑任务卡，不复制计划的设计理由。"
+    }
+  ],
   "markdown_rules": {
-    "forbidden_patterns": ["Run full test suite","/Users/","Lorem ipsum"],
+    "forbidden_patterns": ["Run full test suite","/Users/","Lorem ipsum","<!--","-->","{task-name}","{phase-name}","{功能名}","{场景名}","{sha256}","{exact path}"],
     "require_single_h1": true,
     "require_unique_h2": true,
     "require_balanced_fences": true,

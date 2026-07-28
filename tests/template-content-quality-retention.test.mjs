@@ -166,3 +166,28 @@ describe("high-value Markdown template hygiene", () => {
     });
   }
 });
+
+describe("template responsibilities", () => {
+  it("keeps the declared product, engineering, and execution information split", () => {
+    for (const check of fixture.content_checks) {
+      const document = read(check.path);
+      expect(check.reason.trim().length, `${check.id} needs a concrete reason`).toBeGreaterThan(4);
+      for (const marker of check.required) {
+        expect(document, `${check.id} is missing ${marker}`).toContain(marker);
+      }
+      for (const marker of check.forbidden) {
+        expect(document, `${check.id} duplicates ${marker}`).not.toContain(marker);
+      }
+    }
+  });
+
+  it("leaves templates ready for direct reading instead of authoring syntax", () => {
+    const templatePaths = fixture.scope.filter((path) => path.includes("/templates/"));
+    for (const path of templatePaths) {
+      const document = read(path);
+      expect(document, `${path}: raw JSON example`).not.toMatch(/\[\s*\{\s*"[a-z_]+"\s*:/);
+      expect(document, `${path}: unresolved braces`).not.toMatch(/\{[^}\n]+\}/);
+      expect(document, `${path}: authoring comment`).not.toMatch(/<!--|-->/);
+    }
+  });
+});

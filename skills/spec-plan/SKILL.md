@@ -15,6 +15,14 @@ unrelated repository. The accepted specification remains the authority for
 scope and behavior; this skill turns it into an engineering plan and never
 re-selects product decisions.
 
+## Artifact responsibility
+
+`plan.md` is the engineering decision and evidence dossier: verified facts,
+code anchors, design trade-offs, file boundary, phases, dependencies, risks,
+and verification strategy. It references accepted product IDs instead of
+copying their prose. `tasks.md` projects only the execution-ready cards, so do
+not duplicate task-level inputs, outputs, commands, or recovery detail here.
+
 ## Reading contract
 
 Use `templates/plan-template.md`. Write for two readers in this order:
@@ -57,8 +65,10 @@ retaining an empty subsection or invented architecture.
 ## Phase and file authority
 
 Each Phase has meaningful `Goal`, `Files`, `Tasks`, `Verify`, `Knowledge`,
-`STOP`, `Done`, and `Risks and rollback` sections. `N/A` is valid only with a
-factual applicability reason.
+`STOP`, `Done`, and `Risks and rollback` sections. Keep `Tasks` to IDs and
+one-line outcomes; task-card inputs, outputs, gate commands, and failure
+handling belong only in `tasks.md`. `N/A` is valid only with a factual
+applicability reason.
 
 `Phase.Files` is the authority for file ownership. Paths are exact; wildcards
 and directory-wide ownership are forbidden. The global file view is only the
