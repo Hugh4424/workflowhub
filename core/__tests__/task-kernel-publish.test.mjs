@@ -325,6 +325,21 @@ function startMakeDecisionThrough(kernel, candidate, throughStep = 5) {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("TaskKernel append-only publication", () => {
+  it("does not publish or accept tree-A evidence against a tree-B candidate", () => {
+    const { task, kernel, candidate } = fixture();
+    const treeA = candidate.captureSnapshot().tree;
+    writeFileSync(join(candidate.worktreeRoot, "CONTEXT.md"), "tree B\n");
+    expect(candidate.captureSnapshot().tree).not.toBe(treeA);
+    expect(() => kernel.publishAttempt("make-decision", {
+      facts: {
+        snapshot_tree: treeA,
+        decision: "stale tree must not publish",
+      },
+    })).toThrow(/snapshot|tree|changed/i);
+    expect(task.listStageAttemptRefs("make-decision")).toEqual([]);
+    expect(() => task.readRecord("results/make-decision/accepted.json")).toThrow();
+  });
+
   it("adopts one unique canonical legacy initial root without starting providers and is idempotent", () => {
     const { kernel, candidate } = fixture();
     startMakeDecisionThrough(kernel, candidate);

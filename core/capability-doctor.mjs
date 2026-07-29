@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createSkillDiagnostic } from "./local-skill-resolver.mjs";
 
 function isRequired(requiredWhen, activeConditions) {
   return requiredWhen === "always" || activeConditions.has(requiredWhen);
@@ -16,7 +17,17 @@ export function doctorCapabilities({ manifest, activeConditions = [], probes = {
   const conditions = new Set(activeConditions);
   const capabilities = [...(manifest?.runtime_capabilities || []), ...(manifest?.external_capabilities || [])];
   return capabilities.map(capability => {
-    if (!isRequired(capability.required_when, conditions)) return { id: capability.id, status: "not_required" };
+    if (!isRequired(capability.required_when, conditions)) {
+      return {
+        id: capability.id,
+        ...createSkillDiagnostic({
+          source: "doctor",
+          skill: capability.id,
+          status: "not_required",
+          code: "CAPABILITY_NOT_REQUIRED",
+        }),
+      };
+    }
     let available = false;
     let detail = "";
     if (capability.kind === "cli" || capability.kind === "command") {
@@ -36,15 +47,22 @@ export function doctorCapabilities({ manifest, activeConditions = [], probes = {
       available = result === true || result?.available === true;
       detail = result?.detail || "";
     }
-    return available
-      ? { id: capability.id, status: "available", detail }
-      : { id: capability.id, status: capability.absence_semantics, detail: detail || `${capability.kind} capability unavailable` };
+    const status = available ? "available" : capability.absence_semantics;
+    const message = available ? null : (detail || `${capability.kind} capability unavailable`);
+    return {
+      id: capability.id,
+      ...createSkillDiagnostic({
+        source: "doctor",
+        skill: capability.id,
+        status,
+        code: available ? "CAPABILITY_AVAILABLE" : "CAPABILITY_UNAVAILABLE",
+        message,
+      }),
+      detail: available ? detail : message,
+    };
   });
 }
 
 export function assertRequiredCapabilities(options) {
-  const results = doctorCapabilities(options);
-  const failures = results.filter(result => ["blocked", "human_required"].includes(result.status));
-  if (failures.length) throw new Error(`capability doctor failed: ${failures.map(item => `${item.id}:${item.status}`).join(", ")}`);
-  return results;
+  return doctorCapabilities(options);
 }

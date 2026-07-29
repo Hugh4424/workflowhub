@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveLocalSkill, validateReviewBundleProjection, validateSkillBundle } from "../local-skill-resolver.mjs";
+import { resolveLocalSkill, resolveSkillDispatch, validateReviewBundleProjection, validateSkillBundle } from "../local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -21,6 +21,49 @@ describe("local skill resolver", () => {
     const root = fixture();
     expect(resolveLocalSkill(root, "skills/demo/SKILL.md")).toBe(fs.realpathSync(path.join(root, "skills/demo/SKILL.md")));
     expect(validateSkillBundle(root, "skills/demo/skill-bundle.json", "skills/demo/SKILL.md").files).toHaveLength(1);
+  });
+
+  it("reports resolver success through workflowhub-skill-diagnostic.v1", () => {
+    const root = fixture();
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    expect(resolveSkillDispatch({
+      packageRoot: root,
+      manifestPath: "workflows/stage/skill-deps.yaml",
+      dependency: { name: "demo", path: "skills/demo/SKILL.md", bundle: "skills/demo/skill-bundle.json" },
+    }).diagnostic).toEqual({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "available",
+      code: "SKILL_RESOLVED",
+      message: null,
+      enforcement: "fail_loud",
+    });
+  });
+
+  it("attaches the same diagnostic schema to a fail-loud resolver error", () => {
+    const root = fixture();
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    let failure;
+    try {
+      resolveSkillDispatch({
+        packageRoot: root,
+        manifestPath: "workflows/stage/skill-deps.yaml",
+        dependency: { name: "demo", path: "skills/missing/SKILL.md", bundle: "skills/demo/skill-bundle.json" },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostic).toMatchObject({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+    });
   });
 
   it("rejects absolute paths, traversal and escaping symlinks", () => {

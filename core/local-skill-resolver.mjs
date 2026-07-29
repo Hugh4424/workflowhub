@@ -19,6 +19,38 @@ function canonical(value) {
 
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
 
+export function createSkillDiagnostic({
+  source,
+  skill,
+  status,
+  code,
+  message = null,
+  enforcement = source === "doctor" ? "advisory" : "fail_loud",
+}) {
+  return Object.freeze({
+    schema_version: "workflowhub-skill-diagnostic.v1",
+    source,
+    skill,
+    status,
+    code,
+    message,
+    enforcement,
+  });
+}
+
+function resolverError(skill, error) {
+  if (error?.diagnostic?.schema_version === "workflowhub-skill-diagnostic.v1") return error;
+  const wrapped = new Error(error?.message || "skill resolution failed", { cause: error });
+  wrapped.diagnostic = createSkillDiagnostic({
+    source: "resolver",
+    skill: skill || "unknown",
+    status: "blocked",
+    code: "SKILL_RESOLUTION_FAILED",
+    message: wrapped.message,
+  });
+  return wrapped;
+}
+
 function assertDirectory(root, relative, label) {
   const candidate = path.join(root, relative);
   const stat = fs.lstatSync(candidate);
@@ -115,19 +147,30 @@ export function validateReviewBundleProjection(packageRoot, reviewBundlePath, ex
 }
 
 export function resolveSkillDispatch({ packageRoot, manifestPath, dependency }) {
-  if (!dependency?.name || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");
-  const root = fs.realpathSync(packageRoot);
-  assertRelative(manifestPath);
-  const manifest = path.resolve(root, manifestPath);
-  assertRegularContainedFile(root, root, manifest, `source manifest ${manifestPath}`);
-  const skillPath = resolveLocalSkill(root, dependency.path);
-  const checked = validateSkillBundle(root, dependency.bundle, dependency.path);
-  return {
-    name: dependency.name,
-    resolved_skill_path: skillPath,
-    resolved_bundle_paths: checked.fileEntries.map(entry => entry.resolved),
-    bundle_hash: checked.bundleHash,
-    source_manifest: manifest,
-    package_root: root,
-  };
+  const skill = dependency?.name;
+  try {
+    if (!skill || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");
+    const root = fs.realpathSync(packageRoot);
+    assertRelative(manifestPath);
+    const manifest = path.resolve(root, manifestPath);
+    assertRegularContainedFile(root, root, manifest, `source manifest ${manifestPath}`);
+    const skillPath = resolveLocalSkill(root, dependency.path);
+    const checked = validateSkillBundle(root, dependency.bundle, dependency.path);
+    return {
+      name: skill,
+      resolved_skill_path: skillPath,
+      resolved_bundle_paths: checked.fileEntries.map(entry => entry.resolved),
+      bundle_hash: checked.bundleHash,
+      source_manifest: manifest,
+      package_root: root,
+      diagnostic: createSkillDiagnostic({
+        source: "resolver",
+        skill,
+        status: "available",
+        code: "SKILL_RESOLVED",
+      }),
+    };
+  } catch (error) {
+    throw resolverError(skill, error);
+  }
 }

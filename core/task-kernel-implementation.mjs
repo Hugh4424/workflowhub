@@ -19,6 +19,15 @@ import { createRequirementLedger, createRequirementsCoverage } from "./requireme
 import { validateEntryPayload, validateExitPayload } from "./receipt-schema.mjs";
 import { validateBuildCodeAdjudicationCorrection } from "./review-flow-authority.mjs";
 import {
+  BUILD_SPEC_RECOVERY_REFS,
+  buildSpecReviewAction,
+  consumeBuildSpecRecoveryOwnerCapability,
+  validateBuildSpecBase,
+  validateBuildSpecRecoveryInvocation,
+  validateBuildSpecRecoveryMarker,
+  validateBuildSpecRevision,
+} from "./build-spec-receipt-recovery.mjs";
+import {
   buildRiskAcceptance,
   deriveSeriousReviewPause,
   validateRiskAcceptance,
@@ -549,7 +558,15 @@ export function validateAccepted(accepted, expected = {}) {
   return accepted;
 }
 
-export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString(), workspace, artifacts, candidateWorkspace, attemptPublicationTestHooks, acceptedReplacementTestHooks } = {}, authority) {
+export function buildTaskKernel(taskHandle, {
+  now = () => new Date().toISOString(),
+  workspace,
+  artifacts,
+  candidateWorkspace,
+  attemptPublicationTestHooks,
+  acceptedReplacementTestHooks,
+  buildSpecRecoveryTestHooks,
+} = {}, authority) {
   const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor, replaceStageContentPointerFor } = authority;
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
@@ -2492,10 +2509,161 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     task,
     publishCanonicalRecord(relativePath, data) {
       if (typeof relativePath !== "string" || !/^(?:receipts|reviews|evidence)\//.test(relativePath) || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
+      if (relativePath === BUILD_SPEC_RECOVERY_REFS.marker || relativePath.startsWith("receipts/revisions/spec/")) {
+        throw new Error("trusted prepublish recovery is required; build-spec recovery authority owns this namespace");
+      }
       if (relativePath.startsWith("reviews/flows/")) throw new Error("review flow records require TaskKernel review-flow authority");
       if (relativePath.startsWith("reviews/resolutions/")) throw new Error("review resolutions require TaskKernel review-flow authority");
       if (relativePath.startsWith("evidence/risk-acceptances/")) throw new Error("risk acceptance records require TaskKernel review-risk authority");
       return createKernelRecord(relativePath, data);
+    },
+    recoverBuildSpecReceiptRecords(records, ownerCapability) {
+      if (!workspace || !artifacts) throw new Error("build-spec receipt recovery requires Workspace and ArtifactDir capabilities");
+      plain(records, "build-spec receipt recovery records");
+      rejectUnknown(records, new Set(["revisionRef", "revisionRaw", "markerRaw"]), "build-spec receipt recovery records");
+      if (typeof records.revisionRef !== "string" || typeof records.revisionRaw !== "string"
+          || typeof records.markerRaw !== "string") {
+        throw new TypeError("build-spec receipt recovery records must contain revisionRef, revisionRaw, and markerRaw");
+      }
+      const invocation = consumeBuildSpecRecoveryOwnerCapability({
+        task,
+        workspace,
+        capability: ownerCapability,
+      });
+      const flowIdentity = deriveReviewFlowIdentity({
+        stage: "build-spec",
+        review_track: null,
+        subject_kind: "worktree",
+        phase_id: null,
+        review_scope: null,
+      });
+      const flowId = reviewFlowId(flowIdentity);
+      return task.withRecordLock(`locks/review-flow-execution/${flowId}.lock`, () =>
+        task.withRecordLock(`locks/review-flows/${flowId}.lock`, () =>
+          task.withRecordLock("locks/build-spec.publication.lock", () => {
+            if (task.listStageAttemptRefs("build-spec").length !== 0) {
+              throw new Error("build-spec receipt recovery requires no published stage attempt");
+            }
+            const checkpointPrefix = `refs/workflowhub/checkpoints/${task.identity.projectName}/${task.identity.taskId}/build-spec/`;
+            const checkpointRefs = String(execFileSync(
+              "git",
+              ["for-each-ref", "--format=%(refname)", checkpointPrefix],
+              { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+            )).trim();
+            if (checkpointRefs !== "") throw new Error("build-spec receipt recovery requires no published checkpoint");
+
+            const baseRaw = task.readRecord(BUILD_SPEC_RECOVERY_REFS.base);
+            validateBuildSpecBase(parseJson(baseRaw, "build-spec base receipt"), baseRaw, task.identity.taskId);
+            const content = artifacts.read("spec.md", "utf8");
+            const snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot);
+            const flow = readReviewFlow(flowIdentity);
+            if (flow === null) throw new Error("build-spec receipt recovery requires an authenticated review flow");
+            const action = buildSpecReviewAction(task, { authentication: { flow } });
+            const reviewRaw = task.readRecord(action.head_result_ref);
+            if (hash(reviewRaw) !== action.head_result_hash) throw new Error("build-spec authenticated review result changed");
+            const actionRaw = task.readRecord(action.action_ref);
+            if (hash(actionRaw) !== action.action_hash) throw new Error("build-spec authenticated review action changed");
+            const actionValue = parseJson(actionRaw, "build-spec authenticated review action");
+            if (actionValue.task_id !== task.identity.taskId || actionValue.stage !== "build-spec"
+                || actionValue.snapshot_tree !== snapshot.tree) {
+              throw new Error("build-spec recovery review action does not bind the final current snapshot");
+            }
+
+            const revision = parseJson(records.revisionRaw, "build-spec recovered receipt");
+            validateBuildSpecRevision(revision, records.revisionRaw, {
+              ref: records.revisionRef,
+              taskId: task.identity.taskId,
+              baseHash: hash(baseRaw),
+              content,
+            });
+            const marker = parseJson(records.markerRaw, "build-spec receipt recovery marker");
+            validateBuildSpecRecoveryMarker(marker, records.markerRaw, {
+              taskId: task.identity.taskId,
+              baseRaw,
+              recoveredRaw: records.revisionRaw,
+              recoveredRef: records.revisionRef,
+              artifactRef: artifacts.reference("spec.md"),
+              content,
+              snapshotTree: snapshot.tree,
+              action,
+              invocation,
+            });
+
+            let existingMarkerRaw;
+            try { existingMarkerRaw = task.readRecord(BUILD_SPEC_RECOVERY_REFS.marker); }
+            catch (error) {
+              if (error?.code !== "ENOENT") throw error;
+            }
+            if (existingMarkerRaw !== undefined) {
+              const existingMarker = parseJson(existingMarkerRaw, "existing build-spec receipt recovery marker");
+              let existingInvocation;
+              try {
+                const identity = parseJson(
+                  task.readRecord(existingMarker.invocation?.ref),
+                  "existing build-spec recovery invocation",
+                );
+                existingInvocation = validateBuildSpecRecoveryInvocation(task, {
+                  ...existingMarker.invocation,
+                  identity,
+                });
+                validateBuildSpecRecoveryMarker(existingMarker, existingMarkerRaw, {
+                  taskId: task.identity.taskId,
+                  baseRaw,
+                  recoveredRaw: records.revisionRaw,
+                  recoveredRef: records.revisionRef,
+                  artifactRef: artifacts.reference("spec.md"),
+                  content,
+                  snapshotTree: snapshot.tree,
+                  action,
+                  invocation: existingInvocation,
+                });
+              } catch {
+                throw new Error("build-spec bootstrap recovery is frozen to its recorded invocation, review action, snapshot, and content");
+              }
+              const existingRevisionRaw = task.readRecord(records.revisionRef);
+              if (existingRevisionRaw !== records.revisionRaw) {
+                throw new Error("build-spec recovered revision conflicts with the authoritative recovery");
+              }
+              return deepFreeze({
+                receipt_ref: records.revisionRef,
+                receipt_hash: hash(records.revisionRaw),
+                revision: true,
+                previous_receipt_ref: BUILD_SPEC_RECOVERY_REFS.base,
+                previous_receipt_hash: hash(baseRaw),
+                content_hash: revision.revision.content_hash,
+                recovery_marker_ref: BUILD_SPEC_RECOVERY_REFS.marker,
+                recovery_marker_hash: hash(existingMarkerRaw),
+              });
+            }
+
+            if (buildSpecRecoveryTestHooks?.seedRevisionRaw !== undefined) {
+              try { createKernelRecord(records.revisionRef, buildSpecRecoveryTestHooks.seedRevisionRaw); }
+              catch (error) {
+                if (error?.code !== "EEXIST") throw error;
+              }
+            }
+            let existingRevisionRaw;
+            try { existingRevisionRaw = task.readRecord(records.revisionRef); }
+            catch (error) {
+              if (error?.code !== "ENOENT") throw error;
+            }
+            if (existingRevisionRaw === undefined) createKernelRecord(records.revisionRef, records.revisionRaw);
+            else if (existingRevisionRaw !== records.revisionRaw) {
+              throw new Error("build-spec recovered revision conflicts with existing provenance");
+            }
+            buildSpecRecoveryTestHooks?.afterRevision?.();
+            createKernelRecord(BUILD_SPEC_RECOVERY_REFS.marker, records.markerRaw);
+            return deepFreeze({
+              receipt_ref: records.revisionRef,
+              receipt_hash: hash(records.revisionRaw),
+              revision: true,
+              previous_receipt_ref: BUILD_SPEC_RECOVERY_REFS.base,
+              previous_receipt_hash: hash(baseRaw),
+              content_hash: revision.revision.content_hash,
+              recovery_marker_ref: BUILD_SPEC_RECOVERY_REFS.marker,
+              recovery_marker_hash: hash(records.markerRaw),
+            });
+          })));
     },
     replaceStageContentLatestPointer(relativePath, data, options) {
       if (typeof replaceStageContentPointer !== "function") throw new Error("stage content pointer replacement authority is required");

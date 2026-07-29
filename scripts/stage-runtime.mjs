@@ -18,6 +18,10 @@ import {
   writeOfficialComponentReceipt,
 } from "../core/canonical-receipt-writer.mjs";
 import { createStageContentEvidenceWriter } from "../core/stage-content-evidence.mjs";
+import {
+  createBuildSpecReceiptRecoveryRecords,
+  issueBuildSpecRecoveryOwnerCapability,
+} from "../core/build-spec-receipt-recovery.mjs";
 import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
@@ -58,8 +62,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|recover-spec-receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -73,12 +77,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (values.stage === "make-decision" && new Set(["record-step-entry", "record-step-exit"]).has(command)) {
     throw new TypeError("make-decision journal is runtime-owned; public record-step-entry/record-step-exit are forbidden");
   }
-  if (!new Set(["receipt", "publish-content-evidence"]).has(command)
+  if (!new Set(["receipt", "recover-spec-receipt", "publish-content-evidence"]).has(command)
       && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) {
     throw new TypeError("--revision is only valid for receipt or trusted stage-content publication");
   }
   if (command === "publish-content-evidence" && values.recover !== undefined) throw new TypeError("--recover is only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "recover-spec-receipt") {
+    const allowed = new Set(["stage", "project", "task", "recover", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("recover-spec-receipt accepts only --stage, --project, --task, --recover, and --input");
+    if (values.stage !== "build-spec" || values.recover !== "receipts/spec.json" || !values.input) {
+      throw new TypeError("recover-spec-receipt requires --stage=build-spec --recover=receipts/spec.json --input=<recovery.json>");
+    }
+  }
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   if (command === "publish-content-evidence" && (!values.kind || !values.input)) throw new TypeError("publish-content-evidence requires --kind and --input=<payload.json>");
   if (command === "start-run" && !values.reason) throw new TypeError("start-run requires --reason");
@@ -116,7 +127,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "baseline-rebind") && (command !== "run" || values.stage !== "build-plan")) throw new TypeError("--baseline-rebind is only valid for build-plan run");
   if (command === "rebind" && values.stage !== "build-plan") throw new TypeError("rebind is only valid for build-plan");
   if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
-  if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
+  if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
   if (command === "receipt" && values.revision === "true" && !values.recover) throw new TypeError("receipt revision requires --recover=<previous-receipt-ref>");
   if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
   let context = bootstrapStage(values.stage, {
@@ -125,7 +136,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (values.stage === "make-decision") {
@@ -207,6 +218,29 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       throw new TypeError("record-research requires status=performed|skipped, reason, and a canonical evidence ref");
     }
     return context.kernel.completeMakeDecisionResearch(input);
+  }
+  if (command === "recover-spec-receipt") {
+    const identity = context.kernel.deriveReviewFlowIdentity({
+      stage: "build-spec",
+      review_track: null,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+    });
+    const ownerCapability = issueBuildSpecRecoveryOwnerCapability({
+      task: context.task,
+      workspace: context.workspace,
+      boundary: writeBoundary,
+    });
+    const records = createBuildSpecReceiptRecoveryRecords({
+      task: context.task,
+      workspace: context.workspace,
+      artifacts: context.artifacts,
+      input,
+      authenticatedFlow: context.kernel.readReviewFlow(identity),
+      invocation: ownerCapability.invocation,
+    });
+    return context.kernel.recoverBuildSpecReceiptRecords(records, ownerCapability);
   }
   if (command === "rebind") return context.kernel.authorizeBuildPlanBaselineRebind();
   if (command === "artifact") {

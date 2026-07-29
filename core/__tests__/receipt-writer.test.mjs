@@ -71,4 +71,20 @@ describe("receipt writer TaskHandle contract", () => {
       ineffective: true, reason: "check blocked" });
     expect(journal(task)[0]).toMatchObject({ event_type: "step_auto_rollback", ineffective: true });
   });
+
+  it("rejects a tree-B exit for a tree-A entry without a half-written exit", async () => {
+    const task = fixture();
+    const treeA = "a".repeat(40);
+    const emitted = await writeEntryReceipt(task, entry({
+      workflow_run_id: "run-snapshot-bound",
+      snapshot_tree: treeA,
+    }));
+    await expect(writeExitReceipt(task, exit(emitted.journal_entry_id, {
+      workflow_run_id: "run-snapshot-bound",
+      snapshot_tree: "b".repeat(40),
+    }))).rejects.toThrow(/snapshot|tree/i);
+    expect(journal(task)).toEqual([
+      expect.objectContaining({ event_type: "step_entry", snapshot_tree: treeA }),
+    ]);
+  });
 });

@@ -188,6 +188,15 @@ function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = [])
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
     },
+    readOptionalReceipt: (ref) => {
+      try {
+        const raw = ctx.task.readRecord(ref);
+        return Object.freeze({ value: JSON.parse(raw), sha256: createHash("sha256").update(raw).digest("hex") });
+      } catch (error) {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      }
+    },
     readEvidence: (ref) => {
       const raw = ctx.task.readRecord(ref);
       return Object.freeze({ bytes: raw, sha256: createHash("sha256").update(raw).digest("hex") });

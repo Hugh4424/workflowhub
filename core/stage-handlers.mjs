@@ -14,6 +14,7 @@ import {
   validateRiskAcceptanceSet,
 } from "./stage-review-disposition.mjs";
 import { buildStageCompletion } from "./stage-completion-facts.mjs";
+import { assertLatestBuildSpecReceipt } from "./build-spec-receipt-recovery.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -663,6 +664,22 @@ HANDLERS.set("build-spec", async (worker, input) => {
   if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-spec Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
+  const authenticatedFlow = worker.readAuthenticatedReviewFlow({
+    stage: "build-spec",
+    review_track: null,
+    subject_kind: "worktree",
+    phase_id: null,
+    review_scope: null,
+  });
+  assertLatestBuildSpecReceipt({
+    worker,
+    item,
+    binding: {
+      artifactContent: item.value.content,
+      snapshot: before,
+      authentication: { flow: authenticatedFlow },
+    },
+  });
   const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
   const checkpoint = worker.createCheckpoint("build-spec");
   const after = object(worker.snapshotWorkspace(), "build-spec post-checkpoint Workspace snapshot");

@@ -22,7 +22,16 @@ describe("capability doctor", () => {
   it("distinguishes not-required, diagnostic and human-required capabilities", () => {
     const results = doctorCapabilities({ manifest, activeConditions: ["review", "research"], run: () => ({ status: 0, stdout: "v24" }), probes: { "optional-search": false, "host-subagent": false } });
     expect(results.map(item => [item.id, item.status])).toEqual([["node", "available"], ["host-subagent", "human_required"], ["optional-search", "diagnostic"]]);
-    expect(() => assertRequiredCapabilities({ manifest, activeConditions: ["review"], run: () => ({ status: 0, stdout: "v24" }), probes: { "host-subagent": false } })).toThrow(/host-subagent:human_required/);
+    expect(assertRequiredCapabilities({
+      manifest,
+      activeConditions: ["review"],
+      run: () => ({ status: 0, stdout: "v24" }),
+      probes: { "host-subagent": false },
+    })).toContainEqual(expect.objectContaining({
+      skill: "host-subagent",
+      status: "human_required",
+      enforcement: "advisory",
+    }));
   });
 
   it("uses the real target command argv and accepts browser alternatives", () => {
@@ -38,5 +47,24 @@ describe("capability doctor", () => {
     expect(calls[0]).toEqual(["npm", "test", "--", "--runInBand"]);
     expect(calls).toContainEqual(["browser-use", "doctor"]);
     expect(results.every(item => item.status === "available")).toBe(true);
+  });
+
+  it("uses workflowhub-skill-diagnostic.v1 and remains advisory", () => {
+    const [diagnostic] = doctorCapabilities({
+      manifest,
+      run: () => ({ status: 127, error: new Error("missing") }),
+    });
+    expect(diagnostic).toMatchObject({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "doctor",
+      skill: "node",
+      status: "blocked",
+      code: "CAPABILITY_UNAVAILABLE",
+      enforcement: "advisory",
+    });
+    expect(() => doctorCapabilities({
+      manifest,
+      run: () => ({ status: 127, error: new Error("missing") }),
+    })).not.toThrow();
   });
 });
