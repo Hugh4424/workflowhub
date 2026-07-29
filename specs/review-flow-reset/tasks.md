@@ -534,14 +534,14 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`["core/__tests__/stage-context.test.mjs","scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","tests/stage-completion-facts.test.mjs","tests/interaction-quality-contract.test.mjs","tests/stage-plan-task-contract-v3.test.mjs","tests/official-component-receipts.test.mjs","tests/build-code-phase-evidence.test.mjs","tests/five-stage-facts-v2.test.mjs","tests/facts-subschema.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":0}]`
+- **evidence_refs**：`[{"ref":"tests/stage-plan-task-contract-v3.test.mjs","sha256":"24094ec5c9773f261ec83c86086b06f6ec90e8641c2dd8309186dcaa105c9230"},{"ref":"scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","sha256":"1145e72bff363424f53d2bd8aad64390057fd0ee228ff9c9a6bbbdc9b66689a4"}]`
+- **covered_ac**：AC-17、AC-18、AC-19、AC-20、AC-21
+- **review_fact**：Phase 5 一次独立审查原 verdict=`revise_required`；2 个 major finding 与 1 个 boundary finding 已修；按 single-review 规则未二审。
+- **completed_at**：2026-07-29T14:19:45Z
 
 #### T010 — GREEN：同源完成事实与人类交接
 
@@ -572,14 +572,14 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-plan review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`["contracts/facts-subschema.json","core/__tests__/stage-context.test.mjs","core/canonical-receipt-writer.mjs","core/schemas/ambiguity-ledger.v2.json","core/schemas/stage-completion-facts.v1.json","core/stage-completion-facts.mjs","core/stage-content-contracts.mjs","core/stage-context.mjs","core/stage-handlers.mjs","core/stage-runner.mjs","core/task-kernel-implementation.mjs","core/workspace.mjs","scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","scripts/stage-runtime.mjs","skills/spec-tasks/SKILL.md","skills/spec-tasks/templates/tasks-template.md","skills/wh-review/scripts/integration-review-subject.mjs","skills/wh-review/scripts/review-materials.mjs","tests/build-code-phase-evidence.test.mjs","tests/facts-subschema.test.mjs","tests/five-stage-facts-v2.test.mjs","tests/interaction-quality-contract.test.mjs","tests/official-component-receipts.test.mjs","tests/stage-completion-facts.test.mjs","tests/stage-plan-task-contract-v3.test.mjs","workflows/build-code/SKILL.md","workflows/build-code/phase-evidence.mjs","workflows/build-code/steps.json","workflows/build-plan/SKILL.md","workflows/build-plan/steps.json","workflows/build-spec/SKILL.md","workflows/build-spec/steps.json","workflows/make-decision/SKILL.md","workflows/verify-code/SKILL.md","workflows/verify-code/steps.json"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"ref":"workflows/build-code/phase-evidence.mjs","sha256":"63936f0bf8cf36f8c68527ccdb48735d8b673663f38bb4b4d8c53107467f8a5a"},{"ref":"core/stage-handlers.mjs","sha256":"0f8030def37bbf3eda5f3a1254c872401de1cd422235733414ec5c5bf6e0717a"},{"ref":"skills/wh-review/scripts/integration-review-subject.mjs","sha256":"9466c0c1cd437e509b9a8ed727cfce289fcbf7b19feb28cd08faf59f4902bb73"}]`
+- **covered_ac**：AC-17、AC-18、AC-19、AC-20、AC-21
+- **review_fact**：Phase 5 一次独立审查原 verdict=`revise_required`；seam 已绑定精确 Phase Task IDs 与真实 implementation/test/review refs；completion 已交叉认证 diff、命令/exit、review、AC；boundary 已修正；未二审。
+- **completed_at**：2026-07-29T14:19:45Z
 
 ### Verify
 
