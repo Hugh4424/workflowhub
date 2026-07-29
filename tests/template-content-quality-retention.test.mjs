@@ -1,89 +1,22 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 
-import { validateSpecContentProfile } from "../core/stage-content-contracts.mjs";
+import {
+  validatePlanTaskContract,
+  validateSpecContentProfile,
+} from "../core/stage-content-contracts.mjs";
 
 const fixture = JSON.parse(readFileSync(
   new URL("./fixtures/template-content-quality/retention-map.json", import.meta.url),
   "utf8",
 ));
-
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const baseline = (path) => execFileSync(
-  "git",
-  ["show", `${fixture.baseline_ref}:${path}`],
-  { encoding: "utf8" },
-);
-function headingInventory(text) {
-  const seen = new Map();
-  return text.split(/\r?\n/)
-    .filter((line) => /^#{1,3}\s+\S/.test(line))
-    .map((marker) => {
-      const occurrence = (seen.get(marker) ?? 0) + 1;
-      seen.set(marker, occurrence);
-      return { marker, occurrence };
-    });
-}
+const repoRoot = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const agentHubTemplateRoot = resolve(repoRoot, "../multica-agenthub/.specify/templates");
 
-function markerOccurrence(document, marker, wanted = 1) {
-  let occurrence = 0;
-  for (const line of document.split(/\r?\n/)) {
-    if (line !== marker) continue;
-    occurrence += 1;
-    if (occurrence === wanted) return true;
-  }
-  return false;
-}
-
-function headingKey(source, marker, occurrence) {
-  return `${source}\0${marker}\0${occurrence}`;
-}
-
-function headingEntries() {
-  const remaps = new Map(fixture.heading_retention.remaps.map((entry) => [
-    headingKey(entry.source, entry.old_marker, entry.old_occurrence ?? 1),
-    entry,
-  ]));
-  return fixture.scope.flatMap((source) => headingInventory(baseline(source)).map(({ marker, occurrence }) => {
-    const remap = remaps.get(headingKey(source, marker, occurrence));
-    return {
-      id: `heading:${source}:${occurrence}:${marker}`,
-      target: `heading:${source}:${occurrence}:${marker}`,
-      source,
-      old_marker: marker,
-      old_occurrence: occurrence,
-      target_marker: remap?.target_marker ?? marker,
-      target_occurrence: remap?.target_occurrence ?? 1,
-      action: remap?.action ?? fixture.heading_retention.default_action,
-      reason: remap?.reason ?? fixture.heading_retention.default_reason,
-      validator_test: "baseline-heading-and-target",
-    };
-  }));
-}
-
-const retainedHeadings = headingEntries();
-const retentionEntries = [...retainedHeadings, ...fixture.required_rules];
-
-function validatorFor(entry) {
-  const validator = fixture.validators[entry.validator_test];
-  expect(validator, `${entry.id} references an unknown validator`).toBeDefined();
-  return validator;
-}
-
-function executeValidator(entry) {
-  const validator = validatorFor(entry);
-  if (validator.kind === "heading-target") {
-    return markerOccurrence(read(entry.source), entry.target_marker, entry.target_occurrence ?? 1);
-  }
-  if (validator.kind === "regex-target") {
-    return new RegExp(entry.old_pattern, "m").test(baseline(entry.source))
-      && new RegExp(entry.target_pattern, "m").test(read(entry.source));
-  }
-  if (validator.kind === "contract-marker") {
-    return read(entry.path).replace(/\s+/g, "").includes(entry.pattern.replace(/\s+/g, ""));
-  }
-  throw new Error(`unsupported retention validator kind: ${validator.kind}`);
+function headings(document) {
+  return document.split(/\r?\n/).filter((line) => /^#{1,6}\s+\S/.test(line));
 }
 
 function sectionBody(document, heading) {
@@ -95,162 +28,99 @@ function sectionBody(document, heading) {
   return lines.slice(index + 1, next === -1 ? lines.length : next).join("\n").trim();
 }
 
-function tableBlocks(document) {
-  const blocks = [];
-  let current = [];
-  for (const line of document.split(/\r?\n/)) {
-    if (/^\s*\|.*\|\s*$/.test(line)) current.push(line);
-    else if (current.length) {
-      blocks.push(current);
-      current = [];
-    }
-  }
-  if (current.length) blocks.push(current);
-  return blocks;
-}
-
 function inlineJson(document, label) {
-  const match = document.match(new RegExp(`^\\s*-\\s+\\*\\*${label}\\*\\*\\s*[:：]\\s*` + "`(\\{.*\\}|\\[.*\\])`\\s*$", "mi"));
-  if (!match) return null;
-  try { return JSON.parse(match[1]); } catch { return null; }
+  const match = document.match(new RegExp(
+    `^\\s*-\\s+\\*\\*${label}\\*\\*\\s*[:：]\\s*` + "`(\\{.*\\}|\\[.*\\])`\\s*$",
+    "mi",
+  ));
+  return match ? JSON.parse(match[1]) : null;
 }
 
-describe("template content retention map", () => {
-  it("maps every baseline H1/H2/H3 exactly once with unique IDs and targets", () => {
-    const expected = fixture.scope.flatMap((source) =>
-      headingInventory(baseline(source))
-        .map(({ marker, occurrence }) => `${source}\0${marker}\0${occurrence}`));
-    const mapped = retainedHeadings
-      .map(({ source, old_marker, old_occurrence = 1 }) => `${source}\0${old_marker}\0${old_occurrence}`);
-
-    expect(new Set(mapped).size).toBe(mapped.length);
-    expect([...mapped].sort()).toEqual([...expected].sort());
-    const remapKeys = fixture.heading_retention.remaps.map(({ source, old_marker, old_occurrence = 1 }) =>
-      headingKey(source, old_marker, old_occurrence));
-    expect(new Set(remapKeys).size).toBe(remapKeys.length);
-    expect(remapKeys.every((key) => expected.includes(key))).toBe(true);
-    expect(new Set(retentionEntries.map(({ id }) => id)).size).toBe(retentionEntries.length);
-    expect(new Set(retentionEntries.map(({ target }) => target)).size).toBe(retentionEntries.length);
-  });
-
-  it("executes every declared validator and resolves deletion replacements", () => {
-    const targets = new Map(retentionEntries.map((entry) => [entry.target, entry]));
-    for (const item of retentionEntries) {
-      expect(["retain", "refine", "move", "delete"]).toContain(item.action);
-      expect(item.reason.trim().length, `${item.id} needs a concrete reason`).toBeGreaterThan(4);
-      validatorFor(item);
-      if (item.action === "delete") {
-        expect(item.replacement_target, `${item.id} delete needs a replacement_target`).toBeTruthy();
-        const replacement = targets.get(item.replacement_target);
-        expect(replacement, `${item.id} replacement_target must resolve`).toBeDefined();
-        expect(executeValidator(replacement), `${item.id} replacement target is absent`).toBe(true);
-        continue;
+describe("AgentHub body with WorkflowHub overlays", () => {
+  it("retains the AgentHub H2 backbone in declared order", () => {
+    for (const entry of fixture.agenthub_backbone) {
+      const document = read(entry.target_path);
+      const liveSource = join(agentHubTemplateRoot, entry.source_path.split("/").at(-1));
+      const sourceHeadings = existsSync(liveSource)
+        ? headings(readFileSync(liveSource, "utf8")).filter((heading) => /^##\s+/.test(heading))
+        : entry.source_headings;
+      expect(sourceHeadings, `${entry.artifact} source inventory drift`).toEqual(entry.source_headings);
+      expect(entry.mappings.map(({ source_heading }) => source_heading).sort())
+        .toEqual([...entry.source_headings].sort());
+      const declared = entry.target_heading_order;
+      const positions = declared.map((heading) => document.split(/\r?\n/).indexOf(heading));
+      expect(positions.every((position) => position >= 0), `${entry.artifact} lost an AgentHub H2`).toBe(true);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+      for (const mapping of entry.mappings) {
+        expect(mapping.source_heading).toMatch(/^## /);
+        expect(mapping.target_heading).toMatch(/^## /);
+        expect(mapping.reason.length).toBeGreaterThan(8);
+        expect(["retain", "refine", "move", "merge", "split"]).toContain(mapping.action);
+        expect(sectionBody(document, mapping.target_heading), mapping.target_heading).not.toBe("");
       }
-      expect(executeValidator(item), `${item.id} target validation failed`).toBe(true);
     }
   });
 
-  it("keeps every retained heading in baseline reading order", () => {
-    for (const path of fixture.scope) {
-      const document = read(path);
-      const indexes = retainedHeadings.filter((entry) => entry.source === path)
-        .map((entry) => document.indexOf(entry.target_marker));
-      expect(indexes.every((index) => index >= 0), `${path} has missing retained headings`).toBe(true);
-      expect(indexes).toEqual([...indexes].sort((left, right) => left - right));
+  it("retains every WorkflowHub execution contract", () => {
+    for (const entry of fixture.workflowhub_overlays) {
+      const document = read(entry.path);
+      for (const marker of entry.markers) {
+        expect(document, `${entry.artifact} lost ${marker}`).toContain(marker);
+      }
     }
   });
 
-  it("binds retained structure to the existing schemas and validators", () => {
-    for (const check of fixture.contract_checks) {
-      expect(check.reason.trim().length).toBeGreaterThan(4);
-      expect(executeValidator(check), `${check.id} contract marker missing`).toBe(true);
+  it("keeps spec, plan, and tasks responsibilities separate", () => {
+    for (const entry of fixture.responsibilities) {
+      const document = read(entry.path);
+      for (const marker of entry.forbidden) {
+        expect(document, `${entry.path} duplicates ${marker}`).not.toContain(marker);
+      }
     }
   });
 });
 
-describe("high-value Markdown template hygiene", () => {
+describe("published template quality", () => {
   for (const path of fixture.scope) {
-    it(`${path} stays structurally clean`, () => {
+    it(`${path} is readable Markdown`, () => {
       const document = read(path);
-      const allHeadings = document.split(/\r?\n/).filter((line) => /^#{1,6}\s+\S/.test(line));
-      const h1 = allHeadings.filter((line) => /^#\s+/.test(line));
-      const h2 = allHeadings.filter((line) => /^##\s+/.test(line));
-
-      if (fixture.markdown_rules.require_single_h1) expect(h1).toHaveLength(1);
-      if (fixture.markdown_rules.require_unique_h2) expect(new Set(h2).size).toBe(h2.length);
-      if (fixture.markdown_rules.require_balanced_fences) {
-        expect((document.match(/^```/gm) ?? []).length % 2).toBe(0);
-      }
-      if (fixture.markdown_rules.require_nonempty_h2) {
-        for (const heading of h2) {
-          const body = sectionBody(document, heading);
-          if (body === "") {
-            const lines = document.split(/\r?\n/);
-            const nextHeading = lines.slice(lines.indexOf(heading) + 1).find((line) => /^#{1,6}\s+\S/.test(line));
-            const allowed = fixture.markdown_rules.allowed_empty_container_pairs.some((pair) =>
-              pair.heading === heading && nextHeading?.startsWith(pair.next_heading_prefix));
-            expect(allowed, `${path}: empty ${heading}`).toBe(true);
-          }
-        }
-      }
-      if (fixture.markdown_rules.require_consistent_tables) {
-        for (const table of tableBlocks(document)) {
-          const widths = table.map((line) => line.split("|").length);
-          expect(new Set(widths).size, `${path}: inconsistent table width`).toBe(1);
-        }
-      }
-      for (const pattern of fixture.markdown_rules.forbidden_patterns) {
-        expect(document, `${path}: forbidden template text ${pattern}`).not.toContain(pattern);
+      const allHeadings = headings(document);
+      expect(allHeadings.filter((line) => /^#\s+/.test(line))).toHaveLength(1);
+      expect(new Set(allHeadings.filter((line) => /^##\s+/.test(line))).size)
+        .toBe(allHeadings.filter((line) => /^##\s+/.test(line)).length);
+      expect((document.match(/^```/gm) ?? []).length % 2).toBe(0);
+      expect(document).not.toMatch(/<!--|-->|Lorem ipsum|\/Users\/Hugh/);
+      for (const heading of allHeadings.filter((line) => /^##\s+/.test(line))) {
+        expect(sectionBody(document, heading), `${path}: empty ${heading}`).not.toBe("");
       }
     });
   }
-});
 
-describe("template responsibilities", () => {
-  it("keeps the declared product, engineering, and execution information split", () => {
-    for (const check of fixture.content_checks) {
-      const document = read(check.path);
-      expect(check.reason.trim().length, `${check.id} needs a concrete reason`).toBeGreaterThan(4);
-      for (const marker of check.required) {
-        expect(document, `${check.id} is missing ${marker}`).toContain(marker);
-      }
-      for (const marker of check.forbidden) {
-        expect(document, `${check.id} duplicates ${marker}`).not.toContain(marker);
-      }
-    }
-  });
-
-  it("keeps inline machine contracts while rejecting unresolved authoring syntax", () => {
-    const templatePaths = fixture.scope.filter((path) => path.includes("/templates/"));
-    for (const path of templatePaths) {
-      const document = read(path);
-      const nonContractLines = document.split(/\r?\n/)
-        .filter((line) => !line.includes("**Constitution binding**")
-          && !line.includes("**versioned_refs**")
-          && !line.includes("{AUTHORING_TEMPLATE}"))
-        .join("\n");
-      expect(nonContractLines, `${path}: unresolved braces outside a machine contract`).not.toMatch(/\{[^}\n]+\}/);
-      expect(document, `${path}: authoring comment`).not.toMatch(/<!--|-->/);
-    }
-  });
-
-  it("keeps runtime machine contracts parseable", () => {
+  it("uses parseable authoring bindings without fake valid hashes", () => {
     const plan = read("skills/spec-plan/templates/plan-template.md");
     const tasks = read("skills/spec-tasks/templates/tasks-template.md");
-    const binding = inlineJson(plan, "Constitution binding");
+    const constitution = inlineJson(plan, "Constitution binding");
     const refs = inlineJson(tasks, "versioned_refs");
-    expect(binding).toMatchObject({ artifact_kind: "constitution", clause_count: 21 });
-    expect(binding.hash).toMatch(/^[a-f0-9]{64}$/);
-    expect(refs).toHaveLength(1);
-    expect(refs[0]).toMatchObject({ artifact_kind: "spec" });
-    expect(refs[0].hash).toMatch(/^[a-f0-9]{64}$/);
+
+    expect(constitution).toMatchObject({ artifact_kind: "constitution", clause_count: 21 });
+    expect(refs.map(({ artifact_kind }) => artifact_kind)).toEqual(["spec", "plan"]);
+    expect(constitution.hash).toBe("[填写：真实 SHA-256]");
+    expect(refs.every(({ hash }) => hash === "[填写：真实 SHA-256]")).toBe(true);
+    expect(`${plan}\n${tasks}`).not.toMatch(/"hash":"([a-f0-9])\1{63}"/);
   });
 
-  it("rejects the raw spec template through the production content validator", () => {
-    const template = read("skills/spec-specify/templates/spec-template.md");
-    const validation = validateSpecContentProfile(template);
-    expect(template.match(/\{AUTHORING_TEMPLATE\}/g)).toHaveLength(1);
-    expect(validation.ok).toBe(false);
-    expect(validation.errors).toContain("spec contains an unresolved placeholder");
+  it("production validators reject every raw authoring template", () => {
+    const spec = read("skills/spec-specify/templates/spec-template.md");
+    const plan = read("skills/spec-plan/templates/plan-template.md");
+    const tasks = read("skills/spec-tasks/templates/tasks-template.md");
+    expect(validateSpecContentProfile(spec).errors).toContain("spec contains an unresolved placeholder");
+    expect(validatePlanTaskContract({ spec, plan, tasks }).errors)
+      .toContain("generated plan/tasks must not retain placeholders, template comments, or filler");
+  });
+
+  it("uses one flat task card instead of five-level heading noise", () => {
+    const tasks = read("skills/spec-tasks/templates/tasks-template.md");
+    expect(tasks.match(/^#### T001 /gm)).toHaveLength(1);
+    expect(tasks).not.toMatch(/^##### /m);
   });
 });

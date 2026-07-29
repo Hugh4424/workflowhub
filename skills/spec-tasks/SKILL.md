@@ -24,11 +24,12 @@ remains the engineering evidence dossier.
 
 ## Reading contract
 
-Use `templates/tasks-template.md`. A human should scan each task as four short
-blocks: identity, traceability, execution, and verification/failure. Generated
-Markdown contains no template comments, placeholders, empty headings, empty
-tables, or filler. Use `N/A — {task-specific reason}` when a field is genuinely
-not applicable.
+Use `templates/tasks-template.md`. Keep AgentHub's short Phase checklist and one
+flat task card; do not add five-level identity/traceability/execution headings.
+The field order still reads as identity, traceability, execution, then
+verification/failure. Generated Markdown contains no template comments,
+placeholders, empty headings, empty tables, or filler. Use
+`N/A — {task-specific reason}` only when a field is genuinely not applicable.
 
 ## One authoritative task card
 

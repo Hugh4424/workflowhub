@@ -130,25 +130,21 @@ function card({
   exit,
 }) {
   return `#### ${id} — ${title}
-##### ${id} 身份
 - **ID**：${id}
 - **Phase**：Phase 1：Contract
 - **goal**：Move one observable contract state.
 - **design_state**：ready
-##### ${id} 追溯
 - **versioned_refs**：\`[{"artifact_kind":"spec","ref":"spec.md","hash":"${specHash}","id":"FR-DEMO-001"},{"artifact_kind":"plan","ref":"plan.md","hash":"${planHash}","id":"DEC-001"}]\`
 - **输入**：FR-DEMO-001
 - **依赖**：${dependency}
 - **并行**：否 — ordered RED/GREEN
 - **FR**：FR-DEMO-001
 - **AC**：AC1
-##### ${id} 执行
 - **动作**：${action}
 - **精确文件**：\`${file}\`
 - **boundary**：files: \`${file}\`; symbols/regions: only the declared symbol.
 - **输出**：Contract evidence.
 - **Knowledge**：Verified local interface.
-##### ${id} 验证与失败
 - **verification_role**：${role}
 - **paired_task**：${pair}
 - **gate_cmd**：\`npx vitest run tests/demo.test.mjs\`
@@ -311,8 +307,8 @@ describe("plan-task.v3 structural contract", () => {
     ) });
     expect(oracle.errors.join("\n")).toMatch(/same oracle identity/);
     const frDrift = validate({ tasks: tasks.replace(
-      "- **FR**：FR-DEMO-001\n- **AC**：AC1\n##### T002 执行\n- **动作**：Implement",
-      "- **FR**：FR-OTHER-001\n- **AC**：AC1\n##### T002 执行\n- **动作**：Implement",
+      "- **FR**：FR-DEMO-001\n- **AC**：AC1\n- **动作**：Implement",
+      "- **FR**：FR-OTHER-001\n- **AC**：AC1\n- **动作**：Implement",
     ) });
     expect(frDrift.errors.join("\n")).toMatch(/same FR IDs|unknown FR/);
   });

@@ -49,10 +49,10 @@ to another status. Every unknown PFACT is bound to a RISK or OPEN card.
 
 Keep product facts in `spec.md` only. Do not add code paths, symbols, code
 anchors, engineering alternatives, implementation state machines, exact gate
-commands, or plan/task decisions. Keep explicit exclusions in one authoritative section and inherit
-each accepted upstream exclusion exactly once. Express default product
-constraints as FR/AC-linked obligations; leave engineering gates and exact test
-commands to plan/tasks.
+commands, or plan/task decisions. Keep explicit exclusions in one authoritative
+section and inherit each accepted upstream exclusion exactly once. Express
+default product constraints as FR/AC-linked obligations; leave engineering
+gates and exact test commands to plan/tasks.
 
 Include module, entity, data-lifecycle, and compatibility contracts only at the
 product boundary. For each conditional subsection, write either the applicable

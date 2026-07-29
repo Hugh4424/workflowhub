@@ -23,11 +23,14 @@ describe("spec-specify readable content contract", () => {
       "## 3. 用户场景与状态覆盖",
       "## 4. 产品事实与假设（PFACT）",
       "## 5. 功能需求",
-      "## 6. 条件式业务合同",
-      "## 7. 明确不做与默认必须成立",
-      "## 8. 业务影响与回归范围",
-      "## 9. 验收标准",
-      "## 10. 风险、未决与交接",
+      "## 6. 模块划分",
+      "## 7. 关键实体",
+      "## 8. 数据和生命周期",
+      "## 9. 兼容性预留",
+      "## 10. 明确不做与默认必须成立",
+      "## 11. 验收标准",
+      "## 12. 风险、未决与交接",
+      "## 13. 业务影响与回归范围",
     ];
     const positions = headings.map((heading) => template.indexOf(heading));
     expect(positions.every((position) => position >= 0)).toBe(true);
@@ -36,8 +39,8 @@ describe("spec-specify readable content contract", () => {
 
   it("contains scenario identity and all eight state decisions", () => {
     expect(template).toContain("SCN-001");
-    for (const state of ["默认", "空", "错误", "加载", "取消", "边界", "权限", "竞态"]) {
-      expect(template).toMatch(new RegExp(`\\| ${state} \\|`));
+    for (const state of ["默认态", "空态", "错误态", "加载态", "取消态", "边界态", "权限态", "竞态"]) {
+      expect(template).toContain(`**${state}**`);
     }
     expect(skill).toContain("link each applicable state to a scenario");
   });
@@ -58,7 +61,7 @@ describe("spec-specify readable content contract", () => {
     expect(template.match(/^### 明确不做$/gm)).toHaveLength(1);
     expect(template).not.toContain("### 非目标");
     expect(template).not.toContain("### 假设");
-    for (const section of ["模块职责", "关键实体", "数据与生命周期", "兼容性"]) {
+    for (const section of ["模块划分", "关键实体", "数据和生命周期", "兼容性预留"]) {
       expect(template).toContain(section);
     }
   });

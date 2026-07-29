@@ -396,6 +396,22 @@ const SPEC_CONTENT_V3_SECTIONS = Object.freeze([
   /^3\.\s+用户场景与状态覆盖$/,
   /^4\.\s+产品事实与假设（PFACT）$/,
   /^5\.\s+功能需求$/,
+  /^6\.\s+模块划分$/,
+  /^7\.\s+关键实体$/,
+  /^8\.\s+数据和生命周期$/,
+  /^9\.\s+兼容性预留$/,
+  /^10\.\s+明确不做与默认必须成立$/,
+  /^11\.\s+验收标准$/,
+  /^12\.\s+风险、未决与交接$/,
+  /^13\.\s+业务影响与回归范围$/,
+]);
+const LEGACY_SPEC_CONTENT_V3_SECTIONS = Object.freeze([
+  /^速读卡(?:（30 秒）)?$/,
+  /^1\.\s+问题与紧迫性$/,
+  /^2\.\s+背景、目标与范围$/,
+  /^3\.\s+用户场景与状态覆盖$/,
+  /^4\.\s+产品事实与假设（PFACT）$/,
+  /^5\.\s+功能需求$/,
   /^6\.\s+条件式业务合同$/,
   /^7\.\s+明确不做与默认必须成立$/,
   /^8\.\s+业务影响与回归范围$/,
@@ -408,6 +424,7 @@ export function validateSpecContentProfile(markdown) {
   const errors = markdownStructureErrors(markdown, "spec");
   const residueText = withoutProgrammingFencedCode(markdown).replace(/`[^`\n]*`/g, "");
   if (/\{[^{}"':,\n]{1,120}\}/.test(residueText)) errors.push("spec contains an unresolved placeholder");
+  if (/\[填写：[^\]\r\n]{1,120}\]/.test(residueText)) errors.push("spec contains an unresolved placeholder");
   if (/<!--[\s\S]*?-->/.test(markdown)) errors.push("spec contains an authoring comment");
   if (/^\s*(?:待补充|TBD|TODO)\s*$/mi.test(markdown)) errors.push("spec contains filler");
   if ((markdown.match(/^###\s+明确不做\s*$/gm) ?? []).length !== 1) {
@@ -416,9 +433,14 @@ export function validateSpecContentProfile(markdown) {
   if (/^###\s+假设\s*$/m.test(markdown)) errors.push("assumptions must be represented only as inferred PFACT");
 
   const sectionHeadings = markdownSections(markdown, 2).map(({ heading }) => heading);
-  for (const expected of SPEC_CONTENT_V3_SECTIONS) {
-    if (!sectionHeadings.some((heading) => expected.test(heading))) {
-      errors.push(`spec-content.v3 section missing: ${expected.source}`);
+  const sectionProfiles = [SPEC_CONTENT_V3_SECTIONS, LEGACY_SPEC_CONTENT_V3_SECTIONS];
+  const matchingProfile = sectionProfiles.find((profile) =>
+    profile.every((expected) => sectionHeadings.some((heading) => expected.test(heading))));
+  if (!matchingProfile) {
+    for (const expected of SPEC_CONTENT_V3_SECTIONS) {
+      if (!sectionHeadings.some((heading) => expected.test(heading))) {
+        errors.push(`spec-content.v3 section missing: ${expected.source}`);
+      }
     }
   }
   for (const [label, pattern] of [
@@ -592,7 +614,7 @@ function placeholderOrTemplateNoise(document) {
   if (/<!--[\s\S]*?-->/.test(document)) return true;
   const prose = withoutProgrammingFencedCode(document)
     .replace(/`[^`\n]*`/g, "");
-  return /\{[^{}\n]{1,120}\}|^\s*(?:待补充|TBD|TODO)\s*$/mi.test(prose);
+  return /\{[^{}\n]{1,120}\}|\[填写：[^\]\r\n]{1,120}\]|^\s*(?:待补充|TBD|TODO)\s*$/mi.test(prose);
 }
 
 function withoutFencedCode(document) {

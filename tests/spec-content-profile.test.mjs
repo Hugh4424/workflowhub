@@ -167,34 +167,49 @@ const cleanSpec = `
 ## 5. 功能需求
 - **FR-DEMO-001**：用户完成动作后看到结果
 
-## 6. 条件式业务合同
-### 6.1 模块职责
+## 6. 模块划分
 N/A — 没有跨模块职责变化。
-### 6.2 关键实体
+
+## 7. 关键实体
 N/A — 没有实体变化。
-### 6.3 数据与生命周期
+
+## 8. 数据和生命周期
 N/A — 没有数据生命周期变化。
-### 6.4 兼容性
+
+## 9. 兼容性预留
 N/A — 既有行为保持不变。
 
-## 7. 明确不做与默认必须成立
+## 10. 明确不做与默认必须成立
 
 ### 明确不做
 - 不改变既有用户数据。
 
-## 8. 业务影响与回归范围
-回归既有主路径。
-
-## 9. 验收标准
+## 11. 验收标准
 - [ ] **AC-01**：用户看到结果
 
-## 10. 风险、未决与交接
+## 12. 风险、未决与交接
 N/A — 已检查范围和验收边界，未发现未决项。
+
+## 13. 业务影响与回归范围
+回归既有主路径。
 `;
 
 describe("generated spec Markdown profile", () => {
   it("accepts clean product-only Markdown", () => {
     expect(validateSpecContentProfile(cleanSpec)).toMatchObject({ ok: true, errors: [] });
+  });
+
+  it("keeps previously published spec-content.v3 headings readable", () => {
+    const legacy = cleanSpec
+      .replace("## 6. 模块划分", "## 6. 条件式业务合同\n### 6.1 模块职责")
+      .replace("## 7. 关键实体", "### 6.2 关键实体")
+      .replace("## 8. 数据和生命周期", "### 6.3 数据与生命周期")
+      .replace("## 9. 兼容性预留", "### 6.4 兼容性")
+      .replace("## 10. 明确不做与默认必须成立", "## 7. 明确不做与默认必须成立")
+      .replace("## 11. 验收标准", "## 9. 验收标准")
+      .replace("## 12. 风险、未决与交接", "## 10. 风险、未决与交接")
+      .replace("## 13. 业务影响与回归范围", "## 8. 业务影响与回归范围");
+    expect(validateSpecContentProfile(legacy)).toMatchObject({ ok: true, errors: [] });
   });
 
   it("ignores heading-like text inside fenced examples", () => {

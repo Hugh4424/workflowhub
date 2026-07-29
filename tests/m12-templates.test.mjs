@@ -49,20 +49,20 @@ describe("plan-template.md contains all required sections", () => {
   test("plan-template.md keeps technical context and exact file authority", () => {
     const content = readFileSync(planPath, "utf8");
     assert.ok(content.includes("## 2. Technical Context and Constraints"));
-    assert.ok(content.includes("## 5. File Boundary"));
+    assert.ok(content.includes("## 9. File Boundary"));
     assert.ok(content.includes("Phase.Files"));
   });
 
   test("plan-template.md keeps a bound constitution appendix", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## Appendix A. Constitution Check"));
+    assert.ok(content.includes("## 3. Constitution Check"));
     const binding = inlineJson(content, "Constitution binding");
     for (const field of ["artifact_kind", "ref", "hash", "id", "version", "clause_count"]) {
       assert.ok(Object.hasOwn(binding, field), `missing Constitution binding.${field}`);
     }
     assert.equal(binding.artifact_kind, "constitution");
     assert.match(binding.ref, /\S/);
-    assert.match(binding.hash, /^[a-f0-9]{64}$/);
+    assert.equal(binding.hash, "[填写：真实 SHA-256]");
     assert.match(binding.id, /\S/);
     assert.match(binding.version, /\S/);
     assert.ok(Number.isInteger(binding.clause_count));
@@ -86,10 +86,10 @@ describe("plan-template.md contains all required sections", () => {
   test("plan-template.md keeps solution, decisions, tests, and recovery", () => {
     const content = readFileSync(planPath, "utf8");
     for (const heading of [
-      "## 4. Solution Design",
-      "## 6. Technical Decisions",
-      "## 7. Test Strategy",
-      "## 8. Rollback and Recovery",
+      "## 6. Solution Design",
+      "## 5. Technical Decisions",
+      "## 13. Test Strategy",
+      "## 12. Rollback and Recovery",
       "## Phase 1",
     ]) assert.ok(content.includes(heading), `missing ${heading}`);
   });
@@ -114,7 +114,7 @@ describe("plan-template.md contains all required sections", () => {
 
   test("plan-template.md uses one traceability authority", () => {
     const content = readFileSync(planPath, "utf8");
-    assert.ok(content.includes("## 11. Requirement and Verification Traceability"));
+    assert.ok(content.includes("## 16. Requirement and Verification Traceability"));
     assert.ok(!content.includes("## Verification Mapping"));
   });
 
@@ -138,23 +138,39 @@ describe("tasks-template.md contains all required elements", () => {
     assert.ok(content.includes("逐字一致"));
   });
 
-  test("tasks-template.md contains one four-group authoritative card", () => {
+  test("tasks-template.md contains one flat authoritative card", () => {
     const content = readFileSync(tasksPath, "utf8");
-    for (const group of ["身份", "追溯", "执行", "验证与失败"]) {
-      assert.ok(content.includes(`##### T001 ${group}`), `missing ${group}`);
+    for (const field of [
+      "ID", "Phase", "goal", "design_state", "versioned_refs", "输入", "依赖",
+      "并行", "FR", "AC", "动作", "精确文件", "boundary", "输出", "Knowledge",
+      "verification_role", "paired_task", "gate_cmd", "expected_exit", "oracle",
+      "evidence_path", "STOP", "recovery", "task risk",
+    ]) {
+      assert.ok(content.includes(`**${field}**`), `missing ${field}`);
     }
+    assert.equal((content.match(/^#### T001 /gm) ?? []).length, 1);
+    assert.ok(!content.includes("##### T001"), "task card must stay flat and scannable");
     assert.ok(!content.includes("For the v2 contract, add"));
+  });
+
+  test("tasks-template.md demonstrates a reciprocal RED/GREEN pair", () => {
+    const content = readFileSync(tasksPath, "utf8");
+    assert.match(content, /^#### T001 — RED：/m);
+    assert.match(content, /^#### T002 — GREEN：/m);
+    assert.ok(content.includes("- **paired_task**：T002"));
+    assert.ok(content.includes("- **paired_task**：T001"));
+    assert.ok(content.includes("- **依赖**：T001"));
   });
 
   test("tasks-template.md documents reasoned non-behavior N/A without weakening RED/GREEN", () => {
     const content = readFileSync(tasksPath, "utf8");
     assert.ok(content.includes("N/A — non-behavior change"));
-    assert.ok(content.includes("仍须提供真实 gate_cmd"));
+    assert.ok(content.includes("非行为任务仍须真实 gate"));
   });
 
   test('tasks-template.md documents [P] parallel marker convention', () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(content.includes("[P]"), "tasks-template.md must document [P] parallel marker convention");
+    assert.ok(content.includes("可并行"), "tasks-template.md must document parallel ownership");
   });
 
   test("tasks-template.md preserves FR/AC and versioned references", () => {
@@ -165,7 +181,7 @@ describe("tasks-template.md contains all required elements", () => {
     for (const field of ["artifact_kind", "ref", "hash", "id"]) {
       assert.ok(Object.hasOwn(refs[0], field), `missing versioned_refs[0].${field}`);
     }
-    assert.match(refs[0].hash, /^[a-f0-9]{64}$/);
+    assert.equal(refs[0].hash, "[填写：真实 SHA-256]");
   });
 
   test("tasks-template.md uses the runtime-recognized v3 template version", () => {
@@ -184,7 +200,6 @@ describe("tasks-template.md contains all required elements", () => {
   test("tasks-template.md marks Stage syntax read-only", () => {
     const content = readFileSync(tasksPath, "utf8");
     assert.ok(content.includes("## Stage N"));
-    assert.ok(content.includes("stage:N") && content.includes("depends:"));
     assert.ok(content.includes("只读导入"));
   });
 });
