@@ -68,12 +68,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增真实 per-invocation dirty/legacy 写边界、stale informational path-card、三个 owner shared preflight、子写复用及失败零 mutation 断言；恢复 build-spec/build-plan/verify-code 既有覆盖。
-- **executed_commands**：纯 Phase 1 聚焦 RED exit 1，真实命中 dirty execution 未拒绝与 legacy write boundary 误阻断；修复后五文件验证 117/117、exit 0；`git diff --check` exit 0。
-- **evidence_refs**：implementation commit `6419572226b995cac1bcb44eef41a109c78da84f`；本次 Phase 1 RED/GREEN 执行输出；Phase review finding 1–3 及修复后 117/117 输出。
+- **actual_changes**：`["core/__tests__/invocation-identity.test.mjs","core/__tests__/stage-context.test.mjs","core/__tests__/task-kernel-publish.test.mjs","scripts/__tests__/task-recovery.test.mjs","tests/task-close-delivery.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/invocation-identity.test.mjs core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/invocation-identity.test.mjs core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/6419572226b995cac1bcb44eef41a109c78da84f","sha256":"b7833114880dc3cb07a3beae485f2bb09af8d2ccfc5cbabce8e064d718c55f92"}]`
 - **covered_ac**：AC-01、AC-02、AC-03、AC-04。
 - **review_fact**：独立 Phase review 原 verdict=`revise_required`；3 个 major finding 均已修复并由受影响测试验证；按 single-review 规则未二审、未把 verdict 改写为 pass。旧 canonical task 因 accepted plan/tree 漂移与 closed Phase 无法发布新正式 review，真实记录为 formal unavailable。
-- **completed_at**：2026-07-29T09:01:22Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T002 — GREEN：共享 preflight、调用身份与路径交接
 
@@ -106,12 +106,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：read-only inspect 后在最终 Workspace/CandidateWorkspace 上生成一次 shared write boundary；stage-runtime/recovery/close 子写复用；path-card 绑定真实 source ref/hash 且 informational-only；close 删除 task branch 后只从已认证 no-ff merge 第二父提交恢复 task tip。
-- **executed_commands**：`CI=1 npx vitest run core/__tests__/invocation-identity.test.mjs core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs` → 117/117、exit 0；生产文件 `node --check` 通过；`git diff --check` exit 0；allowlist 12/12、unexpected=[]。
-- **evidence_refs**：implementation commit `6419572226b995cac1bcb44eef41a109c78da84f`；Phase 1 GREEN 输出；独立 review finding 修复记录。
+- **actual_changes**：`["core/__tests__/invocation-identity.test.mjs","core/__tests__/stage-context.test.mjs","core/invocation-identity.mjs","core/stage-context.mjs","core/task-close.mjs","core/task-handle.mjs","core/write-boundary-preflight.mjs","scripts/__tests__/task-recovery.test.mjs","scripts/stage-runtime.mjs","scripts/task-close.mjs","scripts/task-recovery.mjs","tests/task-close-delivery.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/invocation-identity.test.mjs core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/6419572226b995cac1bcb44eef41a109c78da84f","sha256":"b7833114880dc3cb07a3beae485f2bb09af8d2ccfc5cbabce8e064d718c55f92"}]`
 - **covered_ac**：AC-01、AC-02、AC-03、AC-04。
 - **review_fact**：同 T001：原 `revise_required` 保留；3 个 finding 已修；无二审；formal review unavailable 原因已如实记录。
-- **completed_at**：2026-07-29T09:01:22Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
@@ -185,12 +185,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增三类 recovery kind registry/schema/JS/TaskHandle/CLI parity、旧 v1 兼容、未知 kind 拒绝、CAS/rollback/replay、dirty-cleanup-rebind 与 normal close effective Workspace 的真实 RED。
-- **executed_commands**：纯 Phase 2 RED：`core/task-recovery` 19 项中 3 项按 OR-RECOVERY 失败；补充审查 finding RED 命中缺 credential producer、伪造 authorization、normal close 旧 root。最终精确 6 文件 gate 141/141、exit 0。
-- **evidence_refs**：implementation commit `dd51a5a92074d52647b9d6cae569202b21bed7df`；Phase 2 RED/GREEN 输出；一次独立 review 三项 blocking finding 及修复记录。
+- **actual_changes**：`["core/__tests__/task-recovery.test.mjs","core/__tests__/task-handle.test.mjs","core/__tests__/workspace-manager.test.mjs","scripts/__tests__/task-recovery.test.mjs","tests/task-close-delivery.test.mjs","tests/terminal-runtime-blockers.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/task-recovery.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/workspace-manager.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs tests/terminal-runtime-blockers.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/task-recovery.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/workspace-manager.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs tests/terminal-runtime-blockers.test.mjs","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/dd51a5a92074d52647b9d6cae569202b21bed7df","sha256":"fff6d1d5130fbc29fac58459d9c5019c4d7a3a07f59ce3671303ed28203d2578"}]`
 - **covered_ac**：AC-03、AC-04、AC-08、AC-09、AC-10。
 - **review_fact**：独立 Phase review 原 verdict=`revise_required`；3 个 blocking finding 已全部修复，原 verdict 保留；未二审。formal canonical review 因旧 task closed/plan drift unavailable。
-- **completed_at**：2026-07-29T10:05:38Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T004 — GREEN：operation registry 与正式写入口
 
@@ -223,12 +223,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：正式 CLI 签发/消费 content-addressed recovery credential；authorization 强绑定 purpose、subject hash、旧/新 Workspace、Git identity、artifact refs；normal close 使用 authenticated effective Workspace 并安全 detach 旧脏 worktree，保留用户字节。
-- **executed_commands**：最终精确 gate 6/6 files、141/141 tests、exit 0；真实 CLI 17/17；task-close 33/33；4 个 `node --check`、`git diff --check` 通过；allowlist 12 paths、unexpected=[]。
-- **evidence_refs**：implementation commit `dd51a5a92074d52647b9d6cae569202b21bed7df`；Phase 2 GREEN 输出；独立 review finding 修复记录。
+- **actual_changes**：`["core/__tests__/task-recovery.test.mjs","core/__tests__/workspace-manager.test.mjs","core/schemas/workflowhub-recovery-credential.v1.json","core/schemas/workflowhub-recovery-generation.v1.json","core/task-close.mjs","core/task-handle.mjs","core/task-recovery.mjs","core/workspace.mjs","scripts/__tests__/task-recovery.test.mjs","scripts/task-recovery.mjs","tests/task-close-delivery.test.mjs","tests/terminal-runtime-blockers.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/task-recovery.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/workspace-manager.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs tests/terminal-runtime-blockers.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/dd51a5a92074d52647b9d6cae569202b21bed7df","sha256":"fff6d1d5130fbc29fac58459d9c5019c4d7a3a07f59ce3671303ed28203d2578"}]`
 - **covered_ac**：AC-03、AC-04、AC-08、AC-09、AC-10。
 - **review_fact**：原 `revise_required` 保留；credential producer、authorization binding、effective close 三项 blocking finding 已修；按 single-review 规则未二审；formal review unavailable 已如实记录。
-- **completed_at**：2026-07-29T10:05:38Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
@@ -302,12 +302,12 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：构造 locator 原始 ENOENT、doctor 阻断、材料/anchor dispatch 前失败、跨 snapshot 复用、orphan `recover-spec-receipt`、stale base consumer 和旧 invocation replay 的真实 RED。
-- **executed_commands**：初始 recovery gate 7/7 fail，真实命中缺 CLI/TaskKernel writer；审查 finding RED 命中 doctor/locator 5 failures 与旧 invocation replay。最终 Phase 3 exact gate 7/7 files、153/153 tests、exit 0。
-- **evidence_refs**：implementation commit `1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697`；Phase 3 RED/GREEN 输出；一次独立 review 三项 major finding 及修复记录。
+- **actual_changes**：`["core/__tests__/local-skill-resolver.test.mjs","core/__tests__/capability-doctor.test.mjs","core/__tests__/stage-skill-runtime.test.mjs","core/__tests__/receipt-writer.test.mjs","core/__tests__/task-kernel-publish.test.mjs","scripts/__tests__/stage-runtime-spec-recovery.test.mjs","skills/wh-review/scripts/__tests__/review-runner.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/local-skill-resolver.test.mjs core/__tests__/capability-doctor.test.mjs core/__tests__/stage-skill-runtime.test.mjs core/__tests__/receipt-writer.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/local-skill-resolver.test.mjs core/__tests__/capability-doctor.test.mjs core/__tests__/stage-skill-runtime.test.mjs core/__tests__/receipt-writer.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697","sha256":"6184ef478b521f6bb15d8f54027d77bd719e152d616e097c029f99ebc5958bb3"}]`
 - **covered_ac**：AC-05、AC-06、AC-07。
 - **review_fact**：独立 Phase review 原 verdict=`revise_required`；doctor gate、双 locator、旧 invocation capability 三项 major finding 已修，原 verdict 保留；未二审；formal canonical review unavailable。
-- **completed_at**：2026-07-29T11:00:11Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T006 — GREEN：单源诊断与同快照
 
@@ -340,12 +340,12 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：统一 resolver/doctor diagnostic，doctor enforcement=`advisory`；本地材料失败零 provider 调用；receipt/review/attempt/checkpoint 同快照；补齐 build-spec receipt recovery CLI、create-only TaskKernel writer、stale-base consumer；用模块私有 WeakMap one-shot owner capability 拒绝 clone/旧 record/错 operation/reuse。
-- **executed_commands**：最终 exact gate 7/7 files、153/153 tests、exit 0；5-stage local skill smoke 通过；16 个 `.mjs` `node --check`、`git diff --check`、Phase 3 allowlist 通过。
-- **evidence_refs**：implementation commit `1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697`；Phase 3 GREEN 输出；独立 review finding 修复记录。
+- **actual_changes**：`["core/__tests__/capability-doctor.test.mjs","core/__tests__/local-skill-resolver.test.mjs","core/__tests__/receipt-writer.test.mjs","core/__tests__/stage-skill-runtime.test.mjs","core/__tests__/task-kernel-publish.test.mjs","core/build-spec-receipt-recovery.mjs","core/capability-doctor.mjs","core/local-skill-resolver.mjs","core/receipt-writer.mjs","core/stage-handlers.mjs","core/stage-runner.mjs","core/stage-skill-runtime.mjs","core/task-kernel-implementation.mjs","scripts/__tests__/stage-runtime-spec-recovery.test.mjs","scripts/stage-runtime.mjs","skills/wh-review/scripts/__tests__/review-runner.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/local-skill-resolver.test.mjs core/__tests__/capability-doctor.test.mjs core/__tests__/stage-skill-runtime.test.mjs core/__tests__/receipt-writer.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697","sha256":"6184ef478b521f6bb15d8f54027d77bd719e152d616e097c029f99ebc5958bb3"}]`
 - **covered_ac**：AC-05、AC-06、AC-07。
 - **review_fact**：原 `revise_required` 保留；3 个 major finding RED→GREEN；按 single-review 规则未二审；formal review unavailable 已如实记录。
-- **completed_at**：2026-07-29T11:00:11Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
@@ -419,12 +419,12 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：构造 support missing/伪造、核心 decision 缺失/错绑、caller attempt、target attempt-N、canonical verdict 篡改、policy 变化误复用、非法/缺口 generation reset 的真实 RED。
-- **executed_commands**：RED 分别命中 policy-change 错误复用、缺 decision accepted、合法 retry 被 audit 判失败、reset generation gap 静默回退；最终更新后 exact gate 4 files、171/171 tests、exit 0。
-- **evidence_refs**：implementation commit `c111509d8c85cb3dd058d45c14a34ae926535d46`；Phase 4 RED/GREEN 输出；一次独立 review 三项 major finding 及修复记录。
+- **actual_changes**：`["core/__tests__/task-kernel-publish.test.mjs","core/__tests__/task-handle.test.mjs","core/__tests__/receipt-writer.test.mjs","skills/wh-review/scripts/__tests__/review-runner.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/c111509d8c85cb3dd058d45c14a34ae926535d46","sha256":"f857122b9ec262ef196fb1e9a84462422032fb5ca1a54393d293ba5fad89a800"}]`
 - **covered_ac**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16。
 - **review_fact**：独立 Phase review 原 verdict=`revise_required`；decision、retry audit、generation gap 三项 major finding 已修，原 verdict 保留；未二审；formal canonical review unavailable。
-- **completed_at**：2026-07-29T11:58:33Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T008 — GREEN：单核心与合法 generation
 
@@ -457,12 +457,12 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：核心 decision 必须 canonical ref/hash/bytes 同源，support audit 缺失非 gate；kernel 派生并认证 target attempt-N；consumer 只认证 canonical verdict；policy fingerprint 进入 reuse/lock/request ID；structural resolution 正式触发 append-only generation reset；TaskHandle 窄枚举保证 reset namespace 连续。
-- **executed_commands**：最终 exact gate `CI=1 npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs` → 4 files、171/171、exit 0；12 files `node --check`、`git diff --check`、allowlist unexpected=[]。
-- **evidence_refs**：implementation commit `c111509d8c85cb3dd058d45c14a34ae926535d46`；Phase 4 GREEN 输出；ADR 0011；独立 review finding 修复记录。
+- **actual_changes**：`["core/__tests__/receipt-writer.test.mjs","core/__tests__/task-handle.test.mjs","core/__tests__/task-kernel-publish.test.mjs","core/audit-aggregator.mjs","core/canonical-receipt-writer.mjs","core/review-flow-authority.mjs","core/task-handle.mjs","core/task-kernel-implementation.mjs","docs/adr/0011-authenticated-review-flow-generations.md","skills/wh-review/scripts/__tests__/review-runner.test.mjs","skills/wh-review/scripts/review-controller.mjs","skills/wh-review/scripts/review-runner.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/c111509d8c85cb3dd058d45c14a34ae926535d46","sha256":"f857122b9ec262ef196fb1e9a84462422032fb5ca1a54393d293ba5fad89a800"}]`
 - **covered_ac**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16。
 - **review_fact**：原 `revise_required` 保留；3 个 major RED→GREEN；按 single-review 规则未二审；formal review unavailable 已如实记录。
-- **completed_at**：2026-07-29T11:58:33Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
@@ -538,10 +538,10 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **status**：`completed`
 - **actual_changes**：`["core/__tests__/stage-context.test.mjs","scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","tests/stage-completion-facts.test.mjs","tests/interaction-quality-contract.test.mjs","tests/stage-plan-task-contract-v3.test.mjs","tests/official-component-receipts.test.mjs","tests/build-code-phase-evidence.test.mjs","tests/five-stage-facts-v2.test.mjs","tests/facts-subschema.test.mjs"]`
 - **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":1},{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":0}]`
-- **evidence_refs**：`[{"ref":"tests/stage-plan-task-contract-v3.test.mjs","sha256":"24094ec5c9773f261ec83c86086b06f6ec90e8641c2dd8309186dcaa105c9230"},{"ref":"scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","sha256":"1145e72bff363424f53d2bd8aad64390057fd0ee228ff9c9a6bbbdc9b66689a4"}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/5af7349554cdfbb0bfa5c502484d12c69e620188","sha256":"2729e2025a63e01c6177827903cb06f4bb0fb1bdedf98cce7f76edf879d19dfb"}]`
 - **covered_ac**：AC-17、AC-18、AC-19、AC-20、AC-21
 - **review_fact**：Phase 5 一次独立审查原 verdict=`revise_required`；2 个 major finding 与 1 个 boundary finding 已修；按 single-review 规则未二审。
-- **completed_at**：2026-07-29T14:19:45Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T010 — GREEN：同源完成事实与人类交接
 
@@ -576,10 +576,10 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **status**：`completed`
 - **actual_changes**：`["contracts/facts-subschema.json","core/__tests__/stage-context.test.mjs","core/canonical-receipt-writer.mjs","core/schemas/ambiguity-ledger.v2.json","core/schemas/stage-completion-facts.v1.json","core/stage-completion-facts.mjs","core/stage-content-contracts.mjs","core/stage-context.mjs","core/stage-handlers.mjs","core/stage-runner.mjs","core/task-kernel-implementation.mjs","core/workspace.mjs","scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","scripts/stage-runtime.mjs","skills/spec-tasks/SKILL.md","skills/spec-tasks/templates/tasks-template.md","skills/wh-review/scripts/integration-review-subject.mjs","skills/wh-review/scripts/review-materials.mjs","tests/build-code-phase-evidence.test.mjs","tests/facts-subschema.test.mjs","tests/five-stage-facts-v2.test.mjs","tests/interaction-quality-contract.test.mjs","tests/official-component-receipts.test.mjs","tests/stage-completion-facts.test.mjs","tests/stage-plan-task-contract-v3.test.mjs","workflows/build-code/SKILL.md","workflows/build-code/phase-evidence.mjs","workflows/build-code/steps.json","workflows/build-plan/SKILL.md","workflows/build-plan/steps.json","workflows/build-spec/SKILL.md","workflows/build-spec/steps.json","workflows/make-decision/SKILL.md","workflows/verify-code/SKILL.md","workflows/verify-code/steps.json"]`
 - **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
-- **evidence_refs**：`[{"ref":"workflows/build-code/phase-evidence.mjs","sha256":"63936f0bf8cf36f8c68527ccdb48735d8b673663f38bb4b4d8c53107467f8a5a"},{"ref":"core/stage-handlers.mjs","sha256":"0f8030def37bbf3eda5f3a1254c872401de1cd422235733414ec5c5bf6e0717a"},{"ref":"skills/wh-review/scripts/integration-review-subject.mjs","sha256":"9466c0c1cd437e509b9a8ed727cfce289fcbf7b19feb28cd08faf59f4902bb73"}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/5af7349554cdfbb0bfa5c502484d12c69e620188","sha256":"2729e2025a63e01c6177827903cb06f4bb0fb1bdedf98cce7f76edf879d19dfb"}]`
 - **covered_ac**：AC-17、AC-18、AC-19、AC-20、AC-21
 - **review_fact**：Phase 5 一次独立审查原 verdict=`revise_required`；seam 已绑定精确 Phase Task IDs 与真实 implementation/test/review refs；completion 已交叉认证 diff、命令/exit、review、AC；boundary 已修正；未二审。
-- **completed_at**：2026-07-29T14:19:45Z
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
