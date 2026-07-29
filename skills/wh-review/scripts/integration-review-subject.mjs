@@ -8,6 +8,7 @@ import { readPhaseMapTrace } from "./phase-review-subject.mjs";
 const OID = /^[a-f0-9]{40,64}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
+const PHASE_REVIEW_RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const LINEAGE_KEYS = new Set([
   "schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace",
   "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt",
@@ -254,6 +255,116 @@ export function verifiedHistoricalLineage({ task, sourceRoot, readTrace = phaseT
   return boundReviews;
 }
 
+/** Prevalidate legacy sibling-repair records before they can affect trace selection. */
+export function prevalidatePhaseReviewCorrections({ task, sourceRoot, readTrace = phaseTrace } = {}) {
+  if (!task || typeof task !== "object") throw new TypeError("task is required");
+  if (typeof sourceRoot !== "string" || sourceRoot.length === 0) throw new TypeError("sourceRoot is required");
+  if (typeof task.listCanonicalPhaseReviewCorrectionRefs !== "function") return new Map();
+  const superseded = new Map();
+  for (const ref of task.listCanonicalPhaseReviewCorrectionRefs()) {
+    const correction = readJson(task, ref, "Phase review correction");
+    const value = correction.value;
+    const allowed = new Set(["schema_version", "project_name", "task_id", "stage", "phase_id", "base_tree", "supersedes", "replacement", "reason_code", "created_at", "result"]);
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !allowed.has(key))
+      || value.schema_version !== "phase-review-correction.v1" || value.project_name !== task.identity.projectName
+      || value.task_id !== task.identity.taskId || value.stage !== "build-code" || !PHASE.test(value.phase_id ?? "")
+      || !OID.test(value.base_tree ?? "") || value.reason_code !== "historical_phase_repaired"
+      || value.result !== "superseded" || !Number.isFinite(Date.parse(value.created_at ?? ""))) {
+      incomplete(`Phase review correction is invalid: ${ref}`);
+    }
+    const oldBinding = binding(value.supersedes, "superseded Phase review");
+    if (!value.replacement || typeof value.replacement !== "object" || Array.isArray(value.replacement)
+      || Object.keys(value.replacement).some((key) => !new Set(["ref", "sha256", "snapshot_tree", "trace"]).has(key))) {
+      incomplete(`Phase review correction replacement binding is invalid: ${ref}`);
+    }
+    const replacementBinding = binding({ ref: value.replacement.ref, sha256: value.replacement.sha256 }, "replacement Phase review");
+    if (!PHASE_REVIEW_RESULT_REF.test(oldBinding.ref) || !PHASE_REVIEW_RESULT_REF.test(replacementBinding.ref)) incomplete(`Phase review correction review ref is invalid: ${ref}`);
+    const oldReview = readJson(task, oldBinding.ref, "superseded Phase review");
+    const replacement = readJson(task, replacementBinding.ref, "replacement Phase review");
+    try { validateSchema("result", oldReview.value); validateSchema("result", replacement.value); }
+    catch (error) { incomplete(`Phase review correction review schema is invalid: ${ref}: ${error.message}`); }
+    const oldValue = oldReview.value; const newValue = replacement.value;
+    const correctionRef = `identity/phase-review-corrections/phase-${value.phase_id}-${oldValue.candidate_tree}-${newValue.candidate_tree}-${correction.sha256}.json`;
+    if (ref !== correctionRef) incomplete(`Phase review correction ref is invalid: ${ref}`);
+    const invalidFacts = [
+      oldReview.sha256 !== oldBinding.sha256 && "superseded review hash",
+      replacement.sha256 !== replacementBinding.sha256 && "replacement review hash",
+      oldValue.task_id !== task.identity.taskId && "superseded task",
+      newValue.task_id !== task.identity.taskId && "replacement task",
+      oldValue.stage !== "build-code" && "superseded stage",
+      newValue.stage !== "build-code" && "replacement stage",
+      oldValue.subject_kind !== "phase" && "superseded subject",
+      newValue.subject_kind !== "phase" && "replacement subject",
+      oldValue.review_scope !== "phase" && "superseded scope",
+      newValue.review_scope !== "phase" && "replacement scope",
+      oldValue.phase_id !== value.phase_id && "superseded phase",
+      newValue.phase_id !== value.phase_id && "replacement phase",
+      oldValue.base_tree !== value.base_tree && "superseded base",
+      newValue.base_tree !== value.base_tree && "replacement base",
+      oldValue.verdict !== "revise_required" && "superseded verdict",
+      newValue.verdict !== "pass" && "replacement verdict",
+      oldValue.candidate_tree === newValue.candidate_tree && "same snapshot",
+      value.replacement.snapshot_tree !== newValue.candidate_tree && "replacement snapshot mismatch",
+    ].filter(Boolean);
+    if (invalidFacts.length) incomplete(`Phase review correction facts do not bind the final Phase path: ${ref}: ${invalidFacts.join(", ")}`);
+    const traceBinding = binding(value.replacement.trace, "replacement Phase trace");
+    const trace = readTrace(task, sourceRoot, traceBinding.ref);
+    if (trace.traceSha256 !== traceBinding.sha256 || trace.trace.phase_id !== value.phase_id
+      || trace.trace.base_tree !== value.base_tree || trace.trace.snapshot_tree !== newValue.candidate_tree
+      || trace.trace.verdict !== "pass" || trace.review?.ref !== replacementBinding.ref || trace.review?.sha256 !== replacement.sha256) {
+      incomplete(`Phase review correction replacement trace mismatch: ${ref}`);
+    }
+    if (superseded.has(oldBinding.ref) || [...superseded.values()].some((entry) => entry.replacement.ref === replacementBinding.ref)) {
+      incomplete(`Phase review correction duplicates a historical review: ${ref}`);
+    }
+    superseded.set(oldBinding.ref, Object.freeze({
+      sha256: oldBinding.sha256,
+      supersededSnapshot: oldValue.candidate_tree,
+      replacement: replacementBinding,
+    }));
+  }
+  return superseded;
+}
+
+/** Verify prevalidated legacy correction records against the selected final path. */
+export function verifiedPhaseReviewCorrections({
+  task, sourceRoot, coverage, readTrace = phaseTrace, prevalidated,
+} = {}) {
+  if (!Array.isArray(coverage)) throw new TypeError("coverage is required");
+  const corrections = prevalidated ?? prevalidatePhaseReviewCorrections({ task, sourceRoot, readTrace });
+  if (!(corrections instanceof Map)) throw new TypeError("prevalidated corrections are required");
+  const coveredResults = new Map(coverage.flatMap((phase) => phase.review_result === null ? [] : [[phase.review_result.ref, phase.review_result.sha256]]));
+  const coveredTrees = new Set(coverage.flatMap((phase) => [phase.base_tree, phase.snapshot_tree]));
+  for (const [ref, correction] of corrections) {
+    const invalidFacts = [
+      coveredTrees.has(correction.supersededSnapshot) && "superseded snapshot is in path",
+      coveredResults.get(correction.replacement.ref) !== correction.replacement.sha256
+        && `replacement is not in path (${[...coveredResults.keys()].join(",")})`,
+    ].filter(Boolean);
+    if (invalidFacts.length) incomplete(`Phase review correction facts do not bind the final Phase path: ${ref}: ${invalidFacts.join(", ")}`);
+  }
+  return new Map([...corrections].map(([ref, value]) => [ref, value.sha256]));
+}
+
+/** Select canonical traces; only an exact prevalidated legacy binding may skip an invalid historical trace. */
+export function selectCanonicalPhaseTraces({
+  task, sourceRoot, corrections, readTrace = phaseTrace,
+} = {}) {
+  if (!task || typeof task !== "object") throw new TypeError("task is required");
+  if (typeof sourceRoot !== "string" || sourceRoot.length === 0) throw new TypeError("sourceRoot is required");
+  if (!(corrections instanceof Map)) throw new TypeError("prevalidated corrections are required");
+  return task.listCanonicalPhaseMapTraceRefs().flatMap((ref) => {
+    try { return [readTrace(task, sourceRoot, ref)]; }
+    catch (error) {
+      let trace;
+      try { trace = JSON.parse(task.readRecord(ref)); } catch { throw error; }
+      const correction = corrections.get(trace?.review_result?.ref);
+      if (correction?.sha256 === trace?.review_result?.sha256) return [];
+      throw error;
+    }
+  });
+}
+
 function traceCoverage(trace) {
   const reviewAction = trace.review === null ? trace.attempt : trace.review;
   const coverage = {
@@ -304,9 +415,9 @@ function possiblePaths(traces, commit, tree, finalTree, seen = new Set()) {
   return paths;
 }
 
-export function assertNoUntracedFormalPhase({ task, coverage, lineageReviews } = {}) {
+export function assertNoUntracedFormalPhase({ task, coverage, lineageReviews, correctionReviews = new Map() } = {}) {
   if (!task || typeof task !== "object") throw new TypeError("task is required");
-  if (!Array.isArray(coverage) || !(lineageReviews instanceof Map)) throw new TypeError("coverage and lineageReviews are required");
+  if (!Array.isArray(coverage) || !(lineageReviews instanceof Map) || !(correctionReviews instanceof Map)) throw new TypeError("coverage, lineageReviews, and correctionReviews are required");
   const coveredResults = new Set(coverage.flatMap((phase) => phase.review_result === null ? [] : [phase.review_result.ref]));
   const coveredTrees = new Set(coverage.flatMap((phase) => [phase.base_tree, phase.snapshot_tree]));
   for (const ref of task.listCanonicalReviewResultRefs()) {
@@ -317,6 +428,7 @@ export function assertNoUntracedFormalPhase({ task, coverage, lineageReviews } =
     if (record.stage !== "build-code" || record.subject_kind !== "phase" || record.review_scope !== "phase") continue;
     if (coveredResults.has(ref)) continue;
     if (lineageReviews.get(ref) === reviewed.sha256) continue;
+    if (correctionReviews.get(ref) === reviewed.sha256) continue;
     if (coveredTrees.has(record.base_tree) || coveredTrees.has(record.candidate_tree)) {
       incomplete(`formal Phase review has no phase-map trace: ${ref}`);
     }
@@ -393,16 +505,23 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
   if (typeof sourceRoot !== "string" || sourceRoot.length === 0) throw new TypeError("sourceRoot is required");
   if (!OID.test(finalTree ?? "")) throw new TypeError("finalTree is invalid");
   const accepted = checkpoint(safeTask, sourceRoot);
-  const traces = safeTask.listCanonicalPhaseMapTraceRefs().map((ref) => phaseTrace(safeTask, sourceRoot, ref));
+  const corrections = prevalidatePhaseReviewCorrections({ task: safeTask, sourceRoot });
+  const traces = selectCanonicalPhaseTraces({
+    task: safeTask, sourceRoot, corrections,
+  });
   if (traces.length === 0) incomplete("implementation work requires at least one canonical Phase map trace");
   const paths = possiblePaths(traces, accepted.commit, accepted.tree, finalTree);
   if (paths.length === 0) incomplete("no continuous Phase coverage chain reaches the final tree");
   if (paths.length !== 1) incomplete(`Phase coverage is ambiguous: ${paths.length} continuous chains reach the final tree`);
   const coverage = paths[0];
   if (coverage.length === 0) incomplete("zero-Phase coverage is not permitted");
+  const correctionReviews = verifiedPhaseReviewCorrections({
+    task: safeTask, sourceRoot, coverage, prevalidated: corrections,
+  });
   assertNoUntracedFormalPhase({
     task: safeTask, coverage,
     lineageReviews: verifiedHistoricalLineage({ task: safeTask, sourceRoot }),
+    correctionReviews,
   });
   return Object.freeze({
     schema_version: "integration-review-subject.v1",

@@ -989,6 +989,29 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate append-only corrections for stale historical Phase reviews. */
+    listCanonicalPhaseReviewCorrectionRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const identityRoot = resolve(realTaskPath, "identity");
+      const root = resolve(identityRoot, "phase-review-corrections");
+      assertInside(realTaskPath, identityRoot, "identity directory");
+      assertInside(realTaskPath, root, "Phase review correction directory");
+      if (!existsSync(root)) return Object.freeze([]);
+      const identityIdentity = directorySnapshot(realTaskPath, identityRoot);
+      const rootIdentity = directorySnapshot(realTaskPath, root);
+      const refs = readdirSync(root, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(root, entry.name); const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()
+          || !/^phase-[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{40,64}-[a-f0-9]{64}\.json$/.test(entry.name)) {
+          throw new Error(`Phase review correction must be a regular, content-addressed JSON file: ${entry.name}`);
+        }
+        return `identity/phase-review-corrections/${entry.name}`;
+      }).sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(rootIdentity); verifyDirectorySnapshot(identityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate external wh-review audit records. They are never stage receipts. */
     listCanonicalReviewResolutionRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
