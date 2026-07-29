@@ -33,21 +33,6 @@ HEAD plus the three already accepted design artifacts. Pass the returned
 authorization ref to the normal build-plan `run` as
 `--baseline-rebind=<authorization-ref>`, then obtain a fresh confirmation for
 the new attempt. This is the only accepted-design baseline-rebind route.
-Baseline rebind never authorizes changed `spec.md`, `plan.md`, or `tasks.md`
-bytes.
-
-If build-spec has formally replaced its accepted specification after this plan
-was accepted, replace the plan through a build-plan continuation instead:
-create a `build-plan` stage continuation bound to the current accepted plan and
-its attempt, invalidate that exact prior attempt, then start the new build-plan
-run with the returned continuation ref. The runtime permits this only when the
-old plan attempt binds a different accepted build-spec record than the current
-one, neither build-code nor verify-code is accepted, and the replacement plan
-attempt binds the current accepted build-spec. Re-run the complete planning,
-contract, review, receipt, confirmation, and acceptance sequence. Acceptance
-archives the previous accepted plan and records immutable continuation,
-invalidation, previous-attempt, previous-acceptance, and archive hashes. This
-is the only route for changed `plan.md` or `tasks.md` after plan acceptance.
 
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
@@ -184,9 +169,8 @@ planning step.
    this summary; it is visible context for the human confirmation, not an
    automatic acceptance gate.
 
-Changing an accepted plan without a formally replaced accepted specification
-requires a new task. Missing or mismatched accepted provenance fails loud
-before planning.
+Changing an already accepted specification requires a new task. Missing or
+mismatched accepted provenance fails loud before planning.
 
 ## Host interaction and completion handoff
 
