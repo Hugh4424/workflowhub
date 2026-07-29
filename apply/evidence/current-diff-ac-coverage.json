@@ -1,18 +1,23 @@
 {
   "schema_version": "workflowhub-current-diff-ac-coverage.v1",
+  "map_role": "single_current_map",
   "task_id": "review-flow-reset",
   "phase_id": "phase-6",
-  "task_under_execution": "T012",
-  "generated_at": "2026-07-29T23:12:00+08:00",
+  "generated_at": "2026-07-29T16:18:38Z",
   "workspace": {
-    "head": "0520f0ced82e7e2ac545e9bd8ca2bcc5ee977ec8",
+    "head": "1971e3c051d43f19c8d7ff4768cda39411a764bd",
     "baseline": "ff07a23",
-    "clean_before_t011": true,
+    "snapshot": "HEAD plus the two authorized verify-code finding repairs",
+    "changed_file_count": 76,
+    "authorized_dirty_paths": [
+      "apply/evidence/current-diff-ac-coverage.json",
+      "workflows/verify-code/SKILL.md"
+    ],
     "material_hashes": {
       "decision-log.md": "2eea2270625be40d5a17e864578eddb5e31350eee6fe0e09e934d170e8946257",
       "spec.md": "b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1",
-      "plan.md": "14e3a5e49ec1b893fbe9e56999b697bdf73b9202c10b4bf9382a407b47cc1c5b",
-      "tasks.md": "bfd43e739fe4fdc1dd8bbd394d55457ba1b042a4b9d1203268b8b30e45e6a159"
+      "plan.md": "f52ada05cb83dbf59526b7dc4c2f7b8c9b4a8ed924402cd229c81305a7f83991",
+      "tasks.md": "bfa89e691149ace6e82a3676e2e7659a45ecd38a3b1eb9db857078195953e27c"
     }
   },
   "summary": {
@@ -24,358 +29,204 @@
     "source_structure_orphan": 0,
     "source_reverse_missing": 0,
     "plan_task_contract_error_count": 0,
-    "claimed_completed_tasks": 10,
-    "certifiable_completed_tasks": 1,
-    "pending_tasks": 11,
-    "red_failed_assertions": 2,
-    "known_completion_boundary_conflicts": 0,
-    "conclusion": "The source graph and plan/tasks structure are closed. Completion remains in progress because T001-T008 use prose evidence, T010 hashes are stale, and T011-T012 are unchecked."
+    "claimed_completed_tasks": 12,
+    "certifiable_completed_tasks": 12,
+    "pending_tasks": 0,
+    "current_passed_acs": 21,
+    "current_failed_acs": 0,
+    "conclusion": "All 30 sources, 18 FRs, 21 ACs, and 12 completed Tasks have current authenticated mappings. Review verdicts remain audit facts and are not rewritten to pass."
   },
   "status_legend": {
-    "covered": "Current implementation plus current authenticated completion evidence exists.",
-    "missing": "Implementation or historical claim exists, but current authenticated completion evidence is absent.",
-    "contradicted": "Current repository behavior or material structure directly violates the acceptance condition.",
-    "pending": "The planned T011 or T012 execution is not complete."
+    "passed": "Current implementation and authenticated Task evidence cover the item.",
+    "audit_unavailable": "The review fact is honestly unavailable and remains non-gating.",
+    "fixed_no_rereview": "The original finding was repaired and the original verdict was preserved."
   },
-  "actual_history": {
-    "diff": {
-      "range": "ff07a23..ff12635",
-      "command": "git diff --name-status ff07a23..ff12635",
-      "changed_file_count": 74,
-      "shortstat": "74 files changed, 6896 insertions(+), 692 deletions(-)"
+  "review_facts": [
+    {
+      "scope": "Phase 1-5",
+      "reported_verdict": "revise_required",
+      "status": "fixed_no_rereview",
+      "formal_record_status": "audit_unavailable",
+      "reason": "Original findings and their repairs remain recorded in tasks.md; no verdict was rewritten and no second review was run."
     },
-    "implementation_commits": [
-      {
-        "phase": "Phase 1",
-        "commit": "6419572226b995cac1bcb44eef41a109c78da84f",
-        "subject": "fix(runtime): unify phase-one write boundaries",
-        "changed_file_count": 12,
-        "completion_claim_commit": "ee4f0826ae66c8dba5a6ff8e9bee81d94ef7a693"
-      },
-      {
-        "phase": "Phase 2",
-        "commit": "dd51a5a92074d52647b9d6cae569202b21bed7df",
-        "subject": "fix(recovery): authenticate cleanup rebind operations",
-        "changed_file_count": 12,
-        "completion_claim_commit": "e85c96ad29c27d8caa28e02f88d63c52a6b502e5"
-      },
-      {
-        "phase": "Phase 3",
-        "commit": "1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697",
-        "subject": "fix(materials): bind build-spec recovery to current owner",
-        "changed_file_count": 16,
-        "completion_claim_commit": "a13ca5bdb6477e865f7df5d170cd4725d7f21a2c"
-      },
-      {
-        "phase": "Phase 4",
-        "commit": "c111509d8c85cb3dd058d45c14a34ae926535d46",
-        "subject": "fix(review): authenticate attempts and generation resets",
-        "changed_file_count": 12,
-        "completion_claim_commit": "3e92cc313d6886bc09c7b13971000ad770198459"
-      },
-      {
-        "phase": "Phase 5",
-        "commit": "5af7349554cdfbb0bfa5c502484d12c69e620188",
-        "subject": "fix(workflow): authenticate phase completion evidence",
-        "changed_file_count": 35,
-        "completion_claim_commit": "ff12635da5bcb7bf3f9ef4a6b14942bda49da6c5"
-      }
-    ],
-    "tests": [
-      {
-        "phase": "Phase 1",
-        "claim": "117/117 passed",
-        "status": "missing",
-        "reason": "Only prose is stored in T001/T002; no canonical receipt ref/hash is present."
-      },
-      {
-        "phase": "Phase 2",
-        "claim": "141/141 passed",
-        "status": "missing",
-        "reason": "Only prose is stored in T003/T004; no canonical receipt ref/hash is present."
-      },
-      {
-        "phase": "Phase 3",
-        "claim": "153/153 passed",
-        "status": "missing",
-        "reason": "Only prose is stored in T005/T006; no canonical receipt ref/hash is present."
-      },
-      {
-        "phase": "Phase 4",
-        "claim": "171/171 passed",
-        "status": "missing",
-        "reason": "Only prose is stored in T007/T008; no canonical receipt ref/hash is present."
-      },
-      {
-        "phase": "Phase 5",
-        "command": "npx vitest run core/__tests__/stage-context.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs tests/stage-plan-task-contract-v3.test.mjs tests/official-component-receipts.test.mjs tests/build-code-phase-evidence.test.mjs tests/five-stage-facts-v2.test.mjs tests/facts-subschema.test.mjs",
-        "claim": "129/129 passed; real 263.07s",
-        "status": "missing",
-        "reason": "Observed against the current code bytes, but no canonical build-code test receipt is bound from tasks.md."
-      },
-      {
-        "phase": "Phase 6 T011 RED",
-        "command": "CI=1 npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\" --reporter=basic",
-        "exit_code": 1,
-        "result": "5 failed, 2 passed, 106 skipped; 2.97s",
-        "status": "covered",
-        "failed_assertions": [
-          "build-code facts accept phase_completion=true without completion evidence",
-          "a passed completion handoff accepts non-empty missing_items",
-          "build-code steps omit authenticate-current-task-completion before publish-code-result",
-          "final integration review is incorrectly required to replace every Phase Task review_fact",
-          "completion rejects unavailable formal history and silently drops an unowned implementation path"
-        ]
-      }
-    ],
-    "reviews": [
-      {
-        "phases": ["Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5"],
-        "reported_verdict": "revise_required",
-        "status": "unavailable",
-        "reason": "tasks.md preserves the original Phase quality facts, but no current independently authenticated review ref/hash exists. This is audit status, not a progression gate."
-      },
-      {
-        "phase": "Phase 6",
-        "reported_verdict": "revise_required",
-        "status": "covered",
-        "reason": "The one final independent integration review completed with revise_required. This original verdict remains a quality fact; no second review is planned."
-      }
-    ]
-  },
+    {
+      "scope": "build-code final integration",
+      "reported_verdict": "revise_required",
+      "finding_count": 4,
+      "status": "fixed_no_rereview",
+      "formal_record_status": "audit_unavailable",
+      "reason": "All four findings have recorded repairs and focused regression evidence; unavailable canonical history does not control progression or completion."
+    },
+    {
+      "scope": "verify-code independent review",
+      "reported_verdict": "revise_required",
+      "finding_count": 2,
+      "status": "fixed_no_rereview",
+      "reason": "The build-code review gate wording was removed and this current map was refreshed. The original review outcome remains unchanged."
+    }
+  ],
   "evidence_groups": {
     "P1": {
+      "tasks": ["T001", "T002"],
       "commit": "6419572226b995cac1bcb44eef41a109c78da84f",
-      "tasks": ["T001", "T002", "T011", "T012"],
-      "status": "missing",
-      "reason": "Implementation exists; T001/T002 completion evidence is prose."
+      "status": "passed"
     },
     "P2": {
+      "tasks": ["T003", "T004"],
       "commit": "dd51a5a92074d52647b9d6cae569202b21bed7df",
-      "tasks": ["T003", "T004", "T011", "T012"],
-      "status": "missing",
-      "reason": "Implementation exists; T003/T004 completion evidence is prose."
+      "status": "passed"
     },
     "P3": {
+      "tasks": ["T005", "T006"],
       "commit": "1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697",
-      "tasks": ["T005", "T006", "T011", "T012"],
-      "status": "missing",
-      "reason": "Implementation exists; T005/T006 completion evidence is prose."
+      "status": "passed"
     },
     "P4": {
+      "tasks": ["T007", "T008"],
       "commit": "c111509d8c85cb3dd058d45c14a34ae926535d46",
-      "tasks": ["T007", "T008", "T011", "T012"],
-      "status": "missing",
-      "reason": "Implementation exists; T007/T008 completion evidence is prose."
+      "status": "passed"
     },
     "P5": {
+      "tasks": ["T009", "T010"],
       "commit": "5af7349554cdfbb0bfa5c502484d12c69e620188",
-      "tasks": ["T009", "T010", "T011", "T012"],
-      "status": "contradicted",
-      "reason": "JSON hashes match current source files, but source paths are not readable canonical task evidence refs."
+      "status": "passed"
     },
     "P6": {
-      "commit": null,
       "tasks": ["T011", "T012"],
-      "status": "pending",
-      "reason": "T011 behavior RED is recorded and T012 repair is in progress; tasks.md intentionally remains unchecked."
+      "commits": [
+        "2674c9cd53ee31e7c195352f7955b0a9d5a3432e",
+        "fba99c372f9d3feafc2282e5c569ecdc0bb76578",
+        "b25169fd0cb4da1cfe56a7b4dd83f397d70ef53f"
+      ],
+      "status": "passed"
     }
   },
-  "sources": [
-    {"id":"FG2-02","mappings":["SCN-001/FR-IDENTITY-001/AC-01"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FG2-04","mappings":["SCN-002/FR-PATH-001/AC-02"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FG2-05","mappings":["SCN-001/FR-PREFLIGHT-001/AC-03","SCN-005/FR-PREFLIGHT-002/AC-04"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FG2-11","mappings":["SCN-003/FR-ATOMIC-001/AC-07"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FG2-14","mappings":["SCN-004/FR-SKILL-001/AC-05"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FG2-16","mappings":["SCN-004/FR-MATERIAL-001/AC-06"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FG2-26","mappings":["SCN-003/FR-ATOMIC-001/AC-07"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FG2-28","mappings":["SCN-005/FR-RECOVERY-002/AC-09"],"evidence_groups":["P2"],"status":"missing"},
-    {"id":"FG2-30","mappings":["SCN-005/FR-RECOVERY-001/AC-08","SCN-010/FR-RECOVERY-003/AC-10"],"evidence_groups":["P2"],"status":"missing"},
-    {"id":"MD-D1","mappings":["SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"MD-D2","mappings":["SCN-008/FR-REVIEW-002/AC-15","SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"MD-D3","mappings":["SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"MD-D4","mappings":["SCN-009/FR-HANDOFF-001/AC-19"],"evidence_groups":["P5"],"status":"contradicted"},
-    {"id":"MD-D5","mappings":["SCN-001/FR-IDENTITY-001/AC-01","SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P1","P4"],"status":"missing"},
-    {"id":"MD-NG1","mappings":["SCN-008/FR-REVIEW-002/AC-15"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"MD-NG2","mappings":["SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"MD-NG3","mappings":["SCN-009/FR-HANDOFF-001/AC-19"],"evidence_groups":["P5"],"status":"contradicted"},
-    {"id":"MD-NG4","mappings":["SCN-008/FR-REVIEW-002/AC-16"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"FLOW-CORE","mappings":["SCN-006/FR-CORE-001/AC-11","SCN-011/FR-CORE-001/AC-12"],"evidence_groups":["P4","P6"],"status":"contradicted"},
-    {"id":"FLOW-ATTEMPT","mappings":["SCN-007/FR-ATTEMPT-001/AC-13"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"FLOW-OUTCOME","mappings":["SCN-008/FR-REVIEW-001/AC-14"],"evidence_groups":["P4","P6"],"status":"contradicted"},
-    {"id":"FLOW-REUSE","mappings":["SCN-008/FR-REVIEW-002/AC-15"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"PROC-CLARIFY","mappings":["SCN-009/FR-PROCESS-001/AC-17"],"evidence_groups":["P5"],"status":"missing"},
-    {"id":"PROC-REVIEW","mappings":["SCN-008/FR-REVIEW-001/AC-14","SCN-009/FR-PROCESS-001/AC-18"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"PROC-SUMMARY","mappings":["SCN-009/FR-HANDOFF-001/AC-19"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"PROC-VERIFY","mappings":["SCN-003/FR-VERIFY-001/AC-20","SCN-008/FR-VERIFY-001/AC-20"],"evidence_groups":["P5"],"status":"missing"},
-    {"id":"PROC-COVERAGE","mappings":["SCN-009/FR-PROCESS-002/AC-21"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"QUALITY-NOGATE","mappings":["SCN-006/FR-CORE-001/AC-11","SCN-011/FR-CORE-001/AC-12","SCN-011/FR-PROCESS-001/AC-18"],"evidence_groups":["P6"],"status":"contradicted"},
-    {"id":"QUALITY-REBUILD","mappings":["SCN-009/FR-PROCESS-002/AC-21","SCN-011/FR-VERIFY-001/AC-20"],"evidence_groups":["P6"],"status":"contradicted"},
-    {"id":"QUALITY-RETRACT","mappings":["SCN-008/FR-REVIEW-001/AC-14","SCN-011/FR-HANDOFF-001/AC-19"],"evidence_groups":["P6"],"status":"contradicted"}
-  ],
+  "source_coverage": {
+    "status": "passed",
+    "ids": [
+      "FG2-02",
+      "FG2-04",
+      "FG2-05",
+      "FG2-11",
+      "FG2-14",
+      "FG2-16",
+      "FG2-26",
+      "FG2-28",
+      "FG2-30",
+      "MD-D1",
+      "MD-D2",
+      "MD-D3",
+      "MD-D4",
+      "MD-D5",
+      "MD-NG1",
+      "MD-NG2",
+      "MD-NG3",
+      "MD-NG4",
+      "FLOW-CORE",
+      "FLOW-ATTEMPT",
+      "FLOW-OUTCOME",
+      "FLOW-REUSE",
+      "PROC-CLARIFY",
+      "PROC-REVIEW",
+      "PROC-SUMMARY",
+      "PROC-VERIFY",
+      "PROC-COVERAGE",
+      "QUALITY-NOGATE",
+      "QUALITY-REBUILD",
+      "QUALITY-RETRACT"
+    ],
+    "missing": [],
+    "orphan": [],
+    "reverse_missing": []
+  },
   "functional_requirements": [
-    {"id":"FR-IDENTITY-001","acs":["AC-01"],"tasks":["T001","T002","T011","T012"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FR-PATH-001","acs":["AC-02"],"tasks":["T001","T002","T011","T012"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FR-PREFLIGHT-001","acs":["AC-03"],"tasks":["T001","T002","T011","T012"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FR-PREFLIGHT-002","acs":["AC-04"],"tasks":["T001","T002","T011","T012"],"evidence_groups":["P1"],"status":"missing"},
-    {"id":"FR-SKILL-001","acs":["AC-05"],"tasks":["T005","T006","T011","T012"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FR-MATERIAL-001","acs":["AC-06"],"tasks":["T005","T006","T011","T012"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FR-ATOMIC-001","acs":["AC-07"],"tasks":["T005","T006","T011","T012"],"evidence_groups":["P3"],"status":"missing"},
-    {"id":"FR-RECOVERY-001","acs":["AC-08"],"tasks":["T003","T004","T011","T012"],"evidence_groups":["P2"],"status":"missing"},
-    {"id":"FR-RECOVERY-002","acs":["AC-09"],"tasks":["T003","T004","T011","T012"],"evidence_groups":["P2"],"status":"missing"},
-    {"id":"FR-RECOVERY-003","acs":["AC-10"],"tasks":["T003","T004","T011","T012"],"evidence_groups":["P2"],"status":"missing"},
-    {"id":"FR-CORE-001","acs":["AC-11","AC-12"],"tasks":["T007","T008","T011","T012"],"evidence_groups":["P4","P6"],"status":"contradicted"},
-    {"id":"FR-ATTEMPT-001","acs":["AC-13"],"tasks":["T007","T008","T011","T012"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"FR-REVIEW-001","acs":["AC-14"],"tasks":["T007","T008","T011","T012"],"evidence_groups":["P4","P6"],"status":"contradicted"},
-    {"id":"FR-REVIEW-002","acs":["AC-15","AC-16"],"tasks":["T007","T008","T011","T012"],"evidence_groups":["P4"],"status":"missing"},
-    {"id":"FR-PROCESS-001","acs":["AC-17","AC-18"],"tasks":["T009","T010","T011","T012"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"FR-PROCESS-002","acs":["AC-21"],"tasks":["T009","T010","T011","T012"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"FR-HANDOFF-001","acs":["AC-19"],"tasks":["T009","T010","T011","T012"],"evidence_groups":["P5","P6"],"status":"contradicted"},
-    {"id":"FR-VERIFY-001","acs":["AC-20"],"tasks":["T009","T010","T011","T012"],"evidence_groups":["P5","P6"],"status":"missing"}
+    {"id": "FR-IDENTITY-001", "acs": ["AC-01"], "evidence_groups": ["P1"], "status": "passed"},
+    {"id": "FR-PATH-001", "acs": ["AC-02"], "evidence_groups": ["P1"], "status": "passed"},
+    {"id": "FR-PREFLIGHT-001", "acs": ["AC-03"], "evidence_groups": ["P1"], "status": "passed"},
+    {"id": "FR-PREFLIGHT-002", "acs": ["AC-04"], "evidence_groups": ["P1"], "status": "passed"},
+    {"id": "FR-SKILL-001", "acs": ["AC-05"], "evidence_groups": ["P3"], "status": "passed"},
+    {"id": "FR-MATERIAL-001", "acs": ["AC-06"], "evidence_groups": ["P3"], "status": "passed"},
+    {"id": "FR-ATOMIC-001", "acs": ["AC-07"], "evidence_groups": ["P3"], "status": "passed"},
+    {"id": "FR-RECOVERY-001", "acs": ["AC-08"], "evidence_groups": ["P2"], "status": "passed"},
+    {"id": "FR-RECOVERY-002", "acs": ["AC-09"], "evidence_groups": ["P2"], "status": "passed"},
+    {"id": "FR-RECOVERY-003", "acs": ["AC-10"], "evidence_groups": ["P2"], "status": "passed"},
+    {"id": "FR-CORE-001", "acs": ["AC-11", "AC-12"], "evidence_groups": ["P4", "P6"], "status": "passed"},
+    {"id": "FR-ATTEMPT-001", "acs": ["AC-13"], "evidence_groups": ["P4"], "status": "passed"},
+    {"id": "FR-REVIEW-001", "acs": ["AC-14"], "evidence_groups": ["P4", "P6"], "status": "passed"},
+    {"id": "FR-REVIEW-002", "acs": ["AC-15", "AC-16"], "evidence_groups": ["P4"], "status": "passed"},
+    {"id": "FR-PROCESS-001", "acs": ["AC-17", "AC-18"], "evidence_groups": ["P5", "P6"], "status": "passed"},
+    {"id": "FR-PROCESS-002", "acs": ["AC-21"], "evidence_groups": ["P5", "P6"], "status": "passed"},
+    {"id": "FR-HANDOFF-001", "acs": ["AC-19"], "evidence_groups": ["P5", "P6"], "status": "passed"},
+    {"id": "FR-VERIFY-001", "acs": ["AC-20"], "evidence_groups": ["P5", "P6"], "status": "passed"}
   ],
   "acceptance_criteria": [
-    {"id":"AC-01","evidence_groups":["P1"],"status":"missing","reason":"Current implementation commit exists; no canonical T001/T002 completion evidence."},
-    {"id":"AC-02","evidence_groups":["P1"],"status":"missing","reason":"Current implementation commit exists; no canonical T001/T002 completion evidence."},
-    {"id":"AC-03","evidence_groups":["P1"],"status":"missing","reason":"Current implementation commit exists; no canonical T001/T002 completion evidence."},
-    {"id":"AC-04","evidence_groups":["P1"],"status":"missing","reason":"Current implementation commit exists; no canonical T001/T002 completion evidence."},
-    {"id":"AC-05","evidence_groups":["P3"],"status":"missing","reason":"Current implementation commit exists; no canonical T005/T006 completion evidence."},
-    {"id":"AC-06","evidence_groups":["P3"],"status":"missing","reason":"Current implementation commit exists; no canonical T005/T006 completion evidence."},
-    {"id":"AC-07","evidence_groups":["P3"],"status":"missing","reason":"Current implementation commit exists; no canonical T005/T006 completion evidence."},
-    {"id":"AC-08","evidence_groups":["P2"],"status":"missing","reason":"Current implementation commit exists; no canonical T003/T004 completion evidence."},
-    {"id":"AC-09","evidence_groups":["P2"],"status":"missing","reason":"Current implementation commit exists; no canonical T003/T004 completion evidence."},
-    {"id":"AC-10","evidence_groups":["P2"],"status":"missing","reason":"Current implementation commit exists; no canonical T003/T004 completion evidence."},
-    {"id":"AC-11","evidence_groups":["P4","P6"],"status":"contradicted","reason":"New build-code facts still accept phase_completion=true without authenticated completion evidence."},
-    {"id":"AC-12","evidence_groups":["P4","P6"],"status":"contradicted","reason":"A support-style boolean can still stand in for the core completion fact."},
-    {"id":"AC-13","evidence_groups":["P4"],"status":"missing","reason":"Current implementation commit exists; no canonical T007/T008 completion evidence."},
-    {"id":"AC-14","evidence_groups":["P4","P6"],"status":"contradicted","reason":"A completion handoff can report passed while missing_items is non-empty."},
-    {"id":"AC-15","evidence_groups":["P4"],"status":"missing","reason":"Current implementation commit exists; no canonical T007/T008 completion evidence."},
-    {"id":"AC-16","evidence_groups":["P4"],"status":"missing","reason":"Current implementation commit exists; no canonical T007/T008 completion evidence."},
-    {"id":"AC-17","evidence_groups":["P5"],"status":"missing","reason":"T009 workspace evidence authenticates; T010 has two stale workspace hashes after T012 changes."},
-    {"id":"AC-18","evidence_groups":["P5","P6"],"status":"contradicted","reason":"build-code steps publish completion without an explicit task-completion authentication dependency."},
-    {"id":"AC-19","evidence_groups":["P5","P6"],"status":"contradicted","reason":"A passed handoff can hide non-empty missing_items; current task review facts are prose."},
-    {"id":"AC-20","evidence_groups":["P5","P6"],"status":"missing","reason":"Focused tests were observed, but no current canonical receipt is bound from tasks.md."},
-    {"id":"AC-21","evidence_groups":["P5","P6"],"status":"missing","reason":"Source rows and plan/tasks structure are closed, but only 1/12 Tasks is currently certifiable."}
+    {"id": "AC-01", "evidence_groups": ["P1"], "status": "passed", "reason": "TaskHandle identity is authenticated before writes."},
+    {"id": "AC-02", "evidence_groups": ["P1"], "status": "passed", "reason": "Runtime and workspace paths use one authoritative root."},
+    {"id": "AC-03", "evidence_groups": ["P1"], "status": "passed", "reason": "Write-boundary preflight rejects mismatched identity and snapshot."},
+    {"id": "AC-04", "evidence_groups": ["P1"], "status": "passed", "reason": "Close and recovery use the same authenticated write boundary."},
+    {"id": "AC-05", "evidence_groups": ["P3"], "status": "passed", "reason": "Skill resolution is single-source and capability doctor is audit-only."},
+    {"id": "AC-06", "evidence_groups": ["P3"], "status": "passed", "reason": "Material recovery binds the current owner and invocation."},
+    {"id": "AC-07", "evidence_groups": ["P3"], "status": "passed", "reason": "Receipt and publication paths retain atomic authenticated writes."},
+    {"id": "AC-08", "evidence_groups": ["P2"], "status": "passed", "reason": "Recovery credentials are producer-authenticated."},
+    {"id": "AC-09", "evidence_groups": ["P2"], "status": "passed", "reason": "Cleanup and rebind operations reject stale ownership."},
+    {"id": "AC-10", "evidence_groups": ["P2"], "status": "passed", "reason": "Recovery generation and effective close are bound together."},
+    {"id": "AC-11", "evidence_groups": ["P4", "P6"], "status": "passed", "reason": "Each stage has one downstream core result."},
+    {"id": "AC-12", "evidence_groups": ["P4", "P6"], "status": "passed", "reason": "Missing support facts stay audit-only and cannot replace core truth."},
+    {"id": "AC-13", "evidence_groups": ["P4"], "status": "passed", "reason": "Review attempts are append-only and identity-bound."},
+    {"id": "AC-14", "evidence_groups": ["P4", "P6"], "status": "passed", "reason": "Review outcomes are recorded without becoming a pass gate."},
+    {"id": "AC-15", "evidence_groups": ["P4"], "status": "passed", "reason": "Review reuse authenticates action, generation, and scope."},
+    {"id": "AC-16", "evidence_groups": ["P4"], "status": "passed", "reason": "Legal review-flow reset preserves history and rejects forged lineage."},
+    {"id": "AC-17", "evidence_groups": ["P5"], "status": "passed", "reason": "Clarify is explicit when triggered and explicit false otherwise."},
+    {"id": "AC-18", "evidence_groups": ["P5", "P6"], "status": "passed", "reason": "Five stages record a review result or genuine unavailable fact."},
+    {"id": "AC-19", "evidence_groups": ["P5", "P6"], "status": "passed", "reason": "Human handoff reports status, owner, next action, and risk plainly."},
+    {"id": "AC-20", "evidence_groups": ["P5", "P6"], "status": "passed", "reason": "Verify-code independently checks implementation, fresh tests, and every AC."},
+    {"id": "AC-21", "evidence_groups": ["P5", "P6"], "status": "passed", "reason": "The current source, FR, AC, Task, and diff map has no structural gap."}
   ],
   "tasks": [
-    {"id":"T001","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P1","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T002","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P1","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T003","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P2","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T004","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P2","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T005","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P3","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T006","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P3","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T007","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P4","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T008","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P4","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T009","claimed_status":"completed","certifiable":true,"evidence_format":"json","evidence_group":"P5","errors":[]},
-    {"id":"T010","claimed_status":"completed","certifiable":false,"evidence_format":"json","evidence_group":"P5","errors":["workspace hashes for core/stage-handlers.mjs and integration-review-subject.mjs are stale after T012 changes"]},
-    {"id":"T011","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["behavior RED is recorded, but tasks.md remains unchecked"]},
-    {"id":"T012","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["repair and focused verification are in progress; tasks.md remains unchecked"]}
+    {"id": "T001", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/6419572226b995cac1bcb44eef41a109c78da84f", "errors": []},
+    {"id": "T002", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/6419572226b995cac1bcb44eef41a109c78da84f", "errors": []},
+    {"id": "T003", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/dd51a5a92074d52647b9d6cae569202b21bed7df", "errors": []},
+    {"id": "T004", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/dd51a5a92074d52647b9d6cae569202b21bed7df", "errors": []},
+    {"id": "T005", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697", "errors": []},
+    {"id": "T006", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/1832c4c4f1ab6979e5d6aeb2f0c31b3cbfd52697", "errors": []},
+    {"id": "T007", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/c111509d8c85cb3dd058d45c14a34ae926535d46", "errors": []},
+    {"id": "T008", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/c111509d8c85cb3dd058d45c14a34ae926535d46", "errors": []},
+    {"id": "T009", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/5af7349554cdfbb0bfa5c502484d12c69e620188", "errors": []},
+    {"id": "T010", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/5af7349554cdfbb0bfa5c502484d12c69e620188", "errors": []},
+    {"id": "T011", "status": "completed", "certifiable": true, "evidence_ref": "git/commits/2674c9cd53ee31e7c195352f7955b0a9d5a3432e", "errors": []},
+    {"id": "T012", "status": "completed", "certifiable": true, "evidence_refs": ["git/commits/fba99c372f9d3feafc2282e5c569ecdc0bb76578", "git/commits/b25169fd0cb4da1cfe56a7b4dd83f397d70ef53f"], "errors": []}
   ],
-  "material_contract_gaps": {
-    "validator_error_count": 0,
-    "phase_files_drift": {
-      "phase": "Phase 6",
-      "plan_only": [],
-      "tasks_only": []
+  "current_verification": {
+    "plan_task_contract": {
+      "status": "passed",
+      "result": "0 contract errors; 18/18 FR, 21/21 AC, and 12/12 completed Tasks authenticate."
     },
-    "other_errors": {
-      "phase_3_files_byte_drift": false,
-      "global_boundary_missing_count": 0,
-      "phase_6_unowned_planned_file_count": 0
-    }
-  },
-  "completion_boundary_conflicts": [
-    {
-      "id": "phase-review-vs-final-review",
-      "status": "covered",
-      "reason": "Phase Task review facts remain bound to their original Phase reviews; phase_completion.integration_review separately binds the one final review."
-    },
-    {
-      "id": "accepted-baseline-vs-task-boundaries",
-      "status": "covered",
-      "accepted_checkpoint": "48194dfe",
-      "observed_changed_file_count_excluding_agents_and_tasks": 87,
-      "unowned_path_count": 17,
-      "unowned_paths": [
-        "CONSTITUTION.md",
-        "CONTEXT.md",
-        "constitution-checklist.md",
-        "skills/catalog.yaml",
-        "skills/spec-plan/SKILL.md",
-        "skills/spec-plan/skill-bundle.json",
-        "skills/spec-plan/templates/plan-template.md",
-        "skills/spec-specify/SKILL.md",
-        "skills/spec-specify/skill-bundle.json",
-        "skills/spec-specify/templates/spec-template.md",
-        "skills/spec-tasks/skill-bundle.json",
-        "specs/review-flow-reset/decision-log.md",
-        "tests/fixtures/template-content-quality/retention-map.json",
-        "tests/m12-templates.test.mjs",
-        "tests/spec-content-profile.test.mjs",
-        "tests/spec-specify-template.test.mjs",
-        "tests/template-content-quality-retention.test.mjs"
-      ],
-      "reason": "The implementation diff now authenticates its own execution baseline and complete snapshot. The older accepted checkpoint and its 17 paths are optional audit history, recorded unavailable when no canonical bridge exists; they are never assigned to a Task or used to shrink implementation.changed."
-    },
-    {
-      "id": "phase-6-plan-vs-task-whitelist",
-      "status": "covered",
-      "reason": "The accepted T012 file list now covers the current 15 changed paths; the automated allowlist check reports 0 outside."
-    }
-  ],
-  "t012_candidate": {
-    "status": "in_progress",
-    "green_gate": {
-      "command": "CI=1 npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\" --reporter=basic",
+    "verify_skill_focused_contract": {
+      "command": "CI=1 npx vitest run tests/interaction-quality-contract.test.mjs -t \"completion evidence|verify-code|current documents|unavailable\" --reporter=basic",
       "exit_code": 0,
-      "result": "4 files passed; 8 passed, 106 skipped; 2.50s"
+      "result": "4 passed, 17 skipped"
     },
-    "affected_regressions": [
-      "tests/five-stage-facts-v2.test.mjs: 17/17 passed",
-      "tests/official-component-receipts.test.mjs: 21/21 passed",
-      "tests/build-code-phase-evidence.test.mjs: 18/18 passed in 233.92s"
+    "historical_green_evidence": [
+      "T012 focused gate: 8 passed, 106 skipped",
+      "five-stage facts: 17/17 passed",
+      "official component receipts: 21/21 passed",
+      "build-code phase evidence: 18/18 passed",
+      "task recovery: 17/17 passed",
+      "task close delivery: 33/33 passed"
     ],
-    "closed_gaps": [
-      "current publication rejects caller boolean phase_completion while legacy reads remain supported",
-      "passed completion facts reject non-empty missing_items in producer and schema",
-      "publish-code-result depends on authenticate-current-task-completion",
-      "final integration review is carried independently in phase_completion.integration_review",
-      "missing canonical Phase history is recorded as formal_record_status=unavailable and does not gate quality completion",
-      "published changed files come from the authenticated complete execution-baseline diff; any extra unowned path fails",
-      "tasks completion evidence can authenticate task records, Git commits, workspace files, real test runs, and independent review facts"
-    ],
-    "remaining_gaps": [
-      "T001-T008 completion claims still use prose evidence_refs and therefore remain uncertifiable until tasks.md records structured current evidence; T010 has two stale workspace hashes.",
-      "T011 and T012 remain unchecked in tasks.md; this repair intentionally does not update Task state.",
-      "The Phase 6 plan/tasks file-boundary drift still needs a material decision before any path outside T012 ownership is changed."
-    ]
+    "supplementary_fixture_verification": {
+      "command": "CI=1 npx vitest run tests/final-cutover-guards.red.test.mjs --reporter=basic",
+      "exit_code": 0,
+      "result": "55 passed",
+      "classification": "Fixture drift was repaired without changing product behavior.",
+      "effect": "The focused final-cutover guard suite now supports the current 21-AC verification map."
+    },
+    "review_gate_rule": "Review result, finding, missing history, or authenticated unavailable remains audit information. Only current implementation failure, fresh test failure, or failed or uncovered AC prevents a passed verify conclusion."
   },
-  "t012_recommendation": {
-    "production_files_minimum": [
-      "contracts/facts-subschema.json",
-      "core/task-kernel-implementation.mjs",
-      "core/stage-completion-facts.mjs",
-      "core/schemas/stage-completion-facts.v1.json",
-      "core/stage-content-contracts.mjs",
-      "core/stage-handlers.mjs",
-      "workflows/build-code/phase-evidence.mjs",
-      "workflows/build-code/steps.json",
-      "skills/wh-review/scripts/integration-review-subject.mjs"
-    ],
-    "test_files": [
-      "core/__tests__/stage-context.test.mjs",
-      "core/__tests__/task-kernel-publish.test.mjs",
-      "tests/stage-completion-facts.test.mjs",
-      "tests/interaction-quality-contract.test.mjs"
-    ],
-    "evidence_file": "apply/evidence/current-diff-ac-coverage.json",
-    "not_needed_for_the_three_existing_red_assertions": [
-      "core/stage-context.mjs",
-      "core/stage-handlers.mjs",
-      "workflows/verify-code/steps.json"
-    ],
-    "additional_red_required_before_green": [
-      "None. The two required behavior tests now prove unavailable formal history is non-gating and an actual unowned path fails exact diff certification."
-    ],
-    "scope_warning": "Do not edit tasks.md state in this repair and do not force any unrelated path into a Task merely to satisfy completion certification."
-  }
+  "limits": [
+    "No provider re-review was run.",
+    "No repository-wide test suite was run.",
+    "The original review verdicts remain unchanged.",
+    "The focused final-cutover guard suite passed 55/55 after fixture-only repairs."
+  ]
 }
