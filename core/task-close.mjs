@@ -6,7 +6,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
-import { createTaskWorktreeRemoval } from "./workspace.mjs";
+import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
+import { createTaskWorktreeRemoval, openAcceptedWorkspace } from "./workspace.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
@@ -241,6 +242,17 @@ function plannedMergePreflight(delivery) {
   throw new Error(`planned merge preflight failed: ${result.stderr || result.stdout || "git merge-tree failed"}`);
 }
 
+function effectiveAcceptedWorkspaceBinding(task, kernel) {
+  const accepted = kernel.readAccepted("make-decision");
+  const recovery = readAuthenticatedDirtyCleanupBinding(task);
+  return Object.freeze({
+    taskId: accepted.accepted.task_id,
+    stage: accepted.accepted.stage,
+    worktreeRoot: recovery?.workspace.worktree_root ?? accepted.facts.worktree_root,
+    baselineCommit: accepted.facts.baseline_commit,
+  });
+}
+
 function validateDeliveryPlan(plan, task, kernel) {
   validatePlan(plan, task);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
@@ -248,8 +260,8 @@ function validateDeliveryPlan(plan, task, kernel) {
   const required = ["target_repo_root", "worktree_root", "task_branch", "target_branch", "remote", "task_commit", "spec_source_path", "spec_archive_path", "target_baseline", "remote_target_baseline", "merge_strategy"];
   if (required.some((key) => typeof delivery[key] !== "string" || delivery[key] === "")) throw new TypeError("delivery close plan is missing required fields");
   if (resolve(delivery.target_repo_root) !== task.manifest.target_repo_root) throw new Error("delivery close target repository mismatch");
-  const accepted = kernel.readAccepted("make-decision");
-  if (resolve(delivery.worktree_root) !== resolve(accepted.facts.worktree_root)) throw new Error("delivery close worktree does not match accepted make-decision");
+  const effective = effectiveAcceptedWorkspaceBinding(task, kernel);
+  if (resolve(delivery.worktree_root) !== resolve(effective.worktreeRoot)) throw new Error("delivery close worktree does not match the authenticated effective Workspace");
   oid(delivery.task_commit, "delivery task_commit");
   oid(delivery.target_baseline, "delivery target_baseline");
   oid(delivery.remote_target_baseline, "delivery remote_target_baseline");
@@ -298,7 +310,8 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
-  const worktree = resolve(accepted.facts.worktree_root);
+  const workspace = openAcceptedWorkspace(task, accepted);
+  const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
@@ -442,14 +455,7 @@ export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
       }
       if (step.operation === "remove-worktree") {
         if (Object.prototype.hasOwnProperty.call(step, "worktree_root")) throw new TypeError("remove-worktree path is selected only by the current accepted Workspace");
-        const acceptedDecision = safeKernel.readAccepted("make-decision");
-        const acceptedBinding = Object.freeze({
-          taskId: acceptedDecision.accepted.task_id,
-          stage: acceptedDecision.accepted.stage,
-          worktreeRoot: acceptedDecision.facts.worktree_root,
-          baselineCommit: acceptedDecision.facts.baseline_commit,
-        });
-        removal ??= createTaskWorktreeRemoval(safeTask, acceptedBinding);
+        removal ??= createTaskWorktreeRemoval(safeTask, effectiveAcceptedWorkspaceBinding(safeTask, safeKernel));
         return removal;
       }
       throw new Error(`unsupported governed close operation: ${step.operation}`);
@@ -469,7 +475,43 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   }
   const root = delivery.target_repo_root;
   const worktree = delivery.worktree_root;
+  const recovery = readAuthenticatedDirtyCleanupBinding(task);
   const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
+  const detachPreservedWorktrees = () => {
+    const rawRootCommon = git(root, ["rev-parse", "--git-common-dir"]);
+    const rootCommon = realpathSync(isAbsolute(rawRootCommon) ? rawRootCommon : resolve(root, rawRootCommon));
+    for (const identity of recovery?.preserved_workspaces ?? []) {
+      const preservedRoot = resolve(identity.worktree_root);
+      if (!existsSync(preservedRoot) || preservedRoot === resolve(worktree)) continue;
+      const top = realpathSync(git(preservedRoot, ["rev-parse", "--show-toplevel"]));
+      const rawCommon = git(preservedRoot, ["rev-parse", "--git-common-dir"]);
+      const common = realpathSync(isAbsolute(rawCommon) ? rawCommon : resolve(preservedRoot, rawCommon));
+      if (top !== realpathSync(preservedRoot)
+          || common !== identity.git_common_dir
+          || common !== rootCommon) {
+        throw new Error("preserved dirty workspace no longer matches the authenticated task repository");
+      }
+      const symbolic = gitResult(preservedRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+      if (!symbolic.ok) {
+        if (git(preservedRoot, ["rev-parse", "HEAD"]).toLowerCase() !== identity.head.toLowerCase()) {
+          throw new Error("preserved dirty workspace detached HEAD changed after recovery");
+        }
+        continue;
+      }
+      if (symbolic.stdout !== identity.branch || symbolic.stdout !== delivery.task_branch) {
+        throw new Error("preserved dirty workspace branch changed after recovery");
+      }
+      if (!gitResult(root, ["cat-file", "-e", `${identity.head}^{commit}`]).ok) {
+        throw new Error("preserved dirty workspace recorded HEAD no longer exists");
+      }
+      const beforeTree = captureGitWorktreeSnapshot(preservedRoot).tree;
+      git(preservedRoot, ["update-ref", "--no-deref", "HEAD", identity.head]);
+      const afterTree = captureGitWorktreeSnapshot(preservedRoot).tree;
+      if (beforeTree !== afterTree || gitResult(preservedRoot, ["symbolic-ref", "--quiet", "HEAD"]).ok) {
+        throw new Error("preserved dirty workspace could not be detached without changing its bytes");
+      }
+    }
+  };
   const findArchive = () => {
     const taskTip = branchOid(root, delivery.task_branch);
     const targetTip = branchOid(root, delivery.target_branch);
@@ -570,8 +612,11 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
       };
       if (step.operation === "remove-task-worktree") {
-        const accepted = kernel.readAccepted("make-decision");
-        removal ??= createTaskWorktreeRemoval(task, { taskId: accepted.accepted.task_id, stage: accepted.accepted.stage, worktreeRoot: accepted.facts.worktree_root, baselineCommit: accepted.facts.baseline_commit });
+        const effective = effectiveAcceptedWorkspaceBinding(task, kernel);
+        removal ??= createTaskWorktreeRemoval(task, {
+          ...effective,
+          worktreeRoot: delivery.worktree_root,
+        });
         return removal;
       }
       if (step.operation === "remove-task-branch") return {
@@ -581,6 +626,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           const target = branchOid(root, delivery.target_branch);
           const tip = branchOid(root, delivery.task_branch);
           if (!tip || !contains(tip, target)) throw new Error("task branch is not merged into target");
+          detachPreservedWorktrees();
           git(root, ["branch", "-d", "--", delivery.task_branch]);
         },
         verify: async (value) => value.satisfied && value.task_branch === delivery.task_branch,

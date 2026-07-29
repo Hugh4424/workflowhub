@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 describe("stage runtime terminal contracts", () => {
@@ -41,7 +44,60 @@ describe("stage runtime terminal contracts", () => {
 describe("verify close executor fail-stop", () => {
   const roots=[];
   afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true})});
-  const governed=async(steps,outcome="confirmed")=>{const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-")));roots.push(root);const repo=join(root,"repo"),taskId=`close-${roots.length}`,worktree=`${repo}-${taskId}`;mkdirSync(repo);execFileSync("git",["init","-q"],{cwd:repo});execFileSync("git",["config","user.email","t@e.co"],{cwd:repo});execFileSync("git",["config","user.name","T"],{cwd:repo});execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});const head=String(execFileSync("git",["rev-parse","HEAD"],{cwd:repo})).trim();execFileSync("git",["worktree","add","-qb",`task/Demo/${taskId}`,worktree,head],{cwd:repo});const task=createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:taskId,created_at:new Date().toISOString(),target_repo_root:repo,issue_ids:[],inputs:{}}});const kernel=createTaskKernel(task),decision=kernel.publishAttempt("make-decision",{facts:{worktree_root:worktree,baseline_commit:head}});kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;const plan={schema_version:"task-close-plan.v1",task_id:task.identity.taskId,steps:resolvedSteps??[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head}]};const {confirmClosePlan,createGovernedCloseExecutorRegistry}=await import("../core/task-close.mjs");const closeConfirmationRef=confirmClosePlan({task,kernel,plan,outcome}).ref;return{task,kernel,decision,plan,repo,worktree,head,executors:createGovernedCloseExecutorRegistry({task,kernel}),closeConfirmationRef};};
+  const governed=async(steps,outcome="confirmed")=>{
+    const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-")));
+    roots.push(root);
+    const repo=join(root,"repo"),taskId=`close-${roots.length}`,worktree=`${repo}-${taskId}`;
+    mkdirSync(repo);
+    execFileSync("git",["init","-q"],{cwd:repo});
+    execFileSync("git",["config","user.email","t@e.co"],{cwd:repo});
+    execFileSync("git",["config","user.name","T"],{cwd:repo});
+    execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});
+    const head=String(execFileSync("git",["rev-parse","HEAD"],{cwd:repo})).trim();
+    execFileSync("git",["worktree","add","-qb",`task/Demo/${taskId}`,worktree,head],{cwd:repo});
+    const task=createTask({storageRoot:root,manifest:{
+      schema_version:"1.0.0",project_name:"Demo",task_id:taskId,
+      created_at:new Date().toISOString(),target_repo_root:repo,issue_ids:[],inputs:{},
+    }});
+    const kernel=createTaskKernel(task,{candidateWorkspace:prepareTaskWorkspace(task)});
+    const active=kernel.startStageRun("make-decision",{reason:"terminal close fixture"});
+    const snapshotTree=String(execFileSync("git",["rev-parse","HEAD^{tree}"],{cwd:worktree})).trim();
+    const content={
+      schema_version:"stage-content-evidence.v1",kind:"make-decision.test",
+      task_id:taskId,stage:"make-decision",workflow_run_id:active.run.workflow_run_id,
+      snapshot_tree:snapshotTree,
+    };
+    const contentRaw=`${JSON.stringify(content,null,2)}\n`;
+    const contentHash=createHash("sha256").update(contentRaw).digest("hex");
+    const contentRef=`evidence/stage-content/${contentHash}/make-decision-test.json`;
+    kernel.publishCanonicalRecord(contentRef,contentRaw);
+    const contentEvidenceRefs=[{kind:content.kind,ref:contentRef,hash:contentHash}];
+    const unsignedSummary={
+      schema_version:"stage-audit-summary.v1",task_id:taskId,stage_slug:"make-decision",
+      workflow_run_id:active.run.workflow_run_id,snapshot_tree:snapshotTree,
+      verdict:"pass",content_evidence_refs:contentEvidenceRefs,
+    };
+    const summaryHash=hashAuditSummary(unsignedSummary);
+    const summaryRef=`evidence/audits/make-decision/${summaryHash}.json`;
+    kernel.publishCanonicalRecord(summaryRef,`${JSON.stringify({...unsignedSummary,summary_hash:summaryHash},null,2)}\n`);
+    const decision=kernel.publishAttempt("make-decision",{facts:{
+      worktree_root:worktree,baseline_commit:head,audit_contract_version:"v1",
+      audit_summary_ref:summaryRef,audit_summary_hash:summaryHash,audit_verdict:"pass",
+      content_evidence_refs:contentEvidenceRefs,
+    }});
+    kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));
+    const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;
+    const plan={
+      schema_version:"task-close-plan.v1",task_id:task.identity.taskId,
+      steps:resolvedSteps??[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head}],
+    };
+    const {confirmClosePlan,createGovernedCloseExecutorRegistry}=await import("../core/task-close.mjs");
+    const closeConfirmationRef=confirmClosePlan({task,kernel,plan,outcome}).ref;
+    return{
+      task,kernel,decision,plan,repo,worktree,head,
+      executors:createGovernedCloseExecutorRegistry({task,kernel}),closeConfirmationRef,
+    };
+  };
   it("rejects the transitional in-memory close adapter", async () => {
     const { executeClosePlan } = await import("../core/task-close.mjs");
     await expect(executeClosePlan({ confirmationOutcome: "confirmed", steps: [async () => {}] }))

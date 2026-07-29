@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -162,6 +162,18 @@ function fixture() {
 
 function runCli(args) {
   return execFileSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+
+function workspaceIdentity(root) {
+  const real = realpathSync(root);
+  const rawCommon = git(real, ["rev-parse", "--git-common-dir"]);
+  return {
+    worktree_root: real,
+    git_common_dir: realpathSync(isAbsolute(rawCommon) ? rawCommon : resolve(real, rawCommon)),
+    branch: git(real, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    head: git(real, ["rev-parse", "HEAD"]),
+    snapshot_tree: git(real, ["rev-parse", "HEAD^{tree}"]),
+  };
 }
 
 function fileBytes(root) {
@@ -367,6 +379,76 @@ function runRecoveryChild(args, readyPath, goPath) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("task recovery CLI integration", () => {
+  it("issues and consumes dirty rebind credential through the real CLI without a test writer", () => {
+    const f = fixture();
+    const accepted = createTaskKernel(f.task).readAccepted("make-decision");
+    const worktree = accepted.facts.worktree_root;
+    commit(worktree, "clean workspace for formal dirty rebind");
+    const retained = [
+      "results/make-decision/accepted.json",
+      "results/build-spec/accepted.json",
+      "results/build-plan/accepted.json",
+    ].map((ref) => ({ ref, hash: sha256(f.task.readRecord(ref)) }));
+    const authorizedSubject = {
+      previous_workspace: workspaceIdentity(worktree),
+      clean_workspace: workspaceIdentity(worktree),
+      retained_artifact_refs: retained,
+      next_stage: "task-close",
+    };
+    const authorization = {
+      schema_version: "workflowhub-dirty-cleanup-rebind-authorization.v1",
+      project_name: f.task.identity.projectName,
+      task_id: f.task.identity.taskId,
+      purpose: "dirty-cleanup-rebind",
+      recovery_kind: "dirty-cleanup-rebind",
+      decision: "accepted",
+      credential_nonce: "formal-cli-dirty-rebind",
+      single_use: true,
+      accepted_business_snapshot: { ref: accepted.accepted_ref, hash: accepted.accepted_hash },
+      credential_subject_hash: sha256(canonical(authorizedSubject)),
+      ...authorizedSubject,
+      authorized_at: "2026-07-29T00:00:00.000Z",
+    };
+    const authorizationRaw = canonical(authorization);
+    const authorizationHash = sha256(authorizationRaw);
+    const authorizationRef = `evidence/authorizations/dirty-cleanup-rebind/${authorizationHash}.json`;
+    mkdirSync(dirname(join(f.task.taskPath, authorizationRef)), { recursive: true });
+    writeFileSync(join(f.task.taskPath, authorizationRef), authorizationRaw);
+    const args = [
+      "dirty-cleanup-rebind",
+      `--task-path=${f.task.taskPath}`,
+      "--project=workflowhub",
+      "--task=recovery-cli",
+      `--runner-root=${f.nextRunner}`,
+      `--authorization-ref=${authorizationRef}`,
+      `--authorization-hash=${authorizationHash}`,
+      `--previous-workspace-root=${worktree}`,
+      `--clean-workspace-root=${worktree}`,
+      `--retained-artifact-refs=${retained.map(({ ref }) => ref).join(",")}`,
+      `--retained-artifact-hashes=${retained.map(({ hash }) => hash).join(",")}`,
+      "--nonce=formal-cli-dirty-rebind",
+    ];
+
+    const first = JSON.parse(runCli(args));
+    const replay = JSON.parse(runCli(args));
+
+    expect(first).toMatchObject({
+      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/formal-cli-dirty-rebind.json",
+      recovery_ref: "identity/recoveries/dirty-cleanup-rebind-0001.json",
+      generation: 1,
+      replayed: false,
+      next_entry: "normal task-close",
+    });
+    expect(replay).toMatchObject({
+      credential_ref: first.credential_ref,
+      credential_hash: first.credential_hash,
+      recovery_ref: first.recovery_ref,
+      recovery_hash: first.recovery_hash,
+      generation: 1,
+      replayed: true,
+    });
+  });
+
   it("executes runner replacement through the official CLI and preserves lineage", () => {
     const f = fixture();
     const previous = JSON.parse(f.task.readRecord(f.task.manifest.runner_root_migration.ref)).runner_identity;

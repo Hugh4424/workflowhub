@@ -2,14 +2,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { canonical } from "../core/task-recovery.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
+import { runRecovery } from "../scripts/task-recovery.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
@@ -154,7 +156,7 @@ function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   const summaryRef = `evidence/audits/make-decision/${summaryHash}.json`;
   kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
   const decision = kernel.publishAttempt("make-decision", { facts: {
-    worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main"),
+    worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main"), snapshot_tree: snapshotTree,
     audit_contract_version: "v1", audit_summary_ref: summaryRef, audit_summary_hash: summaryHash,
     audit_verdict: "pass", content_evidence_refs: contentEvidenceRefs,
   } });
@@ -179,11 +181,72 @@ function delivery(f) {
   };
 }
 
+function workspaceIdentity(root) {
+  const common = git(root, "rev-parse", "--git-common-dir");
+  return {
+    worktree_root: realpathSync(root),
+    git_common_dir: realpathSync(resolve(root, common)),
+    branch: git(root, "symbolic-ref", "--quiet", "--short", "HEAD"),
+    head: git(root, "rev-parse", "HEAD"),
+    snapshot_tree: git(root, "rev-parse", "HEAD^{tree}"),
+  };
+}
+
+function authorizeDirtyCloseRebind(f, runnerRoot, cleanRoot) {
+  const accepted = f.kernel.readAccepted("make-decision");
+  const retained = [
+    "results/make-decision/accepted.json",
+    "results/build-code/accepted.json",
+    "results/verify-code/accepted.json",
+  ].map((ref) => ({ ref, hash: sha256(f.task.readRecord(ref)) }));
+  const authorizedSubject = {
+    previous_workspace: workspaceIdentity(f.worktree),
+    clean_workspace: workspaceIdentity(cleanRoot),
+    retained_artifact_refs: retained,
+    next_stage: "task-close",
+  };
+  const authorization = {
+    schema_version: "workflowhub-dirty-cleanup-rebind-authorization.v1",
+    project_name: f.task.identity.projectName,
+    task_id: f.task.identity.taskId,
+    purpose: "dirty-cleanup-rebind",
+    recovery_kind: "dirty-cleanup-rebind",
+    decision: "accepted",
+    credential_nonce: "close-chain-rebind",
+    single_use: true,
+    accepted_business_snapshot: { ref: accepted.accepted_ref, hash: accepted.accepted_hash },
+    credential_subject_hash: sha256(canonical(authorizedSubject)),
+    ...authorizedSubject,
+    authorized_at: "2026-07-29T00:00:00.000Z",
+  };
+  const raw = canonical(authorization);
+  const hash = sha256(raw);
+  const ref = `evidence/authorizations/dirty-cleanup-rebind/${hash}.json`;
+  mkdirSync(join(f.task.taskPath, "evidence", "authorizations", "dirty-cleanup-rebind"), { recursive: true });
+  writeFileSync(join(f.task.taskPath, ref), raw);
+  return runRecovery([
+    "dirty-cleanup-rebind",
+    `--task-path=${f.task.taskPath}`,
+    `--project=${f.task.identity.projectName}`,
+    `--task=${f.task.identity.taskId}`,
+    `--runner-root=${runnerRoot}`,
+    "--stage=verify-code",
+    `--authorization-ref=${ref}`,
+    `--authorization-hash=${hash}`,
+    `--previous-workspace-root=${f.worktree}`,
+    `--clean-workspace-root=${cleanRoot}`,
+    `--retained-artifact-refs=${retained.map(({ ref: retainedRef }) => retainedRef).join(",")}`,
+    `--retained-artifact-hashes=${retained.map(({ hash: retainedHash }) => retainedHash).join(",")}`,
+    "--nonce=close-chain-rebind",
+  ]);
+}
+
 function createRunner(f) {
   const runner = join(f.root, "runner");
   mkdirSync(runner);
   execFileSync("git", ["init", "-q", "-b", "task/Demo/close-task"], { cwd: runner });
   writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
+  writeFileSync(join(runner, "CONSTITUTION.md"), "# Constitution\n");
   mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
   writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
   execFileSync("git", ["add", "."], { cwd: runner });
@@ -339,6 +402,48 @@ describe("delivery close verifier", () => {
     git(f.repo, "branch", "wrong-task", f.taskCommit);
     expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: { ...delivery(f), task_branch: "wrong-task" } })).toThrow(/accepted Workspace|task branch/i);
     expect(git(f.repo, "rev-parse", "main")).toBe(git(f.repo, "rev-parse", "origin/main"));
+  });
+
+  it("runs formal dirty rebind through normal close using the authenticated effective Workspace", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const runnerRoot = createRunner(f);
+    writeFileSync(join(f.worktree, "preserved-dirty-user.txt"), "preserved dirty bytes\n");
+    const cleanRoot = join(f.root, "close-task-clean");
+    git(f.repo, "worktree", "add", "--force", "-q", cleanRoot, "task/Demo/close-task");
+
+    const recovery = authorizeDirtyCloseRebind(f, runnerRoot, cleanRoot);
+    expect(recovery).toMatchObject({
+      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/close-chain-rebind.json",
+      generation: 1,
+      next_entry: "normal task-close",
+    });
+
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    expect(prepared.plan.delivery.worktree_root).toBe(realpathSync(cleanRoot));
+    const confirmation = api.confirmClosePlan({
+      task: f.task,
+      kernel: f.kernel,
+      plan: prepared.plan,
+      outcome: "confirmed",
+    });
+    const result = await api.executeClosePlan({
+      task: f.task,
+      kernel: f.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmation.ref,
+      executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }),
+    });
+
+    expect(result).toMatchObject({
+      status: "completed",
+      physical_state: { archive: true, merge: true, push: true, worktree_cleanup: true, branch_cleanup: true },
+    });
+    expect(existsSync(cleanRoot)).toBe(false);
+    expect(readFileSync(join(f.worktree, "preserved-dirty-user.txt"), "utf8")).toBe("preserved dirty bytes\n");
+    expect(git(f.worktree, "status", "--porcelain", "--untracked-files=all")).toContain("preserved-dirty-user.txt");
+    expect(() => git(f.worktree, "symbolic-ref", "--quiet", "--short", "HEAD")).toThrow();
+    expect(git(f.worktree, "rev-parse", "HEAD")).toBe(f.taskCommit);
   });
 
   it("executes the six fixed delivery steps and reconciles a second run", async () => {
