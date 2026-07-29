@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
+import { validateSpecContentProfile } from "../core/stage-content-contracts.mjs";
+
 const fixture = JSON.parse(readFileSync(
   new URL("./fixtures/template-content-quality/retention-map.json", import.meta.url),
   "utf8",
@@ -111,10 +113,6 @@ function inlineJson(document, label) {
   const match = document.match(new RegExp(`^\\s*-\\s+\\*\\*${label}\\*\\*\\s*[:：]\\s*` + "`(\\{.*\\}|\\[.*\\])`\\s*$", "mi"));
   if (!match) return null;
   try { return JSON.parse(match[1]); } catch { return null; }
-}
-
-function hasInstructionResidue(document) {
-  return /^\s*-\s+\*\*(?:功能名|来源|Goal|输入|输出)\*\*：\s*(?:写|说明|列出|记录)/m.test(document);
 }
 
 describe("template content retention map", () => {
@@ -227,7 +225,9 @@ describe("template responsibilities", () => {
     for (const path of templatePaths) {
       const document = read(path);
       const nonContractLines = document.split(/\r?\n/)
-        .filter((line) => !line.includes("**Constitution binding**") && !line.includes("**versioned_refs**"))
+        .filter((line) => !line.includes("**Constitution binding**")
+          && !line.includes("**versioned_refs**")
+          && !line.includes("{AUTHORING_TEMPLATE}"))
         .join("\n");
       expect(nonContractLines, `${path}: unresolved braces outside a machine contract`).not.toMatch(/\{[^}\n]+\}/);
       expect(document, `${path}: authoring comment`).not.toMatch(/<!--|-->/);
@@ -246,8 +246,11 @@ describe("template responsibilities", () => {
     expect(refs[0].hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("rejects obvious instruction residue as published content", () => {
-    expect(hasInstructionResidue("- **功能名**：写出面向用户的名称。")).toBe(true);
-    expect(hasInstructionResidue("- **功能名**：批量导入审批")).toBe(false);
+  it("rejects the raw spec template through the production content validator", () => {
+    const template = read("skills/spec-specify/templates/spec-template.md");
+    const validation = validateSpecContentProfile(template);
+    expect(template.match(/\{AUTHORING_TEMPLATE\}/g)).toHaveLength(1);
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toContain("spec contains an unresolved placeholder");
   });
 });
