@@ -1089,7 +1089,7 @@ describe("TaskKernel append-only publication", () => {
     expect(() => bound.acceptAttempt("build-spec", replacement.attempt_ref)).toThrow(/continuation audit binding mismatch/i);
   });
 
-  it("blocks build-spec replacement after build-plan is accepted", () => {
+  it("allows build-spec replacement when only build-plan is accepted", () => {
     const context = acceptedBuildSpecFixture();
     const { task, artifacts, bound } = context;
     artifacts.writeAtomic("plan.md", "# Plan\n");
@@ -1107,10 +1107,29 @@ describe("TaskKernel append-only publication", () => {
       }],
     });
     bound.acceptAttempt("build-plan", plan.attempt_ref, confirmation(bound, "build-plan", plan.attempt_ref));
+    const acceptedPlanRaw = task.readRecord("results/build-plan/accepted.json");
+    rmSync(artifacts.path("plan.md"));
+    rmSync(artifacts.path("tasks.md"));
     const continuation = beginAcceptedBuildSpecContinuation(context);
 
-    expect(() => publishBuildSpecReplacement(continuation)).toThrow(/downstream stage build-plan/i);
+    const replacement = publishBuildSpecReplacement(continuation);
+    expect(() => replacement.bound.acceptAttempt("build-spec", replacement.replacement.attempt_ref)).not.toThrow();
+    expect(task.readRecord("results/build-plan/accepted.json")).toBe(acceptedPlanRaw);
   });
+
+  it.each(["build-code", "verify-code"])(
+    "blocks build-spec replacement after %s is accepted",
+    (stage) => {
+      const context = beginAcceptedBuildSpecContinuation();
+      const acceptedPath = context.task.recordPath(`results/${stage}/accepted.json`);
+      mkdirSync(dirname(acceptedPath), { recursive: true });
+      writeFileSync(acceptedPath, "{}\n");
+
+      expect(() => publishBuildSpecReplacement(context)).toThrow(
+        new RegExp(`downstream stage ${stage}`, "i"),
+      );
+    },
+  );
 
   it("rejects a stale build-plan attempt after its accepted build-spec upstream is replaced", () => {
     const context = acceptedBuildSpecFixture();

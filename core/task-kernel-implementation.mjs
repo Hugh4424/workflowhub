@@ -1003,7 +1003,9 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     return audit;
   };
   const assertNoAcceptedBuildSpecDownstream = () => {
-    for (const stage of ["build-plan", "build-code", "verify-code"]) {
+    // An accepted plan does not close build-spec clarification. Once execution
+    // has been accepted, replacement still fails closed.
+    for (const stage of ["build-code", "verify-code"]) {
       try {
         task.readRecord(`results/${stage}/accepted.json`);
         throw new Error(`accepted build-spec continuation is blocked by accepted downstream stage ${stage}`);
