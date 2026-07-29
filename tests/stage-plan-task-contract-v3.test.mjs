@@ -335,11 +335,24 @@ describe("plan-task.v3 structural contract", () => {
       },
       artifactRef: (name) => `specs/demo/${name}`,
     };
+    const evidenceHash = sha256(evidenceRaw);
     expect(() => certifyCurrentTaskCompletion(worker, {
       changedFiles: ["core/demo.mjs"],
-      tests: { command: "npx vitest run tests/demo.test.mjs", exit_code: 0 },
+      tests: {
+        command: "npx vitest run tests/demo.test.mjs",
+        exit_code: 0,
+        receipt_ref: evidenceRef,
+        receipt_hash: evidenceHash,
+      },
       review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
-      acceptanceCoverage: { accepted_criterion_ids: ["AC1"], items: [] },
+      acceptanceCoverage: {
+        accepted_criterion_ids: ["AC1"],
+        items: [{
+          acceptance_criterion_id: "AC1",
+          status: "covered",
+          evidence_refs: [{ ref: evidenceRef, sha256: evidenceHash }],
+        }],
+      },
     })).toThrow(/actual_changes differs.*tests\/demo\.test\.mjs.*core\/demo\.mjs/i);
   });
 
