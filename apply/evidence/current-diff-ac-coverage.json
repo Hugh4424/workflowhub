@@ -3,21 +3,18 @@
   "map_role": "single_current_map",
   "task_id": "review-flow-reset",
   "phase_id": "phase-6",
-  "generated_at": "2026-07-29T16:18:38Z",
+  "generated_at": "2026-07-29T16:30:13Z",
   "workspace": {
-    "head": "1971e3c051d43f19c8d7ff4768cda39411a764bd",
+    "implementation_head": "3f50ce6e98970f4023efe8e0e9eb80ff41454a6f",
     "baseline": "ff07a23",
-    "snapshot": "HEAD plus the two authorized verify-code finding repairs",
+    "snapshot": "Committed implementation, fixture, and tasks state before this evidence-only map refresh.",
     "changed_file_count": 76,
-    "authorized_dirty_paths": [
-      "apply/evidence/current-diff-ac-coverage.json",
-      "workflows/verify-code/SKILL.md"
-    ],
+    "evidence_refresh_path": "apply/evidence/current-diff-ac-coverage.json",
     "material_hashes": {
       "decision-log.md": "2eea2270625be40d5a17e864578eddb5e31350eee6fe0e09e934d170e8946257",
       "spec.md": "b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1",
       "plan.md": "f52ada05cb83dbf59526b7dc4c2f7b8c9b4a8ed924402cd229c81305a7f83991",
-      "tasks.md": "bfa89e691149ace6e82a3676e2e7659a45ecd38a3b1eb9db857078195953e27c"
+      "tasks.md": "6576da136f45945df72ed951ece51a6fed9e6e5f5c91ece246c862074977bfc8"
     }
   },
   "summary": {
