@@ -27,9 +27,15 @@ function upstreamForStage(ctx, stage, upstreamStage) {
   const readOptions = stage === "verify-code" && upstreamStage === "build-code"
     ? { allowLegacyBuildCode: true }
     : undefined;
-  if (!hasInput) return ctx.kernel.readAccepted(upstreamStage, readOptions);
+  if (!hasInput) {
+    try { return ctx.kernel.readAcceptedAudit(upstreamStage, readOptions); }
+    catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  }
   let local;
-  try { local = ctx.kernel.readAccepted(upstreamStage, readOptions); } catch (error) {
+  try { local = ctx.kernel.readAcceptedAudit(upstreamStage, readOptions); } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
   if (local) throw new Error(`${stage} has both current accepted ${upstreamStage} and manifest input ${slot}`);
@@ -145,7 +151,11 @@ function trustedReviewFlowIdentities(ctx, publication = {}) {
   if (ctx.stage === "build-code" && publication.reopenProvenance) {
     revision = publication.reopenProvenance;
   } else if (ctx.stage === "verify-code") {
-    revision = ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode: true }).attempt.reopen_provenance ?? null;
+    try {
+      revision = ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode: true }).attempt.reopen_provenance ?? null;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
   }
   return reviewFlowSubjectsForStage(ctx.stage).map((subject) => {
     if (revision === null || subject.stage !== "build-code") return ctx.kernel.deriveReviewFlowIdentity(subject);
@@ -217,7 +227,13 @@ function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = [])
       // Verify must be able to turn a legacy accepted build into an explicit
       // failure so the controlled reopen path can upgrade it. The handler
       // still fails closed when acceptance_coverage is absent.
-      readAcceptedBuildCode: ({ allowLegacyBuildCode = false } = {}) => ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode }),
+      readAcceptedBuildCode: ({ allowLegacyBuildCode = false, required = true } = {}) => {
+        try { return ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode }); }
+        catch (error) {
+          if (!required && error?.code === "ENOENT") return null;
+          throw error;
+        }
+      },
     } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),

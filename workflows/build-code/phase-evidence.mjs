@@ -1,5 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
 import { captureWorkspaceSnapshot } from "../../core/canonical-receipt-writer.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../core/task-handle.mjs";
@@ -11,6 +14,7 @@ import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha25
 import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
 import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../core/stage-review-disposition.mjs";
+import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../core/stage-content-contracts.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -312,7 +316,105 @@ function phaseSubject(task, workspace, phaseResult) {
   };
 }
 
-function deriveBaseline({ task, kernel, workspace, input, current }) {
+function tasksOnlyBaseline(task, workspace, previous) {
+  const previousCommit = previous.scan.implementation_commit;
+  const tasksPath = `specs/${task.identity.taskId}/tasks.md`;
+  const before = execFileSync("git", ["show", `${previousCommit}:${tasksPath}`], {
+    cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  });
+  const after = readFileSync(resolve(workspace.worktreeRoot, tasksPath), "utf8");
+  const phaseTasks = resolvePhaseTaskIds({
+    plan: readFileSync(resolve(workspace.worktreeRoot, `specs/${task.identity.taskId}/plan.md`), "utf8"),
+    tasks: after,
+    phaseId: previous.phaseResult.phase_id,
+  });
+  const requiredRefs = [
+    previous.phaseResult.evidence?.implementation_receipt_ref,
+    previous.phaseResult.evidence?.green_test_receipt_ref,
+    currentPhaseReviewRef(previous.phaseResult),
+  ];
+  const requiredBindings = requiredRefs.map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
+  const seam = validateTasksOnlyCompletionSeam({
+    before,
+    after,
+    allowedTaskIds: phaseTasks.task_ids,
+    requiredBindings,
+    expectedReviewRef: currentPhaseReviewRef(previous.phaseResult),
+    completionEvidence: ({ ref }) => {
+      try { return task.readRecord(ref); }
+      catch (error) {
+        if (error?.code === "ENOENT") return undefined;
+        throw error;
+      }
+    },
+  });
+  if (!seam.ok) throw new Error(`invalid tasks-only completion seam: ${seam.errors.join("; ")}`);
+  const index = resolve(tmpdir(), `workflowhub-tasks-seam-${randomUUID()}.index`);
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  try {
+    execFileSync("git", ["read-tree", `${previousCommit}^{tree}`], { cwd: workspace.worktreeRoot, env, stdio: "ignore" });
+    execFileSync("git", ["add", "--", tasksPath], { cwd: workspace.worktreeRoot, env, stdio: "ignore" });
+    const tree = execFileSync("git", ["write-tree"], {
+      cwd: workspace.worktreeRoot, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    const baseline = execFileSync("git", ["commit-tree", tree, "-p", previousCommit, "-m", "workflowhub tasks completion seam"], {
+      cwd: workspace.worktreeRoot,
+      env: {
+        ...env,
+        GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
+        GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
+        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+      },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    const captured = execFileSync("git", ["show", `${baseline}:${tasksPath}`], {
+      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (captured !== after) throw new Error("tasks-only completion seam changed while its baseline was captured");
+    return baseline;
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+function currentMaterialsBaseline(task, kernel, workspace) {
+  try {
+    return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const root = workspace.worktreeRoot;
+  const head = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  const index = resolve(tmpdir(), `workflowhub-current-materials-${randomUUID()}.index`);
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const taskRoot = `specs/${task.identity.taskId}`;
+  const paths = ["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => `${taskRoot}/${name}`);
+  try {
+    execFileSync("git", ["read-tree", `${head}^{tree}`], { cwd: root, env, stdio: "ignore" });
+    execFileSync("git", ["add", "--", ...paths], { cwd: root, env, stdio: "ignore" });
+    const tree = execFileSync("git", ["write-tree"], {
+      cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return execFileSync("git", ["commit-tree", tree, "-p", head, "-m", "workflowhub current task materials baseline"], {
+      cwd: root,
+      env: {
+        ...env,
+        GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
+        GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
+        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+      },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+function deriveBaseline({ task, kernel, workspace, input, current, red }) {
   if (current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined) {
     if (current.recovery_ref !== input.recovery_ref || current.recovery_hash !== input.recovery_hash) {
       throw new Error("recovery bootstrap must use the current recovery binding");
@@ -328,7 +430,14 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
   }
   if (!current) {
     if (input.previous_phase_review_ref !== undefined) throw new Error("first Phase must not provide previous_phase_review_ref");
-    return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
+    const baseline = currentMaterialsBaseline(task, kernel, workspace);
+    const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], {
+      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (red && red.value.snapshot_tree !== baselineTree) {
+      throw new Error("RED test receipt must bind the current task-material baseline tree");
+    }
+    return baseline;
   }
   const previous = phaseSubject(task, workspace, current);
   if (current.phase_id !== input.phase_id) {
@@ -339,7 +448,7 @@ function deriveBaseline({ task, kernel, workspace, input, current }) {
       ...(predecessorAdjudicationCorrection(current, input.phase_id) === undefined ? {}
         : { adjudicationCorrectionRef: predecessorAdjudicationCorrection(current, input.phase_id) }),
     });
-    return previous.scan.implementation_commit;
+    return tasksOnlyBaseline(task, workspace, { ...previous, phaseResult: current });
   }
   if (input.repair_review_result_ref !== undefined) {
     if (input.reopen_ref !== undefined) throw new Error("pre-accept repair review cannot be combined with reopen_ref");
@@ -574,7 +683,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         throw new Error("a changed same-Phase identity requires previous_phase_review_ref");
       }
     }
-    const baseline = deriveBaseline({ task, kernel, workspace, input, current });
+    const baseline = deriveBaseline({ task, kernel, workspace, input, current, red });
     const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim();
     if (red && red.value.snapshot_tree !== baselineTree) throw new Error("RED test receipt must bind the Phase baseline tree");
     const implementationCommit = phaseCommit(workspace, implementation.value.snapshot_tree, baseline, input.phase_id);

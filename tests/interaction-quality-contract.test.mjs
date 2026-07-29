@@ -194,4 +194,32 @@ describe("interaction quality amendment contracts", () => {
     expect(buildCode).toMatch(/no state change[\s\S]{0,120}no action to take[\s\S]{0,120}publish no public message/i);
     expect(buildCode).toMatch(/latest completed Phase results[\s\S]{0,180}Later facts supersede earlier provisional skips[\s\S]{0,180}never reuse a stale Phase summary/i);
   });
+
+  it("all five stages use current materials, real review facts, and no synthetic pass", () => {
+    for (const name of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = compact(stage(name));
+      expect(skill).toMatch(/(?:real|actual|真实|正式)[\s\S]{0,120}(?:review|审查)/i);
+      expect(skill).toMatch(/unavailable/i);
+      expect(skill).toMatch(/unavailable[\s\S]{0,180}(?:never|不得|不能)[\s\S]{0,80}pass/i);
+    }
+    const buildCode = compact(stage("build-code"));
+    const verifyCode = compact(stage("verify-code"));
+    expect(buildCode).toMatch(/decision-log\.md[\s\S]{0,100}spec\.md[\s\S]{0,100}plan\.md[\s\S]{0,100}tasks\.md/i);
+    expect(buildCode).toMatch(/tasks\.md[\s\S]{0,220}(?:unique|唯一)[\s\S]{0,120}(?:completion|完成)/i);
+    expect(buildCode).toMatch(/(?:after|每个)[^。.;]{0,100}Phase[\s\S]{0,180}tasks-only/i);
+    expect(buildCode).toMatch(/final[^。.;]{0,100}(?:certif|认证)[\s\S]{0,180}tasks\.md/i);
+    expect(buildCode).not.toMatch(/\{"phase_completion":true\}/);
+    expect(verifyCode).toMatch(/independent(?:ly)?[\s\S]{0,180}(?:recheck|复查)[\s\S]{0,180}tasks\.md/i);
+  });
+
+  it("stage step manifests treat accepted history as audit context instead of an entry gate", () => {
+    for (const name of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const manifest = compact(read("workflows", name, "steps.json"));
+      expect(manifest).not.toMatch(/(?:spec|plan|build):\/\/approved/i);
+      expect(manifest).not.toMatch(/automatically accepted/i);
+    }
+    expect(compact(read("workflows", "build-code", "steps.json"))).toMatch(
+      /decision-log\.md[\s\S]{0,120}spec\.md[\s\S]{0,120}plan\.md[\s\S]{0,120}tasks\.md/i,
+    );
+  });
 });

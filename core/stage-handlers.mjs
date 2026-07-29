@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 import { validateAcceptanceEvidence } from "./canonical-receipt-writer.mjs";
 import { minimumReviewersFor } from "../skills/wh-review/scripts/review-materials.mjs";
@@ -15,6 +16,7 @@ import {
 } from "./stage-review-disposition.mjs";
 import { buildStageCompletion } from "./stage-completion-facts.mjs";
 import { assertLatestBuildSpecReceipt } from "./build-spec-receipt-recovery.mjs";
+import { validatePlanTaskContract } from "./stage-content-contracts.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -234,6 +236,145 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   });
   if (declared.size) throw new Error("acceptance_coverage is missing an accepted criterion");
   return { snapshot_tree: snapshotTree, accepted_criterion_ids: coverage.accepted_criterion_ids, items };
+}
+
+function stripCode(value) {
+  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
+}
+
+function completionPaths(value) {
+  const raw = stripCode(value);
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string" && item.trim() !== "")) return [...new Set(parsed)];
+  } catch {}
+  const inline = [...new Set([...String(value ?? "").matchAll(/`([^`]+)`/g)].map((match) => match[1]))];
+  if (inline.length) return inline;
+  return /^[A-Za-z0-9._/-]+$/.test(raw) && raw.includes("/") ? [raw] : [];
+}
+
+function completionExecutions(value) {
+  const raw = stripCode(value);
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {}
+  const match = String(value ?? "").match(/`([^`]+)`[\s;，,]*(?:exit(?:_code)?\s*[=:：]?\s*)(-?\d+)/i);
+  return match ? [{ command: match[1], exit_code: Number(match[2]) }] : [];
+}
+
+function completionReviewRef(value) {
+  const raw = stripCode(value);
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.ref === "string" ? parsed.ref : null;
+  } catch {
+    return raw || null;
+  }
+}
+
+function sameStringSet(left, right) {
+  return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
+}
+
+function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
+  if (expectedTree === actualTree) return true;
+  const root = worker.workspace?.worktreeRoot;
+  if (!root) return false;
+  const changed = execFileSync("git", ["diff", "--name-only", expectedTree, actualTree, "--"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim().split("\n").filter(Boolean);
+  return changed.length === 1 && changed[0] === `specs/${worker.identity.taskId}/tasks.md`;
+}
+
+export function certifyCurrentTaskCompletion(worker, {
+  changedFiles,
+  tests,
+  review,
+  acceptanceCoverage,
+  requiredEvidence = [],
+} = {}) {
+  const validation = validatePlanTaskContract({
+    spec: worker.readArtifact("spec.md"),
+    plan: worker.readArtifact("plan.md"),
+    tasks: worker.readArtifact("tasks.md"),
+    completionEvidence: ({ ref }) => {
+      try { return worker.readEvidence(ref).bytes; }
+      catch (error) {
+        if (error?.code === "ENOENT") return undefined;
+        throw error;
+      }
+    },
+  });
+  const completion = validation.facts?.task_completion;
+  if (!completion || completion.total_count === 0) {
+    throw new Error("tasks.md has no certifiable Task completion rows");
+  }
+  if (completion.completed_count !== completion.total_count) {
+    const details = completion.tasks
+      .filter(({ complete }) => !complete)
+      .map(({ id, errors }) => `${id}: ${errors.join(", ") || "not completed"}`);
+    throw new Error(`tasks.md completion is incomplete: ${details.join("; ")}`);
+  }
+  const taskRows = new Map(validation.facts.task_rows.map((row) => [row.id, row]));
+  const tasksPath = `specs/${worker.identity.taskId}/tasks.md`;
+  const expectedChanges = [...new Set((changedFiles ?? []).filter((path) => path !== tasksPath && path !== "AGENTS.md"))];
+  const claimedChanges = [...new Set(completion.tasks.flatMap(({ id, actual_changes }) => {
+    const paths = completionPaths(actual_changes);
+    const declared = new Set([
+      ...(taskRows.get(id)?.fields?.["精确文件"]?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
+      ...(taskRows.get(id)?.fields?.boundary?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
+    ]);
+    for (const path of paths) {
+      if (declared.size > 0 && !declared.has(path)) throw new Error(`${id} actual_changes is outside its planned file boundary: ${path}`);
+    }
+    return paths;
+  }))];
+  if (!sameStringSet(claimedChanges, expectedChanges)) {
+    throw new Error(`tasks.md actual_changes differs from the current implementation diff: claimed=${JSON.stringify(claimedChanges)} actual=${JSON.stringify(expectedChanges)}`);
+  }
+  const executionMatches = completion.tasks.flatMap(({ executed_commands }) => completionExecutions(executed_commands))
+    .filter((entry) => entry?.command === tests.command && entry?.exit_code === tests.exit_code);
+  if (executionMatches.length === 0) throw new Error("tasks.md executed_commands does not bind the current test command and exit code");
+  const reviewRef = review.result_ref ?? review.attempt_ref;
+  const reviewHash = review.result_hash ?? review.attempt_hash;
+  for (const task of completion.tasks) {
+    if (completionReviewRef(task.review_fact) !== reviewRef) {
+      throw new Error(`${task.id} review_fact does not bind the current review`);
+    }
+  }
+  const evidence = new Map(completion.tasks.flatMap(({ evidence_refs }) => evidence_refs.map((entry) => [entry.ref, entry.sha256])));
+  for (const binding of [
+    { ref: tests.receipt_ref, sha256: tests.receipt_hash },
+    { ref: reviewRef, sha256: reviewHash },
+    ...requiredEvidence,
+  ]) {
+    if (!binding?.ref || !SHA256.test(binding.sha256 ?? "") || evidence.get(binding.ref) !== binding.sha256) {
+      throw new Error(`tasks.md completion evidence does not bind ${binding?.ref ?? "required fact"}`);
+    }
+  }
+  const expectedAc = validation.facts.ac_coverage.accepted_ids;
+  if (!acceptanceCoverage || !sameStringSet(acceptanceCoverage.accepted_criterion_ids, expectedAc)) {
+    throw new Error("build-code acceptance_coverage differs from the current spec AC set");
+  }
+  const coveredItems = acceptanceCoverage.items.filter(({ status }) => status === "covered");
+  if (coveredItems.length !== expectedAc.length) throw new Error("build-code completion requires covered evidence for every accepted AC");
+  const covered = [...new Set(completion.tasks.flatMap(({ covered_ac }) => covered_ac))];
+  if (!sameStringSet(covered, expectedAc)) {
+    throw new Error("tasks.md covered_ac differs from the current spec AC set");
+  }
+  for (const item of coveredItems) {
+    for (const binding of item.evidence_refs) {
+      if (evidence.get(binding.ref) !== binding.sha256) {
+        throw new Error(`tasks.md completion does not bind AC evidence for ${item.acceptance_criterion_id}`);
+      }
+    }
+  }
+  return Object.freeze({
+    status: "completed",
+    evidence_ref: worker.artifactRef("tasks.md"),
+    evidence_hash: hashText(worker.readArtifact("tasks.md")),
+  });
 }
 function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   const policy = attempt.review_policy;
@@ -731,8 +872,18 @@ HANDLERS.set("build-code", async (worker, input) => {
   for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
   if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) throw new Error("implementation, tests, and review must bind the same Workspace snapshot tree");
   const coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree);
-  const phase = impl.value.phase_completion;
-  if (typeof phase !== "boolean" && (!phase || typeof phase !== "object" || Array.isArray(phase))) throw new TypeError("invalid phase_completion");
+  if (tests.facts.exit_code !== 0) throw new Error("build-code final tests must pass before completion");
+  const phase = certifyCurrentTaskCompletion(worker, {
+    changedFiles: impl.value.changed,
+    tests: tests.facts,
+    review: review.facts,
+    acceptanceCoverage: coverage,
+    requiredEvidence: [impl.evidence],
+  });
+  const current = worker.snapshotWorkspace();
+  if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
+    throw new Error("build-code current Workspace differs from the reviewed implementation by more than tasks.md completion");
+  }
   return addCompletion("build-code", {
     facts: { changed: impl.value.changed, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...audit.facts },
     evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
@@ -747,7 +898,8 @@ HANDLERS.set("build-code", async (worker, input) => {
 HANDLERS.set("verify-code", async (worker, input) => {
   const audit = auditFacts(worker, input);
   const tests = testFacts(worker, input);
-  const acceptedBuild = worker.readAcceptedBuildCode({ allowLegacyBuildCode: true });
+  const acceptedBuild = worker.readAcceptedBuildCode({ allowLegacyBuildCode: true, required: false })
+    ?? { facts: {}, attempt: {} };
   const review = reviewFacts(worker, input, "review", undefined, "build-code");
   const qualityReview = reviewFacts(worker, input, "quality_review", undefined, "verify-code");
   authenticateReviewHead(worker, review, {
@@ -761,7 +913,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   if (qualityReview.facts.snapshot_tree !== current.tree) {
     throw new Error("verify-code quality review does not bind the current verification snapshot");
   }
-  const acceptedReview = acceptedBuild.facts.review;
+  const acceptedReview = acceptedBuild.facts.review ?? {};
   const acceptedRef = acceptedReview.result_ref ?? acceptedReview.attempt_ref;
   const acceptedHash = acceptedReview.result_hash ?? acceptedReview.attempt_hash;
   const reviewRef = review.facts.result_ref ?? review.facts.attempt_ref;
@@ -790,13 +942,32 @@ HANDLERS.set("verify-code", async (worker, input) => {
   }
   const mismatches = [];
   if (!acceptedBuild.facts.acceptance_coverage) mismatches.push("accepted build-code lacks acceptance_coverage; controlled reopen required");
+  try {
+    certifyCurrentTaskCompletion(worker, {
+      changedFiles: acceptedBuild.facts.changed ?? [],
+      tests: acceptedBuild.facts.tests ?? {},
+      review: acceptedBuild.facts.review ?? {},
+      acceptanceCoverage: acceptedBuild.facts.acceptance_coverage,
+    });
+  } catch (error) {
+    mismatches.push(`tasks.md independent completion check failed: ${error.message}`);
+  }
+  if (tests.facts.exit_code !== 0) mismatches.push("verify-code tests must pass");
+  if (acceptedBuild.facts.tests?.command !== tests.facts.command
+      || acceptedBuild.facts.tests?.command_hash !== tests.facts.command_hash) {
+    mismatches.push("verify-code must rerun the accepted build-code complete test command");
+  }
+  const expectedCriterionIds = acceptedBuild.facts.acceptance_coverage?.accepted_criterion_ids ?? [];
+  if (!sameStringSet([...criterionIds], expectedCriterionIds)) {
+    mismatches.push("verify-code acceptance evidence criterion set differs from the accepted build-code AC set");
+  }
   if (acceptedReview.review_scope !== "integration" || acceptedReview.subject_kind !== "worktree" || acceptedReview.phase_id !== null) mismatches.push("accepted build-code lacks the required full-worktree integration review; controlled reopen required");
   if (acceptedRef !== reviewRef || acceptedHash !== reviewHash) mismatches.push("verify-code review must reuse the active accepted build-code final review");
   if (review.facts.review_scope !== "integration" || review.facts.subject_kind !== "worktree" || review.facts.phase_id !== null) mismatches.push("verify-code requires the accepted build-code final full-worktree review");
   const workspaceRoot = worker.workspace?.worktreeRoot;
   const snapshotsMatch = workspaceRoot
-    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, review.facts.snapshot_tree)
-    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree);
+    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
+    && differsOnlyByTasksCompletion(worker, review.facts.snapshot_tree, current.tree);
   if (!snapshotsMatch) mismatches.push("tests, review, and current Workspace snapshot must match");
   const result = addCompletion("verify-code", {
     facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...audit.facts },

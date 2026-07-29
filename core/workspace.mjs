@@ -82,7 +82,13 @@ function acceptedWorkspaceExpectation(task) {
 
 function effectiveWorkspaceExpectation(task) {
   const expected = acceptedWorkspaceExpectation(task);
-  const binding = readAuthenticatedDirtyCleanupBinding(task);
+  let binding;
+  try {
+    binding = readAuthenticatedDirtyCleanupBinding(task);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    binding = null;
+  }
   if (!binding) return expected;
   return {
     ...expected,

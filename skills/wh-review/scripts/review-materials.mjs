@@ -236,7 +236,10 @@ function validateIntegrationMaterials({ source, materials }) {
     hashValue(phase.green_test_receipt.sha256, `phase_coverage.${phase.phase_id}.green_test_receipt.sha256`);
     phaseIds.add(phase.phase_id); phases.set(phase.phase_id, phase);
   }
-  if (coverage.phases.at(-1).snapshot_tree !== source.snapshotTree) throw new Error("MATERIAL_INCOMPLETE: integration coverage does not end at the frozen final snapshot");
+  const finalPhase = coverage.phases.at(-1);
+  if ((finalPhase.completion_tree ?? finalPhase.snapshot_tree) !== source.snapshotTree) {
+    throw new Error("MATERIAL_INCOMPLETE: integration coverage does not end at the frozen final snapshot");
+  }
 
   const seams = materials.seam_index;
   if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "cross-phase-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree) {

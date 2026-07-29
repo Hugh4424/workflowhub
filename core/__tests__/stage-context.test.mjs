@@ -11,6 +11,7 @@ import { createTaskKernel } from "../task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
 import { hashAuditSummary } from "../audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
+import { writeOfficialComponentReceipt } from "../canonical-receipt-writer.mjs";
 
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
 const temporaryDirs = [];
@@ -44,9 +45,17 @@ function auditedMakeDecisionFacts(kernel, candidate, { worktreeRoot, baselineCom
   const summaryHash = hashAuditSummary(unsignedSummary);
   const summaryRef = `evidence/audits/make-decision/${summaryHash}.json`;
   kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  const decision = writeOfficialComponentReceipt({
+    task: kernel.task,
+    stage: "make-decision",
+    component: "decision",
+    payload: { decision_log: "# Decision\n\nProceed.\n" },
+  });
   return {
     worktree_root: worktreeRoot,
     baseline_commit: baselineCommit,
+    decision_ref: decision.value.decision_ref,
+    decision_hash: decision.value.decision_hash,
     audit_contract_version: "v1",
     audit_summary_ref: summaryRef,
     audit_summary_hash: summaryHash,
@@ -121,6 +130,14 @@ function fixture({ acceptDecision = true, migrateRunner = false, perInvocation =
   }
   mkdirSync(join(worktreeRoot, "specs", manifest.task_id), { recursive: true });
   return { storageRoot, taskPath, worktreeRoot, baselineCommit, manifest, task: activeTask, kernel, runnerRoot: runnerRoot && realpathSync(runnerRoot) };
+}
+
+function writeCurrentMaterials(worktreeRoot, taskId = "paperbuilder-phase-foundation") {
+  const root = join(worktreeRoot, "specs", taskId);
+  mkdirSync(root, { recursive: true });
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    writeFileSync(join(root, name), `# ${name}\n`);
+  }
 }
 
 afterEach(() => {
@@ -446,9 +463,10 @@ describe("bootstrapStage", () => {
   });
 
   it.each(["build-spec", "build-plan", "verify-code"])(
-    "builds %s Workspace and ArtifactDir only from accepted make-decision facts",
+    "builds %s Workspace and ArtifactDir from the current task worktree",
     (stage) => {
       const fixtureValue = fixture();
+      if (stage === "verify-code") writeCurrentMaterials(fixtureValue.worktreeRoot);
       if (stage !== "build-spec") {
         fixtureValue.kernel.startStageRun(stage, { reason: "stage-context workspace coverage" });
       }
@@ -474,15 +492,27 @@ describe("bootstrapStage", () => {
     },
   );
 
-  it("rejects build-code bootstrap without accepted spec and plan", () => {
-    const { storageRoot } = fixture();
+  it("allows build-code without accepted design history when all four current materials are readable", () => {
+    const { storageRoot, worktreeRoot } = fixture({ acceptDecision: false });
+    writeCurrentMaterials(worktreeRoot);
     expect(() => bootstrapStage("build-code", {
       mode: "launcher",
       home: storageRoot,
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
       env: { WORKFLOWHUB_TASK_DIR: storageRoot },
-    })).toThrow(/accepted spec and plan|build-plan|ENOENT/i);
+    })).not.toThrow();
+  });
+
+  it("names every missing current material before build-code starts", () => {
+    const { storageRoot } = fixture({ acceptDecision: false });
+    expect(() => bootstrapStage("build-code", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+    })).toThrow(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
   });
 
   it("invalidates Workspace automatically when its worktree path is replaced", () => {

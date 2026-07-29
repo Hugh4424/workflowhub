@@ -56,7 +56,7 @@ describe("official component receipt authority", () => {
     expect(JSON.parse(task.readRecord(first.ref))).toMatchObject({ content: "draft\n" });
   });
 
-  it("publishes allowlisted content and rejects implementation without accepted design", () => {
+  it("publishes allowlisted content and derives implementation completion outside the caller payload", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     expect(spec.ref).toBe("receipts/spec.json");
@@ -64,8 +64,15 @@ describe("official component receipt authority", () => {
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
     writeFileSync(join(worktree, "new.txt"), "new\n");
-    expect(() => writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } })).toThrow(/accepted spec and plan/i);
-    expect(() => task.readRecord("receipts/implementation.json")).toThrow();
+    expect(() => writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation",
+      payload: { phase_completion: true },
+    })).toThrow(/payload must be empty|phase_completion is derived/i);
+    const implementation = writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation", payload: {},
+    });
+    expect(implementation.value.changed).toEqual(["new.txt", "tracked.txt"]);
+    expect(implementation.value).not.toHaveProperty("phase_completion");
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 

@@ -1,10 +1,22 @@
 ---
 name: verify-code
-description: Independently verify the accepted implementation and perform confirmed close operations.
+description: Independently verify the current implementation and perform confirmed close operations.
 version: 2.0.0
 ---
 
 # Verify Code
+
+A real review outcome is recorded as returned; `unavailable` never becomes
+`pass`.
+
+## Main-flow and completion rule
+
+Readable current `decision-log.md`, `spec.md`, `plan.md`, and `tasks.md` permit
+verification to start in this same task. Accepted records are audit lineage,
+not an entry licence. Verification independently rechecks every `tasks.md`
+completion row against the current diff, fresh tests, AC evidence, and Phase or
+integration review. Missing, unchecked, stale, or hash-mismatched evidence is
+`unknown` or `fail`; it never becomes pass. Product code remains read-only.
 
 ## Runtime contract
 
@@ -149,10 +161,10 @@ idempotent. Other attempts against a closed stage remain rejected.
 
 ## Procedure
 
-1. Validate StageContext and read the accepted build-code result through
-   `ctx.kernel.readAccepted("build-code")`.
-2. Read only the accepted build-code facts and `evidence_refs` from its
-   authenticated accepted attempt. Resolve formal artifacts, dependencies, and
+1. Validate StageContext and read the four current task documents. Read any
+   accepted build-code result as audit lineage when present; its absence does
+   not prevent verification from starting.
+2. Resolve formal artifacts, dependencies, and
    unresolved risks from those existing records; the human brief is display,
    not a handoff API. For every accepted AC, consume its `covered`, `missing`,
    or `unknown` row from the referenced evidence. If build-code has no per-AC
@@ -169,8 +181,9 @@ idempotent. Other attempts against a closed stage remain rejected.
    `simplicity-guard` or `wh-review`. When formal packet/token/rework data is
    unavailable, report the DEC-05 observation as `unknown`, with no threshold
    or delivery gate.
-3. Take the fresh test command only from accepted build-code facts. Missing
-   command is a fail-loud lineage error; never reuse an older command. Capture
+3. Take the fresh test command from the current plan/tasks and build facts.
+   A missing command is an explicit `unknown`/failure in the verification map;
+   never reuse an unrelated older command. Capture
    it through the only public path:
    `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
    --project=<project> --task=<task>
@@ -195,12 +208,11 @@ idempotent. Other attempts against a closed stage remain rejected.
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-6. Authenticate the active accepted build-code final `worktree + integration`
-   review and its `review_scope=integration`.
-   This is the existing acceptance lineage and must remain the `review` ref in
-   the verify run input. Reject a Phase result, wrong task, changed bytes, or a
-   snapshot different from the fresh tests/current Workspace. The new
-   verify-code review must never replace this ref.
+6. Authenticate the current build-code final `worktree + integration` review
+   when present. A missing, stale, wrong-task, or snapshot-mismatched review is
+   `unknown` and prevents a passed conclusion, but does not prevent the
+   verifier from running remaining checks. The new verify-code review never
+   replaces this fact.
 7. After the fresh test receipt and every acceptance-evidence leaf are complete,
    run configured `wh-review` with `stage: "verify-code"`, the authenticated
    TaskHandle identity, current host provider, and only

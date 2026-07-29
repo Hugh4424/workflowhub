@@ -6,6 +6,9 @@ version: 2.0.0
 
 # Make Decision
 
+A real review outcome is recorded as returned; `unavailable` never becomes
+`pass`.
+
 ## Runtime contract
 
 `core/stage-context.mjs` is the external runner implementation. The launcher calls

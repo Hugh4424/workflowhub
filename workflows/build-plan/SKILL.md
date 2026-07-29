@@ -6,6 +6,18 @@ version: 2.0.0
 
 # Build Plan
 
+A real review outcome is recorded as returned; `unavailable` never becomes
+`pass`.
+
+## Main-flow rule
+
+The current `spec.md`, `plan.md`, and `tasks.md` are live working documents.
+Update them in this same task when requirements change. Accepted records,
+checkpoints, receipts, reviews, confirmations, rebinds, and continuations are
+audit information, not licences to edit or continue. Planning quality still
+requires deterministic FR/AC coverage, executable Tasks, one bounded real
+review, a plain-language summary, and human confirmation.
+
 ## Runtime contract
 
 `core/stage-context.mjs` is the external runner implementation. Consume only the
@@ -25,14 +37,9 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
-If an accepted build-plan must be rebound after an upstream integration commit,
-do not edit `spec.md`, `plan.md`, or `tasks.md` and do not reopen build-spec.
-First run `stage-runtime.mjs rebind --stage=build-plan --project=<project>
---task=<task>`. It fails unless the Workspace is exactly the current integration
-HEAD plus the three already accepted design artifacts. Pass the returned
-authorization ref to the normal build-plan `run` as
-`--baseline-rebind=<authorization-ref>`, then obtain a fresh confirmation for
-the new attempt. This is the only accepted-design baseline-rebind route.
+If the working plan changes after integration, edit the current `plan.md` and
+`tasks.md` in this task and rerun the affected checks. A baseline-rebind record,
+if present, remains historical audit only.
 
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
@@ -107,9 +114,10 @@ planning step.
 
 ## Procedure
 
-1. Validate context and read the accepted build-spec result.
-2. Read `spec.md` through ArtifactDir and verify it matches the accepted
-   checkpoint blob consumed by this stage.
+1. Validate context and read the current `spec.md`. Historical accepted
+   build-spec facts remain audit context.
+2. Author the live `plan.md` and `tasks.md` directly. A receipt, checkpoint, or
+   old accepted result never freezes their content.
 3. Give `spec-research` frozen spec content. Keep its result in memory; do not
    create `research.md`. Extracted data contracts remain in memory and are
    incorporated into `plan.md` when relevant; do not create a separate contract
@@ -169,8 +177,9 @@ planning step.
    this summary; it is visible context for the human confirmation, not an
    automatic acceptance gate.
 
-Changing an already accepted specification requires a new task. Missing or
-mismatched accepted provenance fails loud before planning.
+Changing a specification, plan, or task list updates the current files in this
+same task. Rerun affected deterministic checks and the bounded review on the
+new snapshot, then present the updated plain-language summary and confirmation.
 
 ## Host interaction and completion handoff
 

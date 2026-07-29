@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
+import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../../core/stage-content-contracts.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { readPhaseMapTrace } from "./phase-review-subject.mjs";
@@ -285,19 +286,154 @@ function traceCoverage(trace) {
   return Object.freeze(coverage);
 }
 
-function possiblePaths(traces, commit, tree, finalTree, seen = new Set()) {
+function isTasksCompletionSeam({
+  task,
+  sourceRoot,
+  taskId,
+  previousTrace,
+  previousCommit,
+  previousTree,
+  baselineCommit,
+  baselineTree,
+}) {
+  try {
+    if (!previousTrace) return false;
+    const parentLine = execFileSync("git", ["rev-list", "--parents", "-n", "1", baselineCommit], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split(/\s+/);
+    if (parentLine.length !== 2 || parentLine[1] !== previousCommit) return false;
+    const actualPreviousTree = execFileSync("git", ["rev-parse", `${previousCommit}^{tree}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    const actualBaselineTree = execFileSync("git", ["rev-parse", `${baselineCommit}^{tree}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (actualPreviousTree !== previousTree || actualBaselineTree !== baselineTree) return false;
+    const tasksPath = `specs/${taskId}/tasks.md`;
+    const changed = execFileSync("git", ["diff", "--name-only", previousCommit, baselineCommit, "--"], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split("\n").filter(Boolean);
+    if (changed.length !== 1 || changed[0] !== tasksPath) return false;
+    const before = execFileSync("git", ["show", `${previousCommit}:${tasksPath}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const after = execFileSync("git", ["show", `${baselineCommit}:${tasksPath}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const plan = execFileSync("git", ["show", `${baselineCommit}:specs/${taskId}/plan.md`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const phaseTasks = resolvePhaseTaskIds({ plan, tasks: after, phaseId: previousTrace.trace.phase_id });
+    const reviewAction = previousTrace.review ?? previousTrace.attempt;
+    const requiredBindings = [
+      { ref: previousTrace.implementation.ref, sha256: previousTrace.implementation.sha256 },
+      { ref: previousTrace.green.ref, sha256: previousTrace.green.sha256 },
+      { ref: reviewAction.ref, sha256: reviewAction.sha256 },
+    ];
+    return validateTasksOnlyCompletionSeam({
+      before,
+      after,
+      allowedTaskIds: phaseTasks.task_ids,
+      requiredBindings,
+      expectedReviewRef: reviewAction.ref,
+      completionEvidence: ({ ref }) => {
+        try { return task.readRecord(ref); }
+        catch (error) {
+          if (error?.code === "ENOENT") return undefined;
+          throw error;
+        }
+      },
+    }).ok;
+  } catch {
+    return false;
+  }
+}
+
+function isFinalTasksCompletionSeam({ task, sourceRoot, previousTrace, previousTree, finalTree }) {
+  try {
+    const taskId = task.identity.taskId;
+    const tasksPath = `specs/${taskId}/tasks.md`;
+    const changed = execFileSync("git", ["diff", "--name-only", previousTree, finalTree, "--"], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split("\n").filter(Boolean);
+    if (changed.length !== 1 || changed[0] !== tasksPath) return false;
+    const before = execFileSync("git", ["show", `${previousTree}:${tasksPath}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const after = execFileSync("git", ["show", `${finalTree}:${tasksPath}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const plan = execFileSync("git", ["show", `${finalTree}:specs/${taskId}/plan.md`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const phaseTasks = resolvePhaseTaskIds({ plan, tasks: after, phaseId: previousTrace.trace.phase_id });
+    const reviewAction = previousTrace.review ?? previousTrace.attempt;
+    const requiredBindings = [
+      { ref: previousTrace.implementation.ref, sha256: previousTrace.implementation.sha256 },
+      { ref: previousTrace.green.ref, sha256: previousTrace.green.sha256 },
+      { ref: reviewAction.ref, sha256: reviewAction.sha256 },
+    ];
+    return validateTasksOnlyCompletionSeam({
+      before,
+      after,
+      allowedTaskIds: phaseTasks.task_ids,
+      requiredBindings,
+      expectedReviewRef: reviewAction.ref,
+      completionEvidence: ({ ref }) => {
+        try { return task.readRecord(ref); }
+        catch (error) {
+          if (error?.code === "ENOENT") return undefined;
+          throw error;
+        }
+      },
+    }).ok;
+  } catch {
+    return false;
+  }
+}
+
+function possiblePaths(traces, commit, tree, finalTree, sourceRoot, task, previousTrace = null, seen = new Set()) {
   const key = `${commit}:${tree}`;
   if (seen.has(key)) return [];
   const nextSeen = new Set(seen); nextSeen.add(key);
   const paths = [];
   for (const trace of traces) {
-    if (trace.trace.baseline_commit !== commit || trace.trace.base_tree !== tree) continue;
+    const direct = trace.trace.baseline_commit === commit && trace.trace.base_tree === tree;
+    if (!direct && !isTasksCompletionSeam({
+      task,
+      sourceRoot,
+      taskId: task.identity.taskId,
+      previousTrace,
+      previousCommit: commit,
+      previousTree: tree,
+      baselineCommit: trace.trace.baseline_commit,
+      baselineTree: trace.trace.base_tree,
+    })) continue;
     const coverage = traceCoverage(trace);
     if (coverage.snapshot_tree === finalTree) {
       paths.push([coverage]);
       continue;
     }
-    for (const suffix of possiblePaths(traces, coverage.implementation_commit, coverage.snapshot_tree, finalTree, nextSeen)) {
+    if (isFinalTasksCompletionSeam({
+      task,
+      sourceRoot,
+      previousTrace: trace,
+      previousTree: coverage.snapshot_tree,
+      finalTree,
+    })) {
+      paths.push([Object.freeze({ ...coverage, completion_tree: finalTree })]);
+      continue;
+    }
+    for (const suffix of possiblePaths(
+      traces,
+      coverage.implementation_commit,
+      coverage.snapshot_tree,
+      finalTree,
+      sourceRoot,
+      task,
+      trace,
+      nextSeen,
+    )) {
       paths.push([coverage, ...suffix]);
     }
   }
@@ -395,7 +531,7 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
   const accepted = checkpoint(safeTask, sourceRoot);
   const traces = safeTask.listCanonicalPhaseMapTraceRefs().map((ref) => phaseTrace(safeTask, sourceRoot, ref));
   if (traces.length === 0) incomplete("implementation work requires at least one canonical Phase map trace");
-  const paths = possiblePaths(traces, accepted.commit, accepted.tree, finalTree);
+  const paths = possiblePaths(traces, accepted.commit, accepted.tree, finalTree, sourceRoot, safeTask);
   if (paths.length === 0) incomplete("no continuous Phase coverage chain reaches the final tree");
   if (paths.length !== 1) incomplete(`Phase coverage is ambiguous: ${paths.length} continuous chains reach the final tree`);
   const coverage = paths[0];

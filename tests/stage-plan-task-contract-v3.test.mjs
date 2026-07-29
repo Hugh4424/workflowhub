@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  validateTasksOnlyCompletionSeam,
   validatePlanTaskContract,
   validatePlanTaskContractV2,
 } from "../core/stage-content-contracts.mjs";
+import { certifyCurrentTaskCompletion } from "../core/stage-handlers.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -153,7 +156,18 @@ function card({
 - **evidence_path**：apply/evidence/${id}.stdout
 - **STOP**：Stop on setup failure.
 - **recovery**：Revert current task bytes.
-- **task risk**：False test result.`;
+- **task risk**：False test result.
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：\`pending\`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — not reviewed
+- **completed_at**：N/A — not completed`;
 }
 
 const tasks = `
@@ -228,7 +242,161 @@ describe("plan-task.v3 structural contract", () => {
     expect(validate()).toMatchObject({
       ok: true,
       errors: [],
-      facts: { template_version: "plan-task.v3", phase_count: 1, task_count: 2 },
+      facts: {
+        template_version: "plan-task.v3",
+        phase_count: 1,
+        task_count: 2,
+        task_completion: {
+          total_count: 2,
+          completed_count: 0,
+          pending_ids: ["T001", "T002"],
+        },
+      },
+    });
+  });
+
+  it("does not treat accepted history as task completion and rejects contradictory completed claims", () => {
+    const contradictory = tasks
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`in_progress`");
+    const result = validate({ tasks: contradictory });
+    expect(result.ok).toBe(true);
+    expect(result.facts.task_completion.tasks[0]).toMatchObject({
+      id: "T001",
+      checked: true,
+      status: "in_progress",
+      complete: false,
+      claim_valid: false,
+    });
+    expect(result.facts.task_completion.tasks[0].errors.join("\n")).toMatch(/checkbox.*status/i);
+  });
+
+  it("requires every completion field and parseable task-relative evidence bindings", () => {
+    const incomplete = tasks
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：core/demo.mjs")
+      .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npx vitest run tests/demo.test.mjs; exit 0")
+      .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replace("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const result = validate({ tasks: incomplete });
+    expect(result.facts.task_completion.tasks[0]).toMatchObject({
+      status: "completed",
+      complete: false,
+      claim_valid: false,
+    });
+    expect(result.facts.task_completion.tasks[0].errors.join("\n")).toMatch(/evidence_refs/i);
+  });
+
+  it("authenticates a completed task only against supplied canonical evidence", () => {
+    const evidenceRaw = "focused proof\n";
+    const evidenceRef = "apply/evidence/T001-proof.txt";
+    const completed = tasks
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：core/demo.mjs")
+      .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npx vitest run tests/demo.test.mjs; exit 0")
+      .replace("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replace("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const result = validate({
+      tasks: completed,
+      completionEvidence: ({ ref }) => ref === evidenceRef ? evidenceRaw : undefined,
+    });
+    expect(result.facts.task_completion.tasks[0]).toMatchObject({
+      id: "T001",
+      complete: true,
+      claim_valid: true,
+    });
+    expect(result.facts.task_completion.completed_count).toBe(1);
+  });
+
+  it("rejects a fully checked tasks.md whose claimed files do not equal the implementation diff", () => {
+    const evidenceRaw = "authenticated but semantically false completion\n";
+    const evidenceRef = "apply/evidence/fake-completion.txt";
+    const fakeCompleted = tasks
+      .replaceAll("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replaceAll("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：`tests/demo.test.mjs`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：`core/demo.mjs`")
+      .replaceAll("- **executed_commands**：N/A — not started", "- **executed_commands**：`npx vitest run tests/demo.test.mjs`; exit 0")
+      .replaceAll("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replaceAll("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replaceAll("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replaceAll("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const worker = {
+      identity: { taskId: "demo" },
+      readArtifact: (name) => ({ "spec.md": spec, "plan.md": plan, "tasks.md": fakeCompleted })[name],
+      readEvidence: (ref) => {
+        if (ref !== evidenceRef) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return { bytes: evidenceRaw };
+      },
+      artifactRef: (name) => `specs/demo/${name}`,
+    };
+    expect(() => certifyCurrentTaskCompletion(worker, {
+      changedFiles: ["core/demo.mjs"],
+      tests: { command: "npx vitest run tests/demo.test.mjs", exit_code: 0 },
+      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
+      acceptanceCoverage: { accepted_criterion_ids: ["AC1"], items: [] },
+    })).toThrow(/actual_changes differs.*tests\/demo\.test\.mjs.*core\/demo\.mjs/i);
+  });
+
+  it("permits a post-review tasks-only update only in the selected completion block", () => {
+    const evidenceRaw = "phase completion evidence\n";
+    const evidenceRef = "apply/evidence/T001.txt";
+    const after = tasks
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：core/demo.mjs")
+      .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npx vitest run tests/demo.test.mjs; exit 0")
+      .replace("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replace("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const completionEvidence = ({ ref }) => ref === evidenceRef ? evidenceRaw : undefined;
+    expect(validateTasksOnlyCompletionSeam({ before: tasks, after, taskId: "T001", completionEvidence })).toMatchObject({
+      ok: true,
+      changed_task_ids: ["T001"],
+      requires_repeat_review: false,
+    });
+    expect(validateTasksOnlyCompletionSeam({
+      before: tasks,
+      after: after.replace("Implement the behavior.", "Implement unrelated behavior."),
+      taskId: "T001",
+      completionEvidence,
+    })).toMatchObject({ ok: false });
+    expect(validateTasksOnlyCompletionSeam({
+      before: tasks,
+      after,
+      allowedTaskIds: ["T002"],
+      completionEvidence,
+    })).toMatchObject({ ok: false });
+    expect(validateTasksOnlyCompletionSeam({
+      before: tasks,
+      after,
+      allowedTaskIds: ["T001"],
+      requiredBindings: [{ ref: "receipts/phase-tests.json", sha256: "a".repeat(64) }],
+      completionEvidence,
+    })).toMatchObject({
+      ok: false,
+      errors: [expect.stringMatching(/does not bind receipts\/phase-tests\.json/i)],
+    });
+  });
+
+  it("keeps the current 30-source map closed in spec, plan, and tasks", () => {
+    const material = (name) => readFileSync(new URL(`../specs/review-flow-reset/${name}`, import.meta.url), "utf8");
+    const result = validatePlanTaskContract({
+      spec: material("spec.md"),
+      plan: material("plan.md"),
+      tasks: material("tasks.md"),
+    });
+    expect(result.facts.source_coverage).toMatchObject({
+      source_count: 30,
+      missing_sources: [],
+      orphan_sources: [],
+      reverse_missing: [],
     });
   });
 

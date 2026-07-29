@@ -11,7 +11,7 @@ import { authenticateWriteBoundary } from "./write-boundary-preflight.mjs";
 import {
   assertWorkspace,
   openAcceptedCandidateWorkspace,
-  openAcceptedWorkspace,
+  openCurrentTaskWorkspace,
   prepareTaskWorkspace,
   validateTaskWorkspaceAttempt,
 } from "./workspace.mjs";
@@ -96,6 +96,21 @@ function validateStage(stage) {
   return stage;
 }
 
+function assertCurrentTaskMaterials(artifacts) {
+  const failures = [];
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    try {
+      const content = artifacts.read(name);
+      if (String(content).trim() === "") failures.push(`${name}: empty`);
+    } catch (error) {
+      failures.push(`${name}: ${error.message}`);
+    }
+  }
+  if (failures.length) {
+    throw new Error(`current task material missing or unreadable: ${failures.join("; ")}`);
+  }
+}
+
 function launcherTaskPath({ projectName, taskId, taskPath, env, home }) {
   const storageRoot = resolveStorageRoot({ env, home });
   assertRuntimeAuthority(storageRoot, { home, expectedEpoch: env?.WORKFLOWHUB_CUTOVER_EPOCH });
@@ -178,13 +193,6 @@ export function bootstrapStage(
     throw new TypeError(`unsupported make-decision workspaceLifecycle: ${workspaceLifecycle}`);
   }
   const kernel = createTaskKernel(taskHandle, { candidateWorkspace: candidate });
-  let localDecision;
-  if (normalizedStage !== "make-decision") {
-    try { localDecision = kernel.readAccepted("make-decision"); } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    if (!localDecision) throw new Error("stage requires the current task's accepted make-decision result");
-  }
   const base = {
     stage: normalizedStage,
     task: taskHandle,
@@ -195,16 +203,11 @@ export function bootstrapStage(
   };
 
   if (normalizedStage === "make-decision") return Object.freeze({ ...base, ...(candidate ? { candidateWorkspace: candidate } : {}) });
-  const workspace = openAcceptedWorkspace(taskHandle, localDecision);
+  const workspace = openCurrentTaskWorkspace(taskHandle);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
-  if (normalizedStage === "build-code") {
-    try {
-      stageKernel.readAccepted("build-spec");
-      stageKernel.readAccepted("build-plan");
-    } catch (error) {
-      throw new Error(`build-code requires current accepted spec and plan: ${error.message}`);
-    }
+  if (normalizedStage === "build-code" || normalizedStage === "verify-code") {
+    assertCurrentTaskMaterials(artifacts);
   }
   return Object.freeze({ ...base, kernel: stageKernel, workflowRunId: stageKernel.deriveStageWorkflowRunId(normalizedStage), workspace, artifacts });
 }

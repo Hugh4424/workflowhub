@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
-import { validateAcceptanceEvidence, validatePhaseCompletion } from "./task-kernel-implementation.mjs";
+import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
@@ -296,14 +296,8 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace);
-    if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
-    validatePhaseCompletion(payload.phase_completion);
-    const acceptedKernel = createTaskKernel(safeTask, { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
-    try {
-      acceptedKernel.readAccepted("build-spec");
-      acceptedKernel.readAccepted("build-plan");
-    } catch (error) {
-      throw new Error(`build-code implementation receipt requires current accepted spec and plan: ${error.message}`);
+    if (Object.keys(payload).length !== 0) {
+      throw new TypeError("implementation payload must be empty; phase_completion is derived by the official build-code handler");
     }
     const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
     const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
@@ -316,7 +310,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     // during a controlled reopen must be safe; a different payload is still
     // rejected by the idempotent writer.
     publishIdempotently({ task: safeTask, write, ref: diffRef, raw: diff, label: "implementation diff evidence" });
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();

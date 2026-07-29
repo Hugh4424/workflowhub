@@ -26,6 +26,7 @@ import { runCapture as captureBuildCodeTests } from "../workflows/build-code/cap
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
+import { ArtifactDir } from "../core/artifact-dir.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -34,6 +35,29 @@ const DESIGN_ARTIFACTS = Object.freeze({
 const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
+
+function publishAcceptedDecisionLog(context, accepted) {
+  if (accepted?.stage !== "make-decision") return;
+  const attemptRaw = context.task.readRecord(`results/make-decision/${accepted.attempt_ref}`);
+  if (sha256(attemptRaw) !== String(accepted.integrity_hash ?? "").replace(/^sha256:/, "")) {
+    throw new Error("accepted make-decision attempt changed before live artifact publication");
+  }
+  const attempt = JSON.parse(attemptRaw);
+  const ref = attempt.facts?.decision_ref;
+  const expectedHash = attempt.facts?.decision_hash;
+  if (typeof ref !== "string" || !SHA256.test(expectedHash ?? "")) {
+    throw new Error("accepted make-decision result is missing its canonical decision binding");
+  }
+  const content = context.task.readRecord(ref);
+  if (sha256(content) !== expectedHash) {
+    throw new Error("accepted make-decision decision binding changed before live artifact publication");
+  }
+  const artifacts = ArtifactDir.open(context.candidateWorkspace.worktreeRoot, context.task);
+  artifacts.writeAtomic("decision-log.md", content);
+  if (artifacts.read("decision-log.md") !== content) {
+    throw new Error("live decision-log publication did not preserve accepted canonical bytes");
+  }
+}
 
 function completedStep(task, workflowRunId, stepId) {
   let raw;
@@ -449,6 +473,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       },
     }),
   });
+  publishAcceptedDecisionLog(context, acceptedResult);
   const acceptedSourceRef = `results/${values.stage}/accepted.json`;
   const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
   persistWriteBoundaryPathCard({

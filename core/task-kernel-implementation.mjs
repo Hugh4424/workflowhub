@@ -377,6 +377,9 @@ export function validatePhaseCompletion(value, label = "build-code facts.phase_c
   if (typeof value === "object") {
     nonemptyString(value.status, `${label}.status`);
     artifactRef(value.evidence_ref, `${label}.evidence_ref`);
+    if (value.evidence_hash !== undefined && !HASH.test(value.evidence_hash)) {
+      throw new TypeError(`${label}.evidence_hash must be sha256`);
+    }
   }
   return value;
 }
@@ -1578,8 +1581,16 @@ export function buildTaskKernel(taskHandle, {
     if (active !== null) return active.run.workflow_run_id;
     if (name === "make-decision") return `task-created:${nonemptyString(task.manifest.created_at, "task created_at")}`;
     const upstreamStage = EXPECTED_UPSTREAM[name];
-    const upstream = readAcceptedLocal(upstreamStage, { allowLegacyBuildCode: upstreamStage === "build-code" });
-    return nonemptyString(upstream?.attempt?.attempt_id, `${name} accepted upstream attempt_id`);
+    try {
+      const upstream = readAcceptedLocal(upstreamStage, {
+        allowLegacyBuildCode: upstreamStage === "build-code",
+        liveCheckpoint: false,
+      });
+      return nonemptyString(upstream?.attempt?.attempt_id, `${name} accepted upstream attempt_id`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      return `task-current:${name}:${nonemptyString(task.manifest.created_at, "task created_at")}`;
+    }
   };
   const verifyAuditPublication = (stage, facts) => {
     const raw = task.readRecord(facts.audit_summary_ref);
@@ -1637,14 +1648,34 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision core decision_ref does not bind the published decision bytes");
     }
   };
+  const acceptedDecisionMaterial = () => {
+    const decision = readAcceptedLocal("make-decision");
+    const content = artifacts.read("decision-log.md");
+    if (hash(content) !== decision.facts.decision_hash) {
+      throw new Error("live decision-log.md differs from the accepted make-decision material");
+    }
+    return {
+      path: artifacts.reference("decision-log.md"),
+      blob_oid: String(execFileSync(
+        "git",
+        ["hash-object", "-w", "--no-filters", artifacts.path("decision-log.md")],
+        { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      )).trim(),
+    };
+  };
   const checkpointBase = (stage) => {
     const name = stageName(stage);
     if (name === "build-spec") {
       const decision = readAcceptedLocal("make-decision");
       const baseCommit = decision.facts.baseline_commit;
-      const baseTree = decision.facts.snapshot_tree ?? String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
+      const decisionBaseTree = decision.facts.snapshot_tree ?? String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
         cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
       })).trim();
+      const baseTree = overlayCheckpointArtifacts({
+        repoRoot: workspace.worktreeRoot,
+        baseTree: decisionBaseTree,
+        artifacts: [acceptedDecisionMaterial()],
+      });
       return { baseCommit, baseTree };
     }
     if (name === "build-plan") {
@@ -1672,7 +1703,12 @@ export function buildTaskKernel(taskHandle, {
     const snapshot = captureGitWorktreeSnapshot(repoRoot);
     const value = authorization.record;
     const integrationTree = String(execFileSync("git", ["rev-parse", `${value.integration_head}^{tree}`], { cwd: repoRoot, encoding: "utf8" })).trim();
-    const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: integrationTree, artifacts: spec.accepted.checkpoint.artifacts });
+    const decisionBaseTree = overlayCheckpointArtifacts({
+      repoRoot,
+      baseTree: integrationTree,
+      artifacts: [acceptedDecisionMaterial()],
+    });
+    const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: decisionBaseTree, artifacts: spec.accepted.checkpoint.artifacts });
     if (value.previous_accepted_ref !== currentPlan.accepted_ref || value.previous_accepted_hash !== currentPlan.accepted_hash ||
       value.previous_accepted_raw !== task.readRecord(currentPlan.accepted_ref) ||
       value.previous_attempt_ref !== currentPlan.accepted.attempt_ref || value.previous_attempt_hash !== String(currentPlan.accepted.integrity_hash).replace(/^sha256:/, "") ||
@@ -1690,6 +1726,7 @@ export function buildTaskKernel(taskHandle, {
       if (ref.task_id === task.identity.taskId) {
         const source = readAcceptedLocal(ref.stage, {
           allowLegacyBuildCode: stage === "verify-code" && ref.stage === "build-code",
+          liveCheckpoint: false,
         });
         bindings.push({ task_id: source.accepted.task_id, stage: source.accepted.stage, accepted_ref: source.accepted_ref, integrity_hash: String(source.accepted.integrity_hash).replace(/^sha256:/, "") });
         continue;
@@ -1805,10 +1842,24 @@ export function buildTaskKernel(taskHandle, {
     }
     const snapshot = captureGitWorktreeSnapshot(assertWorkspace(workspace).worktreeRoot);
     const workspaceRoot = assertWorkspace(workspace).worktreeRoot;
+    const matchesCurrentOrCertifiedTasksCompletion = (expectedTree) => {
+      if (equivalentWorkspaceTrees(workspaceRoot, expectedTree, snapshot.tree)) return true;
+      const changed = String(execFileSync("git", ["diff", "--name-only", expectedTree, snapshot.tree, "--"], {
+        cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      })).trim().split("\n").filter(Boolean);
+      const phaseCompletion = activeBuild.facts.phase_completion;
+      const tasksRef = `specs/${task.identity.taskId}/tasks.md`;
+      return changed.length === 1
+        && changed[0] === tasksRef
+        && phaseCompletion?.status === "completed"
+        && phaseCompletion.evidence_ref === tasksRef
+        && HASH.test(phaseCompletion.evidence_hash ?? "")
+        && hash(artifacts.read("tasks.md")) === phaseCompletion.evidence_hash;
+    };
     const snapshotsMatch = equivalentWorkspaceTrees(workspaceRoot, facts.tests.snapshot_tree, snapshot.tree)
-      && equivalentWorkspaceTrees(workspaceRoot, facts.review.snapshot_tree, snapshot.tree)
-      && equivalentWorkspaceTrees(workspaceRoot, activeBuild.facts.tests.snapshot_tree, snapshot.tree)
-      && equivalentWorkspaceTrees(workspaceRoot, activeBuild.facts.review.snapshot_tree, snapshot.tree);
+      && matchesCurrentOrCertifiedTasksCompletion(facts.review.snapshot_tree)
+      && matchesCurrentOrCertifiedTasksCompletion(activeBuild.facts.tests.snapshot_tree)
+      && matchesCurrentOrCertifiedTasksCompletion(activeBuild.facts.review.snapshot_tree);
     if (publication.workspace_head !== snapshot.head || facts.tests.snapshot_head !== snapshot.head || !snapshotsMatch) {
       throw new Error("verify-code passing publication Workspace binding changed before publication");
     }
@@ -2490,7 +2541,10 @@ export function buildTaskKernel(taskHandle, {
       workflowRunId = nonemptyString(activeStageRun(stage).run.workflow_run_id, "make-decision active stage workflow_run_id");
     } else {
       const upstreamStage = EXPECTED_UPSTREAM[stage];
-      const upstream = readAcceptedLocal(upstreamStage, { allowLegacyBuildCode: upstreamStage === "build-code" });
+      const upstream = readAcceptedLocal(upstreamStage, {
+        allowLegacyBuildCode: upstreamStage === "build-code",
+        liveCheckpoint: false,
+      });
       workflowRunId = nonemptyString(upstream?.attempt?.attempt_id, `${stage} accepted upstream attempt_id`);
     }
     if (value.revision_ref !== undefined) {
@@ -3062,7 +3116,12 @@ export function buildTaskKernel(taskHandle, {
         const repoRoot = assertWorkspace(workspace).worktreeRoot;
         const snapshot = captureGitWorktreeSnapshot(repoRoot);
         const integrationTree = String(execFileSync("git", ["rev-parse", `${snapshot.head}^{tree}`], { cwd: repoRoot, encoding: "utf8" })).trim();
-        const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: integrationTree, artifacts: spec.accepted.checkpoint.artifacts });
+        const decisionBaseTree = overlayCheckpointArtifacts({
+          repoRoot,
+          baseTree: integrationTree,
+          artifacts: [acceptedDecisionMaterial()],
+        });
+        const baseTree = overlayCheckpointArtifacts({ repoRoot, baseTree: decisionBaseTree, artifacts: spec.accepted.checkpoint.artifacts });
         const expectedTree = overlayCheckpointArtifacts({ repoRoot, baseTree, artifacts: plan.accepted.checkpoint.artifacts });
         if (snapshot.tree !== expectedTree) throw new Error("build-plan baseline rebind rejects changed design bytes or unrelated Workspace drift");
         const payload = {
@@ -3905,6 +3964,12 @@ export function buildTaskKernel(taskHandle, {
         throw new Error("liveCheckpoint is an internal build-spec continuation capability");
       }
       return readAcceptedLocal(stage, options);
+    },
+    readAcceptedAudit(stage, options = {}) {
+      if (Object.prototype.hasOwnProperty.call(options, "liveCheckpoint")) {
+        throw new Error("accepted audit reads do not accept live checkpoint controls");
+      }
+      return readAcceptedLocal(stage, { ...options, liveCheckpoint: false });
     },
     readInput(slot) {
       const stage = INPUT_STAGES[slot];
