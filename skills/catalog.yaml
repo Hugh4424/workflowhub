@@ -134,7 +134,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 9f075d357bde64a055d403abcf478fae1378d9445d79e35102105aec6b20f3c8
+    local_bundle_hash: b72c58da84645ccdf0b1a10b1bee4ab1a082daf9ad48b124b57f95e44385be06
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -149,7 +149,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: a401886dd81e006f357d76bd438986cf94b0843d7549eec8422eab4dd553683f
+    local_bundle_hash: 5e81c3ac528c781da1cbad14da9bdd85c9e3294187d42f48bb48daadcba1a9c5
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务

@@ -48,7 +48,7 @@
 - **AC**：[填写：有效 AC ID]
 - **动作**：[填写：只写一个行为变化或一个非行为产物变化]
 - **精确文件**：`[填写：Phase NEW/MODIFY 内的精确路径]`
-- **boundary**：`[填写：允许修改的文件、symbol 或 region]`
+- **boundary**：files: `[填写：Phase NEW/MODIFY 内的精确路径]`; symbols/regions: [填写：允许修改的 symbol 或 region]
 - **输出**：[填写：可交付产物或行为结果]
 - **Knowledge**：[填写：最小已核实上下文 / N/A — 理由]
 - **verification_role**：[填写：RED / GREEN / N/A — non-behavior change: 理由]
@@ -77,7 +77,7 @@
 - **AC**：[填写：与 T001 相同的 AC ID]
 - **动作**：[填写：使目标断言通过的一个行为变化]
 - **精确文件**：`[填写：Phase NEW/MODIFY 内的精确路径]`
-- **boundary**：`[填写：允许修改的文件、symbol 或 region]`
+- **boundary**：files: `[填写：Phase NEW/MODIFY 内的精确路径]`; symbols/regions: [填写：允许修改的 symbol 或 region]
 - **输出**：[填写：可观察行为结果]
 - **Knowledge**：[填写：最小已核实上下文]
 - **verification_role**：GREEN
@@ -105,10 +105,10 @@
 
 ### STOP
 
-- [填写：RED 无法按预期复现]
-- [填写：GREEN 需要删除或弱化 accepted test]
-- [填写：需要 Phase.Files 之外的文件、未声明依赖或新架构决策]
-- [填写：出现不可逆或需要用户授权的动作]
+- RED 无法因目标断言失败而复现，或失败来自环境、命令、fixture 损坏。
+- GREEN 需要删除、跳过或弱化 accepted test。
+- 需要 Phase.Files 之外的文件、未知接口、未声明依赖或新架构决策。
+- 出现不可逆操作或需要用户授权的动作。
 
 ### Done
 
@@ -124,8 +124,13 @@
 
 ## 3. Dependency Graph
 
-- [填写：用实际 Task ID 画出无环依赖图]
-- [填写：可并行任务为何输入和文件所有权独立]
+```text
+T001 (RED) → T002 (GREEN)
+```
+
+- 每个依赖必须存在，并且先于消费者执行。
+- 依赖图必须无环。
+- 标记 `[P]` 的任务只有在输入、依赖和文件所有权相互独立时才能并行。
 
 ## 4. Requirement and Verification Traceability
 
@@ -140,6 +145,8 @@
 - [ ] 每个行为变化都有真实 RED → GREEN，命令、oracle 和证据明确。
 - [ ] DAG 与 FR/Task/AC/gate 双向闭合。
 - [ ] Plan File Boundary 等于所有 Phase NEW/MODIFY 的并集。
+- [ ] 每个 Phase NEW/MODIFY 文件至少有一个 owning Task。
+- [ ] 每个 Task 的精确文件和 boundary 都是所属 Phase NEW/MODIFY 的子集。
 - [ ] 没有 host identity、固定 artifact root、无关项目规则或未声明文件。
 
 ## Appendix A. Legacy import

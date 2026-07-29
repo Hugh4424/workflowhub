@@ -64,6 +64,8 @@
 | Knowledge and docs | [填写：路径 / N/A] | [填写：change / no change] | [填写：ID / N/A] | [填写：理由] |
 | Automation gates | [填写：路径 / N/A] | [填写：change / no change] | [填写：ID / N/A] | [填写：理由] |
 
+每个标为 `change` 的行必须映射至少一个有效 Task ID；找不到 owning Task 就不能发布计划。
+
 ## 5. Technical Decisions
 
 ### DEC-001 — [填写：决策名称]
@@ -78,6 +80,7 @@
 - **F10 existing cover**：[填写：仅 Selected 为 new 时保留]
 - **F10 bypassable**：[填写：仅 Selected 为 new 时保留]
 - **F10 maintenance cost**：[填写：仅 Selected 为 new 时保留]
+- **F10 disposition**：[填写：仅 Selected 为 new 时保留；`keep` / `simplify` / `remove`]
 
 ## 6. Solution Design
 
@@ -161,6 +164,8 @@
 | --- | --- | --- | --- |
 | SIG-001 | [填写：CLI / function / event / schema] | [填写：准确参数或字段] | [填写：Anchor ID] |
 
+查不到现有接口或签名时，必须写入 `Unresolved facts` 并触发 STOP；不得猜测后继续。
+
 ## 12. Rollback and Recovery
 
 - **Global recovery rule**：[填写：保留 accepted 产物，只恢复当前实现]
@@ -243,3 +248,5 @@
 | FR | Task IDs | AC IDs | Phase | Gate / evidence |
 | --- | --- | --- | --- | --- |
 | [填写：FR ID] | [填写：Task ID] | [填写：AC ID] | [填写：Phase] | [填写：Gate / evidence ref] |
+
+发布前确认：每个 accepted FR 都有 Task 和 AC；每个 Task 反向引用有效 FR/AC；没有重复 ID、无效依赖、依赖环或 consumer-before-producer。

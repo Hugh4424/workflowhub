@@ -110,6 +110,18 @@ describe("plan-template.md contains all required sections", () => {
     const hasMaint = content.includes("Maintenance cost") || content.includes("长期维护") || content.includes("维护成本") || content.includes("maintenance");
     assert.ok(hasThreat && hasCover && hasBypass && hasMaint,
       "plan-template.md must list all 4 F10 gate questions: real threat, existing cover, bypassable, maintenance cost");
+    assert.ok(content.includes("**F10 disposition**"));
+    for (const disposition of ["keep", "simplify", "remove"]) assert.ok(content.includes(`\`${disposition}\``));
+  });
+
+  test("plan-template.md keeps Phase 5 ownership and STOP guidance", () => {
+    const content = readFileSync(planPath, "utf8");
+    assert.ok(content.includes("每个标为 `change` 的行必须映射至少一个有效 Task ID"));
+    assert.ok(content.includes("查不到现有接口或签名时"));
+    assert.ok(content.includes("`Unresolved facts` 并触发 STOP"));
+    for (const rule of ["重复 ID", "无效依赖", "依赖环", "consumer-before-producer"]) {
+      assert.ok(content.includes(rule), `missing traceability rule: ${rule}`);
+    }
   });
 
   test("plan-template.md uses one traceability authority", () => {
@@ -170,7 +182,21 @@ describe("tasks-template.md contains all required elements", () => {
 
   test('tasks-template.md documents [P] parallel marker convention', () => {
     const content = readFileSync(tasksPath, "utf8");
-    assert.ok(content.includes("可并行"), "tasks-template.md must document parallel ownership");
+    assert.ok(content.includes("标记 `[P]` 的任务"), "tasks-template.md must document [P] ownership");
+    assert.ok(content.includes("输入、依赖和文件所有权相互独立"));
+  });
+
+  test("tasks-template.md keeps parseable boundaries and fixed Phase 5 safeguards", () => {
+    const content = readFileSync(tasksPath, "utf8");
+    assert.equal((content.match(/^\s*-\s+\*\*boundary\*\*：files: `[^`]+`; symbols\/regions:/gm) ?? []).length, 2);
+    for (const rule of [
+      "失败来自环境、命令、fixture 损坏",
+      "删除、跳过或弱化 accepted test",
+      "未知接口",
+      "依赖图必须无环",
+      "每个 Phase NEW/MODIFY 文件至少有一个 owning Task",
+      "精确文件和 boundary 都是所属 Phase NEW/MODIFY 的子集",
+    ]) assert.ok(content.includes(rule), `missing Phase 5 safeguard: ${rule}`);
   });
 
   test("tasks-template.md preserves FR/AC and versioned references", () => {
