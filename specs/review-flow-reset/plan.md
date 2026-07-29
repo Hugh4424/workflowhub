@@ -339,7 +339,7 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 provider 前本地材料 fail-loud，五类记录同字节同快照。
 ### Files
 - **NEW**：N/A — 扩展现有测试。
-- **MODIFY**：`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/stage-runner.mjs`、`core/receipt-writer.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`core/build-spec-receipt-recovery.mjs`、`scripts/stage-runtime.mjs`、`core/__tests__/local-skill-resolver.test.mjs`、`core/__tests__/capability-doctor.test.mjs`、`core/__tests__/stage-skill-runtime.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **MODIFY**：`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/stage-runner.mjs`、`core/receipt-writer.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/stage-handlers.mjs`、`scripts/stage-runtime.mjs`、`core/__tests__/local-skill-resolver.test.mjs`、`core/__tests__/capability-doctor.test.mjs`、`core/__tests__/stage-skill-runtime.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`
 ### Tasks
 - T005 RED；T006 GREEN。
