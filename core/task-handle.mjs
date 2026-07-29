@@ -888,6 +888,38 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate one TaskKernel-owned append-only review-flow reset generation stream. */
+    listCanonicalReviewFlowResetRefs(baseFlowId) {
+      if (typeof baseFlowId !== "string" || !/^[a-f0-9]{64}$/.test(baseFlowId)) {
+        throw new TypeError("review flow base id must be sha256");
+      }
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const resetsRoot = resolve(reviewsRoot, "flow-resets");
+      const baseRoot = resolve(resetsRoot, baseFlowId);
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, resetsRoot, "review flow resets directory");
+      assertInside(realTaskPath, baseRoot, "review flow reset base directory");
+      if (!existsSync(baseRoot)) return Object.freeze([]);
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const resetsIdentity = directorySnapshot(realTaskPath, resetsRoot);
+      const baseIdentity = directorySnapshot(realTaskPath, baseRoot);
+      const refs = readdirSync(baseRoot, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(baseRoot, entry.name);
+        const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()
+            || !/^reset-[0-9]{4}\.json$/.test(entry.name)) {
+          throw new Error(`canonical review flow reset must be a regular numbered JSON file: ${entry.name}`);
+        }
+        return `reviews/flow-resets/${baseFlowId}/${entry.name}`;
+      }).sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(baseIdentity);
+      verifyDirectorySnapshot(resetsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate only content-addressed Phase map traces; this is not a generic evidence walk. */
     listCanonicalPhaseMapTraceRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");

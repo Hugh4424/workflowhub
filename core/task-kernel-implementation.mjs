@@ -17,7 +17,7 @@ import {
 import { hashAuditSummary } from "./audit-summary-carrier.mjs";
 import { createRequirementLedger, createRequirementsCoverage } from "./requirement-ledger.mjs";
 import { validateEntryPayload, validateExitPayload } from "./receipt-schema.mjs";
-import { validateBuildCodeAdjudicationCorrection } from "./review-flow-authority.mjs";
+import { validateBuildCodeAdjudicationCorrection, validateReviewFlowReset } from "./review-flow-authority.mjs";
 import {
   BUILD_SPEC_RECOVERY_REFS,
   buildSpecReviewAction,
@@ -285,6 +285,7 @@ function validateStageUpstream(stage, _taskId, refs) {
 export function validateStageFacts(stage, facts, {
   allowLegacyBuildCode = false,
   allowLegacyAuditRead = false,
+  allowMissingAuditSupport = false,
 } = {}) {
   const name = stageName(stage);
   plain(facts, `${name} facts`);
@@ -297,10 +298,11 @@ export function validateStageFacts(stage, facts, {
   rejectUnknown(facts, ALLOWED_FACTS[name], `${name} facts`);
   const missingAudit = AUDIT_FACT_KEYS.filter((key) => !Object.prototype.hasOwnProperty.call(facts, key));
   const legacyAuditRead = allowLegacyAuditRead && missingAudit.length === AUDIT_FACT_KEYS.length;
-  if (missingAudit.length && !legacyAuditRead) {
+  const missingAuditSupport = allowMissingAuditSupport && missingAudit.length === AUDIT_FACT_KEYS.length;
+  if (missingAudit.length && !legacyAuditRead && !missingAuditSupport) {
     throw new Error(`${name} facts missing audit carrier/content evidence: ${missingAudit.join(", ")}`);
   }
-  if (!legacyAuditRead) {
+  if (!legacyAuditRead && !missingAuditSupport) {
     if (facts.audit_contract_version !== "v1") throw new Error(`${name} audit carrier version must be v1`);
     if (!new RegExp(`^evidence/audits/${name}/[a-f0-9]{64}\\.json$`).test(facts.audit_summary_ref ?? "")) throw new Error(`${name} audit summary ref is invalid`);
     if (!HASH.test(facts.audit_summary_hash ?? "")) throw new Error(`${name} audit summary hash must be sha256`);
@@ -479,11 +481,12 @@ export function validateAttempt(attempt, expected = {}) {
   const stage = stageName(attempt.stage);
   if (typeof attempt.task_id !== "string" || typeof attempt.attempt_id !== "string") throw new Error("attempt identity fields required");
   if (!Number.isFinite(Date.parse(attempt.created_at))) throw new Error("attempt created_at invalid");
+  if (!Array.isArray(attempt.missing_items)) throw new Error("attempt missing_items list required");
   validateStageFacts(stage, attempt.facts, {
     allowLegacyBuildCode: expected.allowLegacyBuildCode === true,
     allowLegacyAuditRead: expected.allowLegacyAuditRead === true,
+    allowMissingAuditSupport: attempt.missing_items.includes("support:audit"),
   });
-  if (!Array.isArray(attempt.missing_items)) throw new Error("attempt missing_items list required");
   validateEvidenceRefs(attempt.evidence_refs, "attempt evidence_refs");
   validateRefs(attempt.upstream_refs, "upstream_refs");
   validateUpstreamAcceptances(attempt.upstream_acceptances);
@@ -945,25 +948,49 @@ export function buildTaskKernel(taskHandle, {
       return deepFreeze({ ref, hash: hash(raw), record, active_run: activeStageRun(name, { required: false }) });
     });
   };
+  const validateStageStepAttemptInvalidation = ({
+    stage,
+    run,
+    stepId,
+    attemptId,
+    events,
+    record,
+  }) => {
+    if (record.schema_version !== "stage-step-attempt-invalidation.v1"
+        || record.task_id !== task.identity.taskId || record.stage !== stage
+        || record.workflow_run_id !== run.workflow_run_id
+        || record.step_id !== stepId || record.attempt_id !== attemptId
+        || record.events_hash !== hash(canonicalJson(events))
+        || typeof record.reason !== "string" || record.reason.trim() === ""
+        || !Number.isFinite(Date.parse(record.created_at))) {
+      throw new Error("stage step retry invalidation binding mismatch");
+    }
+    return record;
+  };
   const invalidateStageStepAttempt = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "stage step attempt invalidation input");
-    rejectUnknown(input, new Set(["attempt_id", "reason"]), "stage step attempt invalidation input");
+    rejectUnknown(input, new Set(["step_id", "attempt_id", "reason"]), "stage step attempt invalidation input");
+    if (!Number.isInteger(input.step_id) || input.step_id < 1) {
+      throw new TypeError("stage step attempt invalidation step_id must be a positive integer");
+    }
     const attemptId = nonemptyString(input.attempt_id, "stage step attempt invalidation attempt_id");
     const reason = nonemptyString(input.reason, "stage step attempt invalidation reason");
     const active = activeStageRun(name);
     const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean)
       .map((line) => parseJson(line, "journal event"))
       .filter((event) => event.workflow_run_id === active.run.workflow_run_id
-        && event.stage_slug === name && event.attempt_id === attemptId);
+        && event.stage_slug === name && event.step_id === input.step_id
+        && event.attempt_id === attemptId);
     if (events.length === 0) throw new Error("stage step attempt invalidation target is missing");
-    const identityHash = hash(`${active.run.workflow_run_id}\0${attemptId}`);
+    const identityHash = hash(`${active.run.workflow_run_id}\0${input.step_id}\0${attemptId}`);
     const ref = `runs/${name}/journal-invalidations/${identityHash}.json`;
     const record = {
       schema_version: "stage-step-attempt-invalidation.v1",
       task_id: task.identity.taskId,
       stage: name,
       workflow_run_id: active.run.workflow_run_id,
+      step_id: input.step_id,
       attempt_id: attemptId,
       events_hash: hash(canonicalJson(events)),
       reason,
@@ -1180,24 +1207,72 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision journal is runtime-owned");
     }
     plain(input, "stage step entry input");
-    rejectUnknown(input, new Set(["step_id", "attempt_id", "entry_evidence", "retry_of_attempt_id"]), "stage step entry input");
+    if (input.retry_of_attempt_id !== undefined
+        || (input.attempt_id !== undefined && input.attempt_id !== "attempt-1")) {
+      throw new Error("step attempt identity is kernel-derived; caller cannot select an attempt");
+    }
+    rejectUnknown(input, new Set(["step_id", "attempt_id", "entry_evidence"]), "stage step entry input");
     const active = activeStageRun(name);
+    let events = [];
+    try {
+      events = task.readRecord("journal.jsonl").split("\n").filter(Boolean)
+        .map((line) => parseJson(line, "journal event"));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const priorEntries = events.filter((event) => event.workflow_run_id === active.run.workflow_run_id
+      && event.stage_slug === name && event.step_id === input.step_id
+      && event.event_type === "step_entry");
+    const attemptNumber = priorEntries.length + 1;
+    if (attemptNumber > 1) {
+      const priorAttemptId = `attempt-${attemptNumber - 1}`;
+      const invalidationHash = hash(`${active.run.workflow_run_id}\0${input.step_id}\0${priorAttemptId}`);
+      let invalidation;
+      try {
+        invalidation = parseJson(
+          task.readRecord(`runs/${name}/journal-invalidations/${invalidationHash}.json`),
+          "stage step attempt invalidation",
+        );
+      } catch (error) {
+        if (error?.code === "ENOENT") {
+          throw new Error("stage step retry requires invalidation of the prior target-step attempt");
+        }
+        throw error;
+      }
+      const priorAttemptEvents = events.filter((event) =>
+        event.workflow_run_id === active.run.workflow_run_id
+        && event.stage_slug === name && event.step_id === input.step_id
+        && event.attempt_id === priorAttemptId);
+      validateStageStepAttemptInvalidation({
+        stage: name,
+        run: active.run,
+        stepId: input.step_id,
+        attemptId: priorAttemptId,
+        events: priorAttemptEvents,
+        record: invalidation,
+      });
+    }
+    const attemptId = `attempt-${attemptNumber}`;
     const event = {
       schema_version: "v1",
       event_type: "step_entry",
       workflow_run_id: active.run.workflow_run_id,
       stage_slug: name,
       step_id: input.step_id,
-      attempt_id: input.attempt_id ?? "attempt-1",
+      attempt_id: attemptId,
       timestamp: now(),
       journal_entry_id: randomUUID(),
       entry_evidence: structuredClone(input.entry_evidence),
-      ...(input.retry_of_attempt_id === undefined ? {} : { retry_of_attempt_id: input.retry_of_attempt_id }),
+      ...(attemptNumber === 1 ? {} : { retry_of_attempt_id: `attempt-${attemptNumber - 1}` }),
       manifest_schema_version: "2.0.0",
     };
     validateEntryPayload(event);
     task.appendJournal(event);
-    return deepFreeze({ journal_entry_id: event.journal_entry_id, workflow_run_id: event.workflow_run_id });
+    return deepFreeze({
+      journal_entry_id: event.journal_entry_id,
+      workflow_run_id: event.workflow_run_id,
+      attempt_id: event.attempt_id,
+    });
   };
   const writeStageStepExit = (stage, input = {}, journalAuthority) => {
     const name = stageName(stage);
@@ -1205,15 +1280,46 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision journal is runtime-owned");
     }
     plain(input, "stage step exit input");
+    if (input.attempt_id !== undefined && input.attempt_id !== "attempt-1") {
+      throw new Error("step attempt identity is kernel-derived; caller cannot select an attempt");
+    }
     rejectUnknown(input, new Set(["step_id", "attempt_id", "entry_journal_entry_id", "terminal_status", "completion_evidence", "skip_reason", "authorized_by", "block_reason"]), "stage step exit input");
     const active = activeStageRun(name);
+    const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map((line) => parseJson(line, "journal event"));
+    const matchingEntry = [...events].reverse().find((candidate) => candidate.event_type === "step_entry"
+      && candidate.workflow_run_id === active.run.workflow_run_id && candidate.stage_slug === name
+      && candidate.step_id === input.step_id
+      && candidate.journal_entry_id === input.entry_journal_entry_id);
+    if (!matchingEntry) throw new Error("entry_journal_entry_id does not bind a canonical entry in the active run");
+    const invalidationHash = hash(`${active.run.workflow_run_id}\0${input.step_id}\0${matchingEntry.attempt_id}`);
+    try {
+      const invalidation = parseJson(
+        task.readRecord(`runs/${name}/journal-invalidations/${invalidationHash}.json`),
+        "stage step attempt invalidation",
+      );
+      const attemptEvents = events.filter((event) =>
+        event.workflow_run_id === active.run.workflow_run_id
+        && event.stage_slug === name && event.step_id === input.step_id
+        && event.attempt_id === matchingEntry.attempt_id);
+      validateStageStepAttemptInvalidation({
+        stage: name,
+        run: active.run,
+        stepId: input.step_id,
+        attemptId: matchingEntry.attempt_id,
+        events: attemptEvents,
+        record: invalidation,
+      });
+      throw new Error("cannot write an exit for an invalidated stage step attempt");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
     const event = {
       schema_version: "v1",
       event_type: "step_exit",
       workflow_run_id: active.run.workflow_run_id,
       stage_slug: name,
       step_id: input.step_id,
-      attempt_id: input.attempt_id ?? "attempt-1",
+      attempt_id: matchingEntry.attempt_id,
       timestamp: now(),
       entry_journal_entry_id: input.entry_journal_entry_id,
       terminal_status: input.terminal_status,
@@ -1224,12 +1330,6 @@ export function buildTaskKernel(taskHandle, {
       ...(input.block_reason === undefined ? {} : { block_reason: input.block_reason }),
     };
     validateExitPayload(event);
-    const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map((line) => parseJson(line, "journal event"));
-    const matchingEntry = events.find((candidate) => candidate.event_type === "step_entry"
-      && candidate.workflow_run_id === event.workflow_run_id && candidate.stage_slug === name
-      && candidate.step_id === event.step_id && candidate.attempt_id === event.attempt_id
-      && candidate.journal_entry_id === event.entry_journal_entry_id);
-    if (!matchingEntry) throw new Error("entry_journal_entry_id does not bind a canonical entry in the active run");
     if (events.some((candidate) => candidate.event_type === "step_exit"
       && candidate.workflow_run_id === event.workflow_run_id && candidate.stage_slug === name
       && candidate.step_id === event.step_id && candidate.attempt_id === event.attempt_id)) {
@@ -1523,6 +1623,18 @@ export function buildTaskKernel(taskHandle, {
           || content.workflow_run_id !== summary.workflow_run_id || content.snapshot_tree !== snapshot.tree) {
         throw new Error(`${stage} content evidence binding mismatch`);
       }
+    }
+  };
+  const verifyMakeDecisionCore = (attempt) => {
+    const decisionRef = attempt.facts.decision_ref;
+    const decisionHash = attempt.facts.decision_hash;
+    const match = /^receipts\/decision-log\/([a-f0-9]{64})\.md$/.exec(decisionRef ?? "");
+    if (!match || !HASH.test(decisionHash ?? "") || match[1] !== decisionHash) {
+      throw new Error("make-decision acceptance requires a canonical core decision_ref/hash binding");
+    }
+    const decisionRaw = task.readRecord(decisionRef);
+    if (decisionRaw.trim() === "" || hash(decisionRaw) !== decisionHash) {
+      throw new Error("make-decision core decision_ref does not bind the published decision bytes");
     }
   };
   const checkpointBase = (stage) => {
@@ -2061,8 +2173,24 @@ export function buildTaskKernel(taskHandle, {
       completion_evidence: evidence,
     });
   };
+  function assertActiveReviewGeneration(identity) {
+    const baseWorkflowRunId = identity.workflow_run_id.replace(/:review-reset:[a-f0-9]{64}$/, "");
+    const baseIdentity = normalizeReviewFlowIdentity(task, {
+      ...identity,
+      workflow_run_id: baseWorkflowRunId,
+    });
+    const reset = activeReviewFlowReset(baseIdentity);
+    const activeIdentity = reset === null ? baseIdentity : normalizeReviewFlowIdentity(task, {
+      ...baseIdentity,
+      workflow_run_id: `${baseIdentity.workflow_run_id}:review-reset:${reset.hash}`,
+    });
+    if (JSON.stringify(identity) !== JSON.stringify(activeIdentity)) {
+      throw new Error("review flow generation is superseded by the active reset");
+    }
+  }
   const advanceReviewFlow = (value, update = {}) => {
     const identity = normalizeReviewFlowIdentity(task, value);
+    assertActiveReviewGeneration(identity);
     plain(update, "review flow update");
     rejectUnknown(update, new Set(["expected_head_ref", "expected_event_ref", "result_ref"]), "review flow update");
     const resultRef = nonemptyString(update.result_ref, "review flow result_ref");
@@ -2201,6 +2329,7 @@ export function buildTaskKernel(taskHandle, {
   };
   const recordReviewAttempt = (value, update = {}) => {
     const identity = normalizeReviewFlowIdentity(task, value);
+    assertActiveReviewGeneration(identity);
     plain(update, "review flow attempt update");
     rejectUnknown(update, new Set(["expected_head_ref", "expected_event_ref", "attempt_ref"]), "review flow attempt update");
     const attemptRef = nonemptyString(update.attempt_ref, "review flow attempt_ref");
@@ -2255,6 +2384,7 @@ export function buildTaskKernel(taskHandle, {
   };
   const recordReviewResolution = (value, update = {}) => {
     const identity = normalizeReviewFlowIdentity(task, value);
+    assertActiveReviewGeneration(identity);
     plain(update, "review flow resolution update");
     rejectUnknown(update, new Set(["expected_head_ref", "expected_event_ref", "resolution"]), "review flow resolution update");
     const resolution = plain(update.resolution, "review flow resolution");
@@ -2263,7 +2393,7 @@ export function buildTaskKernel(taskHandle, {
     const resolutionRef = `reviews/resolutions/${hash(canonical)}.json`;
     const raw = `${JSON.stringify(resolution, null, 2)}\n`;
     const flowId = reviewFlowId(identity);
-    return task.withRecordLock(`locks/review-flows/${flowId}.lock`, () => {
+    const recorded = task.withRecordLock(`locks/review-flows/${flowId}.lock`, () => {
       const current = readReviewFlow(identity);
       if (current?.event_kind === "resolution" && current.action_ref === resolutionRef) {
         return deepFreeze({ resolution_ref: resolutionRef, flow: current });
@@ -2314,8 +2444,24 @@ export function buildTaskKernel(taskHandle, {
       createKernelRecord(eventRef, `${JSON.stringify(event, null, 2)}\n`);
       return deepFreeze({ resolution_ref: resolutionRef, flow: event });
     });
+    if (resolution.evidence_state === "verified" && resolution.change_classification?.structural === true) {
+      const subject = {
+        stage: identity.stage,
+        review_track: identity.review_track,
+        subject_kind: identity.subject_kind,
+        phase_id: identity.phase_id,
+        review_scope: identity.review_scope,
+        ...(identity.snapshot_tree === undefined ? {} : { snapshot_tree: identity.snapshot_tree }),
+      };
+      const reset = createReviewFlowReset(subject, {
+        reason: "authenticated structural change starts a fresh initial review generation",
+        resolution_ref: resolutionRef,
+      });
+      return deepFreeze({ ...recorded, reset });
+    }
+    return recorded;
   };
-  const deriveReviewFlowIdentity = (value) => {
+  const deriveBaseReviewFlowIdentity = (value) => {
     plain(value, "review flow subject");
     rejectUnknown(value, new Set([
       "stage", "review_track", "subject_kind", "phase_id", "review_scope", "snapshot_tree", "revision_ref", "adjudication_correction_ref",
@@ -2370,6 +2516,194 @@ export function buildTaskKernel(taskHandle, {
     }
     const { revision_ref: _revisionRef, adjudication_correction_ref: _correctionRef, ...subject } = value;
     return normalizeReviewFlowIdentity(task, { ...subject, workflow_run_id: workflowRunId });
+  };
+  const activeReviewFlowReset = (baseIdentity) => {
+    const baseFlowId = reviewFlowId(baseIdentity);
+    const refs = task.listCanonicalReviewFlowResetRefs(baseFlowId);
+    if (refs.length > 9999) throw new Error("review flow reset sequence exhausted");
+    let previous = null;
+    for (const [index, ref] of refs.entries()) {
+      const sequence = index + 1;
+      const expectedRef = `reviews/flow-resets/${baseFlowId}/reset-${String(sequence).padStart(4, "0")}.json`;
+      if (ref !== expectedRef) {
+        throw new Error(`review flow reset generation gap before ${ref}`);
+      }
+      const raw = task.readRecord(ref);
+      const record = parseJson(raw, "review flow reset");
+      const previousIdentity = previous === null
+        ? baseIdentity
+        : normalizeReviewFlowIdentity(task, {
+          ...baseIdentity,
+          workflow_run_id: `${baseIdentity.workflow_run_id}:review-reset:${previous.hash}`,
+        });
+      if (!RESULT_REF_FOR_FLOW.test(record.previous_head_ref ?? "")
+          || !HASH.test(record.previous_head_hash ?? "")
+          || !/^reviews\/flows\/[a-f0-9]{64}\/event-[0-9]{4}\.json$/.test(record.previous_event_ref ?? "")
+          || !HASH.test(record.previous_event_hash ?? "")
+          || !GIT_OID.test(record.previous_snapshot_tree ?? "")
+          || !GIT_OID.test(record.current_snapshot_tree ?? "")
+          || !RESOLUTION_REF_FOR_FLOW.test(record.resolution_ref ?? "")
+          || !HASH.test(record.resolution_hash ?? "")
+          || typeof record.reason !== "string" || record.reason.trim() === "") {
+        throw new Error("review flow reset record is invalid or discontinuous");
+      }
+      const previousFlow = readReviewFlow(previousIdentity);
+      const resultRaw = task.readRecord(record.previous_head_ref);
+      const result = parseJson(resultRaw, "review flow reset previous head");
+      const resolutionRaw = task.readRecord(record.resolution_ref);
+      const resolution = parseJson(resolutionRaw, "review flow reset resolution");
+      validateReviewFlowReset({
+        record,
+        taskId: task.identity.taskId,
+        resetRef: ref,
+        baseFlowId,
+        sequence,
+        baseIdentity,
+        previousIdentity,
+        previousResetRef: previous?.ref ?? null,
+        previousResetHash: previous?.hash ?? null,
+        previousFlow,
+        previousResult: result,
+        previousHeadHash: hash(resultRaw),
+        previousEventHash: hash(task.readRecord(record.previous_event_ref)),
+        resolution,
+        resolutionHash: hash(resolutionRaw),
+      });
+      previous = { ref, hash: hash(raw), record };
+    }
+    return previous;
+  };
+  const deriveReviewFlowIdentity = (value) => {
+    const baseIdentity = deriveBaseReviewFlowIdentity(value);
+    const reset = activeReviewFlowReset(baseIdentity);
+    if (reset === null) return baseIdentity;
+    return normalizeReviewFlowIdentity(task, {
+      ...baseIdentity,
+      workflow_run_id: `${baseIdentity.workflow_run_id}:review-reset:${reset.hash}`,
+    });
+  };
+  const createReviewFlowReset = (value, input = {}) => {
+    plain(input, "review flow reset input");
+    rejectUnknown(input, new Set(["reason", "resolution_ref"]), "review flow reset input");
+    const reason = nonemptyString(input.reason, "review flow reset reason");
+    const resolutionRef = nonemptyString(input.resolution_ref, "review flow reset resolution_ref");
+    if (!RESOLUTION_REF_FOR_FLOW.test(resolutionRef)) {
+      throw new Error("review flow reset resolution_ref must be canonical");
+    }
+    const baseIdentity = deriveBaseReviewFlowIdentity(value);
+    if (!new Set(["build-spec", "build-plan", "verify-code"]).has(baseIdentity.stage)) {
+      throw new Error("review flow reset is only supported for open design and verification stages");
+    }
+    try {
+      readAcceptedLocal(baseIdentity.stage);
+      throw new Error("review flow reset requires an open, unaccepted stage");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const previousReset = activeReviewFlowReset(baseIdentity);
+    const previousIdentity = previousReset === null
+      ? baseIdentity
+      : normalizeReviewFlowIdentity(task, {
+        ...baseIdentity,
+        workflow_run_id: `${baseIdentity.workflow_run_id}:review-reset:${previousReset.hash}`,
+      });
+    const current = readReviewFlow(previousIdentity);
+    if (!current?.head_result_ref) {
+      throw new Error(previousReset === null
+        ? "review flow reset requires a current semantic head"
+        : "review flow reset is stale: active generation has no current semantic head");
+    }
+    const resultRaw = task.readRecord(current.head_result_ref);
+    const result = parseJson(resultRaw, "review flow reset previous result");
+    const activeWorkspace = candidate ?? workspace;
+    if (!activeWorkspace) throw new Error("review flow reset requires an authenticated Workspace");
+    const snapshot = typeof activeWorkspace.captureSnapshot === "function"
+      ? activeWorkspace.captureSnapshot()
+      : captureGitWorktreeSnapshot(activeWorkspace.worktreeRoot);
+    if (result.snapshot_tree === snapshot.tree) {
+      throw new Error("review flow reset requires a changed Workspace snapshot");
+    }
+    const resolutionRaw = task.readRecord(resolutionRef);
+    const resolution = parseJson(resolutionRaw, "review flow reset resolution");
+    const structuralDimensions = [...new Set(resolution.change_classification?.changed_dimensions ?? [])].sort();
+    if (current.event_kind !== "resolution" || current.action_ref !== resolutionRef
+        || current.action_sha256 !== hash(resolutionRaw)
+        || resolution.version !== "wh-review-resolution.v1"
+        || resolution.task_id !== task.identity.taskId || resolution.stage !== baseIdentity.stage
+        || (resolution.review_track ?? null) !== baseIdentity.review_track
+        || resolution.previous_result_ref !== current.head_result_ref
+        || resolution.previous_result_sha256 !== hash(resultRaw)
+        || resolution.previous_snapshot_tree !== result.snapshot_tree
+        || resolution.snapshot_tree !== snapshot.tree
+        || resolution.evidence_state !== "verified"
+        || resolution.change_classification?.structural !== true
+        || structuralDimensions.length === 0) {
+      throw new Error("review flow reset requires the current authenticated structural resolution");
+    }
+    const baseFlowId = reviewFlowId(baseIdentity);
+    return task.withRecordLock(`locks/review-flow-resets/${baseFlowId}.lock`, () =>
+      task.withRecordLock(`locks/review-flows/${reviewFlowId(previousIdentity)}.lock`, () => {
+        const liveReset = activeReviewFlowReset(baseIdentity);
+        if ((liveReset?.hash ?? null) !== (previousReset?.hash ?? null)) {
+          throw new Error("review flow reset CAS failed: active generation changed");
+        }
+        const live = readReviewFlow(previousIdentity);
+        if (live?.head_result_ref !== current.head_result_ref || live?.event_ref !== current.event_ref) {
+          throw new Error("review flow reset CAS failed: current head changed");
+        }
+        const sequence = (previousReset?.record.sequence ?? 0) + 1;
+        const ref = `reviews/flow-resets/${baseFlowId}/reset-${String(sequence).padStart(4, "0")}.json`;
+        const record = {
+          schema_version: "review-flow-reset.v1",
+          task_id: task.identity.taskId,
+          reset_ref: ref,
+          base_flow_id: baseFlowId,
+          sequence,
+          base_identity: baseIdentity,
+          previous_identity: previousIdentity,
+          previous_reset_ref: previousReset?.ref ?? null,
+          previous_reset_hash: previousReset?.hash ?? null,
+          previous_head_ref: current.head_result_ref,
+          previous_head_hash: hash(resultRaw),
+          previous_event_ref: current.event_ref,
+          previous_event_hash: hash(task.readRecord(current.event_ref)),
+          previous_snapshot_tree: result.snapshot_tree,
+          current_snapshot_tree: snapshot.tree,
+          resolution_ref: resolutionRef,
+          resolution_hash: hash(resolutionRaw),
+          structural_dimensions: structuralDimensions,
+          reason,
+          created_at: now(),
+        };
+        const raw = `${JSON.stringify(record, null, 2)}\n`;
+        validateReviewFlowReset({
+          record,
+          taskId: task.identity.taskId,
+          resetRef: ref,
+          baseFlowId,
+          sequence,
+          baseIdentity,
+          previousIdentity,
+          previousResetRef: previousReset?.ref ?? null,
+          previousResetHash: previousReset?.hash ?? null,
+          previousFlow: current,
+          previousResult: result,
+          previousHeadHash: hash(resultRaw),
+          previousEventHash: hash(task.readRecord(current.event_ref)),
+          resolution,
+          resolutionHash: hash(resolutionRaw),
+        });
+        createKernelRecord(ref, raw);
+        const resetHash = hash(raw);
+        return deepFreeze({
+          reset_ref: ref,
+          reset_hash: resetHash,
+          identity: normalizeReviewFlowIdentity(task, {
+            ...baseIdentity,
+            workflow_run_id: `${baseIdentity.workflow_run_id}:review-reset:${resetHash}`,
+          }),
+        });
+      }));
   };
   const adoptLegacyReviewRoot = (update = {}) => {
     plain(update, "legacy review adoption");
@@ -2691,6 +3025,17 @@ export function buildTaskKernel(taskHandle, {
     completeMakeDecisionReceipt,
     deriveStageWorkflowRunId,
     deriveReviewFlowIdentity,
+    createReviewFlowReset,
+    readActiveReviewFlowReset(value) {
+      const baseIdentity = deriveBaseReviewFlowIdentity(value);
+      const reset = activeReviewFlowReset(baseIdentity);
+      if (reset === null) return null;
+      return deepFreeze({
+        reset_ref: reset.ref,
+        reset_hash: reset.hash,
+        record: structuredClone(reset.record),
+      });
+    },
     adoptLegacyReviewRoot,
     withReviewFlowLock(value, operation) {
       if (typeof operation !== "function") throw new TypeError("review flow operation must be a function");
@@ -3094,12 +3439,18 @@ export function buildTaskKernel(taskHandle, {
         validateRefs(data.upstream_refs ?? [], "upstream_refs");
         if (data.upstream_acceptances !== undefined) throw new Error("upstream_acceptances are kernel-derived and cannot be supplied");
         const upstreamAcceptances = verifyUpstream(name, data.upstream_refs ?? []);
-        validateStageFacts(name, data.facts);
+        const missingItems = [...(data.missing_items ?? [])];
+        const auditSupportMissing = missingItems.includes("support:audit");
+        if (auditSupportMissing
+            && AUDIT_FACT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(data.facts, key))) {
+          throw new Error(`${name} missing audit support cannot publish unauthenticated audit facts`);
+        }
+        validateStageFacts(name, data.facts, { allowMissingAuditSupport: auditSupportMissing });
         if (name === "make-decision" && candidate && (resolve(data.facts.worktree_root) !== candidate.worktreeRoot || data.facts.baseline_commit !== candidate.baselineCommit)) {
           throw new Error("make-decision facts do not match CandidateWorkspace");
         }
         if (name === "make-decision") verifyCandidateSnapshot(data.facts);
-        verifyAuditPublication(name, data.facts);
+        if (!auditSupportMissing) verifyAuditPublication(name, data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
           const base = baselineRebindAuthorization ? { baseCommit: baselineRebindAuthorization.record.integration_head, baseTree: baselineRebindAuthorization.record.base_tree } : checkpointBase(name);
@@ -3318,6 +3669,7 @@ export function buildTaskKernel(taskHandle, {
           }
           verifyCandidateSnapshot(attempt.facts);
         }
+        if (name === "make-decision") verifyMakeDecisionCore(attempt);
         const liveUpstreamAcceptances = verifyUpstream(name, attempt.upstream_refs);
         if (JSON.stringify(attempt.upstream_acceptances ?? []) !== JSON.stringify(liveUpstreamAcceptances)) {
           throw new Error(`${name} accepted upstream lineage changed after attempt publication`);

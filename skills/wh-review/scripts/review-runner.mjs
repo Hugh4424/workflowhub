@@ -49,16 +49,46 @@ async function withLocalReviewLock(task, lockRef, operation) {
   }
 }
 
-function reviewLockRef({ stage, reviewTrack, reviewScope, snapshotTree, materialId, reviewChain }) {
-  const identity = JSON.stringify([stage, reviewTrack, reviewScope, snapshotTree, materialId, reviewChain ?? null]);
+function reviewLockRef({
+  stage,
+  reviewTrack,
+  reviewScope,
+  snapshotTree,
+  materialId,
+  reviewChain,
+  policyFingerprint = null,
+}) {
+  const identity = JSON.stringify([
+    stage,
+    reviewTrack,
+    reviewScope,
+    snapshotTree,
+    materialId,
+    reviewChain ?? null,
+    policyFingerprint,
+  ]);
   return `locks/reviews/${createHash("sha256").update(identity).digest("hex")}.lock`;
 }
 
-function managedRequestId({ taskId, stage, reviewTrack, subject, snapshotTree, materialId, reviewChain, hostProvider, providers, continuationRuntimeId, dispatchSequence }) {
+function managedRequestId({
+  taskId,
+  stage,
+  reviewTrack,
+  subject,
+  snapshotTree,
+  materialId,
+  reviewChain,
+  policyFingerprint,
+  hostProvider,
+  providers,
+  continuationRuntimeId,
+  dispatchSequence,
+}) {
   if (!Number.isSafeInteger(dispatchSequence) || dispatchSequence < 0) throw new TypeError("dispatchSequence must be a non-negative safe integer");
   const identity = canonicalJson({
     version: "wh-review-dispatch.v1", task_id: taskId, stage, review_track: reviewTrack,
     subject, snapshot_tree: snapshotTree, material_id: materialId, review_chain: reviewChain ?? null,
+    policy_fingerprint: policyFingerprint ?? null,
     host_provider: hostProvider, provider_allowlist: providers, prompt_sha256: createHash("sha256").update(providerPrompt).digest("hex"),
     continuation_runtime_id: continuationRuntimeId ?? null, dispatch_sequence: dispatchSequence,
   });
@@ -320,7 +350,15 @@ function evidenceAnchorsFor(reviewed, bundle) {
   });
 }
 
-function matchesReviewIdentity(record, { taskId, stage, reviewTrack, subject, snapshotTree, materialId, reviewChain = undefined }) {
+function matchesReviewIdentity(record, {
+  taskId,
+  stage,
+  reviewTrack,
+  subject,
+  snapshotTree,
+  materialId,
+  reviewChain = undefined,
+}) {
   return record?.task_id === taskId && record.stage === stage && record.review_track === reviewTrack &&
     record.snapshot_tree === snapshotTree && record.material_id === materialId &&
     record.subject_kind === subject.subject_kind && record.phase_id === subject.phase_id &&
@@ -354,6 +392,15 @@ function validateAttemptIdentity(attempt, attemptRef, identity) {
   if (!attemptMatch || attempt.attempt_id !== attemptMatch[1] || !matchesReviewIdentity(attempt, identity)) {
     throw invalidEvidence("attempt identity does not match its canonical ref or requested review identity");
   }
+}
+
+function matchesRequestedPolicy(attempt, identity) {
+  verifiedPolicyForAttempt(
+    attempt,
+    attempt.provider_attempts.map(({ provider }) => provider),
+    { allowUndispatchedMaterialPreflight: isUndispatchedMaterialPreflightAttempt(attempt) },
+  );
+  return (attempt.policy_snapshot_hash ?? null) === identity.policyFingerprint;
 }
 
 function validateUnavailableAttemptEvidence(task, attempt, bundle) {
@@ -506,6 +553,11 @@ function reusableResults(task, identity) {
   const candidateResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
   const invalidatedAttemptRefs = new Set();
   const results = candidateResults.filter(({ ref, record }) => {
+    let resultAttempt;
+    try { resultAttempt = JSON.parse(task.readRecord(record.attempt_ref)); }
+    catch (error) { throw invalidEvidence(`semantic result attempt cannot be read: ${error.message}`); }
+    validateAttemptIdentity(resultAttempt, record.attempt_ref, identity);
+    if (!matchesRequestedPolicy(resultAttempt, identity)) return false;
     const raw = task.readRecord(ref);
     const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
     let invalidation;
@@ -534,16 +586,17 @@ function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, cla
   }
   const claimedUnavailable = new Set(claimedUnavailableAttemptRefs);
   const { results: matchingResults, invalidatedAttemptRefs } = reusableResults(task, identity);
-  const matchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+  const allMatchingAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
     .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
   if (matchingResults.length > 1) throw invalidEvidence("multiple canonical semantic results exist for the same review identity");
   // Transport failures are immutable evidence, not a permanent ban on another
   // formal review of the same draft. Validate every historical attempt before
   // continuing so damaged evidence is still fail-loud.
-  for (const item of matchingAttempts) {
+  for (const item of allMatchingAttempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
     if (item.record.terminal_status === "unavailable") validateUnavailableAttemptEvidence(task, item.record, bundle);
   }
+  const matchingAttempts = allMatchingAttempts.filter(({ record }) => matchesRequestedPolicy(record, identity));
   if (matchingResults.length === 0) {
     const semanticAttempts = matchingAttempts.filter(({ record }) => record.terminal_status === "semantic" && record.error === null);
     if (semanticAttempts.length > 1) throw invalidEvidence("multiple semantic attempts exist without a canonical result");
@@ -660,11 +713,18 @@ function unavailableDispatchSequence(task, identity) {
   // cancellation forever. Revalidate every matching attempt before deriving
   // this sequence, so a damaged record never changes dispatch identity.
   const { invalidatedAttemptRefs } = reusableResults(task, identity);
-  const attempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
+  const allAttempts = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity)
     .filter(({ ref }) => !invalidatedAttemptRefs.has(ref));
-  for (const item of attempts) {
+  for (const item of allAttempts) {
     validateAttemptIdentity(item.record, item.ref, identity);
-    if (item.record.terminal_status !== "unavailable") throw invalidEvidence(`attempt without a semantic result is not unavailable: ${item.ref}`);
+    matchesRequestedPolicy(item.record, identity);
+  }
+  const attempts = allAttempts.filter(({ record }) =>
+    (record.policy_snapshot_hash ?? null) === identity.policyFingerprint);
+  for (const item of attempts) {
+    if (item.record.terminal_status !== "unavailable") {
+      throw invalidEvidence(`attempt without a semantic result is not unavailable: ${item.ref}`);
+    }
   }
   return attempts.length;
 }
@@ -757,13 +817,37 @@ function materialPreflightId({ stage, reviewTrack, subject, source, policy, diag
 
 async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, chain, policy, diagnostic }) {
   const materialId = materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic });
-  const identity = { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId, reviewChain: chain };
-  const lockRef = reviewLockRef({ stage, reviewTrack, reviewScope: subject.review_scope, snapshotTree: source.snapshotTree, materialId, reviewChain: chain });
+  const policyFingerprint = policy === null ? null : hashCanonical(policy);
+  const identity = {
+    taskId,
+    stage,
+    reviewTrack,
+    subject,
+    snapshotTree: source.snapshotTree,
+    materialId,
+    reviewChain: chain,
+    policyFingerprint,
+  };
+  const lockRef = reviewLockRef({
+    stage,
+    reviewTrack,
+    reviewScope: subject.review_scope,
+    snapshotTree: source.snapshotTree,
+    materialId,
+    reviewChain: chain,
+    policyFingerprint,
+  });
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
   const aggregation = aggregateProviderResults([], minimumReviewers, { profilePriority: policy?.requested_profiles ?? [] });
   const coverage = reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation });
   const unavailable = () => withLocalReviewLock(task, lockRef, () => task.withRecordLock(lockRef, () => {
-    const matches = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+    const allMatches = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
+    for (const item of allMatches) {
+      validateAttemptIdentity(item.record, item.ref, identity);
+      matchesRequestedPolicy(item.record, identity);
+    }
+    const matches = allMatches.filter(({ record }) =>
+      (record.policy_snapshot_hash ?? null) === identity.policyFingerprint);
     const results = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
     if (results.length !== 0 || matches.length > 1) throw invalidEvidence("material preflight identity has conflicting canonical review records");
     if (matches.length === 1) {
@@ -1067,8 +1151,26 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   } finally {
     source.dispose?.();
   }
-  const lockRef = reviewLockRef({ stage, reviewTrack, reviewScope: subject.review_scope, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain });
-  const identity = { taskId, stage, reviewTrack, subject, snapshotTree: source.snapshotTree, materialId: bundle.materialId, reviewChain: chain };
+  const policyFingerprint = policy === null ? null : hashCanonical(policy);
+  const lockRef = reviewLockRef({
+    stage,
+    reviewTrack,
+    reviewScope: subject.review_scope,
+    snapshotTree: source.snapshotTree,
+    materialId: bundle.materialId,
+    reviewChain: chain,
+    policyFingerprint,
+  });
+  const identity = {
+    taskId,
+    stage,
+    reviewTrack,
+    subject,
+    snapshotTree: source.snapshotTree,
+    materialId: bundle.materialId,
+    reviewChain: chain,
+    policyFingerprint,
+  };
   const reuseOptions = { reuseUnavailable, claimedUnavailableAttemptRefs };
   const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle, reuseOptions)));
   const existing = await reusable();

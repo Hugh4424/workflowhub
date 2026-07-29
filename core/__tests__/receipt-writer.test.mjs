@@ -3,7 +3,12 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../task-handle.mjs";
+import { createTask, createTaskKernel } from "../task-handle.mjs";
+import {
+  authenticateAuditRetryEvidence,
+  buildAuditSummaryFromJournalEvents,
+} from "../audit-aggregator.mjs";
+import { computeLedgerHash, computeRequirementContentHash } from "../requirement-ledger.mjs";
 import { writeEntryReceipt, writeExitReceipt, writeStepAutoRollback } from "../receipt-writer.mjs";
 
 const temporary = [];
@@ -31,6 +36,22 @@ function exit(entryId, overrides = {}) {
 }
 function journal(task) {
   return task.readRecord("journal.jsonl").trim().split("\n").map(JSON.parse);
+}
+function coveredLedger() {
+  const requirement = {
+    requirement_id: "R1",
+    status: "accepted",
+    source_ref: { kind: "source", uri_or_path: "source://R1", content_hash: "a".repeat(64) },
+    decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+    artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+    acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+    upstream_hashes: ["a".repeat(64)],
+    stale: false,
+  };
+  requirement.content_hash = computeRequirementContentHash(requirement);
+  const ledger = { schema_version: "v1", source_manifest_hash: "e".repeat(64), requirements: [requirement] };
+  ledger.ledger_hash = computeLedgerHash(ledger);
+  return ledger;
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
@@ -62,6 +83,123 @@ describe("receipt writer TaskHandle contract", () => {
     await writeEntryReceipt(task, entry({ workflow_run_id: "run-duplicate" }));
     await expect(writeEntryReceipt(task, entry({ workflow_run_id: "run-duplicate" })))
       .rejects.toThrow(/duplicate active entry/i);
+  });
+
+  it("keeps the same derived attempt id independent across different steps", async () => {
+    const task = fixture();
+    const stepOne = await writeEntryReceipt(task, entry({
+      workflow_run_id: "run-step-scoped",
+      step_id: 1,
+      attempt_id: "attempt-1",
+    }));
+    const stepTwo = await writeEntryReceipt(task, entry({
+      workflow_run_id: "run-step-scoped",
+      step_id: 2,
+      attempt_id: "attempt-1",
+    }));
+    await writeExitReceipt(task, exit(stepOne.journal_entry_id, {
+      workflow_run_id: "run-step-scoped",
+      step_id: 1,
+      attempt_id: "attempt-1",
+    }));
+    await writeExitReceipt(task, exit(stepTwo.journal_entry_id, {
+      workflow_run_id: "run-step-scoped",
+      step_id: 2,
+      attempt_id: "attempt-1",
+    }));
+    expect(journal(task).filter(({ event_type }) => event_type === "step_exit")
+      .map(({ step_id, attempt_id }) => [step_id, attempt_id])).toEqual([
+      [1, "attempt-1"],
+      [2, "attempt-1"],
+    ]);
+  });
+
+  it("does not fail an audit for a kernel-derived retry of the invalidated target step", () => {
+    const task = fixture();
+    const kernel = createTaskKernel(task);
+    const run = kernel.startStageRun("build-spec", { reason: "retry the target step" }).run;
+    const first = kernel.writeStageStepEntry("build-spec", {
+      step_id: 1,
+      entry_evidence: { kind: "test", uri_or_path: "evidence/red" },
+    });
+    kernel.writeStageStepExit("build-spec", {
+      step_id: 1,
+      entry_journal_entry_id: first.journal_entry_id,
+      terminal_status: "failure",
+      completion_evidence: { kind: "test", uri_or_path: "evidence/failed" },
+    });
+    kernel.invalidateStageStepAttempt("build-spec", {
+      step_id: 1,
+      attempt_id: "attempt-1",
+      reason: "retry the failed target step",
+    });
+    const retry = kernel.writeStageStepEntry("build-spec", {
+      step_id: 1,
+      entry_evidence: { kind: "test", uri_or_path: "evidence/retry" },
+    });
+    kernel.writeStageStepExit("build-spec", {
+      step_id: 1,
+      entry_journal_entry_id: retry.journal_entry_id,
+      terminal_status: "success",
+      completion_evidence: { kind: "test", uri_or_path: "evidence/green" },
+    });
+    const allEvents = journal(task);
+    const previousEvents = allEvents.filter(({ step_id, attempt_id }) =>
+      step_id === 1 && attempt_id === "attempt-1");
+    const retryEvents = allEvents.filter(({ step_id, attempt_id }) =>
+      step_id === 1 && attempt_id === "attempt-2");
+    const authenticatedRetry = authenticateAuditRetryEvidence({
+      task,
+      stageSlug: "build-spec",
+      workflowRunId: run.workflow_run_id,
+      retryEvent: retryEvents.find(({ event_type }) => event_type === "step_entry"),
+      previousEvents,
+    });
+    const context = {
+      task_id: task.identity.taskId,
+      manifest: {
+        schema_version: "2.0.0",
+        stage_slug: "build-spec",
+        manifest_hash: "f".repeat(64),
+        steps: [{ step_id: 1, order: 1, depends_on: [] }],
+      },
+      ledger: coveredLedger(),
+      authenticated_retries: [authenticatedRetry],
+    };
+    const summary = buildAuditSummaryFromJournalEvents(
+      retryEvents,
+      "build-spec",
+      run.workflow_run_id,
+      context,
+    ).audit_summary;
+
+    expect(summary.verdict).toBe("pass");
+    expect(summary.expected_steps).toContainEqual(expect.objectContaining({
+      step_id: 1,
+      attempt_id: "attempt-2",
+    }));
+
+    const forged = buildAuditSummaryFromJournalEvents(
+      retryEvents,
+      "build-spec",
+      run.workflow_run_id,
+      { ...context, authenticated_retries: [structuredClone(authenticatedRetry)] },
+    ).audit_summary;
+    expect(forged.verdict).toBe("fail");
+    expect(forged.facts.retry).toContainEqual(expect.objectContaining({
+      type: "UNAUTHENTICATED_RETRY",
+      step_id: 1,
+      attempt_id: "attempt-2",
+    }));
+
+    const tamperedEvents = structuredClone(retryEvents);
+    tamperedEvents.find(({ event_type }) => event_type === "step_entry").entry_evidence.uri_or_path = "evidence/forged";
+    expect(buildAuditSummaryFromJournalEvents(
+      tamperedEvents,
+      "build-spec",
+      run.workflow_run_id,
+      context,
+    ).audit_summary.verdict).toBe("fail");
   });
 
   it("appends rollback facts through TaskHandle without inventing a receipt pass", async () => {

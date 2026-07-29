@@ -155,6 +155,62 @@ export function reviewFlowSubject(result) {
   });
 }
 
+export function validateReviewFlowReset({
+  record,
+  taskId,
+  resetRef,
+  baseFlowId,
+  sequence,
+  baseIdentity,
+  previousIdentity,
+  previousResetRef,
+  previousResetHash,
+  previousFlow,
+  previousResult,
+  previousHeadHash,
+  previousEventHash,
+  resolution,
+  resolutionHash,
+} = {}) {
+  const value = object(record, "review flow reset");
+  const flow = object(previousFlow, "review flow reset previous flow");
+  const result = object(previousResult, "review flow reset previous result");
+  const action = object(resolution, "review flow reset resolution");
+  const dimensions = [...new Set(action.change_classification?.changed_dimensions ?? [])].sort();
+  if (value.schema_version !== "review-flow-reset.v1"
+      || value.task_id !== taskId || value.reset_ref !== resetRef
+      || value.base_flow_id !== baseFlowId || value.sequence !== sequence
+      || JSON.stringify(value.base_identity) !== JSON.stringify(baseIdentity)
+      || JSON.stringify(value.previous_identity) !== JSON.stringify(previousIdentity)
+      || value.previous_reset_ref !== previousResetRef
+      || value.previous_reset_hash !== previousResetHash
+      || value.previous_head_ref !== flow.head_result_ref
+      || value.previous_head_hash !== previousHeadHash
+      || value.previous_event_ref !== flow.event_ref
+      || value.previous_event_hash !== previousEventHash
+      || value.previous_snapshot_tree !== result.snapshot_tree
+      || value.current_snapshot_tree !== action.snapshot_tree
+      || value.resolution_ref !== flow.action_ref
+      || value.resolution_hash !== resolutionHash
+      || JSON.stringify(value.structural_dimensions) !== JSON.stringify(dimensions)
+      || !Number.isFinite(Date.parse(value.created_at))) {
+    throw new Error("review flow reset record is invalid or discontinuous");
+  }
+  if (flow.event_kind !== "resolution" || flow.action_sha256 !== resolutionHash
+      || action.version !== "wh-review-resolution.v1"
+      || action.task_id !== taskId
+      || action.previous_result_ref !== flow.head_result_ref
+      || action.previous_result_sha256 !== previousHeadHash
+      || action.previous_snapshot_tree !== result.snapshot_tree
+      || action.evidence_state !== "verified"
+      || action.change_classification?.structural !== true
+      || dimensions.length === 0
+      || value.previous_snapshot_tree === value.current_snapshot_tree) {
+    throw new Error("review flow reset bindings changed");
+  }
+  return Object.freeze(JSON.parse(JSON.stringify(value)));
+}
+
 export function assertAuthenticatedReviewHead({
   readFlow,
   reviewRef,
@@ -182,6 +238,7 @@ export function assertAuthenticatedReviewHead({
   }
   if (flow.head_result_ref !== reviewRef) throw new Error("review is not the authenticated flow head");
   if (flow.result_sha256 !== reviewHash) throw new Error("review does not match the authenticated flow hash");
+  if (flow.verdict !== result.verdict) throw new Error("review verdict does not match the authenticated flow outcome");
   const expectedRoot = result.review_chain?.root_result_ref ?? reviewRef;
   if (flow.root_result_ref !== expectedRoot) throw new Error("review does not match the authenticated flow root");
   if (latestResolution === undefined) {
