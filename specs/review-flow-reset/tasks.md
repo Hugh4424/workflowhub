@@ -651,14 +651,14 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with T012 final integration result
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`["apply/evidence/current-diff-ac-coverage.json","core/__tests__/stage-context.test.mjs","core/__tests__/task-kernel-publish.test.mjs","tests/interaction-quality-contract.test.mjs","tests/stage-completion-facts.test.mjs"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\"","exit_code":1}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/2674c9cd53ee31e7c195352f7955b0a9d5a3432e","sha256":"3b4aa671ac725369fbfabbe51ec47398537e41126f2aa16be57d81cb8bf05ead"}]`
+- **covered_ac**：AC-01、AC-02、AC-03、AC-04、AC-05、AC-06、AC-07、AC-08、AC-09、AC-10、AC-11、AC-12、AC-13、AC-14、AC-15、AC-16、AC-17、AC-18、AC-19、AC-20、AC-21
+- **review_fact**：唯一 final integration review 原 verdict=`revise_required`；4 项 finding 已全部修复并由聚焦回归验证；未二审、未改写 verdict；canonical Phase history 缺失记 `formal_record_status=unavailable`，只作审计且不控制推进。
+- **completed_at**：2026-07-29T15:29:42Z
 
 #### T012 — GREEN：修复候选并真正完成 build-code
 
@@ -689,14 +689,14 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — final integration review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`["apply/evidence/current-diff-ac-coverage.json","core/schemas/stage-completion-facts.v1.json","core/stage-completion-facts.mjs","core/stage-content-contracts.mjs","core/stage-handlers.mjs","core/stage-runner.mjs","core/task-kernel-implementation.mjs","schemas/task-attempt.v2.schema.json","skills/wh-review/scripts/integration-review-subject.mjs","tests/build-code-phase-evidence.test.mjs","tests/five-stage-facts-v2.test.mjs","tests/interaction-quality-contract.test.mjs","tests/official-component-receipts.test.mjs","workflows/build-code/SKILL.md","workflows/build-code/steps.json"]`
+- **executed_commands**：`[{"command":"npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\"","exit_code":0},{"command":"npx vitest run tests/five-stage-facts-v2.test.mjs tests/official-component-receipts.test.mjs","exit_code":0},{"command":"npx vitest run tests/build-code-phase-evidence.test.mjs","exit_code":0},{"command":"git diff --check","exit_code":0}]`
+- **evidence_refs**：`[{"kind":"git_commit","ref":"git/commits/fba99c372f9d3feafc2282e5c569ecdc0bb76578","sha256":"754b494c77d8e81e4cc22ab2aae6e3ef3b10304a621365d38d555b800fa4aab5"}]`
+- **covered_ac**：AC-01、AC-02、AC-03、AC-04、AC-05、AC-06、AC-07、AC-08、AC-09、AC-10、AC-11、AC-12、AC-13、AC-14、AC-15、AC-16、AC-17、AC-18、AC-19、AC-20、AC-21
+- **review_fact**：唯一 final integration review 原 verdict=`revise_required`；4 项 finding 已全部修复，行为 RED/GREEN、T012 聚焦和三个直接回归均通过；未二审、未改写 verdict；canonical Phase history 缺失记 `formal_record_status=unavailable`，只作审计且不控制推进。
+- **completed_at**：2026-07-29T15:29:42Z
 
 ### Verify
 
