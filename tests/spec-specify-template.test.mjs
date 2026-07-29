@@ -11,8 +11,8 @@ const template = readFileSync(
 
 describe("spec-specify readable content contract", () => {
   it("uses product identity rather than host task identity", () => {
-    expect(template).toContain("- **功能名**：{功能名}");
-    expect(template).not.toContain("{task-id}");
+    expect(template).toMatch(/^- \*\*功能名\*\*：\S/m);
+    expect(template).not.toMatch(/\{task-id\}|host[- ]task[- ]identity/i);
   });
 
   it("keeps the human reading order stable", () => {
@@ -46,10 +46,11 @@ describe("spec-specify readable content contract", () => {
     for (const status of ["verified", "inferred", "unknown", "not_applicable"]) {
       expect(template).toContain(status);
     }
-    expect(template).toContain("FR-{DOMAIN}-001");
-    expect(template).toContain("PFACT IDs");
-    expect(template).toContain("SCN IDs");
-    expect(template).toContain("AC IDs");
+    expect(template).toContain("FR-DOMAIN-001");
+    expect(template).toContain("新需求使用 `FR-DOMAIN-NNN`");
+    expect(template).toContain("PFACT ID");
+    expect(template).toContain("SCN ID");
+    expect(template).toContain("AC ID");
     expect(template).toContain("**失败条件**");
   });
 

@@ -2,7 +2,7 @@
 
 - **Input**：受控命名产物 `spec.md`。
 - **Status**：Draft、Accepted 或 Superseded。
-- **Template version**：`plan-task.v3`。
+- **Template version**：`plan-task.v3`
 
 ## 1. 速读卡
 
@@ -243,7 +243,9 @@
 
 ## Appendix A. Constitution Check
 
-- **Constitution binding**：分别记录 `artifact_kind`、`ref`、SHA-256 `hash`、稳定 `id`、`version` 和 `clause_count`。
+- **Constitution binding**：`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","id":"CONSTITUTION","version":"1","clause_count":21}`
+
+生成时将这一个 inline JSON 替换为当前宪法的真实 `ref`、SHA-256 `hash`、稳定 `id`、`version` 和 `clause_count`；不得改成自然语言说明。
 
 ### Framework Principles
 

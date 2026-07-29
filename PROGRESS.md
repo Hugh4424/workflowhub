@@ -1,12 +1,10 @@
 # Progress
-
-1. 基线：`main`=`f98b8428494cb077ac920a4a140b7cf5a447d09d`，隔离分支同起点，白名单无差异。
-2. 顺序：retention map → 三套模板/SKILL → focused 断言与红绿 → 审查 → 验收提交。
-3. 最大风险：保留 ID、字段、排序和 `spec-content.v3`/`plan-task.v3` 核心合同，同时消除职责重复。
-4. 基线 lint：6 文件、54 个 `MD060`，集中 plan/tasks 模板。
-5. 基线 focused tests 与 skill closure 因缺少本地 `vitest`/`js-yaml` 未启动；见 BLOCKED.md。
-6. 任务 1 完成：retention map 先补职责断言；三份模板去除注释、占位符和 raw JSON，并保留 `spec-content.v3`、`plan-task.v3` 既有字段。
-7. 三份 SKILL 明确 spec 是产品真相、plan 是工程证据与取舍、tasks 是紧凑执行投影；Markdown lint 已为 0 issues。
-8. 任务 2 测试完成：focused retention 12/12、skip 0；删除 spec 的 `失败条件` 字段时 1 个专属断言失败，恢复后 GREEN。
-9. 三个受影响 bundle manifest/hash 和 catalog hash 已更新；发现并同步既有 `wh-review` catalog hash，未改其内容、路由或审查引擎。
-10. 审查预检完成：没有合法 TaskHandle 或 stage-bound canonical materials，未调用 `wh-review`，不伪造任务或材料；见 BLOCKED.md。
+1. 当前 HEAD `f1d19f4`；本轮只修复模板合同回归，起点仍为 `f98b842`。
+2. 基线：retention 12/12；m12+spec 20 通过、4 失败，skip 0。
+3. 失败范围：版本句号、Constitution JSON、非行为 gate 规则、两个旧花括号断言。
+4. 任务 1 完成：plan/tasks 精确版本、Constitution JSON、versioned_refs JSON 和非行为 gate 已恢复并由 JSON 解析测试锁定。
+5. 两项 RED 已记录：版本句号令 m12 2 个版本断言失败；自然语言 Constitution binding 令 JSON 断言失败；均已恢复。
+6. 任务 2 完成：spec 断言改为产品身份、禁止 host identity、FR grammar 的等价语义；retention 基线重建为 `f98b842` 全量 H1-H3 映射。
+7. 最大风险：可读说明再次替代机器合同，或 retention 映射不再对准真实起点；已用 JSON 和 instruction-residue 断言覆盖。
+8. 仅白名单修改；不改 core/schema/workflow/wh-review/依赖或发布链。
+9. Active blockers：无合法 TaskHandle；stage 两套测试缺 clean worktree 的 `ajv` 解析；均已写 BLOCKED，不伪造材料、不创建依赖链接。

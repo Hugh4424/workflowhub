@@ -3,7 +3,7 @@
   "skill": "spec-plan",
   "files": [
     { "path": "SKILL.md", "sha256": "00a7fdc82618853a019b96720081e9c615dea3d933abfdc9f34af657d85f9773" },
-    { "path": "templates/plan-template.md", "sha256": "e693899013d181613d9ac377d8c135794bc1dffc1d001e8ed39aa4b89c0a9bd5" }
+    { "path": "templates/plan-template.md", "sha256": "7c5d34bfbef4e78ac1208d6a3330d2819725799ba225aab71cfe2363119d2247" }
   ],
   "sources": [
     {

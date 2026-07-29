@@ -2,7 +2,7 @@
 
 - **Input**：受控命名产物 `spec.md` 和 `plan.md`。
 - **Status**：Draft、Accepted 或 Superseded。
-- **Template version**：`plan-task.v3`。
+- **Template version**：`plan-task.v3`
 
 ## 1. 执行摘要
 
@@ -45,7 +45,10 @@ Phase 名称和上述 Files 区块必须与 accepted plan 逐字一致。
 
 ##### T001 追溯
 
-- **versioned_refs**：逐条列出 `artifact_kind`、`ref`、SHA-256 `hash` 和稳定 `id`。
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","id":"FR-DEMO-001"}]`
+
+生成时替换为当前 accepted artifact 的非空 JSON array；每项必须保留 `artifact_kind`、`ref`、SHA-256 `hash` 和稳定 `id`。
+
 - **输入**：写 accepted artifact section、anchor 或 prior task output。
 - **依赖**：写前置 Task ID；首个任务写 `N/A — first task`。
 - **并行**：写是或否，并说明输入和文件所有权理由。
@@ -72,7 +75,7 @@ Phase 名称和上述 Files 区块必须与 accepted plan 逐字一致。
 - **recovery**：写恢复负责人和最小恢复动作。
 - **task risk**：写具体风险。
 
-一个任务只保留这四组卡片字段，只改变一个行为。行为任务的 RED 与 GREEN 使用相同 `gate_cmd` 和 oracle identity；RED 必须证明目标断言失败，不是环境或命令损坏。
+一个任务只保留这四组卡片字段，只改变一个行为。行为任务的 RED 与 GREEN 使用相同 `gate_cmd` 和 oracle identity；RED 必须证明目标断言失败，不是环境或命令损坏。非行为变化仍须提供真实 gate_cmd、oracle、evidence_path；不能用 N/A 绕过可执行验证和证据。
 
 ### Verify
 

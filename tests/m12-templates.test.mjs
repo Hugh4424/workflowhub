@@ -7,6 +7,18 @@ import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
+function inlineJson(content, label) {
+  const match = content.match(new RegExp(`^\\s*-\\s+\\*\\*${label}\\*\\*\\s*[:：]\\s*` + "`(\\{.*\\}|\\[.*\\])`\\s*$", "mi"));
+  assert.ok(match, `${label} must be one inline JSON value`);
+  let value;
+  assert.doesNotThrow(() => { value = JSON.parse(match[1]); }, `${label} must parse as JSON`);
+  return value;
+}
+
+function templateVersion(content) {
+  return content.match(/^\s*(?:-\s+)?\*\*Template version\*\*\s*[:：]\s*`?([^`\s]+)`?\s*$/mi)?.[1] ?? null;
+}
+
 // --- Existence: both template files must exist ---
 
 describe("m12 template files exist", () => {
@@ -44,7 +56,22 @@ describe("plan-template.md contains all required sections", () => {
   test("plan-template.md keeps a bound constitution appendix", () => {
     const content = readFileSync(planPath, "utf8");
     assert.ok(content.includes("## Appendix A. Constitution Check"));
-    for (const field of ["ref", "hash", "version", "clause_count"]) assert.ok(content.includes(`\"${field}\"`));
+    const binding = inlineJson(content, "Constitution binding");
+    for (const field of ["artifact_kind", "ref", "hash", "id", "version", "clause_count"]) {
+      assert.ok(Object.hasOwn(binding, field), `missing Constitution binding.${field}`);
+    }
+    assert.equal(binding.artifact_kind, "constitution");
+    assert.match(binding.ref, /\S/);
+    assert.match(binding.hash, /^[a-f0-9]{64}$/);
+    assert.match(binding.id, /\S/);
+    assert.match(binding.version, /\S/);
+    assert.ok(Number.isInteger(binding.clause_count));
+    assert.equal(binding.clause_count, 21);
+  });
+
+  test("plan-template.md uses the runtime-recognized v3 template version", () => {
+    const content = readFileSync(planPath, "utf8");
+    assert.equal(templateVersion(content), "plan-task.v3");
   });
 
   test("plan-template.md contains F, Q, S clause groups for 21-clause coverage", () => {
@@ -133,6 +160,17 @@ describe("tasks-template.md contains all required elements", () => {
   test("tasks-template.md preserves FR/AC and versioned references", () => {
     const content = readFileSync(tasksPath, "utf8");
     for (const field of ["**versioned_refs**", "**FR**", "**AC**"]) assert.ok(content.includes(field));
+    const refs = inlineJson(content, "versioned_refs");
+    assert.ok(Array.isArray(refs) && refs.length > 0, "versioned_refs must be a non-empty array");
+    for (const field of ["artifact_kind", "ref", "hash", "id"]) {
+      assert.ok(Object.hasOwn(refs[0], field), `missing versioned_refs[0].${field}`);
+    }
+    assert.match(refs[0].hash, /^[a-f0-9]{64}$/);
+  });
+
+  test("tasks-template.md uses the runtime-recognized v3 template version", () => {
+    const content = readFileSync(tasksPath, "utf8");
+    assert.equal(templateVersion(content), "plan-task.v3");
   });
 
   test("tasks-template.md keeps all eight Phase sections", () => {

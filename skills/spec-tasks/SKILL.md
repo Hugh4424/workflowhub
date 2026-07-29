@@ -87,8 +87,9 @@ A behavior change starts with a real RED task before implementation:
 
 Use `verification_role: N/A — non-behavior change: {reason}` only for a task
 that changes no behavior. Its `paired_task` also uses `N/A — {reason}`, its
-`expected_exit` is `0`, and its executable gate proves the non-behavior result.
-Never use N/A to bypass RED/GREEN for a behavior change.
+`expected_exit` is `0`, and it still provides a real executable `gate_cmd`,
+observable `oracle`, and task-relative `evidence_path` proving the
+non-behavior result. Never use N/A to bypass RED/GREEN for a behavior change.
 
 Do not use text inspection instead of behavior when a real helper, validator,
 CLI, schema, or runtime path exists. A schema/hash validator is a valid minimal

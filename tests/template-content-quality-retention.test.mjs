@@ -34,7 +34,34 @@ function markerOccurrence(document, marker, wanted = 1) {
   return false;
 }
 
-const retentionEntries = [...fixture.items, ...fixture.subsections, ...fixture.required_rules];
+function headingKey(source, marker, occurrence) {
+  return `${source}\0${marker}\0${occurrence}`;
+}
+
+function headingEntries() {
+  const remaps = new Map(fixture.heading_retention.remaps.map((entry) => [
+    headingKey(entry.source, entry.old_marker, entry.old_occurrence ?? 1),
+    entry,
+  ]));
+  return fixture.scope.flatMap((source) => headingInventory(baseline(source)).map(({ marker, occurrence }) => {
+    const remap = remaps.get(headingKey(source, marker, occurrence));
+    return {
+      id: `heading:${source}:${occurrence}:${marker}`,
+      target: `heading:${source}:${occurrence}:${marker}`,
+      source,
+      old_marker: marker,
+      old_occurrence: occurrence,
+      target_marker: remap?.target_marker ?? marker,
+      target_occurrence: remap?.target_occurrence ?? 1,
+      action: remap?.action ?? fixture.heading_retention.default_action,
+      reason: remap?.reason ?? fixture.heading_retention.default_reason,
+      validator_test: "baseline-heading-and-target",
+    };
+  }));
+}
+
+const retainedHeadings = headingEntries();
+const retentionEntries = [...retainedHeadings, ...fixture.required_rules];
 
 function validatorFor(entry) {
   const validator = fixture.validators[entry.validator_test];
@@ -80,16 +107,30 @@ function tableBlocks(document) {
   return blocks;
 }
 
+function inlineJson(document, label) {
+  const match = document.match(new RegExp(`^\\s*-\\s+\\*\\*${label}\\*\\*\\s*[:：]\\s*` + "`(\\{.*\\}|\\[.*\\])`\\s*$", "mi"));
+  if (!match) return null;
+  try { return JSON.parse(match[1]); } catch { return null; }
+}
+
+function hasInstructionResidue(document) {
+  return /^\s*-\s+\*\*(?:功能名|来源|Goal|输入|输出)\*\*：\s*(?:写|说明|列出|记录)/m.test(document);
+}
+
 describe("template content retention map", () => {
   it("maps every baseline H1/H2/H3 exactly once with unique IDs and targets", () => {
     const expected = fixture.scope.flatMap((source) =>
       headingInventory(baseline(source))
         .map(({ marker, occurrence }) => `${source}\0${marker}\0${occurrence}`));
-    const mapped = [...fixture.items, ...fixture.subsections]
+    const mapped = retainedHeadings
       .map(({ source, old_marker, old_occurrence = 1 }) => `${source}\0${old_marker}\0${old_occurrence}`);
 
     expect(new Set(mapped).size).toBe(mapped.length);
     expect([...mapped].sort()).toEqual([...expected].sort());
+    const remapKeys = fixture.heading_retention.remaps.map(({ source, old_marker, old_occurrence = 1 }) =>
+      headingKey(source, old_marker, old_occurrence));
+    expect(new Set(remapKeys).size).toBe(remapKeys.length);
+    expect(remapKeys.every((key) => expected.includes(key))).toBe(true);
     expect(new Set(retentionEntries.map(({ id }) => id)).size).toBe(retentionEntries.length);
     expect(new Set(retentionEntries.map(({ target }) => target)).size).toBe(retentionEntries.length);
   });
@@ -111,12 +152,12 @@ describe("template content retention map", () => {
     }
   });
 
-  it("keeps target sections in the declared information order", () => {
-    const byTarget = new Map(retentionEntries.map((item) => [item.target, item]));
-    for (const [path, targets] of Object.entries(fixture.ordered_targets)) {
+  it("keeps every retained heading in baseline reading order", () => {
+    for (const path of fixture.scope) {
       const document = read(path);
-      const indexes = targets.map((target) => document.indexOf(byTarget.get(target).target_marker));
-      expect(indexes.every((index) => index >= 0), `${path} has missing ordered targets`).toBe(true);
+      const indexes = retainedHeadings.filter((entry) => entry.source === path)
+        .map((entry) => document.indexOf(entry.target_marker));
+      expect(indexes.every((index) => index >= 0), `${path} has missing retained headings`).toBe(true);
       expect(indexes).toEqual([...indexes].sort((left, right) => left - right));
     }
   });
@@ -181,13 +222,32 @@ describe("template responsibilities", () => {
     }
   });
 
-  it("leaves templates ready for direct reading instead of authoring syntax", () => {
+  it("keeps inline machine contracts while rejecting unresolved authoring syntax", () => {
     const templatePaths = fixture.scope.filter((path) => path.includes("/templates/"));
     for (const path of templatePaths) {
       const document = read(path);
-      expect(document, `${path}: raw JSON example`).not.toMatch(/\[\s*\{\s*"[a-z_]+"\s*:/);
-      expect(document, `${path}: unresolved braces`).not.toMatch(/\{[^}\n]+\}/);
+      const nonContractLines = document.split(/\r?\n/)
+        .filter((line) => !line.includes("**Constitution binding**") && !line.includes("**versioned_refs**"))
+        .join("\n");
+      expect(nonContractLines, `${path}: unresolved braces outside a machine contract`).not.toMatch(/\{[^}\n]+\}/);
       expect(document, `${path}: authoring comment`).not.toMatch(/<!--|-->/);
     }
+  });
+
+  it("keeps runtime machine contracts parseable", () => {
+    const plan = read("skills/spec-plan/templates/plan-template.md");
+    const tasks = read("skills/spec-tasks/templates/tasks-template.md");
+    const binding = inlineJson(plan, "Constitution binding");
+    const refs = inlineJson(tasks, "versioned_refs");
+    expect(binding).toMatchObject({ artifact_kind: "constitution", clause_count: 21 });
+    expect(binding.hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({ artifact_kind: "spec" });
+    expect(refs[0].hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("rejects obvious instruction residue as published content", () => {
+    expect(hasInstructionResidue("- **功能名**：写出面向用户的名称。")).toBe(true);
+    expect(hasInstructionResidue("- **功能名**：批量导入审批")).toBe(false);
   });
 });
