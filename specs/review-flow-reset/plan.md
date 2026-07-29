@@ -229,7 +229,7 @@ spec → plan Phase → tasks 唯一 Task 卡 → 执行者填写完成事实 �
 ## 11. Code Anchors and Reuse
 
 ### Versioned identity and context projection
-- **Spec binding**：`{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"cb84509f5f055deaa0490a9b779b666a27051615b4be64b27921cf54755e10ac","id":"REVIEW-FLOW-RESET"}`
+- **Spec binding**：`{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"REVIEW-FLOW-RESET"}`
 - **read_now**：TaskKernel publication、stage handlers、v3 templates。
 - **must_read_before_task**：各 Task 的精确文件和 gate。
 - **Context mode**：Full — 跨五阶段但按 Phase 串行。
@@ -393,10 +393,11 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - AC-17–21；真实 material validator；30 source 双向差集为空；build-code 最终 integration 与 verify-code 分别认证同一 `tasks.md` 的完成填写及其代码、测试、AC、review 证据。
 ### Knowledge
 - tasks.md 是唯一 Task 状态，runtime 只读认证。
+- Phase review 绑定 implementation/test tree；review 后的 tasks-only completion 只允许改对应填写区，由下一 Phase/最终 integration 认证，不重复审查。
 ### STOP
 - 新增正常确认、摘要补造执行事实或历史记录自动勾选。
 ### Done
-- 五阶段组件闭合，build-plan 摘要和 Task 状态真实。
+- 五阶段组件闭合，build-plan 摘要和 Task 状态真实；tasks-only completion seam 不扩大业务 diff、不触发重复 Phase review。
 ### Risks and rollback
 - **Risk**：validator 自己成为推进 gate。
 - **Prevention**：只约束 completed 声明，不阻止继续修复。

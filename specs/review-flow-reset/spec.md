@@ -87,7 +87,7 @@ WorkflowHub 必须把“能否继续工作”和“能否宣称阶段完成”�
 ### 流程、交接与验证
 
 - **FR-PROCESS-001**：每阶段按声明组件产生完成事实；build-spec ambiguity/clarify 必须 executed 或 `trigger=false`；五阶段正式 review 必须产生 canonical result 或真实 unavailable。
-- **FR-PROCESS-002**：原始需求、accepted decision-log、后续补充要求作为独立来源层；spec 维护来源与 SCN/FR/AC 双向映射，plan/tasks/摘要继承相同来源键。`tasks.md` 的每张唯一 Task 卡同时保存执行者填写的完成勾选、实际改动、命令与 exit、证据、覆盖 AC、review 事实和完成时间；其他记录不得生成第二份完成状态。
+- **FR-PROCESS-002**：原始需求、accepted decision-log、后续补充要求作为独立来源层；spec 维护来源与 SCN/FR/AC 双向映射，plan/tasks/摘要继承相同来源键。`tasks.md` 的每张唯一 Task 卡同时保存执行者填写的完成勾选、实际改动、命令与 exit、证据、覆盖 AC、review 事实和完成时间；其他记录不得生成第二份完成状态。Phase review 绑定该 Phase 的 implementation/test tree；review 后只允许一个受控的 `tasks.md` 完成填写变更引用该 review fact，下一 Phase 与最终 integration 必须认证该变更只触及对应 Task 填写区，不得因此重复 Phase review。
 - **FR-HANDOFF-001**：正常人工确认仅 make-decision、build-plan、verify-code；build-plan 确认前用大白话总结完整 spec、非目标、Phase、依赖、验证、review 事实、风险和影响，并说明 review verdict 不等于 accepted。
 - **FR-VERIFY-001**：每个真实风险有聚焦 RED/GREEN；代码、命令或 snapshot 改变时只重跑受影响组；不跑最终全量、不重复 provider pass-chasing。
 
@@ -113,7 +113,7 @@ WorkflowHub 必须把“能否继续工作”和“能否宣称阶段完成”�
 - [ ] **AC-18**：五阶段正式 review 均产生 canonical result 或真实 unavailable；其他 conditional component 有 executed/具体 trigger=false。失败：漏 review、漏 clarify 状态或用摘要补造执行事实。
 - [ ] **AC-19**：build-plan 接受前大白话摘要完整；三个正常确认与不可逆授权分离；make-decision 双 track 独立。失败：缺摘要、自动确认、混合授权或误述状态。
 - [ ] **AC-20**：每个已证明风险有聚焦 RED/GREEN；证据 stale 时只重跑受影响组；无最终全量或重复 provider 审查。失败：复用 stale evidence、跑全量或追 pass。
-- [ ] **AC-21**：FG2 九项、decision-log 五项决策和四项非目标、后续补充要求均双向映射到 SCN/FR/AC，并保留于 plan/tasks/摘要；进入 build-code/verify-code 时逐一检查 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`，任一缺失或不可读都点名报错并停止本次进入/继续；每个 Task 只有 `tasks.md` 内一个完成状态，未勾选或任一完成字段缺失时保持 `pending/in_progress`。build-code 最终 integration 收口前必须认证全部计划 Task 的当前完成填写，verify-code 必须重新独立核对同一 `tasks.md` 与最终代码、测试、AC、review 证据一致。失败：较晚来源覆盖较早来源、隐藏缺口、四材料未逐一检查或错误不点名、runtime 自动勾选、build-code/verify-code 漏检 Task 完成事实，或 accepted/receipt/trace/reopen/generation/audit 被当成 Task 完成。
+- [ ] **AC-21**：FG2 九项、decision-log 五项决策和四项非目标、后续补充要求均双向映射到 SCN/FR/AC，并保留于 plan/tasks/摘要；进入 build-code/verify-code 时逐一检查 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`，任一缺失或不可读都点名报错并停止本次进入/继续；每个 Task 只有 `tasks.md` 内一个完成状态，未勾选或任一完成字段缺失时保持 `pending/in_progress`。Phase review 后的 tasks-only 完成填写必须只修改对应 Task 填写区、引用同一 implementation/test/review fact，并由下一 Phase/最终 integration 认证而不触发重复审查。build-code 最终 integration 收口前必须认证全部计划 Task 的当前完成填写，verify-code 必须重新独立核对同一 `tasks.md` 与最终代码、测试、AC、review 证据一致。失败：较晚来源覆盖较早来源、隐藏缺口、四材料未逐一检查或错误不点名、runtime 自动勾选、tasks-only seam 扩大业务 diff 或触发循环重审、build-code/verify-code 漏检 Task 完成事实，或 accepted/receipt/trace/reopen/generation/audit 被当成 Task 完成。
 
 ## 7. 来源双向覆盖
 
