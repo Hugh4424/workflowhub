@@ -24,13 +24,26 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
-  it.each([true, false])("accepts boolean phase completion: %s", (value) => {
+  it.each([true, false])("keeps boolean phase completion readable as legacy data: %s", (value) => {
     expect(validatePhaseCompletion(value)).toBe(value);
   });
 
-  it("accepts structured phase completion with a task-relative evidence ref", () => {
-    const value = { status: "completed", evidence_ref: "evidence/phase-result.json" };
+  it("accepts structured phase completion with authenticated task evidence", () => {
+    const value = {
+      status: "completed",
+      evidence_ref: "evidence/phase-result.json",
+      evidence_hash: "a".repeat(64),
+      integration_review: { ref: "reviews/results/build-code.json", sha256: "b".repeat(64) },
+      formal_record_status: { status: "unavailable", reason: "fixture has no Phase history" },
+    };
     expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it("rejects caller boolean phase completion for current publication", () => {
+    expect(() => validatePhaseCompletion(true, "build-code facts.phase_completion", {
+      allowLegacyBoolean: false,
+      requireAuthenticatedEvidence: true,
+    })).toThrow(/legacy read-only|derived completion evidence/i);
   });
 
   it.each([

@@ -16,7 +16,13 @@ const valid = {
   "build-spec": { spec_ref: "specs/task/spec.md", checkpoint: checkpoint("build-spec","specs/task/spec.md"), ...audit("build-spec") },
   "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", checkpoint: {...checkpoint("build-plan","specs/task/plan.md"),artifacts:[{path:"specs/task/plan.md",blob_oid:"b".repeat(40),content_hash:"c".repeat(64)},{path:"specs/task/tasks.md",blob_oid:"c".repeat(40),content_hash:"d".repeat(64)}]}, ...audit("build-plan") },
   "build-code": {
-    changed: [], phase_completion: true,
+    changed: [], phase_completion: {
+      status: "completed",
+      evidence_ref: "specs/task/tasks.md",
+      evidence_hash: "6".repeat(64),
+      integration_review: { ref: "reviews/results/build-code.json", sha256: "4".repeat(64) },
+      formal_record_status: { status: "unavailable", reason: "legacy fixture has no Phase history" },
+    },
     tests: testFacts("build-test"),
     review: { verdict: "pass", result_ref: "reviews/results/build-code.json", result_hash: "4".repeat(64), snapshot_tree: "a".repeat(40) },
     acceptance_coverage: acceptanceCoverage,
@@ -41,17 +47,23 @@ describe("five-stage facts v2 schema", () => {
     expect(() => validateStageFacts("build-code", { ...valid["build-code"], tests: { command: 7, exit_code: 0 } })).toThrow(/tests|command/i);
   });
   it("accepts the documented structured phase completion", () => {
-    const phase_completion = { status: "complete", evidence_ref: "evidence/phase-summary.json" };
+    const phase_completion = {
+      status: "completed",
+      evidence_ref: "evidence/phase-summary.json",
+      evidence_hash: "6".repeat(64),
+      integration_review: { ref: "reviews/results/build-code.json", sha256: "4".repeat(64) },
+      formal_record_status: { status: "unavailable", reason: "legacy fixture has no Phase history" },
+    };
     expect(validateStageFacts("build-code", { ...valid["build-code"], phase_completion }).phase_completion).toBe(phase_completion);
   });
   it("allows legacy build-code facts only for an explicit controlled-reopen read", () => {
-    const legacy = { ...valid["build-code"] };
+    const legacy = { ...valid["build-code"], phase_completion: true };
     delete legacy.acceptance_coverage;
     expect(() => validateStageFacts("build-code", legacy)).toThrow(/acceptance_coverage/i);
     expect(validateStageFacts("build-code", legacy, { allowLegacyBuildCode: true })).toBe(legacy);
   });
   it("rejects phase details that omit the documented status and evidence ref", () => {
-    expect(() => validateStageFacts("build-code", { ...valid["build-code"], phase_completion: { phases: [], acceptance: [] } })).toThrow(/phase_completion\.status/i);
+    expect(() => validateStageFacts("build-code", { ...valid["build-code"], phase_completion: { phases: [], acceptance: [] } })).toThrow(/phase_completion.*(?:unknown|status|evidence_ref)/i);
   });
   it("rejects copied review verdicts without a formal result ref and snapshot",()=>{
     expect(()=>validateStageFacts("verify-code",{...valid["verify-code"],review:{verdict:"pass"}})).toThrow(/result_ref|hash|snapshot|review/i);

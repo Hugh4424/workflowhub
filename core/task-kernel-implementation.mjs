@@ -333,7 +333,18 @@ export function validateStageFacts(stage, facts, {
     facts.changed.forEach((ref, index) => artifactRef(ref, `build-code facts.changed[${index}]`));
     validateTests(facts.tests, "build-code facts.tests");
     validateReview(facts.review, "build-code facts.review");
-    validatePhaseCompletion(facts.phase_completion);
+    validatePhaseCompletion(facts.phase_completion, "build-code facts.phase_completion", {
+      allowLegacyBoolean: allowLegacyBuildCode,
+      requireAuthenticatedEvidence: !allowLegacyBuildCode,
+    });
+    if (typeof facts.phase_completion === "object") {
+      const reviewRef = facts.review.result_ref ?? facts.review.attempt_ref;
+      const reviewHash = facts.review.result_hash ?? facts.review.attempt_hash;
+      if (facts.phase_completion.integration_review?.ref !== reviewRef
+          || facts.phase_completion.integration_review?.sha256 !== reviewHash) {
+        throw new Error("build-code phase_completion integration_review must bind facts.review");
+      }
+    }
   }
   if (name === "verify-code") {
     validateTests(facts.tests, "verify-code facts.tests");
@@ -370,16 +381,44 @@ function artifactRef(value, label) {
   return value;
 }
 
-export function validatePhaseCompletion(value, label = "build-code facts.phase_completion") {
-  if (typeof value !== "boolean" && (!value || typeof value !== "object" || Array.isArray(value))) {
-    throw new TypeError(`${label} must be a boolean or object`);
+export function validatePhaseCompletion(value, label = "build-code facts.phase_completion", {
+  allowLegacyBoolean = true,
+  requireAuthenticatedEvidence = false,
+} = {}) {
+  if (typeof value === "boolean") {
+    if (allowLegacyBoolean) return value;
+    throw new TypeError(`${label} boolean is legacy read-only; current publication requires derived completion evidence`);
   }
-  if (typeof value === "object") {
-    nonemptyString(value.status, `${label}.status`);
-    artifactRef(value.evidence_ref, `${label}.evidence_ref`);
-    if (value.evidence_hash !== undefined && !HASH.test(value.evidence_hash)) {
-      throw new TypeError(`${label}.evidence_hash must be sha256`);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${label} must be a derived completion evidence object`);
+  }
+  rejectUnknown(value, new Set(["status", "evidence_ref", "evidence_hash", "integration_review", "formal_record_status"]), label);
+  nonemptyString(value.status, `${label}.status`);
+  if (requireAuthenticatedEvidence && value.status !== "completed") {
+    throw new TypeError(`${label}.status must be completed for current publication`);
+  }
+  artifactRef(value.evidence_ref, `${label}.evidence_ref`);
+  if (requireAuthenticatedEvidence && !HASH.test(value.evidence_hash ?? "")) {
+    throw new TypeError(`${label}.evidence_hash must be sha256`);
+  }
+  if (value.evidence_hash !== undefined && !HASH.test(value.evidence_hash)) {
+    throw new TypeError(`${label}.evidence_hash must be sha256`);
+  }
+  if (requireAuthenticatedEvidence) {
+    plain(value.integration_review, `${label}.integration_review`);
+    rejectUnknown(value.integration_review, new Set(["ref", "sha256"]), `${label}.integration_review`);
+    artifactRef(value.integration_review.ref, `${label}.integration_review.ref`);
+    if (!HASH.test(value.integration_review.sha256 ?? "")) {
+      throw new TypeError(`${label}.integration_review.sha256 must be sha256`);
     }
+  }
+  if (requireAuthenticatedEvidence || value.formal_record_status !== undefined) {
+    plain(value.formal_record_status, `${label}.formal_record_status`);
+    rejectUnknown(value.formal_record_status, new Set(["status", "reason"]), `${label}.formal_record_status`);
+    if (!["available", "unavailable"].includes(value.formal_record_status.status)) {
+      throw new TypeError(`${label}.formal_record_status.status must be available or unavailable`);
+    }
+    nonemptyString(value.formal_record_status.reason, `${label}.formal_record_status.reason`);
   }
   return value;
 }

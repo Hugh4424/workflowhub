@@ -544,6 +544,10 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
     schema_version: "integration-review-subject.v1",
     subject_kind: "worktree",
     review_scope: "integration",
+    formal_record_status: Object.freeze({
+      status: "available",
+      reason: "canonical Phase history was available for optional audit enrichment",
+    }),
     base_commit: accepted.commit,
     base_tree: accepted.tree,
     snapshot_tree: finalTree,
@@ -556,4 +560,26 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
     seam_index: seamIndex(coverage, finalTree),
     ac_trace: acTrace(coverage, finalTree),
   });
+}
+
+/**
+ * Best-effort audit view. Canonical Phase history enriches an integration
+ * review when present, but its absence never controls build-code completion.
+ */
+export function inspectIntegrationReviewSubject(options = {}) {
+  try {
+    return buildIntegrationReviewSubject(options);
+  } catch (error) {
+    if (error?.code !== "MATERIAL_INCOMPLETE") throw error;
+    return Object.freeze({
+      schema_version: "integration-review-subject.v1",
+      subject_kind: "worktree",
+      review_scope: "integration",
+      snapshot_tree: options.finalTree,
+      formal_record_status: Object.freeze({
+        status: "unavailable",
+        reason: String(error.message).replace(/^MATERIAL_INCOMPLETE:\s*/, ""),
+      }),
+    });
+  }
 }

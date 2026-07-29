@@ -2,17 +2,17 @@
   "schema_version": "workflowhub-current-diff-ac-coverage.v1",
   "task_id": "review-flow-reset",
   "phase_id": "phase-6",
-  "task_under_execution": "T011",
-  "generated_at": "2026-07-29T22:25:15+08:00",
+  "task_under_execution": "T012",
+  "generated_at": "2026-07-29T23:12:00+08:00",
   "workspace": {
-    "head": "ff12635da5bcb7bf3f9ef4a6b14942bda49da6c5",
+    "head": "0520f0ced82e7e2ac545e9bd8ca2bcc5ee977ec8",
     "baseline": "ff07a23",
     "clean_before_t011": true,
     "material_hashes": {
       "decision-log.md": "2eea2270625be40d5a17e864578eddb5e31350eee6fe0e09e934d170e8946257",
       "spec.md": "b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1",
-      "plan.md": "c9dcb667ad65706e3ea2352c6ec7bca9f7555940980255ae5bdc9f14a06bede0",
-      "tasks.md": "ae23d95a4863b7754195a504a51b3d62928d5eebb360542e64bb6c16c6c971ae"
+      "plan.md": "14e3a5e49ec1b893fbe9e56999b697bdf73b9202c10b4bf9382a407b47cc1c5b",
+      "tasks.md": "bfd43e739fe4fdc1dd8bbd394d55457ba1b042a4b9d1203268b8b30e45e6a159"
     }
   },
   "summary": {
@@ -23,17 +23,17 @@
     "source_structure_missing": 0,
     "source_structure_orphan": 0,
     "source_reverse_missing": 0,
-    "plan_task_contract_error_count": 23,
+    "plan_task_contract_error_count": 0,
     "claimed_completed_tasks": 10,
-    "certifiable_completed_tasks": 0,
-    "pending_tasks": 12,
-    "red_failed_assertions": 3,
-    "known_completion_boundary_conflicts": 3,
-    "conclusion": "The source graph is structurally closed, but current completion evidence is not. Accepted history and local test claims cannot certify any Task."
+    "certifiable_completed_tasks": 1,
+    "pending_tasks": 11,
+    "red_failed_assertions": 2,
+    "known_completion_boundary_conflicts": 0,
+    "conclusion": "The source graph and plan/tasks structure are closed. Completion remains in progress because T001-T008 use prose evidence, T010 hashes are stale, and T011-T012 are unchecked."
   },
   "status_legend": {
     "covered": "Current implementation plus current authenticated completion evidence exists.",
-    "missing": "Implementation or historical claim exists, but current canonical completion evidence is absent.",
+    "missing": "Implementation or historical claim exists, but current authenticated completion evidence is absent.",
     "contradicted": "Current repository behavior or material structure directly violates the acceptance condition.",
     "pending": "The planned T011 or T012 execution is not complete."
   },
@@ -117,12 +117,14 @@
         "phase": "Phase 6 T011 RED",
         "command": "CI=1 npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\" --reporter=basic",
         "exit_code": 1,
-        "result": "3 failed, 2 passed, 106 skipped; 2.52s",
+        "result": "5 failed, 2 passed, 106 skipped; 2.97s",
         "status": "covered",
         "failed_assertions": [
           "build-code facts accept phase_completion=true without completion evidence",
           "a passed completion handoff accepts non-empty missing_items",
-          "build-code steps omit authenticate-current-task-completion before publish-code-result"
+          "build-code steps omit authenticate-current-task-completion before publish-code-result",
+          "final integration review is incorrectly required to replace every Phase Task review_fact",
+          "completion rejects unavailable formal history and silently drops an unowned implementation path"
         ]
       }
     ],
@@ -130,13 +132,14 @@
       {
         "phases": ["Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5"],
         "reported_verdict": "revise_required",
-        "status": "missing",
-        "reason": "tasks.md preserves prose quality facts but no current canonical review ref/hash that completion certification can open."
+        "status": "unavailable",
+        "reason": "tasks.md preserves the original Phase quality facts, but no current independently authenticated review ref/hash exists. This is audit status, not a progression gate."
       },
       {
         "phase": "Phase 6",
-        "status": "pending",
-        "reason": "T011 does not run a provider or integration review; T012 owns the single final integration review."
+        "reported_verdict": "revise_required",
+        "status": "covered",
+        "reason": "The one final independent integration review completed with revise_required. This original verdict remains a quality fact; no second review is planned."
       }
     ]
   },
@@ -175,7 +178,7 @@
       "commit": null,
       "tasks": ["T011", "T012"],
       "status": "pending",
-      "reason": "T011 RED is open and T012 has not started."
+      "reason": "T011 behavior RED is recorded and T012 repair is in progress; tasks.md intentionally remains unchecked."
     }
   },
   "sources": [
@@ -247,11 +250,11 @@
     {"id":"AC-14","evidence_groups":["P4","P6"],"status":"contradicted","reason":"A completion handoff can report passed while missing_items is non-empty."},
     {"id":"AC-15","evidence_groups":["P4"],"status":"missing","reason":"Current implementation commit exists; no canonical T007/T008 completion evidence."},
     {"id":"AC-16","evidence_groups":["P4"],"status":"missing","reason":"Current implementation commit exists; no canonical T007/T008 completion evidence."},
-    {"id":"AC-17","evidence_groups":["P5"],"status":"missing","reason":"Workflow content exists; T009/T010 refs are not canonical completion evidence."},
+    {"id":"AC-17","evidence_groups":["P5"],"status":"missing","reason":"T009 workspace evidence authenticates; T010 has two stale workspace hashes after T012 changes."},
     {"id":"AC-18","evidence_groups":["P5","P6"],"status":"contradicted","reason":"build-code steps publish completion without an explicit task-completion authentication dependency."},
     {"id":"AC-19","evidence_groups":["P5","P6"],"status":"contradicted","reason":"A passed handoff can hide non-empty missing_items; current task review facts are prose."},
     {"id":"AC-20","evidence_groups":["P5","P6"],"status":"missing","reason":"Focused tests were observed, but no current canonical receipt is bound from tasks.md."},
-    {"id":"AC-21","evidence_groups":["P5","P6"],"status":"contradicted","reason":"Source rows are closed, but plan/tasks validation has 23 errors and 0/12 Tasks are certifiable."}
+    {"id":"AC-21","evidence_groups":["P5","P6"],"status":"missing","reason":"Source rows and plan/tasks structure are closed, but only 1/12 Tasks is currently certifiable."}
   ],
   "tasks": [
     {"id":"T001","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P1","errors":["evidence_refs is not a non-empty JSON array"]},
@@ -262,42 +265,33 @@
     {"id":"T006","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P3","errors":["evidence_refs is not a non-empty JSON array"]},
     {"id":"T007","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P4","errors":["evidence_refs is not a non-empty JSON array"]},
     {"id":"T008","claimed_status":"completed","certifiable":false,"evidence_format":"prose","evidence_group":"P4","errors":["evidence_refs is not a non-empty JSON array"]},
-    {"id":"T009","claimed_status":"completed","certifiable":false,"evidence_format":"json","evidence_group":"P5","errors":["hashes match current source files, but refs are workspace paths rather than canonical task evidence records"]},
-    {"id":"T010","claimed_status":"completed","certifiable":false,"evidence_format":"json","evidence_group":"P5","errors":["hashes match current source files, but refs are workspace paths rather than canonical task evidence records"]},
-    {"id":"T011","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["T011 RED is open"]},
-    {"id":"T012","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["T012 has not started"]}
+    {"id":"T009","claimed_status":"completed","certifiable":true,"evidence_format":"json","evidence_group":"P5","errors":[]},
+    {"id":"T010","claimed_status":"completed","certifiable":false,"evidence_format":"json","evidence_group":"P5","errors":["workspace hashes for core/stage-handlers.mjs and integration-review-subject.mjs are stale after T012 changes"]},
+    {"id":"T011","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["behavior RED is recorded, but tasks.md remains unchecked"]},
+    {"id":"T012","claimed_status":"pending","certifiable":false,"evidence_format":"none","evidence_group":"P6","errors":["repair and focused verification are in progress; tasks.md remains unchecked"]}
   ],
   "material_contract_gaps": {
-    "validator_error_count": 23,
+    "validator_error_count": 0,
     "phase_files_drift": {
       "phase": "Phase 6",
-      "plan_only": [
-        "core/schemas/ambiguity-ledger.v2.json",
-        "core/schemas/stage-completion-facts.v1.json",
-        "contracts/facts-subschema.json",
-        "core/schemas/task-attempt.v2.schema.json",
-        "workflows/build-spec/steps.json",
-        "workflows/build-plan/steps.json",
-        "workflows/build-code/phase-evidence.mjs",
-        "workflows/verify-code/steps.json"
-      ],
+      "plan_only": [],
       "tasks_only": []
     },
     "other_errors": {
-      "phase_3_files_byte_drift": true,
-      "global_boundary_missing_count": 14,
-      "phase_6_unowned_planned_file_count": 8
+      "phase_3_files_byte_drift": false,
+      "global_boundary_missing_count": 0,
+      "phase_6_unowned_planned_file_count": 0
     }
   },
   "completion_boundary_conflicts": [
     {
       "id": "phase-review-vs-final-review",
-      "status": "contradicted",
-      "reason": "certifyCurrentTaskCompletion requires every Task review_fact to bind the final review, while the tasks-only phase seam only permits updating the current Phase Task IDs. Rebinding T001-T010 during Phase 6 would violate the existing seam."
+      "status": "covered",
+      "reason": "Phase Task review facts remain bound to their original Phase reviews; phase_completion.integration_review separately binds the one final review."
     },
     {
       "id": "accepted-baseline-vs-task-boundaries",
-      "status": "missing",
+      "status": "covered",
       "accepted_checkpoint": "48194dfe",
       "observed_changed_file_count_excluding_agents_and_tasks": 87,
       "unowned_path_count": 17,
@@ -320,14 +314,41 @@
         "tests/spec-specify-template.test.mjs",
         "tests/template-content-quality-retention.test.mjs"
       ],
-      "reason": "No current formal implementation baseline provenance proves that the 17 pre-existing material/main changes are excluded. If the completion receipt still uses the accepted checkpoint, claimed_changes cannot equal the actual diff without incorrectly assigning unrelated files to a Task."
+      "reason": "The implementation diff now authenticates its own execution baseline and complete snapshot. The older accepted checkpoint and its 17 paths are optional audit history, recorded unavailable when no canonical bridge exists; they are never assigned to a Task or used to shrink implementation.changed."
     },
     {
       "id": "phase-6-plan-vs-task-whitelist",
-      "status": "contradicted",
-      "reason": "Phase 6 in plan.md declares 50 paths, while Phase 6 and T012 in tasks.md declare 42. Eight planned paths have no owning Task."
+      "status": "covered",
+      "reason": "The accepted T012 file list now covers the current 15 changed paths; the automated allowlist check reports 0 outside."
     }
   ],
+  "t012_candidate": {
+    "status": "in_progress",
+    "green_gate": {
+      "command": "CI=1 npx vitest run core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-completion-facts.test.mjs tests/interaction-quality-contract.test.mjs -t \"live_plan_execution|completion evidence|verify-code|current documents\" --reporter=basic",
+      "exit_code": 0,
+      "result": "4 files passed; 8 passed, 106 skipped; 2.50s"
+    },
+    "affected_regressions": [
+      "tests/five-stage-facts-v2.test.mjs: 17/17 passed",
+      "tests/official-component-receipts.test.mjs: 21/21 passed",
+      "tests/build-code-phase-evidence.test.mjs: 18/18 passed in 233.92s"
+    ],
+    "closed_gaps": [
+      "current publication rejects caller boolean phase_completion while legacy reads remain supported",
+      "passed completion facts reject non-empty missing_items in producer and schema",
+      "publish-code-result depends on authenticate-current-task-completion",
+      "final integration review is carried independently in phase_completion.integration_review",
+      "missing canonical Phase history is recorded as formal_record_status=unavailable and does not gate quality completion",
+      "published changed files come from the authenticated complete execution-baseline diff; any extra unowned path fails",
+      "tasks completion evidence can authenticate task records, Git commits, workspace files, real test runs, and independent review facts"
+    ],
+    "remaining_gaps": [
+      "T001-T008 completion claims still use prose evidence_refs and therefore remain uncertifiable until tasks.md records structured current evidence; T010 has two stale workspace hashes.",
+      "T011 and T012 remain unchecked in tasks.md; this repair intentionally does not update Task state.",
+      "The Phase 6 plan/tasks file-boundary drift still needs a material decision before any path outside T012 ownership is changed."
+    ]
+  },
   "t012_recommendation": {
     "production_files_minimum": [
       "contracts/facts-subschema.json",
@@ -353,9 +374,8 @@
       "workflows/verify-code/steps.json"
     ],
     "additional_red_required_before_green": [
-      "A live tasks.md case proving the final-review binding versus phase-only completion-update conflict.",
-      "A formal baseline provenance case proving unrelated accepted-checkpoint changes cannot be assigned to T012."
+      "None. The two required behavior tests now prove unavailable formal history is non-gating and an actual unowned path fails exact diff certification."
     ],
-    "scope_warning": "The Phase 6/T012 material boundary must be reconciled before T012 edits any of the eight plan-only paths. T011 does not edit plan.md or tasks.md, and no unrelated path may be forced into a Task merely to satisfy completion certification."
+    "scope_warning": "Do not edit tasks.md state in this repair and do not force any unrelated path into a Task merely to satisfy completion certification."
   }
 }

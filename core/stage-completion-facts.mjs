@@ -114,12 +114,17 @@ export function createStageCompletionFacts(input) {
   const value = object(input, "completion facts");
   const verification = object(value.verification, "verification");
   const review = object(value.review, "review");
+  const result = text(value.result, "result");
+  const missingItems = stringList(value.missing_items, "missing_items");
+  if (result === "passed" && missingItems.length > 0) {
+    throw new TypeError("passed completion evidence requires empty missing_items");
+  }
   if (value.result === "passed" && review.status === "unavailable") {
     throw new TypeError("review unavailable cannot be reported as pass");
   }
   const facts = {
     schema_version: "stage-completion-facts.v1",
-    result: text(value.result, "result"),
+    result,
     objective: text(value.objective, "objective"),
     approach: text(value.approach, "approach"),
     effect: text(value.effect, "effect"),
@@ -147,7 +152,7 @@ export function createStageCompletionFacts(input) {
     ...(value.risk_verification === undefined ? {} : {
       risk_verification: riskVerification(value.risk_verification),
     }),
-    missing_items: stringList(value.missing_items, "missing_items"),
+    missing_items: missingItems,
     risks: stringList(value.risks, "risks"),
     dependencies: stringList(value.dependencies, "dependencies"),
     recovery_conditions: stringList(value.recovery_conditions, "recovery_conditions"),

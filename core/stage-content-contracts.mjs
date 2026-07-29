@@ -309,6 +309,24 @@ function taskRelativeRef(value) {
     && !value.startsWith("/") && !value.split(/[\\/]+/).includes("..");
 }
 
+const COMPLETION_EVIDENCE_KINDS = new Set([
+  "task_record",
+  "git_commit",
+  "workspace_file",
+  "test_run",
+  "review_fact",
+]);
+
+function completionEvidenceRef(entry) {
+  const kind = entry?.kind ?? "task_record";
+  if (!COMPLETION_EVIDENCE_KINDS.has(kind)) return false;
+  if (kind === "git_commit") {
+    return typeof entry.ref === "string"
+      && /^(?:git\/commits\/)?[a-f0-9]{40,64}$/.test(entry.ref);
+  }
+  return taskRelativeRef(entry.ref);
+}
+
 function addUniqueIds(items, label, errors) {
   const ids = new Set();
   for (const item of items ?? []) {
@@ -807,14 +825,19 @@ function taskCompletionFact(task, completionEvidence) {
   }
   for (const [index, entry] of (Array.isArray(evidenceRefs) ? evidenceRefs : []).entries()) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)
-        || !taskRelativeRef(entry.ref) || !HASH.test(entry.sha256 ?? "")) {
-      errors.push(`evidence_refs[${index}] must contain a task-relative ref and sha256`);
+        || !completionEvidenceRef(entry) || !HASH.test(entry.sha256 ?? "")) {
+      errors.push(`evidence_refs[${index}] must contain a supported ref, optional kind, and sha256`);
       continue;
     }
     if (typeof completionEvidence === "function") {
-      const raw = completionEvidence(entry, task.heading_id);
-      if (typeof raw !== "string") errors.push(`evidence_refs[${index}] is missing: ${entry.ref}`);
-      else if (sha256(raw) !== entry.sha256) errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      const authenticated = completionEvidence(entry, task.heading_id);
+      if (typeof authenticated === "string") {
+        if (sha256(authenticated) !== entry.sha256) errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      } else if (!authenticated || authenticated.ok !== true) {
+        errors.push(`evidence_refs[${index}] is missing: ${entry.ref}`);
+      } else if (authenticated.sha256 !== entry.sha256) {
+        errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      }
     } else if (claimed) {
       errors.push(`evidence_refs[${index}] was not authenticated: ${entry.ref}`);
     }

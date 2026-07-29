@@ -4,6 +4,7 @@ import { officialStageHandler } from "./stage-handlers.mjs";
 import { requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { createHash } from "node:crypto";
 import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
+import { inspectIntegrationReviewSubject } from "../skills/wh-review/scripts/integration-review-subject.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -223,6 +224,13 @@ function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = [])
       if (!identity) throw new Error("review subject is not authorized for this stage consumer");
       return ctx.kernel.readReviewFlow(identity);
     },
+    ...(ctx.stage === "build-code" && ctx.workspace ? {
+      inspectIntegrationReviewSubject: (finalTree) => inspectIntegrationReviewSubject({
+        task: ctx.task,
+        sourceRoot: ctx.workspace.worktreeRoot,
+        finalTree,
+      }),
+    } : {}),
     ...(ctx.stage === "verify-code" ? {
       // Verify must be able to turn a legacy accepted build into an explicit
       // failure so the controlled reopen path can upgrade it. The handler

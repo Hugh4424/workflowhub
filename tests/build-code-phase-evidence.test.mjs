@@ -339,7 +339,14 @@ function controlledReopen(state, published, receipts, reviewRef) {
     snapshot_tree: published.snapshot_tree,
   };
   accept(state.auditedKernel, "build-code", {
-    changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts, phase_completion: true,
+    changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts,
+    phase_completion: {
+      status: "completed",
+      evidence_ref: "phase-result.json",
+      evidence_hash: sha256(state.task.readRecord("phase-result.json")),
+      integration_review: { ref: reviewRef, sha256: sha256(reviewRaw) },
+      formal_record_status: { status: "unavailable", reason: "fixture has no Phase history" },
+    },
     acceptance_coverage: {
       snapshot_tree: published.snapshot_tree,
       accepted_criterion_ids: [`AC-${published.phase_id}`],

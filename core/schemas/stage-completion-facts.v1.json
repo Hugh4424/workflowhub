@@ -33,6 +33,12 @@
     "next_owner": { "type": "string", "minLength": 1 },
     "user_action": { "type": "string", "minLength": 1 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "result": { "const": "passed" } }, "required": ["result"] },
+      "then": { "properties": { "missing_items": { "maxItems": 0 } } }
+    }
+  ],
   "$defs": {
     "ref": { "type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "minLength": 1 }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } },
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } },

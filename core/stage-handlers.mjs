@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { validateAcceptanceEvidence } from "./canonical-receipt-writer.mjs";
+import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { minimumReviewersFor } from "../skills/wh-review/scripts/review-materials.mjs";
 import { parseReviewerOutput } from "../skills/wh-review/scripts/review-output.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
@@ -287,24 +290,125 @@ function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
   return changed.length === 1 && changed[0] === `specs/${worker.identity.taskId}/tasks.md`;
 }
 
+function unavailableFormalRecordStatus(reason = "canonical Phase history is unavailable; current quality facts remain authoritative") {
+  return Object.freeze({ status: "unavailable", reason });
+}
+
+function completionEvidence(worker, entry) {
+  const kind = entry.kind ?? "task_record";
+  const fromTaskRecord = () => {
+    try {
+      const value = worker.readEvidence(entry.ref);
+      return { ok: true, sha256: value.sha256 ?? hashText(value.bytes) };
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  };
+  if (kind === "task_record" || kind === "test_run" || kind === "review_fact") {
+    const record = fromTaskRecord();
+    if (record) return record;
+    if (kind !== "task_record") return { ok: false };
+  }
+  const root = worker.workspace?.worktreeRoot;
+  if (!root) return { ok: false };
+  if (kind === "git_commit") {
+    const oid = entry.ref.replace(/^git\/commits\//, "");
+    try {
+      const raw = execFileSync("git", ["cat-file", "commit", oid], {
+        cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { ok: true, sha256: hashText(raw) };
+    } catch {
+      return { ok: false };
+    }
+  }
+  if (kind !== "workspace_file" && kind !== "task_record") return { ok: false };
+  const absolute = resolve(root, entry.ref);
+  const workspaceRelative = relative(root, absolute);
+  if (workspaceRelative === "" || workspaceRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)
+      || workspaceRelative === ".." || isAbsolute(workspaceRelative)) return { ok: false };
+  try {
+    const raw = readFileSync(absolute);
+    return { ok: true, sha256: createHash("sha256").update(raw).digest("hex") };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "EISDIR") return { ok: false };
+    throw error;
+  }
+}
+
+export function certifyBuildCodeQualityBasis({
+  changedFiles,
+  claimedChanges,
+  tests,
+  review,
+  expectedAc,
+  coveredAc,
+  formalRecordStatus = unavailableFormalRecordStatus(),
+} = {}) {
+  if (!Array.isArray(changedFiles) || !Array.isArray(claimedChanges)) {
+    throw new TypeError("build-code changedFiles and claimedChanges must be arrays");
+  }
+  if (!sameStringSet([...new Set(claimedChanges)], [...new Set(changedFiles)])) {
+    throw new Error(`tasks.md actual_changes differs from the current implementation diff: claimed=${JSON.stringify(claimedChanges)} actual=${JSON.stringify(changedFiles)}`);
+  }
+  if (tests?.exit_code !== 0) throw new Error("build-code completion requires passing current test facts");
+  const reviewRef = review?.result_ref ?? review?.attempt_ref;
+  const reviewHash = review?.result_hash ?? review?.attempt_hash;
+  if (typeof reviewRef !== "string" || !SHA256.test(reviewHash ?? "")) {
+    throw new Error("build-code completion requires an authenticated independent review fact");
+  }
+  if (!Array.isArray(expectedAc) || !Array.isArray(coveredAc) || !sameStringSet(coveredAc, expectedAc)) {
+    throw new Error("tasks.md covered_ac differs from the current spec AC set");
+  }
+  if (!formalRecordStatus || !["available", "unavailable"].includes(formalRecordStatus.status)
+      || (formalRecordStatus.status === "unavailable" && typeof formalRecordStatus.reason !== "string")) {
+    throw new TypeError("formal_record_status must be available or unavailable with a reason");
+  }
+  return Object.freeze({
+    changed: Object.freeze([...new Set(changedFiles)]),
+    review: Object.freeze({ ref: reviewRef, sha256: reviewHash, verdict: review.verdict ?? null }),
+    formal_record_status: Object.freeze({ ...formalRecordStatus }),
+  });
+}
+
+function authenticatedImplementationChanged(worker, implementation) {
+  const evidence = worker.readEvidence(implementation.diff_ref);
+  if ((evidence.sha256 ?? hashText(evidence.bytes)) !== implementation.diff_hash) {
+    throw new Error("implementation diff evidence hash mismatch");
+  }
+  let record;
+  try { record = JSON.parse(evidence.bytes); }
+  catch { throw new Error("implementation diff evidence must be JSON"); }
+  if (record?.schema_version !== "workflowhub-diff-evidence.v1"
+      || typeof record.baseline_commit !== "string"
+      || record.snapshot_tree !== implementation.snapshot_tree) {
+    throw new Error("implementation diff evidence does not bind the current execution baseline and snapshot");
+  }
+  const actual = normalizeRuntimeOnlyPaths(execFileSync(
+    "git",
+    ["diff", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
+    { cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  ).trim().split("\n").filter(Boolean));
+  if (!sameStringSet(actual, normalizeRuntimeOnlyPaths(implementation.changed))) {
+    throw new Error(`implementation.changed differs from the authenticated execution-baseline diff: receipt=${JSON.stringify(implementation.changed)} actual=${JSON.stringify(actual)}`);
+  }
+  return actual;
+}
+
 export function certifyCurrentTaskCompletion(worker, {
   changedFiles,
   tests,
   review,
   acceptanceCoverage,
   requiredEvidence = [],
+  formalRecordStatus = unavailableFormalRecordStatus(),
 } = {}) {
   const validation = validatePlanTaskContract({
     spec: worker.readArtifact("spec.md"),
     plan: worker.readArtifact("plan.md"),
     tasks: worker.readArtifact("tasks.md"),
-    completionEvidence: ({ ref }) => {
-      try { return worker.readEvidence(ref).bytes; }
-      catch (error) {
-        if (error?.code === "ENOENT") return undefined;
-        throw error;
-      }
-    },
+    completionEvidence: (entry) => completionEvidence(worker, entry),
   });
   const completion = validation.facts?.task_completion;
   if (!completion || completion.total_count === 0) {
@@ -330,23 +434,17 @@ export function certifyCurrentTaskCompletion(worker, {
     }
     return paths;
   }))];
-  if (!sameStringSet(claimedChanges, expectedChanges)) {
-    throw new Error(`tasks.md actual_changes differs from the current implementation diff: claimed=${JSON.stringify(claimedChanges)} actual=${JSON.stringify(expectedChanges)}`);
-  }
   const executionMatches = completion.tasks.flatMap(({ executed_commands }) => completionExecutions(executed_commands))
     .filter((entry) => entry?.command === tests.command && entry?.exit_code === tests.exit_code);
   if (executionMatches.length === 0) throw new Error("tasks.md executed_commands does not bind the current test command and exit code");
   const reviewRef = review.result_ref ?? review.attempt_ref;
   const reviewHash = review.result_hash ?? review.attempt_hash;
-  for (const task of completion.tasks) {
-    if (completionReviewRef(task.review_fact) !== reviewRef) {
-      throw new Error(`${task.id} review_fact does not bind the current review`);
-    }
-  }
+  // Phase Task review_fact values stay bound to their original Phase reviews.
+  // The final integration review is an independent build-code completion fact
+  // and is authenticated below through tasks.md completion evidence.
   const evidence = new Map(completion.tasks.flatMap(({ evidence_refs }) => evidence_refs.map((entry) => [entry.ref, entry.sha256])));
   for (const binding of [
     { ref: tests.receipt_ref, sha256: tests.receipt_hash },
-    { ref: reviewRef, sha256: reviewHash },
     ...requiredEvidence,
   ]) {
     if (!binding?.ref || !SHA256.test(binding.sha256 ?? "") || evidence.get(binding.ref) !== binding.sha256) {
@@ -360,9 +458,15 @@ export function certifyCurrentTaskCompletion(worker, {
   const coveredItems = acceptanceCoverage.items.filter(({ status }) => status === "covered");
   if (coveredItems.length !== expectedAc.length) throw new Error("build-code completion requires covered evidence for every accepted AC");
   const covered = [...new Set(completion.tasks.flatMap(({ covered_ac }) => covered_ac))];
-  if (!sameStringSet(covered, expectedAc)) {
-    throw new Error("tasks.md covered_ac differs from the current spec AC set");
-  }
+  const quality = certifyBuildCodeQualityBasis({
+    changedFiles: expectedChanges,
+    claimedChanges,
+    tests,
+    review,
+    expectedAc,
+    coveredAc: covered,
+    formalRecordStatus,
+  });
   for (const item of coveredItems) {
     for (const binding of item.evidence_refs) {
       if (evidence.get(binding.ref) !== binding.sha256) {
@@ -374,6 +478,8 @@ export function certifyCurrentTaskCompletion(worker, {
     status: "completed",
     evidence_ref: worker.artifactRef("tasks.md"),
     evidence_hash: hashText(worker.readArtifact("tasks.md")),
+    integration_review: { ref: reviewRef, sha256: reviewHash },
+    formal_record_status: quality.formal_record_status,
   });
 }
 function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
@@ -873,19 +979,24 @@ HANDLERS.set("build-code", async (worker, input) => {
   if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) throw new Error("implementation, tests, and review must bind the same Workspace snapshot tree");
   const coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree);
   if (tests.facts.exit_code !== 0) throw new Error("build-code final tests must pass before completion");
+  const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
+  const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
+    ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree)
+    : { formal_record_status: unavailableFormalRecordStatus() };
   const phase = certifyCurrentTaskCompletion(worker, {
-    changedFiles: impl.value.changed,
+    changedFiles: actualChangedFiles,
     tests: tests.facts,
     review: review.facts,
     acceptanceCoverage: coverage,
     requiredEvidence: [impl.evidence],
+    formalRecordStatus: integrationAudit.formal_record_status,
   });
   const current = worker.snapshotWorkspace();
   if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
     throw new Error("build-code current Workspace differs from the reviewed implementation by more than tasks.md completion");
   }
   return addCompletion("build-code", {
-    facts: { changed: impl.value.changed, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...audit.facts },
+    facts: { changed: actualChangedFiles, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...audit.facts },
     evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
     missing_items: review.missing_items,
   }, {

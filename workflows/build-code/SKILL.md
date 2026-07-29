@@ -127,12 +127,11 @@ review fact, and the final implementation
 receipt and fresh complete test receipt exist, run one final independent **integration**
 review: `wh-review` without `phase_id`. The runner derives
 `review_scope=integration`; callers never supply it, paths, commits, ranges, or
-a caller-built diff. Before any independent review call, it reconstructs one unique,
-continuous formal semantic-review Phase-trace chain from the accepted build-plan checkpoint
-to the final tree, validates final test and AC trace identity, and builds only
-the integration packet. Missing/branched/stale traces, zero-Phase work, legacy
-unscoped final results, or missing AC/seam facts fail `MATERIAL_INCOMPLETE`;
-they never fall back to a full history or cumulative diff. The canonical
+a caller-built diff. The packet is built from the authenticated execution
+baseline through the final snapshot. Canonical Phase traces, accepted
+checkpoints, and AC/seam records may enrich that packet for audit. When they
+do not exist, record `formal_record_status=unavailable`; never rebuild history,
+invent a bridge record, or block current quality completion. The canonical
 implementation receipt, canonical tests receipt, and final integration result
 must all bind the same snapshot tree. A mismatch fails before the build-code
 attempt is published. Before final publication, certify every planned Task
@@ -207,27 +206,25 @@ order, evidence, or authority boundaries.
    text. A missing, stale, duplicate, or overwide binding stops that task with
    its affected ID and recovery condition. The projection is execution input
    only: discard it after the task and never publish it as an accepted fact.
-3. Start only the current Phase. When Phase execution returns, run the Phase
-   gate against the canonical result, its authenticated semantic review fact,
-   and the live Workspace tree. Missing evidence, identity/hash/snapshot/scope/
-   material mismatch, or Workspace drift returns to the same Phase; it never
-   advances. `pass` and `revise_required` remain review quality facts and do
-   not decide this structural gate. Present one
-   Phase result brief after the gate decision: implemented behavior, real tests,
+3. Start only the current Phase. When Phase execution returns, update every
+   completed Task in `tasks.md` with its actual changes, real commands, evidence,
+   covered ACs, and independent review fact. Current Task facts and the live
+   Workspace decide whether the Phase work is complete. Canonical TaskKernel or
+   Phase records are optional audit bindings; their absence is recorded as
+   unavailable and never prevents the next planned Phase. `pass` and
+   `revise_required` remain review quality facts and do not decide completion.
+   Present one Phase result brief: implemented behavior, real tests,
    Phase review conclusion, important findings/disposition, residual risk, and
    whether the next Phase may start.
-4. Start the next Phase only after the current Phase gate passes. The accepted
-   plan remains the ordering authority; the mutable `phase-result.json` is only
-   the current pointer because there is no machine-readable Phase index.
-5. After every planned Phase completes, verify each Phase ID has matching
-   canonical snapshot/material evidence, a formal semantic result, and a minimal
-   phase-map trace. Reconstruct one unique continuous coverage chain from the
-   accepted build-plan checkpoint to the final tree; missing/ambiguous/legacy
-   facts are `MATERIAL_INCOMPLETE`. A trace that only authenticates paths and
-   evidence must emit an audited `unknown` seam, not invent a semantic
-   producer/consumer relation. After the fresh test receipt is captured, run
+4. Start the next Phase only after its Tasks are complete in `tasks.md`. The
+   accepted plan remains the ordering authority.
+5. After every planned Phase completes, best-effort inspect any canonical
+   snapshot, semantic-review, Phase trace, and seam records. Preserve valid
+   records as audit enrichment. Record missing history as
+   `formal_record_status=unavailable`; do not replay a Phase or change the
+   complete implementation diff. After the fresh test receipt is captured, run
    exactly one final full-worktree `wh-review`; its scope is `worktree + integration`
-   and it uses no historical or cumulative diff.
+   and it uses the authenticated execution baseline, never a cumulative history diff.
    After the fresh test receipt, run the final independent integration review.
    The final scope is `worktree + integration` `wh-review` without historical or cumulative diff.
    Never repeat a Phase or final review when its snapshot/material identity is
@@ -435,4 +432,5 @@ affected scope, and mutually exclusive “repair first” (recommended) and
 adapter failures never open this override; unavailable remains unavailable and
 never produces a risk acceptance. With no serious finding
 build-code remains automatic; accepted risk keeps the original verdict and
-cannot excuse missing tests, Phase evidence, or integration structure.
+cannot excuse missing current Task evidence, failed tests, unowned changes, or
+uncovered ACs.
