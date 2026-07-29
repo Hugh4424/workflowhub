@@ -18,6 +18,13 @@ const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
 
+function publishCoreDecision(kernel, decisionLog = "# Close decision\n\nProceed.\n") {
+  const decisionHash = sha256(decisionLog);
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, decisionLog);
+  return { decision_ref: decisionRef, decision_hash: decisionHash };
+}
+
 function writeAcceptedBuildFixture(task, taskCommit, snapshotTree) {
   const upstreamRefs = [{ task_id: "close-task", stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }];
   const attempt = {
@@ -159,6 +166,7 @@ function fixture({ targetRepo = "main", archiveParent = true } = {}) {
     worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main"), snapshot_tree: snapshotTree,
     audit_contract_version: "v1", audit_summary_ref: summaryRef, audit_summary_hash: summaryHash,
     audit_verdict: "pass", content_evidence_refs: contentEvidenceRefs,
+    ...publishCoreDecision(kernel),
   } });
   kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
   writeFileSync(join(worktree, "delivery.txt"), "done\n");

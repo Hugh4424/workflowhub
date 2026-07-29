@@ -25,14 +25,24 @@ import {
 
 const temporary = [];
 const execFileAsync = promisify(execFile);
+const DEFAULT_CORE_DECISION = "# Decision\n\nProceed.\n";
 function confirmation(kernel, stage, attemptRef) {
   return kernel.confirmAttempt(stage, attemptRef, "accepted", stage === "make-decision" ? "comment:test-confirmation" : undefined).ref;
 }
-function coreDecision(kernel, decisionLog = "# Decision\n\nProceed.\n") {
+function coreDecision(kernel, decisionLog = DEFAULT_CORE_DECISION) {
   const decisionHash = createHash("sha256").update(decisionLog).digest("hex");
   const decisionRef = `receipts/decision-log/${decisionHash}.md`;
   kernel.publishCanonicalRecord(decisionRef, decisionLog);
   return { decision_ref: decisionRef, decision_hash: decisionHash };
+}
+function writeCoreDecisionArtifact(artifacts, decisionLog = DEFAULT_CORE_DECISION) {
+  artifacts.writeAtomic("decision-log.md", decisionLog);
+}
+function seedCoreDecisionArtifact(repo, taskId = "task-one", decisionLog = DEFAULT_CORE_DECISION) {
+  const artifactRoot = join(repo, "specs", taskId);
+  mkdirSync(artifactRoot, { recursive: true });
+  writeFileSync(join(artifactRoot, "decision-log.md"), decisionLog);
+  return artifactRoot;
 }
 function createAuditedTestKernel(task, options = {}) {
   const kernel = createTaskKernel(task, options);
@@ -126,8 +136,9 @@ function fixture(inputs = {}, { deferCandidate = false } = {}) {
 }
 function acceptedBuildSpecFixture() {
   const { task, kernel } = fixture();
+  const decisionLog = DEFAULT_CORE_DECISION;
   const decision = kernel.publishAttempt("make-decision", {
-    facts: { worktree_root: "/fixture", baseline_commit: "a".repeat(40), ...coreDecision(kernel) },
+    facts: { worktree_root: "/fixture", baseline_commit: "a".repeat(40), ...coreDecision(kernel, decisionLog) },
   });
   kernel.acceptAttempt(
     "make-decision",
@@ -137,6 +148,7 @@ function acceptedBuildSpecFixture() {
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
   const bound = createAuditedTestKernel(task, { workspace, artifacts });
+  writeCoreDecisionArtifact(artifacts, decisionLog);
   artifacts.writeAtomic("spec.md", "# Spec v1\n");
   const first = bound.publishAttempt("build-spec", {
     facts: {
@@ -1274,6 +1286,7 @@ describe("TaskKernel append-only publication", () => {
       .toThrow(/checkpoint/i);
     const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    writeCoreDecisionArtifact(artifacts);
     artifacts.writeAtomic("spec.md", "# Spec\n");
     const boundKernel = createAuditedTestKernel(task, { workspace, artifacts });
     const checkpoint = boundKernel.createCheckpoint("build-spec");
@@ -1633,6 +1646,7 @@ describe("TaskKernel append-only publication", () => {
     const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
     const bound = createAuditedTestKernel(task, { workspace, artifacts });
+    writeCoreDecisionArtifact(artifacts);
     artifacts.writeAtomic("spec.md", "# Spec\n");
     const specAttempt = bound.publishAttempt("build-spec", {
       facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: bound.createCheckpoint("build-spec") },
@@ -1737,10 +1751,9 @@ describe("TaskKernel append-only publication", () => {
 
   it("accepts a checkpoint when the controlled artifact already matches its parent", () => {
     const { repo, task } = fixture({}, { deferCandidate: true });
-    const artifactRoot = join(repo, "specs", "task-one");
-    mkdirSync(artifactRoot, { recursive: true });
+    const artifactRoot = seedCoreDecisionArtifact(repo);
     writeFileSync(join(artifactRoot, "spec.md"), "# Existing Spec\n");
-    execFileSync("git", ["add", "specs/task-one/spec.md"], { cwd: repo });
+    execFileSync("git", ["add", "specs/task-one/decision-log.md", "specs/task-one/spec.md"], { cwd: repo });
     execFileSync("git", ["commit", "-qm", "existing spec"], { cwd: repo });
 
     const candidate = prepareTaskWorkspace(task);
@@ -1778,10 +1791,9 @@ describe("TaskKernel append-only publication", () => {
 
   it.each(["tracked", "untracked"])("rejects a no-diff checkpoint when the Workspace also contains an unexpected %s path", (kind) => {
     const { repo, task } = fixture({}, { deferCandidate: true });
-    const artifactRoot = join(repo, "specs", "task-one");
-    mkdirSync(artifactRoot, { recursive: true });
+    const artifactRoot = seedCoreDecisionArtifact(repo);
     writeFileSync(join(artifactRoot, "spec.md"), "# Existing Spec\n");
-    execFileSync("git", ["add", "specs/task-one/spec.md"], { cwd: repo });
+    execFileSync("git", ["add", "specs/task-one/decision-log.md", "specs/task-one/spec.md"], { cwd: repo });
     execFileSync("git", ["commit", "-qm", "existing spec"], { cwd: repo });
     const candidate = prepareTaskWorkspace(task);
     const kernel = createAuditedTestKernel(task, { candidateWorkspace: candidate });
@@ -1817,6 +1829,7 @@ describe("TaskKernel append-only publication", () => {
     const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
     const boundKernel = createAuditedTestKernel(task, { workspace, artifacts });
+    writeCoreDecisionArtifact(artifacts);
     artifacts.writeAtomic("spec.md", "# Spec\n");
     const specAttempt = boundKernel.publishAttempt("build-spec", {
       facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: boundKernel.createCheckpoint("build-spec") },

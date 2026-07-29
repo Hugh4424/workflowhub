@@ -33,6 +33,13 @@ function commit(cwd, message) {
   git(cwd, ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", message]);
 }
 
+function publishCoreDecision(kernel, decisionLog = "# Recovery decision\n\nProceed.\n") {
+  const decisionHash = sha256(decisionLog);
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, decisionLog);
+  return { decision_ref: decisionRef, decision_hash: decisionHash };
+}
+
 function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunId, data }) {
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
   const kind = `${stage}-recovery-fixture`;
@@ -102,6 +109,7 @@ function fixture() {
   } });
   const candidate = prepareTaskWorkspace(task);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
+  const decisionLog = "# Recovery decision\n\nProceed.\n";
   const attempt = publishAuditedAttempt({
     kernel,
     task,
@@ -111,12 +119,14 @@ function fixture() {
     data: { facts: {
       worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
       snapshot_tree: git(candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]),
+      ...publishCoreDecision(kernel, decisionLog),
     } },
   });
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
   const bound = createTaskKernel(task, { workspace, artifacts });
+  artifacts.writeAtomic("decision-log.md", decisionLog);
   artifacts.writeAtomic("spec.md", "# Recovery spec\n");
   const specCheckpoint = bound.createCheckpoint("build-spec");
   const spec = publishAuditedAttempt({
