@@ -66,14 +66,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — phase resequence not started
-- **executed_commands**：N/A — phase resequence not started
-- **evidence_refs**：N/A — phase resequence not started
-- **covered_ac**：N/A — phase resequence not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增真实 per-invocation dirty/legacy 写边界、stale informational path-card、三个 owner shared preflight、子写复用及失败零 mutation 断言；恢复 build-spec/build-plan/verify-code 既有覆盖。
+- **executed_commands**：纯 Phase 1 聚焦 RED exit 1，真实命中 dirty execution 未拒绝与 legacy write boundary 误阻断；修复后五文件验证 117/117、exit 0；`git diff --check` exit 0。
+- **evidence_refs**：implementation commit `6419572226b995cac1bcb44eef41a109c78da84f`；本次 Phase 1 RED/GREEN 执行输出；Phase review finding 1–3 及修复后 117/117 输出。
+- **covered_ac**：AC-01、AC-02、AC-03、AC-04。
+- **review_fact**：独立 Phase review 原 verdict=`revise_required`；3 个 major finding 均已修复并由受影响测试验证；按 single-review 规则未二审、未把 verdict 改写为 pass。旧 canonical task 因 accepted plan/tree 漂移与 closed Phase 无法发布新正式 review，真实记录为 formal unavailable。
+- **completed_at**：2026-07-29T09:01:22Z
 
 #### T002 — GREEN：共享 preflight、调用身份与路径交接
 
@@ -104,14 +104,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — phase resequence not started
-- **executed_commands**：N/A — phase resequence not started
-- **evidence_refs**：N/A — phase resequence not started
-- **covered_ac**：N/A — phase resequence not started
-- **review_fact**：N/A — Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：read-only inspect 后在最终 Workspace/CandidateWorkspace 上生成一次 shared write boundary；stage-runtime/recovery/close 子写复用；path-card 绑定真实 source ref/hash 且 informational-only；close 删除 task branch 后只从已认证 no-ff merge 第二父提交恢复 task tip。
+- **executed_commands**：`CI=1 npx vitest run core/__tests__/invocation-identity.test.mjs core/__tests__/stage-context.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/task-recovery.test.mjs tests/task-close-delivery.test.mjs` → 117/117、exit 0；生产文件 `node --check` 通过；`git diff --check` exit 0；allowlist 12/12、unexpected=[]。
+- **evidence_refs**：implementation commit `6419572226b995cac1bcb44eef41a109c78da84f`；Phase 1 GREEN 输出；独立 review finding 修复记录。
+- **covered_ac**：AC-01、AC-02、AC-03、AC-04。
+- **review_fact**：同 T001：原 `revise_required` 保留；3 个 finding 已修；无二审；formal review unavailable 原因已如实记录。
+- **completed_at**：2026-07-29T09:01:22Z
 
 ### Verify
 
