@@ -1,10 +1,22 @@
 ---
 name: verify-code
-description: Independently verify the accepted implementation and perform confirmed close operations.
+description: Independently verify the current implementation and perform confirmed close operations.
 version: 2.0.0
 ---
 
 # Verify Code
+
+A real review outcome is recorded as returned; `unavailable` never becomes
+`pass`.
+
+## Main-flow and completion rule
+
+Readable current `decision-log.md`, `spec.md`, `plan.md`, and `tasks.md` permit
+verification to start in this same task. Accepted records are audit lineage,
+not an entry licence. Verification independently rechecks every `tasks.md`
+completion row against the current diff, fresh tests, AC evidence, and Phase or
+integration review. Missing, unchecked, stale, or hash-mismatched evidence is
+`unknown` or `fail`; it never becomes pass. Product code remains read-only.
 
 ## Runtime contract
 
@@ -44,14 +56,15 @@ Create the evidence aggregate with `node scripts/stage-runtime.mjs receipt
 That input has exactly:
 `{"refs":[{"ref":"<leaf ref returned by the runtime>","sha256":"<leaf hash returned by the runtime>"}]}`.
 
-Verify-code has two distinct review facts. The active accepted build-code final
-same-snapshot `worktree + integration` **pass** review remains the acceptance
-lineage. Pass that exact build-code review ref in the verify run input; the
-runtime authenticates its `review_scope=integration`, provider evidence, and
-current snapshot. A Phase result, legacy unscoped worktree result, or verify-code
-quality review never replaces, upgrades, or becomes this `receipts.review` fact.
-Its human-facing review card lists findings and their disposition, not a second
-pass/fail decision for the stage.
+Verify-code has two distinct review facts. Record the active build-code final
+same-snapshot `worktree + integration` result or its authenticated unavailable
+attempt as audit lineage when either exists. Pass that exact ref in the verify
+run input; the runtime authenticates its scope, provider evidence, and current
+snapshot. A missing, stale, wrong-task, or snapshot-mismatched build-code review
+is reported as an audit gap; it never decides the verification conclusion. A
+Phase result, legacy unscoped worktree result, or verify-code quality review
+never replaces or upgrades this audit fact. Its human-facing review card lists
+findings and their disposition, not a second pass/fail decision for the stage.
 
 After fresh tests and every acceptance-evidence leaf are complete, normal
 verify-code must run configured `wh-review` with `stage: "verify-code"`. It
@@ -131,9 +144,11 @@ fresh passing verification through
 --project=<project> --task=<task>
 --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
-kernel requires a new active accepted build, fresh passing tests and acceptance
-evidence, plus that build's accepted final integration review. The active build's accepted tests and
-review snapshots must match those fresh materials and the live Workspace; a
+kernel requires a new active accepted build plus fresh passing tests and
+acceptance evidence. The build-code final integration review result or
+authenticated unavailable attempt is retained as an audit fact when present;
+it does not decide the verification conclusion. The active build's accepted
+test snapshot must match those fresh materials and the live Workspace; a
 build accepted at snapshot A cannot validate later Workspace B evidence. The
 kernel then binds their hashes plus the old
 accepted verify result and current Workspace HEAD/tree into one new unaccepted
@@ -149,10 +164,10 @@ idempotent. Other attempts against a closed stage remain rejected.
 
 ## Procedure
 
-1. Validate StageContext and read the accepted build-code result through
-   `ctx.kernel.readAccepted("build-code")`.
-2. Read only the accepted build-code facts and `evidence_refs` from its
-   authenticated accepted attempt. Resolve formal artifacts, dependencies, and
+1. Validate StageContext and read the four current task documents. Read any
+   accepted build-code result as audit lineage when present; its absence does
+   not prevent verification from starting.
+2. Resolve formal artifacts, dependencies, and
    unresolved risks from those existing records; the human brief is display,
    not a handoff API. For every accepted AC, consume its `covered`, `missing`,
    or `unknown` row from the referenced evidence. If build-code has no per-AC
@@ -169,8 +184,9 @@ idempotent. Other attempts against a closed stage remain rejected.
    `simplicity-guard` or `wh-review`. When formal packet/token/rework data is
    unavailable, report the DEC-05 observation as `unknown`, with no threshold
    or delivery gate.
-3. Take the fresh test command only from accepted build-code facts. Missing
-   command is a fail-loud lineage error; never reuse an older command. Capture
+3. Take the fresh test command from the current plan/tasks and build facts.
+   A missing command is an explicit `unknown`/failure in the verification map;
+   never reuse an unrelated older command. Capture
    it through the only public path:
    `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
    --project=<project> --task=<task>
@@ -195,12 +211,13 @@ idempotent. Other attempts against a closed stage remain rejected.
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-6. Authenticate the active accepted build-code final `worktree + integration`
-   review and its `review_scope=integration`.
-   This is the existing acceptance lineage and must remain the `review` ref in
-   the verify run input. Reject a Phase result, wrong task, changed bytes, or a
-   snapshot different from the fresh tests/current Workspace. The new
-   verify-code review must never replace this ref.
+6. Record the current build-code final `worktree + integration` review result
+   or authenticated unavailable attempt when present. A missing, stale,
+   wrong-task, or snapshot-mismatched review is an audit gap and is reported
+   honestly, but never controls the verification conclusion. The new
+   verify-code review never replaces or upgrades this fact. Only a current
+   implementation failure, fresh test failure, or failed or uncovered AC
+   prevents a passed conclusion.
 7. After the fresh test receipt and every acceptance-evidence leaf are complete,
    run configured `wh-review` with `stage: "verify-code"`, the authenticated
    TaskHandle identity, current host provider, and only

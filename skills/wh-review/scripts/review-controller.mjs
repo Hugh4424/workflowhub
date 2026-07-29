@@ -379,7 +379,10 @@ export function selectReviewRound({ stage, route, previousResult = null, ledger 
       if (structuralFullAlreadyRecorded || previousResult.review_chain?.round === "full") {
         return { round: "none", reason: "post_full_non_gate_recorded" };
       }
-      return { round: "full", reason: "structural_rework" };
+      // Record the authenticated structural resolution first. TaskKernel then
+      // opens a fresh generation; the next invocation naturally starts at an
+      // initial review instead of mutating this accepted history in place.
+      return { round: "none", reason: "review_non_gate_recorded" };
     }
     return { round: "none", reason: "review_non_gate_recorded" };
   }

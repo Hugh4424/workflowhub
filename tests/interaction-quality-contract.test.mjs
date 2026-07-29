@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import yaml from "js-yaml";
+import { certifyBuildCodeQualityBasis } from "../core/stage-handlers.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
@@ -193,5 +194,100 @@ describe("interaction quality amendment contracts", () => {
     expect(buildCode).toMatch(/missing host resource mapping[\s\S]{0,180}host configuration failure[\s\S]{0,180}host coordinator[\s\S]{0,180}do not ask the user/i);
     expect(buildCode).toMatch(/no state change[\s\S]{0,120}no action to take[\s\S]{0,120}publish no public message/i);
     expect(buildCode).toMatch(/latest completed Phase results[\s\S]{0,180}Later facts supersede earlier provisional skips[\s\S]{0,180}never reuse a stale Phase summary/i);
+  });
+
+  it("all five stages use current materials, real review facts, and no synthetic pass", () => {
+    for (const name of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = compact(stage(name));
+      expect(skill).toMatch(/(?:real|actual|真实|正式)[\s\S]{0,120}(?:review|审查)/i);
+      expect(skill).toMatch(/unavailable/i);
+      expect(skill).toMatch(/unavailable[\s\S]{0,180}(?:never|不得|不能)[\s\S]{0,80}pass/i);
+    }
+    const buildCode = compact(stage("build-code"));
+    const verifyCode = compact(stage("verify-code"));
+    expect(buildCode).toMatch(/decision-log\.md[\s\S]{0,100}spec\.md[\s\S]{0,100}plan\.md[\s\S]{0,100}tasks\.md/i);
+    expect(buildCode).toMatch(/tasks\.md[\s\S]{0,220}(?:unique|唯一)[\s\S]{0,120}(?:completion|完成)/i);
+    expect(buildCode).toMatch(/(?:after|每个)[^。.;]{0,100}Phase[\s\S]{0,180}tasks-only/i);
+    expect(buildCode).toMatch(/final[^。.;]{0,100}(?:certif|认证)[\s\S]{0,180}tasks\.md/i);
+    expect(buildCode).not.toMatch(/\{"phase_completion":true\}/);
+    expect(verifyCode).toMatch(/independent(?:ly)?[\s\S]{0,180}(?:recheck|复查)[\s\S]{0,180}tasks\.md/i);
+  });
+
+  it("stage step manifests treat accepted history as audit context instead of an entry gate", () => {
+    for (const name of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const manifest = compact(read("workflows", name, "steps.json"));
+      expect(manifest).not.toMatch(/(?:spec|plan|build):\/\/approved/i);
+      expect(manifest).not.toMatch(/automatically accepted/i);
+    }
+    expect(compact(read("workflows", "build-code", "steps.json"))).toMatch(
+      /decision-log\.md[\s\S]{0,120}spec\.md[\s\S]{0,120}plan\.md[\s\S]{0,120}tasks\.md/i,
+    );
+  });
+
+  it("completion evidence: build-code authenticates current tasks before publishing completion", () => {
+    const manifest = JSON.parse(read("workflows", "build-code", "steps.json"));
+    const authenticate = manifest.steps.find(({ step_slug: slug }) => slug === "authenticate-current-task-completion");
+    const publish = manifest.steps.find(({ step_slug: slug }) => slug === "publish-code-result");
+    expect(authenticate).toBeDefined();
+    expect(authenticate.order).toBeLessThan(publish.order);
+    expect(publish.depends_on).toContain(authenticate.step_id);
+  });
+
+  it("completion evidence: final integration review stays separate from Phase task review facts", () => {
+    const handler = read("core", "stage-handlers.mjs");
+    expect(handler).not.toMatch(
+      /for \(const task of completion\.tasks\)[\s\S]{0,320}review_fact does not bind the current review/i,
+    );
+    expect(handler).toMatch(
+      /final integration review[\s\S]{0,320}tasks\.md completion evidence/i,
+    );
+    expect(handler).toMatch(
+      /integration_review:\s*\{\s*ref:\s*reviewRef,\s*sha256:\s*reviewHash\s*\}/i,
+    );
+    expect(handler).not.toMatch(
+      /\{\s*ref:\s*reviewRef,\s*sha256:\s*reviewHash\s*\},[\s\S]{0,80}\.\.\.requiredEvidence/i,
+    );
+  });
+
+  it("completion evidence: missing formal history remains audit-only when current quality facts are complete", () => {
+    const result = certifyBuildCodeQualityBasis({
+      changedFiles: ["core/owned.mjs"],
+      claimedChanges: ["core/owned.mjs"],
+      tests: { exit_code: 0 },
+      review: {
+        result_ref: "reviews/results/final.json",
+        result_hash: "a".repeat(64),
+        verdict: "revise_required",
+      },
+      expectedAc: ["AC-001"],
+      coveredAc: ["AC-001"],
+      formalRecordStatus: {
+        status: "unavailable",
+        reason: "no accepted checkpoint or canonical Phase trace exists",
+      },
+    });
+
+    expect(result.formal_record_status.status).toBe("unavailable");
+    expect(result.review.verdict).toBe("revise_required");
+    expect(result.changed).toEqual(["core/owned.mjs"]);
+  });
+
+  it("completion evidence: an actual unowned implementation path fails exact diff certification", () => {
+    expect(() => certifyBuildCodeQualityBasis({
+      changedFiles: ["core/owned.mjs", "core/hidden.mjs"],
+      claimedChanges: ["core/owned.mjs"],
+      tests: { exit_code: 0 },
+      review: {
+        result_ref: "reviews/results/final.json",
+        result_hash: "b".repeat(64),
+        verdict: "revise_required",
+      },
+      expectedAc: ["AC-001"],
+      coveredAc: ["AC-001"],
+      formalRecordStatus: {
+        status: "unavailable",
+        reason: "no canonical Phase trace exists",
+      },
+    })).toThrow(/core\/hidden\.mjs/);
   });
 });

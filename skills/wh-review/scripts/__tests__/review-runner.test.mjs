@@ -655,6 +655,80 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("ignores run runner and audit metadata for reuse but never reuses a changed policy", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-policy-identity-");
+    const calls = [];
+    const requestIds = [];
+    const policy = {
+      source: "wh_review.v2",
+      mode: "single_round",
+      minimum_heterologous: 1,
+      requested_profiles: ["kimi/coding"],
+      eligible_profiles: ["kimi/coding"],
+      same_source_exclusions: [],
+      effective_profiles: [{
+        provider: "kimi/coding",
+        adapter: "kimi",
+        model: "kimi-for-coding",
+        effort: null,
+        thinking: true,
+      }],
+      round: "initial",
+    };
+    const providerClient = {
+      runGroup: async ({ requestId }) => {
+        calls.push(true);
+        requestIds.push(requestId);
+        return {
+          runtimeId: `runtime-${calls.length}`,
+          providers: [{
+            provider: "kimi/coding",
+            status: "completed",
+            session_id: `session-${calls.length}`,
+            output: pass,
+            error: null,
+            execution: null,
+          }],
+        };
+      },
+    };
+    const base = {
+      task,
+      attachmentRoot,
+      taskId: "task",
+      stage: "build-spec",
+      materials: {},
+      hostProvider: "codex",
+      providers: ["kimi/coding"],
+      reviewPolicy: policy,
+      providerClient,
+      captureSource: () => source,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
+    };
+    const first = await runReviewFixture(base);
+    const metadataOnly = await runReviewFixture({
+      ...base,
+      workflowRunId: "different-run",
+      runnerOid: "f".repeat(40),
+      auditSummaryRef: "evidence/audits/different.json",
+    });
+    expect(metadataOnly).toMatchObject({ reused: true, resultRef: first.resultRef });
+    expect(calls).toHaveLength(1);
+
+    const changedPolicy = {
+      ...policy,
+      effective_profiles: [{
+        ...policy.effective_profiles[0],
+        model: "kimi-for-coding-v2",
+      }],
+    };
+    const second = await runReviewFixture({ ...base, reviewPolicy: changedPolicy });
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(second).not.toHaveProperty("reused", true);
+    expect(calls).toHaveLength(2);
+    expect(requestIds[1]).not.toBe(requestIds[0]);
+  });
+
   it("does not reuse a result or semantic attempt with a binding invalidation", async () => {
     const { root, attachmentRoot, task } = fixture("simple-review-binding-invalid-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: `session-${calls.length}`, output: pass, error: null } }; } };
@@ -987,6 +1061,30 @@ describe("aggregation and runner", () => {
     const { attachmentRoot, task } = fixture("simple-review-source-mutated-"); const calls = [];
     await expect(runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: { run: async (request) => { calls.push(request); } }, captureSource: () => { throw new Error("SOURCE_CHANGED_DURING_CAPTURE"); } })).rejects.toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);
     expect(calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["empty material", "MATERIAL_INCOMPLETE: review input is empty"],
+    ["missing map", "MATERIAL_INCOMPLETE: acceptance map is missing"],
+    ["invalid anchor", "MATERIAL_FORBIDDEN: evidence anchor is outside the sealed material"],
+  ])("records local %s failure before provider dispatch", async (_label, message) => {
+    const { attachmentRoot, task } = fixture("simple-review-local-preflight-");
+    const calls = [];
+    const outcome = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {},
+      hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async (request) => { calls.push(request); throw new Error("provider must not run"); } },
+      captureSource: () => source,
+      buildMaterials: () => { throw new Error(message); },
+    });
+    expect(calls).toHaveLength(0);
+    expect(outcome).toMatchObject({ status: "unavailable", resultRef: null, runtimeIds: {} });
+    const attempt = JSON.parse(task.readRecord(outcome.attemptRef));
+    expect(attempt).toMatchObject({
+      provider_attempts: [],
+      terminal_status: "unavailable",
+      error: { code: message.split(":")[0] },
+    });
   });
 
   it("guards an empty code-stage skill plan before the provider fan-out", () => {

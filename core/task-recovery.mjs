@@ -6,10 +6,54 @@ const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const PROJECT = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
 const TASK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const KIND = new Set(["runner-replacement", "phase-pointer"]);
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const CREDENTIAL_REF = /^identity\/recovery-credentials\/(runner-replacement|phase-pointer)\/([A-Za-z0-9._-]{1,256})\.json$/;
-const GENERATION_REF = /^identity\/recoveries\/(runner-replacement|phase-pointer)-([0-9]{4})\.json$/;
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+export const RECOVERY_OPERATIONS = deepFreeze({
+  "runner-replacement": {
+    contract_version: "workflowhub-recovery-operation.v1",
+    credential_subject: "runner_subject",
+    generation_mode: "consecutive",
+    lock_ref: "locks/task-identity-migration.lock",
+    mutable_refs: ["task.json"],
+    append_refs: ["identity/recovery-credentials/runner-replacement/<nonce>.json", "identity/recovery-archives/runner-manifest-<sha256>.json", "identity/recoveries/runner-replacement-<generation>.json"],
+    authorization: "accepted recovery credential",
+    rollback_scope: ["task.json", "identity/recovery-archives/runner-manifest-<sha256>.json", "identity/recoveries/runner-replacement-<generation>.json"],
+    postcondition: "authenticated replacement runner identity",
+  },
+  "phase-pointer": {
+    contract_version: "workflowhub-recovery-operation.v1",
+    credential_subject: "phase_subject",
+    generation_mode: "one-shot",
+    lock_ref: "locks/build-code-phase-evidence.lock",
+    mutable_refs: ["phase-result.json"],
+    append_refs: ["identity/recovery-credentials/phase-pointer/<nonce>.json", "identity/recovery-archives/phase-result-<sha256>.json", "identity/recoveries/phase-pointer-<generation>.json"],
+    authorization: "accepted recovery credential",
+    rollback_scope: ["phase-result.json", "identity/recovery-archives/phase-result-<sha256>.json", "identity/recoveries/phase-pointer-<generation>.json"],
+    postcondition: "authenticated Phase 0 continuation",
+  },
+  "dirty-cleanup-rebind": {
+    contract_version: "workflowhub-recovery-operation.v1",
+    credential_subject: "workspace_subject",
+    generation_mode: "consecutive",
+    lock_ref: "identity/locks/dirty-cleanup-rebind.lock",
+    mutable_refs: [],
+    append_refs: ["identity/recovery-credentials/dirty-cleanup-rebind/<nonce>.json", "identity/recoveries/dirty-cleanup-rebind-<generation>.json"],
+    authorization: "explicit human authorization receipt",
+    rollback_scope: ["identity/recoveries/dirty-cleanup-rebind-<generation>.json"],
+    postcondition: "authenticated clean identity continues through normal task-close",
+  },
+});
+
+const KIND = new Set(Object.keys(RECOVERY_OPERATIONS));
+const KIND_PATTERN = [...KIND].join("|");
+const CREDENTIAL_REF = new RegExp(`^identity/recovery-credentials/(${KIND_PATTERN})/([A-Za-z0-9._-]{1,256})\\.json$`);
+const GENERATION_REF = new RegExp(`^identity/recoveries/(${KIND_PATTERN})-([0-9]{4})\\.json$`);
 
 export const RECOVERY_ERROR_CODES = Object.freeze([
   "RECOVERY_INPUT_REQUIRED", "RECOVERY_TASK_IDENTITY_MISMATCH", "RECOVERY_CREDENTIAL_INVALID",
@@ -97,6 +141,42 @@ function assertReceipt(value, label) {
   assertSafeRecoveryRef(value.ref, `${label}.ref`); assertHash(value.hash, `${label}.hash`);
 }
 
+const WORKSPACE_IDENTITY_FIELDS = Object.freeze([
+  "worktree_root",
+  "git_common_dir",
+  "branch",
+  "head",
+  "snapshot_tree",
+]);
+
+function assertWorkspaceIdentity(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).some((field) => !WORKSPACE_IDENTITY_FIELDS.includes(field))
+      || WORKSPACE_IDENTITY_FIELDS.some((field) => typeof value[field] !== "string" || value[field].length === 0)
+      || !value.worktree_root.startsWith("/") || !value.git_common_dir.startsWith("/")) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} is invalid`);
+  }
+  assertOid(value.head, `${label}.head`);
+  assertOid(value.snapshot_tree, `${label}.snapshot_tree`);
+}
+
+export function dirtyCleanupAuthorizationSubject(workspaceSubject) {
+  if (!workspaceSubject || typeof workspaceSubject !== "object" || Array.isArray(workspaceSubject)) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "workspace_subject is invalid");
+  }
+  const value = {
+    previous_workspace: structuredClone(workspaceSubject.previous_workspace),
+    clean_workspace: structuredClone(workspaceSubject.clean_workspace),
+    retained_artifact_refs: structuredClone(workspaceSubject.retained_artifact_refs),
+    next_stage: workspaceSubject.next_stage,
+  };
+  return Object.freeze(value);
+}
+
+export function dirtyCleanupAuthorizationSubjectHash(workspaceSubject) {
+  return sha256(canonical(dirtyCleanupAuthorizationSubject(workspaceSubject)));
+}
+
 function assertBusinessSnapshot(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !["accepted_ref", "accepted_hash", "baseline_commit", "snapshot_tree", "target_repo_root"].includes(key))) {
     throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "accepted_business_snapshot is invalid");
@@ -110,14 +190,18 @@ function assertBusinessSnapshot(value) {
 
 export function validateRecoveryCredential(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "credential must be an object");
-  const allowed = new Set(["schema_version", "project_name", "task_id", "recovery_kind", "nonce", "issued_at", "decision", "accepted_business_snapshot", "runner_subject", "phase_subject", "bridge_subject"]);
+  const allowed = new Set(["schema_version", "project_name", "task_id", "recovery_kind", "nonce", "issued_at", "decision", "accepted_business_snapshot", "runner_subject", "phase_subject", "workspace_subject", "bridge_subject"]);
   if (Object.keys(value).some((key) => !allowed.has(key)) || value.schema_version !== "workflowhub-recovery-credential.v1" || !PROJECT.test(value.project_name ?? "") || !TASK.test(value.task_id ?? "") || !KIND.has(value.recovery_kind) || typeof value.nonce !== "string" || value.nonce.length === 0 || value.nonce.includes("/") || value.nonce.includes("\\") || !Number.isFinite(Date.parse(value.issued_at ?? "")) || value.decision !== "accepted") {
     throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "credential envelope is invalid");
   }
   assertBusinessSnapshot(value.accepted_business_snapshot);
   const hasRunner = value.runner_subject !== undefined;
   const hasPhase = value.phase_subject !== undefined;
-  if (hasRunner === hasPhase || (value.recovery_kind === "runner-replacement") !== hasRunner) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "credential subject does not match recovery kind");
+  const hasWorkspace = value.workspace_subject !== undefined;
+  const subjectCount = Number(hasRunner) + Number(hasPhase) + Number(hasWorkspace);
+  if (subjectCount !== 1 || RECOVERY_OPERATIONS[value.recovery_kind].credential_subject !== (
+    hasRunner ? "runner_subject" : hasPhase ? "phase_subject" : "workspace_subject"
+  )) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "credential subject does not match recovery kind");
   if (hasRunner) {
     const subject = value.runner_subject;
     if (!subject || typeof subject !== "object" || Object.keys(subject).some((key) => !["previous_runner", "new_runner", "previous_manifest_hash", "stage"].includes(key))) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "runner_subject is invalid");
@@ -152,7 +236,7 @@ export function validateRecoveryCredential(value) {
         throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "bridge authorization excerpt hash mismatch");
       }
     }
-  } else {
+  } else if (hasPhase) {
     if (value.bridge_subject !== undefined) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "phase credential cannot carry bridge_subject");
     const subject = value.phase_subject;
     const required = ["current_pointer_ref", "current_pointer_hash", "baseline_phase0_evidence_ref", "baseline_phase0_evidence_hash", "baseline_phase0_review_ref", "baseline_phase0_review_hash", "current_phase_id", "target_phase_id", "baseline_commit", "snapshot_tree", "implementation_receipt", "green_test_receipt", "allowed_files"];
@@ -169,6 +253,29 @@ export function validateRecoveryCredential(value) {
     assertReceipt(subject.implementation_receipt, "phase_subject.implementation_receipt"); assertReceipt(subject.green_test_receipt, "phase_subject.green_test_receipt");
     if (subject.red_test_receipt !== undefined && subject.red_test_receipt !== null) assertReceipt(subject.red_test_receipt, "phase_subject.red_test_receipt");
     if (!Array.isArray(subject.allowed_files) || new Set(subject.allowed_files).size !== subject.allowed_files.length || subject.allowed_files.some((file) => typeof file !== "string" || file.startsWith("/") || file.includes("..") || file.includes("\\"))) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "phase_subject.allowed_files is invalid");
+  } else {
+    if (value.bridge_subject !== undefined) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "workspace credential cannot carry bridge_subject");
+    const subject = value.workspace_subject;
+    const required = ["previous_workspace", "clean_workspace", "authorization", "retained_artifact_refs", "next_stage"];
+    if (!subject || typeof subject !== "object" || Array.isArray(subject)
+        || Object.keys(subject).some((key) => !required.includes(key))
+        || required.some((key) => subject[key] === undefined)) {
+      throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "workspace_subject is incomplete");
+    }
+    for (const key of ["previous_workspace", "clean_workspace"]) {
+      assertWorkspaceIdentity(subject[key], `workspace_subject.${key}`);
+    }
+    assertReceipt(subject.authorization, "workspace_subject.authorization");
+    if (!Array.isArray(subject.retained_artifact_refs) || subject.retained_artifact_refs.length === 0) {
+      throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "workspace_subject.retained_artifact_refs is required");
+    }
+    const retainedRefs = new Set();
+    for (const [index, receipt] of subject.retained_artifact_refs.entries()) {
+      assertReceipt(receipt, `workspace_subject.retained_artifact_refs[${index}]`);
+      if (retainedRefs.has(receipt.ref)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "retained artifact refs must be unique");
+      retainedRefs.add(receipt.ref);
+    }
+    if (subject.next_stage !== "task-close") throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "workspace_subject.next_stage must be task-close");
   }
   return value;
 }
@@ -179,10 +286,13 @@ export function validateRecoveryGeneration(value) {
   if (Object.keys(value).some((key) => !allowed.has(key)) || value.schema_version !== "workflowhub-recovery-generation.v1" || !PROJECT.test(value.project_name ?? "") || !TASK.test(value.task_id ?? "") || !KIND.has(value.recovery_kind) || !Number.isSafeInteger(value.generation) || value.generation < 1 || !Number.isFinite(Date.parse(value.created_at ?? "")) || value.result !== "accepted") throw recoveryError("RECOVERY_RECORD_CONFLICT", "generation envelope is invalid");
   const hasPreviousRef = value.previous_generation_ref !== undefined;
   const hasPreviousHash = value.previous_generation_hash !== undefined;
+  const operation = RECOVERY_OPERATIONS[value.recovery_kind];
+  const consecutive = operation.generation_mode === "consecutive";
   if (hasPreviousRef !== hasPreviousHash
-      || (value.recovery_kind !== "runner-replacement" && hasPreviousRef)
+      || (!consecutive && hasPreviousRef)
+      || (!consecutive && value.generation !== 1)
       || (value.generation === 1 && hasPreviousRef)
-      || (value.generation > 1 && value.recovery_kind === "runner-replacement" && !hasPreviousRef)) {
+      || (value.generation > 1 && consecutive && !hasPreviousRef)) {
     throw recoveryError("RECOVERY_RECORD_CONFLICT", "generation lineage pointer is invalid");
   }
   if (hasPreviousRef) {
@@ -191,24 +301,46 @@ export function validateRecoveryGeneration(value) {
     }
     assertHash(value.previous_generation_hash, "previous_generation_hash");
   }
-  assertSafeRecoveryRef(value.credential_ref, "generation.credential_ref"); assertHash(value.credential_hash, "generation.credential_hash");
+  assertSafeRecoveryRef(value.credential_ref, "generation.credential_ref");
+  const credentialMatch = CREDENTIAL_REF.exec(value.credential_ref);
+  if (!credentialMatch || credentialMatch[1] !== value.recovery_kind) {
+    throw recoveryError("RECOVERY_RECORD_CONFLICT", "generation credential ref does not match recovery kind");
+  }
+  assertHash(value.credential_hash, "generation.credential_hash");
   for (const key of ["before", "after"]) {
     if (!value[key] || typeof value[key] !== "object" || Object.keys(value[key]).some((field) => !["ref", "hash", "tree", "identity"].includes(field))) throw recoveryError("RECOVERY_RECORD_CONFLICT", `generation.${key} is invalid`);
     assertSafeRecoveryRef(value[key].ref, `generation.${key}.ref`); assertHash(value[key].hash, `generation.${key}.hash`);
     if (value[key].tree !== undefined) assertOid(value[key].tree, `generation.${key}.tree`);
     if (value[key].identity !== undefined && (!value[key].identity || typeof value[key].identity !== "object" || Array.isArray(value[key].identity))) throw recoveryError("RECOVERY_RECORD_CONFLICT", `generation.${key}.identity is invalid`);
   }
+  if (value.recovery_kind === "dirty-cleanup-rebind") {
+    if (value.before.ref !== "results/make-decision/accepted.json" || value.before.identity !== undefined
+        || !CREDENTIAL_REF.test(value.after.ref) || !value.after.ref.includes("/dirty-cleanup-rebind/")
+        || !value.after.identity) {
+      throw recoveryError("RECOVERY_RECORD_CONFLICT", "dirty cleanup rebind generation boundary is invalid");
+    }
+    try { assertWorkspaceIdentity(value.after.identity, "generation.after.identity"); }
+    catch (error) { throw recoveryError("RECOVERY_RECORD_CONFLICT", error.message); }
+  }
   return value;
 }
 
 export function credentialRef(kind, nonce) {
   if (!KIND.has(kind) || typeof nonce !== "string" || !/^[A-Za-z0-9._-]{1,256}$/.test(nonce)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "credential ref is invalid");
-  return `identity/recovery-credentials/${kind}/${nonce}.json`;
+  const template = RECOVERY_OPERATIONS[kind].append_refs.find((ref) => ref.includes("/recovery-credentials/"));
+  if (typeof template !== "string" || !template.includes("<nonce>")) {
+    throw recoveryError("RECOVERY_RECORD_CONFLICT", `${kind} registry does not declare a credential append`);
+  }
+  return template.replace("<nonce>", nonce);
 }
 
 export function generationRef(kind, generation = 1) {
   if (!KIND.has(kind) || !Number.isSafeInteger(generation) || generation < 1 || generation > 9999) throw recoveryError("RECOVERY_RECORD_CONFLICT", "generation ref is invalid");
-  return `identity/recoveries/${kind}-${String(generation).padStart(4, "0")}.json`;
+  const template = RECOVERY_OPERATIONS[kind].append_refs.find((ref) => ref.includes("/recoveries/") && ref.includes("<generation>"));
+  if (typeof template !== "string") {
+    throw recoveryError("RECOVERY_RECORD_CONFLICT", `${kind} registry does not declare a generation append`);
+  }
+  return template.replace("<generation>", String(generation).padStart(4, "0"));
 }
 
 export function readRecoveryCredential(task, ref, expectedHash, expectedKind) {
@@ -261,8 +393,8 @@ export function readRecoveryGeneration(task, kind) {
       }
     } else if (value.previous_generation_ref !== previous.ref
         || value.previous_generation_hash !== previous.hash
-        || !deepEqual(value.before.identity, previous.value.after.identity)) {
-      throw recoveryError("RECOVERY_RECORD_CONFLICT", `runner replacement lineage fork or historical hash tamper at generation ${generation}`);
+        || (kind === "runner-replacement" && !deepEqual(value.before.identity, previous.value.after.identity))) {
+      throw recoveryError("RECOVERY_RECORD_CONFLICT", `${kind} lineage fork or historical hash tamper at generation ${generation}`);
     }
     if (credentials.has(value.credential_ref)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "runner replacement credential was already consumed by an earlier generation");
     credentials.add(value.credential_ref);
@@ -270,6 +402,50 @@ export function readRecoveryGeneration(task, kind) {
   }
   const latest = history.at(-1);
   return Object.freeze({ ...latest, history: Object.freeze(history), next_generation: latest.value.generation + 1 });
+}
+
+export function readAuthenticatedDirtyCleanupBinding(task) {
+  const latest = readRecoveryGeneration(task, "dirty-cleanup-rebind");
+  if (!latest) return null;
+  let acceptedRaw;
+  try { acceptedRaw = task.readRecord("results/make-decision/accepted.json"); }
+  catch { throw recoveryError("RECOVERY_BUSINESS_SNAPSHOT_MISMATCH", "accepted make-decision record is missing"); }
+  const credential = readRecoveryCredential(
+    task,
+    latest.value.credential_ref,
+    latest.value.credential_hash,
+    "dirty-cleanup-rebind",
+  );
+  const subject = credential.value.workspace_subject;
+  if (latest.value.before.ref !== "results/make-decision/accepted.json"
+      || latest.value.before.hash !== sha256(acceptedRaw)
+      || credential.value.accepted_business_snapshot.accepted_hash !== sha256(acceptedRaw)
+      || latest.value.after.ref !== credential.ref
+      || latest.value.after.hash !== credential.hash
+      || !deepEqual(latest.value.after.identity, subject.clean_workspace)) {
+    throw recoveryError("RECOVERY_BUSINESS_SNAPSHOT_MISMATCH", "dirty cleanup rebind generation does not bind accepted and credential bytes");
+  }
+  const preservedWorkspaces = [];
+  for (const [index, entry] of latest.history.entries()) {
+    const entryCredential = readRecoveryCredential(task, entry.value.credential_ref, entry.value.credential_hash, "dirty-cleanup-rebind");
+    preservedWorkspaces.push(Object.freeze(structuredClone(entryCredential.value.workspace_subject.previous_workspace)));
+    if (entry.value.before.hash !== sha256(acceptedRaw)
+        || entry.value.after.ref !== entryCredential.ref
+        || entry.value.after.hash !== entryCredential.hash
+        || !deepEqual(entry.value.after.identity, entryCredential.value.workspace_subject.clean_workspace)
+        || (index > 0 && !deepEqual(
+          entryCredential.value.workspace_subject.previous_workspace,
+          latest.history[index - 1].value.after.identity,
+        ))) {
+      throw recoveryError("RECOVERY_RECORD_CONFLICT", "dirty cleanup rebind lineage or credential binding is invalid");
+    }
+  }
+  return Object.freeze({
+    ...latest,
+    credential,
+    workspace: Object.freeze(structuredClone(subject.clean_workspace)),
+    preserved_workspaces: Object.freeze(preservedWorkspaces),
+  });
 }
 
 export function assertRecoveryUnused(task, kind) {

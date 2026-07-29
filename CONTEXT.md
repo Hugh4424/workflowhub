@@ -218,6 +218,16 @@ verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文�
 - 采用：用户必须先看到具体问题、证据、影响范围和可能后果，再对绑定的 finding 或遗漏做明确选择；review risk 与 decision omission 使用不同记录。
 - 拒绝：不接受通用“用户同意”，不跨 finding/快照复用，不把风险承担改写成质量通过，也不建设通用风险治理平台。
 
+## Review-flow reset 术语（2026-07-28）
+
+**review-flow generation**：一个由受认证 reset 记录派生的独立审查主题；它继承旧主题的可追溯来源，但不改变旧主题的 head、verdict 或审查额度。
+
+**合法 reset**：只在当前快照相对旧主题发生可核验的结构变化、旧主题仍是当前 head、且阶段尚未接受时，追加一份绑定旧主题与新快照的 reset 记录；普通内容修订不能借此获得新主题。
+
+_避免_：把 reset 叫成“重置通过状态”或“重新打开 accepted”；它不改质量结论，也不改变阶段确认边界。
+
+**同链复审额度**：单个 review-flow generation 内允许的结构性 full review 次数；额度耗尽只对该 generation 生效，不阻止经过合法 reset 的新 generation 重新开始一次初始审查。
+
 ## 关系与边界
 
 - 一个 **决策卡**只处理一个决策轴，并通过**调用方可见对话面**完成问答。
@@ -230,3 +240,11 @@ verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文�
 ## 已消除的歧义
 
 - “reset”统一指创建**恢复代次**后的受控重新绑定；不表示删除、覆盖或手改旧记录。
+**推进资格（progression eligibility）**：
+build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 存在且可读。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
+
+**正式写边界（formal write boundary）**：
+核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次 runtime 内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
+
+**阶段完成判据（stage completion criteria）**：
+与推进资格不同的谓词。只有阶段核心交付、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。

@@ -1,4 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+
+import { assertArtifactDir } from "./artifact-dir.mjs";
+import { canonical } from "./canonical-utils.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { assertWorkspace } from "./workspace.mjs";
 
 const BASE_REF = "receipts/spec.json";
 const MARKER_REF = "receipts/recoveries/spec.json";
@@ -8,6 +13,9 @@ const REVISION_REF = /^receipts\/revisions\/spec\/[a-f0-9]{64}\.json$/;
 const REVIEW_RESULT_REF = /^reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const REVIEW_RESOLUTION_REF = /^reviews\/resolutions\/[a-f0-9]{64}\.json$/;
 const REVIEW_EVENT_REF = /^reviews\/flows\/[a-f0-9]{64}\/event-[0-9]{4}\.json$/;
+const INVOCATION_REF = /^identity\/executions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$/;
+const RECOVERY_OPERATION = "recover-spec-receipt";
+const RECOVERY_OWNER_CAPABILITIES = new WeakMap();
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -21,6 +29,132 @@ function exactKeys(value, expected, label) {
   const actual = Object.keys(plain(value, label)).sort();
   const wanted = [...expected].sort();
   if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new Error(`${label} fields are invalid`);
+}
+
+export function validateBuildSpecRecoveryInvocation(task, invocation) {
+  exactKeys(invocation, ["ref", "hash", "identity"], "build-spec recovery invocation");
+  if (!INVOCATION_REF.test(invocation.ref ?? "") || !HASH.test(invocation.hash ?? "")) {
+    throw new Error("build-spec recovery invocation ref/hash is invalid");
+  }
+  const raw = task.readRecord(invocation.ref);
+  if (sha256(raw) !== invocation.hash) throw new Error("build-spec recovery invocation hash changed");
+  const value = JSON.parse(raw);
+  if (raw !== `${canonical(value)}\n` || JSON.stringify(value) !== JSON.stringify(invocation.identity)) {
+    throw new Error("build-spec recovery invocation identity changed");
+  }
+  if (value.schema_version !== "workflowhub-invocation-identity.v1"
+      || value.project_name !== task.identity.projectName || value.task_id !== task.identity.taskId
+      || value.stage !== "build-spec" || value.source_kind !== "git_invocation" || value.source_clean !== true
+      || !TREE.test(value.source?.git_oid ?? "") || !TREE.test(value.source?.git_tree ?? "")) {
+    throw new Error("build-spec recovery requires a clean committed invocation");
+  }
+  const unsigned = { ...value };
+  delete unsigned.execution_manifest_hash;
+  if (value.execution_manifest_hash !== sha256(canonical(unsigned))) {
+    throw new Error("build-spec recovery invocation manifest hash changed");
+  }
+  exactKeys(value.contracts, ["agents", "stage_skill", "constitution"], "build-spec recovery invocation contracts");
+  const expectedContractRefs = {
+    agents: "AGENTS.md",
+    stage_skill: "workflows/build-spec/SKILL.md",
+    constitution: "CONSTITUTION.md",
+  };
+  for (const [name, contract] of Object.entries(value.contracts)) {
+    exactKeys(contract, ["ref", "sha256"], `build-spec recovery ${name} contract`);
+    if (contract.ref !== expectedContractRefs[name] || !HASH.test(contract.sha256 ?? "")) {
+      throw new Error(`build-spec recovery ${name} contract is unavailable`);
+    }
+  }
+  if (!Array.isArray(value.capabilities) || !value.capabilities.includes("stage:build-spec")) {
+    throw new Error("build-spec recovery invocation capability is unavailable");
+  }
+  return Object.freeze({ ref: invocation.ref, hash: invocation.hash });
+}
+
+export function issueBuildSpecRecoveryOwnerCapability({
+  task,
+  workspace,
+  boundary,
+} = {}) {
+  if (!task || typeof task.readRecord !== "function" || typeof task.identity?.taskId !== "string") {
+    throw new TypeError("build-spec recovery owner requires a task read capability");
+  }
+  const safeWorkspace = assertWorkspace(workspace);
+  if (!boundary || boundary.schema_version !== "workflowhub-write-boundary-preflight.v1"
+      || boundary.status !== "valid" || !Array.isArray(boundary.violations) || boundary.violations.length !== 0
+      || boundary.task_id !== task.identity.taskId || boundary.stage !== "build-spec"
+      || boundary.operation !== RECOVERY_OPERATION
+      || boundary.worktree_root !== safeWorkspace.worktreeRoot
+      || boundary.path_card?.worktree_root !== safeWorkspace.worktreeRoot
+      || boundary.path_card?.source?.invocation_ref !== boundary.invocation_ref
+      || boundary.path_card?.source?.invocation_hash !== boundary.invocation_hash) {
+    throw new Error("build-spec recovery requires the current recover-spec-receipt write boundary");
+  }
+  const invocationIdentity = JSON.parse(task.readRecord(boundary.invocation_ref));
+  const invocation = validateBuildSpecRecoveryInvocation(task, {
+    ref: boundary.invocation_ref,
+    hash: boundary.invocation_hash,
+    identity: invocationIdentity,
+  });
+  if (boundary.authority_refs?.length !== 1
+      || boundary.authority_refs[0]?.ref !== invocation.ref
+      || boundary.authority_refs[0]?.sha256 !== invocation.hash) {
+    throw new Error("build-spec recovery write boundary invocation binding is invalid");
+  }
+  const nonce = randomUUID();
+  const identity = Object.freeze({
+    task_id: task.identity.taskId,
+    stage: "build-spec",
+    operation: RECOVERY_OPERATION,
+    invocation_ref: invocation.ref,
+    invocation_hash: invocation.hash,
+    worktree_root: safeWorkspace.worktreeRoot,
+  });
+  const capabilityHash = sha256(canonical({ identity, nonce }));
+  const capability = Object.freeze({
+    schema_version: "workflowhub-build-spec-recovery-owner.v1",
+    identity,
+    nonce,
+    capability_hash: capabilityHash,
+    invocation: Object.freeze({
+      ...invocation,
+      identity: Object.freeze(invocationIdentity),
+    }),
+  });
+  RECOVERY_OWNER_CAPABILITIES.set(capability, {
+    identity,
+    nonce,
+    capabilityHash,
+    invocation,
+    consumed: false,
+  });
+  return capability;
+}
+
+export function consumeBuildSpecRecoveryOwnerCapability({
+  task,
+  workspace,
+  capability,
+} = {}) {
+  const state = capability && RECOVERY_OWNER_CAPABILITIES.get(capability);
+  const safeWorkspace = assertWorkspace(workspace);
+  if (!state || capability.schema_version !== "workflowhub-build-spec-recovery-owner.v1"
+      || state.consumed
+      || capability.identity !== state.identity
+      || capability.nonce !== state.nonce
+      || capability.capability_hash !== state.capabilityHash
+      || capability.capability_hash !== sha256(canonical({ identity: state.identity, nonce: state.nonce }))
+      || state.identity.task_id !== task?.identity?.taskId
+      || state.identity.stage !== "build-spec"
+      || state.identity.operation !== RECOVERY_OPERATION
+      || state.identity.worktree_root !== safeWorkspace.worktreeRoot) {
+    throw new Error("build-spec receipt recovery requires an unconsumed current recovery owner capability");
+  }
+  state.consumed = true;
+  return validateBuildSpecRecoveryInvocation(task, {
+    ...state.invocation,
+    identity: JSON.parse(task.readRecord(state.invocation.ref)),
+  });
 }
 
 export function buildSpecReviewAction(task, binding) {
@@ -108,9 +242,9 @@ export function validateBuildSpecRevision(value, raw, { ref, taskId, baseHash, c
   }
 }
 
-function buildSpecRecoveryMarker({ taskId, baseRaw, recoveredRaw, recoveredRef, artifactRef, content, snapshotTree, action }) {
+function buildSpecRecoveryMarker({ taskId, baseRaw, recoveredRaw, recoveredRef, artifactRef, content, snapshotTree, action, invocation }) {
   return {
-    schema_version: "workflowhub-build-spec-receipt-recovery.v1",
+    schema_version: "workflowhub-build-spec-receipt-recovery.v2",
     task_id: taskId,
     stage: "build-spec",
     component: "spec",
@@ -122,25 +256,97 @@ function buildSpecRecoveryMarker({ taskId, baseRaw, recoveredRaw, recoveredRef, 
     content_hash: sha256(content),
     snapshot_tree: snapshotTree,
     review_action: action,
+    invocation,
   };
 }
 
-export function validateBuildSpecRecoveryMarker(value, raw, { taskId, baseRaw, recoveredRaw, recoveredRef, artifactRef, content, snapshotTree, action }) {
+export function createBuildSpecReceiptRecoveryRecords({
+  task,
+  workspace,
+  artifacts,
+  input,
+  authenticatedFlow,
+  invocation,
+} = {}) {
+  if (!task || typeof task.readRecord !== "function" || typeof task.identity?.taskId !== "string") {
+    throw new TypeError("build-spec receipt recovery requires a task read capability");
+  }
+  const safeWorkspace = assertWorkspace(workspace);
+  const safeArtifacts = assertArtifactDir(artifacts);
+  const invocationBinding = validateBuildSpecRecoveryInvocation(task, invocation);
+  exactKeys(input, ["content", "receipts"], "build-spec receipt recovery input");
+  const action = buildSpecReviewAction(task, { authentication: { flow: authenticatedFlow } });
+  const expectedReceiptKeys = action.event_kind === "resolution"
+    ? ["review", "review_resolution"]
+    : ["review"];
+  exactKeys(input.receipts, expectedReceiptKeys, "build-spec receipt recovery receipts");
+  if (input.receipts.review !== action.head_result_ref) {
+    throw new Error("build-spec receipt recovery review is not the authenticated review-flow head");
+  }
+  if (action.event_kind === "resolution" && input.receipts.review_resolution !== action.action_ref) {
+    throw new Error("build-spec receipt recovery resolution is not the latest authenticated review-flow action");
+  }
+  const reviewRaw = task.readRecord(action.head_result_ref);
+  if (sha256(reviewRaw) !== action.head_result_hash) throw new Error("build-spec authenticated review result changed");
+  const content = safeArtifacts.read("spec.md", "utf8");
+  if (input.content !== content) throw new Error("build-spec receipt recovery content must equal the current spec.md bytes");
+  const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
+  const actionRaw = task.readRecord(action.action_ref);
+  if (sha256(actionRaw) !== action.action_hash) throw new Error("build-spec authenticated review action changed");
+  const actionValue = JSON.parse(actionRaw);
+  if (actionValue.task_id !== task.identity.taskId || actionValue.stage !== "build-spec"
+      || actionValue.snapshot_tree !== snapshot.tree) {
+    throw new Error("build-spec recovery review action does not bind the final current snapshot");
+  }
+  const baseRaw = task.readRecord(BASE_REF);
+  validateBuildSpecBase(JSON.parse(baseRaw), baseRaw, task.identity.taskId);
+  const revision = buildSpecRevision({ taskId: task.identity.taskId, baseRaw, content });
+  const marker = buildSpecRecoveryMarker({
+    taskId: task.identity.taskId,
+    baseRaw,
+    recoveredRaw: revision.raw,
+    recoveredRef: revision.ref,
+    artifactRef: safeArtifacts.reference("spec.md"),
+    content,
+    snapshotTree: snapshot.tree,
+    action,
+    invocation: invocationBinding,
+  });
+  return Object.freeze({
+    revisionRef: revision.ref,
+    revisionRaw: revision.raw,
+    markerRaw: canonicalJson(marker),
+  });
+}
+
+export function validateBuildSpecRecoveryMarker(value, raw, {
+  taskId,
+  baseRaw,
+  recoveredRaw,
+  recoveredRef,
+  artifactRef,
+  content,
+  snapshotTree,
+  action,
+  invocation,
+}) {
   exactKeys(value, [
     "schema_version", "task_id", "stage", "component", "base_receipt_ref", "base_receipt_hash",
     "recovered_receipt_ref", "recovered_receipt_hash", "artifact_ref", "content_hash",
-    "snapshot_tree", "review_action",
+    "snapshot_tree", "review_action", "invocation",
   ], "build-spec receipt recovery marker");
   exactKeys(value.review_action, [
     "event_ref", "event_hash", "event_kind", "head_result_ref", "head_result_hash", "action_ref", "action_hash",
   ], "build-spec receipt recovery marker review_action");
-  if (value.schema_version !== "workflowhub-build-spec-receipt-recovery.v1"
+  exactKeys(value.invocation, ["ref", "hash"], "build-spec receipt recovery marker invocation");
+  if (value.schema_version !== "workflowhub-build-spec-receipt-recovery.v2"
       || value.task_id !== taskId || value.stage !== "build-spec" || value.component !== "spec"
       || value.base_receipt_ref !== BASE_REF || value.base_receipt_hash !== sha256(baseRaw)
       || value.recovered_receipt_ref !== recoveredRef || value.recovered_receipt_hash !== sha256(recoveredRaw)
       || value.artifact_ref !== artifactRef || value.content_hash !== sha256(content)
       || value.snapshot_tree !== snapshotTree || !TREE.test(value.snapshot_tree)
       || JSON.stringify(value.review_action) !== JSON.stringify(action)
+      || JSON.stringify(value.invocation) !== JSON.stringify(invocation)
       || raw !== canonicalJson(value)) {
     throw new Error("build-spec receipt recovery marker binding is invalid");
   }
@@ -179,6 +385,19 @@ export function assertLatestBuildSpecReceipt({ worker, item, binding } = {}) {
       return canonicalJson(record.value);
     },
   }, binding);
+  const markerInvocation = markerRecord.value.invocation;
+  const invocationRecord = worker.readReceipt(markerInvocation?.ref);
+  const invocation = validateBuildSpecRecoveryInvocation({
+    identity: worker.identity,
+    readRecord(ref) {
+      const record = worker.readReceipt(ref);
+      return `${canonical(record.value)}\n`;
+    },
+  }, {
+    ref: markerInvocation?.ref,
+    hash: markerInvocation?.hash,
+    identity: invocationRecord.value,
+  });
   validateBuildSpecRecoveryMarker(markerRecord.value, canonicalJson(markerRecord.value), {
     taskId: worker.identity.taskId,
     baseRaw: canonicalJson(baseRecord.value),
@@ -188,6 +407,7 @@ export function assertLatestBuildSpecReceipt({ worker, item, binding } = {}) {
     content: binding.artifactContent,
     snapshotTree: binding.snapshot.tree,
     action,
+    invocation,
   });
   if (markerRecord.sha256 !== sha256(canonicalJson(markerRecord.value))) throw new Error("build-spec receipt recovery marker hash changed");
 }

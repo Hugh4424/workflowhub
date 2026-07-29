@@ -111,6 +111,23 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("enumerates the complete sorted review-flow reset namespace and rejects noncanonical entries", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const baseFlowId = "a".repeat(64);
+    const resetsRoot = join(taskPath, "reviews", "flow-resets", baseFlowId);
+    mkdirSync(resetsRoot, { recursive: true });
+    writeFileSync(join(resetsRoot, "reset-0003.json"), "{}");
+    writeFileSync(join(resetsRoot, "reset-0001.json"), "{}");
+    expect(task.listCanonicalReviewFlowResetRefs(baseFlowId)).toEqual([
+      `reviews/flow-resets/${baseFlowId}/reset-0001.json`,
+      `reviews/flow-resets/${baseFlowId}/reset-0003.json`,
+    ]);
+    writeFileSync(join(resetsRoot, "ignored.txt"), "{}");
+    expect(() => task.listCanonicalReviewFlowResetRefs(baseFlowId))
+      .toThrow(/regular numbered JSON file|canonical review flow reset/i);
+  });
+
   it("enumerates only content-addressed Phase map traces in the narrow evidence namespace", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });

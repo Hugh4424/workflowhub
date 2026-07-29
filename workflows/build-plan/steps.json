@@ -2,7 +2,7 @@
   "schema_version": "2.0.0",
   "stage_slug": "build-plan",
   "steps": [
-    { "step_id": 1, "step_slug": "read-spec", "order": 1, "entry_conditions": [{ "kind": "spec", "uri_or_path": "spec://approved" }], "completion_evidence": [{ "kind": "input", "uri_or_path": "plan://spec-read" }], "observable_result": "Approved specification is loaded.", "depends_on": [] },
+    { "step_id": 1, "step_slug": "read-current-spec", "order": 1, "entry_conditions": [{ "kind": "spec", "uri_or_path": "spec.md" }], "completion_evidence": [{ "kind": "input", "uri_or_path": "plan://spec-read" }], "observable_result": "The current specification is readable; accepted history is audit context.", "depends_on": [] },
     { "step_id": 2, "step_slug": "research-plan", "order": 2, "entry_conditions": [{ "kind": "input", "uri_or_path": "step://1" }], "completion_evidence": [{ "kind": "research", "uri_or_path": "memory://build-plan/research" }], "observable_result": "Planning research is available in memory.", "depends_on": [1] },
     { "step_id": 3, "step_slug": "define-contracts", "order": 3, "entry_conditions": [{ "kind": "research", "uri_or_path": "step://2" }], "completion_evidence": [{ "kind": "contracts", "uri_or_path": "memory://build-plan/data-contracts" }], "observable_result": "Relevant data contracts are available for plan generation.", "depends_on": [2] },
     { "step_id": 4, "step_slug": "write-plan", "order": 4, "entry_conditions": [{ "kind": "contracts", "uri_or_path": "step://3" }], "completion_evidence": [{ "kind": "plan", "uri_or_path": "plan://implementation" }], "observable_result": "Implementation plan exists.", "depends_on": [3] },

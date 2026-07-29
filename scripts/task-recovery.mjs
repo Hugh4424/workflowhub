@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { inspectRunnerIdentity } from "../core/runner-identity.mjs";
 import { openTask } from "../core/task-handle.mjs";
+import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../core/stage-review-disposition.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import {
-  assertPhaseRecoveryIntent, assertRecoveryUnused, canonical, credentialRef, deepEqual, generationRef, normalizedRecoveryRecordHash,
-  normalizeRuntimeOnlyPaths, readRecoveryCredential, recoveryError, readRecoveryGeneration, sha256, validateRecoveryInput,
+  assertPhaseRecoveryIntent, assertRecoveryUnused, canonical, credentialRef, deepEqual, dirtyCleanupAuthorizationSubjectHash, generationRef, normalizedRecoveryRecordHash, RECOVERY_OPERATIONS,
+  normalizeRuntimeOnlyPaths, readAuthenticatedDirtyCleanupBinding, readRecoveryCredential, recoveryError, readRecoveryGeneration, sha256, validateRecoveryInput,
   validateRecoveryCredential,
 } from "../core/task-recovery.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
@@ -25,11 +28,44 @@ const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const RISK_ACCEPTANCE_REF = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/;
+const DIRTY_CLEANUP_AUTHORIZATION_REF = /^evidence\/authorizations\/dirty-cleanup-rebind\/([a-f0-9]{64})\.json$/;
+
+function validateDirtyCleanupInput(values) {
+  const required = [
+    "task-path", "project", "task", "runner-root", "authorization-ref", "authorization-hash",
+    "previous-workspace-root", "clean-workspace-root", "retained-artifact-refs",
+    "retained-artifact-hashes", "nonce",
+  ];
+  for (const key of required) {
+    if (typeof values[key] !== "string" || values[key].trim() === "") {
+      throw recoveryError("RECOVERY_INPUT_REQUIRED", `--${key} is required`);
+    }
+  }
+  if (values["credential-ref"] !== undefined || values["credential-hash"] !== undefined) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "dirty-cleanup-rebind derives its credential from the authorization receipt");
+  }
+  if (!isAbsolute(values["previous-workspace-root"]) || !isAbsolute(values["clean-workspace-root"])) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "dirty cleanup workspace roots must be absolute");
+  }
+  if (!DIRTY_CLEANUP_AUTHORIZATION_REF.test(values["authorization-ref"])
+      || !HASH.test(values["authorization-hash"])
+      || !/^[A-Za-z0-9._-]{1,256}$/.test(values.nonce)) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "dirty cleanup authorization or nonce is invalid");
+  }
+  const refs = values["retained-artifact-refs"].split(",");
+  const hashes = values["retained-artifact-hashes"].split(",");
+  if (refs.length === 0 || refs.length !== hashes.length || new Set(refs).size !== refs.length
+      || refs.some((ref) => ref === "" || ref.startsWith("/") || ref.includes("\\") || ref.split("/").includes(".."))
+      || hashes.some((hash) => !HASH.test(hash))) {
+    throw recoveryError("RECOVERY_INPUT_REQUIRED", "retained artifact refs and hashes must be unique paired values");
+  }
+  return values;
+}
 
 function parse(argv) {
   const [command, ...rest] = argv;
   if (command === "--help" || command === "-h") return { help: true };
-  if (!new Set(["runner-replacement", "runner-replacement-bridge", "phase-pointer", "phase-trace-lineage"]).has(command)) throw recoveryError("RECOVERY_INPUT_REQUIRED", "command must be runner-replacement, runner-replacement-bridge, phase-pointer, or phase-trace-lineage");
+  if (!new Set(["runner-replacement", "runner-replacement-bridge", "phase-pointer", "dirty-cleanup-rebind", "phase-trace-lineage"]).has(command)) throw recoveryError("RECOVERY_INPUT_REQUIRED", "command must be runner-replacement, runner-replacement-bridge, phase-pointer, dirty-cleanup-rebind, or phase-trace-lineage");
   const values = { command };
   for (const item of rest) {
     const at = item.indexOf("=");
@@ -46,11 +82,13 @@ function parse(argv) {
     "bootstrap-bundle-ref", "bootstrap-bundle-hash",
     "bootstrap-review-result-ref", "bootstrap-review-result-hash", "bootstrap-trust-mode",
     "user-bootstrap-authorization-ref", "user-bootstrap-authorization-hash", "nonce",
+    "previous-workspace-root", "clean-workspace-root", "retained-artifact-refs", "retained-artifact-hashes",
   ]);
   const unexpected = Object.keys(values).find((key) => !allowed.has(key));
   if (unexpected) throw recoveryError("RECOVERY_INPUT_REQUIRED", `--${unexpected} is not accepted`);
   if (command === "phase-trace-lineage") validateLineageInput(values);
   else if (command === "runner-replacement-bridge") validateBridgeInput(values);
+  else if (command === "dirty-cleanup-rebind") validateDirtyCleanupInput(values);
   else validateRecoveryInput(values, command);
   return values;
 }
@@ -61,6 +99,7 @@ export function helpText() {
     "  node scripts/task-recovery.mjs runner-replacement --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=<stage> --credential-ref=<task-relative-ref> --credential-hash=<sha256>",
     "  node scripts/task-recovery.mjs runner-replacement-bridge --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=<stage> --authorization-ref=<task-relative-ref> --authorization-hash=<sha256> --bootstrap-packet-ref=<task-relative-ref> --bootstrap-packet-hash=<sha256> --bootstrap-bundle-ref=<task-relative-ref> --bootstrap-bundle-hash=<sha256> --bootstrap-review-result-ref=<task-relative-ref> --bootstrap-review-result-hash=<sha256> --nonce=<nonce>",
     "  node scripts/task-recovery.mjs phase-pointer --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --credential-ref=<task-relative-ref> --credential-hash=<sha256> [--risk-acceptance-refs=<comma-separated refs> --risk-acceptance-hashes=<comma-separated sha256s>]",
+    "  node scripts/task-recovery.mjs dirty-cleanup-rebind --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --authorization-ref=<task-relative-ref> --authorization-hash=<sha256> --previous-workspace-root=<absolute> --clean-workspace-root=<absolute> --retained-artifact-refs=<comma-separated refs> --retained-artifact-hashes=<comma-separated sha256s> --nonce=<nonce>",
     "  node scripts/task-recovery.mjs phase-trace-lineage --task-path=<absolute> --project=<project> --task=<task> --runner-root=<absolute> --stage=build-code --phase-id=<phase> --phase-evidence-ref=<task-relative-ref> --phase-evidence-hash=<sha256> --review-result-ref=<task-relative-ref> --review-result-hash=<sha256> [--risk-acceptance-refs=<comma-separated refs> --risk-acceptance-hashes=<comma-separated sha256s>]",
     "",
     "Credentials are canonical task-local records. phase-trace-lineage binds historical Phase facts append-only and never replaces old records or pointers.",
@@ -607,7 +646,7 @@ function runnerReplacementBridge(values) {
   validateRecoveryCredential(credential);
   const ref = credentialRef("runner-replacement", values.nonce);
   const raw = canonical(credential);
-  const result = task.withRecordLock("locks/task-identity-migration.lock", () => {
+  const result = task.withRecordLock(RECOVERY_OPERATIONS["runner-replacement"].lock_ref, () => {
     try {
       task.readRecord(ref);
       throw recoveryError("RECOVERY_ALREADY_USED", "bridge nonce is already published");
@@ -708,7 +747,7 @@ function runnerReplacement(values) {
   const generationHash = sha256(generationRaw);
   const nextManifest = { ...task.manifest, runner_root: next.runner_root, runner_oid: next.runner_oid, runner_replacement: { ref: generationPath, integrity_hash: generationHash } };
   const nextManifestRaw = canonical(nextManifest);
-  const result = task.withRecordLock("locks/task-identity-migration.lock", () => {
+  const result = task.withRecordLock(RECOVERY_OPERATIONS["runner-replacement"].lock_ref, () => {
     const fresh = readRecoveryGeneration(task, "runner-replacement");
     if ((fresh?.ref ?? null) !== (lineage.replacements?.ref ?? null)
         || (fresh?.hash ?? null) !== (lineage.replacements?.hash ?? null)
@@ -1140,6 +1179,291 @@ function recordExists(task, ref) {
   try { task.readRecord(ref); return true; } catch (error) { if (error?.code === "ENOENT") return false; throw error; }
 }
 
+function gitIdentity(root, label) {
+  if (typeof root !== "string" || !isAbsolute(root)) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} root must be absolute`);
+  let real; let top; let common; let branch; let head; let tree; let status;
+  try {
+    real = realpathSync(resolve(root));
+    top = realpathSync(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim());
+    const rawCommon = execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    common = realpathSync(isAbsolute(rawCommon) ? rawCommon : resolve(real, rawCommon));
+    branch = execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: real, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} Git identity cannot be authenticated: ${error.stderr?.toString().trim() || error.message}`);
+  }
+  if (top !== real) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} must be a Git toplevel`);
+  return Object.freeze({
+    identity: Object.freeze({
+      worktree_root: real,
+      git_common_dir: common,
+      branch,
+      head,
+      snapshot_tree: tree,
+    }),
+    status,
+  });
+}
+
+function readBoundRecord(task, binding, label) {
+  let raw;
+  try { raw = task.readRecord(binding.ref); }
+  catch { throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", `${label} is missing`); }
+  if (sha256(raw) !== binding.hash) throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", `${label} hash mismatch`);
+  return raw;
+}
+
+function retainedArtifactBindings(values) {
+  const refs = values["retained-artifact-refs"].split(",");
+  const hashes = values["retained-artifact-hashes"].split(",");
+  return refs.map((ref, index) => Object.freeze({ ref, hash: hashes[index] }));
+}
+
+function readAcceptedWorkspaceFacts(task) {
+  const raw = task.readRecord("results/make-decision/accepted.json");
+  let facts;
+  try {
+    facts = createTaskKernel(task).readAccepted("make-decision").facts;
+  } catch {
+    try { facts = JSON.parse(raw).facts; }
+    catch { throw recoveryError("RECOVERY_BUSINESS_SNAPSHOT_MISMATCH", "accepted make-decision is invalid"); }
+  }
+  if (!facts || typeof facts !== "object" || typeof facts.worktree_root !== "string"
+      || !OID.test(facts.baseline_commit ?? "") || !OID.test(facts.snapshot_tree ?? "")) {
+    throw recoveryError("RECOVERY_BUSINESS_SNAPSHOT_MISMATCH", "accepted make-decision workspace facts are incomplete");
+  }
+  return Object.freeze({ raw, facts });
+}
+
+function dirtyCleanupBusinessSnapshot(task, accepted) {
+  return Object.freeze({
+    accepted_ref: "results/make-decision/accepted.json",
+    accepted_hash: sha256(accepted.raw),
+    baseline_commit: accepted.facts.baseline_commit,
+    snapshot_tree: accepted.facts.snapshot_tree,
+    target_repo_root: task.manifest.target_repo_root,
+  });
+}
+
+function assertAncestorCommit(root, ancestor, descendant, label) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      cwd: root,
+      stdio: "ignore",
+    });
+  } catch (error) {
+    if (error?.status === 1) throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} is not descended from the accepted baseline`);
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", `${label} ancestry cannot be authenticated`);
+  }
+}
+
+function authenticateDirtyAuthorization(task, credential) {
+  const subject = credential.value.workspace_subject;
+  const authorizationRaw = readBoundRecord(task, subject.authorization, "dirty cleanup authorization");
+  const authorizationMatch = DIRTY_CLEANUP_AUTHORIZATION_REF.exec(subject.authorization.ref);
+  if (!authorizationMatch || authorizationMatch[1] !== subject.authorization.hash) {
+    throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup authorization must be content-addressed");
+  }
+  let authorization;
+  try { authorization = JSON.parse(authorizationRaw); }
+  catch { throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup authorization is invalid JSON"); }
+  const required = [
+    "schema_version", "project_name", "task_id", "purpose", "recovery_kind", "decision",
+    "credential_nonce", "single_use", "accepted_business_snapshot", "credential_subject_hash",
+    "previous_workspace", "clean_workspace", "retained_artifact_refs", "next_stage", "authorized_at",
+  ];
+  if (!authorization || typeof authorization !== "object" || Array.isArray(authorization)
+      || !deepEqual(Object.keys(authorization).sort(), [...required].sort())
+      || authorization.schema_version !== "workflowhub-dirty-cleanup-rebind-authorization.v1"
+      || authorization.project_name !== task.identity.projectName
+      || authorization.task_id !== task.identity.taskId
+      || authorization.purpose !== "dirty-cleanup-rebind"
+      || authorization.recovery_kind !== "dirty-cleanup-rebind"
+      || authorization.decision !== "accepted"
+      || authorization.credential_nonce !== credential.value.nonce
+      || authorization.single_use !== true
+      || authorization.next_stage !== "task-close"
+      || !Number.isFinite(Date.parse(authorization.authorized_at ?? ""))) {
+    throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup rebind requires explicit accepted human authorization");
+  }
+  const expectedBusiness = {
+    ref: credential.value.accepted_business_snapshot.accepted_ref,
+    hash: credential.value.accepted_business_snapshot.accepted_hash,
+  };
+  if (!deepEqual(authorization.accepted_business_snapshot, expectedBusiness)
+      || authorization.credential_subject_hash !== dirtyCleanupAuthorizationSubjectHash(subject)
+      || !deepEqual(authorization.previous_workspace, subject.previous_workspace)
+      || !deepEqual(authorization.clean_workspace, subject.clean_workspace)
+      || !deepEqual(authorization.retained_artifact_refs, subject.retained_artifact_refs)) {
+    throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup authorization subject binding is stale");
+  }
+  return authorization;
+}
+
+function authenticateDirtyWorkspaceSubject(task, credential) {
+  const subject = credential.value.workspace_subject;
+  authenticateDirtyAuthorization(task, credential);
+  for (const binding of subject.retained_artifact_refs) readBoundRecord(task, binding, `retained artifact ${binding.ref}`);
+  const before = gitIdentity(subject.previous_workspace.worktree_root, "previous workspace");
+  const after = gitIdentity(subject.clean_workspace.worktree_root, "clean workspace");
+  const target = gitIdentity(task.manifest.target_repo_root, "target repository");
+  if (!deepEqual(before.identity, subject.previous_workspace)) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "previous workspace Git identity does not match the credential");
+  }
+  if (!deepEqual(after.identity, subject.clean_workspace)) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "clean workspace Git identity does not match the credential");
+  }
+  const expectedBranch = `task/${task.identity.projectName}/${task.identity.taskId}`;
+  if (before.identity.git_common_dir !== target.identity.git_common_dir
+      || after.identity.git_common_dir !== target.identity.git_common_dir
+      || before.identity.branch !== expectedBranch || after.identity.branch !== expectedBranch) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "clean workspace common-dir, branch, or tree does not match the credential");
+  }
+  if (after.status !== "") throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "clean workspace postcondition is not clean");
+  return Object.freeze({
+    before: before.identity,
+    after: after.identity,
+  });
+}
+
+function deriveDirtyCleanupCredential(task, values) {
+  const accepted = readAcceptedWorkspaceFacts(task);
+  const latest = readAuthenticatedDirtyCleanupBinding(task);
+  const previous = gitIdentity(values["previous-workspace-root"], "previous workspace");
+  const clean = gitIdentity(values["clean-workspace-root"], "clean workspace");
+  const target = gitIdentity(task.manifest.target_repo_root, "target repository");
+  const expectedBranch = `task/${task.identity.projectName}/${task.identity.taskId}`;
+  const expectedPrevious = latest?.workspace;
+  if (resolve(previous.identity.worktree_root) !== resolve(expectedPrevious?.worktree_root ?? accepted.facts.worktree_root)) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "previous workspace does not match the accepted or effective binding");
+  }
+  if (expectedPrevious && !deepEqual(previous.identity, expectedPrevious)) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "previous workspace does not match the effective recovery binding");
+  }
+  if (previous.identity.git_common_dir !== target.identity.git_common_dir
+      || clean.identity.git_common_dir !== target.identity.git_common_dir
+      || previous.identity.branch !== expectedBranch || clean.identity.branch !== expectedBranch) {
+    throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "dirty cleanup workspaces do not match the task Git identity");
+  }
+  assertAncestorCommit(target.identity.worktree_root, accepted.facts.baseline_commit, previous.identity.head, "previous workspace HEAD");
+  if (clean.status !== "") throw recoveryError("RECOVERY_CREDENTIAL_INVALID", "clean workspace postcondition is not clean");
+  const retained = retainedArtifactBindings(values);
+  for (const binding of retained) readBoundRecord(task, binding, `retained artifact ${binding.ref}`);
+  const subject = {
+    previous_workspace: previous.identity,
+    clean_workspace: clean.identity,
+    authorization: { ref: values["authorization-ref"], hash: values["authorization-hash"] },
+    retained_artifact_refs: retained,
+    next_stage: "task-close",
+  };
+  let authorization;
+  try { authorization = JSON.parse(readBoundRecord(task, subject.authorization, "dirty cleanup authorization")); }
+  catch (error) {
+    if (error?.recovery_code === "RECOVERY_AUTHORIZATION_INVALID") throw error;
+    throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup authorization is invalid JSON");
+  }
+  if (!Number.isFinite(Date.parse(authorization?.authorized_at ?? ""))) {
+    throw recoveryError("RECOVERY_AUTHORIZATION_INVALID", "dirty cleanup authorization time is invalid");
+  }
+  const credential = {
+    schema_version: "workflowhub-recovery-credential.v1",
+    project_name: task.identity.projectName,
+    task_id: task.identity.taskId,
+    recovery_kind: "dirty-cleanup-rebind",
+    nonce: values.nonce,
+    issued_at: authorization.authorized_at,
+    decision: "accepted",
+    accepted_business_snapshot: dirtyCleanupBusinessSnapshot(task, accepted),
+    workspace_subject: subject,
+  };
+  validateRecoveryCredential(credential);
+  authenticateDirtyAuthorization(task, { value: credential });
+  return Object.freeze({ accepted, credential, raw: canonical(credential) });
+}
+
+export function dirtyCleanupRebind(values, testHooks) {
+  const task = openTask(values["task-path"], values.project, values.task);
+  return task.withRecordLock(RECOVERY_OPERATIONS["dirty-cleanup-rebind"].lock_ref, () => {
+    const derived = deriveDirtyCleanupCredential(task, values);
+    const credentialPath = credentialRef("dirty-cleanup-rebind", values.nonce);
+    const credentialExisted = recordExists(task, credentialPath);
+    if (credentialExisted && task.readRecord(credentialPath) !== derived.raw) {
+      throw recoveryError("RECOVERY_ALREADY_USED", "dirty cleanup credential nonce is already bound to different facts");
+    }
+    const credentialHash = sha256(derived.raw);
+    const acceptedRaw = derived.accepted.raw;
+    const latest = readRecoveryGeneration(task, "dirty-cleanup-rebind");
+    if (latest?.value.credential_ref === credentialPath && latest.value.credential_hash === credentialHash) {
+      const credential = readRecoveryCredential(task, credentialPath, credentialHash, "dirty-cleanup-rebind");
+      authenticateDirtyWorkspaceSubject(task, credential);
+      const authenticated = readAuthenticatedDirtyCleanupBinding(task);
+      return Object.freeze({
+        recovery_ref: authenticated.ref,
+        recovery_hash: authenticated.hash,
+        credential_ref: credential.ref,
+        credential_hash: credential.hash,
+        generation: authenticated.value.generation,
+        next_entry: "normal task-close",
+        replayed: true,
+      });
+    }
+    if (latest && !deepEqual(derived.credential.workspace_subject.previous_workspace, latest.value.after.identity)) {
+      throw recoveryError("RECOVERY_CONCURRENT_CHANGE", "dirty cleanup rebind does not continue the latest authenticated generation");
+    }
+    testHooks?.beforeGenerationCreate?.({
+      task,
+      credential: Object.freeze({ ref: credentialPath, hash: credentialHash, raw: derived.raw, value: derived.credential }),
+      latest,
+    });
+    if (sha256(task.readRecord("results/make-decision/accepted.json")) !== sha256(acceptedRaw)) {
+      throw recoveryError("RECOVERY_CONCURRENT_CHANGE", "accepted record changed before credential publication");
+    }
+    const refreshed = deriveDirtyCleanupCredential(task, values);
+    if (refreshed.raw !== derived.raw) {
+      throw recoveryError("RECOVERY_CONCURRENT_CHANGE", "authorization or workspace changed before credential publication");
+    }
+    if (!credentialExisted) {
+      try { task.writeRecoveryCredential(credentialPath, derived.raw); }
+      catch (error) { throw recoveryError("RECOVERY_RECORD_CONFLICT", error.message); }
+    }
+    const credential = readRecoveryCredential(task, credentialPath, credentialHash, "dirty-cleanup-rebind");
+    authenticateDirtyWorkspaceSubject(task, credential);
+    const generation = latest ? latest.next_generation : 1;
+    const ref = generationRef("dirty-cleanup-rebind", generation);
+    const value = {
+      schema_version: "workflowhub-recovery-generation.v1",
+      project_name: task.identity.projectName,
+      task_id: task.identity.taskId,
+      recovery_kind: "dirty-cleanup-rebind",
+      generation,
+      credential_ref: credential.ref,
+      credential_hash: credential.hash,
+      ...(latest ? { previous_generation_ref: latest.ref, previous_generation_hash: latest.hash } : {}),
+      before: { ref: "results/make-decision/accepted.json", hash: sha256(acceptedRaw) },
+      after: { ref: credential.ref, hash: credential.hash, identity: credential.value.workspace_subject.clean_workspace },
+      created_at: new Date().toISOString(),
+      result: "accepted",
+    };
+    const raw = canonical(value);
+    try { task.writeRecoveryGeneration(ref, raw); }
+    catch (error) { throw recoveryError("RECOVERY_RECORD_CONFLICT", error.message); }
+    testHooks?.afterGenerationCreate?.({ task, ref, raw });
+    const authenticated = readAuthenticatedDirtyCleanupBinding(task);
+    authenticateDirtyWorkspaceSubject(task, authenticated.credential);
+    return Object.freeze({
+      recovery_ref: authenticated.ref,
+      recovery_hash: authenticated.hash,
+      credential_ref: credential.ref,
+      credential_hash: credential.hash,
+      generation: authenticated.value.generation,
+      next_entry: "normal task-close",
+      replayed: false,
+    });
+  });
+}
+
 /**
  * Bind one already-published canonical Phase trace to its historical semantic
  * review fact. Actionable serious findings require exact risk acceptances.
@@ -1339,7 +1663,7 @@ function phasePointer(values, testHooks) {
   pointerBody.recovery_hash = generationHash;
   const pointerRaw = canonical(pointerBody);
   testHooks?.beforeCommitLock?.();
-  task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
+  task.withRecordLock(RECOVERY_OPERATIONS["phase-pointer"].lock_ref, () => {
     if (readRecoveryGeneration(task, "phase-pointer")) throw recoveryError("RECOVERY_ALREADY_USED", "phase-pointer recovery gate is already consumed");
     if (sha256(task.readRecord("phase-result.json")) !== pointer.hash) throw recoveryError("RECOVERY_CONCURRENT_CHANGE", "Phase pointer changed before recovery");
     try {
@@ -1383,10 +1707,32 @@ function phasePointer(values, testHooks) {
 export function runRecovery(argv = process.argv.slice(2), options) {
   const values = parse(argv);
   if (values.help) return helpText();
-  if (values.command === "runner-replacement") return runnerReplacement(values);
-  if (values.command === "phase-pointer") return phasePointer(values, options);
-  if (values.command === "runner-replacement-bridge") return runnerReplacementBridge(values);
-  return phaseTraceLineage(values);
+  const task = openTask(values["task-path"], values.project, values.task);
+  const stage = values.stage ?? "build-code";
+  const workspace = values.command === "dirty-cleanup-rebind"
+    ? undefined
+    : openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
+  const boundary = authenticateWriteBoundary({
+    task,
+    runnerRoot: values["runner-root"],
+    stage,
+    operation: `recovery.${values.command}`,
+    ...(workspace === undefined ? {} : { workspace }),
+  });
+  let result;
+  if (values.command === "runner-replacement") result = runnerReplacement(values);
+  else if (values.command === "runner-replacement-bridge") result = runnerReplacementBridge(values);
+  else if (values.command === "phase-pointer") result = phasePointer(values, options);
+  else if (values.command === "dirty-cleanup-rebind") result = dirtyCleanupRebind(values, options);
+  else result = phaseTraceLineage(values);
+  if (typeof result?.recovery_ref === "string" && HASH.test(result.recovery_hash ?? "")) {
+    persistWriteBoundaryPathCard({
+      task: openTask(values["task-path"], values.project, values.task),
+      boundary,
+      source: { ref: result.recovery_ref, hash: result.recovery_hash },
+    });
+  }
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

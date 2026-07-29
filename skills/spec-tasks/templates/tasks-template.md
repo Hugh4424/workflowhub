@@ -19,6 +19,8 @@
 - 行为改动必须先有真实 RED，再做 GREEN。
 - `display_cmd` 不能充当 pass/fail 判据。
 - 文件只用精确路径，不用通配符。
+- 完成区必须使用可认证格式：`actual_changes` 为 JSON 路径数组；`executed_commands` 为含 `command`、`exit_code` 的 JSON 数组；`evidence_refs` 为含 `ref`、`sha256` 的 JSON 数组；`covered_ac` 填 AC ID；`review_fact` 填当前 Phase review ref。
+- 只有实际改动、测试 receipt、AC 证据和 review 都与当前工作树互相吻合，才勾选“任务完成”；预先勾选或填写伪证据必须失败。
 
 ## Phase 1：[填写：阶段名称]
 
@@ -61,6 +63,17 @@
 - **recovery**：[填写：负责人和最小恢复动作]
 - **task risk**：[填写：具体风险]
 
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：`pending`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
+- **completed_at**：N/A — not completed
+
 > 一张卡只改变一个行为。RED/GREEN 使用相同 gate 和 oracle；GREEN 依赖 RED。非行为任务仍须真实 gate、oracle 和 evidence。
 
 #### T002 — GREEN：[填写：实现标题]
@@ -89,6 +102,17 @@
 - **STOP**：[填写：需要弱化测试、越界或新设计时停止]
 - **recovery**：[填写：负责人和最小恢复动作]
 - **task risk**：[填写：具体风险]
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：`pending`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — build-code Phase review not executed
+- **completed_at**：N/A — not completed
 
 ### Verify
 
@@ -147,6 +171,7 @@ T001 (RED) → T002 (GREEN)
 - [ ] Plan File Boundary 等于所有 Phase NEW/MODIFY 的并集。
 - [ ] 每个 Phase NEW/MODIFY 文件至少有一个 owning Task。
 - [ ] 每个 Task 的精确文件和 boundary 都是所属 Phase NEW/MODIFY 的子集。
+- [ ] 每个 Task 只有一个完成区；完成项的改动、命令、证据、AC、review 和时间均可认证。
 - [ ] 没有 host identity、固定 artifact root、无关项目规则或未声明文件。
 
 ## Appendix A. Legacy import

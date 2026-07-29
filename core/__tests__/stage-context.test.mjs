@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,12 +9,68 @@ import { bootstrapStage } from "../stage-context.mjs";
 import { createTask, migrateTaskRunnerRoot } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
+import { hashAuditSummary } from "../audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
+import { writeOfficialComponentReceipt } from "../canonical-receipt-writer.mjs";
 
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
 const temporaryDirs = [];
 
-function fixture({ acceptDecision = true, migrateRunner = false } = {}) {
+function auditedMakeDecisionFacts(kernel, candidate, { worktreeRoot, baselineCommit }) {
+  const active = kernel.activeStageRun("make-decision", { required: false });
+  const started = active ?? kernel.startStageRun("make-decision", { reason: "test fixture publication" });
+  const snapshot = candidate.captureSnapshot();
+  const content = {
+    schema_version: "stage-content-evidence.v1",
+    kind: "make-decision.test",
+    task_id: kernel.task.identity.taskId,
+    stage: "make-decision",
+    workflow_run_id: started.run.workflow_run_id,
+    snapshot_tree: snapshot.tree,
+  };
+  const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+  const contentHash = createHash("sha256").update(contentRaw).digest("hex");
+  const contentRef = `evidence/stage-content/${contentHash}/make-decision-test.json`;
+  kernel.publishCanonicalRecord(contentRef, contentRaw);
+  const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
+  const unsignedSummary = {
+    schema_version: "stage-audit-summary.v1",
+    task_id: kernel.task.identity.taskId,
+    stage_slug: "make-decision",
+    workflow_run_id: started.run.workflow_run_id,
+    snapshot_tree: snapshot.tree,
+    verdict: "pass",
+    content_evidence_refs: contentEvidenceRefs,
+  };
+  const summaryHash = hashAuditSummary(unsignedSummary);
+  const summaryRef = `evidence/audits/make-decision/${summaryHash}.json`;
+  kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  const decision = writeOfficialComponentReceipt({
+    task: kernel.task,
+    stage: "make-decision",
+    component: "decision",
+    payload: { decision_log: "# Decision\n\nProceed.\n" },
+  });
+  return {
+    worktree_root: worktreeRoot,
+    baseline_commit: baselineCommit,
+    decision_ref: decision.value.decision_ref,
+    decision_hash: decision.value.decision_hash,
+    audit_contract_version: "v1",
+    audit_summary_ref: summaryRef,
+    audit_summary_hash: summaryHash,
+    audit_verdict: "pass",
+    content_evidence_refs: contentEvidenceRefs,
+  };
+}
+
+function publishAuditedMakeDecisionAttempt(kernel, candidate, facts) {
+  return kernel.publishAttempt("make-decision", {
+    facts: auditedMakeDecisionFacts(kernel, candidate, facts),
+  });
+}
+
+function fixture({ acceptDecision = true, migrateRunner = false, perInvocation = false } = {}) {
   const storageRoot = realpathSync(
     mkdtempSync(join(tmpdir(), "workflowhub-stage-context-")),
   );
@@ -36,6 +93,7 @@ function fixture({ acceptDecision = true, migrateRunner = false } = {}) {
   execFileSync("git", ["worktree", "add", "-qb", "task/PaperBuilder/paperbuilder-phase-foundation", worktreeRoot, baselineCommit], { cwd: targetRepoRoot });
   const manifest = Object.freeze({
     schema_version: "1.0.0",
+    ...(perInvocation ? { execution_mode: "per_invocation" } : {}),
     project_name: "PaperBuilder",
     task_id: "paperbuilder-phase-foundation",
     created_at: "2026-07-16T00:00:00.000Z",
@@ -46,30 +104,40 @@ function fixture({ acceptDecision = true, migrateRunner = false } = {}) {
   const task = createTask({ storageRoot, taskPath, manifest });
   let activeTask = task;
   let runnerRoot;
-  if (migrateRunner) {
+  if (migrateRunner || perInvocation) {
     runnerRoot = join(storageRoot, "runner");
     mkdirSync(runnerRoot);
     execFileSync("git", ["init", "-q", "-b", "task/PaperBuilder/paperbuilder-phase-foundation"], { cwd: runnerRoot });
     execFileSync("git", ["config", "user.email", "tests@workflowhub.local"], { cwd: runnerRoot });
     execFileSync("git", ["config", "user.name", "WorkflowHub Tests"], { cwd: runnerRoot });
     writeFileSync(join(runnerRoot, "AGENTS.md"), "# Runner\n");
+    writeFileSync(join(runnerRoot, "CONSTITUTION.md"), "# Constitution\n");
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       mkdirSync(join(runnerRoot, "workflows", stage), { recursive: true });
       writeFileSync(join(runnerRoot, "workflows", stage, "SKILL.md"), `# ${stage}\n`);
     }
     execFileSync("git", ["add", "."], { cwd: runnerRoot });
     execFileSync("git", ["commit", "-qm", "runner"], { cwd: runnerRoot });
-    activeTask = migrateTaskRunnerRoot({ taskPath, projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", runnerRoot: realpathSync(runnerRoot), stage: "verify-code" }).task;
+    if (migrateRunner) {
+      activeTask = migrateTaskRunnerRoot({ taskPath, projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", runnerRoot: realpathSync(runnerRoot), stage: "verify-code" }).task;
+    }
   }
-  const kernel = createTaskKernel(activeTask);
+  const candidate = prepareTaskWorkspace(activeTask);
+  const kernel = createTaskKernel(activeTask, { candidateWorkspace: candidate });
   if (acceptDecision) {
-    const published = kernel.publishAttempt("make-decision", {
-      facts: { worktree_root: worktreeRoot, baseline_commit: baselineCommit },
-    });
+    const published = publishAuditedMakeDecisionAttempt(kernel, candidate, { worktreeRoot, baselineCommit });
     kernel.acceptAttempt("make-decision", published.attempt_ref, writeHumanConfirmation(kernel, "make-decision", published));
   }
   mkdirSync(join(worktreeRoot, "specs", manifest.task_id), { recursive: true });
-  return { storageRoot, taskPath, worktreeRoot, baselineCommit, manifest, task: activeTask, runnerRoot: runnerRoot && realpathSync(runnerRoot) };
+  return { storageRoot, taskPath, worktreeRoot, baselineCommit, manifest, task: activeTask, kernel, runnerRoot: runnerRoot && realpathSync(runnerRoot) };
+}
+
+function writeCurrentMaterials(worktreeRoot, taskId = "paperbuilder-phase-foundation") {
+  const root = join(worktreeRoot, "specs", taskId);
+  mkdirSync(root, { recursive: true });
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    writeFileSync(join(root, name), `# ${name}\n`);
+  }
 }
 
 afterEach(() => {
@@ -110,7 +178,7 @@ describe("bootstrapStage", () => {
     const poisonEnv = { WORKFLOWHUB_TASK_DIR: join(storageRoot, "poison-root") };
 
     const context = bootstrapStage(
-      "verify-code",
+      "build-spec",
       {
         mode: "sidecar",
         taskPath,
@@ -131,7 +199,7 @@ describe("bootstrapStage", () => {
     mkdirSync(configDirectory, { recursive: true });
     writeFileSync(join(configDirectory, "config.json"), "{", "utf8");
 
-    const context = bootstrapStage("verify-code", {
+    const context = bootstrapStage("build-spec", {
       mode: "sidecar",
       taskPath,
       projectName: "PaperBuilder",
@@ -147,13 +215,195 @@ describe("bootstrapStage", () => {
     const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "runner drift"], { cwd: runnerRoot });
 
-    expect(() => bootstrapStage("verify-code", {
+    expect(() => bootstrapStage("build-spec", {
       mode: "sidecar",
       taskPath,
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
       runnerRoot,
     })).toThrow(/runner identity mismatch/i);
+  });
+
+  it("fails a dirty official write before mutation and shares one authenticated boundary across child writes", async () => {
+    const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
+    const context = bootstrapStage("build-spec", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    });
+    const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
+    expect(typeof authenticateStageWriteBoundary).toBe("function");
+
+    writeFileSync(join(runnerRoot, "dirty.txt"), "not committed\n");
+    expect(() => authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "accept",
+      runId: "dirty-write",
+    })).toThrow(/clean/i);
+    expect(() => context.task.readRecord("identity/executions/dirty-write.json")).toThrow();
+
+    rmSync(join(runnerRoot, "dirty.txt"));
+    expect(authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "accept",
+      runId: "clean-write",
+    })).toMatchObject({
+      status: "valid",
+      worktree_root: realpathSync(context.workspace.worktreeRoot),
+      path_card: {
+        worktree_root: realpathSync(context.workspace.worktreeRoot),
+        source: { invocation_ref: "identity/executions/clean-write.json" },
+        authority: "informational_only",
+      },
+    });
+    context.kernel.publishCanonicalRecord("evidence/shared-preflight-child-a.json", '{"child":"a"}\n');
+    context.kernel.publishCanonicalRecord("evidence/shared-preflight-child-b.json", '{"child":"b"}\n');
+    expect(readdirSync(join(taskPath, "identity", "executions"))).toEqual(["clean-write.json"]);
+  });
+
+  it("persists one per-invocation identity only at the final Workspace-bound write boundary", async () => {
+    const { taskPath, runnerRoot, worktreeRoot } = fixture({ perInvocation: true });
+    const context = bootstrapStage("build-spec", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    });
+    const identityRoot = join(taskPath, "identity", "executions");
+    expect(() => readdirSync(identityRoot)).toThrow();
+
+    const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
+    const boundary = authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "accept",
+      runId: "single-owner-write",
+    });
+
+    expect(readdirSync(identityRoot)).toEqual(["single-owner-write.json"]);
+    expect(boundary).toMatchObject({
+      worktree_root: realpathSync(worktreeRoot),
+      invocation_ref: "identity/executions/single-owner-write.json",
+    });
+  });
+
+  it("leaves no per-invocation record when the final shared boundary fails", async () => {
+    const { taskPath, runnerRoot } = fixture({ perInvocation: true });
+    const context = bootstrapStage("build-spec", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    });
+    writeFileSync(join(runnerRoot, "dirty.txt"), "dirty\n");
+
+    const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
+    expect(() => authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "accept",
+      runId: "failed-owner-write",
+    })).toThrow(/clean/i);
+    expect(() => readdirSync(join(taskPath, "identity", "executions"))).toThrow();
+  });
+
+  it("binds make-decision write authentication to the prepared CandidateWorkspace", async () => {
+    const { storageRoot, taskPath, runnerRoot, worktreeRoot } = fixture({
+      acceptDecision: false,
+      perInvocation: true,
+    });
+    const context = bootstrapStage("make-decision", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+      runnerRoot,
+      workspaceLifecycle: "prepare",
+    });
+    const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
+    const boundary = authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "prepare",
+      runId: "make-decision-write",
+    });
+    expect(boundary.worktree_root).toBe(realpathSync(worktreeRoot));
+    expect(boundary.path_card.worktree_root).toBe(realpathSync(worktreeRoot));
+    expect(readdirSync(join(taskPath, "identity", "executions"))).toEqual(["make-decision-write.json"]);
+  });
+
+  it("persists an append-only source-bound path card and rejects stale source reuse without mutation", async () => {
+    const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
+    const context = bootstrapStage("build-spec", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    });
+    const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
+    const { persistWriteBoundaryPathCard } = await import("../write-boundary-preflight.mjs");
+    const boundary = authenticateStageWriteBoundary(context, {
+      runnerRoot,
+      operation: "accept",
+      runId: "path-card",
+    });
+    const sourceRef = "test-source.json";
+    const sourceRaw = '{"result":"pass"}\n';
+    context.task.createRecordAtomic(sourceRef, sourceRaw);
+    const sourceHash = createHash("sha256").update(sourceRaw).digest("hex");
+    const first = persistWriteBoundaryPathCard({
+      task: context.task,
+      boundary,
+      source: { ref: sourceRef, hash: sourceHash },
+    });
+    expect(JSON.parse(context.task.readRecord(first.ref))).toMatchObject({
+      authority: "informational_only",
+      source: { ref: sourceRef, hash: sourceHash },
+    });
+    expect(persistWriteBoundaryPathCard({
+      task: context.task,
+      boundary,
+      source: { ref: sourceRef, hash: sourceHash },
+    })).toEqual(first);
+
+    const before = readdirSync(taskPath, { recursive: true }).map(String).sort();
+    expect(() => persistWriteBoundaryPathCard({
+      task: context.task,
+      boundary,
+      source: { ref: sourceRef, hash: "b".repeat(64) },
+    })).toThrow(/source|hash|stale/i);
+    expect(readdirSync(taskPath, { recursive: true }).map(String).sort()).toEqual(before);
+  });
+
+  it("ignores a stale informational path card when resolving the current task and worktree", () => {
+    const { taskPath, worktreeRoot, task, runnerRoot } = fixture({ migrateRunner: true });
+    const staleCardRaw = `${JSON.stringify({
+      schema_version: "workflowhub-path-card.v1",
+      task_id: "paperbuilder-phase-foundation",
+      stage: "build-spec",
+      operation: "accept",
+      task_path: "/tmp/stale-task",
+      target_repo_root: "/tmp/stale-repository",
+      worktree_root: "/tmp/stale-worktree",
+      invocation: { ref: "identity/executions/stale.json", hash: "a".repeat(64) },
+      source: { ref: "results/verify-code/accepted.json", hash: "b".repeat(64) },
+      authority: "informational_only",
+    }, null, 2)}\n`;
+    const staleRef = `identity/path-cards/build-spec/${createHash("sha256").update(staleCardRaw).digest("hex")}.json`;
+    task.createPathCardRecord(staleRef, staleCardRaw);
+
+    const context = bootstrapStage("build-spec", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    });
+    expect(context.task.taskPath).toBe(realpathSync(taskPath));
+    expect(context.workspace.worktreeRoot).toBe(realpathSync(worktreeRoot));
   });
 
   it("rejects taskPath, expected identity, and manifest disagreement", () => {
@@ -201,20 +451,26 @@ describe("bootstrapStage", () => {
     });
     const worktreeRoot = join(storageRoot, "PaperBuilder-paperbuilder-phase-foundation");
     expect(context.candidateWorkspace).toMatchObject({ worktreeRoot: realpathSync(worktreeRoot), baselineCommit });
+    const facts = auditedMakeDecisionFacts(context.kernel, context.candidateWorkspace, { worktreeRoot, baselineCommit });
     expect(() => context.kernel.publishAttempt("make-decision", {
-      facts: { worktree_root: worktreeRoot, baseline_commit: "a".repeat(40) },
+      facts: { ...facts, baseline_commit: "a".repeat(40) },
     }))
       .toThrow(/CandidateWorkspace|match/i);
     const correct = context.kernel.publishAttempt("make-decision", {
-      facts: { worktree_root: worktreeRoot, baseline_commit: baselineCommit },
+      facts,
     });
     expect(() => context.kernel.acceptAttempt("make-decision", correct.attempt_ref, writeHumanConfirmation(context.kernel, "make-decision", correct))).not.toThrow();
   });
 
   it.each(["build-spec", "build-plan", "verify-code"])(
-    "builds %s Workspace and ArtifactDir only from accepted make-decision facts",
+    "builds %s Workspace and ArtifactDir from the current task worktree",
     (stage) => {
-      const { storageRoot, worktreeRoot, baselineCommit } = fixture();
+      const fixtureValue = fixture();
+      if (stage === "verify-code") writeCurrentMaterials(fixtureValue.worktreeRoot);
+      if (stage !== "build-spec") {
+        fixtureValue.kernel.startStageRun(stage, { reason: "stage-context workspace coverage" });
+      }
+      const { storageRoot, worktreeRoot, baselineCommit } = fixtureValue;
       const context = bootstrapStage(
         stage,
         {
@@ -236,15 +492,39 @@ describe("bootstrapStage", () => {
     },
   );
 
-  it("rejects build-code bootstrap without accepted spec and plan", () => {
-    const { storageRoot } = fixture();
+  it("allows build-code without accepted design history when all four current materials are readable", () => {
+    const { storageRoot, worktreeRoot } = fixture({ acceptDecision: false });
+    writeCurrentMaterials(worktreeRoot);
     expect(() => bootstrapStage("build-code", {
       mode: "launcher",
       home: storageRoot,
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
       env: { WORKFLOWHUB_TASK_DIR: storageRoot },
-    })).toThrow(/accepted spec and plan/i);
+    })).not.toThrow();
+  });
+
+  it("names every missing current material before build-code starts", () => {
+    const { storageRoot } = fixture({ acceptDecision: false });
+    expect(() => bootstrapStage("build-code", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+    })).toThrow(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
+  });
+
+  it("current documents: names every missing material before verify-code starts", () => {
+    const fixtureValue = fixture({ acceptDecision: false });
+    fixtureValue.kernel.startStageRun("verify-code", { reason: "current documents RED control" });
+    expect(() => bootstrapStage("verify-code", {
+      mode: "launcher",
+      home: fixtureValue.storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: fixtureValue.storageRoot },
+    })).toThrow(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
   });
 
   it("invalidates Workspace automatically when its worktree path is replaced", () => {

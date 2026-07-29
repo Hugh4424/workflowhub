@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { openTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
+import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import {
   closePlanHash,
   completeDeliveryClosePlan,
@@ -11,6 +16,8 @@ import {
   inspectDeliveryCloseState,
   prepareDeliveryClosePlan,
 } from "../core/task-close.mjs";
+
+const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function args(argv) {
   const [command, ...rest] = argv;
@@ -27,9 +34,12 @@ function required(values, name) {
   return values[name];
 }
 
-function context(values) {
+function context(values, { workspaceRequired = true } = {}) {
   const task = openTask(required(values, "task-path"), required(values, "project"), required(values, "task"));
-  return { task, kernel: createTaskKernel(task) };
+  const unboundKernel = createTaskKernel(task);
+  if (!workspaceRequired) return { task, workspace: null, kernel: unboundKernel };
+  const workspace = openAcceptedWorkspace(task, unboundKernel.readAccepted("make-decision"));
+  return { task, workspace, kernel: createTaskKernel(task, { workspace }) };
 }
 
 function preparedPlan(task, hash) {
@@ -60,9 +70,25 @@ function usage() {
 async function main() {
   const { command, values } = args(process.argv.slice(2));
   if (!new Set(["prepare", "confirm", "execute", "complete", "status"]).has(command)) throw new TypeError(usage());
-  const { task, kernel } = context(values);
+  const { task, workspace, kernel } = context(values, { workspaceRequired: command !== "status" });
+  const boundary = command === "status" ? null : authenticateWriteBoundary({
+    task,
+    stage: "verify-code",
+    operation: `close.${command}`,
+    runnerRoot: RUNNER_ROOT,
+    workspace,
+  });
+  const finish = (result, sourceRef) => {
+    const raw = task.readRecord(sourceRef);
+    persistWriteBoundaryPathCard({
+      task,
+      boundary,
+      source: { ref: sourceRef, hash: createHash("sha256").update(raw).digest("hex") },
+    });
+    return result;
+  };
   if (command === "prepare") {
-    return prepareDeliveryClosePlan({ task, kernel, delivery: {
+    const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
       task_branch: required(values, "task-branch"),
       target_branch: required(values, "target-branch"),
       remote: required(values, "remote"),
@@ -70,11 +96,24 @@ async function main() {
       spec_source_path: required(values, "spec-source"),
       spec_archive_path: required(values, "spec-archive"),
     } });
+    return finish(result, `operations/close/plans/${result.plan_hash}/plan.json`);
   }
   const plan = preparedPlan(task, required(values, "plan-hash"));
-  if (command === "confirm") return confirmClosePlan({ task, kernel, plan, outcome: required(values, "decision") });
-  if (command === "execute") return executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
-  if (command === "complete") return completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
+  if (command === "confirm") {
+    const result = confirmClosePlan({ task, kernel, plan, outcome: required(values, "decision") });
+    return finish(result, result.ref);
+  }
+  if (command === "execute") {
+    const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
+    const sourceRef = result.status === "completed"
+      ? "operations/close/completed.json"
+      : required(values, "confirmation-ref");
+    return finish(result, sourceRef);
+  }
+  if (command === "complete") {
+    const result = await completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
+    return finish(result, "operations/close/completed.json");
+  }
   const completion = optionalCompletion(task);
   if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {
     throw new Error("completed close record conflicts with the requested plan");

@@ -24,13 +24,26 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
-  it.each([true, false])("accepts boolean phase completion: %s", (value) => {
+  it.each([true, false])("keeps boolean phase completion readable as legacy data: %s", (value) => {
     expect(validatePhaseCompletion(value)).toBe(value);
   });
 
-  it("accepts structured phase completion with a task-relative evidence ref", () => {
-    const value = { status: "completed", evidence_ref: "evidence/phase-result.json" };
+  it("accepts structured phase completion with authenticated task evidence", () => {
+    const value = {
+      status: "completed",
+      evidence_ref: "evidence/phase-result.json",
+      evidence_hash: "a".repeat(64),
+      integration_review: { ref: "reviews/results/build-code.json", sha256: "b".repeat(64) },
+      formal_record_status: { status: "unavailable", reason: "fixture has no Phase history" },
+    };
     expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it("rejects caller boolean phase completion for current publication", () => {
+    expect(() => validatePhaseCompletion(true, "build-code facts.phase_completion", {
+      allowLegacyBoolean: false,
+      requireAuthenticatedEvidence: true,
+    })).toThrow(/legacy read-only|derived completion evidence/i);
   });
 
   it.each([
@@ -56,7 +69,7 @@ describe("official component receipt authority", () => {
     expect(JSON.parse(task.readRecord(first.ref))).toMatchObject({ content: "draft\n" });
   });
 
-  it("publishes allowlisted content and rejects implementation without accepted design", () => {
+  it("publishes allowlisted content and derives implementation completion outside the caller payload", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     expect(spec.ref).toBe("receipts/spec.json");
@@ -64,8 +77,15 @@ describe("official component receipt authority", () => {
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
     writeFileSync(join(worktree, "new.txt"), "new\n");
-    expect(() => writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } })).toThrow(/accepted spec and plan/i);
-    expect(() => task.readRecord("receipts/implementation.json")).toThrow();
+    expect(() => writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation",
+      payload: { phase_completion: true },
+    })).toThrow(/payload must be empty|phase_completion is derived/i);
+    const implementation = writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation", payload: {},
+    });
+    expect(implementation.value.changed).toEqual(["new.txt", "tracked.txt"]);
+    expect(implementation.value).not.toHaveProperty("phase_completion");
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 

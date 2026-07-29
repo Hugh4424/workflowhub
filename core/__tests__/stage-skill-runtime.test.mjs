@@ -42,7 +42,21 @@ describe("stage skill runtime", () => {
   it("validates conditional bundle assets during stage preflight", () => {
     const root = fixture();
     fs.rmSync(path.join(root, "skills/demo/SKILL.md"));
-    expect(() => preflightStageSkills({ packageRoot: root, stage: "stage" })).toThrow();
+    let failure;
+    try {
+      preflightStageSkills({ packageRoot: root, stage: "stage" });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.code).not.toBe("ENOENT");
+    expect(failure.diagnostic).toMatchObject({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+    });
   });
 
   it("records an unavailable independent context without a human gate", async () => {
@@ -50,11 +64,45 @@ describe("stage skill runtime", () => {
     await expect(dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", independentContextAvailable: false, hostInvoke: () => null })).resolves.toMatchObject({ name: "demo", status: "unavailable", reason: "independent_context_unavailable" });
   });
 
-  it("blocks preflight according to required_when and absence_semantics", () => {
+  it("records a blocked doctor diagnostic without blocking stage startup", () => {
     const root = fixture();
     fs.appendFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "");
     const manifestPath = path.join(root, "workflows/stage/skill-deps.yaml");
     fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace("runtime_capabilities: []", "runtime_capabilities:\n  - { id: missing, kind: cli, required_when: always, doctor: [missing-cli], absence_semantics: blocked }"));
-    expect(() => preflightStageSkills({ packageRoot: root, stage: "stage", run: () => ({ status: 127, error: new Error("missing") }) })).toThrow(/missing:blocked/);
+    const prepared = preflightStageSkills({ packageRoot: root, stage: "stage", run: () => ({ status: 127, error: new Error("missing") }) });
+    expect(prepared.payloads.has("demo")).toBe(true);
+    expect(prepared.capabilityResults).toContainEqual(expect.objectContaining({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "doctor",
+      skill: "missing",
+      status: "blocked",
+    }));
+  });
+
+  it.each(["blocked", "human_required"])("keeps a %s doctor result advisory through host invocation", async (absenceSemantics) => {
+    const root = fixture();
+    const manifestPath = path.join(root, "workflows/stage/skill-deps.yaml");
+    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace(
+      "runtime_capabilities: []",
+      `runtime_capabilities:\n  - { id: missing, kind: cli, required_when: always, doctor: [missing-cli], absence_semantics: ${absenceSemantics} }`,
+    ));
+    const hostCalls = [];
+    const result = await dispatchStageSkill({
+      packageRoot: root,
+      stage: "stage",
+      name: "demo",
+      run: () => ({ status: 127, error: new Error("missing") }),
+      hostInvoke: (payload) => {
+        hostCalls.push(payload);
+        return payload;
+      },
+    });
+    expect(hostCalls).toHaveLength(1);
+    expect(result.doctor_diagnostics).toContainEqual(expect.objectContaining({
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      skill: "missing",
+      status: absenceSemantics,
+      enforcement: "advisory",
+    }));
   });
 });

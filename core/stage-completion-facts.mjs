@@ -61,13 +61,70 @@ function metric(value, label) {
   return value;
 }
 
+function component(value, index) {
+  const item = object(value, `components[${index}]`);
+  const status = text(item.status, `components[${index}].status`);
+  if (!["executed", "trigger=false"].includes(status)) {
+    throw new TypeError("component status must be executed or trigger=false");
+  }
+  return {
+    name: text(item.name, `components[${index}].name`),
+    status,
+    reason: text(item.reason, `components[${index}].reason`),
+  };
+}
+
+function sourceCoverage(value) {
+  const item = object(value, "source_coverage");
+  return {
+    source_keys: stringList(item.source_keys, "source_coverage.source_keys"),
+    missing_sources: stringList(item.missing_sources, "source_coverage.missing_sources"),
+    orphan_sources: stringList(item.orphan_sources, "source_coverage.orphan_sources"),
+    reverse_missing: stringList(item.reverse_missing, "source_coverage.reverse_missing"),
+  };
+}
+
+function confirmationSummary(value) {
+  const item = object(value, "confirmation_summary");
+  return {
+    specification: text(item.specification, "confirmation_summary.specification"),
+    non_goals: stringList(item.non_goals, "confirmation_summary.non_goals"),
+    phases: stringList(item.phases, "confirmation_summary.phases"),
+    dependencies: stringList(item.dependencies, "confirmation_summary.dependencies"),
+    tests: stringList(item.tests, "confirmation_summary.tests"),
+    review_advice: text(item.review_advice, "confirmation_summary.review_advice"),
+    risks: stringList(item.risks, "confirmation_summary.risks"),
+    expected_impact: text(item.expected_impact, "confirmation_summary.expected_impact"),
+  };
+}
+
+function riskVerification(value) {
+  if (!Array.isArray(value)) throw new TypeError("risk_verification must be an array");
+  return value.map((entry, index) => {
+    const item = object(entry, `risk_verification[${index}]`);
+    return {
+      risk_id: text(item.risk_id, `risk_verification[${index}].risk_id`),
+      red: structuredClone(object(item.red, `risk_verification[${index}].red`)),
+      green: structuredClone(object(item.green, `risk_verification[${index}].green`)),
+    };
+  });
+}
+
 export function createStageCompletionFacts(input) {
   const value = object(input, "completion facts");
   const verification = object(value.verification, "verification");
   const review = object(value.review, "review");
+  const result = text(value.result, "result");
+  const missingItems = stringList(value.missing_items, "missing_items");
+  if (result === "passed" && missingItems.length > 0) {
+    throw new TypeError("passed completion evidence requires empty missing_items");
+  }
+  if (value.result === "passed" && review.status === "unavailable") {
+    throw new TypeError("review unavailable cannot be reported as pass");
+  }
   const facts = {
     schema_version: "stage-completion-facts.v1",
-    result: text(value.result, "result"),
+    result,
     objective: text(value.objective, "objective"),
     approach: text(value.approach, "approach"),
     effect: text(value.effect, "effect"),
@@ -85,7 +142,17 @@ export function createStageCompletionFacts(input) {
       findings: Array.isArray(review.findings) ? structuredClone(review.findings) : (() => { throw new TypeError("review.findings must be an array"); })(),
       refs: (review.refs ?? []).map(ref),
     },
-    missing_items: stringList(value.missing_items, "missing_items"),
+    components: (value.components ?? []).map(component),
+    ...(value.confirmation_summary === undefined ? {} : {
+      confirmation_summary: confirmationSummary(value.confirmation_summary),
+    }),
+    ...(value.source_coverage === undefined ? {} : {
+      source_coverage: sourceCoverage(value.source_coverage),
+    }),
+    ...(value.risk_verification === undefined ? {} : {
+      risk_verification: riskVerification(value.risk_verification),
+    }),
+    missing_items: missingItems,
     risks: stringList(value.risks, "risks"),
     dependencies: stringList(value.dependencies, "dependencies"),
     recovery_conditions: stringList(value.recovery_conditions, "recovery_conditions"),

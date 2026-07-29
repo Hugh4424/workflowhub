@@ -1,10 +1,31 @@
 ---
 name: build-code
-description: Implement the accepted plan in the verified task worktree.
+description: Implement the current plan in the verified task worktree.
 version: 2.0.0
 ---
 
 # Build Code
+
+A real review outcome is recorded as returned; `unavailable` never becomes
+`pass`.
+
+## Main-flow and completion rule
+
+Start from the current readable `decision-log.md`, `spec.md`, `plan.md`, and
+`tasks.md`. Historical accepted records are audit context, not an entry
+licence. Missing or unreadable current material is named and stops this
+invocation; it does not create a repair task.
+
+`tasks.md` is the only Task completion authority. The executor implements each
+Task, runs its focused tests, obtains the Phase review, then updates only that
+Task's `执行状态填写区（唯一完成权威）` with the checkbox, `status`,
+actual changes, commands and exit codes, canonical evidence ref/hash bindings,
+covered ACs, review fact, and completion time. The runtime only reads and
+certifies this area; it never checks a box or creates a second completion
+state. A review followed by this tasks-only update does not repeat the Phase
+review. The next Phase, or the final integration when it is the last Phase,
+must certify that the delta touched only the named Task status area and binds
+the same implementation, test, and review facts.
 
 ## Runtime contract
 
@@ -78,12 +99,10 @@ repair of the current open stage; it
 does not require or create a verify-code reopen authorization. After build-code
 is accepted, only the controlled verification-failure path above may create
 another build-code attempt.
-For a normal completed build, use the smallest valid payload:
-`{"phase_completion":true}`. A structured value is allowed only as
-`{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
-Keep Phase lists and the AC table in the existing test evidence and human brief;
-do not put them inside `phase_completion`. The receipt command validates this
-shape before publishing any create-only receipt or diff evidence.
+For every implementation receipt, use the only valid payload: `{}`.
+`phase_completion` is derived later by the official handler from the current
+`tasks.md`, current implementation diff, fresh tests, AC coverage, and review
+facts. Callers must never supply it.
 
 Create the canonical build test receipt only through:
 `node scripts/stage-runtime.mjs capture-tests --stage=build-code
@@ -108,15 +127,18 @@ review fact, and the final implementation
 receipt and fresh complete test receipt exist, run one final independent **integration**
 review: `wh-review` without `phase_id`. The runner derives
 `review_scope=integration`; callers never supply it, paths, commits, ranges, or
-a caller-built diff. Before any independent review call, it reconstructs one unique,
-continuous formal semantic-review Phase-trace chain from the accepted build-plan checkpoint
-to the final tree, validates final test and AC trace identity, and builds only
-the integration packet. Missing/branched/stale traces, zero-Phase work, legacy
-unscoped final results, or missing AC/seam facts fail `MATERIAL_INCOMPLETE`;
-they never fall back to a full history or cumulative diff. The canonical
+a caller-built diff. The packet is built from the authenticated execution
+baseline through the final snapshot. Canonical Phase traces, accepted
+checkpoints, and AC/seam records may enrich that packet for audit. When they
+do not exist, record `formal_record_status=unavailable`; never rebuild history,
+invent a bridge record, or block current quality completion. The canonical
 implementation receipt, canonical tests receipt, and final integration result
 must all bind the same snapshot tree. A mismatch fails before the build-code
-attempt is published.
+attempt is published. Before final publication, certify every planned Task
+against the current `tasks.md`, implementation diff, focused tests, covered
+ACs, and review binding. Any unchecked Task, missing completion field, absent
+or mismatched evidence, failed test, uncovered AC, or stale review keeps
+build-code in progress. Accepted records never change this conclusion.
 The final integration packet also carries authoritative Phase Card facts for every
 changed Phase, including regression scope and explicit compatibility boundaries;
 it is not assembled from `spec.md` alone. A missing compatibility declaration
@@ -139,8 +161,8 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 
 ## Inputs and outputs
 
-- Reads: accepted make-decision and build-plan results; `spec.md`, `plan.md`,
-  and `tasks.md` through ArtifactDir.
+- Reads: current `decision-log.md`, `spec.md`, `plan.md`, and `tasks.md`
+  through ArtifactDir; accepted records are audit context.
 - Writes: code only inside the verified Workspace; append-only build-code
   attempt and evidence through TaskHandle/TaskKernel.
 - Does not modify accepted design artifacts.
@@ -184,27 +206,25 @@ order, evidence, or authority boundaries.
    text. A missing, stale, duplicate, or overwide binding stops that task with
    its affected ID and recovery condition. The projection is execution input
    only: discard it after the task and never publish it as an accepted fact.
-3. Start only the current Phase. When Phase execution returns, run the Phase
-   gate against the canonical result, its authenticated semantic review fact,
-   and the live Workspace tree. Missing evidence, identity/hash/snapshot/scope/
-   material mismatch, or Workspace drift returns to the same Phase; it never
-   advances. `pass` and `revise_required` remain review quality facts and do
-   not decide this structural gate. Present one
-   Phase result brief after the gate decision: implemented behavior, real tests,
+3. Start only the current Phase. When Phase execution returns, update every
+   completed Task in `tasks.md` with its actual changes, real commands, evidence,
+   covered ACs, and independent review fact. Current Task facts and the live
+   Workspace decide whether the Phase work is complete. Canonical TaskKernel or
+   Phase records are optional audit bindings; their absence is recorded as
+   unavailable and never prevents the next planned Phase. `pass` and
+   `revise_required` remain review quality facts and do not decide completion.
+   Present one Phase result brief: implemented behavior, real tests,
    Phase review conclusion, important findings/disposition, residual risk, and
    whether the next Phase may start.
-4. Start the next Phase only after the current Phase gate passes. The accepted
-   plan remains the ordering authority; the mutable `phase-result.json` is only
-   the current pointer because there is no machine-readable Phase index.
-5. After every planned Phase completes, verify each Phase ID has matching
-   canonical snapshot/material evidence, a formal semantic result, and a minimal
-   phase-map trace. Reconstruct one unique continuous coverage chain from the
-   accepted build-plan checkpoint to the final tree; missing/ambiguous/legacy
-   facts are `MATERIAL_INCOMPLETE`. A trace that only authenticates paths and
-   evidence must emit an audited `unknown` seam, not invent a semantic
-   producer/consumer relation. After the fresh test receipt is captured, run
+4. Start the next Phase only after its Tasks are complete in `tasks.md`. The
+   accepted plan remains the ordering authority.
+5. After every planned Phase completes, best-effort inspect any canonical
+   snapshot, semantic-review, Phase trace, and seam records. Preserve valid
+   records as audit enrichment. Record missing history as
+   `formal_record_status=unavailable`; do not replay a Phase or change the
+   complete implementation diff. After the fresh test receipt is captured, run
    exactly one final full-worktree `wh-review`; its scope is `worktree + integration`
-   and it uses no historical or cumulative diff.
+   and it uses the authenticated execution baseline, never a cumulative history diff.
    After the fresh test receipt, run the final independent integration review.
    The final scope is `worktree + integration` `wh-review` without historical or cumulative diff.
    Never repeat a Phase or final review when its snapshot/material identity is
@@ -252,7 +272,7 @@ order, evidence, or authority boundaries.
    The runtime derives the baseline and Workspace identity. Do not supply a
    path, commit, range, review implementation detail, or output destination.
    `phase_id` and `allowed_files` are declared Phase facts, not a new approval
-   registry; the independent review checks them against the accepted plan.
+   registry; the independent review checks them against the current plan.
    If the final full-worktree review finds a problem before build-code is
    accepted, include its formal `revise_required` result as
    `repair_review_result_ref`. The runtime binds that result to the current
@@ -265,14 +285,19 @@ order, evidence, or authority boundaries.
    them to the Phase Card, revert them, or treat them as business changes. Any
    edit outside complete marked blocks, malformed marker, mode change, symlink,
    or any other path still fails the allowlist normally.
-5. Run one independent `wh-review` for the current `phase_id`. Then call
+5. Run one independent `wh-review` for the current `phase_id`. After every
+   Phase review, update that Phase's completion area in `tasks.md`; the following
+   tasks-only seam authenticates the update without repeating the Phase review. Then call
    `publish-phase-evidence` again with the same facts plus
    `review_result_ref`; this finalizes the current pointer without invoking a
    review itself.
    `simplicity-guard` is visible only inside `wh-review`; Stage coordination
    and Phase execution never invoke it directly.
    Present one Phase review brief for the effective result before returning or
-   repairing findings.
+   repairing findings. Then the executor updates only this Phase Task's
+   completion area in `tasks.md`. The next Phase, or final integration for the
+   last Phase, authenticates that tasks-only seam and the same
+   implementation/test/review refs without repeating this Phase review.
 6. Preserve `revise_required` and its findings as quality facts. Minor,
    invalid-anchor/evidence, and unavailable outcomes are recorded without
    becoming a stage-pass gate; unavailable never becomes `pass` and never
@@ -407,4 +432,5 @@ affected scope, and mutually exclusive “repair first” (recommended) and
 adapter failures never open this override; unavailable remains unavailable and
 never produces a risk acceptance. With no serious finding
 build-code remains automatic; accepted risk keeps the original verdict and
-cannot excuse missing tests, Phase evidence, or integration structure.
+cannot excuse missing current Task evidence, failed tests, unowned changes, or
+uncovered ACs.

@@ -5,13 +5,13 @@ import { fileURLToPath } from "node:url";
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
-import { validateAcceptanceEvidence, validatePhaseCompletion } from "./task-kernel-implementation.mjs";
+import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
-import { buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
+import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
 import { carryAuditSummary } from "./audit-summary-carrier.mjs";
 import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
@@ -73,26 +73,46 @@ function auditableJournalEvents(task, stage, workflowRunId) {
     event.workflow_run_id === workflowRunId && event.stage_slug === stage);
   const byAttempt = new Map();
   for (const event of events) {
-    const bucket = byAttempt.get(event.attempt_id) ?? [];
+    const key = `${event.step_id}\0${event.attempt_id}`;
+    const bucket = byAttempt.get(key) ?? [];
     bucket.push(event);
-    byAttempt.set(event.attempt_id, bucket);
+    byAttempt.set(key, bucket);
   }
   const invalidated = new Set();
-  for (const [attemptId, attemptEvents] of byAttempt) {
-    const identityHash = sha256(`${workflowRunId}\0${attemptId}`);
+  const invalidatedEvents = new Map();
+  for (const [key, attemptEvents] of byAttempt) {
+    const [stepId, attemptId] = key.split("\0");
+    const identityHash = sha256(`${workflowRunId}\0${stepId}\0${attemptId}`);
     const ref = `runs/${stage}/journal-invalidations/${identityHash}.json`;
     const raw = readCanonicalRecord(task, ref);
     if (raw === undefined) continue;
     const record = JSON.parse(raw);
     if (record.schema_version !== "stage-step-attempt-invalidation.v1"
         || record.task_id !== task.identity.taskId || record.stage !== stage
-        || record.workflow_run_id !== workflowRunId || record.attempt_id !== attemptId
+        || record.workflow_run_id !== workflowRunId || record.step_id !== Number(stepId)
+        || record.attempt_id !== attemptId
         || record.events_hash !== sha256(canonicalHashJson(attemptEvents))) {
       throw new Error("stage step attempt invalidation binding mismatch");
     }
-    invalidated.add(attemptId);
+    invalidated.add(key);
+    invalidatedEvents.set(key, attemptEvents);
   }
-  return events.filter((event) => !invalidated.has(event.attempt_id));
+  const auditableEvents = events.filter((event) => !invalidated.has(`${event.step_id}\0${event.attempt_id}`));
+  const authenticatedRetries = auditableEvents
+    .filter((event) => event.event_type === "step_entry" && event.retry_of_attempt_id)
+    .map((retryEvent) => {
+      const previousEvents = invalidatedEvents.get(`${retryEvent.step_id}\0${retryEvent.retry_of_attempt_id}`);
+      if (previousEvents === undefined) return null;
+      return authenticateAuditRetryEvidence({
+        task,
+        stageSlug: stage,
+        workflowRunId,
+        retryEvent,
+        previousEvents,
+      });
+    })
+    .filter(Boolean);
+  return { events: auditableEvents, authenticatedRetries };
 }
 
 /** Build and publish the only audit summary from canonical task records. */
@@ -142,8 +162,9 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
   const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
   const ledger = JSON.parse(ledgerRaw);
   const manifest = loadStageManifest(stage, fileURLToPath(new URL("../", import.meta.url)));
+  const auditable = auditableJournalEvents(safeTask, stage, workflowRunId);
   const summary = buildAuditSummaryFromJournalEvents(
-    auditableJournalEvents(safeTask, stage, workflowRunId),
+    auditable.events,
     stage,
     workflowRunId,
     {
@@ -153,6 +174,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
       ledger,
       required_content_kinds: kinds,
       content_evidence: contentEvidence,
+      authenticated_retries: auditable.authenticatedRetries,
       ...(throughStepId === undefined ? {} : { through_step_id: throughStepId }),
     },
   ).audit_summary;
@@ -274,14 +296,8 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace);
-    if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
-    validatePhaseCompletion(payload.phase_completion);
-    const acceptedKernel = createTaskKernel(safeTask, { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
-    try {
-      acceptedKernel.readAccepted("build-spec");
-      acceptedKernel.readAccepted("build-plan");
-    } catch (error) {
-      throw new Error(`build-code implementation receipt requires current accepted spec and plan: ${error.message}`);
+    if (Object.keys(payload).length !== 0) {
+      throw new TypeError("implementation payload must be empty; phase_completion is derived by the official build-code handler");
     }
     const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
     const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
@@ -294,7 +310,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     // during a controlled reopen must be safe; a different payload is still
     // rejected by the idempotent writer.
     publishIdempotently({ task: safeTask, write, ref: diffRef, raw: diff, label: "implementation diff evidence" });
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();

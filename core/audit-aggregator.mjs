@@ -1,15 +1,19 @@
 /** Canonical expected-topology / observed-receipt reconciler. */
 import { createHash } from "node:crypto";
 import { calculateCoverage, validateRequirementLedger } from "./requirement-ledger.mjs";
+import { assertTaskHandle } from "./task-handle.mjs";
 
 const STAGE_SLUGS = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const TERMINAL_STATUSES = new Set(["success", "failure", "blocked", "skipped", "needs_human"]);
+const ATTEMPT_ID = /^attempt-([1-9][0-9]*)$/;
+const AUTHENTICATED_RETRY_EVIDENCE = new WeakSet();
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
 }
+function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 function hashSummary(summary) { return createHash("sha256").update(canonicalJson(summary), "utf8").digest("hex"); }
 function nonEmptyString(value) { return typeof value === "string" && value.trim() !== ""; }
 function evidenceRef(value) {
@@ -35,7 +39,123 @@ function completedDependency(event, stageSlug) {
   return event?.terminal_status === "success" || authorizedResearchSkip(event, stageSlug);
 }
 
-function requiredExpectedSteps(manifest, stageSlug, facts, throughStepId) {
+/**
+ * Authenticate one retry against the kernel-owned journal and invalidation.
+ * The returned capability is process-local; copying its fields does not confer
+ * authority to promote an observed retry into expected work.
+ */
+export function authenticateAuditRetryEvidence({
+  task,
+  stageSlug,
+  workflowRunId,
+  retryEvent,
+  previousEvents,
+} = {}) {
+  const safeTask = assertTaskHandle(task);
+  if (!STAGE_SLUGS.has(stageSlug) || !nonEmptyString(workflowRunId)
+      || !validIdentity(retryEvent, stageSlug, workflowRunId)
+      || retryEvent.event_type !== "step_entry") {
+    throw new Error("audit retry target identity is invalid");
+  }
+  const retryMatch = ATTEMPT_ID.exec(retryEvent.attempt_id);
+  const previousMatch = ATTEMPT_ID.exec(retryEvent.retry_of_attempt_id ?? "");
+  if (!retryMatch || !previousMatch || Number(retryMatch[1]) !== Number(previousMatch[1]) + 1) {
+    throw new Error("audit retry must name the immediately previous attempt");
+  }
+  if (!Array.isArray(previousEvents) || previousEvents.length === 0
+      || previousEvents.some((event) =>
+        !validIdentity(event, stageSlug, workflowRunId)
+        || event.step_id !== retryEvent.step_id
+        || event.attempt_id !== retryEvent.retry_of_attempt_id)) {
+    throw new Error("audit retry previous target-step events are invalid");
+  }
+
+  const journal = safeTask.readRecord("journal.jsonl").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const canonicalPreviousEvents = journal.filter((event) =>
+    event.workflow_run_id === workflowRunId
+    && event.stage_slug === stageSlug
+    && event.step_id === retryEvent.step_id
+    && event.attempt_id === retryEvent.retry_of_attempt_id);
+  const canonicalRetryEntries = journal.filter((event) =>
+    event.workflow_run_id === workflowRunId
+    && event.stage_slug === stageSlug
+    && event.step_id === retryEvent.step_id
+    && event.attempt_id === retryEvent.attempt_id
+    && event.event_type === "step_entry");
+  if (canonicalJson(canonicalPreviousEvents) !== canonicalJson(previousEvents)
+      || canonicalRetryEntries.length !== 1
+      || canonicalJson(canonicalRetryEntries[0]) !== canonicalJson(retryEvent)) {
+    throw new Error("audit retry journal binding mismatch");
+  }
+
+  const previousEventsHash = sha256(canonicalJson(previousEvents));
+  const identityHash = sha256(`${workflowRunId}\0${retryEvent.step_id}\0${retryEvent.retry_of_attempt_id}`);
+  const invalidationRef = `runs/${stageSlug}/journal-invalidations/${identityHash}.json`;
+  const invalidationRaw = safeTask.readRecord(invalidationRef);
+  const invalidation = JSON.parse(invalidationRaw);
+  if (invalidation.schema_version !== "stage-step-attempt-invalidation.v1"
+      || invalidation.task_id !== safeTask.identity.taskId
+      || invalidation.stage !== stageSlug
+      || invalidation.workflow_run_id !== workflowRunId
+      || invalidation.step_id !== retryEvent.step_id
+      || invalidation.attempt_id !== retryEvent.retry_of_attempt_id
+      || invalidation.events_hash !== previousEventsHash
+      || !nonEmptyString(invalidation.reason)
+      || !Number.isFinite(Date.parse(invalidation.created_at))) {
+    throw new Error("audit retry invalidation binding mismatch");
+  }
+
+  const evidence = Object.freeze({
+    task_id: safeTask.identity.taskId,
+    stage_slug: stageSlug,
+    workflow_run_id: workflowRunId,
+    step_id: retryEvent.step_id,
+    attempt_id: retryEvent.attempt_id,
+    retry_of_attempt_id: retryEvent.retry_of_attempt_id,
+    retry_event_hash: sha256(canonicalJson(retryEvent)),
+    previous_events_hash: previousEventsHash,
+    invalidation_ref: invalidationRef,
+    invalidation_hash: sha256(invalidationRaw),
+  });
+  AUTHENTICATED_RETRY_EVIDENCE.add(evidence);
+  return evidence;
+}
+
+function authenticatedRetries(evidence, events, stageSlug, workflowRunId, taskId, facts) {
+  const result = new Map();
+  if (evidence === undefined) return result;
+  if (!Array.isArray(evidence)) {
+    facts.retry.push({ type: "INVALID_AUTHENTICATED_RETRY_EVIDENCE" });
+    return result;
+  }
+  for (const item of evidence) {
+    const matchingEntry = events.filter((event) =>
+      event?.event_type === "step_entry"
+      && event?.workflow_run_id === workflowRunId
+      && event?.stage_slug === stageSlug
+      && event?.step_id === item?.step_id
+      && event?.attempt_id === item?.attempt_id
+      && event?.retry_of_attempt_id === item?.retry_of_attempt_id);
+    if (!AUTHENTICATED_RETRY_EVIDENCE.has(item)
+        || item.task_id !== taskId
+        || item.stage_slug !== stageSlug
+        || item.workflow_run_id !== workflowRunId
+        || matchingEntry.length !== 1
+        || sha256(canonicalJson(matchingEntry[0])) !== item.retry_event_hash
+        || result.has(item.step_id)) {
+      facts.retry.push({
+        type: "INVALID_AUTHENTICATED_RETRY_EVIDENCE",
+        step_id: item?.step_id ?? null,
+        attempt_id: item?.attempt_id ?? null,
+      });
+      continue;
+    }
+    result.set(item.step_id, item);
+  }
+  return result;
+}
+
+function requiredExpectedSteps(manifest, stageSlug, facts, throughStepId, retryEvidence = new Map()) {
   if (!manifest || typeof manifest !== "object") { facts.unknown.push({ type: "MANIFEST_REQUIRED" }); return []; }
   const declaredStage = manifest.stage_slug ?? stageSlug;
   if (declaredStage !== stageSlug || !Array.isArray(manifest.steps) || manifest.steps.length === 0) {
@@ -44,7 +164,7 @@ function requiredExpectedSteps(manifest, stageSlug, facts, throughStepId) {
   const seen = new Set();
   const steps = manifest.steps.map((step) => ({
     step_id: step?.step_id,
-    attempt_id: step?.attempt_id ?? "attempt-1",
+    attempt_id: retryEvidence.get(step?.step_id)?.attempt_id ?? step?.attempt_id ?? "attempt-1",
     order: step?.order,
     depends_on: step?.depends_on ?? [],
   }));
@@ -122,7 +242,21 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [],
     terminal_non_success: [], retry: [], cross_attempt: [], dependency: [],
   };
-  const expectedSteps = requiredExpectedSteps(auditContext.manifest, stageSlug, facts, auditContext.through_step_id);
+  const retryEvidence = authenticatedRetries(
+    auditContext.authenticated_retries,
+    events,
+    stageSlug,
+    workflowRunId,
+    auditContext.task_id,
+    facts,
+  );
+  const expectedSteps = requiredExpectedSteps(
+    auditContext.manifest,
+    stageSlug,
+    facts,
+    auditContext.through_step_id,
+    retryEvidence,
+  );
   const ledgerResult = validateRequirementLedger(auditContext.ledger);
   const requirement_coverage = ledgerResult.ok ? calculateCoverage(auditContext.ledger) : { covered: 0, total: 0, withdrawn: 0, missing_ids: [] };
   if (!ledgerResult.ok) facts.unknown.push({ type: "LEDGER_REQUIRED_OR_INVALID", errors: ledgerResult.errors });
@@ -135,7 +269,17 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     if (event.event_type === "step_entry") {
       if (!evidenceRef(event.entry_evidence) || !nonEmptyString(event.journal_entry_id)) facts.unknown.push({ index, type: "invalid_entry", step_id: event.step_id });
       else { entries.push({ event, index }); evidenceRefs.push(evidenceRef(event.entry_evidence)); }
-      if (event.retry_of_attempt_id) facts.retry.push({ step_id: event.step_id, attempt_id: event.attempt_id, retry_of_attempt_id: event.retry_of_attempt_id });
+      const authenticated = retryEvidence.get(event.step_id);
+      if (event.retry_of_attempt_id
+          && (authenticated?.attempt_id !== event.attempt_id
+            || authenticated.retry_of_attempt_id !== event.retry_of_attempt_id)) {
+        facts.retry.push({
+          type: "UNAUTHENTICATED_RETRY",
+          step_id: event.step_id,
+          attempt_id: event.attempt_id,
+          retry_of_attempt_id: event.retry_of_attempt_id,
+        });
+      }
     } else if (event.event_type === "step_exit") {
       if (!TERMINAL_STATUSES.has(event.terminal_status) || !evidenceRef(event.completion_evidence) || !nonEmptyString(event.entry_journal_entry_id)) facts.unknown.push({ index, type: "invalid_exit", step_id: event.step_id });
       else {

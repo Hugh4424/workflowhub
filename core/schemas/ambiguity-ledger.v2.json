@@ -13,13 +13,26 @@
     "frs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fr" } },
     "acs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ac" } },
     "risks": { "type": "array", "items": { "$ref": "#/$defs/risk" } },
-    "open_questions": { "type": "array", "items": { "$ref": "#/$defs/open_question" } }
+    "open_questions": { "type": "array", "items": { "$ref": "#/$defs/open_question" } },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "status", "reason"],
+      "properties": {
+        "component": { "const": "spec-clarify" },
+        "status": { "enum": ["executed", "trigger=false"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "ask": { "$ref": "#/$defs/clarify_ask" },
+        "wait": { "$ref": "#/$defs/clarify_wait" },
+        "resume": { "$ref": "#/$defs/clarify_resume" }
+      }
+    }
   },
   "allOf": [
     {
       "if": { "properties": { "content_profile": { "const": "spec-content.v3" } }, "required": ["content_profile"] },
       "then": {
-        "required": ["scenarios", "open_questions"],
+        "required": ["scenarios", "open_questions", "clarification"],
         "properties": {
           "pfacts": {
             "items": {
@@ -57,6 +70,37 @@
     }
   ],
   "$defs": {
+    "clarify_ask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "sequence", "ref"],
+      "properties": {
+        "axis": { "type": "string", "minLength": 1 },
+        "sequence": { "const": 1 },
+        "ref": { "type": "string", "pattern": "^host-message://ask/" }
+      }
+    },
+    "clarify_wait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "sequence", "status", "reply_ref"],
+      "properties": {
+        "axis": { "type": "string", "minLength": 1 },
+        "sequence": { "const": 2 },
+        "status": { "const": "waiting-for-user" },
+        "reply_ref": { "type": "string", "pattern": "^host-message://reply/" }
+      }
+    },
+    "clarify_resume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "sequence", "ref"],
+      "properties": {
+        "axis": { "type": "string", "minLength": 1 },
+        "sequence": { "const": 3 },
+        "ref": { "type": "string", "pattern": "^host-message://resume/" }
+      }
+    },
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "reference": {
       "type": "object",

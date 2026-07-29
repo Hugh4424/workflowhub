@@ -70,6 +70,34 @@ function auditedKernel(task, workspace, options = {}) {
   });
 }
 
+function phaseTaskCard(id, title) {
+  return `#### ${id} — ${title}
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：\`pending\`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — not reviewed
+- **completed_at**：N/A — not completed`;
+}
+
+function fixtureTasks() {
+  return `# Tasks
+
+## Phase 1：Contract
+
+${phaseTaskCard("T001", "Phase 1")}
+
+## Phase 2：Integration
+
+${phaseTaskCard("T002", "Phase 2")}
+`;
+}
+
 function fixture(taskId = "phase-evidence") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-phase-evidence-")));
   roots.push(root);
@@ -87,23 +115,58 @@ function fixture(taskId = "phase-evidence") {
   } });
   const candidate = prepareTaskWorkspace(task);
   const kernel = auditedKernel(task, candidate, { candidateWorkspace: candidate });
+  const decision = writeOfficialComponentReceipt({
+    task,
+    stage: "make-decision",
+    component: "decision",
+    payload: { decision_log: "# Decision\n\nProceed with the fixture plan.\n" },
+  });
   accept(kernel, "make-decision", {
     worktree_root: candidate.worktreeRoot,
     baseline_commit: candidate.baselineCommit,
     snapshot_tree: candidate.captureSnapshot().tree,
+    decision_ref: decision.value.decision_ref,
+    decision_hash: decision.value.decision_hash,
   }, true);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
   const bound = auditedKernel(task, workspace, { artifacts });
+  artifacts.writeAtomic("decision-log.md", task.readRecord(decision.value.decision_ref));
   artifacts.writeAtomic("spec.md", "# Spec\n");
   accept(bound, "build-spec", { spec_ref: artifacts.reference("spec.md"), checkpoint: bound.createCheckpoint("build-spec") }, false,
     [{ task_id: taskId, stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }]);
-  artifacts.writeAtomic("plan.md", "# Plan\n");
-  artifacts.writeAtomic("tasks.md", "# Tasks\n");
+  artifacts.writeAtomic("plan.md", "# Plan\n\n## Phase 1：Contract\n\n## Phase 2：Integration\n");
+  artifacts.writeAtomic("tasks.md", fixtureTasks());
   accept(bound, "build-plan", {
     plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: bound.createCheckpoint("build-plan"),
   }, true, [{ task_id: taskId, stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }]);
   return { root, task, workspace, kernel: bound.rawKernel, auditedKernel: bound };
+}
+
+function recordPhaseTaskCompletion(state, phaseId, reviewRef) {
+  const phaseNumber = Number.parseInt(phaseId.match(/^phase-(\d+)$/)?.[1] ?? "", 10);
+  if (!Number.isSafeInteger(phaseNumber) || phaseNumber < 1) throw new Error(`fixture phase id is invalid: ${phaseId}`);
+  const taskId = `T${String(phaseNumber).padStart(3, "0")}`;
+  const tasksPath = join(state.workspace.worktreeRoot, "specs", state.task.identity.taskId, "tasks.md");
+  const before = readFileSync(tasksPath, "utf8");
+  const phaseResult = JSON.parse(state.task.readRecord("phase-result.json"));
+  const boundRefs = [
+    phaseResult.evidence.implementation_receipt_ref,
+    phaseResult.evidence.green_test_receipt_ref,
+    reviewRef,
+  ].map((ref) => ({ ref, sha256: sha256(state.task.readRecord(ref)) }));
+  const blockPattern = new RegExp(`(^####\\s+${taskId}\\b[^\\n]*\\n[\\s\\S]*?)(?=^####\\s+T\\d+\\b|(?![\\s\\S]))`, "m");
+  const after = before.replace(blockPattern, (block) => block
+    .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+    .replace("- **status**：`pending`", "- **status**：`completed`")
+    .replace("- **actual_changes**：N/A — not started", `- **actual_changes**：${phaseId}.txt`)
+    .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：true; exit 0")
+    .replace("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`${JSON.stringify(boundRefs)}\``)
+    .replace("- **covered_ac**：N/A — not started", `- **covered_ac**：AC-${String(phaseNumber).padStart(2, "0")}`)
+    .replace("- **review_fact**：N/A — not reviewed", `- **review_fact**：${reviewRef}`)
+    .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z"));
+  if (after === before) throw new Error(`fixture Task completion block was not updated: ${taskId}`);
+  writeFileSync(tasksPath, after);
 }
 
 function phaseReceipts(state, name, { revisionOf, extraFiles = [] } = {}) {
@@ -111,7 +174,7 @@ function phaseReceipts(state, name, { revisionOf, extraFiles = [] } = {}) {
   for (const { path, content } of extraFiles) writeFileSync(join(state.workspace.worktreeRoot, path), content);
   const implementation = writeOfficialComponentReceipt({
     task: state.task, workspace: state.workspace, stage: "build-code", component: "implementation",
-    payload: { phase_completion: true }, ...(revisionOf ? { revisionOf } : {}),
+    payload: {}, ...(revisionOf ? { revisionOf } : {}),
   });
   const tests = createCanonicalReceiptWriter({ task: state.task, workspace: state.workspace, stage: "build-code", component: "build-code-test-capture" })
     .captureTests({ command: "true", receiptRef: `receipts/${name}-green.json`, outputRef: `evidence/${name}-green.txt` });
@@ -276,7 +339,14 @@ function controlledReopen(state, published, receipts, reviewRef) {
     snapshot_tree: published.snapshot_tree,
   };
   accept(state.auditedKernel, "build-code", {
-    changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts, phase_completion: true,
+    changed: [`${published.phase_id}.txt`], tests: testFacts, review: reviewFacts,
+    phase_completion: {
+      status: "completed",
+      evidence_ref: "phase-result.json",
+      evidence_hash: sha256(state.task.readRecord("phase-result.json")),
+      integration_review: { ref: reviewRef, sha256: sha256(reviewRaw) },
+      formal_record_status: { status: "unavailable", reason: "fixture has no Phase history" },
+    },
     acceptance_coverage: {
       snapshot_tree: published.snapshot_tree,
       accepted_criterion_ids: [`AC-${published.phase_id}`],
@@ -343,6 +413,7 @@ describe("build-code phase evidence publication", () => {
     rmSync(join(state.workspace.worktreeRoot, "late-untracked.txt"));
 
     publish(state, "phase-1", firstReceipts, { ...firstAllowedFiles, review_result_ref: firstReview });
+    recordPhaseTaskCompletion(state, "phase-1", firstReview);
     const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
     const second = publish(state, "phase-2", secondReceipts, { previous_phase_review_ref: firstReview });
     const secondScan = JSON.parse(state.task.readRecord(second.diff_scan_ref));
@@ -366,13 +437,14 @@ describe("build-code phase evidence publication", () => {
     const state = fixture("integration-subject");
     const firstReceipts = phaseReceipts(state, "phase-1");
     const first = completePhase(state, "phase-1", firstReceipts);
+    recordPhaseTaskCompletion(state, "phase-1", first.review);
     const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
     const second = completePhase(state, "phase-2", secondReceipts, { previous_phase_review_ref: first.review });
 
     const subject = buildIntegrationReviewSubject({ task: state.task, sourceRoot: state.workspace.worktreeRoot, finalTree: second.completed.snapshot_tree });
     expect(subject).toMatchObject({
       schema_version: "integration-review-subject.v1", subject_kind: "worktree", review_scope: "integration",
-      base_commit: state.kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid,
+      base_commit: state.kernel.readAcceptedAudit("build-plan").accepted.checkpoint.commit_oid,
       snapshot_tree: second.completed.snapshot_tree,
     });
     expect(subject.phase_coverage.phases.map(({ phase_id }) => phase_id)).toEqual(["phase-1", "phase-2"]);
@@ -442,6 +514,7 @@ describe("build-code phase evidence publication", () => {
     const state = fixture("integration-legacy-trace");
     const firstReceipts = phaseReceipts(state, "phase-1");
     const first = completePhase(state, "phase-1", firstReceipts);
+    recordPhaseTaskCompletion(state, "phase-1", first.review);
     const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
     const second = completePhase(state, "phase-2", secondReceipts, { previous_phase_review_ref: first.review });
     rmSync(join(state.task.taskPath, first.traceRef));
@@ -586,9 +659,12 @@ describe("build-code phase evidence publication", () => {
     const first = publish(state, "phase-1", firstReceipts);
     const reviewRef = formalPhaseReview(state, first);
     publish(state, "phase-1", firstReceipts, { review_result_ref: reviewRef });
+    recordPhaseTaskCompletion(state, "phase-1", reviewRef);
     const secondReceipts = phaseReceipts(state, "phase-2", { revisionOf: firstReceipts.implementation.ref });
     const second = publish(state, "phase-2", secondReceipts, { previous_phase_review_ref: reviewRef });
-    expect(second.baseline_commit).toBe(first.implementation_commit);
+    expect(git(state.workspace.worktreeRoot, ["rev-parse", `${second.baseline_commit}^`])).toBe(first.implementation_commit);
+    expect(git(state.workspace.worktreeRoot, ["diff", "--name-only", first.implementation_commit, second.baseline_commit]))
+      .toBe(`specs/${state.task.identity.taskId}/tasks.md`);
   });
 
   it("accepts revise_required predecessors but rejects unknown fields, drift, wrong provenance, and allowlist violations", () => {
@@ -597,9 +673,12 @@ describe("build-code phase evidence publication", () => {
     const first = publish(nonPass, "phase-1", firstReceipts);
     const reviewRef = formalPhaseReview(nonPass, first, "revise_required");
     publish(nonPass, "phase-1", firstReceipts, { review_result_ref: reviewRef });
+    recordPhaseTaskCompletion(nonPass, "phase-1", reviewRef);
     const secondReceipts = phaseReceipts(nonPass, "phase-2", { revisionOf: firstReceipts.implementation.ref });
-    expect(publish(nonPass, "phase-2", secondReceipts, { previous_phase_review_ref: reviewRef }).baseline_commit)
-      .toBe(first.implementation_commit);
+    const secondBaseline = publish(nonPass, "phase-2", secondReceipts, { previous_phase_review_ref: reviewRef }).baseline_commit;
+    expect(git(nonPass.workspace.worktreeRoot, ["rev-parse", `${secondBaseline}^`])).toBe(first.implementation_commit);
+    expect(git(nonPass.workspace.worktreeRoot, ["diff", "--name-only", first.implementation_commit, secondBaseline]))
+      .toBe(`specs/${nonPass.task.identity.taskId}/tasks.md`);
 
     const legacy = fixture("legacy-phase-scope");
     const legacyReceipts = phaseReceipts(legacy, "phase-1");

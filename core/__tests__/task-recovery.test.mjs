@@ -1,9 +1,11 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import Ajv from "ajv";
 
 import { createTask } from "../task-handle.mjs";
+import * as recoveryContract from "../task-recovery.mjs";
 import {
   assertPhaseRecoveryIntent, canonical, deepEqual, generationRef, normalizedRecoveryRecordHash, readRecoveryCredential, readRecoveryGeneration,
   sha256, validateRecoveryCredential, validateRecoveryGeneration, writeRecoveryCredentialForTest,
@@ -11,6 +13,7 @@ import {
 import { runRecovery } from "../../scripts/task-recovery.mjs";
 
 const roots = [];
+const recoveryKinds = ["runner-replacement", "phase-pointer", "dirty-cleanup-rebind"];
 const baseCredential = () => ({
   schema_version: "workflowhub-recovery-credential.v1", project_name: "workflowhub", task_id: "recovery-test",
   recovery_kind: "runner-replacement", nonce: "nonce-1", issued_at: "2026-07-25T00:00:00.000Z", decision: "accepted",
@@ -44,6 +47,36 @@ const phaseCredential = (recoveryIntent) => ({
     red_test_receipt: null, allowed_files: ["core/task-recovery.mjs"],
     ...(recoveryIntent === undefined ? {} : { recovery_intent: recoveryIntent }),
   },
+});
+
+const workspaceIdentity = (root, oid) => ({
+  worktree_root: root,
+  git_common_dir: "/target/.git",
+  branch: "task/workflowhub/recovery-test",
+  head: oid.repeat(40),
+  snapshot_tree: oid.repeat(40),
+});
+
+const workspaceCredential = (overrides = {}) => ({
+  schema_version: "workflowhub-recovery-credential.v1", project_name: "workflowhub", task_id: "recovery-test",
+  recovery_kind: "dirty-cleanup-rebind", nonce: "dirty-cleanup-rebind", issued_at: "2026-07-25T00:00:00.000Z", decision: "accepted",
+  accepted_business_snapshot: {
+    accepted_ref: "results/make-decision/accepted.json", accepted_hash: "a".repeat(64),
+    baseline_commit: "b".repeat(40), snapshot_tree: "c".repeat(40), target_repo_root: "/target",
+  },
+  workspace_subject: {
+    previous_workspace: workspaceIdentity("/target-dirty", "c"),
+    clean_workspace: workspaceIdentity("/target-clean", "e"),
+    authorization: { ref: `evidence/authorizations/dirty-cleanup-rebind/${"d".repeat(64)}.json`, hash: "d".repeat(64) },
+    retained_artifact_refs: [
+      { ref: "receipts/decision-log.json", hash: "1".repeat(64) },
+      { ref: "receipts/spec.json", hash: "2".repeat(64) },
+      { ref: "receipts/plan.json", hash: "3".repeat(64) },
+      { ref: "receipts/tasks.json", hash: "4".repeat(64) },
+    ],
+    next_stage: "task-close",
+  },
+  ...overrides,
 });
 
 function fixture() {
@@ -99,6 +132,174 @@ function installGeneration(task, value) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("recovery contracts", () => {
+  it("keeps registry, JSON schemas, JS validators, and ref builders on the same exact three-kind contract", () => {
+    expect(Object.keys(recoveryContract.RECOVERY_OPERATIONS ?? {}).sort()).toEqual([...recoveryKinds].sort());
+    for (const operation of Object.values(recoveryContract.RECOVERY_OPERATIONS ?? {})) {
+      expect(Object.keys(operation).sort()).toEqual([
+        "append_refs", "authorization", "contract_version", "credential_subject",
+        "generation_mode", "lock_ref", "mutable_refs", "postcondition", "rollback_scope",
+      ].sort());
+      expect(operation.contract_version).toBe("workflowhub-recovery-operation.v1");
+      expect(typeof operation.credential_subject).toBe("string");
+      expect(typeof operation.authorization).toBe("string");
+      expect(typeof operation.lock_ref).toBe("string");
+      expect(Array.isArray(operation.mutable_refs)).toBe(true);
+      expect(Array.isArray(operation.append_refs)).toBe(true);
+      expect(Array.isArray(operation.rollback_scope)).toBe(true);
+      expect(typeof operation.postcondition).toBe("string");
+    }
+
+    const ajv = new Ajv({ strict: false, formats: { "date-time": true } });
+    const credentialSchema = JSON.parse(readFileSync(new URL("../schemas/workflowhub-recovery-credential.v1.json", import.meta.url), "utf8"));
+    const generationSchema = JSON.parse(readFileSync(new URL("../schemas/workflowhub-recovery-generation.v1.json", import.meta.url), "utf8"));
+    const validateCredentialSchema = ajv.compile(credentialSchema);
+    const validateGenerationSchema = ajv.compile(generationSchema);
+    expect(credentialSchema.properties.recovery_kind.enum).toEqual(recoveryKinds);
+    expect(generationSchema.properties.recovery_kind.enum).toEqual(recoveryKinds);
+    expect(Object.fromEntries(recoveryKinds.map((kind) => [kind, recoveryContract.RECOVERY_OPERATIONS[kind].lock_ref]))).toEqual({
+      "runner-replacement": "locks/task-identity-migration.lock",
+      "phase-pointer": "locks/build-code-phase-evidence.lock",
+      "dirty-cleanup-rebind": "identity/locks/dirty-cleanup-rebind.lock",
+    });
+
+    for (const legacyCredential of [baseCredential(), phaseCredential()]) {
+      expect(validateCredentialSchema(legacyCredential), validateCredentialSchema.errors).toBe(true);
+      expect(validateRecoveryCredential(legacyCredential)).toBe(legacyCredential);
+    }
+    const legacyGenerations = [
+      replacementGeneration(1, runnerIdentity("d"), runnerIdentity("e")),
+      {
+        schema_version: "workflowhub-recovery-generation.v1", project_name: "workflowhub", task_id: "recovery-test",
+        recovery_kind: "phase-pointer", generation: 1,
+        credential_ref: "identity/recovery-credentials/phase-pointer/legacy.json",
+        credential_hash: "a".repeat(64),
+        before: { ref: "phase-result.json", hash: "b".repeat(64) },
+        after: { ref: "phase-result.json", hash: "c".repeat(64), tree: "d".repeat(40) },
+        created_at: "2026-07-25T00:00:00.000Z", result: "accepted",
+      },
+    ];
+    for (const legacyGeneration of legacyGenerations) {
+      expect(validateGenerationSchema(legacyGeneration), validateGenerationSchema.errors).toBe(true);
+      expect(validateRecoveryGeneration(legacyGeneration)).toBe(legacyGeneration);
+    }
+    const invalidRepeatedPhasePointer = { ...legacyGenerations[1], generation: 2 };
+    expect(validateGenerationSchema(invalidRepeatedPhasePointer)).toBe(false);
+    expect(() => validateRecoveryGeneration(invalidRepeatedPhasePointer)).toThrow(/RECOVERY_RECORD_CONFLICT/);
+    const dirtyCredential = workspaceCredential();
+    expect(validateCredentialSchema(dirtyCredential), validateCredentialSchema.errors).toBe(true);
+    expect(validateRecoveryCredential(dirtyCredential)).toBe(dirtyCredential);
+    expect(validateCredentialSchema({ ...dirtyCredential, recovery_kind: "runner-replacement" })).toBe(false);
+    expect(() => validateRecoveryCredential({ ...dirtyCredential, recovery_kind: "runner-replacement" }))
+      .toThrow(/RECOVERY_CREDENTIAL_INVALID/);
+    const task = fixture();
+    const written = writeRecoveryCredentialForTest(task, dirtyCredential);
+    expect(written.ref).toBe("identity/recovery-credentials/dirty-cleanup-rebind/dirty-cleanup-rebind.json");
+    expect(task.listRecoveryGenerationRefs("dirty-cleanup-rebind")).toEqual([]);
+    expect(generationRef("dirty-cleanup-rebind", 1)).toBe("identity/recoveries/dirty-cleanup-rebind-0001.json");
+    const dirtyGeneration = {
+      schema_version: "workflowhub-recovery-generation.v1", project_name: "workflowhub", task_id: "recovery-test",
+      recovery_kind: "dirty-cleanup-rebind", generation: 1,
+      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/dirty-cleanup-rebind.json",
+      credential_hash: "e".repeat(64),
+      before: { ref: "results/make-decision/accepted.json", hash: "a".repeat(64) },
+      after: {
+        ref: "identity/recovery-credentials/dirty-cleanup-rebind/dirty-cleanup-rebind.json",
+        hash: "e".repeat(64),
+        identity: dirtyCredential.workspace_subject.clean_workspace,
+      },
+      created_at: "2026-07-25T00:00:00.000Z", result: "accepted",
+    };
+    expect(validateGenerationSchema(dirtyGeneration), validateGenerationSchema.errors).toBe(true);
+    expect(validateRecoveryGeneration(dirtyGeneration)).toBe(dirtyGeneration);
+    expect(validateGenerationSchema({
+      ...dirtyGeneration,
+      credential_ref: "identity/recovery-credentials/runner-replacement/dirty-cleanup-rebind.json",
+    })).toBe(false);
+    expect(() => validateRecoveryGeneration({
+      ...dirtyGeneration,
+      credential_ref: "identity/recovery-credentials/runner-replacement/dirty-cleanup-rebind.json",
+    })).toThrow(/RECOVERY_RECORD_CONFLICT/);
+    const dirtyGenerationTwo = {
+      ...structuredClone(dirtyGeneration),
+      generation: 2,
+      previous_generation_ref: "identity/recoveries/dirty-cleanup-rebind-0001.json",
+      previous_generation_hash: "f".repeat(64),
+      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/second.json",
+    };
+    expect(validateGenerationSchema(dirtyGenerationTwo), validateGenerationSchema.errors).toBe(true);
+    expect(validateRecoveryGeneration(dirtyGenerationTwo)).toBe(dirtyGenerationTwo);
+    for (const invalidLineage of [
+      { ...dirtyGeneration, previous_generation_ref: "identity/recoveries/dirty-cleanup-rebind-0000.json", previous_generation_hash: "f".repeat(64) },
+      { ...dirtyGenerationTwo, previous_generation_hash: undefined },
+      { ...dirtyGenerationTwo, previous_generation_ref: undefined, previous_generation_hash: undefined },
+    ]) {
+      const compact = Object.fromEntries(Object.entries(invalidLineage).filter(([, value]) => value !== undefined));
+      expect(validateGenerationSchema(compact)).toBe(false);
+      expect(() => validateRecoveryGeneration(compact)).toThrow(/RECOVERY_RECORD_CONFLICT/);
+    }
+    expect(validateGenerationSchema({
+      ...dirtyGenerationTwo,
+      previous_generation_ref: "identity/recoveries/runner-replacement-0001.json",
+    })).toBe(false);
+    expect(() => validateRecoveryGeneration({
+      ...dirtyGenerationTwo,
+      previous_generation_ref: "identity/recoveries/runner-replacement-0001.json",
+    })).toThrow(/RECOVERY_RECORD_CONFLICT/);
+    const help = runRecovery(["--help"]);
+    expect(recoveryKinds.every((kind) => help.includes(kind))).toBe(true);
+    expect(() => runRecovery(["dirty-cleanup-rebind"])).toThrow(/RECOVERY_INPUT_REQUIRED/);
+    try { runRecovery(["dirty-cleanup-rebind"]); }
+    catch (error) { expect(error.message).not.toMatch(/command must be/); }
+  });
+
+  it("requires an authorized exclusive workspace subject and rejects unknown recovery kinds", () => {
+    expect(() => validateRecoveryCredential(workspaceCredential({ decision: "pending" }))).toThrow(/RECOVERY_CREDENTIAL_INVALID/);
+    expect(() => validateRecoveryCredential(workspaceCredential({ runner_subject: baseCredential().runner_subject }))).toThrow(/RECOVERY_CREDENTIAL_INVALID/);
+    expect(() => validateRecoveryCredential(workspaceCredential({ phase_subject: phaseCredential().phase_subject }))).toThrow(/RECOVERY_CREDENTIAL_INVALID/);
+    expect(() => validateRecoveryCredential({ ...workspaceCredential(), recovery_kind: "unknown-recovery" })).toThrow(/RECOVERY_CREDENTIAL_INVALID/);
+  });
+
+  it("declares dirty rebind rollback as metadata-only and excludes worktree bytes and third-party pointers", () => {
+    const operation = recoveryContract.RECOVERY_OPERATIONS?.["dirty-cleanup-rebind"];
+    expect(operation?.credential_subject).toBe("workspace_subject");
+    expect(operation?.authorization).toMatch(/explicit|human/i);
+    expect(operation?.postcondition).toMatch(/normal.*close|task-close/i);
+    expect(operation?.mutable_refs).toEqual([]);
+    expect(operation?.generation_mode).toBe("consecutive");
+    expect(operation?.append_refs.length).toBeGreaterThan(0);
+    expect(operation?.rollback_scope.every((ref) => operation.append_refs.includes(ref))).toBe(true);
+    expect(JSON.stringify({ mutable_refs: operation?.mutable_refs, rollback_scope: operation?.rollback_scope }))
+      .not.toMatch(/workspace-binding\.json|worktree|phase-result\.json|third.party/i);
+    expect(JSON.stringify(operation)).not.toMatch(/identity\/workspace-binding\.json/);
+    expect(JSON.stringify(operation)).not.toMatch(/identity\/recovery-bindings\//);
+    expect(operation?.append_refs).toEqual([
+      "identity/recovery-credentials/dirty-cleanup-rebind/<nonce>.json",
+      "identity/recoveries/dirty-cleanup-rebind-<generation>.json",
+    ]);
+  });
+
+  it("allows a clean rebind at the same path and keeps generations create-only with exact replay", () => {
+    const samePath = workspaceCredential();
+    samePath.workspace_subject.clean_workspace = structuredClone(samePath.workspace_subject.previous_workspace);
+    expect(validateRecoveryCredential(samePath)).toBe(samePath);
+
+    const task = fixture();
+    const raw = canonical({
+      schema_version: "workflowhub-recovery-generation.v1", project_name: "workflowhub", task_id: "recovery-test",
+      recovery_kind: "dirty-cleanup-rebind", generation: 1,
+      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/dirty-cleanup-rebind.json",
+      credential_hash: "e".repeat(64),
+      before: { ref: "results/make-decision/accepted.json", hash: "a".repeat(64) },
+      after: { ref: "identity/recovery-credentials/dirty-cleanup-rebind/dirty-cleanup-rebind.json", hash: "e".repeat(64), identity: samePath.workspace_subject.clean_workspace },
+      created_at: "2026-07-25T00:00:00.000Z", result: "accepted",
+    });
+    const ref = generationRef("dirty-cleanup-rebind", 1);
+    task.writeRecoveryGeneration(ref, raw);
+    expect(() => task.writeRecoveryGeneration(ref, raw)).not.toThrow();
+    expect(() => task.writeRecoveryGeneration(ref, `${raw}\n`)).toThrow(/conflicts with immutable record/);
+    expect(() => task.writeRecoveryGeneration("identity/recoveries/phase-pointer-0001.json", raw)).toThrow(/path is invalid/);
+  });
+
   it("compares identity objects independent of JSON key order and hashes self-references reproducibly", () => {
     expect(deepEqual({ runner_oid: "a", runner_root: "/runner" }, { runner_root: "/runner", runner_oid: "a" })).toBe(true);
     const manifest = { runner_root: "/runner", runner_oid: "a".repeat(40), runner_replacement: { ref: "identity/recoveries/runner-replacement-0001.json", integrity_hash: "placeholder" } };

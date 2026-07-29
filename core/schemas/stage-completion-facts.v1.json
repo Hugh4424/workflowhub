@@ -21,6 +21,10 @@
     },
     "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
     "review": { "$ref": "#/$defs/review" },
+    "components": { "type": "array", "items": { "$ref": "#/$defs/component" } },
+    "confirmation_summary": { "$ref": "#/$defs/confirmationSummary" },
+    "source_coverage": { "$ref": "#/$defs/sourceCoverage" },
+    "risk_verification": { "type": "array", "items": { "$ref": "#/$defs/riskVerification" } },
     "missing_items": { "$ref": "#/$defs/stringList" },
     "risks": { "$ref": "#/$defs/stringList" },
     "dependencies": { "$ref": "#/$defs/stringList" },
@@ -29,6 +33,12 @@
     "next_owner": { "type": "string", "minLength": 1 },
     "user_action": { "type": "string", "minLength": 1 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "result": { "const": "passed" } }, "required": ["result"] },
+      "then": { "properties": { "missing_items": { "maxItems": 0 } } }
+    }
+  ],
   "$defs": {
     "ref": { "type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "minLength": 1 }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } },
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } },
@@ -41,6 +51,52 @@
         "ref": { "type": "string", "minLength": 1 },
         "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "accepted_lookup": { "type": "string", "minLength": 1 }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "reason"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["executed", "trigger=false"] },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "confirmationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specification", "non_goals", "phases", "dependencies", "tests", "review_advice", "risks", "expected_impact"],
+      "properties": {
+        "specification": { "type": "string", "minLength": 1 },
+        "non_goals": { "$ref": "#/$defs/stringList" },
+        "phases": { "$ref": "#/$defs/stringList" },
+        "dependencies": { "$ref": "#/$defs/stringList" },
+        "tests": { "$ref": "#/$defs/stringList" },
+        "review_advice": { "type": "string", "minLength": 1 },
+        "risks": { "$ref": "#/$defs/stringList" },
+        "expected_impact": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_keys", "missing_sources", "orphan_sources", "reverse_missing"],
+      "properties": {
+        "source_keys": { "$ref": "#/$defs/stringList" },
+        "missing_sources": { "$ref": "#/$defs/stringList" },
+        "orphan_sources": { "$ref": "#/$defs/stringList" },
+        "reverse_missing": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "riskVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk_id", "red", "green"],
+      "properties": {
+        "risk_id": { "type": "string", "minLength": 1 },
+        "red": { "type": "object" },
+        "green": { "type": "object" }
       }
     },
     "review": {

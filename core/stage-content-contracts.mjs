@@ -309,6 +309,24 @@ function taskRelativeRef(value) {
     && !value.startsWith("/") && !value.split(/[\\/]+/).includes("..");
 }
 
+const COMPLETION_EVIDENCE_KINDS = new Set([
+  "task_record",
+  "git_commit",
+  "workspace_file",
+  "test_run",
+  "review_fact",
+]);
+
+function completionEvidenceRef(entry) {
+  const kind = entry?.kind ?? "task_record";
+  if (!COMPLETION_EVIDENCE_KINDS.has(kind)) return false;
+  if (kind === "git_commit") {
+    return typeof entry.ref === "string"
+      && /^(?:git\/commits\/)?[a-f0-9]{40,64}$/.test(entry.ref);
+  }
+  return taskRelativeRef(entry.ref);
+}
+
 function addUniqueIds(items, label, errors) {
   const ids = new Set();
   for (const item of items ?? []) {
@@ -330,6 +348,9 @@ function validateBoundSpecReference(reference, knownIds, subject, label, errors)
  * stores only IDs and bindings, never a second copy of product prose.
  */
 export function validateAmbiguityLedgerV2(value) {
+  if (value?.content_profile === "spec-content.v3" && !object(value.clarification)) {
+    return result(["spec-clarify must record canonical trigger=false and reason when there is no ambiguity"]);
+  }
   if (!validateAmbiguityLedgerV2Schema(value)) return result(schemaErrors(validateAmbiguityLedgerV2Schema));
   const errors = [];
   const subject = value.subject_binding;
@@ -372,6 +393,31 @@ export function validateAmbiguityLedgerV2(value) {
   }
   for (const question of value.open_questions ?? []) {
     for (const id of question.affected_ids) if (!allIds.has(id)) errors.push(`open question ${question.id} affects unknown ID: ${id}`);
+  }
+  const clarification = value.clarification;
+  if ((value.open_questions ?? []).length > 0) {
+    const sameAxis = object(clarification?.ask) && object(clarification?.wait) && object(clarification?.resume)
+      && clarification.ask.axis === clarification.wait.axis
+      && clarification.wait.axis === clarification.resume.axis;
+    const ordered = clarification?.ask?.sequence === 1
+      && clarification?.wait?.sequence === 2
+      && clarification?.resume?.sequence === 3;
+    const hostVisible = /^host-message:\/\/ask\//.test(clarification?.ask?.ref ?? "")
+      && clarification?.wait?.status === "waiting-for-user"
+      && /^host-message:\/\/reply\//.test(clarification?.wait?.reply_ref ?? "")
+      && /^host-message:\/\/resume\//.test(clarification?.resume?.ref ?? "");
+    if (!object(clarification)
+        || clarification.component !== "spec-clarify"
+        || clarification.status !== "executed"
+        || !sameAxis || !ordered || !hostVisible) {
+      errors.push("spec-clarify open questions require canonical host-visible ask -> wait -> resume facts and reason");
+    }
+  } else if (!object(clarification)
+      || clarification.component !== "spec-clarify"
+      || clarification.status !== "trigger=false"
+      || typeof clarification.reason !== "string"
+      || clarification.reason.trim() === "") {
+    errors.push("spec-clarify must record canonical trigger=false and reason when there is no ambiguity");
   }
   if (value.content_profile === "spec-content.v3") {
     const referencedScenarios = new Set(value.frs.flatMap((fr) => (fr.scenario_refs ?? []).map((reference) => reference.id)));
@@ -738,7 +784,216 @@ function cycleIn(tasks) {
   return [...edges.keys()].some(visit);
 }
 
-export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
+function parseJsonField(value) {
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value.trim().replace(/^`([\s\S]*)`$/, "$1"));
+  } catch {
+    return null;
+  }
+}
+
+function completionZone(task) {
+  const marker = /^#####\s+执行状态填写区（唯一完成权威）\s*$/m;
+  const index = task.body.search(marker);
+  return index < 0 ? null : task.body.slice(index);
+}
+
+function taskCompletionFact(task, completionEvidence) {
+  const zone = completionZone(task);
+  const checked = /-\s+\[[xX]\]\s+\*\*任务完成\*\*/.test(zone ?? "");
+  const status = String(task.fields.status ?? "").replace(/^`|`$/g, "");
+  const claimed = checked || status === "completed";
+  const errors = [];
+  if (zone === null) errors.push("missing unique completion status area");
+  if (checked !== (status === "completed")) errors.push("completion checkbox and status must agree");
+  const required = [
+    "actual_changes", "executed_commands", "evidence_refs", "covered_ac",
+    "review_fact", "completed_at",
+  ];
+  if (claimed) {
+    for (const field of required) {
+      const value = task.fields[field];
+      if (typeof value !== "string" || value.trim() === "" || /^N\/A\b/i.test(value.trim())) {
+        errors.push(`completed task is missing ${field}`);
+      }
+    }
+  }
+  const evidenceRefs = parseJsonField(task.fields.evidence_refs);
+  if (claimed && (!Array.isArray(evidenceRefs) || evidenceRefs.length === 0)) {
+    errors.push("completed task evidence_refs must be a non-empty JSON array");
+  }
+  for (const [index, entry] of (Array.isArray(evidenceRefs) ? evidenceRefs : []).entries()) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || !completionEvidenceRef(entry) || !HASH.test(entry.sha256 ?? "")) {
+      errors.push(`evidence_refs[${index}] must contain a supported ref, optional kind, and sha256`);
+      continue;
+    }
+    if (typeof completionEvidence === "function") {
+      const authenticated = completionEvidence(entry, task.heading_id);
+      if (typeof authenticated === "string") {
+        if (sha256(authenticated) !== entry.sha256) errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      } else if (!authenticated || authenticated.ok !== true) {
+        errors.push(`evidence_refs[${index}] is missing: ${entry.ref}`);
+      } else if (authenticated.sha256 !== entry.sha256) {
+        errors.push(`evidence_refs[${index}] hash mismatch: ${entry.ref}`);
+      }
+    } else if (claimed) {
+      errors.push(`evidence_refs[${index}] was not authenticated: ${entry.ref}`);
+    }
+  }
+  const claimValid = !claimed || errors.length === 0;
+  return Object.freeze({
+    id: task.heading_id,
+    checked,
+    status: status || "pending",
+    claimed_complete: claimed,
+    claim_valid: claimValid,
+    complete: claimed && claimValid,
+    errors: Object.freeze(errors),
+    evidence_refs: Object.freeze(Array.isArray(evidenceRefs) ? structuredClone(evidenceRefs) : []),
+    actual_changes: task.fields.actual_changes ?? null,
+    executed_commands: task.fields.executed_commands ?? null,
+    covered_ac: Object.freeze(identifiers(task.fields.covered_ac ?? "", /\bAC-?\d+\b/g)),
+    review_fact: task.fields.review_fact ?? null,
+    completed_at: task.fields.completed_at ?? null,
+  });
+}
+
+function sourceRows(document) {
+  return [...String(document ?? "").matchAll(
+    /^\|\s*([A-Z][A-Z0-9-]+)\s*\|\s*(SCN-\d+)\s*\|\s*(FR-[A-Z0-9-]+)\s*\|\s*(AC-?\d+)\s*\|\s*([^|]+)\|$/gm,
+  )].map((match) => Object.freeze({
+    source: match[1],
+    scenario: match[2],
+    fr: match[3],
+    ac: match[4],
+    tasks: Object.freeze(identifiers(match[5], /\bT\d+\b/g)),
+  }));
+}
+
+function sourceCoverageFacts({ spec, plan, tasks, acceptedFrs, acceptedAcs, taskRows }) {
+  const documents = [sourceRows(spec), sourceRows(plan), sourceRows(tasks)];
+  const keys = [...new Set(documents.flatMap((rows) => rows.map(({ source }) => source)))];
+  const missing = keys.filter((key) => documents.some((rows) => !rows.some(({ source }) => source === key)));
+  const knownTasks = new Set(taskRows.map(({ id }) => id));
+  const invalidRows = documents.flatMap((rows) => rows).filter((row) =>
+    !acceptedFrs.includes(row.fr) || !acceptedAcs.includes(row.ac));
+  const reverseInvalid = documents.flatMap((rows) => rows).filter((row) =>
+    row.tasks.some((id) => !knownTasks.has(id)));
+  return Object.freeze({
+    source_count: keys.length,
+    source_keys: Object.freeze(keys),
+    missing_sources: Object.freeze(missing),
+    orphan_sources: Object.freeze([...new Set(invalidRows.map(({ source }) => source))]),
+    reverse_missing: Object.freeze([...new Set(reverseInvalid.map(({ source }) => source))]),
+  });
+}
+
+export function resolvePhaseTaskIds({ plan, tasks, phaseId } = {}) {
+  if (typeof plan !== "string" || typeof tasks !== "string" || typeof phaseId !== "string" || phaseId.trim() === "") {
+    throw new TypeError("plan, tasks, and phaseId are required");
+  }
+  const planPhases = markdownSections(plan, 2, "Phase ").map(({ heading }) => heading);
+  const taskPhases = markdownSections(tasks, 2, "Phase ").map(({ heading }) => heading);
+  if (!sameIds(planPhases, taskPhases)) throw new Error("plan/tasks Phase headings or order differ");
+  const ordinal = /^phase[-_. ]?(\d+)$/i.exec(phaseId)?.[1];
+  const matchedPhase = planPhases.find((phase) => phase === phaseId)
+    ?? (ordinal ? planPhases.find((phase) => new RegExp(`^Phase\\s+${Number(ordinal)}(?:\\b|\\s|[:：])`, "i").test(phase)) : undefined);
+  if (!matchedPhase) throw new Error(`phase_id has no unique plan/tasks Phase mapping: ${phaseId}`);
+  const rows = taskBlocks(tasks);
+  const ids = rows.filter(({ phase }) => phase === matchedPhase).map(({ heading_id }) => heading_id);
+  if (ids.length === 0 || ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) {
+    throw new Error(`Phase has no unique non-empty Task IDs: ${matchedPhase}`);
+  }
+  for (const row of rows.filter(({ phase }) => phase === matchedPhase)) {
+    if (row.fields.Phase !== undefined && row.fields.Phase !== matchedPhase) {
+      throw new Error(`${row.heading_id} Phase field differs from its owning Phase`);
+    }
+  }
+  return Object.freeze({ phase: matchedPhase, task_ids: Object.freeze(ids) });
+}
+
+export function validateTasksOnlyCompletionSeam({
+  before,
+  after,
+  taskId,
+  allowedTaskIds,
+  requiredBindings = [],
+  expectedReviewRef,
+  completionEvidence,
+} = {}) {
+  if (typeof before !== "string" || typeof after !== "string"
+      || (taskId !== undefined && typeof taskId !== "string")
+      || (allowedTaskIds !== undefined && (!Array.isArray(allowedTaskIds)
+        || allowedTaskIds.length === 0
+        || allowedTaskIds.some((id) => typeof id !== "string")
+        || new Set(allowedTaskIds).size !== allowedTaskIds.length))) {
+    throw new TypeError("before and after are required; taskId must be a string when provided");
+  }
+  const beforeTasks = taskBlocks(before);
+  const afterTasks = taskBlocks(after);
+  const errors = [];
+  if (!sameIds(beforeTasks.map(({ heading_id }) => heading_id), afterTasks.map(({ heading_id }) => heading_id))) {
+    errors.push("tasks-only seam cannot add, remove, or reorder Task identities");
+  }
+  const zones = new Map();
+  const mask = (document, parsed, side) => {
+    for (const task of parsed) {
+      const zone = completionZone(task);
+      if (zone === null) errors.push(`${task.heading_id} ${side} is missing the unique completion status area`);
+      else zones.set(`${side}:${task.heading_id}`, zone);
+    }
+    return document.replace(
+      /(^####\s+(T\d+)\b[^\n]*\n)([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/gm,
+      (block, heading, id, body) => {
+        const marker = body.search(/^#####\s+执行状态填写区（唯一完成权威）\s*$/m);
+        return marker < 0 ? block : `${heading}${body.slice(0, marker)}##### EXECUTION_STATUS:${id}\n`;
+      },
+    );
+  };
+  if (mask(before, beforeTasks, "before") !== mask(after, afterTasks, "after")) {
+    errors.push("tasks-only seam changed content outside execution status areas");
+  }
+  const changedIds = beforeTasks.map(({ heading_id }) => heading_id).filter((id) =>
+    zones.get(`before:${id}`) !== zones.get(`after:${id}`));
+  if (allowedTaskIds && !sameIds(changedIds, allowedTaskIds)) {
+    errors.push(`tasks-only seam must change exactly ${allowedTaskIds.join(", ")}`);
+  } else if (taskId && (changedIds.length !== 1 || changedIds[0] !== taskId)) {
+    errors.push(`tasks-only seam must change only ${taskId}`);
+  } else if (!taskId && changedIds.length === 0) {
+    errors.push("tasks-only seam must change at least one Task completion area");
+  }
+  for (const changedId of changedIds) {
+    const target = afterTasks.find(({ heading_id }) => heading_id === changedId);
+    const targetFact = target ? taskCompletionFact(target, completionEvidence) : null;
+    if (!targetFact?.claimed_complete
+        || targetFact.errors.length > 0) {
+      errors.push(`${changedId} completion area is not structurally complete`);
+      continue;
+    }
+    const bindings = new Map(targetFact.evidence_refs.map((entry) => [entry.ref, entry.sha256]));
+    for (const required of requiredBindings) {
+      if (!required || typeof required.ref !== "string" || !HASH.test(required.sha256 ?? "")
+          || bindings.get(required.ref) !== required.sha256) {
+        errors.push(`${changedId} completion evidence does not bind ${required?.ref ?? "required fact"}`);
+      }
+    }
+    const reviewRef = parseJsonField(targetFact.review_fact)?.ref
+      ?? String(targetFact.review_fact ?? "").replace(/^`|`$/g, "");
+    if (expectedReviewRef !== undefined && reviewRef !== expectedReviewRef) {
+      errors.push(`${changedId} review_fact does not bind the Phase review`);
+    }
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    changed_task_ids: Object.freeze(changedIds),
+    requires_repeat_review: false,
+  });
+}
+
+export function validatePlanTaskContract({ spec, plan, tasks, completionEvidence } = {}) {
   const errors = [];
   for (const [name, value] of Object.entries({ spec, plan, tasks })) {
     if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
@@ -992,6 +1247,7 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
   for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
   for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
 
+  const completionTasks = parsedTasks.map((task) => taskCompletionFact(task, completionEvidence));
   const facts = Object.freeze({
     template_version: isV3 ? PLAN_TASK_V3 : "legacy-v1",
     phase_count: planPhaseRows.length,
@@ -1016,6 +1272,17 @@ export function validatePlanTaskContract({ spec, plan, tasks } = {}) {
     dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|cycle/.test(error)) }),
     command_oracle_checks: Object.freeze({
       valid: !errors.some((error) => /gate_cmd|expected_exit|RED before GREEN|oracle|paired_task|RED\/GREEN|GREEN must depend/.test(error)),
+    }),
+    task_completion: Object.freeze({
+      total_count: completionTasks.length,
+      claimed_completed_count: completionTasks.filter(({ claimed_complete }) => claimed_complete).length,
+      completed_count: completionTasks.filter(({ complete }) => complete).length,
+      pending_ids: Object.freeze(completionTasks.filter(({ complete }) => !complete).map(({ id }) => id)),
+      invalid_completed_ids: Object.freeze(completionTasks.filter(({ claimed_complete, complete }) => claimed_complete && !complete).map(({ id }) => id)),
+      tasks: Object.freeze(completionTasks),
+    }),
+    source_coverage: sourceCoverageFacts({
+      spec, plan, tasks, acceptedFrs, acceptedAcs, taskRows,
     }),
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });

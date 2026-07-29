@@ -52,7 +52,10 @@ export async function writeEntryReceipt(taskHandle, payload) {
     throw new TypeError("duplicate active entry for workflow_run_id, stage_slug, step_id, and attempt_id");
   }
   const { journal_entry_id } = await appendJournalLine(taskHandle, JOURNAL_EVENT_TYPES.STEP_ENTRY, payload);
-  activeEntries.set(key, journal_entry_id);
+  activeEntries.set(key, {
+    journalEntryId: journal_entry_id,
+    snapshotTree: payload.snapshot_tree,
+  });
   return { journal_entry_id };
 }
 
@@ -69,9 +72,12 @@ export async function writeExitReceipt(taskHandle, payload) {
   // Validation throws on bad payload — intentionally propagates (caller bug).
   validateExitPayload(payload);
   const key = attemptKey(payload);
-  const entryJournalId = activeEntries.get(key);
-  if (entryJournalId == null || entryJournalId !== payload.entry_journal_entry_id) {
+  const entry = activeEntries.get(key);
+  if (entry == null || entry.journalEntryId !== payload.entry_journal_entry_id) {
     throw new TypeError("entry_journal_entry_id must bind the active entry from the same attempt");
+  }
+  if (entry.snapshotTree !== payload.snapshot_tree) {
+    throw new TypeError("step exit snapshot_tree must match the active entry snapshot_tree");
   }
   try {
     await appendJournalLine(taskHandle, JOURNAL_EVENT_TYPES.STEP_EXIT, payload);

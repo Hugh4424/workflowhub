@@ -19,17 +19,10 @@ export function preflightStageSkills({ packageRoot, stage, activeConditions = []
   const dependencies = new Map();
   const payloads = new Map();
   for (const dependency of loaded.manifest.skills) {
-    for (const locator of [dependency.path, dependency.bundle]) {
-      const candidate = path.resolve(loaded.root, locator);
-      const stat = fs.lstatSync(candidate);
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${stage}/${dependency.name}: invalid installation file ${locator}`);
-    }
     dependencies.set(dependency.name, dependency);
     payloads.set(dependency.name, resolveSkillDispatch({ packageRoot: loaded.root, manifestPath: loaded.relative, dependency }));
   }
   const capabilityResults = doctorCapabilities({ manifest: loaded.manifest, activeConditions, probes, commands, ...(run ? { run } : {}) });
-  const blocking = capabilityResults.filter(result => ["blocked", "human_required"].includes(result.status));
-  if (blocking.length) throw new Error(`${stage}: capability preflight failed: ${blocking.map(item => `${item.id}:${item.status}`).join(", ")}`);
   return { ...loaded, dependencies, payloads, capabilityResults };
 }
 
@@ -45,5 +38,8 @@ export async function dispatchStageSkill({ packageRoot, stage, name, triggered =
     return { name, status: "unavailable", reason: "independent_context_unavailable", source_manifest: prepared.source, package_root: prepared.root };
   }
   if (typeof hostInvoke !== "function") throw new Error(`${stage}/${name}: hostInvoke is required`);
-  return hostInvoke(prepared.payloads.get(name));
+  return hostInvoke(Object.freeze({
+    ...prepared.payloads.get(name),
+    doctor_diagnostics: Object.freeze([...prepared.capabilityResults]),
+  }));
 }

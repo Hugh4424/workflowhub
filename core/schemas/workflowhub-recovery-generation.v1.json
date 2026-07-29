@@ -7,15 +7,91 @@
     "schema_version": {"const": "workflowhub-recovery-generation.v1"},
     "project_name": {"type": "string", "minLength": 1},
     "task_id": {"type": "string", "minLength": 1},
-    "recovery_kind": {"enum": ["runner-replacement", "phase-pointer"]},
+    "recovery_kind": {"enum": ["runner-replacement", "phase-pointer", "dirty-cleanup-rebind"]},
     "generation": {"type": "integer", "minimum": 1},
-    "credential_ref": {"type": "string", "minLength": 1},
+    "credential_ref": {"type": "string", "pattern": "^identity/recovery-credentials/(runner-replacement|phase-pointer|dirty-cleanup-rebind)/[A-Za-z0-9._-]{1,256}\\.json$"},
     "credential_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "previous_generation_ref": {"type": "string", "pattern": "^identity/recoveries/runner-replacement-[0-9]{4}\\.json$"},
+    "previous_generation_ref": {"type": "string", "pattern": "^identity/recoveries/(runner-replacement|dirty-cleanup-rebind)-[0-9]{4}\\.json$"},
     "previous_generation_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "before": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
     "after": {"type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": {"ref": {"type": "string", "minLength": 1}, "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "identity": {"type": "object"}}},
     "created_at": {"type": "string", "format": "date-time"},
     "result": {"const": "accepted"}
-  }
+  },
+  "dependencies": {
+    "previous_generation_ref": ["previous_generation_hash"],
+    "previous_generation_hash": ["previous_generation_ref"]
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"generation": {"const": 1}}},
+      "then": {"not": {"anyOf": [{"required": ["previous_generation_ref"]}, {"required": ["previous_generation_hash"]}]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "recovery_kind": {"enum": ["runner-replacement", "dirty-cleanup-rebind"]},
+          "generation": {"minimum": 2}
+        }
+      },
+      "then": {"required": ["previous_generation_ref", "previous_generation_hash"]}
+    },
+    {
+      "if": {"properties": {"recovery_kind": {"const": "phase-pointer"}}},
+      "then": {
+        "properties": {"generation": {"const": 1}},
+        "not": {"anyOf": [{"required": ["previous_generation_ref"]}, {"required": ["previous_generation_hash"]}]}
+      }
+    },
+    {
+      "if": {"properties": {"recovery_kind": {"const": "runner-replacement"}}},
+      "then": {"properties": {
+        "credential_ref": {"pattern": "^identity/recovery-credentials/runner-replacement/[A-Za-z0-9._-]{1,256}\\.json$"},
+        "previous_generation_ref": {"pattern": "^identity/recoveries/runner-replacement-[0-9]{4}\\.json$"}
+      }}
+    },
+    {
+      "if": {"properties": {"recovery_kind": {"const": "phase-pointer"}}},
+      "then": {"properties": {
+        "credential_ref": {"pattern": "^identity/recovery-credentials/phase-pointer/[A-Za-z0-9._-]{1,256}\\.json$"}
+      }}
+    },
+    {
+      "if": {"properties": {"recovery_kind": {"const": "dirty-cleanup-rebind"}}},
+      "then": {"properties": {
+        "credential_ref": {"pattern": "^identity/recovery-credentials/dirty-cleanup-rebind/[A-Za-z0-9._-]{1,256}\\.json$"},
+        "previous_generation_ref": {"pattern": "^identity/recoveries/dirty-cleanup-rebind-[0-9]{4}\\.json$"}
+      }}
+    },
+    {
+      "if": {"properties": {"recovery_kind": {"const": "dirty-cleanup-rebind"}}},
+      "then": {
+        "properties": {
+          "before": {
+            "properties": {
+              "ref": {"const": "results/make-decision/accepted.json"}
+            },
+            "not": {"required": ["identity"]}
+          },
+          "after": {
+            "required": ["identity"],
+            "properties": {
+              "ref": {"pattern": "^identity/recovery-credentials/dirty-cleanup-rebind/[A-Za-z0-9._-]{1,256}\\.json$"},
+              "identity": {
+                "type": "object", "additionalProperties": false,
+                "required": ["worktree_root", "git_common_dir", "branch", "head", "snapshot_tree"],
+                "properties": {
+                  "worktree_root": {"type": "string", "pattern": "^/", "minLength": 1},
+                  "git_common_dir": {"type": "string", "pattern": "^/", "minLength": 1},
+                  "branch": {"type": "string", "minLength": 1},
+                  "head": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"},
+                  "snapshot_tree": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

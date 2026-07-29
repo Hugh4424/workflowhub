@@ -22,6 +22,21 @@ and failure handling. It references product and engineering decisions instead
 of restating their rationale. `spec.md` remains behavior truth and `plan.md`
 remains the engineering evidence dossier.
 
+It is also the only Task completion authority. Every card ends with one
+`执行状态填写区（唯一完成权威）`. The executor, not the runtime, changes that
+area after implementation, focused tests, and Phase review. A completed claim
+must include the checked box, `status: completed`, actual changes, commands and
+exit codes, non-empty task-relative canonical evidence ref/SHA-256 bindings,
+covered ACs, review fact, and completion time. Missing or contradictory fields
+remain `pending`/`in_progress`. Accepted records, receipts, traces, reopen
+records, generations, and audits never create another completion state.
+
+After review, a tasks-only completion update may change only the corresponding
+status area. The next Phase or final integration certifies that seam without
+repeating the Phase review. Final build-code certifies all Task rows; verify-code
+independently rechecks the same rows against current code, tests, AC evidence,
+and review facts.
+
 ## Reading contract
 
 Use `templates/tasks-template.md`. Keep AgentHub's short Phase checklist and one
@@ -46,6 +61,8 @@ authoritative card containing:
 - **Verification and failure**: verification role and paired task, executable
   `gate_cmd`, `expected_exit`, observable oracle identity/result,
   task-relative evidence path, STOP, recovery, and task risk.
+- **Execution status**: the one completion checkbox/status area and its
+  authenticated implementation/test/review evidence.
 
 This single card preserves every legacy execution field and every v2 field.
 One card changes at most one behavior. Missing or stale bindings stop execution;

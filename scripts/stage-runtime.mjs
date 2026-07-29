@@ -5,9 +5,11 @@ import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  authenticateStageWriteBoundary,
   bootstrapStage,
   prepareMakeDecisionWorkspace,
 } from "../core/stage-context.mjs";
+import { persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import {
@@ -16,10 +18,15 @@ import {
   writeOfficialComponentReceipt,
 } from "../core/canonical-receipt-writer.mjs";
 import { createStageContentEvidenceWriter } from "../core/stage-content-evidence.mjs";
+import {
+  createBuildSpecReceiptRecoveryRecords,
+  issueBuildSpecRecoveryOwnerCapability,
+} from "../core/build-spec-receipt-recovery.mjs";
 import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
+import { ArtifactDir } from "../core/artifact-dir.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -28,6 +35,29 @@ const DESIGN_ARTIFACTS = Object.freeze({
 const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
+
+function publishAcceptedDecisionLog(context, accepted) {
+  if (accepted?.stage !== "make-decision") return;
+  const attemptRaw = context.task.readRecord(`results/make-decision/${accepted.attempt_ref}`);
+  if (sha256(attemptRaw) !== String(accepted.integrity_hash ?? "").replace(/^sha256:/, "")) {
+    throw new Error("accepted make-decision attempt changed before live artifact publication");
+  }
+  const attempt = JSON.parse(attemptRaw);
+  const ref = attempt.facts?.decision_ref;
+  const expectedHash = attempt.facts?.decision_hash;
+  if (typeof ref !== "string" || !SHA256.test(expectedHash ?? "")) {
+    throw new Error("accepted make-decision result is missing its canonical decision binding");
+  }
+  const content = context.task.readRecord(ref);
+  if (sha256(content) !== expectedHash) {
+    throw new Error("accepted make-decision decision binding changed before live artifact publication");
+  }
+  const artifacts = ArtifactDir.open(context.candidateWorkspace.worktreeRoot, context.task);
+  artifacts.writeAtomic("decision-log.md", content);
+  if (artifacts.read("decision-log.md") !== content) {
+    throw new Error("live decision-log publication did not preserve accepted canonical bytes");
+  }
+}
 
 function completedStep(task, workflowRunId, stepId) {
   let raw;
@@ -56,8 +86,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|recover-spec-receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -71,12 +101,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (values.stage === "make-decision" && new Set(["record-step-entry", "record-step-exit"]).has(command)) {
     throw new TypeError("make-decision journal is runtime-owned; public record-step-entry/record-step-exit are forbidden");
   }
-  if (!new Set(["receipt", "publish-content-evidence"]).has(command)
+  if (!new Set(["receipt", "recover-spec-receipt", "publish-content-evidence"]).has(command)
       && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) {
     throw new TypeError("--revision is only valid for receipt or trusted stage-content publication");
   }
   if (command === "publish-content-evidence" && values.recover !== undefined) throw new TypeError("--recover is only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "recover-spec-receipt") {
+    const allowed = new Set(["stage", "project", "task", "recover", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("recover-spec-receipt accepts only --stage, --project, --task, --recover, and --input");
+    if (values.stage !== "build-spec" || values.recover !== "receipts/spec.json" || !values.input) {
+      throw new TypeError("recover-spec-receipt requires --stage=build-spec --recover=receipts/spec.json --input=<recovery.json>");
+    }
+  }
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   if (command === "publish-content-evidence" && (!values.kind || !values.input)) throw new TypeError("publish-content-evidence requires --kind and --input=<payload.json>");
   if (command === "start-run" && !values.reason) throw new TypeError("start-run requires --reason");
@@ -114,7 +151,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "baseline-rebind") && (command !== "run" || values.stage !== "build-plan")) throw new TypeError("--baseline-rebind is only valid for build-plan run");
   if (command === "rebind" && values.stage !== "build-plan") throw new TypeError("rebind is only valid for build-plan");
   if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
-  if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
+  if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
   if (command === "receipt" && values.revision === "true" && !values.recover) throw new TypeError("receipt revision requires --recover=<previous-receipt-ref>");
   if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
   let context = bootstrapStage(values.stage, {
@@ -123,12 +160,18 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
+  if (values.stage === "make-decision") {
+    context = prepareMakeDecisionWorkspace(context);
+  }
+  const writeBoundary = authenticateStageWriteBoundary(context, {
+    runnerRoot: RUNNER_ROOT,
+    operation: command,
+  });
   if (command === "prepare") {
     if (values.stage !== "make-decision") throw new TypeError("prepare is only valid for make-decision");
-    context = prepareMakeDecisionWorkspace(context);
     return {
       worktree_root: context.candidateWorkspace.worktreeRoot,
       baseline_commit: context.candidateWorkspace.baselineCommit,
@@ -141,9 +184,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       reason: values.reason,
       ...(values["continuation-ref"] ? { continuation_ref: values["continuation-ref"] } : {}),
     });
-    if (values.stage === "make-decision") {
-      context = prepareMakeDecisionWorkspace(context);
-    }
     return started;
   }
   if (command === "continue-stage") {
@@ -169,7 +209,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "invalidate-review-binding") {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-review-binding accepts only --stage, --project, --task, and --input");
-    if (values.stage === "make-decision") context = prepareMakeDecisionWorkspace(context);
     return context.kernel.invalidateReviewBinding(values.stage, input);
   }
   if (command === "publish-requirements-ledger") {
@@ -203,6 +242,29 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       throw new TypeError("record-research requires status=performed|skipped, reason, and a canonical evidence ref");
     }
     return context.kernel.completeMakeDecisionResearch(input);
+  }
+  if (command === "recover-spec-receipt") {
+    const identity = context.kernel.deriveReviewFlowIdentity({
+      stage: "build-spec",
+      review_track: null,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+    });
+    const ownerCapability = issueBuildSpecRecoveryOwnerCapability({
+      task: context.task,
+      workspace: context.workspace,
+      boundary: writeBoundary,
+    });
+    const records = createBuildSpecReceiptRecoveryRecords({
+      task: context.task,
+      workspace: context.workspace,
+      artifacts: context.artifacts,
+      input,
+      authenticatedFlow: context.kernel.readReviewFlow(identity),
+      invocation: ownerCapability.invocation,
+    });
+    return context.kernel.recoverBuildSpecReceiptRecords(records, ownerCapability);
   }
   if (command === "rebind") return context.kernel.authorizeBuildPlanBaselineRebind();
   if (command === "artifact") {
@@ -299,8 +361,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       ...(input.adjudication_correction_ref === undefined ? {} : { adjudicationCorrectionRef: input.adjudication_correction_ref }),
     });
   }
-  if (values.stage === "make-decision" && new Set(["run", "publish-content-evidence"]).has(command)) context = prepareMakeDecisionWorkspace(context);
-  if (values.stage === "make-decision" && command === "accept") context = prepareMakeDecisionWorkspace(context);
   if (command === "receipt") {
     const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: input, ...(values.revision === "true" ? { revisionOf: values.recover } : {}) });
     if (values.stage === "make-decision" && values.component === "decision") {
@@ -377,15 +437,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     });
     if (requiresHumanConfirmation(values.stage)) return attempt;
     const accepted = acceptStageAttempt(values.stage, context, { attemptRef: attempt.attempt_ref });
+    const acceptedSourceRef = `results/${values.stage}/accepted.json`;
+    const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
+    persistWriteBoundaryPathCard({
+      task: context.task,
+      boundary: writeBoundary,
+      source: { ref: acceptedSourceRef, hash: createHash("sha256").update(acceptedSourceRaw).digest("hex") },
+    });
     return { ...attempt, accepted };
   }
   if (command === "confirm") {
-    if (values.stage === "make-decision") {
-      context = prepareMakeDecisionWorkspace(context);
-    }
     return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
   }
-  return acceptStageAttempt(values.stage, context, {
+  const acceptedResult = acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
     ...(values.stage !== "make-decision" ? {} : {
@@ -409,6 +473,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       },
     }),
   });
+  publishAcceptedDecisionLog(context, acceptedResult);
+  const acceptedSourceRef = `results/${values.stage}/accepted.json`;
+  const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
+  persistWriteBoundaryPathCard({
+    task: context.task,
+    boundary: writeBoundary,
+    source: { ref: acceptedSourceRef, hash: createHash("sha256").update(acceptedSourceRaw).digest("hex") },
+  });
+  return acceptedResult;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

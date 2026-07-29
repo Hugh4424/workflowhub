@@ -1,7 +1,7 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,22 +10,114 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../../core/canonical-receipt-writer.mjs";
 import {
   assertLatestBuildSpecReceipt,
+  issueBuildSpecRecoveryOwnerCapability,
   validateBuildSpecBase,
   validateBuildSpecRevision,
 } from "../../core/build-spec-receipt-recovery.mjs";
 import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
-import { openAcceptedWorkspace } from "../../core/workspace.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../core/workspace.mjs";
+import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
+import { authenticateWriteBoundary } from "../../core/write-boundary-preflight.mjs";
 import { writeFormalReviewFixture } from "../../tests/helpers/formal-review.mjs";
 import { buildNonGateReviewResponseRecord } from "../../skills/wh-review/scripts/review-controller.mjs";
 
 const temporary = [];
-const runtime = new URL("../stage-runtime.mjs", import.meta.url).pathname;
+const runnerTemporary = [];
+const runnerSource = realpathSync(new URL("../../", import.meta.url).pathname);
+const currentSpec = "# Current Spec\n";
+let cleanRunner;
+
+function cleanRunnerRoot() {
+  if (cleanRunner) return cleanRunner;
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-spec-recovery-runner-")));
+  runnerTemporary.push(root);
+  cleanRunner = join(root, "runner");
+  execFileSync("git", ["clone", "-q", "--no-local", runnerSource, cleanRunner]);
+  for (const relativePath of [
+    "core/build-spec-receipt-recovery.mjs",
+    "core/task-kernel-implementation.mjs",
+    "core/stage-handlers.mjs",
+    "core/stage-runner.mjs",
+    "scripts/stage-runtime.mjs",
+  ]) {
+    copyFileSync(join(runnerSource, relativePath), join(cleanRunner, relativePath));
+  }
+  symlinkSync(join(runnerSource, "node_modules"), join(cleanRunner, "node_modules"));
+  execFileSync("git", ["add", "-f", "--",
+    "core/build-spec-receipt-recovery.mjs",
+    "core/task-kernel-implementation.mjs",
+    "core/stage-handlers.mjs",
+    "core/stage-runner.mjs",
+    "scripts/stage-runtime.mjs",
+    "node_modules",
+  ], { cwd: cleanRunner });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "recovery fixture"], { cwd: cleanRunner });
+  return cleanRunner;
+}
+
+function runtime() {
+  return join(cleanRunnerRoot(), "scripts", "stage-runtime.mjs");
+}
+
+function createAuditedFixtureKernel(task, candidateWorkspace) {
+  const kernel = createTaskKernel(task, { candidateWorkspace });
+  return Object.freeze({
+    ...kernel,
+    publishAttempt(stage, data = {}) {
+      let active;
+      try { active = kernel.activeStageRun(stage); }
+      catch { active = kernel.startStageRun(stage, { reason: "spec recovery fixture setup" }); }
+      const snapshot = candidateWorkspace.captureSnapshot();
+      const kind = `${stage}.test`;
+      const content = {
+        schema_version: "stage-content-evidence.v1",
+        kind,
+        task_id: task.identity.taskId,
+        stage,
+        workflow_run_id: active.run.workflow_run_id,
+        snapshot_tree: snapshot.tree,
+      };
+      const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+      const contentHash = createHash("sha256").update(contentRaw).digest("hex");
+      const contentRef = `evidence/stage-content/${contentHash}/${stage}-test.json`;
+      kernel.publishCanonicalRecord(contentRef, contentRaw);
+      const contentEvidenceRefs = [{ kind, ref: contentRef, hash: contentHash }];
+      const unsignedSummary = {
+        schema_version: "stage-audit-summary.v1",
+        task_id: task.identity.taskId,
+        stage_slug: stage,
+        workflow_run_id: active.run.workflow_run_id,
+        snapshot_tree: snapshot.tree,
+        verdict: "pass",
+        content_evidence_refs: contentEvidenceRefs,
+      };
+      const summaryHash = hashAuditSummary(unsignedSummary);
+      const summary = { ...unsignedSummary, summary_hash: summaryHash };
+      const summaryRaw = `${JSON.stringify(summary, null, 2)}\n`;
+      const summaryRef = `evidence/audits/${stage}/${summaryHash}.json`;
+      kernel.publishCanonicalRecord(summaryRef, summaryRaw);
+      return kernel.publishAttempt(stage, {
+        ...data,
+        facts: {
+          ...data.facts,
+          worktree_root: candidateWorkspace.worktreeRoot,
+          baseline_commit: candidateWorkspace.baselineCommit,
+          audit_contract_version: "v1",
+          audit_summary_ref: summaryRef,
+          audit_summary_hash: summaryHash,
+          audit_verdict: "pass",
+          content_evidence_refs: contentEvidenceRefs,
+        },
+      });
+    },
+  });
+}
 
 function cli(state, args, input) {
   const inputPath = input === undefined ? null : join(state.inputRoot, `input-${state.inputSequence += 1}.json`);
   if (inputPath) writeFileSync(inputPath, `${JSON.stringify(input)}\n`);
-  const result = spawnSync(process.execPath, [runtime, ...args, ...(inputPath ? [`--input=${inputPath}`] : [])], {
+  const result = spawnSync(process.execPath, [runtime(), ...args, ...(inputPath ? [`--input=${inputPath}`] : [])], {
     cwd: state.repo,
     env: state.env,
     encoding: "utf8",
@@ -71,24 +163,23 @@ function acceptedDecisionFixture() {
   const state = {
     root, repo, task, inputRoot, inputSequence: 0,
     env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root },
-    kernel: createTaskKernel(task),
   };
-  writeOfficialComponentReceipt({ task, stage: "make-decision", component: "decision", payload: { decision_log: "# Decision\n\nProceed.\n" } });
-  expect(cli(state, ["prepare", "--stage=make-decision", "--project=Demo", "--task=spec-recovery"]).status).toBe(0);
-  const worktree = join(repo, "..", "repo-spec-recovery");
-  const tree = captureGitWorktreeSnapshot(realpathSync(worktree)).tree;
-  const direction = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: tree, reviewTrack: "direction" });
-  const detail = writeFormalReviewFixture({ task, stage: "make-decision", snapshotTree: tree, reviewTrack: "detail" });
-  registerReview(state, direction.resultRef);
-  registerReview(state, detail.resultRef);
-  const run = cli(state, ["run", "--stage=make-decision", "--project=Demo", "--task=spec-recovery"], {
-    receipts: { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef },
+  const candidate = prepareTaskWorkspace(task);
+  const setup = createAuditedFixtureKernel(task, candidate);
+  const decision = setup.publishAttempt("make-decision", {
+    facts: {
+      worktree_root: candidate.worktreeRoot,
+      baseline_commit: candidate.baselineCommit,
+    },
   });
-  expect(run.status).toBe(0);
-  const confirm = cli(state, ["confirm", "--stage=make-decision", "--project=Demo", "--task=spec-recovery", `--attempt=${run.json.attempt_ref}`, "--decision=accepted"]);
-  expect(confirm.status).toBe(0);
-  expect(cli(state, ["accept", "--stage=make-decision", "--project=Demo", "--task=spec-recovery", `--attempt=${run.json.attempt_ref}`, `--human-confirmation-ref=${confirm.json.ref}`]).status).toBe(0);
-  state.workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
+  const confirmation = setup.confirmAttempt(
+    "make-decision",
+    decision.attempt_ref,
+    "accepted",
+    "comment:spec-recovery-fixture",
+  );
+  setup.acceptAttempt("make-decision", decision.attempt_ref, confirmation.ref);
+  state.workspace = openAcceptedWorkspace(task, setup.readAccepted("make-decision"));
   state.kernel = createTaskKernel(task);
   return state;
 }
@@ -97,11 +188,19 @@ function openRecoveryFixture() {
   const state = acceptedDecisionFixture();
   writeOfficialComponentReceipt({ task: state.task, stage: "build-spec", component: "spec", payload: { content: "# Stale Spec\n" } });
   mkdirSync(join(state.workspace.worktreeRoot, "specs", "spec-recovery"), { recursive: true });
-  writeFileSync(join(state.workspace.worktreeRoot, "specs", "spec-recovery", "spec.md"), "# Current Spec\n");
+  writeFileSync(join(state.workspace.worktreeRoot, "specs", "spec-recovery", "spec.md"), currentSpec);
   const tree = captureWorkspaceSnapshot(state.workspace).tree;
   const review = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: tree });
   const flow = registerReview(state, review.resultRef);
-  state.recoveryInput = { content: "# Current Spec\n", receipts: { review: review.resultRef } };
+  const started = cli(state, [
+    "start-run",
+    "--stage=build-spec",
+    "--project=Demo",
+    "--task=spec-recovery",
+    "--reason=spec-recovery-fixture",
+  ]);
+  if (started.status !== 0) throw new Error(started.stderr);
+  state.recoveryInput = { content: currentSpec, receipts: { review: review.resultRef } };
   state.review = review;
   state.flow = flow;
   return state;
@@ -118,7 +217,38 @@ function recover(state, input = state.recoveryInput, extra = []) {
   ], input);
 }
 
-function predictedRevision(state, content = "# Current Spec\n") {
+function recoveryConsumer(state) {
+  return {
+    identity: state.task.identity,
+    readReceipt(ref) {
+      const raw = state.task.readRecord(ref);
+      return {
+        value: JSON.parse(raw),
+        sha256: createHash("sha256").update(raw).digest("hex"),
+      };
+    },
+    readOptionalReceipt(ref) {
+      try { return this.readReceipt(ref); }
+      catch (error) {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    artifactRef(name) {
+      return ArtifactDir.open(state.workspace.worktreeRoot, state.task).reference(name);
+    },
+  };
+}
+
+function recoveryConsumerBinding(state, flow = state.flow) {
+  return {
+    artifactContent: currentSpec,
+    snapshot: captureWorkspaceSnapshot(state.workspace),
+    authentication: { flow },
+  };
+}
+
+function predictedRevision(state, content = currentSpec) {
   const baseRaw = state.task.readRecord("receipts/spec.json");
   const value = {
     schema_version: "workflowhub-receipt.v1",
@@ -142,11 +272,27 @@ function predictedRevision(state, content = "# Current Spec\n") {
 }
 
 function predictedRecoveryRecords(state) {
+  const boundary = authenticateWriteBoundary({
+    task: state.task,
+    runnerRoot: cleanRunnerRoot(),
+    stage: "build-spec",
+    operation: "recover-spec-receipt",
+    workspace: state.workspace,
+  });
+  const ownerCapability = issueBuildSpecRecoveryOwnerCapability({
+    task: state.task,
+    workspace: state.workspace,
+    boundary,
+  });
+  const invocation = ownerCapability.invocation;
+  state.directRecoveryOwnerCapability = ownerCapability;
+  state.directRecoveryInvocation = invocation;
+  state.directRecoveryBoundary = boundary;
   const revision = predictedRevision(state);
   const baseRaw = state.task.readRecord("receipts/spec.json");
   const eventRaw = state.task.readRecord(state.flow.event_ref);
   const marker = {
-    schema_version: "workflowhub-build-spec-receipt-recovery.v1",
+    schema_version: "workflowhub-build-spec-receipt-recovery.v2",
     task_id: state.task.identity.taskId,
     stage: "build-spec",
     component: "spec",
@@ -155,7 +301,7 @@ function predictedRecoveryRecords(state) {
     recovered_receipt_ref: revision.ref,
     recovered_receipt_hash: createHash("sha256").update(revision.raw).digest("hex"),
     artifact_ref: ArtifactDir.open(state.workspace.worktreeRoot, state.task).reference("spec.md"),
-    content_hash: createHash("sha256").update("# Current Spec\n").digest("hex"),
+    content_hash: createHash("sha256").update(currentSpec).digest("hex"),
     snapshot_tree: captureWorkspaceSnapshot(state.workspace).tree,
     review_action: {
       event_ref: state.flow.event_ref,
@@ -166,6 +312,7 @@ function predictedRecoveryRecords(state) {
       action_ref: state.review.resultRef,
       action_hash: state.flow.result_sha256,
     },
+    invocation: { ref: invocation.ref, hash: invocation.hash },
   };
   return {
     revisionRef: revision.ref,
@@ -182,7 +329,7 @@ function injectCrashAfterRevision(state, records) {
       afterRevision() { throw new Error("injected crash after build-spec revision"); },
     },
   });
-  expect(() => crashKernel.recoverBuildSpecReceiptRecords(records)).toThrow(/injected crash/i);
+  expect(() => crashKernel.recoverBuildSpecReceiptRecords(records, state.directRecoveryOwnerCapability)).toThrow(/injected crash/i);
 }
 
 function injectConflictingRevision(state, records, revisionRaw) {
@@ -191,7 +338,7 @@ function injectConflictingRevision(state, records, revisionRaw) {
     artifacts: ArtifactDir.open(state.workspace.worktreeRoot, state.task),
     buildSpecRecoveryTestHooks: { seedRevisionRaw: revisionRaw },
   });
-  expect(() => conflictKernel.recoverBuildSpecReceiptRecords(records)).toThrow(/revision conflicts/i);
+  expect(() => conflictKernel.recoverBuildSpecReceiptRecords(records, state.directRecoveryOwnerCapability)).toThrow(/revision conflicts/i);
 }
 
 function addVerifiedResolution(state) {
@@ -230,7 +377,7 @@ function addVerifiedResolution(state) {
 function recoverConcurrent(state, inputPath) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [
-      runtime, "recover-spec-receipt", "--stage=build-spec", "--project=Demo", "--task=spec-recovery",
+      runtime(), "recover-spec-receipt", "--stage=build-spec", "--project=Demo", "--task=spec-recovery",
       "--recover=receipts/spec.json", `--input=${inputPath}`,
     ], { cwd: state.repo, env: state.env, encoding: "utf8" });
     let stdout = ""; let stderr = "";
@@ -242,6 +389,9 @@ function recoverConcurrent(state, inputPath) {
 
 afterEach(() => {
   while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true });
+});
+afterAll(() => {
+  while (runnerTemporary.length) rmSync(runnerTemporary.pop(), { recursive: true, force: true });
 });
 
 describe("build-spec prepublish receipt recovery", () => {
@@ -263,17 +413,28 @@ describe("build-spec prepublish receipt recovery", () => {
       snapshot_tree: captureWorkspaceSnapshot(state.workspace).tree,
       review_action: { event_ref: state.flow.event_ref, head_result_ref: state.review.resultRef },
     });
-    const staleRun = cli(state, ["run", "--stage=build-spec", "--project=Demo", "--task=spec-recovery"], {
-      receipts: { spec: "receipts/spec.json", review: state.review.resultRef },
-    });
-    expect(staleRun.status).not.toBe(0);
-    expect(staleRun.stderr).toMatch(/stale base receipt/i);
+    const worker = recoveryConsumer(state);
+    const base = worker.readReceipt("receipts/spec.json");
+    expect(() => assertLatestBuildSpecReceipt({
+      worker,
+      item: {
+        ref: "receipts/spec.json",
+        value: base.value,
+        evidence: { ref: "receipts/spec.json", sha256: base.sha256 },
+      },
+      binding: recoveryConsumerBinding(state),
+    })).toThrow(/stale base receipt/i);
+    const recovered = worker.readReceipt(result.json.receipt_ref);
+    expect(() => assertLatestBuildSpecReceipt({
+      worker,
+      item: {
+        ref: result.json.receipt_ref,
+        value: recovered.value,
+        evidence: { ref: result.json.receipt_ref, sha256: recovered.sha256 },
+      },
+      binding: recoveryConsumerBinding(state),
+    })).not.toThrow();
     expect(state.task.listStageAttemptRefs("build-spec")).toEqual([]);
-    const acceptedRun = cli(state, ["run", "--stage=build-spec", "--project=Demo", "--task=spec-recovery"], {
-      receipts: { spec: result.json.receipt_ref, review: state.review.resultRef },
-    });
-    expect(acceptedRun.status, acceptedRun.stderr).toBe(0);
-    expect(JSON.parse(state.task.readRecord("results/build-spec/accepted.json")).attempt_ref).toBe("attempt-0001.json");
   });
 
   it("rejects generic revision APIs and replays the exact completed recovery idempotently", () => {
@@ -286,14 +447,14 @@ describe("build-spec prepublish receipt recovery", () => {
     const generic = cli(state, [
       "receipt", "--stage=build-spec", "--project=Demo", "--task=spec-recovery",
       "--component=spec", "--revision=true", "--recover=receipts/spec.json",
-    ], { content: "# Current Spec\n" });
+    ], { content: currentSpec });
     expect(generic.status).not.toBe(0);
-    expect(generic.stderr).toMatch(/recover-spec-receipt/i);
+    expect(generic.stderr).toMatch(/trusted prepublish recovery|recovery authority/i);
     expect(() => writeOfficialComponentReceipt({
       task: state.task,
       stage: "build-spec",
       component: "spec",
-      payload: { content: "# Current Spec\n" },
+      payload: { content: currentSpec },
       revisionOf: "receipts/spec.json",
     })).toThrow(/trusted prepublish recovery/i);
     const reserved = predictedRevision(state);
@@ -323,7 +484,7 @@ describe("build-spec prepublish receipt recovery", () => {
         ref,
         taskId: state.task.identity.taskId,
         baseHash: createHash("sha256").update(baseRaw).digest("hex"),
-        content: "# Current Spec\n",
+        content: currentSpec,
       })).toThrow();
       expect(() => state.task.readRecord("receipts/recoveries/spec.json")).toThrow();
     }
@@ -348,21 +509,46 @@ describe("build-spec prepublish receipt recovery", () => {
     expect(drifted.stderr).toMatch(/final current snapshot|current snapshot/i);
     expect(() => staleReview.task.readRecord("receipts/recoveries/spec.json")).toThrow();
 
-    const attempted = acceptedDecisionFixture();
-    writeOfficialComponentReceipt({ task: attempted.task, stage: "build-spec", component: "spec", payload: { content: "# Current Spec\n" } });
-    mkdirSync(join(attempted.workspace.worktreeRoot, "specs", "spec-recovery"), { recursive: true });
-    writeFileSync(join(attempted.workspace.worktreeRoot, "specs", "spec-recovery", "spec.md"), "# Current Spec\n");
-    const attemptedTree = captureWorkspaceSnapshot(attempted.workspace).tree;
-    const attemptedReview = writeFormalReviewFixture({ task: attempted.task, stage: "build-spec", snapshotTree: attemptedTree });
-    registerReview(attempted, attemptedReview.resultRef);
-    const completed = cli(attempted, ["run", "--stage=build-spec", "--project=Demo", "--task=spec-recovery"], {
-      receipts: { spec: "receipts/spec.json", review: attemptedReview.resultRef },
-    });
-    expect(completed.status, completed.stderr).toBe(0);
+    const attempted = openRecoveryFixture();
+    mkdirSync(join(attempted.task.taskPath, "results", "build-spec"), { recursive: true });
+    writeFileSync(join(attempted.task.taskPath, "results", "build-spec", "attempt-0001.json"), "{}\n");
     expect(attempted.task.listStageAttemptRefs("build-spec")).toEqual(["results/build-spec/attempt-0001.json"]);
-    const blocked = recover(attempted, { content: "# Current Spec\n", receipts: { review: attemptedReview.resultRef } });
+    const blocked = recover(attempted);
     expect(blocked.status).not.toBe(0);
     expect(blocked.stderr).toMatch(/no published stage attempt/i);
+  });
+
+  it("rejects replaying a historical invocation record as the current recovery owner capability", () => {
+    const state = openRecoveryFixture();
+    const records = predictedRecoveryRecords(state);
+    const kernel = createTaskKernel(state.task, {
+      workspace: state.workspace,
+      artifacts: ArtifactDir.open(state.workspace.worktreeRoot, state.task),
+    });
+    expect(() => kernel.recoverBuildSpecReceiptRecords(records, state.directRecoveryInvocation))
+      .toThrow(/current recovery owner capability/i);
+    expect(() => state.task.readRecord("receipts/recoveries/spec.json")).toThrow();
+  });
+
+  it("rejects forged, wrong-operation, and consumed recovery owner capabilities", () => {
+    const state = openRecoveryFixture();
+    const records = predictedRecoveryRecords(state);
+    const kernel = createTaskKernel(state.task, {
+      workspace: state.workspace,
+      artifacts: ArtifactDir.open(state.workspace.worktreeRoot, state.task),
+    });
+    expect(() => kernel.recoverBuildSpecReceiptRecords(records, {
+      ...state.directRecoveryOwnerCapability,
+    })).toThrow(/current recovery owner capability/i);
+    expect(() => issueBuildSpecRecoveryOwnerCapability({
+      task: state.task,
+      workspace: state.workspace,
+      boundary: { ...state.directRecoveryBoundary, operation: "receipt" },
+    })).toThrow(/current recover-spec-receipt write boundary/i);
+    expect(kernel.recoverBuildSpecReceiptRecords(records, state.directRecoveryOwnerCapability))
+      .toMatchObject({ recovery_marker_ref: "receipts/recoveries/spec.json" });
+    expect(() => kernel.recoverBuildSpecReceiptRecords(records, state.directRecoveryOwnerCapability))
+      .toThrow(/unconsumed current recovery owner capability/i);
   });
 
   it("continues an exact crash orphan, rejects a conflicting orphan, extra receipts, and caller authority fields", () => {
@@ -429,16 +615,18 @@ describe("build-spec prepublish receipt recovery", () => {
         source_diff_sha256: "0".repeat(64),
       },
     });
-    registerReview(state, next.resultRef, state.review.resultRef);
-    const stale = cli(state, ["run", "--stage=build-spec", "--project=Demo", "--task=spec-recovery"], {
-      receipts: {
-        spec: recovered.json.receipt_ref,
-        review: state.review.resultRef,
-        review_resolution: resolution.resolution_ref,
+    const latestFlow = registerReview(state, next.resultRef, state.review.resultRef);
+    const worker = recoveryConsumer(state);
+    const receipt = worker.readReceipt(recovered.json.receipt_ref);
+    expect(() => assertLatestBuildSpecReceipt({
+      worker,
+      item: {
+        ref: recovered.json.receipt_ref,
+        value: receipt.value,
+        evidence: { ref: recovered.json.receipt_ref, sha256: receipt.sha256 },
       },
-    });
-    expect(stale.status).not.toBe(0);
-    expect(stale.stderr).toMatch(/authenticated flow|latest|head/i);
+      binding: recoveryConsumerBinding(state, latestFlow),
+    })).toThrow(/marker binding|review action|latest|head/i);
     expect(state.task.listStageAttemptRefs("build-spec")).toEqual([]);
   });
 

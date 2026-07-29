@@ -39,11 +39,13 @@ const STAGE_CONTENT_POINTER_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const RUNNER_ROOT_MIGRATORS = new WeakMap();
 const RECOVERY_CREDENTIAL_WRITERS = new WeakMap();
+const RECOVERY_GENERATION_WRITERS = new WeakMap();
 const RECOVERY_MANIFEST_REPLACERS = new WeakMap();
 const RECOVERY_POINTER_REPLACERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_WRITERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS = new WeakMap();
 const INVOCATION_IDENTITY_WRITERS = new WeakMap();
+const PATH_CARD_WRITERS = new WeakMap();
 const INVOCATION_MODE_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
@@ -782,7 +784,7 @@ function makeTaskHandle(taskPath, manifest) {
       const stageRoot = resolve(resultsRoot, stage);
       assertInside(realTaskPath, resultsRoot, "results directory");
       assertInside(realTaskPath, stageRoot, "stage results directory");
-      if (!existsSync(stageRoot)) return [];
+      if (!existsSync(resultsRoot) || !existsSync(stageRoot)) return [];
       const resultsIdentity = directorySnapshot(realTaskPath, resultsRoot);
       const stageIdentity = directorySnapshot(realTaskPath, stageRoot);
       const refs = readdirSync(stageRoot, { withFileTypes: true })
@@ -803,7 +805,7 @@ function makeTaskHandle(taskPath, manifest) {
     },
     /** Enumerate one append-only recovery generation namespace in sequence order. */
     listRecoveryGenerationRefs(kind) {
-      if (!new Set(["runner-replacement", "phase-pointer"]).has(kind)) throw new TypeError("unsupported recovery generation kind");
+      if (!new Set(["runner-replacement", "phase-pointer", "dirty-cleanup-rebind"]).has(kind)) throw new TypeError("unsupported recovery generation kind");
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();
       const identityRoot = resolve(realTaskPath, "identity");
@@ -882,6 +884,38 @@ function makeTaskHandle(taskPath, manifest) {
       }).sort((left, right) => left.localeCompare(right));
       verifyDirectorySnapshot(flowIdentity);
       verifyDirectorySnapshot(flowsIdentity);
+      verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate one TaskKernel-owned append-only review-flow reset generation stream. */
+    listCanonicalReviewFlowResetRefs(baseFlowId) {
+      if (typeof baseFlowId !== "string" || !/^[a-f0-9]{64}$/.test(baseFlowId)) {
+        throw new TypeError("review flow base id must be sha256");
+      }
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const reviewsRoot = resolve(realTaskPath, "reviews");
+      const resetsRoot = resolve(reviewsRoot, "flow-resets");
+      const baseRoot = resolve(resetsRoot, baseFlowId);
+      assertInside(realTaskPath, reviewsRoot, "reviews directory");
+      assertInside(realTaskPath, resetsRoot, "review flow resets directory");
+      assertInside(realTaskPath, baseRoot, "review flow reset base directory");
+      if (!existsSync(baseRoot)) return Object.freeze([]);
+      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
+      const resetsIdentity = directorySnapshot(realTaskPath, resetsRoot);
+      const baseIdentity = directorySnapshot(realTaskPath, baseRoot);
+      const refs = readdirSync(baseRoot, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(baseRoot, entry.name);
+        const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()
+            || !/^reset-[0-9]{4}\.json$/.test(entry.name)) {
+          throw new Error(`canonical review flow reset must be a regular numbered JSON file: ${entry.name}`);
+        }
+        return `reviews/flow-resets/${baseFlowId}/${entry.name}`;
+      }).sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(baseIdentity);
+      verifyDirectorySnapshot(resetsIdentity);
       verifyDirectorySnapshot(reviewsIdentity);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
@@ -1098,6 +1132,11 @@ function makeTaskHandle(taskPath, manifest) {
       if (typeof writer !== "function") throw new TypeError("authentic recovery credential writer required");
       return writer(relativePath, data);
     },
+    writeRecoveryGeneration(relativePath, data) {
+      const writer = RECOVERY_GENERATION_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic recovery generation writer required");
+      return writer(relativePath, data);
+    },
     replaceRecoveryManifest(options) {
       const replacer = RECOVERY_MANIFEST_REPLACERS.get(handle);
       if (typeof replacer !== "function") throw new TypeError("authentic recovery manifest replacer required");
@@ -1121,6 +1160,11 @@ function makeTaskHandle(taskPath, manifest) {
     createInvocationIdentityRecord(relativePath, data) {
       const writer = INVOCATION_IDENTITY_WRITERS.get(handle);
       if (typeof writer !== "function") throw new TypeError("authentic invocation identity writer required");
+      return writer(relativePath, data);
+    },
+    createPathCardRecord(relativePath, data) {
+      const writer = PATH_CARD_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic path card writer required");
       return writer(relativePath, data);
     },
     // Internal publication authority. Stage code receives TaskHandle but must
@@ -1182,6 +1226,15 @@ function makeTaskHandle(taskPath, manifest) {
       throw new Error("invocation identity path is invalid");
     }
     if (typeof data !== "string" || data.length === 0) throw new TypeError("invocation identity data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    return createOnlyAt(realTaskPath, relativePath, data);
+  });
+  PATH_CARD_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/path-cards\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(relativePath ?? "")) {
+      throw new Error("path card record path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("path card record data is required");
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
     return createOnlyAt(realTaskPath, relativePath, data);
@@ -1321,7 +1374,7 @@ function makeTaskHandle(taskPath, manifest) {
     }
   });
   RECOVERY_CREDENTIAL_WRITERS.set(frozen, (relativePath, data) => {
-    if (!/^identity\/recovery-credentials\/(runner-replacement|phase-pointer)\/[A-Za-z0-9._-]{1,256}\.json$/.test(relativePath ?? "")) throw new Error("recovery credential path is invalid");
+    if (!/^identity\/recovery-credentials\/(runner-replacement|phase-pointer|dirty-cleanup-rebind)\/[A-Za-z0-9._-]{1,256}\.json$/.test(relativePath ?? "")) throw new Error("recovery credential path is invalid");
     if (typeof data !== "string" || data.length === 0) throw new TypeError("recovery credential data is required");
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
@@ -1330,6 +1383,25 @@ function makeTaskHandle(taskPath, manifest) {
       if (error?.code !== "EEXIST") throw error;
       const existing = readRegularFileNoFollow(resolveRecord(realTaskPath, relativePath).candidate, "recovery credential", taskRootIdentity.real);
       if (existing !== data) throw new Error("recovery credential conflicts with immutable record");
+      return resolveRecord(realTaskPath, relativePath).candidate;
+    }
+  });
+  RECOVERY_GENERATION_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/recoveries\/dirty-cleanup-rebind-[0-9]{4}\.json$/.test(relativePath ?? "")) {
+      throw new Error("dirty cleanup rebind recovery generation path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("recovery generation data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    try { return createOnlyAt(realTaskPath, relativePath, data); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const existing = readRegularFileNoFollow(
+        resolveRecord(realTaskPath, relativePath).candidate,
+        "dirty cleanup rebind recovery generation",
+        taskRootIdentity.real,
+      );
+      if (existing !== data) throw new Error("dirty cleanup rebind recovery generation conflicts with immutable record");
       return resolveRecord(realTaskPath, relativePath).candidate;
     }
   });
