@@ -5,9 +5,11 @@ import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  authenticateStageWriteBoundary,
   bootstrapStage,
   prepareMakeDecisionWorkspace,
 } from "../core/stage-context.mjs";
+import { persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import {
@@ -126,9 +128,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
+  if (values.stage === "make-decision") {
+    context = prepareMakeDecisionWorkspace(context);
+  }
+  const writeBoundary = authenticateStageWriteBoundary(context, {
+    runnerRoot: RUNNER_ROOT,
+    operation: command,
+  });
   if (command === "prepare") {
     if (values.stage !== "make-decision") throw new TypeError("prepare is only valid for make-decision");
-    context = prepareMakeDecisionWorkspace(context);
     return {
       worktree_root: context.candidateWorkspace.worktreeRoot,
       baseline_commit: context.candidateWorkspace.baselineCommit,
@@ -141,9 +149,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       reason: values.reason,
       ...(values["continuation-ref"] ? { continuation_ref: values["continuation-ref"] } : {}),
     });
-    if (values.stage === "make-decision") {
-      context = prepareMakeDecisionWorkspace(context);
-    }
     return started;
   }
   if (command === "continue-stage") {
@@ -169,7 +174,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "invalidate-review-binding") {
     const allowed = new Set(["stage", "project", "task", "input"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invalidate-review-binding accepts only --stage, --project, --task, and --input");
-    if (values.stage === "make-decision") context = prepareMakeDecisionWorkspace(context);
     return context.kernel.invalidateReviewBinding(values.stage, input);
   }
   if (command === "publish-requirements-ledger") {
@@ -299,8 +303,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       ...(input.adjudication_correction_ref === undefined ? {} : { adjudicationCorrectionRef: input.adjudication_correction_ref }),
     });
   }
-  if (values.stage === "make-decision" && new Set(["run", "publish-content-evidence"]).has(command)) context = prepareMakeDecisionWorkspace(context);
-  if (values.stage === "make-decision" && command === "accept") context = prepareMakeDecisionWorkspace(context);
   if (command === "receipt") {
     const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: input, ...(values.revision === "true" ? { revisionOf: values.recover } : {}) });
     if (values.stage === "make-decision" && values.component === "decision") {
@@ -377,15 +379,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     });
     if (requiresHumanConfirmation(values.stage)) return attempt;
     const accepted = acceptStageAttempt(values.stage, context, { attemptRef: attempt.attempt_ref });
+    const acceptedSourceRef = `results/${values.stage}/accepted.json`;
+    const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
+    persistWriteBoundaryPathCard({
+      task: context.task,
+      boundary: writeBoundary,
+      source: { ref: acceptedSourceRef, hash: createHash("sha256").update(acceptedSourceRaw).digest("hex") },
+    });
     return { ...attempt, accepted };
   }
   if (command === "confirm") {
-    if (values.stage === "make-decision") {
-      context = prepareMakeDecisionWorkspace(context);
-    }
     return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
   }
-  return acceptStageAttempt(values.stage, context, {
+  const acceptedResult = acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
     ...(values.stage !== "make-decision" ? {} : {
@@ -409,6 +415,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       },
     }),
   });
+  const acceptedSourceRef = `results/${values.stage}/accepted.json`;
+  const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
+  persistWriteBoundaryPathCard({
+    task: context.task,
+    boundary: writeBoundary,
+    source: { ref: acceptedSourceRef, hash: createHash("sha256").update(acceptedSourceRaw).digest("hex") },
+  });
+  return acceptedResult;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

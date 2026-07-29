@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { inspectRunnerIdentity } from "../core/runner-identity.mjs";
 import { openTask } from "../core/task-handle.mjs";
+import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../core/stage-review-disposition.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
@@ -1383,10 +1384,29 @@ function phasePointer(values, testHooks) {
 export function runRecovery(argv = process.argv.slice(2), options) {
   const values = parse(argv);
   if (values.help) return helpText();
-  if (values.command === "runner-replacement") return runnerReplacement(values);
-  if (values.command === "phase-pointer") return phasePointer(values, options);
-  if (values.command === "runner-replacement-bridge") return runnerReplacementBridge(values);
-  return phaseTraceLineage(values);
+  const task = openTask(values["task-path"], values.project, values.task);
+  const stage = values.stage ?? "build-code";
+  const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
+  const boundary = authenticateWriteBoundary({
+    task,
+    runnerRoot: values["runner-root"],
+    stage,
+    operation: `recovery.${values.command}`,
+    workspace,
+  });
+  let result;
+  if (values.command === "runner-replacement") result = runnerReplacement(values);
+  else if (values.command === "runner-replacement-bridge") result = runnerReplacementBridge(values);
+  else if (values.command === "phase-pointer") result = phasePointer(values, options);
+  else result = phaseTraceLineage(values);
+  if (typeof result?.recovery_ref === "string" && HASH.test(result.recovery_hash ?? "")) {
+    persistWriteBoundaryPathCard({
+      task: openTask(values["task-path"], values.project, values.task),
+      boundary,
+      source: { ref: result.recovery_ref, hash: result.recovery_hash },
+    });
+  }
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -44,6 +44,7 @@ const RECOVERY_POINTER_REPLACERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_WRITERS = new WeakMap();
 const PHASE_TRACE_LINEAGE_SUPERSESSION_WRITERS = new WeakMap();
 const INVOCATION_IDENTITY_WRITERS = new WeakMap();
+const PATH_CARD_WRITERS = new WeakMap();
 const INVOCATION_MODE_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
@@ -1100,6 +1101,11 @@ function makeTaskHandle(taskPath, manifest) {
       if (typeof writer !== "function") throw new TypeError("authentic invocation identity writer required");
       return writer(relativePath, data);
     },
+    createPathCardRecord(relativePath, data) {
+      const writer = PATH_CARD_WRITERS.get(handle);
+      if (typeof writer !== "function") throw new TypeError("authentic path card writer required");
+      return writer(relativePath, data);
+    },
     // Internal publication authority. Stage code receives TaskHandle but must
     // publish canonical attempts/accepted records only through TaskKernel.
     withRecordLock(relativePath, operation, options) {
@@ -1159,6 +1165,15 @@ function makeTaskHandle(taskPath, manifest) {
       throw new Error("invocation identity path is invalid");
     }
     if (typeof data !== "string" || data.length === 0) throw new TypeError("invocation identity data is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    return createOnlyAt(realTaskPath, relativePath, data);
+  });
+  PATH_CARD_WRITERS.set(frozen, (relativePath, data) => {
+    if (!/^identity\/path-cards\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(relativePath ?? "")) {
+      throw new Error("path card record path is invalid");
+    }
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("path card record data is required");
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
     return createOnlyAt(realTaskPath, relativePath, data);

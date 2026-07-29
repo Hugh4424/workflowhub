@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -91,6 +91,7 @@ function fixture() {
 
   git(oldRunner, ["init", "-q", "-b", "task/workflowhub/recovery-cli"]);
   writeFileSync(join(oldRunner, "AGENTS.md"), "# Runner\n");
+  writeFileSync(join(oldRunner, "CONSTITUTION.md"), "# Constitution\n");
   mkdirSync(join(oldRunner, "workflows", "build-code"), { recursive: true });
   writeFileSync(join(oldRunner, "workflows", "build-code", "SKILL.md"), "# build-code\n");
   commit(oldRunner, "runner");
@@ -161,6 +162,12 @@ function fixture() {
 
 function runCli(args) {
   return execFileSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+
+function fileBytes(root) {
+  return readdirSync(root, { recursive: true }).map(String).sort()
+    .filter((relativePath) => lstatSync(join(root, relativePath)).isFile())
+    .map((relativePath) => [relativePath, sha256(readFileSync(join(root, relativePath)))]);
 }
 
 function sameSnapshotRecoveryFixture({ reviewStatus = "pass", serious = false } = {}) {
@@ -314,6 +321,16 @@ function recoveredPhaseReview(f, recovery, canonicalEvidenceRef, verdict = "pass
     } }],
     verdict, findings: verdict === "pass" ? [] : [{ provider: "fixture", ...finding }],
   });
+  const kernel = createTaskKernel(f.task);
+  const identity = kernel.deriveReviewFlowIdentity({
+    stage: "build-code",
+    review_track: null,
+    subject_kind: "phase",
+    phase_id: "phase-0",
+    review_scope: "phase",
+    snapshot_tree: f.snapshotTree,
+  });
+  kernel.advanceReviewFlow(identity, { expected_head_ref: null, result_ref: resultRef });
   return { attemptRef, resultRef, materialId, phaseEvidence };
 }
 
@@ -370,10 +387,14 @@ describe("task recovery CLI integration", () => {
       },
     };
     const written = writeRecoveryCredentialForTest(f.task, credential);
+    const identityRoot = join(f.task.taskPath, "identity", "executions");
+    const beforeIdentityCount = existsSync(identityRoot) ? readdirSync(identityRoot).length : 0;
     const output = JSON.parse(runCli([
       "runner-replacement", `--task-path=${f.task.taskPath}`, "--project=workflowhub", "--task=recovery-cli",
       `--runner-root=${f.nextRunner}`, "--stage=build-code", `--credential-ref=${written.ref}`, `--credential-hash=${written.hash}`,
     ]));
+    expect(readdirSync(identityRoot).length - beforeIdentityCount).toBe(1);
+    expect(readdirSync(join(f.task.taskPath, "identity", "path-cards", "build-code"))).toHaveLength(1);
     expect(output).toMatchObject({ recovery_ref: "identity/recoveries/runner-replacement-0001.json", next_entry: "task-bootstrap" });
     expect(output).not.toHaveProperty("task_path");
     expect(output).not.toHaveProperty("previous_runner");
@@ -386,6 +407,55 @@ describe("task recovery CLI integration", () => {
     expect(generation.after.hash).toBe(normalizedRecoveryRecordHash("runner-replacement", {
       ...recovered.manifest, runner_replacement: { ref: output.recovery_ref, integrity_hash: output.recovery_hash },
     }));
+  });
+
+  it("leaves task and target bytes unchanged when recovery write-boundary authentication fails", () => {
+    const f = fixture();
+    const previous = JSON.parse(f.task.readRecord(f.task.manifest.runner_root_migration.ref)).runner_identity;
+    const next = inspectRunnerIdentity({ runnerRoot: f.nextRunner, projectName: "workflowhub", taskId: "recovery-cli", stage: "build-code" });
+    const accepted = createTaskKernel(f.task).readAccepted("make-decision");
+    const credential = {
+      schema_version: "workflowhub-recovery-credential.v1",
+      project_name: "workflowhub",
+      task_id: "recovery-cli",
+      recovery_kind: "runner-replacement",
+      nonce: "dirty-runner-zero-mutation",
+      issued_at: "2026-07-25T00:00:00.000Z",
+      decision: "accepted",
+      accepted_business_snapshot: {
+        accepted_ref: accepted.accepted_ref,
+        accepted_hash: accepted.accepted_hash,
+        baseline_commit: accepted.facts.baseline_commit,
+        snapshot_tree: git(f.task.manifest.target_repo_root, ["rev-parse", `${accepted.facts.baseline_commit}^{tree}`]),
+        target_repo_root: f.task.manifest.target_repo_root,
+      },
+      runner_subject: {
+        previous_runner: previous,
+        new_runner: next,
+        previous_manifest_hash: sha256(f.task.readRecord("task.json")),
+        stage: "build-code",
+      },
+    };
+    const written = writeRecoveryCredentialForTest(f.task, credential);
+    const taskBefore = fileBytes(f.task.taskPath);
+    const targetBefore = {
+      head: git(f.task.manifest.target_repo_root, ["rev-parse", "HEAD"]),
+      tree: git(f.task.manifest.target_repo_root, ["rev-parse", "HEAD^{tree}"]),
+      status: git(f.task.manifest.target_repo_root, ["status", "--porcelain", "--untracked-files=all"]),
+    };
+    writeFileSync(join(f.nextRunner, "dirty-runtime.txt"), "dirty\n");
+
+    expect(() => runCli([
+      "runner-replacement", `--task-path=${f.task.taskPath}`, "--project=workflowhub", "--task=recovery-cli",
+      `--runner-root=${f.nextRunner}`, "--stage=build-code", `--credential-ref=${written.ref}`, `--credential-hash=${written.hash}`,
+    ])).toThrow(/clean/i);
+
+    expect(fileBytes(f.task.taskPath)).toEqual(taskBefore);
+    expect({
+      head: git(f.task.manifest.target_repo_root, ["rev-parse", "HEAD"]),
+      tree: git(f.task.manifest.target_repo_root, ["rev-parse", "HEAD^{tree}"]),
+      status: git(f.task.manifest.target_repo_root, ["status", "--porcelain", "--untracked-files=all"]),
+    }).toEqual(targetBefore);
   });
 
   it("appends a second authenticated runner generation and keeps the full history immutable", () => {
@@ -511,7 +581,7 @@ describe("task recovery CLI integration", () => {
     expect(help).toContain("phase_subject.recovery_intent=same-snapshot-phase0-reopen");
     expect(help).toContain("changed-snapshot recovery must omit it");
     expect(help).toContain("create-only gate and pointer CAS");
-    expect(help).toContain("fresh wh-review PASS");
+    expect(help).toContain("fresh semantic wh-review result");
     expect(help).toContain("Never edit task.json, phase-result.json, recovery generations");
     expect(help).toContain("RECOVERY_PHASE_INTENT_REQUIRED");
     expect(help).toContain("RECOVERY_PHASE_INTENT_USAGE_MISMATCH");
@@ -605,19 +675,15 @@ describe("task recovery CLI integration", () => {
     expect(f.task.listCanonicalReviewAttemptRefs()).toEqual(attempts);
   });
 
-  it("keeps a fresh revise-required recovery blocked without consuming another gate", () => {
+  it("does not reinterpret a fresh revise-required quality fact in the Phase 1 recovery boundary", () => {
     const f = sameSnapshotRecoveryFixture();
     const output = runRecovery(f.args);
-    const context = recoveredPhaseContext(f);
     const fresh = recoveredPhaseReview(f, output, output.canonical_phase_evidence_ref, "revise_required");
-    publishBuildCodePhaseEvidence(context, {
-      phase_id: "phase-0", implementation_receipt_ref: f.implementationRef,
-      green_test_receipt_ref: f.greenRef, allowed_files: [],
-      recovery_ref: output.recovery_ref, recovery_hash: output.recovery_hash,
-      review_result_ref: fresh.resultRef,
+    expect(JSON.parse(f.task.readRecord(fresh.resultRef))).toMatchObject({
+      verdict: "revise_required",
     });
     expect(JSON.parse(f.task.readRecord("phase-result.json"))).toMatchObject({
-      phase_id: "phase-0", status: "needs_revision",
+      phase_id: "phase-0", status: "awaiting_review",
       recovery_ref: output.recovery_ref, recovery_hash: output.recovery_hash,
     });
     expect(() => runRecovery(f.args)).toThrow(/RECOVERY_ALREADY_USED/);

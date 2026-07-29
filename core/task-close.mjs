@@ -491,8 +491,11 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   const mergeState = () => {
     const archive = findArchive();
     const target = branchOid(root, delivery.target_branch);
-    const taskTip = branchOid(root, delivery.task_branch);
     const parents = target ? gitResult(root, ["rev-list", "--parents", "-n", "1", target]).stdout.split(" ").slice(1) : [];
+    const branchTip = branchOid(root, delivery.task_branch);
+    // Once close removes the task branch, the immutable second parent of the
+    // planned no-ff merge remains the authoritative published task tip.
+    const taskTip = branchTip ?? (parents.length === 2 && parents[0] === delivery.target_baseline ? parents[1] : null);
     const taskParents = taskTip ? gitResult(root, ["rev-list", "--parents", "-n", "1", taskTip]).stdout.split(" ").slice(1) : [];
     const taskTipIsArchived = taskTip === archive.commit;
     const taskTipIsResolved = taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;

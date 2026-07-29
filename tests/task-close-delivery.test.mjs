@@ -1,18 +1,60 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
+import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
+
+function writeAcceptedBuildFixture(task, taskCommit, snapshotTree) {
+  const upstreamRefs = [{ task_id: "close-task", stage: "build-plan", accepted_ref: "results/build-plan/accepted.json" }];
+  const attempt = {
+    schema_version: "task-attempt.v2",
+    task_id: "close-task",
+    stage: "build-code",
+    attempt_id: "build-code:attempt-0001",
+    created_at: "2026-07-19T00:00:00.000Z",
+    facts: {
+      changed: [],
+      tests: {
+        command: "npm test", exit_code: 0, command_hash: "1".repeat(64),
+        snapshot_head: taskCommit, snapshot_tree: snapshotTree, snapshot_commit: taskCommit,
+        started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z",
+        receipt_ref: "receipts/build-tests.json", receipt_hash: "2".repeat(64),
+        output_ref: "evidence/build-tests.txt", output_hash: "3".repeat(64),
+      },
+      review: { verdict: "pass", result_ref: "reviews/results/build.json", result_hash: "4".repeat(64), snapshot_tree: snapshotTree },
+      phase_completion: true,
+    },
+    evidence_refs: [],
+    missing_items: [],
+    upstream_refs: upstreamRefs,
+  };
+  const attemptRaw = `${JSON.stringify(attempt, null, 2)}\n`;
+  const accepted = {
+    schema_version: "task-accepted.v2",
+    task_id: "close-task",
+    stage: "build-code",
+    attempt_ref: "attempt-0001.json",
+    integrity_hash: sha256(attemptRaw),
+    acceptance_mode: "automatic",
+    accepted_at: "2026-07-19T00:00:02.000Z",
+    upstream_refs: upstreamRefs,
+  };
+  mkdirSync(join(task.taskPath, "results", "build-code"), { recursive: true });
+  writeFileSync(join(task.taskPath, "results", "build-code", "attempt-0001.json"), attemptRaw);
+  writeFileSync(join(task.taskPath, "results", "build-code", "accepted.json"), `${JSON.stringify(accepted, null, 2)}\n`);
+}
 
 function writeAcceptedVerifyFixture(task, taskCommit, snapshotTree) {
   const attempt = {
@@ -68,16 +110,15 @@ function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   writeFileSync(join(repo, "specs", "task", "plan.md"), "accepted plan\n");
   mkdirSync(join(repo, "specs", "task", "notes"));
   writeFileSync(join(repo, "specs", "task", "notes", "review.md"), "accepted review\n");
+  mkdirSync(join(repo, "specs", "close-task"), { recursive: true });
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    writeFileSync(join(repo, "specs", "close-task", name), `# ${name}\n`);
+  }
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "base");
   git(repo, "push", "-q", "-u", "origin", "main");
   if (targetRepo === "worktree") git(repo, "worktree", "add", "-qb", "generation-two", source, "main");
   git(repo, "worktree", "add", "-qb", "task/Demo/close-task", worktree, "main");
-  writeFileSync(join(worktree, "delivery.txt"), "done\n");
-  git(worktree, "add", "delivery.txt");
-  git(worktree, "commit", "-qm", "delivery");
-  const taskCommit = git(worktree, "rev-parse", "HEAD");
-
   const task = createTask({
     storageRoot: root,
     manifest: {
@@ -90,9 +131,39 @@ function fixture({ targetRepo = "main", archiveParent = true } = {}) {
       inputs: {},
     },
   });
-  const kernel = createTaskKernel(task);
-  const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main") } });
+  const candidateWorkspace = prepareTaskWorkspace(task);
+  const kernel = createTaskKernel(task, { candidateWorkspace });
+  const active = kernel.startStageRun("make-decision", { reason: "delivery close test fixture" });
+  const snapshotTree = git(worktree, "rev-parse", "HEAD^{tree}");
+  const content = {
+    schema_version: "stage-content-evidence.v1", kind: "make-decision.test",
+    task_id: "close-task", stage: "make-decision",
+    workflow_run_id: active.run.workflow_run_id, snapshot_tree: snapshotTree,
+  };
+  const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+  const contentHash = sha256(contentRaw);
+  const contentRef = `evidence/stage-content/${contentHash}/make-decision-test.json`;
+  kernel.publishCanonicalRecord(contentRef, contentRaw);
+  const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
+  const unsignedSummary = {
+    schema_version: "stage-audit-summary.v1", task_id: "close-task", stage_slug: "make-decision",
+    workflow_run_id: active.run.workflow_run_id, snapshot_tree: snapshotTree,
+    verdict: "pass", content_evidence_refs: contentEvidenceRefs,
+  };
+  const summaryHash = hashAuditSummary(unsignedSummary);
+  const summaryRef = `evidence/audits/make-decision/${summaryHash}.json`;
+  kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  const decision = kernel.publishAttempt("make-decision", { facts: {
+    worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main"),
+    audit_contract_version: "v1", audit_summary_ref: summaryRef, audit_summary_hash: summaryHash,
+    audit_verdict: "pass", content_evidence_refs: contentEvidenceRefs,
+  } });
   kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
+  writeFileSync(join(worktree, "delivery.txt"), "done\n");
+  git(worktree, "add", "delivery.txt");
+  git(worktree, "commit", "-qm", "delivery");
+  const taskCommit = git(worktree, "rev-parse", "HEAD");
+  writeAcceptedBuildFixture(task, taskCommit, git(worktree, "rev-parse", "HEAD^{tree}"));
   writeAcceptedVerifyFixture(task, taskCommit, git(worktree, "rev-parse", "HEAD^{tree}"));
   return { root, remote, repo, source, worktree, taskCommit, task, kernel };
 }
@@ -118,6 +189,25 @@ function createRunner(f) {
   execFileSync("git", ["add", "."], { cwd: runner });
   execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
   return realpathSync(runner);
+}
+
+function committedTaskCloseRuntime(f) {
+  const projectRoot = realpathSync(join(import.meta.dirname, ".."));
+  const runner = join(f.root, "task-close-runner");
+  execFileSync("git", ["clone", "-q", "--no-local", projectRoot, runner]);
+  execFileSync("git", ["checkout", "-qb", "codex/task-close-test"], { cwd: runner });
+  cpSync(join(projectRoot, "core"), join(runner, "core"), { recursive: true, force: true });
+  cpSync(join(projectRoot, "scripts", "task-close.mjs"), join(runner, "scripts", "task-close.mjs"), { force: true });
+  symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
+  execFileSync("git", ["add", "core", "scripts/task-close.mjs", "node_modules"], { cwd: runner });
+  execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "--allow-empty", "-qm", "task close runtime"], { cwd: runner });
+  return join(runner, "scripts", "task-close.mjs");
+}
+
+function fileBytes(root) {
+  return readdirSync(root, { recursive: true }).map(String).sort()
+    .filter((relativePath) => lstatSync(join(root, relativePath)).isFile())
+    .map((relativePath) => [relativePath, sha256(readFileSync(join(root, relativePath)))]);
 }
 
 function archive(f) {
@@ -499,17 +589,72 @@ describe("delivery close verifier", () => {
 
   it("provides the thin prepare, confirm, execute, and status CLI", () => {
     const f = fixture();
-    const script = join(process.cwd(), "scripts", "task-close.mjs");
+    const script = committedTaskCloseRuntime(f);
     const identity = [`--task-path=${f.task.taskPath}`, "--project=Demo", "--task=close-task"];
+    const expectedWorktreeRoot = realpathSync(f.worktree);
+    const identityRoot = join(f.task.taskPath, "identity", "executions");
+    const countIdentities = () => existsSync(identityRoot) ? readdirSync(identityRoot).length : 0;
+    const beforePrepare = countIdentities();
     const prepared = JSON.parse(execFileSync(process.execPath, [script, "prepare", ...identity,
       "--task-branch=task/Demo/close-task", "--target-branch=main", "--remote=origin", `--task-commit=${f.taskCommit}`,
       "--spec-source=specs/task", "--spec-archive=specs/archive/task"], { encoding: "utf8" }));
+    expect(countIdentities() - beforePrepare).toBe(1);
     expect(prepared.plan_hash).toMatch(/^[a-f0-9]{64}$/);
+    const beforeConfirm = countIdentities();
     const confirmed = JSON.parse(execFileSync(process.execPath, [script, "confirm", ...identity, `--plan-hash=${prepared.plan_hash}`, "--decision=confirmed"], { encoding: "utf8" }));
+    expect(countIdentities() - beforeConfirm).toBe(1);
     expect(confirmed.ref).toContain(`/confirmations/${prepared.plan_hash}/`);
+    const beforeExecute = countIdentities();
     const executed = JSON.parse(execFileSync(process.execPath, [script, "execute", ...identity, `--plan-hash=${prepared.plan_hash}`, `--confirmation-ref=${confirmed.ref}`], { encoding: "utf8" }));
+    expect(countIdentities() - beforeExecute).toBe(1);
     expect(executed).toMatchObject({ status: "completed", physical_state: { archive: true, push: true, branch_cleanup: true } });
+    const beforeStatus = countIdentities();
     const status = JSON.parse(execFileSync(process.execPath, [script, "status", ...identity, `--plan-hash=${prepared.plan_hash}`], { encoding: "utf8" }));
+    expect(countIdentities()).toBe(beforeStatus);
     expect(status).toMatchObject({ record_status: "completed", physical_state: { status: "ready" } });
+    const pathCardRoot = join(f.task.taskPath, "identity", "path-cards", "verify-code");
+    const pathCards = readdirSync(pathCardRoot);
+    expect(pathCards).toHaveLength(3);
+    for (const name of pathCards) {
+      expect(JSON.parse(readFileSync(join(pathCardRoot, name), "utf8"))).toMatchObject({
+        task_id: "close-task",
+        stage: "verify-code",
+        worktree_root: expectedWorktreeRoot,
+        authority: "informational_only",
+      });
+    }
+  });
+
+  it("leaves task, target, worktree, and remote bytes unchanged when close write-boundary authentication fails", () => {
+    const f = fixture();
+    const script = committedTaskCloseRuntime(f);
+    writeFileSync(join(dirname(dirname(script)), "dirty-runtime.txt"), "dirty\n");
+    const identity = [`--task-path=${f.task.taskPath}`, "--project=Demo", "--task=close-task"];
+    const taskBefore = fileBytes(f.task.taskPath);
+    const repositoryBefore = {
+      target: git(f.repo, "rev-parse", "main"),
+      target_tree: git(f.repo, "rev-parse", "main^{tree}"),
+      target_status: git(f.repo, "status", "--porcelain", "--untracked-files=all"),
+      worktree: git(f.worktree, "rev-parse", "HEAD"),
+      worktree_tree: git(f.worktree, "rev-parse", "HEAD^{tree}"),
+      worktree_status: git(f.worktree, "status", "--porcelain", "--untracked-files=all"),
+      remote: git(f.repo, "ls-remote", "origin", "refs/heads/main"),
+    };
+
+    expect(() => execFileSync(process.execPath, [script, "prepare", ...identity,
+      "--task-branch=task/Demo/close-task", "--target-branch=main", "--remote=origin", `--task-commit=${f.taskCommit}`,
+      "--spec-source=specs/task", "--spec-archive=specs/archive/task"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }))
+      .toThrow(/clean/i);
+
+    expect(fileBytes(f.task.taskPath)).toEqual(taskBefore);
+    expect({
+      target: git(f.repo, "rev-parse", "main"),
+      target_tree: git(f.repo, "rev-parse", "main^{tree}"),
+      target_status: git(f.repo, "status", "--porcelain", "--untracked-files=all"),
+      worktree: git(f.worktree, "rev-parse", "HEAD"),
+      worktree_tree: git(f.worktree, "rev-parse", "HEAD^{tree}"),
+      worktree_status: git(f.worktree, "status", "--porcelain", "--untracked-files=all"),
+      remote: git(f.repo, "ls-remote", "origin", "refs/heads/main"),
+    }).toEqual(repositoryBefore);
   });
 });

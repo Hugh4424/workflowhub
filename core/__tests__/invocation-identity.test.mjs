@@ -52,18 +52,19 @@ describe("per-invocation runner identity", () => {
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-1" })).toThrow(/EEXIST|exist/i);
   });
 
-  it("rejects caller identity/path injection, cross-task source and same-run tampering", () => {
+  it("rejects caller identity/path injection and dirty execution without binding the runner branch to business identity", () => {
     const f = fixture();
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2", taskPath: f.task.taskPath })).toThrow(/caller-supplied|forbidden/i);
     writeFileSync(join(f.runner, "workflows", "build-code", "SKILL.md"), "# tampered\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).not.toThrow();
+    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).toThrow(/clean/i);
     execFileSync("git", ["checkout", "--", "workflows/build-code/SKILL.md"], { cwd: f.runner });
     writeFileSync(join(f.runner, "untracked-executable.mjs"), "process.exit(0);\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-3" })).not.toThrow();
+    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-3" })).toThrow(/clean/i);
     rmSync(join(f.runner, "untracked-executable.mjs"));
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "release", sourceKind: "release_manifest" })).toThrow(/unsupported/i);
     const other = fixture({ taskId: "other-call" });
-    expect(() => authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" })).not.toThrow();
+    expect(authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" }).identity)
+      .toMatchObject({ task_id: "other-call", source: { git_branch: "task/workflowhub/per-call" } });
   });
 
   it("reads legacy pinned tasks, migrates once with CAS lineage, then disables replacement", () => {
@@ -73,7 +74,8 @@ describe("per-invocation runner identity", () => {
       runnerRoot: f.runner, stage: "build-code",
     });
     const beforeHash = createHash("sha256").update(pinned.task.readRecord("task.json")).digest("hex");
-    expect(() => authenticateOfficialInvocation(pinned.task, { runnerRoot: f.runner, stage: "build-code", runId: "legacy" })).toThrow(/legacy.*read-only/i);
+    expect(authenticateOfficialInvocation(pinned.task, { runnerRoot: f.runner, stage: "build-code", runId: "legacy" }).identity)
+      .toMatchObject({ task_id: "per-call", source_kind: "git_invocation" });
     const migrated = migrateTaskToPerInvocation({
       taskPath: f.task.taskPath, projectName: "workflowhub", taskId: "per-call",
       expectedManifestHash: beforeHash,
