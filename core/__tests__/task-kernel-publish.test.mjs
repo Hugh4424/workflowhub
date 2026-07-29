@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
 import { createTask } from "../task-handle.mjs";
-import { createTaskKernel, validateAccepted } from "../task-kernel.mjs";
+import { createTaskKernel, validateAccepted, validateStageFacts } from "../task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 import { ArtifactDir } from "../artifact-dir.mjs";
 import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
@@ -337,6 +337,46 @@ function startMakeDecisionThrough(kernel, candidate, throughStep = 5) {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("TaskKernel append-only publication", () => {
+  it("live_plan_execution: automatic accepted cannot replace completion evidence with a boolean", () => {
+    const tree = "a".repeat(40);
+    const hash = "b".repeat(64);
+    const facts = {
+      changed: [],
+      tests: {
+        command: "npm test",
+        exit_code: 0,
+        command_hash: hash,
+        snapshot_head: tree,
+        snapshot_tree: tree,
+        snapshot_commit: "c".repeat(40),
+        started_at: "2026-07-29T00:00:00.000Z",
+        completed_at: "2026-07-29T00:00:01.000Z",
+        receipt_ref: "receipts/build-tests.json",
+        receipt_hash: hash,
+        output_ref: "evidence/build-tests.txt",
+        output_hash: hash,
+      },
+      review: {
+        verdict: "revise_required",
+        result_ref: "reviews/results/build-code.json",
+        result_hash: hash,
+        snapshot_tree: tree,
+      },
+      phase_completion: true,
+      acceptance_coverage: {
+        snapshot_tree: tree,
+        accepted_criterion_ids: ["AC-01"],
+        items: [{ acceptance_criterion_id: "AC-01", status: "covered", evidence_refs: [] }],
+      },
+      audit_contract_version: "v1",
+      audit_summary_ref: `evidence/audits/build-code/${hash}.json`,
+      audit_summary_hash: hash,
+      audit_verdict: "pass",
+      content_evidence_refs: [],
+    };
+    expect(() => validateStageFacts("build-code", facts)).toThrow(/completion evidence|phase_completion/i);
+  });
+
   it("rejects acceptance when the core decision is missing even if audit support is missing", () => {
     const { task, candidate } = fixture();
     const kernel = createTaskKernel(task, { candidateWorkspace: candidate });

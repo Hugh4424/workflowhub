@@ -515,6 +515,18 @@ describe("bootstrapStage", () => {
     })).toThrow(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
   });
 
+  it("current documents: names every missing material before verify-code starts", () => {
+    const fixtureValue = fixture({ acceptDecision: false });
+    fixtureValue.kernel.startStageRun("verify-code", { reason: "current documents RED control" });
+    expect(() => bootstrapStage("verify-code", {
+      mode: "launcher",
+      home: fixtureValue.storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: fixtureValue.storageRoot },
+    })).toThrow(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
+  });
+
   it("invalidates Workspace automatically when its worktree path is replaced", () => {
     const { storageRoot, worktreeRoot } = fixture();
     const context = bootstrapStage("build-spec", {

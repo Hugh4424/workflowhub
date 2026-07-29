@@ -78,6 +78,13 @@ function fixture(overrides = {}) {
 }
 
 describe("stage completion facts", () => {
+  it("completion evidence: cannot render a passed handoff while required items are missing", () => {
+    expect(() => fixture({
+      result: "passed",
+      missing_items: ["tasks.md completion evidence is missing"],
+    })).toThrow(/completion evidence|missing_items|passed/i);
+  });
+
   it("derives both views from one immutable canonical value", () => {
     const facts = fixture();
     expect(Object.isFrozen(facts)).toBe(true);

@@ -222,4 +222,13 @@ describe("interaction quality amendment contracts", () => {
       /decision-log\.md[\s\S]{0,120}spec\.md[\s\S]{0,120}plan\.md[\s\S]{0,120}tasks\.md/i,
     );
   });
+
+  it("completion evidence: build-code authenticates current tasks before publishing completion", () => {
+    const manifest = JSON.parse(read("workflows", "build-code", "steps.json"));
+    const authenticate = manifest.steps.find(({ step_slug: slug }) => slug === "authenticate-current-task-completion");
+    const publish = manifest.steps.find(({ step_slug: slug }) => slug === "publish-code-result");
+    expect(authenticate).toBeDefined();
+    expect(authenticate.order).toBeLessThan(publish.order);
+    expect(publish.depends_on).toContain(authenticate.step_id);
+  });
 });
