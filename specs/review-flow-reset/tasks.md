@@ -796,14 +796,14 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 
 ## 6. Final Boundary Check
 
-- [ ] 每个 Phase 八段完整，且 Files 与 plan 逐字一致。
-- [ ] 每个 Task 只有一张权威卡，精确文件属于本 Phase NEW/MODIFY。
-- [ ] 每个行为变化都有真实 RED → GREEN，命令、oracle 和 evidence 明确。
-- [ ] DAG 与 FR/Task/AC/gate 双向闭合。
-- [ ] Plan File Boundary 等于所有 Phase NEW/MODIFY 的并集。
-- [ ] 每个 Phase NEW/MODIFY 文件至少有一个 owning Task。
-- [ ] 每个 Task 的精确文件和 boundary 都是所属 Phase NEW/MODIFY 的子集。
-- [ ] 没有 host identity、固定 artifact root、无关项目规则或未声明文件。
+- [x] 每个 Phase 八段完整，且 Files 与 plan 逐字一致。
+- [x] 每个 Task 只有一张权威卡，精确文件属于本 Phase NEW/MODIFY。
+- [x] 每个行为变化都有真实 RED → GREEN，命令、oracle 和 evidence 明确。
+- [x] DAG 与 FR/Task/AC/gate 双向闭合。
+- [x] Plan File Boundary 等于所有 Phase NEW/MODIFY 的并集。
+- [x] 每个 Phase NEW/MODIFY 文件至少有一个 owning Task。
+- [x] 每个 Task 的精确文件和 boundary 都是所属 Phase NEW/MODIFY 的子集。
+- [x] 没有 host identity、固定 artifact root、无关项目规则或未声明文件。
 
 ## Appendix A. Legacy import
 
