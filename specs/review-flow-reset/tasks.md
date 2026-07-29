@@ -183,14 +183,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增三类 recovery kind registry/schema/JS/TaskHandle/CLI parity、旧 v1 兼容、未知 kind 拒绝、CAS/rollback/replay、dirty-cleanup-rebind 与 normal close effective Workspace 的真实 RED。
+- **executed_commands**：纯 Phase 2 RED：`core/task-recovery` 19 项中 3 项按 OR-RECOVERY 失败；补充审查 finding RED 命中缺 credential producer、伪造 authorization、normal close 旧 root。最终精确 6 文件 gate 141/141、exit 0。
+- **evidence_refs**：implementation commit `dd51a5a92074d52647b9d6cae569202b21bed7df`；Phase 2 RED/GREEN 输出；一次独立 review 三项 blocking finding 及修复记录。
+- **covered_ac**：AC-03、AC-04、AC-08、AC-09、AC-10。
+- **review_fact**：独立 Phase review 原 verdict=`revise_required`；3 个 blocking finding 已全部修复，原 verdict 保留；未二审。formal canonical review 因旧 task closed/plan drift unavailable。
+- **completed_at**：2026-07-29T10:05:38Z
 
 #### T004 — GREEN：operation registry 与正式写入口
 
@@ -221,14 +221,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：正式 CLI 签发/消费 content-addressed recovery credential；authorization 强绑定 purpose、subject hash、旧/新 Workspace、Git identity、artifact refs；normal close 使用 authenticated effective Workspace 并安全 detach 旧脏 worktree，保留用户字节。
+- **executed_commands**：最终精确 gate 6/6 files、141/141 tests、exit 0；真实 CLI 17/17；task-close 33/33；4 个 `node --check`、`git diff --check` 通过；allowlist 12 paths、unexpected=[]。
+- **evidence_refs**：implementation commit `dd51a5a92074d52647b9d6cae569202b21bed7df`；Phase 2 GREEN 输出；独立 review finding 修复记录。
+- **covered_ac**：AC-03、AC-04、AC-08、AC-09、AC-10。
+- **review_fact**：原 `revise_required` 保留；credential producer、authorization binding、effective close 三项 blocking finding 已修；按 single-review 规则未二审；formal review unavailable 已如实记录。
+- **completed_at**：2026-07-29T10:05:38Z
 
 ### Verify
 
