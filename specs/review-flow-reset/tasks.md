@@ -16,7 +16,7 @@
 ## 2. Global Constraints
 
 - spec binding：`{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"REVIEW-FLOW-RESET"}`
-- plan binding：`{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"REVIEW-FLOW-RESET-PLAN"}`
+- plan binding：`{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"REVIEW-FLOW-RESET-PLAN"}`
 - 每个行为变化先有真实 RED，再做 GREEN；配对任务使用相同 `gate_cmd` 和 oracle。
 - 只跑风险相关聚焦测试；不拼最终全量，不重复 provider 审查追 pass。
 - `tasks.md` 是唯一完成权威。只有执行者可在全部完成事实核验后勾选；runtime 只认证，不代替勾选。
@@ -43,7 +43,7 @@
 - **Phase**：Phase 1：统一身份、结构预检与路径交接
 - **goal**：复现三个 official owner 绕过、stale path card 和失败后字节变化。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PREFLIGHT-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T001"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PREFLIGHT-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T001"}]`
 - **输入**：当前 owner 入口、调用身份和路径卡实现。
 - **依赖**：N/A — first task
 - **并行**：否 — T002 直接消费本 RED。
@@ -81,7 +81,7 @@
 - **Phase**：Phase 1：统一身份、结构预检与路径交接
 - **goal**：三个 official owner 复用一次 shared preflight，并发布只读来源路径卡。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PREFLIGHT-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PREFLIGHT-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T002"}]`
 - **输入**：T001 RED。
 - **依赖**：T001
 - **并行**：否 — 共享 owner 与测试文件。
@@ -160,7 +160,7 @@
 - **Phase**：Phase 2：统一正式写边界与 recovery operation
 - **goal**：复现三类 operation 的 registry/白名单漂移、竞态、rollback 和 replay 缺口。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-RECOVERY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-RECOVERY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T003"}]`
 - **输入**：现有 recovery v1 schema、validator、TaskHandle 和 CLI。
 - **依赖**：T002
 - **并行**：否 — 依赖 Phase 1 写边界。
@@ -198,7 +198,7 @@
 - **Phase**：Phase 2：统一正式写边界与 recovery operation
 - **goal**：三类 recovery kind 由同一 registry 和解释器消费且不修改用户内容。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-RECOVERY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T004"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-RECOVERY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T004"}]`
 - **输入**：T003 RED。
 - **依赖**：T003
 - **并行**：否 — 共享 recovery core。
@@ -277,7 +277,7 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 - **Phase**：Phase 3：技能、材料与快照同源
 - **goal**：复现 locator、材料、anchor 和五类同源链缺口。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-MATERIAL-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T005"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-MATERIAL-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T005"}]`
 - **输入**：现有 resolver/doctor/material/writer/review runner。
 - **依赖**：T004
 - **并行**：否 — 依赖 recovery/close 边界。
@@ -315,7 +315,7 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 - **Phase**：Phase 3：技能、材料与快照同源
 - **goal**：resolver/doctor 同源、本地 preflight 先于 provider、五类记录同快照。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-MATERIAL-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T006"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-MATERIAL-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T006"}]`
 - **输入**：T005 RED。
 - **依赖**：T005
 - **并行**：否 — 共享 resolver/writer/review files。
@@ -383,7 +383,7 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 ### Files
 
 - **NEW**：`docs/adr/0011-authenticated-review-flow-generations.md`
-- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`、历史 generation bytes。
 
 ### Tasks
@@ -394,20 +394,20 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 - **Phase**：Phase 4：单核心、attempt-N 与 review-flow reset
 - **goal**：复现 support 卡死、核心假绿、caller attempt、consumer 重裁、错误复用和非法 reset。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-CORE-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T007"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-CORE-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T007"}]`
 - **输入**：现有 publication、journal 和 review-flow authority。
 - **依赖**：T006
 - **并行**：否 — 集成前置 Phase。
 - **FR**：FR-CORE-001、FR-ATTEMPT-001、FR-REVIEW-001、FR-REVIEW-002
 - **AC**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16
 - **动作**：新增 support missing、结构错误、target attempt-N、canonical consumer、reuse policy 和 reset append-only 测试。
-- **精确文件**：`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **精确文件**：`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **boundary**：只改测试；不改 publication/journal/review 实现或 provider config。
 - **输出**：OR-CORE-REVIEW RED。
 - **Knowledge**：producer 是唯一质量语义源。
 - **verification_role**：RED
 - **paired_task**：T008
-- **gate_cmd**：`npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **gate_cmd**：`npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **expected_exit**：1
 - **oracle**：OR-CORE-REVIEW — support 阻断、核心假绿、caller 跳 attempt、consumer 重裁、未变 subject 调 provider 或 reset 改旧链即命中。
 - **evidence_path**：`apply/evidence/stage-core-review-flow-red.stdout`、`apply/evidence/stage-core-review-flow-red.stderr`
@@ -417,14 +417,14 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — RED task is reviewed with its paired GREEN Phase result
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：构造 support missing/伪造、核心 decision 缺失/错绑、caller attempt、target attempt-N、canonical verdict 篡改、policy 变化误复用、非法/缺口 generation reset 的真实 RED。
+- **executed_commands**：RED 分别命中 policy-change 错误复用、缺 decision accepted、合法 retry 被 audit 判失败、reset generation gap 静默回退；最终更新后 exact gate 4 files、171/171 tests、exit 0。
+- **evidence_refs**：implementation commit `c111509d8c85cb3dd058d45c14a34ae926535d46`；Phase 4 RED/GREEN 输出；一次独立 review 三项 major finding 及修复记录。
+- **covered_ac**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16。
+- **review_fact**：独立 Phase review 原 verdict=`revise_required`；decision、retry audit、generation gap 三项 major finding 已修，原 verdict 保留；未二审；formal canonical review unavailable。
+- **completed_at**：2026-07-29T11:58:33Z
 
 #### T008 — GREEN：单核心与合法 generation
 
@@ -432,20 +432,20 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 - **Phase**：Phase 4：单核心、attempt-N 与 review-flow reset
 - **goal**：核心错误真失败，step attempt-N 和 review reuse/reset 由单一 authority 派生。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-CORE-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T008"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-CORE-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T008"}]`
 - **输入**：T007 RED。
 - **依赖**：T007
 - **并行**：否 — 共享 kernel/review files。
 - **FR**：FR-CORE-001、FR-ATTEMPT-001、FR-REVIEW-001、FR-REVIEW-002
 - **AC**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16
 - **动作**：核心/support 分层；kernel 派生 target attempt-N；consumer 只认证；相同 subject 复用，结构变化 append-only reset。
-- **精确文件**：`core/task-kernel-implementation.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`docs/adr/0011-authenticated-review-flow-generations.md`
+- **精确文件**：`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`docs/adr/0011-authenticated-review-flow-generations.md`
 - **boundary**：不重写旧 generation，不改 provider route/双 track/人工确认，不建平行 review state。
 - **输出**：单核心、target attempt-N、canonical outcome 和合法 generation。
 - **Knowledge**：每代最多一次 structural full review。
 - **verification_role**：GREEN
 - **paired_task**：T007
-- **gate_cmd**：`npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **gate_cmd**：`npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **expected_exit**：0
 - **oracle**：OR-CORE-REVIEW — support missing 可继续、结构错绑失败、只目标 attempt-N、未变零调用、reset append-only。
 - **evidence_path**：`apply/evidence/stage-core-review-flow-green.stdout`、`apply/evidence/stage-core-review-flow-green.stderr`
@@ -455,14 +455,14 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：核心 decision 必须 canonical ref/hash/bytes 同源，support audit 缺失非 gate；kernel 派生并认证 target attempt-N；consumer 只认证 canonical verdict；policy fingerprint 进入 reuse/lock/request ID；structural resolution 正式触发 append-only generation reset；TaskHandle 窄枚举保证 reset namespace 连续。
+- **executed_commands**：最终 exact gate `CI=1 npx vitest run core/__tests__/task-kernel-publish.test.mjs core/__tests__/task-handle.test.mjs core/__tests__/receipt-writer.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs` → 4 files、171/171、exit 0；12 files `node --check`、`git diff --check`、allowlist unexpected=[]。
+- **evidence_refs**：implementation commit `c111509d8c85cb3dd058d45c14a34ae926535d46`；Phase 4 GREEN 输出；ADR 0011；独立 review finding 修复记录。
+- **covered_ac**：AC-11、AC-12、AC-13、AC-14、AC-15、AC-16。
+- **review_fact**：原 `revise_required` 保留；3 个 major RED→GREEN；按 single-review 规则未二审；formal review unavailable 已如实记录。
+- **completed_at**：2026-07-29T11:58:33Z
 
 ### Verify
 
@@ -511,7 +511,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **Phase**：Phase 5：五阶段流程完成与人类交接
 - **goal**：复现漏组件、漏摘要、来源丢失和未执行 Task 被自动完成。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PROCESS-002"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T009"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PROCESS-002"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T009"}]`
 - **输入**：五阶段 Skill、completion facts、当前 spec/plan/tasks。
 - **依赖**：T008
 - **并行**：否 — 当前材料是权威输入。
@@ -549,7 +549,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **Phase**：Phase 5：五阶段流程完成与人类交接
 - **goal**：五阶段组件、摘要、来源和唯一 Task 状态均从真实当前事实产生。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PROCESS-002"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T010"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-PROCESS-002"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T010"}]`
 - **输入**：T009 RED。
 - **依赖**：T009
 - **并行**：否 — 共享 completion/runtime/material files。
@@ -628,7 +628,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **Phase**：Phase 6：本轮质量坍塌修复与 build-code 重做
 - **goal**：为 18 FR、21 AC、12 Task、文件和测试建立当前差距图并复现假完成。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-VERIFY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T011"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-VERIFY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T011"}]`
 - **输入**：T010、当前候选 diff、30 source matrix。
 - **依赖**：T010
 - **并行**：否 — 必须基于最终 Phase 1–5 候选。
@@ -666,7 +666,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 - **Phase**：Phase 6：本轮质量坍塌修复与 build-code 重做
 - **goal**：关闭 T011 的真实缺口并完成 build-code 交接。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-VERIFY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"329ce162bdd6f265ee5bb56de072b0e85c87a41b3fb65fede43179d3ce09ab24","id":"T012"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"FR-VERIFY-001"},{"artifact_kind":"plan","ref":"specs/review-flow-reset/plan.md","hash":"704eab5720adb16753e8f32458928fbcf3761c4b07072dc04b6eaab4a2a966de","id":"T012"}]`
 - **输入**：T011 RED、差距图、T001–T010 当前完成事实。
 - **依赖**：T011
 - **并行**：否 — 最终收口。
