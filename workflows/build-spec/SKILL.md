@@ -105,9 +105,11 @@ Do not edit or delete the accepted record:
    compare-and-swap. A missing, stale, cross-stage, changed, or tampered
    continuation/invalidation binding fails before replacement.
 
-Do not replace build-spec after build-plan, build-code, or verify-code has an
-accepted record. That requires a separate downstream invalidation design; fail
-closed instead of leaving accepted downstream lineage bound to the old spec.
+An accepted build-plan does not block build-spec continuation. The existing
+accepted plan remains unchanged; rerun build-plan when the plan must reflect the
+replacement specification. Do not replace build-spec after build-code or
+verify-code has an accepted record; fail closed once execution has been
+accepted.
 
 The prior accepted record remains the readable current fact until the corrected
 attempt is accepted. Continuation is recovery from a proven Stage defect, not a

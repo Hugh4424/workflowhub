@@ -155,6 +155,41 @@ describe("TaskHandle", () => {
     expect(() => task.listCanonicalPhaseMapTraceRefs()).toThrow(/symlink|regular/i);
   });
 
+  it("enumerates only sorted regular content-addressed Phase review corrections", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const correctionsRoot = join(taskPath, "identity", "phase-review-corrections");
+    mkdirSync(correctionsRoot, { recursive: true });
+    const oldTree = "a".repeat(40), newTree = "b".repeat(40);
+    const first = `phase-T02-${oldTree}-${newTree}-${"1".repeat(64)}.json`;
+    const second = `phase-T02-${oldTree}-${newTree}-${"2".repeat(64)}.json`;
+    writeFileSync(join(correctionsRoot, second), "{}");
+    writeFileSync(join(correctionsRoot, first), "{}");
+
+    expect(task.listCanonicalPhaseReviewCorrectionRefs()).toEqual([
+      `identity/phase-review-corrections/${first}`,
+      `identity/phase-review-corrections/${second}`,
+    ]);
+  });
+
+  it("rejects noncanonical and symlinked Phase review corrections", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const correctionsRoot = join(taskPath, "identity", "phase-review-corrections");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-phase-review-correction-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(correctionsRoot, { recursive: true });
+    const oldTree = "a".repeat(40), newTree = "b".repeat(40);
+    const name = `phase-T02-${oldTree}-${newTree}-${"3".repeat(64)}.json`;
+    writeFileSync(join(outside, name), "{}");
+    symlinkSync(join(outside, name), join(correctionsRoot, name));
+    expect(() => task.listCanonicalPhaseReviewCorrectionRefs()).toThrow(/symlink|regular/i);
+
+    rmSync(join(correctionsRoot, name));
+    writeFileSync(join(correctionsRoot, "phase-T02-not-content-addressed.json"), "{}");
+    expect(() => task.listCanonicalPhaseReviewCorrectionRefs()).toThrow(/content-addressed|regular/i);
+  });
+
   it("enumerates external review audits without treating them as review results", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });
