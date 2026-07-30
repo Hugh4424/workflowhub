@@ -275,7 +275,12 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       }
       context = recoverMakeDecisionWorkspace(context);
     } else {
-      context = prepareMakeDecisionWorkspace(context);
+      const active = command === "prepare"
+        ? null
+        : context.kernel.activeStageRun("make-decision", { required: false });
+      context = active?.run.recovery_source_ref !== undefined
+        ? recoverMakeDecisionWorkspace(context)
+        : prepareMakeDecisionWorkspace(context);
     }
   }
   const writeBoundary = authenticateStageWriteBoundary(context, {

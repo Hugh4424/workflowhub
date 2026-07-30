@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import { createTask } from "../../core/task-handle.mjs";
 import { createTaskKernel } from "../../core/task-kernel.mjs";
+import { createCanonicalSource, createSourceManifest } from "../../core/canonical-source.mjs";
 import { prepareTaskWorkspace, recoverTaskWorkspace } from "../../core/workspace.mjs";
 
 const roots = [];
@@ -87,6 +88,38 @@ function recoverWithStage(f, stage, extra = []) {
     runtime, "recover-run", `--stage=${stage}`, "--project=Demo",
     `--task=${f.task.identity.taskId}`, "--reason=transparent recovery", ...extra,
   ], { cwd: f.repo, env: f.env, encoding: "utf8" });
+}
+
+function requirementsLedgerInput() {
+  const canonicalSource = createCanonicalSource({
+    source_type: "offline_fixture",
+    source_id: "recovery-continuation",
+    revision: "r1",
+    requirements: ["R1"],
+  });
+  const sourceManifest = createSourceManifest({
+    canonical_source: canonicalSource,
+    atoms: [{
+      requirement_id: "R1",
+      text: "Recovery continuation must keep the recovered workspace.",
+      owner: "workflowhub",
+      authority: "test",
+      derived_from: [],
+      supersedes: [],
+      status: "accepted",
+      stale: false,
+    }],
+  }).manifest;
+  return {
+    source_manifest: sourceManifest,
+    mappings: {
+      R1: {
+        decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+        artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+        acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+      },
+    },
+  };
 }
 
 function concurrentRecoveries(f) {
@@ -193,6 +226,35 @@ describe("official make-decision recover-run", () => {
     });
     expect(f.task.readRecord(f.old.ref)).toBe(oldRunBytes);
     expect(f.task.readRecord(invalidation.ref)).toBe(invalidationBytes);
+  });
+
+  it("keeps using the recovered workspace for later commands in the same active recovery run", () => {
+    const f = fixture("recovery-continuation-workspace");
+    writeFileSync(join(f.worktreeRoot, "task-work.txt"), "task work\n");
+    execFileSync("git", ["add", "."], { cwd: f.worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "task-only recovery head"], { cwd: f.worktreeRoot });
+    const recovered = recover(f);
+    expect(recovered.status, recovered.stderr).toBe(0);
+    const input = join(f.root, "requirements-ledger.json");
+    writeFileSync(input, `${JSON.stringify(requirementsLedgerInput())}\n`);
+    const before = recordSnapshot(f.task);
+
+    const continued = spawnSync(process.execPath, [
+      runtime, "publish-requirements-ledger", "--stage=make-decision", "--project=Demo",
+      `--task=${f.task.identity.taskId}`, `--input=${input}`,
+    ], { cwd: f.repo, env: f.env, encoding: "utf8" });
+
+    if (continued.status !== 0) expect(recordSnapshot(f.task)).toEqual(before);
+    expect(continued.status, continued.stderr).toBe(0);
+    const publication = JSON.parse(continued.stdout);
+    expect(publication).toMatchObject({
+      ledger_ref: "requirements/ledger.json",
+      workflow_run_id: JSON.parse(recovered.stdout).run.workflow_run_id,
+      current: true,
+    });
+    expect(JSON.parse(f.task.readRecord(publication.ledger_ref))).toMatchObject({
+      schema_version: "v1",
+    });
   });
 
   it("adds no run or journal records when a recovered workspace becomes dirty before runtime use", () => {
