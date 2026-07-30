@@ -174,6 +174,16 @@
 - **开放项**：无。
 - **supersedes**：D-06 的 post-Grill material 更新细化，不覆盖 D-06。
 
+### D-12：resolution 完成边界与一次性 revalidation replacement
+
+- **来源**：真实 detail resolution 已写入 canonical resolution/event 后，runtime 又尝试 make-decision 不支持的 review-flow reset，导致命令错误退出；修复该 runtime 后 Workspace tree 再次变化。
+- **事实/约束**：旧 resolution、review、Talk、Grill 和首次 revalidation 都必须保留；审计恢复不能制造重复 review 循环。
+- **选择及理由**：所有 Stage 的 resolution 都只追加修复与聚焦验证事实，不自动创建 reset 或新 review generation；保留的显式 reset 能力只能由用户明确要求的新语义审查调用。首次 revalidation 因修复 runtime 失去 current-tree 绑定时，只允许一个 runtime 派生、显式 supersede `0001` 的 `0002`。
+- **影响/风险**：`0002` 必须绑定 `0001` 的真实 invocation、直接下一版材料和自己的真实 invocation；禁止 `0003`，不重跑 Talk/provider。
+- **拒绝方案**：吞掉 post-write 错误、删除 `0001`、把任意材料变更开放成无限 revalidation，或自动 full review。
+- **开放项**：无。
+- **supersedes**：细化 D-11 的异常恢复边界，不覆盖 D-11。
+
 ## Grill 结论
 
 - `CONTEXT.md` 已更新，补齐本任务使用的恢复、当前材料和 requirements 指针术语。

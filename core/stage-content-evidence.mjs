@@ -316,6 +316,9 @@ function validateInteractionSemantics(payload) {
     validateGrillFacts(payload.grill);
     requireBinding(payload.previous_grill, "grill revalidation previous grill");
     requireBinding(payload.material_revision, "grill revalidation material revision");
+    if (payload.supersedes_revalidation !== undefined) {
+      requireBinding(payload.supersedes_revalidation, "superseded grill revalidation");
+    }
     return;
   }
   if (payload.interaction_type === "aggregate") {
@@ -360,17 +363,22 @@ export function createStageContentEvidenceWriter(options = {}) {
       return `${refRoot}/interaction-completion.${type}.json`;
     }
     if (type === "grill-revalidation") {
-      const candidate = `${refRoot}/interaction-completion.grill-revalidation-0001.json`;
-      const existing = readOptional(task, candidate);
-      if (existing === undefined) return candidate;
-      try {
-        const value = JSON.parse(existing);
-        if (value.kind === "interaction-completion.v1"
-            && value.content_hash === sha256(JSON.stringify(payload))) return candidate;
-      } catch {
-        throw new Error(`existing interaction evidence is invalid: ${candidate}`);
+      for (const sequence of [1, 2]) {
+        const candidate = `${refRoot}/interaction-completion.grill-revalidation-${String(sequence).padStart(4, "0")}.json`;
+        const existing = readOptional(task, candidate);
+        if (existing === undefined) {
+          if (sequence === 1 || payload.supersedes_revalidation !== undefined) return candidate;
+          break;
+        }
+        try {
+          const value = JSON.parse(existing);
+          if (value.kind === "interaction-completion.v1"
+              && value.content_hash === sha256(JSON.stringify(payload))) return candidate;
+        } catch {
+          throw new Error(`existing interaction evidence is invalid: ${candidate}`);
+        }
       }
-      throw new Error("make-decision permits only one focused grill revalidation per workflow run");
+      throw new Error("make-decision permits only one replacement after the initial focused grill revalidation");
     }
     const prefix = `${refRoot}/interaction-completion.${type}-`;
     const limit = type === "talk" ? 3 : 9999;
@@ -416,6 +424,44 @@ export function createStageContentEvidenceWriter(options = {}) {
     return binding;
   }
 
+  function trustedSupersededGrillRevalidation(currentMaterial, currentTree) {
+    const ref = `${refRoot}/interaction-completion.grill-revalidation-0001.json`;
+    const raw = readOptional(task, ref);
+    if (raw === undefined) return undefined;
+    const hash = sha256(raw);
+    const value = verifyStageContentEvidence({
+      task, ref, hash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (value.payload?.interaction_type !== "grill-revalidation") {
+      throw new Error("superseded grill revalidation binding is not revalidation evidence");
+    }
+    if (value.snapshot_tree === currentTree
+        && currentMaterial.ref === value.payload.material_revision.ref
+        && currentMaterial.hash === value.payload.material_revision.hash) {
+      return undefined;
+    }
+    const invocation = kernel.readStageSkillInvocation(
+      "make-decision",
+      "grill-with-docs",
+      "grill-revalidation-1",
+    );
+    if (invocation?.fact?.status !== "executed"
+        || invocation.fact.outcome_ref !== ref
+        || invocation.fact.outcome_hash !== hash
+        || invocation.fact.snapshot_tree !== value.snapshot_tree) {
+      throw new Error("replacement grill revalidation requires the completed authenticated initial revalidation");
+    }
+    if (value.snapshot_tree === currentTree) {
+      throw new Error("replacement grill revalidation requires a changed Workspace tree");
+    }
+    if (currentMaterial.value.previous_ref !== value.payload.material_revision.ref
+        || currentMaterial.value.previous_hash !== value.payload.material_revision.hash) {
+      throw new Error("replacement grill revalidation requires the direct next material revision");
+    }
+    return { ref, hash };
+  }
+
   function validateGrillRevalidationBindings(payload) {
     if (payload.interaction_type !== "grill-revalidation") return;
     const predecessor = verifyStageContentEvidence({
@@ -431,6 +477,17 @@ export function createStageContentEvidenceWriter(options = {}) {
     const current = trustedCurrentMaterialBinding();
     if (payload.material_revision.ref !== current.ref || payload.material_revision.hash !== current.hash) {
       throw new Error("grill revalidation does not bind the current material revision");
+    }
+    if (payload.supersedes_revalidation !== undefined) {
+      const expected = trustedSupersededGrillRevalidation(
+        readCurrentTaskMaterialRevision({ task }),
+        payload.workspace_tree,
+      );
+      if (!expected
+          || payload.supersedes_revalidation.ref !== expected.ref
+          || payload.supersedes_revalidation.hash !== expected.hash) {
+        throw new Error("replacement grill revalidation supersedes binding is invalid");
+      }
     }
   }
 
@@ -449,6 +506,13 @@ export function createStageContentEvidenceWriter(options = {}) {
         || !EVIDENCE_REF.test(binding.ref ?? "")
         || !HASH.test(binding.hash ?? "")) {
         throw new TypeError(`aggregate ${label} binding must contain only a canonical ref and hash`);
+      }
+      if (label === "grill") {
+        const replacementRef = `${refRoot}/interaction-completion.grill-revalidation-0002.json`;
+        const replacementRaw = readOptional(task, replacementRef);
+        if (replacementRaw !== undefined && binding.ref !== replacementRef) {
+          throw new Error("interaction aggregate must bind the latest grill revalidation replacement");
+        }
       }
       const child = verifyStageContentEvidence({
         task,
@@ -558,8 +622,9 @@ export function createStageContentEvidenceWriter(options = {}) {
       const grillRevalidation = input.kind === "interaction-completion.v1"
         && input.payload.interaction_type === "grill-revalidation";
       if (grillRevalidation && (Object.hasOwn(input.payload, "previous_grill")
-          || Object.hasOwn(input.payload, "material_revision"))) {
-        throw new TypeError("grill revalidation predecessor and material bindings are caller-forbidden and runtime-derived");
+          || Object.hasOwn(input.payload, "material_revision")
+          || Object.hasOwn(input.payload, "supersedes_revalidation"))) {
+        throw new TypeError("grill revalidation predecessor, material, and supersedes bindings are caller-forbidden and runtime-derived");
       }
       if (input.kind === "browser-qa-evidence.v1") rejectBrowserPrivateKeys(input.payload);
       let snapshot;
@@ -579,7 +644,10 @@ export function createStageContentEvidenceWriter(options = {}) {
         payload.workspace_tree = snapshot.tree;
         if (grillRevalidation) {
           payload.previous_grill = trustedPreviousGrill();
+          const currentMaterial = readCurrentTaskMaterialRevision({ task });
           payload.material_revision = trustedCurrentMaterialBinding();
+          const superseded = trustedSupersededGrillRevalidation(currentMaterial, snapshot.tree);
+          if (superseded !== undefined) payload.supersedes_revalidation = superseded;
         }
       }
       validatePayload(input.kind, payload);

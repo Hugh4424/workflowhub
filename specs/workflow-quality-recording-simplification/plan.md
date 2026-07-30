@@ -669,14 +669,63 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 
 风险是为追 pass 对同一 tree 重跑；停止并如实记录。修复产生新 tree 时必须追加新结果，不覆盖旧事实。
 
+## Phase 8：resolution 完成边界与一次性 revalidation replacement
+
+### Goal
+
+修复 make-decision resolution 已持久化却因 unsupported reset 报失败的问题；代码修复
+改变最终 tree 时，保留 `0001` 并只追加一次可追溯 `0002`，不形成 review/revalidation
+循环。
+
+### Files
+
+- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/schemas/interaction-completion.v1.json`、`core/stage-content-evidence.mjs`、`workflows/make-decision/SKILL.md`。
+- **TEST**：`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`。
+- **MATERIALS**：本任务四材料只记录 D-12、FR-MAT-007、AC-18、T020/T021 和实际证据。
+- **DO NOT TOUCH**：旧 review/result/resolution/event、Talk、Grill、`grill-revalidation-0001`、provider route。
+
+### Tasks
+
+T020 先复现 post-write reset error 与第二次 revalidation 被拒；T021 移除 resolution
+自动 reset，并实现最多一个 runtime-owned replacement。
+
+### Strategy
+
+resolution 对所有 Stage 只追加记录；显式 reset API 仍只服务用户明确要求的新语义
+审查。`0002` 的 supersede、原 Grill、当前材料均由 runtime 派生；`0001` 必须有
+精确 executed invocation，当前材料必须是其直接下一版且 tree 不同。`0002` 自己
+也必须有真实 invocation；aggregate 只能引用当前 replacement。
+
+### Verify
+
+只运行 resolution/revalidation 聚焦测试；保留 RED exit 1 与 GREEN exit 0。独立审查
+检查历史不变、provider_calls=0、无 `0003`。
+
+### Knowledge
+
+D-11、D-12；FR-MAT-006/007；AC-17/18；宪法 Q1/Q2/Q3、F5/F10。
+
+### STOP
+
+吞异常、重写历史、开放无限 replacement、自动 review 或重跑 Talk/provider。
+
+### Done
+
+聚焦测试通过且独立审查无未解决 finding；T021 完成后回到 T015 正式收口。
+
+### Risks and rollback
+
+风险是把一次性恢复扩成通用循环。若 replacement 身份或材料直系关系不成立，立即
+fail-loud，并保留所有既有事实。
+
 ## 15. Dependencies and Parallelism
 
 - T001→T002→T003→T004 串行。
 - T005/T007/T009 的 fixture 准备可在 T004 后并行；各 GREEN 只消费自己的 RED。
 - T011 依赖 T004、T008、T010；T012 依赖 T006、T008、T010、T011。
-- T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T015 依赖 T017，T018 依赖 T015 的 Step 10，T019 依赖 T018；T013 依赖 T019 后形成的正式
+- T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T018 依赖 T017 和 T015 已完成的 Step 10，T019 依赖 T018，T020 依赖 T019，T021 依赖 T020，T015 依赖 T021；T013 依赖 T015 后形成的正式
   accepted build-plan/build-code lineage 与 fresh test facts。
-- T014、T016、T017、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
+- T014、T016、T017、T018、T019、T020、T021、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
 
 ## 16. Requirement and Verification Traceability
 
@@ -685,7 +734,7 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 | FR-INV-001..005 | T001,T002,T011,T012,T016,T017,T015 | AC-01,02,03,16 | 1,6,7 | ORACLE-INV/RECOVERY |
 | FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP/VERIFY |
 | FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
-| FR-MAT-001..005 | T007,T008,T011,T012 | AC-09,10,16 | 4,6 | ORACLE-MAT |
+| FR-MAT-001..007 | T007,T008,T011,T012,T018,T019,T020,T021 | AC-09,10,16,17,18 | 4,6,7,8 | ORACLE-MAT/POST-GRILL |
 | FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
 | FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
 | FR-REC-001..002 | T011,T012,T016,T017,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
@@ -701,3 +750,4 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 | 5 Browser | T009,T010 | Phase 2 | ORACLE-BQA GREEN | T013 |
 | 6 Verify | T011,T012 | Phase 3,4,5 | ORACLE-VERIFY GREEN | T013 |
 | 7 Closure | T014,T016,T017,T015,T013 | Phase 6 | facts→recovery RED/GREEN→formal recovery→review | T013 only |
+| 8 Resolution replacement | T020,T021 | Phase 7/T019 | ORACLE-RESOLUTION-REPLACEMENT | independent Phase review |

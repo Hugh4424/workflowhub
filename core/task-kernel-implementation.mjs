@@ -76,6 +76,7 @@ const ALLOWED_FACTS = Object.freeze({
   "verify-code": new Set(["tests", "review", "evidence_refs", "browser_qa", "verification_items", "quality_note", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
 });
 const AUDIT_FACT_KEYS = ["audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"];
+const REVIEW_FLOW_RESET_STAGES = new Set(["build-spec", "build-plan", "verify-code"]);
 
 function stageName(stage) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
@@ -2994,21 +2995,6 @@ export function buildTaskKernel(taskHandle, {
       createKernelRecord(eventRef, `${JSON.stringify(event, null, 2)}\n`);
       return deepFreeze({ resolution_ref: resolutionRef, flow: event });
     });
-    if (resolution.evidence_state === "verified" && resolution.change_classification?.structural === true) {
-      const subject = {
-        stage: identity.stage,
-        review_track: identity.review_track,
-        subject_kind: identity.subject_kind,
-        phase_id: identity.phase_id,
-        review_scope: identity.review_scope,
-        ...(identity.snapshot_tree === undefined ? {} : { snapshot_tree: identity.snapshot_tree }),
-      };
-      const reset = createReviewFlowReset(subject, {
-        reason: "authenticated structural change starts a fresh initial review generation",
-        resolution_ref: resolutionRef,
-      });
-      return deepFreeze({ ...recorded, reset });
-    }
     return recorded;
   };
   const deriveBaseReviewFlowIdentity = (value) => {
@@ -3144,7 +3130,7 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("review flow reset resolution_ref must be canonical");
     }
     const baseIdentity = deriveBaseReviewFlowIdentity(value);
-    if (!new Set(["build-spec", "build-plan", "verify-code"]).has(baseIdentity.stage)) {
+    if (!REVIEW_FLOW_RESET_STAGES.has(baseIdentity.stage)) {
       throw new Error("review flow reset is only supported for open design and verification stages");
     }
     try {

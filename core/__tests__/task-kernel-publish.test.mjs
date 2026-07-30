@@ -595,7 +595,7 @@ describe("TaskKernel append-only publication", () => {
     })).toThrow(/invalidated|superseded/i);
   });
 
-  it("creates one append-only initial review generation only from an authenticated structural change", () => {
+  it("allows an explicit review reset only after an authenticated structural resolution", () => {
     const { task, kernel } = fixture();
     const decision = kernel.publishAttempt("make-decision", {
       facts: { worktree_root: "/fixture", baseline_commit: "a".repeat(40), ...coreDecision(kernel) },
@@ -705,7 +705,11 @@ describe("TaskKernel append-only publication", () => {
       resolution_ref: recorded.resolution_ref,
       providers: ["fixture/forged"],
     })).toThrow(/unknown|provider/i);
-    const reset = recorded.reset;
+    expect(recorded).not.toHaveProperty("reset");
+    const reset = bound.createReviewFlowReset(subject, {
+      reason: "the user explicitly requested a new semantic review",
+      resolution_ref: recorded.resolution_ref,
+    });
     expect(reset).toMatchObject({
       reset_ref: expect.stringMatching(/^reviews\/flow-resets\/[a-f0-9]{64}\/reset-0001\.json$/),
       identity: {
@@ -954,6 +958,132 @@ describe("TaskKernel append-only publication", () => {
       resolution: { ...resolution, snapshot_tree: "c".repeat(40) },
     })).toThrow(/CAS|stale|event/i);
   });
+
+  it("records a structural make-decision resolution without opening a review-flow reset", () => {
+    const { task, kernel, candidate } = fixture();
+    startMakeDecisionThrough(kernel, candidate);
+    const previousTree = candidate.captureSnapshot().tree;
+    const { resultRef } = publishAdoptableLegacyRoot(kernel, "make-decision-structural-resolution", {
+      snapshotTree: previousTree,
+    });
+    const semantic = kernel.adoptLegacyReviewRoot({ result_ref: resultRef });
+    writeFileSync(join(candidate.worktreeRoot, "CONTEXT.md"), "structural correction\n");
+    const currentTree = candidate.captureSnapshot().tree;
+    const previousManifest = buildClassificationManifest({ draft_spec: "# Before\n" });
+    const currentManifest = buildClassificationManifest({ draft_spec: "# After\n" });
+    const changeClassification = deriveChangeClassification({
+      previousSnapshotTree: previousTree,
+      currentSnapshotTree: currentTree,
+      previousManifest,
+      currentManifest,
+    });
+    const resolution = {
+      version: "wh-review-resolution.v1",
+      task_id: "task-one",
+      stage: "make-decision",
+      review_track: semantic.identity.review_track,
+      outcome: "recorded_non_gate_response",
+      previous_verdict: semantic.verdict,
+      provider_calls: 0,
+      previous_result_ref: resultRef,
+      previous_result_sha256: semantic.result_sha256,
+      previous_snapshot_tree: previousTree,
+      snapshot_tree: currentTree,
+      evidence_state: "verified",
+      response_ledger: {},
+      response_ledger_sha256: "b".repeat(64),
+      unverified_reason: null,
+      accepted_risk_count: 0,
+      change_classification: changeClassification,
+    };
+
+    const recorded = kernel.recordReviewResolution(semantic.identity, {
+      expected_head_ref: resultRef,
+      expected_event_ref: semantic.event_ref,
+      resolution,
+    });
+
+    expect(recorded).not.toHaveProperty("reset");
+    expect(recorded.flow).toMatchObject({
+      event_kind: "resolution",
+      head_result_ref: resultRef,
+      provider_calls: semantic.provider_calls,
+    });
+    expect(task.listCanonicalReviewFlowResetRefs(recorded.flow.flow_id)).toEqual([]);
+  });
+
+  it.each(["build-spec", "build-plan", "verify-code"])(
+    "does not automatically reset %s after a structural resolution",
+    (stage) => {
+      const { task, kernel } = fixture();
+      const identity = {
+        workflow_run_id: `run-${stage}-structural-resolution`,
+        stage,
+        review_track: null,
+        subject_kind: "worktree",
+        phase_id: null,
+        review_scope: null,
+      };
+      const previousTree = "a".repeat(40);
+      const currentTree = "b".repeat(40);
+      const resultRef = `reviews/results/${stage}-structural-resolution.json`;
+      kernel.publishCanonicalRecord(resultRef, `${JSON.stringify({
+        version: "wh-review-result.v1",
+        task_id: "task-one",
+        stage,
+        review_track: null,
+        subject_kind: "worktree",
+        phase_id: null,
+        review_scope: null,
+        snapshot_tree: previousTree,
+        verdict: "revise_required",
+        provider_results: [{ provider: "fixture/a" }],
+      })}\n`);
+      const semantic = kernel.advanceReviewFlow(identity, {
+        expected_head_ref: null,
+        result_ref: resultRef,
+      });
+      const previousManifest = buildClassificationManifest({ draft_spec: "# Before\n" });
+      const currentManifest = buildClassificationManifest({ draft_spec: "# After\n" });
+      const changeClassification = deriveChangeClassification({
+        previousSnapshotTree: previousTree,
+        currentSnapshotTree: currentTree,
+        previousManifest,
+        currentManifest,
+      });
+      const recorded = kernel.recordReviewResolution(identity, {
+        expected_head_ref: resultRef,
+        expected_event_ref: semantic.event_ref,
+        resolution: {
+          version: "wh-review-resolution.v1",
+          task_id: "task-one",
+          stage,
+          review_track: null,
+          outcome: "recorded_non_gate_response",
+          previous_verdict: "revise_required",
+          provider_calls: 0,
+          previous_result_ref: resultRef,
+          previous_result_sha256: semantic.result_sha256,
+          previous_snapshot_tree: previousTree,
+          snapshot_tree: currentTree,
+          evidence_state: "verified",
+          response_ledger: {},
+          response_ledger_sha256: "c".repeat(64),
+          unverified_reason: null,
+          accepted_risk_count: 0,
+          change_classification: changeClassification,
+        },
+      });
+
+      expect(recorded).not.toHaveProperty("reset");
+      expect(recorded.flow).toMatchObject({
+        event_kind: "resolution",
+        head_result_ref: resultRef,
+        provider_calls: 1,
+      });
+      expect(task.listCanonicalReviewFlowResetRefs(recorded.flow.flow_id)).toEqual([]);
+    },
+  );
 
   it("replays a recorded make-decision review into a missing runtime step after a crash", () => {
     const { task, kernel, candidate } = fixture();

@@ -26,6 +26,15 @@
       },
       "additionalProperties": false
     },
+    "supersedes_revalidation": {
+      "type": "object",
+      "required": ["ref", "hash"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^evidence/stage-content/[a-f0-9]{64}/interaction-completion\\.grill-revalidation-0001\\.json$" },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "workspace_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "decision_ref": { "type": "string", "minLength": 1 },
     "decision_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }

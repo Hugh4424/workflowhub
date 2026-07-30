@@ -81,6 +81,10 @@
 - **FR-MAT-006**：detail review 后四材料变更使 Grill 绑定树变化时，只追加一次
   真实、聚焦的 Grill revalidation；它绑定原 Grill、当前 material revision 和新树，
   不重跑 Talk 或 full review，也不覆盖原 review verdict。
+- **FR-MAT-007**：任何 Stage 的 structural resolution 写入后都不得自动创建
+  review-flow reset 或新语义审查；若修复 revalidation/runtime 本身导致 tree 再变化，
+  只允许一个 `0002` 显式 supersede 已真实完成的 `0001`。`0002` 绑定直接下一版
+  material revision 和独立 authenticated invocation；禁止 `0003`。
 
 ### 3.5 浏览器证据
 
@@ -140,6 +144,11 @@
 - **AC-17**：post-Grill 四材料更新可追加当前 decision receipt 与受控 Grill
   revalidation；没有新 authenticated invocation 时，aggregate 必须拒绝。
   **失败条件**：旧 Step 9 被重绑/重试，或只写新 evidence 就能伪称完成。
+- **AC-18**：所有 Stage 的 structural resolution 返回成功且不自动产生 reset；
+  runtime 修复后的 revalidation replacement 只允许 `0002`，自动绑定已完成的
+  `0001`、直接下一版材料和新的 invocation，aggregate 继续复用原三轮 Talk。
+  **失败条件**：canonical resolution 已写却命令失败、caller 伪造 supersede、
+  未完成 `0001` 即 replacement，或出现 `0003`/重复 Talk/provider。
 - **AC-11**：UI 验收记录页面、场景、工具、登录态、性能状态、
   截图、测试文件/命令/exit、cleanup，并绑定当前 snapshot。
   **失败条件**：只有“页面测试通过”或证据不可定位。
@@ -172,6 +181,7 @@
 - **USR-BROWSER** → SCN-006；FR-BQA-*；AC-11、AC-12
 - **USR-REVIEW-RESOLUTION** → SCN-003；FR-REV-001、002；AC-05
 - **USR-MATERIAL-REVISION** → SCN-004；FR-MAT-*；AC-09、AC-10
+- **REC-POST-WRITE-RESET** → SCN-003、004；FR-MAT-007；AC-18
 - **USR-VERIFY-DEPTH** → SCN-005；FR-COMP-*、FR-VER-*；AC-03、04、13、14
 - **USR-FOCUSED-REVIEW** → SCN-003、007；FR-REV-*；AC-05、06、07
 - **FG3-09** → SCN-007；FR-REV-006；AC-08

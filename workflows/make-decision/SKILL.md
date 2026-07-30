@@ -90,13 +90,19 @@ Use this complete public sequence without inventing flags or input shapes:
     If a detail finding changes current materials after Step 10, preserve the
     old receipt, Grill, Talk and review bytes. Append the current material
     revision and decision receipt revision; Step 9 is not retried. Invoke one
-    real, focused `grill-with-docs` revalidation with its next
-    `grill-revalidation-N` host key, then publish `grill-revalidation` evidence.
+    real, focused `grill-with-docs` revalidation with
+    `grill-revalidation-1`, then publish `grill-revalidation` evidence.
     The runtime derives the predecessor Grill and current material revision;
     callers must not supply either binding. A revised aggregate may reuse the
     three Talk refs, but it rejects a revalidation without that authenticated
     host invocation. Record the detail finding resolution and focused evidence;
     do not dispatch another provider review unless the user explicitly asks.
+    If fixing the revalidation/runtime path itself changes the Workspace again,
+    keep `0001` unchanged and allow exactly one `grill-revalidation-2`. Runtime
+    must derive its `supersedes_revalidation` binding to the completed `0001`
+    and the direct next material revision. `0002` needs its own authenticated
+    host invocation; `0003` is forbidden. This recovery exception never reruns
+    Talk or provider review.
 13. Put the run input under `$TMP_DIR` with exactly:
    `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
    When the latest authenticated action for a track is a verified resolution,

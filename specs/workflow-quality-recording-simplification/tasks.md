@@ -818,8 +818,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **goal**：旧 run 保持 incomplete，新 run 真实执行声明组件。
 - **design_state**：ready
 - **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"1d6362713a7022c80696675973a77aaf1044bfdde5da7c38bb3fe7f41c0d1e12","id":"T015"}]`
-- **输入**：T017 GREEN 与旧 run recovery source；完成后等待真实用户确认。
-- **依赖**：T017
+- **输入**：run-0005 Step 1–10、T021 GREEN 与旧 run recovery source；完成后等待真实用户确认。
+- **依赖**：T021
 - **并行**：否 — 单一正式 run
 - **FR**：FR-INV-001、FR-INV-002、FR-INV-003、FR-INV-004、FR-INV-005、FR-COMP-001、FR-COMP-002、FR-COMP-003、FR-COMP-004、FR-COMP-005、FR-REC-001、FR-REC-002
 - **AC**：AC-01、AC-02、AC-03、AC-04、AC-15、AC-16
@@ -857,7 +857,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **design_state**：ready
 - **versioned_refs**：`[]`
 - **输入**：run-0005 Step 10、原 Grill、current material revision、detail finding resolution。
-- **依赖**：T015
+- **依赖**：T017
 - **并行**：否 — 单一 active make-decision run
 - **FR**：FR-MAT-001、FR-MAT-002、FR-MAT-004、FR-MAT-006、FR-INV-001、FR-INV-003
 - **AC**：AC-03、AC-05、AC-09、AC-16、AC-17
@@ -916,14 +916,90 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`in_progress`
-- **actual_changes**：新版 receipt 只在本 run Step 10 后作为当前材料，旧 Step 9 bytes 不重绑、不重试；`grill-revalidation` 只允许一次、固定绑定原 Grill，writer 自动注入原 Grill/current material revision，aggregate 必须核对新 authenticated invocation。独立审查的两个 finding 已做 focused 修复；真实 revalidation invocation、resolution 与正式 attempt 尚待执行。
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新版 receipt 只在本 run Step 10 后作为当前材料，旧 Step 9 bytes 不重绑、不重试；`grill-revalidation-0001` 固定绑定原 Grill，writer 自动注入原 Grill/current material revision，aggregate 必须核对新 authenticated invocation。真实 `0001`、direction/detail 零 provider resolution 已追加；旧 verdict 和 Talk/provider 均未改写或重跑。其后发现 resolution post-write reset runtime defect，转 T020/T021。
 - **executed_commands**：`vitest ... -t "accepts a verified decision revision"` → 1/1 pass；`vitest ... -t "appends a controlled grill revalidation|permits only one focused grill revalidation"` → 2/2 pass；此前 caller forged binding 与 prewritten-without-invocation 两条各 1/1 pass；无全量测试。
-- **evidence_refs**：当前会话的非 canonical 聚焦输出；正式 revalidation/receipt/resolution ref 尚不存在。
+- **evidence_refs**：`evidence/stage-content/43bbe9d157e9fdd1a69aa704c919bc6e4ffb2fe67a4a4bda8a12e641660542b3/interaction-completion.grill-revalidation-0001.json`；material revision `materials/revisions/0c6a93c1d7eb0a7b7a9ec2d55ea9001b44eb5b94023dcd19b6c4bbc304ce6dc4.json`；direction resolution `reviews/resolutions/a298bbe6826c387fa263e90123b01a06f9530b0fd8ebfac1ffb1644992d5bc9d.json`；detail resolution 已 canonical 写入且原 CLI post-write error 由 T020 固定。
 - **covered_ac**：AC-03、AC-05、AC-09、AC-16、AC-17。
 - **review_fact**：独立审查原 verdict=`revise_required` 保留；Step 10 前 revision 与多次 revalidation 循环两项 finding 均已由上述 focused tests 验证修复，未自动 full review、未产生新 provider verdict。detail review 原 verdict=`revise_required` 不变。
-- **completed_at**：N/A — not completed
+- **completed_at**：2026-07-30。
+
+#### T020: RED：resolution post-write reset 与 replacement 缺口
+
+- **ID**：T020
+- **Phase**：Phase 8：resolution 完成边界与一次性 revalidation replacement
+- **goal**：证明 make-decision structural resolution 已写入后错误调用 unsupported reset，并证明当前合同拒绝代码修复后的唯一 replacement。
+- **design_state**：ready
+- **versioned_refs**：`[]`
+- **输入**：T019、真实 detail resolution post-write error、`grill-revalidation-0001`。
+- **依赖**：T019
+- **并行**：否 — 同一 runtime 边界
+- **FR**：FR-MAT-006、FR-MAT-007、FR-REV-002
+- **AC**：AC-05、AC-17、AC-18
+- **动作**：新增两个聚焦反例：make-decision structural resolution 应成功返回且无 reset；完成 `0001` 后 direct-next material/tree 变化应允许唯一 `0002`。
+- **精确文件**：`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`
+- **boundary**：files: `core/__tests__/task-kernel-publish.test.mjs`, `tests/stage-content-evidence.test.mjs`; symbols/regions: structural resolution and grill replacement tests only.
+- **输出**：两个行为 RED。
+- **Knowledge**：D-12；旧 canonical resolution/event 已写入事实不回滚。
+- **verification_role**：RED
+- **paired_task**：T021
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/task-kernel-publish.test.mjs tests/stage-content-evidence.test.mjs -t "structural make-decision resolution|append-only replacement grill revalidation" --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-RESOLUTION-REPLACEMENT — RED 分别命中 unsupported reset 和 only-one revalidation；不是 fixture/setup 失败。
+- **evidence_path**：`apply/evidence/T020-resolution-replacement-red.stdout`
+- **STOP**：删除已写 resolution、重跑 provider/Talk，或把任意材料更新解释成 replacement。
+- **recovery**：保留 RED 和旧事实，进入 T021。
+- **task risk**：post-write error 误导重试，或修复 tree 无法形成最终可信 aggregate。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：两个 RED 已分别命中 `review flow reset is only supported for open design and verification stages` 与 `make-decision permits only one focused grill revalidation per workflow run`。
+- **executed_commands**：上述 gate 聚焦运行 → exit 1，2 tests failed；修正 test fixture 的 tree OID 后，resolution RED 精确命中 runtime defect。
+- **evidence_refs**：当前会话聚焦 stdout；无 canonical Phase receipt。
+- **covered_ac**：AC-05、AC-17、AC-18。
+- **review_fact**：N/A — RED 不审查。
+- **completed_at**：2026-07-30。
+
+#### T021: GREEN：resolution 正常完成与唯一 replacement
+
+- **ID**：T021
+- **Phase**：Phase 8：resolution 完成边界与一次性 revalidation replacement
+- **goal**：make-decision resolution 干净完成；修复 tree 只允许一个可信 `0002`，不开放循环。
+- **design_state**：ready
+- **versioned_refs**：`[]`
+- **输入**：T020 RED。
+- **依赖**：T020
+- **并行**：否 — 同一最小 GREEN
+- **FR**：FR-MAT-006、FR-MAT-007、FR-REV-002
+- **AC**：AC-05、AC-17、AC-18
+- **动作**：所有 Stage 的 resolution 都不自动创建 reset；显式 reset API 只保留给用户明确要求的新语义审查。schema/runtime 增加 caller-forbidden `supersedes_revalidation`；只允许 completed `0001` 的 direct-next material/tree 生成 `0002`，要求各自 invocation，禁止 `0003`，aggregate 绑定最新 replacement。
+- **精确文件**：`core/task-kernel-implementation.mjs`、`core/schemas/interaction-completion.v1.json`、`core/stage-content-evidence.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`、`workflows/make-decision/SKILL.md`
+- **boundary**：files: `core/task-kernel-implementation.mjs`, `core/schemas/interaction-completion.v1.json`, `core/stage-content-evidence.mjs`, `core/__tests__/task-kernel-publish.test.mjs`, `tests/stage-content-evidence.test.mjs`, `workflows/make-decision/SKILL.md`; symbols/regions: reset eligibility and revalidation replacement only.
+- **输出**：干净 resolution 返回和 append-only `0002` 合同。
+- **Knowledge**：D-11、D-12；原 review/result/resolution/`0001` 永久保留。
+- **verification_role**：GREEN
+- **paired_task**：T020
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/task-kernel-publish.test.mjs tests/stage-content-evidence.test.mjs -t "records resolutions as ordered|structural make-decision resolution|grill revalidation|review generation" --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-RESOLUTION-REPLACEMENT — 所有 Stage 的 resolution 无自动 reset/provider 增量，显式 reset 能力保持；`0002` 自动 supersede、direct-next、独立 invocation、Talk refs 不变；forged/missing/stale/`0003` 失败。
+- **evidence_path**：`apply/evidence/T021-resolution-replacement-green.stdout`
+- **STOP**：吞异常、宽化 reset、caller binding、无限 replacement、自动 review。
+- **recovery**：失败则保留 RED/历史，不执行正式 aggregate。
+- **task risk**：一次性恢复被误扩为重复审查机制。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：所有 Stage 的 structural resolution 不再自动进入 reset；显式 reset 能力仍受原 Stage/身份约束。`0002` 只从 completed `0001`、direct-next material 和新 tree 派生，caller 不能传 binding；`0003`、缺 invocation 与 stale aggregate 拒绝，aggregate 复用原 Talk。
+- **executed_commands**：初始 GREEN：TaskKernel 相关 4 tests pass、stage-content grill revalidation 5 tests pass；finding 修复后 TaskKernel 聚焦 5/5 pass，stage-content revalidation 聚焦 6/6 pass；材料最小可执行合同 1/1 pass；`node --check`、`git diff --check` pass；无全量测试。
+- **evidence_refs**：当前会话聚焦 stdout；独立 review verdict=`revise_required` 及两项 finding 保留在本任务记录。
+- **covered_ac**：AC-05、AC-17、AC-18。
+- **review_fact**：独立 Phase review 原 verdict=`revise_required` 保留；两项 finding 为自动 reset 仍触发重复审查、缺少 `0002` invocation/stale aggregate 负例。修复后分别由 TaskKernel 5/5 和 revalidation 6/6 聚焦测试验证；未覆盖旧 verdict，未强制二审。
+- **completed_at**：2026-07-30。
 
 #### T013: 唯一独立 integration review
 
@@ -990,7 +1066,7 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 
 ## 3. Dependency Graph
 
-`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T015→T018→T019→T013`
+`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T018→T019→T020→T021→T015→T013`
 
 ## 4. Requirement and Verification Traceability
 
@@ -999,15 +1075,15 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 | FR-INV-001..005 | T001,T002,T011,T012,T016,T017,T015 | AC-01,02,03,16 | 1,6,7 | ORACLE-INV |
 | FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP |
 | FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
-| FR-MAT-001..005 | T007,T008,T011,T012 | AC-09,10,16 | 4,6 | ORACLE-MAT |
+| FR-MAT-001..007 | T007,T008,T011,T012,T018,T019,T020,T021 | AC-09,10,16,17,18 | 4,6,7,8 | ORACLE-MAT |
 | FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
 | FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
 | FR-REC-001..002 | T011,T012,T016,T017,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
 
 ## 5. Final Boundary Check
 
-- T001–T012、T014、T016、T017 已 complete；T013、T015 保持 pending。
-- T001–T012 为六对严格 RED/GREEN；T016/T017 为恢复 blocker 的第七对行为 RED/GREEN。
+- T001–T012、T014、T016–T021 已 complete；T013、T015 保持 pending。
+- T001–T012 为六对严格 RED/GREEN；T016/T017 为恢复 blocker 的第七对，T018/T019 为 post-Grill 第八对，T020/T021 为 resolution/replacement 第九对。
 - T013–T015 中 T013/T015 是有理由的 non-behavior task，T014 保存真实验证事实。
 - commit/push/merge/archive/cleanup 均未授权。
 
