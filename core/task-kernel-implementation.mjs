@@ -1009,6 +1009,42 @@ export function buildTaskKernel(taskHandle, {
     }
     return record;
   };
+  const activeStageStepEvents = ({ stage, run, events }) => {
+    const scoped = events.filter((event) => event.workflow_run_id === run.workflow_run_id
+      && event.stage_slug === stage);
+    const attempts = new Map();
+    for (const event of scoped) {
+      const key = `${event.step_id}\0${event.attempt_id}`;
+      const attemptEvents = attempts.get(key) ?? [];
+      attemptEvents.push(event);
+      attempts.set(key, attemptEvents);
+    }
+    const invalidated = new Set();
+    for (const [key, attemptEvents] of attempts) {
+      const [stepId, attemptId] = key.split("\0");
+      const identityHash = hash(`${run.workflow_run_id}\0${stepId}\0${attemptId}`);
+      let record;
+      try {
+        record = parseJson(
+          task.readRecord(`runs/${stage}/journal-invalidations/${identityHash}.json`),
+          "stage step attempt invalidation",
+        );
+      } catch (error) {
+        if (error?.code === "ENOENT") continue;
+        throw error;
+      }
+      validateStageStepAttemptInvalidation({
+        stage,
+        run,
+        stepId: Number(stepId),
+        attemptId,
+        events: attemptEvents,
+        record,
+      });
+      invalidated.add(key);
+    }
+    return scoped.filter((event) => !invalidated.has(`${event.step_id}\0${event.attempt_id}`));
+  };
   const invalidateStageStepAttempt = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "stage step attempt invalidation input");
@@ -1410,8 +1446,8 @@ export function buildTaskKernel(taskHandle, {
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
-      const matching = events.filter((event) => event.workflow_run_id === active.run.workflow_run_id
-        && event.stage_slug === name && event.step_id === input.step_id && event.attempt_id === "attempt-1");
+      const activeEvents = activeStageStepEvents({ stage: name, run: active.run, events });
+      const matching = activeEvents.filter((event) => event.step_id === input.step_id);
       const existingExit = matching.find((event) => event.event_type === "step_exit");
       if (existingExit) {
         const existingEntry = matching.find((event) => event.event_type === "step_entry");
@@ -1425,9 +1461,8 @@ export function buildTaskKernel(taskHandle, {
         }
         return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
       }
-      if (input.step_id > 1 && !events.some((event) => event.workflow_run_id === active.run.workflow_run_id
-          && event.stage_slug === name && event.step_id === input.step_id - 1
-          && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
+      if (input.step_id > 1 && !activeEvents.some((event) => event.step_id === input.step_id - 1
+          && event.event_type === "step_exit"
           && eventCompletesDependency(event))) {
         throw new Error(`runtime-owned ${name} step ${input.step_id} requires completed step ${input.step_id - 1}`);
       }
@@ -1463,9 +1498,10 @@ export function buildTaskKernel(taskHandle, {
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    return events.some((event) => event.workflow_run_id === workflowRunId
-      && event.stage_slug === "make-decision" && event.step_id === stepId
-      && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
+    const active = activeStageRun("make-decision");
+    if (active.run.workflow_run_id !== workflowRunId) return false;
+    return activeStageStepEvents({ stage: "make-decision", run: active.run, events })
+      .some((event) => event.step_id === stepId && event.event_type === "step_exit"
       && (event.terminal_status === "success"
         || (stepId === 4 && event.terminal_status === "skipped"
           && event.authorized_by === "stage-runtime:record-research"
@@ -2243,16 +2279,7 @@ export function buildTaskKernel(taskHandle, {
     if (active.run.workflow_run_id !== identity.workflow_run_id) {
       throw new Error("make-decision review flow does not bind the active run");
     }
-    let events = [];
-    try {
-      events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map((line) => parseJson(line, "journal event"));
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    if (!events.some((event) => event.workflow_run_id === identity.workflow_run_id
-        && event.stage_slug === "make-decision" && event.step_id === stepId - 1
-        && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
-        && event.terminal_status === "success")) {
+    if (!completedMakeDecisionDependency(identity.workflow_run_id, stepId - 1)) {
       throw new Error(`make-decision review step ${stepId} requires successful step ${stepId - 1}`);
     }
     return stepId;

@@ -977,6 +977,59 @@ describe("TaskKernel append-only publication", () => {
     });
   });
 
+  it("retries a runtime-owned step only after its prior attempt is invalidated", () => {
+    const { task, kernel, candidate } = fixture();
+    const started = startMakeDecisionThrough(kernel, candidate);
+    const identity = kernel.deriveReviewFlowIdentity({
+      stage: "make-decision", review_track: "direction",
+      subject_kind: "worktree", phase_id: null, review_scope: null,
+    });
+    const attemptRef = "reviews/attempts/runtime-step-retry/attempt.json";
+    kernel.publishCanonicalRecord(attemptRef, `${JSON.stringify({
+      version: "wh-review-attempt.v1", attempt_id: "runtime-step-retry", task_id: "task-one",
+      stage: "make-decision", review_track: "direction", subject_kind: "worktree",
+      phase_id: null, review_scope: null,
+      provider_attempts: [{ provider: "fixture/a", status: "failed" }],
+      terminal_status: "unavailable", error: { code: "MATERIAL_INVALID", message: "fix materials" },
+      review_chain: { round: "initial", parent_result_ref: null, root_result_ref: null },
+    })}\n`);
+    const failed = kernel.recordReviewAttempt(identity, {
+      expected_head_ref: null,
+      expected_event_ref: null,
+      attempt_ref: attemptRef,
+    });
+    const { resultRef } = publishAdoptableLegacyRoot(kernel, "runtime-step-retry", {
+      snapshotTree: candidate.captureSnapshot().tree,
+    });
+    expect(() => kernel.advanceReviewFlow(identity, {
+      expected_head_ref: null,
+      expected_event_ref: failed.event_ref,
+      result_ref: resultRef,
+    })).toThrow(/already has different canonical evidence or status/);
+
+    kernel.invalidateStageStepAttempt("make-decision", {
+      step_id: 6,
+      attempt_id: "attempt-1",
+      reason: "replace the failed material review with the semantic result",
+    });
+    expect(() => kernel.prepareMakeDecisionInteractionPublication({
+      interaction_type: "talk",
+      round_number: 3,
+    })).toThrow(/requires completed step 6/);
+
+    expect(kernel.advanceReviewFlow(identity, {
+      result_ref: resultRef,
+    })).toMatchObject({ event_kind: "semantic_result", head_result_ref: resultRef });
+    expect(kernel.prepareMakeDecisionInteractionPublication({
+      interaction_type: "talk",
+      round_number: 3,
+    })).toMatchObject({ workflow_run_id: started.run.workflow_run_id, step_id: 7 });
+    const exits = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)
+      .filter((event) => event.step_id === 6 && event.event_type === "step_exit");
+    expect(exits.map((event) => event.attempt_id)).toEqual(["attempt-1", "attempt-2"]);
+    expect(exits[1].completion_evidence.uri_or_path).toMatch(/event-0002\.json$/);
+  });
+
   it("records unavailable provider cost without moving head or consuming the structural full budget", () => {
     const { task, kernel } = fixture();
     const identity = {
