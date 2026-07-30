@@ -1,7 +1,7 @@
 # 实现计划：WorkflowHub 核心质量流程真实执行与轻量记录
 
 - **Input**：`specs/workflow-quality-recording-simplification/spec.md`
-- **Status**：In progress — transparent recovery；T001–T014、T016–T017 complete，T015 当前执行 run-0005
+- **Status**：In progress — transparent recovery；T001–T014、T016–T017 complete；T015 run-0005 已完成 Step 1–10，detail verdict=`revise_required`，材料 finding 正在补充
 - **Template version**：`plan-task.v3`
 
 ## 1. 速读卡
@@ -11,7 +11,7 @@
 - **Before**：手写 payload、receipt 或 journal 可被误当成 Skill 已执行，质量步骤与完成声明脱节。
 - **After**：真实 `hostInvoke` 产生 invocation fact；统一 reconcile 用真实调用和业务事实判断完成。
 - **Main risk**：把“真实执行”误实现为新的开发进入 Gate。
-- **Next step**：完成 run-0005 的 grill、决策收据、详情审查和 attempt；仅在真实用户确认后进入正式 build lineage。
+- **Next step**：补充 detail review 指出的决策卡、grill 结论和开放交付风险，只做 focused verification、不自动 full re-review；最终 attempt 与真实用户确认完成后才进入正式 build lineage。
 
 ## 2. Technical Context and Constraints
 
@@ -22,9 +22,9 @@
 - **Target environment**：macOS 本地 WorkflowHub，可由不同宿主提供 `hostInvoke`。
 - **Project type**：可搬运的 AI 开发工作流编排工具。
 - **Performance goals**：同一 review subject 最多一次 initial provider dispatch；普通修复 provider 调用数为 0。
-- **Scale / scope**：五阶段、15 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
+- **Scale / scope**：五阶段、17 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
 - **Relevant ADR / context**：`CONSTITUTION.md`、`CONTEXT.md`、处理组 3 问题 9/15。
-- **Current unresolved fact**：run-0005 尚未获得最终人类确认；T013 的 build-code 独立审查还受本机 provider priority 配置警告影响，未经用户单独授权不得改全局配置。
+- **Current unresolved fact**：run-0005 Step 1–10 已完成，正式 detail result 永久保留 `revise_required`；三项材料缺口正在补充，尚未做 focused verification。最终 attempt 与人类确认尚未发生；T013 的 build-code 独立审查还受本机 provider priority 配置警告影响，未经用户单独授权不得改全局配置。
 
 ### Global Constraints
 

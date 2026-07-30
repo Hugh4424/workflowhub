@@ -180,3 +180,9 @@
 - F5/F10：不增加认证平台、通用 Gate 或重复 review。
 - F8/F9：复用现有 resolver/TaskKernel；缺失如实，不假绿。
 - S7/S8：阶段与 Skill 保持独立、可搬运，宿主只提供 `hostInvoke`。
+
+## 8. 开放交付风险
+
+- 本机存在 build-code provider priority 配置警告。若该警告在 T013 实际阻断独立审查，
+  必须如实报告，并取得用户对全局配置变更的单独授权后才能修改。
+- 该风险不改变当前 FR/AC，不影响当前材料继续完善，也不构成开发或验收 Gate。
