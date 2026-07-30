@@ -1036,7 +1036,8 @@ export function buildTaskKernel(taskHandle, {
       if (previous === null || previous.ref !== expectedPreviousRef || previous.hash !== expectedPreviousHash) {
         throw new Error("recovery previous run CAS failed");
       }
-      if (previous.run.recovery_source_ref !== undefined || previous.run.recovery_source_hash !== undefined) {
+      if ((previous.run.recovery_source_ref !== undefined || previous.run.recovery_source_hash !== undefined)
+          && stageRunInvalidation(name, previous) === null) {
         throw new Error("recovery previous run was already consumed");
       }
       const sequence = Number(previous.ref.match(/run-([0-9]{4})\.json$/)[1]) + 1;

@@ -228,6 +228,47 @@ describe("official make-decision recover-run", () => {
     expect(f.task.readRecord(invalidation.ref)).toBe(invalidationBytes);
   });
 
+  it("allows an invalidated recovery run to become the source of the next recovery without rewriting prior evidence", () => {
+    const f = fixture("invalidated-recovery-source");
+    const firstResult = recover(f);
+    expect(firstResult.status, firstResult.stderr).toBe(0);
+    const firstRecovery = JSON.parse(firstResult.stdout);
+    const kernel = createTaskKernel(f.task, { candidateWorkspace: recoverTaskWorkspace(f.task) });
+    const invalidation = kernel.invalidateStageRun("make-decision", {
+      run_ref: firstRecovery.ref,
+      run_hash: firstRecovery.hash,
+      reason: "host interrupted the recovery run",
+    });
+    expect(kernel.activeStageRun("make-decision", { required: false })).toMatchObject({
+      ref: f.old.ref,
+      hash: f.old.hash,
+    });
+    const protectedRecords = new Map([
+      [f.old.ref, f.task.readRecord(f.old.ref)],
+      [firstRecovery.ref, f.task.readRecord(firstRecovery.ref)],
+      [invalidation.ref, f.task.readRecord(invalidation.ref)],
+      ...recordSnapshot(f.task)
+        .filter(([ref]) => ref.startsWith("identity/executions/"))
+        .map(([ref]) => [ref, f.task.readRecord(ref)]),
+    ]);
+
+    const secondResult = recover(f);
+
+    expect(secondResult.status, secondResult.stderr).toBe(0);
+    const secondRecovery = JSON.parse(secondResult.stdout);
+    expect(secondRecovery).toMatchObject({
+      previous_run_ref: firstRecovery.ref,
+      previous_run_hash: firstRecovery.hash,
+    });
+    expect(JSON.parse(f.task.readRecord(secondRecovery.ref))).toMatchObject({
+      previous_run_ref: firstRecovery.ref,
+      previous_run_hash: firstRecovery.hash,
+      recovery_source_ref: firstRecovery.ref,
+      recovery_source_hash: firstRecovery.hash,
+    });
+    for (const [ref, raw] of protectedRecords) expect(f.task.readRecord(ref)).toBe(raw);
+  });
+
   it("keeps using the recovered workspace for later commands in the same active recovery run", () => {
     const f = fixture("recovery-continuation-workspace");
     writeFileSync(join(f.worktreeRoot, "task-work.txt"), "task work\n");
@@ -294,7 +335,8 @@ describe("official make-decision recover-run", () => {
     expect(first.status, first.stderr).toBe(0);
     expect(second.status).not.toBe(0);
     expect(second.stderr).toMatch(/already|consumed|current|previous|recovery/i);
-    expect(recordSnapshot(f.task)).toEqual(afterFirst);
+    expect(recordSnapshot(f.task).filter(([ref]) => !ref.startsWith("identity/executions/")))
+      .toEqual(afterFirst.filter(([ref]) => !ref.startsWith("identity/executions/")));
   });
 
   it("allows only one concurrent recovery to consume the same old run", async () => {
