@@ -840,14 +840,14 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 已真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。三个当前材料缺口已补齐，并以 T018/T019 的 receipt revision 与一次受控 Grill revalidation 合同做 focused 验证；未自动 full re-review。当前仍缺正式 material revision、detail resolution、真实 revalidation evidence、最终 attempt 与人类确认，不能称 accepted。
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。材料补齐后追加 generation 2 material revision、decision receipt revision、detail resolution、真实 `grill-revalidation-0002` 与最新 aggregate；未重跑 Talk/provider 或 full review。用户确认后生成正式 attempt、confirmation、Steps 11–12、through Step 12 full audit 与 accepted。
 - **executed_commands**：前置实现聚焦验证 `npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，先 8/8、continuation 后 9/9、invalidated recovery source 后 10/10 tests pass；`node scripts/stage-runtime.mjs invalidate-run ... run-0004` → exit 0；`recover-run ... transparent-recovery-after-ledger-binding-fix` → exit 0，生成 run-0005；run-0005 的 Step 1–10 与 detail review 已执行；T019 聚焦 receipt/revalidation tests 4/4 pass、独立 focused verification pass；未跑全量。
-- **evidence_refs**：前置实现非 canonical 证据 `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；`/tmp/T015-recovery-continuation-green.stdout`，sha256 `be0b551b6b1824c16dcbe862c06ecdd0cbb82c80883730a29ec6b359b3e9d59d`；`/tmp/T015-invalidated-recovery-source-green.stdout`，sha256 `bdb5d39d25fea7aa9c6520bbedee69c0f52ec44a1f399245e1a759ad4c55e809`；run-0004 invalidation `runs/make-decision/invalidations/321162652d0b87198a8be6c697a4d7232ffa020ab6895883841c3ae573f6e960.json`，sha256 `bc0a94e0870e6dc38b86525efc958e134c35e68b7464b26e6d9ec640d89b571d`；run-0005 `runs/make-decision/run-0005.json`，sha256 `c378ccc5e3e25c1328bc7aa523488096862f90519233cd39e004a93115fb051a`；detail result `reviews/results/make-decision-detail-dcc2070a4c8dda2bf5bd9a0e745c9cef9fa43ec9-3718f76f-1b62-4fc5-8068-dbe599eef4ad.json`，verdict=`revise_required`；最终 attempt/确认 evidence 尚不存在。
-- **covered_ac**：前置实现覆盖 AC-01、AC-02、AC-03、AC-15、AC-16；T015 正式执行仍 pending。
+- **evidence_refs**：run-0004 invalidation `runs/make-decision/invalidations/321162652d0b87198a8be6c697a4d7232ffa020ab6895883841c3ae573f6e960.json`；run-0005 `runs/make-decision/run-0005.json`；generation 2 material revision `materials/revisions/140e06fd19330c3ba7981145ca3ec067b1962509142670c4030b3a2565ab7ee9.json`；detail resolution `reviews/resolutions/c47d947d015ed33dae0756aef889510b06e9ddce4c8f5bfe31b12c27c591d22c.json`；revalidation `evidence/stage-content/43bbe9d000b580288aa7662d6f86158400a83a35b1965831e9437eacaf09a973/interaction-completion.grill-revalidation-0002.json`；aggregate 同目录 `interaction-completion.aggregate.json`；attempt `results/make-decision/attempt-0001.json`，integrity `e756a89b2ccd746d74605c03ea275a4ba69358c8d54a498bd61dbb6ad327cf07`；confirmation `confirmations/make-decision/attempt-0001.json`；accepted `results/make-decision/accepted.json`；full audit `evidence/audits/make-decision/0c954a4bafbe67629da7b1595afaee0b930a0653f8b477679a71b70cc5c8c1fc.json`。
+- **covered_ac**：AC-01、AC-02、AC-03、AC-04、AC-15、AC-16。
 - **review_fact**：T017 独立审查原 verdict=`revise_required` 保留；run-0005 detail result verdict=`revise_required` 也永久保留。detail finding 的材料补齐与 T019 独立 focused verification 已记录，未自动 full re-review，未改写为 pass。
-- **completed_at**：N/A — not completed
+- **completed_at**：2026-07-30
 
 #### T018: RED：post-Grill current material revalidation
 
@@ -1082,7 +1082,7 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 
 ## 5. Final Boundary Check
 
-- T001–T012、T014、T016–T021 已 complete；T013、T015 保持 pending。
+- T001–T012、T014–T021 已 complete；T013 保持 pending，等待最终 integration review。
 - T001–T012 为六对严格 RED/GREEN；T016/T017 为恢复 blocker 的第七对，T018/T019 为 post-Grill 第八对，T020/T021 为 resolution/replacement 第九对。
 - T013–T015 中 T013/T015 是有理由的 non-behavior task，T014 保存真实验证事实。
 - commit/push/merge/archive/cleanup 均未授权。
