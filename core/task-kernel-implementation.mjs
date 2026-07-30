@@ -1081,6 +1081,42 @@ export function buildTaskKernel(taskHandle, {
     }
     return record;
   };
+  const activeStageStepEvents = ({ stage, run, events }) => {
+    const scoped = events.filter((event) => event.workflow_run_id === run.workflow_run_id
+      && event.stage_slug === stage);
+    const attempts = new Map();
+    for (const event of scoped) {
+      const key = `${event.step_id}\0${event.attempt_id}`;
+      const attemptEvents = attempts.get(key) ?? [];
+      attemptEvents.push(event);
+      attempts.set(key, attemptEvents);
+    }
+    const invalidated = new Set();
+    for (const [key, attemptEvents] of attempts) {
+      const [stepId, attemptId] = key.split("\0");
+      const identityHash = hash(`${run.workflow_run_id}\0${stepId}\0${attemptId}`);
+      let record;
+      try {
+        record = parseJson(
+          task.readRecord(`runs/${stage}/journal-invalidations/${identityHash}.json`),
+          "stage step attempt invalidation",
+        );
+      } catch (error) {
+        if (error?.code === "ENOENT") continue;
+        throw error;
+      }
+      validateStageStepAttemptInvalidation({
+        stage,
+        run,
+        stepId: Number(stepId),
+        attemptId,
+        events: attemptEvents,
+        record,
+      });
+      invalidated.add(key);
+    }
+    return scoped.filter((event) => !invalidated.has(`${event.step_id}\0${event.attempt_id}`));
+  };
   const invalidateStageStepAttempt = (stage, input = {}) => {
     const name = stageName(stage);
     plain(input, "stage step attempt invalidation input");
@@ -1667,15 +1703,20 @@ export function buildTaskKernel(taskHandle, {
     task.appendJournal(event);
     return deepFreeze({ workflow_run_id: event.workflow_run_id });
   };
-  const completeMakeDecisionStageStep = (input = {}) => {
-    const name = "make-decision";
+  const completeRuntimeOwnedStageStep = (name, input = {}) => {
+    if (name !== "make-decision" && name !== "build-plan") {
+      throw new TypeError(`unsupported runtime-owned stage: ${name}`);
+    }
     plain(input, "runtime-owned stage step input");
     rejectUnknown(input, new Set(["step_id", "entry_evidence", "completion_evidence", "terminal_status", "skip_reason"]), "runtime-owned stage step input");
+    if (name === "build-plan" && !new Set([7, 8]).has(input.step_id)) {
+      throw new Error("runtime-owned build-plan completion is limited to steps 7 and 8");
+    }
     const terminalStatus = input.terminal_status ?? "success";
     if (!new Set(["success", "skipped"]).has(terminalStatus)) {
       throw new Error("runtime-owned stage step terminal_status must be success or skipped");
     }
-    const isResearchSkip = input.step_id === 4 && terminalStatus === "skipped";
+    const isResearchSkip = name === "make-decision" && input.step_id === 4 && terminalStatus === "skipped";
     if (terminalStatus === "skipped" && (!isResearchSkip || typeof input.skip_reason !== "string" || input.skip_reason.trim() === "")) {
       throw new Error("runtime-owned skipped status is only valid for make-decision research with a skip_reason");
     }
@@ -1695,8 +1736,8 @@ export function buildTaskKernel(taskHandle, {
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
-      const matching = events.filter((event) => event.workflow_run_id === active.run.workflow_run_id
-        && event.stage_slug === name && event.step_id === input.step_id && event.attempt_id === "attempt-1");
+      const activeEvents = activeStageStepEvents({ stage: name, run: active.run, events });
+      const matching = activeEvents.filter((event) => event.step_id === input.step_id);
       const existingExit = matching.find((event) => event.event_type === "step_exit");
       if (existingExit) {
         const existingEntry = matching.find((event) => event.event_type === "step_entry");
@@ -1710,9 +1751,8 @@ export function buildTaskKernel(taskHandle, {
         }
         return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
       }
-      if (input.step_id > 1 && !events.some((event) => event.workflow_run_id === active.run.workflow_run_id
-          && event.stage_slug === name && event.step_id === input.step_id - 1
-          && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
+      if (input.step_id > 1 && !activeEvents.some((event) => event.step_id === input.step_id - 1
+          && event.event_type === "step_exit"
           && eventCompletesDependency(event))) {
         throw new Error(`runtime-owned ${name} step ${input.step_id} requires completed step ${input.step_id - 1}`);
       }
@@ -1740,6 +1780,8 @@ export function buildTaskKernel(taskHandle, {
       return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: false });
     });
   };
+  const completeMakeDecisionStageStep = (input = {}) =>
+    completeRuntimeOwnedStageStep("make-decision", input);
   const completedMakeDecisionDependency = (workflowRunId, stepId) => {
     let events = [];
     try {
@@ -1748,9 +1790,10 @@ export function buildTaskKernel(taskHandle, {
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    return events.some((event) => event.workflow_run_id === workflowRunId
-      && event.stage_slug === "make-decision" && event.step_id === stepId
-      && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
+    const active = activeStageRun("make-decision");
+    if (active.run.workflow_run_id !== workflowRunId) return false;
+    return activeStageStepEvents({ stage: "make-decision", run: active.run, events })
+      .some((event) => event.step_id === stepId && event.event_type === "step_exit"
       && (event.terminal_status === "success"
         || (stepId === 4 && event.terminal_status === "skipped"
           && event.authorized_by === "stage-runtime:record-research"
@@ -1932,6 +1975,22 @@ export function buildTaskKernel(taskHandle, {
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
       return `task-current:${name}:${nonemptyString(task.manifest.created_at, "task created_at")}`;
+    }
+  };
+  const buildPlanPreConfirmationAudit = (attempt) => {
+    if (attempt?.stage !== "build-plan" || typeof attempt.facts?.audit_summary_ref !== "string") return null;
+    try {
+      const raw = task.readRecord(attempt.facts.audit_summary_ref);
+      const value = parseJson(raw, "build-plan pre-confirmation audit");
+      if (value.through_step_id !== 6
+          || value.summary_hash !== attempt.facts.audit_summary_hash
+          || value.verdict !== "pass" || attempt.facts.audit_verdict !== "pass"
+          || hashAuditSummary(value) !== value.summary_hash
+          || value.task_id !== task.identity.taskId || value.stage_slug !== "build-plan"
+          || value.workflow_run_id !== deriveStageWorkflowRunId("build-plan")) return null;
+      return { raw, value };
+    } catch {
+      return null;
     }
   };
   const verifyAuditPublication = (stage, facts) => {
@@ -2546,16 +2605,7 @@ export function buildTaskKernel(taskHandle, {
     if (active.run.workflow_run_id !== identity.workflow_run_id) {
       throw new Error("make-decision review flow does not bind the active run");
     }
-    let events = [];
-    try {
-      events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map((line) => parseJson(line, "journal event"));
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    if (!events.some((event) => event.workflow_run_id === identity.workflow_run_id
-        && event.stage_slug === "make-decision" && event.step_id === stepId - 1
-        && event.attempt_id === "attempt-1" && event.event_type === "step_exit"
-        && event.terminal_status === "success")) {
+    if (!completedMakeDecisionDependency(identity.workflow_run_id, stepId - 1)) {
       throw new Error(`make-decision review step ${stepId} requires successful step ${stepId - 1}`);
     }
     return stepId;
@@ -3881,7 +3931,16 @@ export function buildTaskKernel(taskHandle, {
         if (data.upstream_acceptances !== undefined) throw new Error("upstream_acceptances are kernel-derived and cannot be supplied");
         const upstreamAcceptances = verifyUpstream(name, data.upstream_refs ?? []);
         const missingItems = [...(data.missing_items ?? [])];
-        const auditSupportMissing = missingItems.includes("support:audit");
+        let auditSupportMissing = missingItems.includes("support:audit");
+        if (name === "build-plan" && !auditSupportMissing) {
+          try {
+            verifyAuditPublication(name, data.facts);
+          } catch (error) {
+            missingItems.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
+            for (const key of AUDIT_FACT_KEYS) delete data.facts[key];
+            auditSupportMissing = true;
+          }
+        }
         if (auditSupportMissing
             && AUDIT_FACT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(data.facts, key))) {
           throw new Error(`${name} missing audit support cannot publish unauthenticated audit facts`);
@@ -3894,7 +3953,7 @@ export function buildTaskKernel(taskHandle, {
           throw new Error("make-decision facts do not match CandidateWorkspace");
         }
         if (name === "make-decision") verifyCandidateSnapshot(data.facts);
-        if (!auditSupportMissing) verifyAuditPublication(name, data.facts);
+        if (!auditSupportMissing && name !== "build-plan") verifyAuditPublication(name, data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
           const base = baselineRebindAuthorization ? { baseCommit: baselineRebindAuthorization.record.integration_head, baseTree: baselineRebindAuthorization.record.base_tree } : checkpointBase(name);
@@ -3911,7 +3970,7 @@ export function buildTaskKernel(taskHandle, {
             created_at: data.created_at ?? now(),
             facts: structuredClone(data.facts),
             evidence_refs: [...(data.evidence_refs ?? [])],
-            missing_items: [...(data.missing_items ?? [])],
+            missing_items: [...missingItems],
             upstream_refs: structuredClone(data.upstream_refs ?? []),
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
@@ -4007,6 +4066,7 @@ export function buildTaskKernel(taskHandle, {
       if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
       if (!new Set(["accepted", "rejected"]).has(decision)) throw new TypeError("explicit confirmation decision must be accepted or rejected");
       const attempt = validateAttempt(parseJson(task.readRecord(`results/${name}/${attemptRef}`), `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+      const buildPlanPreAudit = buildPlanPreConfirmationAudit(attempt);
       const ref = `confirmations/${name}/${attemptRef}`;
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let record;
@@ -4026,8 +4086,26 @@ export function buildTaskKernel(taskHandle, {
           completeMakeDecisionStageStep({
             step_id: 11,
             entry_evidence: { kind: "stage_attempt", uri_or_path: `results/${name}/${attemptRef}`, content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)) },
-            completion_evidence: { kind: "human_confirmation", uri_or_path: ref, content_hash: hash(raw) },
+              completion_evidence: { kind: "human_confirmation", uri_or_path: ref, content_hash: hash(raw) },
           });
+        } else if (buildPlanPreAudit && decision === "accepted") {
+          try {
+            completeRuntimeOwnedStageStep("build-plan", {
+              step_id: 7,
+              entry_evidence: {
+                kind: "stage_attempt",
+                uri_or_path: `results/${name}/${attemptRef}`,
+                content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)),
+              },
+              completion_evidence: {
+                kind: "human_confirmation",
+                uri_or_path: ref,
+                content_hash: hash(raw),
+              },
+            });
+          } catch {
+            // Build-plan journal support is diagnostic and never authorizes confirmation.
+          }
         }
         return deepFreeze({ ref, confirmation: record });
       });
@@ -4048,6 +4126,7 @@ export function buildTaskKernel(taskHandle, {
         if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
         const attemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
         const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+        const buildPlanPreAudit = buildPlanPreConfirmationAudit(attempt);
         let fullAudit;
         let fullAuditVerdict;
         if (name === "verify-code" && attempt.verification_failure === true) {
@@ -4195,8 +4274,27 @@ export function buildTaskKernel(taskHandle, {
             throw new Error("make-decision acceptance requires a canonical bound full audit through step 12");
           }
           fullAuditVerdict = audit.verdict;
+        } else if (buildPlanPreAudit) {
+          try {
+            completeRuntimeOwnedStageStep("build-plan", {
+              step_id: 8,
+              entry_evidence: {
+                kind: "human_confirmation",
+                uri_or_path: humanConfirmationRef,
+                content_hash: hash(confirmationRaw),
+              },
+              completion_evidence: {
+                kind: "stage_attempt",
+                uri_or_path: `results/${name}/${attemptRef}`,
+                content_hash: hash(attemptRaw),
+              },
+            });
+            options.full_audit_writer?.();
+          } catch {
+            // Build-plan journal/audit support is diagnostic and never authorizes acceptance.
+          }
         } else if (options.full_audit_writer !== undefined) {
-          throw new Error("full audit writer is only valid for a bounded make-decision attempt");
+          throw new Error("full audit writer is only valid for a bounded human-confirmation attempt");
         }
         revalidateControlledVerifyPassing?.("pre");
         let acceptedCheckpoint;

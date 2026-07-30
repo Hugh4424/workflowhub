@@ -579,16 +579,29 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       reviewEvidence("direction", 6, input.receipts.direction_review);
       reviewEvidence("detail", 10, input.receipts.detail_review);
     }
-    const audit = writeCanonicalAuditSummary({
-      task: context.task,
-      workspace: context.candidateWorkspace ?? context.workspace,
-      stage: values.stage,
-      ...(values.stage === "make-decision" && input.receipts.decision_revision
-        ? { decisionRef: input.receipts.decision_revision }
-        : {}),
-      ...(values.stage === "make-decision" ? { throughStepId: 10 } : {}),
-    });
-    const controlledInput = { ...input, receipts: { ...input.receipts, audit: audit.audit_summary_ref } };
+    let audit;
+    try {
+      audit = writeCanonicalAuditSummary({
+        task: context.task,
+        workspace: context.candidateWorkspace ?? context.workspace,
+        stage: values.stage,
+        ...(values.stage === "make-decision" && input.receipts.decision_revision
+          ? { decisionRef: input.receipts.decision_revision }
+          : {}),
+        ...(values.stage === "make-decision"
+          ? { throughStepId: 10 }
+          : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
+      });
+    } catch (error) {
+      if (values.stage !== "build-plan") throw error;
+    }
+    const controlledInput = {
+      ...input,
+      receipts: {
+        ...input.receipts,
+        ...(audit ? { audit: audit.audit_summary_ref } : {}),
+      },
+    };
     const attempt = await runOfficialStage(values.stage, context, controlledInput, {
       ...(values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : {}),
       ...(values["baseline-rebind"] ? { baselineRebindRef: values["baseline-rebind"] } : {}),
@@ -610,8 +623,21 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   const acceptedResult = acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
-    ...(values.stage !== "make-decision" ? {} : {
+    ...(!new Set(["make-decision", "build-plan"]).has(values.stage) ? {} : {
       fullAuditWriter: () => {
+        if (values.stage === "build-plan") {
+          const audit = writeCanonicalAuditSummary({
+            task: context.task,
+            workspace: context.workspace,
+            stage: "build-plan",
+            throughStepId: 8,
+          });
+          return {
+            ref: audit.audit_summary_ref,
+            hash: audit.audit_record_hash,
+            summary_hash: audit.audit_summary_hash,
+          };
+        }
         const attemptRaw = context.task.readRecord(`results/make-decision/${values.attempt}`);
         const attempt = JSON.parse(attemptRaw);
         const decisionRevisionRef = attempt.evidence_refs?.find((entry) =>

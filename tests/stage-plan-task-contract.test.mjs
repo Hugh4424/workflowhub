@@ -3,12 +3,17 @@ import { existsSync, readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020.js";
 
 let validatePlanTaskContract;
+let validateExecutablePlanTaskMinimum;
 let buildPlanTaskContract;
 let moduleLoadError;
 
 beforeAll(async () => {
   try {
-    ({ validatePlanTaskContract, buildPlanTaskContract } = await import("../core/stage-content-contracts.mjs"));
+    ({
+      validatePlanTaskContract,
+      validateExecutablePlanTaskMinimum,
+      buildPlanTaskContract,
+    } = await import("../core/stage-content-contracts.mjs"));
   } catch (error) {
     moduleLoadError = error;
   }
@@ -21,6 +26,7 @@ function requireApi() {
     "core/stage-content-contracts.mjs must provide the accepted plan/tasks validator",
   ).toBeTypeOf("function");
   expect(buildPlanTaskContract).toBeTypeOf("function");
+  expect(validateExecutablePlanTaskMinimum).toBeTypeOf("function");
 }
 
 const spec = `
@@ -374,6 +380,38 @@ describe("FR-PLN-004 IDs, dependencies, and traceability", () => {
     expectRejected(validate({
       tasks: tasks.replace("- **AC**: AC2", "- **AC**: AC999"),
     }), /AC2|AC999|coverage|unknown|覆盖|无效/i);
+  });
+});
+
+describe("build-plan minimum executable gate", () => {
+  const minimum = (overrides = {}) => validateExecutablePlanTaskMinimum({
+    spec,
+    plan,
+    tasks,
+    ...overrides,
+  });
+
+  it("keeps only coverage, dependency, file, command, and RED/GREEN blockers", () => {
+    requireApi();
+    expect(minimum()).toMatchObject({ ok: true, errors: [] });
+    expect(minimum({
+      tasks: tasks.replace("- **FR**: FR-DEMO-002", "- **FR**: FR-DEMO-001"),
+    }).errors).toContain("accepted FR has no task coverage: FR-DEMO-002");
+    expect(minimum({
+      tasks: tasks.replace("- **依赖**: T001", "- **依赖**: T999"),
+    }).errors.join("; ")).toMatch(/unknown dependency T999/);
+    expect(minimum({
+      tasks: tasks.replace("- **精确文件**: tests/demo-contract.test.mjs", "- **精确文件**: none"),
+    }).errors.join("; ")).toMatch(/exact file boundary/);
+    expect(minimum({
+      tasks: tasks.replace("- **精确文件**: tests/demo-contract.test.mjs", "- **精确文件**: `src/*.mjs`"),
+    }).errors.join("; ")).toMatch(/exact file boundary/);
+    expect(minimum({
+      tasks: tasks.replace("npx vitest run tests/demo-contract.test.mjs", "uv run pytest tests/demo_contract.py"),
+    })).toMatchObject({ ok: true, errors: [] });
+    expect(minimum({
+      tasks: tasks.replace("- **依赖**: T001", "- **依赖**: none"),
+    }).errors.join("; ")).toMatch(/reciprocal/);
   });
 });
 

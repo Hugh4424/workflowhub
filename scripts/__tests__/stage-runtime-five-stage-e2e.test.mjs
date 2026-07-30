@@ -161,8 +161,11 @@ function officialTasks({ specRef, specHash, planRef, planHash }) {
 - **versioned_refs**：\`${refs}\`
 - **Knowledge**：The accepted specification is authoritative.
 - **boundary**：Only the official-chain fixture artifacts.
+- **精确文件**：\`README.md\`, \`src/feature.txt\`, \`specs/official-chain/decision-log.md\`, \`specs/official-chain/spec.md\`, \`specs/official-chain/plan.md\`, \`specs/official-chain/tasks.md\`
 - **动作**：Run the accepted plan.
 - **gate_cmd**：\`node --test\`
+- **verification_role**：N/A — non-behavior change: fixture-only planning task
+- **paired_task**：N/A — non-behavior change: fixture-only planning task
 - **design_state**：ready
 - **依赖**：N/A — first task
 - **FR**：FR-SPEC-001
@@ -211,7 +214,6 @@ function decisionTalkPayload(roundNumber, tree) {
       zero_question_reason: roundNumber === 1 ? null : `round ${roundNumber} was resolved from canonical evidence`,
     }],
     grill: null,
-    workspace_tree: tree,
   };
 }
 
@@ -231,7 +233,6 @@ function decisionGrillPayload(tree) {
         file_references_checked: true,
       },
     },
-    workspace_tree: tree,
   };
 }
 
@@ -490,11 +491,12 @@ describe("official five-stage CLI", () => {
         } },
       };
     })();
-    const prepareOfficialRun = (stage, reason = "official fixture execution") => {
+    const prepareOfficialRun = (stage, reason = "official fixture execution", throughStep = stage === "build-plan" ? 6 : Infinity) => {
       const kernel = createTaskKernel(task);
       const runRecord = kernel.startStageRun(stage, { reason });
       kernel.publishRequirementsLedger(stage, requirementsInput);
-      for (const step of loadStageManifest(stage, realpathSync(join(import.meta.dirname, "../.."))).steps) {
+      for (const step of loadStageManifest(stage, realpathSync(join(import.meta.dirname, "../.."))).steps
+        .filter(({ step_id: stepId }) => stepId <= throughStep)) {
         const entry = kernel.writeStageStepEntry(stage, {
           step_id: step.step_id,
           attempt_id: "attempt-1",
@@ -592,9 +594,25 @@ describe("official five-stage CLI", () => {
         ...callerFields,
       })}\n`);
       const attempt = run(root, repo, ["run", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--input=${input}`, ...extra]);
+      if (stage === "build-plan") {
+        const preAudit = JSON.parse(task.readRecord(attempt.attempt.facts.audit_summary_ref));
+        expect(preAudit).toMatchObject({ verdict: "pass", through_step_id: 6 });
+      }
       if (["build-spec", "build-plan"].includes(stage)) expect(attempt.attempt.checkpoint).not.toHaveProperty("ref");
       const human = ["make-decision", "build-plan", "verify-code"].includes(stage);
       const confirmation = human ? run(root, repo, ["confirm", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--decision=accepted", ...extra]) : undefined;
+      if (stage === "build-plan") {
+        const runId = JSON.parse(task.readRecord("journal.jsonl").trim().split("\n").at(-1)).workflow_run_id;
+        expect(task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)).toContainEqual(
+          expect.objectContaining({
+            workflow_run_id: runId,
+            stage_slug: "build-plan",
+            step_id: 7,
+            event_type: "step_exit",
+            terminal_status: "success",
+          }),
+        );
+      }
       const invalidArgs = human
         ? ["accept", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--human-confirmation-ref=plain-string", ...extra]
         : ["confirm", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--decision=accepted", ...extra];
@@ -607,6 +625,18 @@ describe("official five-stage CLI", () => {
       expect(accepted.acceptance_mode).toBe(human ? "human" : "automatic");
       if (!human) expect(accepted).not.toHaveProperty("human_confirmation_ref");
       if (["build-spec", "build-plan"].includes(stage)) expect(accepted.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\//);
+      if (stage === "build-plan") {
+        const fullAudit = writeCanonicalAuditSummary({
+          task,
+          workspace,
+          stage,
+          throughStepId: 8,
+        });
+        expect(JSON.parse(task.readRecord(fullAudit.audit_summary_ref))).toMatchObject({
+          verdict: "pass",
+          through_step_id: 8,
+        });
+      }
       return { attempt, accepted };
     };
 
@@ -743,7 +773,6 @@ describe("official five-stage CLI", () => {
       interaction_type: "aggregate",
       rounds: [talkOne, talkTwo, talkThree].map((item) => ({ ref: item.evidence_ref, hash: item.evidence_hash })),
       grill: { ref: grill.evidence_ref, hash: grill.evidence_hash },
-      workspace_tree: decisionTree,
       decision_ref: canonicalDecision.decision_ref,
       decision_hash: canonicalDecision.decision_hash,
     });
@@ -837,14 +866,34 @@ describe("official five-stage CLI", () => {
       tasksRef,
       tasksHash: sha256(tasksContent),
     });
-    const buildPlan = invoke(
-      "build-plan",
-      { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef },
-      [],
-      {},
-      () => publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract"),
-    );
-    expect(buildPlan.attempt.attempt.missing_items).toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
+    prepareOfficialRun("build-plan", "missing pre-confirmation step", 5);
+    publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract-missing-step");
+    const missingStepInput = join(inputRoots["build-plan"], "build-plan-missing-step-input.json");
+    writeFileSync(missingStepInput, `${JSON.stringify({
+      receipts: {
+        plan: "receipts/missing-plan.json",
+        tasks: "not-a-canonical-receipt",
+        review: "reviews/results/missing-review.json",
+      },
+    })}\n`);
+    const missingStepRun = run(root, repo, [
+      "run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${missingStepInput}`,
+    ]);
+    expect(missingStepRun.attempt.missing_items).toEqual(expect.arrayContaining([
+      "support:audit",
+      expect.stringMatching(/plan receipt missing\/unverified\/mismatch/),
+      expect.stringMatching(/tasks receipt missing\/unverified\/mismatch/),
+      expect.stringMatching(/review unavailable\/unverified\/mismatch/),
+    ]));
+    const missingStepConfirmation = run(root, repo, [
+      "confirm", "--stage=build-plan", "--project=Demo", "--task=official-chain",
+      `--attempt=${missingStepRun.attempt_ref}`, "--decision=accepted",
+    ]);
+    const missingStepAccepted = run(root, repo, [
+      "accept", "--stage=build-plan", "--project=Demo", "--task=official-chain",
+      `--attempt=${missingStepRun.attempt_ref}`, `--human-confirmation-ref=${missingStepConfirmation.ref}`,
+    ]);
+    const buildPlan = { accepted: missingStepAccepted };
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",

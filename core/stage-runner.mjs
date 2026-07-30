@@ -425,8 +425,9 @@ export function acceptStageAttempt(stage, context, request = {}) {
   if (!requiresHumanConfirmation(stage) && humanConfirmationRef !== undefined) {
     throw new TypeError(`${stage} uses automatic acceptance; omit humanConfirmationRef`);
   }
-  if (fullAuditWriter !== undefined && (stage !== "make-decision" || typeof fullAuditWriter !== "function")) {
-    throw new TypeError("fullAuditWriter is an internal make-decision runtime capability");
+  if (fullAuditWriter !== undefined
+      && (!new Set(["make-decision", "build-plan"]).has(stage) || typeof fullAuditWriter !== "function")) {
+    throw new TypeError("fullAuditWriter is an internal bounded-audit runtime capability");
   }
   return ctx.kernel.acceptAttempt(stage, attemptRef, humanConfirmationRef, {
     ...(fullAuditWriter === undefined ? {} : { full_audit_writer: fullAuditWriter }),
