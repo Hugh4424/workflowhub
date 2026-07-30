@@ -128,10 +128,27 @@ describe("existing task runner root migration", () => {
     const f = fixture();
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: f.target });
     execFileSync("git", ["config", "user.name", "Test"], { cwd: f.target });
+    mkdirSync(join(f.target, "specs", "m14b-fact-collection-g2"), { recursive: true });
+    for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+      writeFileSync(join(f.target, "specs", "m14b-fact-collection-g2", name), `# ${name}\n`);
+    }
+    execFileSync("git", ["add", "."], { cwd: f.target });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: f.target });
     const candidate = prepareTaskWorkspace(f.task);
     const kernel = createTaskKernel(f.task, { candidateWorkspace: candidate });
-    const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+    const decisionRaw = "# Runner migration fixture decision\n";
+    const decisionHash = sha256(decisionRaw);
+    const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+    kernel.publishCanonicalRecord(decisionRef, decisionRaw);
+    const attempt = kernel.publishAttempt("make-decision", {
+      facts: {
+        worktree_root: candidate.worktreeRoot,
+        baseline_commit: candidate.baselineCommit,
+        decision_ref: decisionRef,
+        decision_hash: decisionHash,
+      },
+      missing_items: ["support:audit"],
+    });
     kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
     migrate(f);
     expect(() => bootstrapStage("verify-code", { mode: "sidecar", taskPath: f.task.taskPath, projectName: "workflowhub", taskId: "m14b-fact-collection-g2" })).toThrow(/explicit absolute path/i);

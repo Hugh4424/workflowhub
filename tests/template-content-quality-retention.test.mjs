@@ -118,9 +118,11 @@ describe("published template quality", () => {
       .toContain("generated plan/tasks must not retain placeholders, template comments, or filler");
   });
 
-  it("uses one flat task card instead of five-level heading noise", () => {
+  it("uses one flat task card and only the required completion-authority H5", () => {
     const tasks = read("skills/spec-tasks/templates/tasks-template.md");
     expect(tasks.match(/^#### T001 /gm)).toHaveLength(1);
-    expect(tasks).not.toMatch(/^##### /m);
+    const authorityHeadings = tasks.split(/\r?\n/).filter((line) => /^##### /.test(line));
+    expect(authorityHeadings).toHaveLength(2);
+    expect(new Set(authorityHeadings)).toEqual(new Set(["##### 执行状态填写区（唯一完成权威）"]));
   });
 });

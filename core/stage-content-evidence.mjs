@@ -14,6 +14,8 @@ import decisionLogSchema from "./schemas/decision-log-contract.v1.json" with { t
 import planTaskSchema from "./schemas/plan-task-contract.v1.json" with { type: "json" };
 import planTaskV2Schema from "./schemas/plan-task-contract.v2.json" with { type: "json" };
 import completionSchema from "./schemas/stage-completion-facts.v1.json" with { type: "json" };
+import materialRevisionSchema from "./schemas/task-material-revision.v1.json" with { type: "json" };
+import browserQaSchema from "./schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
@@ -44,6 +46,7 @@ const FORBIDDEN_IDENTITY_KEYS = new Set([
   "root", "task_path", "taskPath", "cwd", "repository", "repo_root",
 ]);
 const PRIVATE_KEYS = /^(?:private(?:_|$)|secret(?:_|$)|token$|password$|authorization$|cookie$|full_card$|session(?:_|$)|api_?key$)/i;
+const BROWSER_PRIVATE_KEYS = /^(?:private(?:_|$)|secret(?:_|$)|token$|password$|authorization$|cookie$|full_card$|api_?key$|profile_content$|profile_data$)/i;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const payloadSchemas = new Map([
   ["interaction-completion.v1", interactionSchema],
@@ -57,6 +60,7 @@ const payloadSchemas = new Map([
   ["plan-task-contract.v1", planTaskSchema],
   ["plan-task-contract.v2", planTaskV2Schema],
   ["stage-completion-facts.v1", completionSchema],
+  ["browser-qa-evidence.v1", browserQaSchema],
 ]);
 const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
   "make-decision": Object.freeze(["interaction-completion.v1", "decision-coverage-audit.v1"]),
@@ -68,6 +72,7 @@ const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validateEnvelope = ajv.compile(envelopeSchema);
 const payloadValidators = new Map([...payloadSchemas].map(([kind, schema]) => [kind, ajv.compile(schema)]));
+const validateMaterialRevision = ajv.compile(materialRevisionSchema);
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -123,12 +128,26 @@ function rejectIdentityKeys(value, label, allowEvidenceBinding = false) {
   }
 }
 
-function minimize(value) {
-  if (Array.isArray(value)) return value.map(minimize);
+function minimize(value, { allowBrowserSession = false, depth = 0 } = {}) {
+  if (Array.isArray(value)) return value.map((entry) => minimize(entry, { allowBrowserSession, depth: depth + 1 }));
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !PRIVATE_KEYS.test(key))
-    .map(([key, child]) => [key, minimize(child)]));
+    .filter(([key]) => (allowBrowserSession && depth === 0 && key === "session") || !PRIVATE_KEYS.test(key))
+    .map(([key, child]) => [key, minimize(child, { allowBrowserSession, depth: depth + 1 })]));
+}
+
+function rejectBrowserPrivateKeys(value, label = "browser QA payload") {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => rejectBrowserPrivateKeys(entry, `${label}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (BROWSER_PRIVATE_KEYS.test(key)) {
+      throw new TypeError(`${label}.${key} is a forbidden private credential or profile field`);
+    }
+    rejectBrowserPrivateKeys(child, `${label}.${key}`);
+  }
 }
 
 function schemaErrors(validate) {
@@ -144,6 +163,24 @@ function validatePayload(kind, payload) {
     const contract = validateAmbiguityLedgerV2(payload);
     if (!contract.ok) throw new TypeError(`${kind} payload violates identity contract: ${contract.errors.join("; ")}`);
   }
+}
+
+function verifyBrowserAsset(task, ref, hash, label) {
+  if (typeof ref !== "string" || ref.trim() === "" || !HASH.test(hash ?? "")) {
+    throw new TypeError(`${label} must contain a canonical ref and sha256 hash`);
+  }
+  let raw;
+  try { raw = task.readRecord(ref); }
+  catch (error) { throw new Error(`${label} canonical bytes are unavailable: ${error.message}`); }
+  if (sha256(raw) !== hash) throw new Error(`${label} canonical bytes hash mismatch`);
+}
+
+function verifyBrowserAssets(task, payload) {
+  if (payload.applicability !== "ui") return;
+  payload.screenshots.forEach((binding, index) => {
+    verifyBrowserAsset(task, binding.ref, binding.hash, `browser screenshot ${index + 1}`);
+  });
+  verifyBrowserAsset(task, payload.test.output_ref, payload.test.output_hash, "browser test output");
 }
 
 function requireBinding(value, label) {
@@ -272,6 +309,18 @@ function validateInteractionSemantics(payload) {
     validateGrillFacts(payload.grill);
     return;
   }
+  if (payload.interaction_type === "grill-revalidation") {
+    if (!Array.isArray(payload.rounds) || payload.rounds.length !== 0) {
+      throw new TypeError("grill revalidation cannot contain talk rounds");
+    }
+    validateGrillFacts(payload.grill);
+    requireBinding(payload.previous_grill, "grill revalidation previous grill");
+    requireBinding(payload.material_revision, "grill revalidation material revision");
+    if (payload.supersedes_revalidation !== undefined) {
+      requireBinding(payload.supersedes_revalidation, "superseded grill revalidation");
+    }
+    return;
+  }
   if (payload.interaction_type === "aggregate") {
     if (!Array.isArray(payload.rounds) || payload.rounds.length !== 3) {
       throw new TypeError("interaction aggregate requires exactly three ordered talk rounds");
@@ -313,6 +362,24 @@ export function createStageContentEvidenceWriter(options = {}) {
     if (type === "grill" || type === "aggregate") {
       return `${refRoot}/interaction-completion.${type}.json`;
     }
+    if (type === "grill-revalidation") {
+      for (const sequence of [1, 2]) {
+        const candidate = `${refRoot}/interaction-completion.grill-revalidation-${String(sequence).padStart(4, "0")}.json`;
+        const existing = readOptional(task, candidate);
+        if (existing === undefined) {
+          if (sequence === 1 || payload.supersedes_revalidation !== undefined) return candidate;
+          break;
+        }
+        try {
+          const value = JSON.parse(existing);
+          if (value.kind === "interaction-completion.v1"
+              && value.content_hash === sha256(JSON.stringify(payload))) return candidate;
+        } catch {
+          throw new Error(`existing interaction evidence is invalid: ${candidate}`);
+        }
+      }
+      throw new Error("make-decision permits only one replacement after the initial focused grill revalidation");
+    }
     const prefix = `${refRoot}/interaction-completion.${type}-`;
     const limit = type === "talk" ? 3 : 9999;
     for (let sequence = 1; sequence <= limit; sequence += 1) {
@@ -330,21 +397,122 @@ export function createStageContentEvidenceWriter(options = {}) {
     throw new Error(`${type} interaction sequence is complete for this workflow run`);
   }
 
+  function trustedCurrentMaterialBinding() {
+    const current = readCurrentTaskMaterialRevision({ task });
+    if (!current) throw new Error("grill revalidation requires a current material revision");
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [file, expectedHash] of Object.entries(current.value.hashes)) {
+      if (sha256(artifacts.read(file)) !== expectedHash) {
+        throw new Error("grill revalidation material revision does not bind the current materials");
+      }
+    }
+    return { ref: current.ref, hash: current.hash };
+  }
+
+  function trustedPreviousGrill() {
+    const ref = `${refRoot}/interaction-completion.grill.json`;
+    const raw = readOptional(task, ref);
+    if (raw === undefined) throw new Error("grill revalidation requires the original grill evidence");
+    const binding = { ref, hash: sha256(raw) };
+    const value = verifyStageContentEvidence({
+      task, ref: binding.ref, hash: binding.hash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (value.payload?.interaction_type !== "grill") {
+      throw new Error("grill revalidation predecessor is not grill evidence");
+    }
+    return binding;
+  }
+
+  function trustedSupersededGrillRevalidation(currentMaterial, currentTree) {
+    const ref = `${refRoot}/interaction-completion.grill-revalidation-0001.json`;
+    const raw = readOptional(task, ref);
+    if (raw === undefined) return undefined;
+    const hash = sha256(raw);
+    const value = verifyStageContentEvidence({
+      task, ref, hash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (value.payload?.interaction_type !== "grill-revalidation") {
+      throw new Error("superseded grill revalidation binding is not revalidation evidence");
+    }
+    if (value.snapshot_tree === currentTree
+        && currentMaterial.ref === value.payload.material_revision.ref
+        && currentMaterial.hash === value.payload.material_revision.hash) {
+      return undefined;
+    }
+    const invocation = kernel.readStageSkillInvocation(
+      "make-decision",
+      "grill-with-docs",
+      "grill-revalidation-1",
+    );
+    if (invocation?.fact?.status !== "executed"
+        || invocation.fact.outcome_ref !== ref
+        || invocation.fact.outcome_hash !== hash
+        || invocation.fact.snapshot_tree !== value.snapshot_tree) {
+      throw new Error("replacement grill revalidation requires the completed authenticated initial revalidation");
+    }
+    if (value.snapshot_tree === currentTree) {
+      throw new Error("replacement grill revalidation requires a changed Workspace tree");
+    }
+    if (currentMaterial.value.previous_ref !== value.payload.material_revision.ref
+        || currentMaterial.value.previous_hash !== value.payload.material_revision.hash) {
+      throw new Error("replacement grill revalidation requires the direct next material revision");
+    }
+    return { ref, hash };
+  }
+
+  function validateGrillRevalidationBindings(payload) {
+    if (payload.interaction_type !== "grill-revalidation") return;
+    const predecessor = verifyStageContentEvidence({
+      task, ref: payload.previous_grill.ref, hash: payload.previous_grill.hash,
+      expectedStage: stage, expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (predecessor.payload?.interaction_type !== "grill") {
+      throw new Error("grill revalidation predecessor is not grill evidence");
+    }
+    if (predecessor.snapshot_tree === payload.workspace_tree) {
+      throw new Error("grill revalidation requires a changed Workspace tree");
+    }
+    const current = trustedCurrentMaterialBinding();
+    if (payload.material_revision.ref !== current.ref || payload.material_revision.hash !== current.hash) {
+      throw new Error("grill revalidation does not bind the current material revision");
+    }
+    if (payload.supersedes_revalidation !== undefined) {
+      const expected = trustedSupersededGrillRevalidation(
+        readCurrentTaskMaterialRevision({ task }),
+        payload.workspace_tree,
+      );
+      if (!expected
+          || payload.supersedes_revalidation.ref !== expected.ref
+          || payload.supersedes_revalidation.hash !== expected.hash) {
+        throw new Error("replacement grill revalidation supersedes binding is invalid");
+      }
+    }
+  }
+
   function validateAggregateBindings(payload) {
     if (payload.interaction_type !== "aggregate") return;
     const questionIds = new Set();
     const hostMessageRefs = new Set();
     let preGrillTree;
     const bindings = [
-      ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, "talk", index + 1]),
-      ["grill", payload.grill, "grill", null],
+      ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, new Set(["talk"]), index + 1]),
+      ["grill", payload.grill, new Set(["grill", "grill-revalidation"]), null],
     ];
-    for (const [label, binding, expectedType, expectedRound] of bindings) {
+    for (const [label, binding, expectedTypes, expectedRound] of bindings) {
       if (!binding || typeof binding !== "object"
         || Object.keys(binding).some((key) => key !== "ref" && key !== "hash")
         || !EVIDENCE_REF.test(binding.ref ?? "")
         || !HASH.test(binding.hash ?? "")) {
         throw new TypeError(`aggregate ${label} binding must contain only a canonical ref and hash`);
+      }
+      if (label === "grill") {
+        const replacementRef = `${refRoot}/interaction-completion.grill-revalidation-0002.json`;
+        const replacementRaw = readOptional(task, replacementRef);
+        if (replacementRaw !== undefined && binding.ref !== replacementRef) {
+          throw new Error("interaction aggregate must bind the latest grill revalidation replacement");
+        }
       }
       const child = verifyStageContentEvidence({
         task,
@@ -352,16 +520,16 @@ export function createStageContentEvidenceWriter(options = {}) {
         hash: binding.hash,
         expectedStage: stage,
         expectedRunId: workflowRunId,
-        ...(expectedType === "grill" ? { expectedTree: payload.workspace_tree } : {}),
+        ...(label === "grill" ? { expectedTree: payload.workspace_tree } : {}),
         expectedKind: "interaction-completion.v1",
       });
-      if (child.payload?.interaction_type !== expectedType) {
+      if (!expectedTypes.has(child.payload?.interaction_type)) {
         throw new Error(`aggregate ${label} binds the wrong interaction type`);
       }
       if (expectedRound !== null && child.payload.rounds?.[0]?.round_number !== expectedRound) {
         throw new Error(`aggregate ${label} is out of order`);
       }
-      if (expectedType === "talk") {
+      if (expectedTypes.has("talk")) {
         if (child.payload?.workspace_tree !== child.snapshot_tree) {
           throw new Error(`aggregate ${label} payload tree binding mismatch`);
         }
@@ -382,8 +550,20 @@ export function createStageContentEvidenceWriter(options = {}) {
             hostMessageRefs.add(hostRef);
           }
         }
-      } else if (child.payload?.workspace_tree !== payload.workspace_tree) {
-        throw new Error("aggregate grill must bind the final post-grill tree");
+      } else {
+        if (child.payload?.workspace_tree !== payload.workspace_tree) {
+          throw new Error("aggregate grill must bind the final post-grill tree");
+        }
+        validateGrillRevalidationBindings(child.payload);
+        if (child.payload?.interaction_type === "grill-revalidation") {
+          const completion = kernel.completeMakeDecisionInteractionPublication({
+            evidence_ref: binding.ref,
+            evidence_hash: binding.hash,
+          });
+          if (completion.completed === false) {
+            throw new Error("aggregate grill revalidation requires a fresh authenticated invocation");
+          }
+        }
       }
     }
     const decisionMatch = DECISION_LOG_REF.exec(payload.decision_ref ?? "");
@@ -439,6 +619,14 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new TypeError("talk/grill interaction evidence is create-only and cannot be revised");
       }
       plain(input.payload, "stage content payload");
+      const grillRevalidation = input.kind === "interaction-completion.v1"
+        && input.payload.interaction_type === "grill-revalidation";
+      if (grillRevalidation && (Object.hasOwn(input.payload, "previous_grill")
+          || Object.hasOwn(input.payload, "material_revision")
+          || Object.hasOwn(input.payload, "supersedes_revalidation"))) {
+        throw new TypeError("grill revalidation predecessor, material, and supersedes bindings are caller-forbidden and runtime-derived");
+      }
+      if (input.kind === "browser-qa-evidence.v1") rejectBrowserPrivateKeys(input.payload);
       let snapshot;
       if (input.kind === "interaction-completion.v1") {
         snapshot = captureSnapshot(workspace);
@@ -449,9 +637,21 @@ export function createStageContentEvidenceWriter(options = {}) {
       const aggregate = input.kind === "interaction-completion.v1"
         && input.payload.interaction_type === "aggregate";
       rejectIdentityKeys(input.payload, "payload", aggregate);
-      const payload = minimize(structuredClone(input.payload));
-      if (input.kind === "interaction-completion.v1") payload.workspace_tree = snapshot.tree;
+      const payload = minimize(structuredClone(input.payload), {
+        allowBrowserSession: input.kind === "browser-qa-evidence.v1",
+      });
+      if (input.kind === "interaction-completion.v1") {
+        payload.workspace_tree = snapshot.tree;
+        if (grillRevalidation) {
+          payload.previous_grill = trustedPreviousGrill();
+          const currentMaterial = readCurrentTaskMaterialRevision({ task });
+          payload.material_revision = trustedCurrentMaterialBinding();
+          const superseded = trustedSupersededGrillRevalidation(currentMaterial, snapshot.tree);
+          if (superseded !== undefined) payload.supersedes_revalidation = superseded;
+        }
+      }
       validatePayload(input.kind, payload);
+      if (input.kind === "browser-qa-evidence.v1") verifyBrowserAssets(task, payload);
       if (stage === "build-spec" && input.kind === "ambiguity-ledger.v2") {
         if (payload.content_profile !== "spec-content.v3") {
           throw new TypeError("new build-spec publication requires spec-content.v3; legacy ledgers are read-only");
@@ -470,6 +670,7 @@ export function createStageContentEvidenceWriter(options = {}) {
         }
       }
       validateAggregateBindings(payload);
+      validateGrillRevalidationBindings(payload);
       snapshot ??= captureSnapshot(workspace);
       if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {
         throw new Error("interaction completion workspace tree does not match the current Workspace");
@@ -621,6 +822,50 @@ export function readLatestStageContentEvidence({ task, stage, workflowRunId, kin
   return Object.freeze({ ref: pointer.ref, hash: pointer.hash, value, pointer_ref: pointerRef });
 }
 
+export function readCurrentTaskMaterialRevision({ task } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const pointerRaw = readOptional(safeTask, "materials/current.json");
+  if (pointerRaw === undefined) return undefined;
+  let pointer;
+  try { pointer = JSON.parse(pointerRaw); }
+  catch { throw new Error("material current pointer is invalid"); }
+  if (pointer?.schema_version !== "task-material-current.v1"
+      || pointer.task_id !== safeTask.identity.taskId
+      || !Number.isInteger(pointer.generation) || pointer.generation < 1
+      || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+      || !HASH.test(pointer.revision_hash ?? "")) {
+    throw new Error("material current pointer binding is invalid");
+  }
+  const raw = safeTask.readRecord(pointer.revision_ref);
+  if (sha256(raw) !== pointer.revision_hash) throw new Error("material current revision hash mismatch");
+  let revision;
+  try { revision = JSON.parse(raw); } catch { throw new Error("material current revision is invalid JSON"); }
+  if (!validateMaterialRevision(revision) || revision.task_id !== safeTask.identity.taskId
+      || revision.revision_id !== pointer.revision_id
+      || revision.previous_ref !== (pointer.previous_ref ?? null)) {
+    throw new Error(`material current revision is invalid: ${schemaErrors(validateMaterialRevision)}`);
+  }
+  if (revision.previous_ref === null) {
+    if (revision.parent_revision !== null || revision.previous_hash !== null) {
+      throw new Error("material root revision has a forged parent");
+    }
+  } else {
+    const priorRaw = safeTask.readRecord(revision.previous_ref);
+    if (sha256(priorRaw) !== revision.previous_hash) throw new Error("material previous revision hash mismatch");
+    const prior = JSON.parse(priorRaw);
+    if (!validateMaterialRevision(prior) || prior.revision_id !== revision.parent_revision) {
+      throw new Error("material parent revision does not match previous_ref");
+    }
+  }
+  return Object.freeze({
+    pointer_ref: "materials/current.json",
+    pointer: Object.freeze(pointer),
+    ref: pointer.revision_ref,
+    hash: pointer.revision_hash,
+    value: Object.freeze(revision),
+  });
+}
+
 export function verifyStageContentEvidence({
   task, ref, hash, expectedStage, expectedRunId, expectedTree, expectedKind,
 } = {}) {
@@ -638,6 +883,24 @@ export function verifyStageContentEvidence({
   if (expectedTree !== undefined && (!TREE.test(expectedTree) || value.snapshot_tree !== expectedTree)) throw new Error("stage content evidence snapshot tree binding mismatch");
   if (expectedKind !== undefined && value.kind !== expectedKind) throw new Error("stage content evidence kind binding mismatch");
   return Object.freeze(value);
+}
+
+export function verifyBrowserQaEvidenceBinding({
+  task, binding, expectedRunId, expectedTree,
+} = {}) {
+  plain(binding, "browser QA evidence binding");
+  if (Object.keys(binding).some((key) => key !== "ref" && key !== "hash")) {
+    throw new TypeError("browser QA evidence binding accepts only ref and hash");
+  }
+  return verifyStageContentEvidence({
+    task,
+    ref: binding.ref,
+    hash: binding.hash,
+    expectedStage: "verify-code",
+    expectedRunId,
+    expectedTree,
+    expectedKind: "browser-qa-evidence.v1",
+  });
 }
 
 export function requiredStageContentKinds(stage) {

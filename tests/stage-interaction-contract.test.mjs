@@ -96,7 +96,7 @@ describe("typed interaction boundary", () => {
 
 describe("ambiguity ledger boundary", () => {
   it("classifies every independent axis and records all six impact dimensions", () => {
-    expect(buildSpec).toMatch(/ambiguity-ledger\.v1/i);
+    expect(buildSpec).toMatch(/ambiguity-ledger\.v2/i);
     for (const classification of [
       /locked upstream decision/i,
       /(?:upstream explicitly unresolved|explicitly unresolved upstream)/i,

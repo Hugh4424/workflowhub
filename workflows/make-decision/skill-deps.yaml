@@ -3,13 +3,9 @@ skills:
   - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, invocation: always, trigger: talk_round_1_2_3, bundle: skills/talk-with-zhipeng/skill-bundle.json }
   - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: independent, invocation: always, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json }
   - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, invocation: always, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json }
-  - { name: intake-decision-review, path: skills/intake-decision-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_direction_lens, bundle: skills/intake-decision-review/skill-bundle.json }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
   - { name: anysearch, path: skills/anysearch/SKILL.md, execution: independent, invocation: conditional, trigger: external_research_approved, bundle: skills/anysearch/skill-bundle.json }
   - { name: debate, path: skills/debate/SKILL.md, execution: independent, invocation: conditional, trigger: material_disagreement, bundle: skills/debate/skill-bundle.json }
-  - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_direction_lens, bundle: skills/plan-ceo-review/skill-bundle.json }
-  - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }
-  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_simplicity_lens, bundle: skills/simplicity-guard/skill-bundle.json }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }

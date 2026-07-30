@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import yaml from "js-yaml";
 import { resolveSkillDispatch } from "./local-skill-resolver.mjs";
 import { doctorCapabilities } from "./capability-doctor.mjs";
+import { createStageSkillInvocation } from "./stage-skill-invocation.mjs";
 
 export function loadStageSkillManifest(packageRoot, stage) {
   if (!/^[a-z][a-z0-9-]*$/.test(stage)) throw new Error(`invalid stage: ${stage}`);
@@ -26,20 +28,58 @@ export function preflightStageSkills({ packageRoot, stage, activeConditions = []
   return { ...loaded, dependencies, payloads, capabilityResults };
 }
 
-export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, hostInvoke, independentContextAvailable = true, activeConditions = [], probes = {}, commands = {}, run }) {
+export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, notInvokedReason = "trigger_false", hostInvoke, independentContextAvailable = true, activeConditions = [], probes = {}, commands = {}, run, kernel, invocationKey = "default" }) {
   const prepared = preflightStageSkills({ packageRoot, stage, activeConditions, probes, commands, run });
   const dependency = prepared.manifest.skills.find(item => item.name === name);
   if (!dependency) throw new Error(`${stage}: undeclared skill ${name}`);
   if (!triggered) {
     if (dependency.invocation !== "conditional") throw new Error(`${stage}/${name}: always skill cannot be not_invoked`);
-    return { name, status: "not_invoked", source_manifest: prepared.source, package_root: prepared.root };
+    const fact = createStageSkillInvocation({
+      ...(kernel ? { taskId: kernel.task.identity.taskId, workflowRunId: kernel.deriveStageWorkflowRunId(stage) } : {}),
+      stage, name, invocationKey, declaredTrigger: dependency.trigger, bundleHash: prepared.payloads.get(name).bundle_hash,
+      status: "not_invoked", reason: notInvokedReason,
+    });
+    if (kernel) kernel.publishStageSkillInvocation(fact);
+    return fact;
   }
   if (dependency.execution === "independent" && !independentContextAvailable) {
-    return { name, status: "unavailable", reason: "independent_context_unavailable", source_manifest: prepared.source, package_root: prepared.root };
+    const fact = createStageSkillInvocation({
+      ...(kernel ? { taskId: kernel.task.identity.taskId, workflowRunId: kernel.deriveStageWorkflowRunId(stage) } : {}),
+      stage, name, invocationKey, declaredTrigger: dependency.trigger, bundleHash: prepared.payloads.get(name).bundle_hash,
+      status: "unavailable", reason: "independent_context_unavailable",
+    });
+    if (kernel) kernel.publishStageSkillInvocation(fact);
+    return fact;
   }
   if (typeof hostInvoke !== "function") throw new Error(`${stage}/${name}: hostInvoke is required`);
-  return hostInvoke(Object.freeze({
-    ...prepared.payloads.get(name),
-    doctor_diagnostics: Object.freeze([...prepared.capabilityResults]),
-  }));
+  let result;
+  try {
+    result = await hostInvoke(Object.freeze({
+      ...prepared.payloads.get(name),
+      doctor_diagnostics: Object.freeze([...prepared.capabilityResults]),
+    }));
+  } catch (error) {
+    const fact = createStageSkillInvocation({
+      ...(kernel ? { taskId: kernel.task.identity.taskId, workflowRunId: kernel.deriveStageWorkflowRunId(stage) } : {}),
+      stage, name, invocationKey, declaredTrigger: dependency.trigger, bundleHash: prepared.payloads.get(name).bundle_hash,
+      status: "unavailable", reason: `host_invoke_failed:${error?.name ?? "Error"}`,
+    });
+    if (kernel) kernel.publishStageSkillInvocation(fact);
+    throw error;
+  }
+  const fact = createStageSkillInvocation({
+    ...(kernel ? { taskId: kernel.task.identity.taskId, workflowRunId: kernel.deriveStageWorkflowRunId(stage) } : {}),
+    stage, name, invocationKey, declaredTrigger: dependency.trigger, bundleHash: prepared.payloads.get(name).bundle_hash,
+    status: "executed", result,
+  });
+  if (kernel) {
+    const raw = kernel.task.readRecord(result?.outcome_ref);
+    const actualHash = createHash("sha256").update(raw).digest("hex");
+    if (actualHash !== result?.outcome_hash) throw new Error(`${stage}/${name}: hostInvoke outcome hash mismatch`);
+    let outcome;
+    try { outcome = JSON.parse(raw); } catch { throw new Error(`${stage}/${name}: hostInvoke outcome must be canonical JSON`); }
+    if (outcome.snapshot_tree !== result?.snapshot_tree) throw new Error(`${stage}/${name}: hostInvoke outcome snapshot mismatch`);
+  }
+  if (kernel) kernel.publishStageSkillInvocation(fact);
+  return fact;
 }

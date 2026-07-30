@@ -36,6 +36,7 @@ const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
 const STAGE_CONTENT_POINTER_REPLACERS = new WeakMap();
+const TASK_CURRENT_POINTER_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const RUNNER_ROOT_MIGRATORS = new WeakMap();
 const RECOVERY_CREDENTIAL_WRITERS = new WeakMap();
@@ -1199,7 +1200,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}|results\/build-code\/revisions\/(?:reopen-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:run-[0-9]{4}\.json|invalidations\/[a-f0-9]{64}\.json|journal-invalidations\/[a-f0-9]{64}\.json)|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}|results\/build-code\/revisions\/(?:reopen-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:run-[0-9]{4}\.json|invalidations\/[a-f0-9]{64}\.json|journal-invalidations\/[a-f0-9]{64}\.json)|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|materials\/(?:current|revisions\/[a-f0-9]{64})\.json|requirements\/current\.json|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
@@ -1311,6 +1312,17 @@ function makeTaskHandle(taskPath, manifest) {
     }
     if (typeof options.validator !== "function" || typeof options.expectedPriorRaw !== "string") {
       throw new Error("stage content latest pointer replacement requires CAS binding");
+    }
+    return writeAtomicAt(realTaskPath, relativePath, data, options);
+  });
+  TASK_CURRENT_POINTER_REPLACERS.set(frozen, (relativePath, data, options = {}) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    if (!new Set(["materials/current.json", "requirements/current.json"]).has(relativePath)) {
+      throw new Error("task current pointer path is invalid");
+    }
+    if (typeof options.validator !== "function" || typeof options.expectedPriorRaw !== "string") {
+      throw new Error("task current pointer replacement requires CAS binding");
     }
     return writeAtomicAt(realTaskPath, relativePath, data, options);
   });
@@ -1692,6 +1704,12 @@ export function createTaskKernel(taskHandle, options) {
       assertTaskHandle(task);
       const replacer = STAGE_CONTENT_POINTER_REPLACERS.get(task);
       if (typeof replacer !== "function") throw new TypeError("authentic stage content pointer replacer required");
+      return replacer;
+    },
+    replaceTaskCurrentPointerFor(task) {
+      assertTaskHandle(task);
+      const replacer = TASK_CURRENT_POINTER_REPLACERS.get(task);
+      if (typeof replacer !== "function") throw new TypeError("authentic task current pointer replacer required");
       return replacer;
     },
   }));

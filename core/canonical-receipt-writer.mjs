@@ -12,7 +12,7 @@ import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
-import { carryAuditSummary } from "./audit-summary-carrier.mjs";
+import { carryAuditSummary, verifyAuditSummary } from "./audit-summary-carrier.mjs";
 import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 
@@ -26,7 +26,42 @@ const OFFICIAL_COMPONENTS = Object.freeze({
   tasks: Object.freeze({ stage: "build-plan", kind: "content", ref: "receipts/tasks.json" }),
   implementation: Object.freeze({ stage: "build-code", kind: "implementation", ref: "receipts/implementation.json" }),
   evidence: Object.freeze({ stage: "verify-code", kind: "evidence-aggregate", ref: "evidence/verify-evidence.json" }),
+  verification: Object.freeze({ stage: "verify-code", kind: "verification-items", ref: "receipts/verification.json" }),
 });
+
+function currentRequirementsLedger(task) {
+  let pointerRaw;
+  try { pointerRaw = task.readRecord("requirements/current.json"); }
+  catch (error) {
+    if (error?.code === "ENOENT") return JSON.parse(task.readRecord("requirements/ledger.json"));
+    throw error;
+  }
+  let pointer;
+  try { pointer = JSON.parse(pointerRaw); } catch { throw new Error("requirements current pointer is invalid JSON"); }
+  if (pointer?.schema_version !== "requirements-current.v1"
+      || pointer.task_id !== task.identity.taskId
+      || !Number.isInteger(pointer.generation) || pointer.generation < 1
+      || typeof pointer.ledger_ref !== "string"
+      || !/^[a-f0-9]{64}$/.test(pointer.ledger_hash ?? "")
+      || !/^[a-f0-9]{64}$/.test(pointer.content_hash ?? "")) {
+    throw new Error("requirements current pointer binding is invalid");
+  }
+  const raw = task.readRecord(pointer.ledger_ref);
+  if (sha256(raw) !== pointer.ledger_hash) throw new Error("requirements current ledger hash mismatch");
+  const value = JSON.parse(raw);
+  const ledger = pointer.ledger_ref === "requirements/ledger.json" ? value : value?.ledger;
+  if (pointer.ledger_ref !== "requirements/ledger.json"
+      && (value?.schema_version !== "requirements-ledger-revision.v1"
+        || value.task_id !== task.identity.taskId
+        || value.parent_ref !== pointer.parent_ref
+        || JSON.stringify(value.supersedes) !== JSON.stringify([pointer.parent_ref]))) {
+    throw new Error("requirements current revision parent/supersedes binding is invalid");
+  }
+  if (!ledger || sha256(`${canonicalHashJson(ledger)}\n`) !== pointer.content_hash) {
+    throw new Error("requirements current ledger content hash mismatch");
+  }
+  return ledger;
+}
 
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
@@ -159,8 +194,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
   if (stage === "make-decision" && throughStepId !== undefined) {
     validateMakeDecisionAuditContent(safeTask, contentEvidence, decisionRef);
   }
-  const ledgerRaw = safeTask.readRecord("requirements/ledger.json");
-  const ledger = JSON.parse(ledgerRaw);
+  const ledger = currentRequirementsLedger(safeTask);
   const manifest = loadStageManifest(stage, fileURLToPath(new URL("../", import.meta.url)));
   const auditable = auditableJournalEvents(safeTask, stage, workflowRunId);
   const summary = buildAuditSummaryFromJournalEvents(
@@ -178,11 +212,14 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
       ...(throughStepId === undefined ? {} : { through_step_id: throughStepId }),
     },
   ).audit_summary;
-  if (summary.verdict !== "pass") throw new Error(`${stage} canonical audit did not pass`);
   const ref = `evidence/audits/${stage}/${summary.summary_hash}.json`;
   const raw = canonicalJson(summary);
-  publishIdempotently({
-    task: safeTask, write: kernel.publishCanonicalRecord, ref, raw,
+  publishCanonicalAuditSummaryRecord({
+    summary,
+    ref,
+    expectedHash: summary.summary_hash,
+    readExisting: (recordRef) => readCanonicalRecord(safeTask, recordRef),
+    write: kernel.publishCanonicalRecord,
     label: `${stage} canonical audit summary`,
   });
   return Object.freeze({
@@ -190,6 +227,33 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
     audit_record_hash: sha256(raw),
     content_evidence_refs: summary.content_evidence_refs,
   });
+}
+
+export function publishCanonicalAuditSummaryRecord({
+  summary,
+  ref,
+  expectedHash,
+  readExisting,
+  write,
+  label = "canonical audit summary",
+}) {
+  if (typeof readExisting !== "function" || typeof write !== "function") {
+    throw new TypeError("canonical audit publication requires read/write capabilities");
+  }
+  const check = verifyAuditSummary(ref, summary, { hash: expectedHash });
+  if (!check.ok) throw new Error(check.errors.join("; "));
+  const raw = canonicalJson(summary);
+  const existing = readExisting(ref);
+  if (existing === undefined) {
+    try {
+      write(ref, raw);
+    } catch (error) {
+      if (error?.code !== "EEXIST" || readExisting(ref) !== raw) throw error;
+    }
+  } else if (existing !== raw) {
+    throw new Error(`${label} already exists with different content`);
+  }
+  return Object.freeze({ ref, hash: sha256(raw), summary_hash: summary.summary_hash });
 }
 
 function publishIdempotently({ task, write, ref, raw, label }) {
@@ -311,6 +375,48 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     // rejected by the idempotent writer.
     publishIdempotently({ task: safeTask, write, ref: diffRef, raw: diff, label: "implementation diff evidence" });
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
+  } else if (registration.kind === "verification-items") {
+    if (Object.keys(payload).some((key) => key !== "items") || !Array.isArray(payload.items)) {
+      throw new TypeError("verification payload requires items only");
+    }
+    const required = [
+      "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+      "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+    ];
+    const seen = new Set();
+    const items = payload.items.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)
+          || Object.keys(entry).some((key) => !new Set(["id", "status", "evidence_refs", "reason"]).has(key))
+          || !required.includes(entry.id) || seen.has(entry.id)
+          || !new Set(["pass", "fail", "unknown", "not_applicable"]).has(entry.status)
+          || !Array.isArray(entry.evidence_refs)
+          || typeof entry.reason !== "string" || entry.reason.trim() === "") {
+        throw new TypeError(`verification item ${index} is invalid or duplicate`);
+      }
+      seen.add(entry.id);
+      if (entry.status === "pass" && entry.evidence_refs.length === 0) {
+        throw new TypeError(`verification item ${entry.id} pass requires canonical evidence_refs`);
+      }
+      if (entry.status === "not_applicable" && entry.evidence_refs.length !== 0) {
+        throw new TypeError(`verification item ${entry.id} not_applicable must not claim evidence_refs`);
+      }
+      const evidenceRefs = entry.evidence_refs.map((binding, bindingIndex) => {
+        if (!binding || typeof binding !== "object" || Array.isArray(binding)
+            || Object.keys(binding).some((key) => key !== "ref" && key !== "sha256")
+            || typeof binding.ref !== "string" || binding.ref.trim() === ""
+            || !/^[a-f0-9]{64}$/.test(binding.sha256 ?? "")) {
+          throw new TypeError(`verification item ${entry.id} evidence_refs[${bindingIndex}] is invalid`);
+        }
+        const nested = safeTask.readRecord(binding.ref);
+        if (sha256(nested) !== binding.sha256) {
+          throw new Error(`verification item ${entry.id} evidence hash mismatch: ${binding.ref}`);
+        }
+        return { ref: binding.ref, sha256: binding.sha256 };
+      });
+      return { id: entry.id, status: entry.status, evidence_refs: evidenceRefs, reason: entry.reason };
+    });
+    for (const id of required) if (!seen.has(id)) throw new Error(`missing verify item: ${id}`);
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, items };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();

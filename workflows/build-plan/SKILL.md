@@ -100,7 +100,7 @@ Temporary files may be authoring inputs, but are never the reviewed artifacts
 by themselves. Do not create official receipts before review is finished.
 
 Declared runtime components: `spec-research`, `spec-plan`, `spec-tasks`,
-`wh-review`, and the review lenses declared by the manifest.
+and `wh-review`.
 `simplicity-guard` is provider-visible only inside `wh-review`; it is not a
 planning step.
 
@@ -256,3 +256,10 @@ continue”. Wait for the real host reply and use only `accept-review-risk`.
 Minor, invalid-anchor/evidence, unavailable, timeout, and adapter failures do
 not open this path. The risk choice keeps the original verdict and does not
 replace build-plan's normal confirmation or any structural gate.
+
+## 当前材料 revision
+
+四材料更新使用 task-global append-only `task-material-revision.v1`。caller 只交 summary
+和 source refs；writer 从认证 ArtifactDir 注入 task identity/revision ID，并计算
+changed files、content/source hashes。旧版本只读；
+不要求 reopen/reset/rebind/checkpoint，不自动重审，也不把 revision lineage 变成开发 gate。

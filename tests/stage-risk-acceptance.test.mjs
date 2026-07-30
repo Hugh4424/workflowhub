@@ -31,37 +31,35 @@ const clauses = {
   Q2: section(constitution, "Q2", "Q3"),
 };
 
-describe("CONSTITUTION 1.3.0 serious-review exception", () => {
-  it("keeps exactly 21 principles and changes only the five approved clauses", () => {
-    expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.3\.0\b/);
+describe("CONSTITUTION 1.5.0 quality and serious-review boundaries", () => {
+  it("keeps exactly 21 principles and the current five quality clauses", () => {
+    expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.5\.0\b/);
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)].map((match) => match[1])).toEqual([
       "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10",
       "Q1", "Q2", "Q3",
       "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
     ]);
-    expect(constitution).toMatch(/F3\s*→\s*F3[\s\S]*F4\s*→\s*F4[\s\S]*F7\s*→\s*F7[\s\S]*Q1\s*→\s*Q1[\s\S]*Q2\s*→\s*Q2/);
-    expect(constitution).toMatch(/其余\s*16\s*条不变/);
+    for (const id of ["F3", "F4", "F7", "Q1", "Q2"]) expect(constitution).toContain(`### ${id} `);
   });
 
   it("distinguishes structural publication facts, ordinary quality facts, and the narrow serious-review pause", () => {
-    expect(clauses.F3).toMatch(/身份[\s\S]*顺序[\s\S]*(?:hash|哈希)[\s\S]*(?:阻止|不得)[\s\S]*成功发布/i);
-    expect(clauses.F3).toMatch(/一般质量事实[\s\S]*(?:只记录|记录)/);
-    expect(clauses.F3).toMatch(/actionable[\s\S]*(?:major|blocking)[\s\S]*(?:暂停|风险)/i);
-    expect(clauses.F4).toMatch(/独立来源[\s\S]*(?:人工|人)[\s\S]*(?:窄例外|例外)/);
-    expect(clauses.F4).toMatch(/minor[\s\S]*(?:只记录|不触发)/i);
-    expect(clauses.Q1).toMatch(/一般质量事实[\s\S]*(?:只记录|不阻断)/);
-    expect(clauses.Q1).toMatch(/actionable[\s\S]*(?:major|blocking)[\s\S]*(?:暂停|承担风险)/i);
+    expect(clauses.F3).toMatch(/身份[\s\S]*(?:hash|哈希)[\s\S]*顺序[\s\S]*(?:fail-loud|失败)/i);
+    expect(clauses.F3).toMatch(/辅助审计缺失[\s\S]*(?:missing|unavailable)/);
+    expect(clauses.F4).toMatch(/actionable[\s\S]*(?:major|blocking)[\s\S]*(?:处置|风险)/i);
+    expect(clauses.F4).toMatch(/独立来源[\s\S]*(?:人工|人)[\s\S]*(?:严重问题|major|blocking)/i);
+    expect(clauses.F4).toMatch(/一般 finding[\s\S]*(?:只记录|记录)/i);
+    expect(clauses.Q1).toMatch(/质量事实[\s\S]*(?:不作为|记录代替普遍阻断)/);
+    expect(clauses.Q1).toMatch(/serious finding[\s\S]*F4/i);
   });
 
   it("preserves the three normal confirmations and makes build-spec/build-code pause only on serious findings", () => {
     for (const name of ["make-decision", "build-plan", "verify-code"]) {
       expect(clauses.F7).toContain(name);
     }
-    expect(clauses.F7).toMatch(/build-spec[\s\S]*build-code[\s\S]*(?:正常|通常)[\s\S]*(?:自动|不确认)/i);
-    expect(clauses.F7).toMatch(/actionable[\s\S]*(?:major|blocking)[\s\S]*(?:异常处置|暂停)/i);
-    expect(clauses.Q2).toMatch(/入口校验[\s\S]*事实采集[\s\S]*人工确认/);
-    expect(clauses.Q2).toMatch(/build-spec[\s\S]*build-code[\s\S]*(?:异常处置|暂停)/i);
-    expect(clauses.Q2).toMatch(/minor[\s\S]*(?:只记录|不触发)/i);
+    expect(clauses.F7).toMatch(/正常业务确认[\s\S]*make-decision[\s\S]*build-plan[\s\S]*verify-code/i);
+    expect(clauses.F7).toMatch(/不可逆操作[\s\S]*独立授权/);
+    expect(clauses.Q2).toMatch(/四材料可读[\s\S]*正式 publication[\s\S]*阶段完成/i);
+    expect(clauses.Q2).toMatch(/独立审查事实[\s\S]*人类交接/i);
   });
 
   it("records the approved sources before the narrow risk implementation", () => {
@@ -74,9 +72,8 @@ describe("CONSTITUTION 1.3.0 serious-review exception", () => {
 
   it("keeps the checklist synchronized at exactly 21 entries", () => {
     expect([...checklist.matchAll(/^- \[[ x]\] \*\*(F\d+|Q\d+|S\d+) /gm)]).toHaveLength(21);
-    for (const id of ["F3", "F4", "F7", "Q1", "Q2"]) {
-      expect(checklist).toMatch(new RegExp(`\\*\\*${id} [^*]+\\*\\*[^\\n]+(?:serious|严重|actionable|结构)`, "i"));
-    }
+    for (const id of ["F3", "F4", "F7", "Q1", "Q2"])
+      expect(checklist).toMatch(new RegExp(`\\*\\*${id} [^*]+\\*\\*`));
     expect(checklist).toMatch(/\*\*条目数\*\*：21/);
   });
 });

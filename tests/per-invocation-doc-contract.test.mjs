@@ -7,9 +7,9 @@ describe("per-invocation documentation contract", () => {
   it("keeps constitution and checklist aligned on execution identity", () => {
     const constitution = read("CONSTITUTION.md");
     const checklist = read("constitution-checklist.md");
-    expect(constitution).toMatch(/Version\*\*: 1\.4\.0/);
-    for (const term of ["per-invocation", "clean", "不是质量裁决"]) expect(constitution).toContain(term);
-    for (const term of ["F6", "F8", "F9", "Q3", "dirty runner"]) expect(checklist).toContain(term);
+    expect(constitution).toMatch(/Version\*\*: 1\.5\.0/);
+    for (const term of ["当次执行身份", "clean", "不是质量裁决"]) expect(constitution).toContain(term);
+    for (const term of ["F6", "F8", "F9", "Q3", "dirty 内容"]) expect(checklist).toContain(term);
     expect((checklist.match(/^- \[ \] \*\*/gm) ?? [])).toHaveLength(21);
   });
 

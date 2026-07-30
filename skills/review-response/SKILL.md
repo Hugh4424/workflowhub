@@ -1,6 +1,6 @@
 ---
 name: review-response
-description: 在 revise_required 后逐条核实审查发现，定位根因，修复同类问题，补证据，并用同一 review flow 重审。
+description: 在 revise_required 后逐条核实审查发现，定位根因，修复同类问题，并在同一 review flow 追加聚焦验证证据。
 ---
 
 # Review Response
@@ -17,7 +17,8 @@ description: 在 revise_required 后逐条核实审查发现，定位根因，�
 4. **找根因**：对 accepted finding 定位根因并反查同模式位置。禁止只改 reviewer 指出的单个表面点。
 5. **修复**：一次处理一个 finding 或同根因 finding 组；不夹带无关重构。
 6. **补证据**：运行能证明原 finding 已关闭且无回退的窄测试，再运行受影响测试集。
-7. **重审**：必须通过原 `flow_id`/同一 review 路径提交新证据。禁止新开第二条 review 路径绕过历史。
+7. **追加记录**：通过原 `flow_id` 追加 finding disposition 和聚焦验证证据。保留原 verdict，不覆盖历史，不默认再次调用 provider 或生成新 pass。
+8. **精确重放**：重放必须绑定原 `previous_result_ref`、`finding_id`、`requested_profiles` 和 `evidence_anchor_valid`；任一不一致都报 `REPLAY_MISMATCH`。
 
 ## 输出
 
@@ -32,9 +33,11 @@ affected_matches:
 change:
 evidence:
 rereview_flow_id:
+previous_result_ref:
+provider_calls: 0
 ```
 
-未核实、无根因、无新证据或未重审，均不得标为 resolved。无法在当前环境验证时明确写 `needs_human`，不猜测通过。
+未核实、无根因或无聚焦验证证据，均不得标为 resolved。无法在当前环境验证时明确写 `needs_human`，不猜测通过。只有用户明确要求或原审查证据失效时，才另行发起审查。
 
 ## 禁止
 
@@ -42,6 +45,6 @@ rereview_flow_id:
 - 只回复“同意”或“已修复”而无证据。
 - finding 含糊时先做能看懂的部分。
 - 用 YAGNI 名义拒绝已经存在的合同或真实调用方。
-- 新建 review flow 清空 revise 历史。
+- 新建 review flow 清空 revise 历史，或用新 pass 覆盖原 verdict。
 
-本地版本适配自 Superpowers `receiving-code-review`；去除特定宿主话术，加入 workflowhub finding ID、同 flow 重审和证据合同。
+本地版本适配自 Superpowers `receiving-code-review`；去除特定宿主话术，加入 workflowhub finding ID、同 flow 追加记录、聚焦验证和重放绑定合同。

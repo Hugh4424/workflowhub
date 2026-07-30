@@ -42,6 +42,11 @@ function legacyLedger(frId = "FR-ACCEPT") {
       evidence_type: "manual",
     }],
     risks: [],
+    clarification: {
+      component: "spec-clarify",
+      status: "trigger=false",
+      reason: "No unresolved ambiguity requires a host-visible question.",
+    },
   };
 }
 
@@ -132,9 +137,25 @@ describe("spec-content.v3 typed ledger", () => {
       handling_stage: "build-spec",
       close_condition_or_stop: "Stop until the product owner decides.",
     }];
+    value.clarification = {
+      component: "spec-clarify",
+      status: "executed",
+      reason: "The unknown product fact requires one host-visible clarification.",
+      ask: { axis: "product-fact", sequence: 1, ref: "host-message://ask/open-01" },
+      wait: {
+        axis: "product-fact", sequence: 2, status: "waiting-for-user",
+        reply_ref: "host-message://reply/open-01",
+      },
+      resume: { axis: "product-fact", sequence: 3, ref: "host-message://resume/open-01" },
+    };
     expect(validateAmbiguityLedgerV2(value)).toMatchObject({ ok: true, errors: [] });
 
     value.open_questions = [];
+    value.clarification = {
+      component: "spec-clarify",
+      status: "trigger=false",
+      reason: "No unresolved ambiguity requires a host-visible question.",
+    };
     expect(validateAmbiguityLedgerV2(value).errors.join("\n")).toMatch(/unknown PFACT.*RISK or OPEN/);
   });
 });

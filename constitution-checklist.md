@@ -9,7 +9,7 @@
 - [ ] **F1 薄核心** — 判据：核心是否只做调度编排、重活下沉技能层（改动牵连面小）。→ [CONSTITUTION.md#f1-薄核心](CONSTITUTION.md#f1-薄核心)
 - [ ] **F2 窄契约** — 判据：模块间是否走窄而明确的接口、不暴露内部实现。→ [CONSTITUTION.md#f2-窄契约](CONSTITUTION.md#f2-窄契约)
 - [ ] **F3 四材料决定推进正式发布保持结构真实** — 判据：四材料是否只决定进入/继续；task/worktree/runtime 写边界、hash、顺序和核心 publication 错误是否在写成功前 fail-loud。→ [CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-四材料决定推进正式发布保持结构真实)
-- [ ] **F4 质量靠异源审查与人finding不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
+- [ ] **F4 质量靠异源审查与人，finding 不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
 - [ ] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。→ [CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
 - [ ] **F6 统一外置执行记录** — 判据：正式写入是否认证当次干净已提交内容，且未把 runner 永久绑定任务或把旧身份记录当准入 gate。→ [CONSTITUTION.md#f6-统一外置执行记录](CONSTITUTION.md#f6-统一外置执行记录)
 - [ ] **F7 三处正常确认保留不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认保留不可逆操作独立授权)

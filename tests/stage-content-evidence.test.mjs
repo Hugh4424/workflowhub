@@ -20,6 +20,7 @@ import { createCanonicalSource, createSourceManifest } from "../core/canonical-s
 import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { dispatchStageSkill } from "../core/stage-skill-runtime.mjs";
 import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "../core/step-manifest.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
@@ -32,6 +33,7 @@ let createStageContentEvidenceWriter;
 let verifyStageContentEvidence;
 let readLatestStageContentEvidence;
 let requiredStageContentKinds;
+let verifyBrowserQaEvidenceBinding;
 let moduleLoadError;
 
 beforeAll(async () => {
@@ -41,6 +43,7 @@ beforeAll(async () => {
       verifyStageContentEvidence,
       readLatestStageContentEvidence,
       requiredStageContentKinds,
+      verifyBrowserQaEvidenceBinding,
     } = await import("../core/stage-content-evidence.mjs"));
   } catch (error) {
     moduleLoadError = error;
@@ -57,6 +60,7 @@ function requireApi() {
   expect(verifyStageContentEvidence).toBeTypeOf("function");
   expect(readLatestStageContentEvidence).toBeTypeOf("function");
   expect(requiredStageContentKinds).toBeTypeOf("function");
+  expect(verifyBrowserQaEvidenceBinding).toBeTypeOf("function");
 }
 
 function talkPayload(roundNumber, _workspaceTree, {
@@ -204,7 +208,22 @@ function appendFixtureStep(task, workflowRunId, stepId) {
   });
 }
 
-function fixture(taskId = "stage-content-evidence") {
+function hasCompletedFixtureStep(task, workflowRunId, stepId) {
+  const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse);
+  return events.some((event) => event.workflow_run_id === workflowRunId
+    && event.stage_slug === "make-decision"
+    && event.step_id === stepId
+    && event.event_type === "step_exit"
+    && event.terminal_status === "success");
+}
+
+function ensureFixtureStep(task, workflowRunId, stepId) {
+  if (!hasCompletedFixtureStep(task, workflowRunId, stepId)) {
+    appendFixtureStep(task, workflowRunId, stepId);
+  }
+}
+
+async function fixture(taskId = "stage-content-evidence") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-content-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -244,24 +263,51 @@ function fixture(taskId = "stage-content-evidence") {
   const setupDecisionHash = sha256(setupDecisionLog);
   const setupDecisionRef = `receipts/decision-log/${setupDecisionHash}.md`;
   kernel.publishCanonicalRecord(setupDecisionRef, setupDecisionLog);
+  const publishInvokedInteraction = async ({ payload, name, invocationKey }) => {
+    const published = setupWriter.publish({
+      kind: "interaction-completion.v1",
+      payload,
+    });
+    await dispatchStageSkill({
+      packageRoot: realpathSync(join(import.meta.dirname, "..")),
+      stage: "make-decision",
+      name,
+      invocationKey,
+      kernel,
+      hostInvoke: () => ({
+        outcome: "done",
+        outcome_ref: published.ref,
+        outcome_hash: published.hash,
+        snapshot_tree: setupTree,
+      }),
+    });
+    setupWriter.publish({ kind: "interaction-completion.v1", payload });
+    return published;
+  };
   const setupTalks = [];
-  setupTalks.push(setupWriter.publish({
-    kind: "interaction-completion.v1",
+  ensureFixtureStep(task, setupRunId, 1);
+  ensureFixtureStep(task, setupRunId, 2);
+  setupTalks.push(await publishInvokedInteraction({
     payload: talkPayload(1, setupTree),
+    name: "talk-with-zhipeng",
+    invocationKey: "talk-1",
   }));
   appendFixtureStep(task, setupRunId, 4);
-  setupTalks.push(setupWriter.publish({
-    kind: "interaction-completion.v1",
+  setupTalks.push(await publishInvokedInteraction({
     payload: talkPayload(2, setupTree, { zeroQuestion: true }),
+    name: "talk-with-zhipeng",
+    invocationKey: "talk-2",
   }));
   appendFixtureStep(task, setupRunId, 6);
-  setupTalks.push(setupWriter.publish({
-    kind: "interaction-completion.v1",
+  setupTalks.push(await publishInvokedInteraction({
     payload: talkPayload(3, setupTree, { zeroQuestion: true }),
+    name: "talk-with-zhipeng",
+    invocationKey: "talk-3",
   }));
-  const setupGrill = setupWriter.publish({
-    kind: "interaction-completion.v1",
+  const setupGrill = await publishInvokedInteraction({
     payload: grillPayload(setupTree),
+    name: "grill-with-docs",
+    invocationKey: "grill",
   });
   appendFixtureStep(task, setupRunId, 9);
   appendFixtureStep(task, setupRunId, 10);
@@ -296,6 +342,8 @@ function fixture(taskId = "stage-content-evidence") {
       worktree_root: candidate.worktreeRoot,
       baseline_commit: candidate.baselineCommit,
       snapshot_tree: candidate.captureSnapshot().tree,
+      decision_ref: setupDecisionRef,
+      decision_hash: setupDecisionHash,
       audit_contract_version: audit.audit_contract_version,
       audit_summary_ref: audit.audit_summary_ref,
       audit_summary_hash: audit.audit_summary_hash,
@@ -311,6 +359,8 @@ function fixture(taskId = "stage-content-evidence") {
     source_manifest: setup.sourceManifest,
     mappings: setup.mappings,
   });
+  ensureFixtureStep(task, nextRun.run.workflow_run_id, 1);
+  ensureFixtureStep(task, nextRun.run.workflow_run_id, 2);
   return {
     root, task, workspace, workflowRunId: nextRun.run.workflow_run_id,
     decisionRef: setupDecisionRef, decisionHash: setupDecisionHash,
@@ -346,6 +396,51 @@ function completionPayload(overrides = {}) {
   };
 }
 
+function browserQaPayload(overrides = {}) {
+  const screenshot = "settings screenshot bytes";
+  const output = "browser test output\n";
+  return {
+    applicability: "ui",
+    result: "pass",
+    route: "/settings",
+    page: "Settings",
+    scenario: "save a valid preference",
+    tool: "agent-browser",
+    engine: "agent-browser",
+    session: "workflowhub-qa-demo",
+    auth: { mode: "reused", login_state_reused: true },
+    performance: { status: "not_measured", reason: "No performance AC applies." },
+    screenshots: [{ ref: "evidence/browser/settings.png", hash: sha256(screenshot) }],
+    test: {
+      command: "npm run test:browser",
+      file: "tests/settings.browser.test.mjs",
+      output_ref: "evidence/browser/settings.stdout",
+      output_hash: sha256(output),
+      exit_code: 0,
+    },
+    cleanup: { status: "completed", app_service_running: true },
+    engine_switch: "no",
+    ...overrides,
+  };
+}
+
+function publishBrowserArtifacts(state) {
+  const kernel = createTaskKernel(state.task);
+  kernel.publishCanonicalRecord("evidence/browser/settings.png", "settings screenshot bytes");
+  kernel.publishCanonicalRecord("evidence/browser/settings.stdout", "browser test output\n");
+}
+
+function withoutBrowserQaPath(path) {
+  const payload = structuredClone(browserQaPayload());
+  const segments = path.split(".");
+  let owner = payload;
+  for (const segment of segments.slice(0, -1)) {
+    owner = owner[Number.isInteger(Number(segment)) ? Number(segment) : segment];
+  }
+  delete owner[segments.at(-1)];
+  return payload;
+}
+
 function writerFor(state, overrides = {}) {
   return createStageContentEvidenceWriter({
     task: state.task,
@@ -354,6 +449,126 @@ function writerFor(state, overrides = {}) {
     workflowRunId: state.workflowRunId,
     now: () => "2026-07-26T01:02:03.000Z",
     ...overrides,
+  });
+}
+
+async function publishDispatchedInteraction(state, writer, payload) {
+  const interactionType = payload.interaction_type;
+  const roundNumber = interactionType === "talk" ? payload.rounds[0].round_number : null;
+  if (roundNumber === 2) ensureFixtureStep(state.task, state.workflowRunId, 4);
+  if (roundNumber === 3) ensureFixtureStep(state.task, state.workflowRunId, 6);
+  const published = writer.publish({ kind: "interaction-completion.v1", payload });
+  const name = interactionType === "talk" ? "talk-with-zhipeng" : "grill-with-docs";
+  const invocationKey = interactionType === "talk" ? `talk-${roundNumber}` : "grill";
+  await dispatchStageSkill({
+    packageRoot: realpathSync(join(import.meta.dirname, "..")),
+    stage: "make-decision",
+    name,
+    invocationKey,
+    kernel: createTaskKernel(state.task),
+    hostInvoke: () => ({
+      outcome: "done",
+      outcome_ref: published.ref,
+      outcome_hash: published.hash,
+      snapshot_tree: published.value.snapshot_tree,
+    }),
+  });
+  writer.publish({ kind: "interaction-completion.v1", payload });
+  if (interactionType === "grill") {
+    ensureFixtureStep(state.task, state.workflowRunId, 9);
+    ensureFixtureStep(state.task, state.workflowRunId, 10);
+  }
+  return published;
+}
+
+async function completedGrillRevalidationFixture(taskId) {
+  const state = await fixture(taskId);
+  const writer = writerFor(state);
+  const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+  const talks = [];
+  for (const [index, selected] of ["A", "B", "C"].entries()) {
+    talks.push(await publishDispatchedInteraction(
+      state,
+      writer,
+      talkPayload(index + 1, tree, { selected }),
+    ));
+  }
+  const grill = await publishDispatchedInteraction(state, writer, grillPayload(tree));
+  const aggregate = await invoke(() => writer.publish({
+    kind: "interaction-completion.v1",
+    payload: {
+      interaction_type: "aggregate",
+      rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
+      grill: { ref: grill.ref, hash: grill.hash },
+      decision_ref: state.decisionRef,
+      decision_hash: state.decisionHash,
+    },
+  }));
+  const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+  artifacts.writeAtomic("decision-log.md", "# Revised decision\n");
+  artifacts.writeAtomic("spec.md", "# Spec\n");
+  artifacts.writeAtomic("plan.md", "# Plan\n");
+  artifacts.writeAtomic("tasks.md", "# Tasks\n");
+  const materialRevision = createTaskKernel(state.task, { workspace: state.workspace })
+    .publishMaterialRevision({
+      change_summary: "Focused detail-review material corrections",
+      source_refs: [grill.ref],
+    });
+  const decisionLog = artifacts.read("decision-log.md").toString();
+  const decisionHash = sha256(decisionLog);
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  createTaskKernel(state.task).publishCanonicalRecord(decisionRef, decisionLog);
+  return {
+    ...state,
+    writer,
+    talks,
+    grill,
+    aggregate,
+    materialRevision,
+    decisionRef,
+    decisionHash,
+    currentTree: captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree,
+  };
+}
+
+function grillRevalidationPayload(state, overrides = {}) {
+  return {
+    interaction_type: "grill-revalidation",
+    rounds: [],
+    grill: {
+      ...grillPayload(state.currentTree).grill,
+      context: { status: "changed", reason: "Focused material findings were applied" },
+      conflicts: { status: "resolved", reason: "The reviewed material gaps are now reconciled" },
+      file_references: [
+        "CONTEXT.md",
+        "specs/task/decision-log.md",
+        "specs/task/spec.md",
+        "specs/task/plan.md",
+        "specs/task/tasks.md",
+      ],
+    },
+    ...overrides,
+  };
+}
+
+async function dispatchGrillRevalidation(
+  state,
+  reserved,
+  snapshotTree = reserved.value.snapshot_tree,
+  sequence = 1,
+) {
+  return dispatchStageSkill({
+    packageRoot: realpathSync(join(import.meta.dirname, "..")),
+    stage: "make-decision",
+    name: "grill-with-docs",
+    invocationKey: `grill-revalidation-${sequence}`,
+    kernel: createTaskKernel(state.task),
+    hostInvoke: () => ({
+      outcome: "done",
+      outcome_ref: reserved.ref,
+      outcome_hash: reserved.hash,
+      snapshot_tree: snapshotTree,
+    }),
   });
 }
 
@@ -400,6 +615,11 @@ function ambiguityLedgerV2(overrides = {}, frId = "FR-SPEC-001") {
       handling_stage: "build-plan",
       verification: "The focused content-contract test rejects the payload.",
     }],
+    clarification: {
+      component: "spec-clarify",
+      status: "trigger=false",
+      reason: "No unresolved ambiguity requires a host-visible question.",
+    },
     ...overrides,
   };
 }
@@ -496,6 +716,11 @@ function currentLedgerForSpec(spec, ref) {
     }],
     risks: [],
     open_questions: [],
+    clarification: {
+      component: "spec-clarify",
+      status: "trigger=false",
+      reason: "No unresolved ambiguity requires a host-visible question.",
+    },
   };
 }
 
@@ -504,9 +729,179 @@ async function invoke(operation) {
 }
 
 describe("stage-content-evidence.v1 controlled writer", () => {
+  it("publishes complete browser QA evidence bound to the runtime snapshot and identity", async () => {
+    requireApi();
+    const state = await fixture("browser-qa-complete");
+    publishBrowserArtifacts(state);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const published = await invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload(),
+    }));
+    const consumed = verifyBrowserQaEvidenceBinding({
+      task: state.task,
+      binding: { ref: published.ref, hash: published.hash },
+      expectedRunId: run.run.workflow_run_id,
+      expectedTree: published.value.snapshot_tree,
+    });
+    expect(consumed).toEqual(published.value);
+    expect(() => verifyBrowserQaEvidenceBinding({
+      task: state.task,
+      binding: { ref: published.ref, hash: "f".repeat(64) },
+      expectedRunId: run.run.workflow_run_id,
+      expectedTree: published.value.snapshot_tree,
+    })).toThrow(/integrity|hash/i);
+    expect(() => verifyBrowserQaEvidenceBinding({
+      task: state.task,
+      binding: { ref: published.ref, hash: published.hash },
+      expectedRunId: run.run.workflow_run_id,
+      expectedTree: "f".repeat(40),
+    })).toThrow(/snapshot|tree|binding/i);
+    expect(published.value.snapshot_tree).toMatch(/^[a-f0-9]{40}$/);
+    expect(published.value).toMatchObject({
+      kind: "browser-qa-evidence.v1",
+      task_id: state.task.identity.taskId,
+      stage: "verify-code",
+      workflow_run_id: run.run.workflow_run_id,
+      snapshot_tree: published.value.snapshot_tree,
+      payload: { result: "pass", engine_switch: "no" },
+    });
+  });
+
+  it("accepts performance not_measured only when a reason is recorded", async () => {
+    requireApi();
+    const state = await fixture("browser-qa-performance-not-measured");
+    publishBrowserArtifacts(state);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const published = await invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload({
+        performance: { status: "not_measured", reason: "No performance AC applies." },
+      }),
+    }));
+    expect(published.value.payload.performance).toEqual({
+      status: "not_measured",
+      reason: "No performance AC applies.",
+    });
+  });
+
+  it.each([
+    ["measured", { status: "measured", metrics: { lcp_ms: 420 } }],
+    ["not_applicable", { status: "not_applicable", reason: "No performance acceptance criterion applies." }],
+  ])("accepts %s performance with its required evidence", async (label, performance) => {
+    requireApi();
+    const state = await fixture(`browser-qa-performance-${label}`);
+    publishBrowserArtifacts(state);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const published = await invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload({ performance }),
+    }));
+    expect(published.value.payload.performance).toEqual(performance);
+  });
+
+  it.each(["fresh", "none"])("accepts auth mode %s without claiming reused login state", async (mode) => {
+    requireApi();
+    const state = await fixture(`browser-qa-auth-${mode}`);
+    publishBrowserArtifacts(state);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const published = await invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload({ auth: { mode, login_state_reused: false } }),
+    }));
+    expect(published.value.payload.auth).toEqual({ mode, login_state_reused: false });
+  });
+
+  it.each([
+    "route", "page", "scenario", "tool", "engine", "session",
+    "auth", "auth.mode", "auth.login_state_reused",
+    "performance", "performance.status", "performance.reason",
+    "screenshots", "screenshots.0.ref", "screenshots.0.hash",
+    "test", "test.command", "test.file", "test.output_ref", "test.output_hash", "test.exit_code",
+    "cleanup", "cleanup.status", "cleanup.app_service_running",
+    "engine_switch",
+  ])("rejects UI pass when browser evidence omits %s", async (path) => {
+    requireApi();
+    const state = await fixture(`browser-qa-missing-${path.replaceAll(".", "-")}`);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    await expect(invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: withoutBrowserQaPath(path),
+    }))).rejects.toThrow(/browser|schema|required|missing/i);
+  });
+
+  it.each([
+    ["pass with non-zero test exit", { test: { ...browserQaPayload().test, exit_code: 1 } }],
+    ["fail with zero test exit", { result: "fail" }],
+    ["unknown with zero test exit", { result: "unknown" }],
+    ["incomplete cleanup", { cleanup: { status: "completed", app_service_running: false } }],
+    ["inconsistent reused auth", { auth: { mode: "reused", login_state_reused: false } }],
+    ["unknown auth mode", { auth: { mode: "qa-state", login_state_reused: true } }],
+    ["unexplained unmeasured performance", { performance: { status: "not_measured" } }],
+    ["unexplained inapplicable performance", { performance: { status: "not_applicable" } }],
+  ])("rejects inconsistent browser outcome: %s", async (_label, overrides) => {
+    requireApi();
+    const state = await fixture(`browser-qa-inconsistent-${sha256(_label).slice(0, 8)}`);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    await expect(invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload(overrides),
+    }))).rejects.toThrow(/browser|schema|exit|cleanup|auth|performance/i);
+  });
+
+  it.each(["screenshot", "output"])("fails loud when canonical browser %s bytes are hash-mismatched", async (kind) => {
+    requireApi();
+    const state = await fixture(`browser-qa-hash-mismatch-${kind}`);
+    publishBrowserArtifacts(state);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const payload = browserQaPayload();
+    if (kind === "screenshot") payload.screenshots[0].hash = "f".repeat(64);
+    else payload.test.output_hash = "f".repeat(64);
+    await expect(invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload,
+    }))).rejects.toThrow(/canonical bytes|hash mismatch|screenshot|test output/i);
+  });
+
+  it("accepts explicit non-UI N/A without creating a global browser Gate", async () => {
+    requireApi();
+    const state = await fixture("browser-qa-not-applicable");
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    const published = await invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: {
+        applicability: "not_applicable",
+        reason: "No UI acceptance criterion applies.",
+      },
+    }));
+    expect(published.value.payload).toEqual({
+      applicability: "not_applicable",
+      reason: "No UI acceptance criterion applies.",
+    });
+  });
+
+  it.each(["cookie", "token", "profile_content"])("rejects private browser field %s", async (field) => {
+    requireApi();
+    const state = await fixture(`browser-qa-private-${field}`);
+    const run = createTaskKernel(state.task).startStageRun("verify-code", { reason: "browser evidence fixture" });
+    const writer = writerFor(state, { stage: "verify-code", workflowRunId: run.run.workflow_run_id });
+    await expect(invoke(() => writer.publish({
+      kind: "browser-qa-evidence.v1",
+      payload: browserQaPayload({ [field]: "must-not-be-recorded" }),
+    }))).rejects.toThrow(/private|forbidden|cookie|token|profile|schema/i);
+  });
+
   it("requires an identity-closed ambiguity-ledger.v2 and keeps v1 records untouched", async () => {
     requireApi();
-    const state = fixture("ambiguity-ledger-v2");
+    const state = await fixture("ambiguity-ledger-v2");
     const writer = writerFor(state);
     const before = evidenceNamespaceSnapshot(state.task);
 
@@ -545,23 +940,23 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       ["canonical-fr-id", ambiguityLedgerV2()],
       ["legacy-fr-id", ambiguityLedgerV2({}, "FR-01")],
     ]) {
-      const state = fixture(name);
+      const state = await fixture(name);
       await expect(invoke(() => writerFor(state).publish({
         kind: "ambiguity-ledger.v2",
         payload,
       }))).resolves.toBeDefined();
     }
 
-    const state = fixture("malformed-fr-id");
+    const state = await fixture("malformed-fr-id");
     await expect(invoke(() => writerFor(state).publish({
       kind: "ambiguity-ledger.v2",
       payload: ambiguityLedgerV2({}, "FR-SPEC-01"),
     }))).rejects.toThrow(/schema|pattern|FR/i);
   });
 
-  it("fails closed on dirty or hash-drifted spec-content.v3 before publication", () => {
+  it("fails closed on dirty or hash-drifted spec-content.v3 before publication", async () => {
     requireApi();
-    const state = fixture("spec-content-v3-publication");
+    const state = await fixture("spec-content-v3-publication");
     const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
     artifacts.writeAtomic("spec.md", currentSpec);
     const ref = artifacts.reference("spec.md");
@@ -592,7 +987,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("rejects an unknown kind without creating an evidence namespace", async () => {
     requireApi();
-    const state = fixture("unknown-kind");
+    const state = await fixture("unknown-kind");
     const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
@@ -609,7 +1004,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     ["constructor cwd", { cwd: "/tmp/forged-cwd" }],
   ])("rejects caller-supplied %s", async (_label, injected) => {
     requireApi();
-    const state = fixture(`constructor-injection-${roots.length}`);
+    const state = await fixture(`constructor-injection-${roots.length}`);
     const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state, injected))).rejects.toThrow(
@@ -631,7 +1026,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     ["cwd", "/tmp/forged-cwd"],
   ])("rejects caller-supplied publish field %s before writing", async (key, value) => {
     requireApi();
-    const state = fixture(`publish-injection-${key.replaceAll("_", "-")}`);
+    const state = await fixture(`publish-injection-${key.replaceAll("_", "-")}`);
     const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
@@ -655,7 +1050,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     ["cwd", "/tmp/forged-cwd"],
   ])("rejects identity or path field %s hidden inside payload", async (key, value) => {
     requireApi();
-    const state = fixture(`payload-injection-${key.replaceAll("_", "-")}`);
+    const state = await fixture(`payload-injection-${key.replaceAll("_", "-")}`);
     const before = evidenceNamespaceSnapshot(state.task);
 
     await expect(invoke(() => writerFor(state).publish({
@@ -667,7 +1062,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("allows the schema-declared decision_location.ref only for decision coverage", async () => {
     requireApi();
-    const state = fixture("decision-coverage-location");
+    const state = await fixture("decision-coverage-location");
     const published = await invoke(() => writerFor(state).publish({
       kind: "decision-coverage-audit.v1",
       payload: {
@@ -692,7 +1087,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("injects authenticated identity and rejects wrong hash, run, stage, or tree on read", async () => {
     requireApi();
-    const state = fixture("verify-bindings");
+    const state = await fixture("verify-bindings");
     const snapshot = captureGitWorktreeSnapshot(state.workspace.worktreeRoot);
     const published = await invoke(() => writerFor(state).publish({
       kind: "stage-completion-facts.v1",
@@ -730,7 +1125,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("keeps the first create-only record when the same run/kind is published with different content", async () => {
     requireApi();
-    const state = fixture("duplicate-conflict");
+    const state = await fixture("duplicate-conflict");
     const writer = writerFor(state);
     const first = await invoke(() => writer.publish({
       kind: "stage-completion-facts.v1",
@@ -747,7 +1142,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("publishes trusted post-interaction revisions with exact lineage and latest-pointer CAS", async () => {
     requireApi();
-    const state = fixture("content-revision");
+    const state = await fixture("content-revision");
     const writer = writerFor(state);
     const first = await invoke(() => writer.publish({
       kind: "stage-completion-facts.v1",
@@ -773,11 +1168,11 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("never permits talk or grill revision and never discovers latest by scanning revisions", async () => {
     requireApi();
-    const state = fixture("interaction-revision-forbidden");
+    const state = await fixture("interaction-revision-forbidden");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const talk = talkPayload(1, tree);
-    await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk }));
+    await publishDispatchedInteraction(state, writer, talk);
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1", revision: 2, payload: talk,
     }))).rejects.toThrow(/create-only|cannot be revised|forbidden/i);
@@ -789,7 +1184,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("injects the authenticated Workspace tree into interaction evidence", async () => {
     requireApi();
-    const state = fixture("interaction-workspace-tree");
+    const state = await fixture("interaction-workspace-tree");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const published = await invoke(() => writer.publish({
@@ -801,7 +1196,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("accepts canonical ref/hash bindings inside a revised decision coverage payload", async () => {
     requireApi();
-    const state = fixture("coverage-revision");
+    const state = await fixture("coverage-revision");
     const writer = writerFor(state);
     const coverage = (hash) => ({
       decision_log_ref: "receipts/decision-log/example.md",
@@ -825,15 +1220,12 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("publishes three talk rounds and the aggregate under separate writer-derived refs", async () => {
     requireApi();
-    const state = fixture("interaction-components");
+    const state = await fixture("interaction-components");
     const writer = writerFor(state);
     const preGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const interaction = (roundNumber, selected) => talkPayload(roundNumber, preGrillTree, { selected });
 
-    const round1 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: interaction(1, "A"),
-    }));
+    const round1 = await publishDispatchedInteraction(state, writer, interaction(1, "A"));
     const journalPath = join(state.task.taskPath, "journal.jsonl");
     const withoutRoundOneJournal = readFileSync(journalPath, "utf8").split("\n").filter(Boolean)
       .map(JSON.parse)
@@ -848,21 +1240,12 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     }));
     expect(repeated.value.created_at).toBe(round1.value.created_at);
     appendFixtureStep(state.task, state.workflowRunId, 4);
-    const round2 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: interaction(2, "B"),
-    }));
+    const round2 = await publishDispatchedInteraction(state, writer, interaction(2, "B"));
     appendFixtureStep(state.task, state.workflowRunId, 6);
-    const round3 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: interaction(3, "C"),
-    }));
+    const round3 = await publishDispatchedInteraction(state, writer, interaction(3, "C"));
     writeFileSync(join(state.workspace.worktreeRoot, "CONTEXT.md"), "# Post-grill context\n");
     const postGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
-    const grill = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: grillPayload(postGrillTree),
-    }));
+    const grill = await publishDispatchedInteraction(state, writer, grillPayload(postGrillTree));
     appendFixtureStep(state.task, state.workflowRunId, 9);
     appendFixtureStep(state.task, state.workflowRunId, 10);
     const aggregate = await invoke(() => writer.publish({
@@ -892,33 +1275,260 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(postGrillTree).not.toBe(preGrillTree);
   });
 
+  it("appends a controlled grill revalidation and reuses the three talks in a revised aggregate", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-positive");
+    expect(state.currentTree).not.toBe(state.grill.value.snapshot_tree);
+    const payload = grillRevalidationPayload(state);
+
+    const reserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload,
+    }));
+    await dispatchGrillRevalidation(state, reserved);
+    const revalidation = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload,
+    }));
+    const aggregate = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }));
+
+    expect(revalidation.ref).toMatch(/interaction-completion\.grill-revalidation-0001\.json$/);
+    expect(revalidation.value).toMatchObject({
+      snapshot_tree: state.currentTree,
+      payload: {
+        interaction_type: "grill-revalidation",
+        previous_grill: { ref: state.grill.ref, hash: state.grill.hash },
+        material_revision: {
+          ref: state.materialRevision.revision_ref,
+          hash: state.materialRevision.revision_hash,
+        },
+      },
+    });
+    expect(aggregate.value).toMatchObject({
+      revision: { number: 2, previous_ref: state.aggregate.ref, previous_hash: state.aggregate.hash },
+      payload: {
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+      },
+    });
+  });
+
+  it("permits one append-only replacement grill revalidation and rejects a third", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-once");
+    const payload = grillRevalidationPayload(state);
+    const reserved = await invoke(() => state.writer.publish({ kind: "interaction-completion.v1", payload }));
+    await dispatchGrillRevalidation(state, reserved);
+    await invoke(() => state.writer.publish({ kind: "interaction-completion.v1", payload }));
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("decision-log.md", "# Revised decision again\n");
+    const replacementMaterial = createTaskKernel(state.task, { workspace: state.workspace }).publishMaterialRevision({
+      change_summary: "The first focused revalidation exposed a runtime defect",
+      source_refs: [reserved.ref],
+    });
+
+    const replacementPayload = grillRevalidationPayload(state, {
+      grill: {
+        ...payload.grill,
+        context: { status: "changed", reason: "Runtime defect fixed after the first focused review" },
+      },
+    });
+    const replacementReserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: replacementPayload,
+    }));
+    await dispatchGrillRevalidation(state, replacementReserved, replacementReserved.value.snapshot_tree, 2);
+    const replacement = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: replacementPayload,
+    }));
+    const aggregate = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: replacement.ref, hash: replacement.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }));
+
+    expect(replacement.ref).toMatch(/interaction-completion\.grill-revalidation-0002\.json$/);
+    expect(replacement.value.payload).toMatchObject({
+      material_revision: {
+        ref: replacementMaterial.revision_ref,
+        hash: replacementMaterial.revision_hash,
+      },
+      supersedes_revalidation: { ref: reserved.ref, hash: reserved.hash },
+    });
+    expect(aggregate.value.payload).toMatchObject({
+      rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+      grill: { ref: replacement.ref, hash: replacement.hash },
+    });
+
+    artifacts.writeAtomic("decision-log.md", "# Revised decision a third time\n");
+    createTaskKernel(state.task, { workspace: state.workspace }).publishMaterialRevision({
+      change_summary: "A third focused revalidation is forbidden",
+      source_refs: [replacement.ref],
+    });
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state),
+    }))).rejects.toThrow(/replacement|third|two focused grill revalidations/i);
+  });
+
+  it("rejects caller-forged grill revalidation predecessor and material bindings", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-predecessor");
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state, {
+        previous_grill: { ref: state.grill.ref, hash: state.grill.hash },
+        material_revision: {
+          ref: state.materialRevision.revision_ref,
+          hash: state.materialRevision.revision_hash,
+        },
+        supersedes_revalidation: { ref: state.grill.ref, hash: state.grill.hash },
+      }),
+    }))).rejects.toThrow(/caller.*forbidden|previous_grill|material_revision|supersedes/i);
+  });
+
+  it("rejects a replacement when the initial grill revalidation lacks its authenticated invocation", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-replacement-missing-invocation");
+    const reserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state),
+    }));
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("decision-log.md", "# Revised after an incomplete revalidation\n");
+    createTaskKernel(state.task, { workspace: state.workspace }).publishMaterialRevision({
+      change_summary: "Attempt replacement after incomplete initial revalidation",
+      source_refs: [reserved.ref],
+    });
+
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state),
+    }))).rejects.toThrow(/authenticated initial revalidation/i);
+  });
+
+  it("rejects an uninvoked replacement and a stale initial revalidation after replacement", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-replacement-invocation");
+    const initialPayload = grillRevalidationPayload(state);
+    const initialReserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: initialPayload,
+    }));
+    await dispatchGrillRevalidation(state, initialReserved);
+    const initial = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: initialPayload,
+    }));
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("decision-log.md", "# Runtime repair after initial revalidation\n");
+    createTaskKernel(state.task, { workspace: state.workspace }).publishMaterialRevision({
+      change_summary: "Runtime repair requires one replacement",
+      source_refs: [initial.ref],
+    });
+    const replacementPayload = grillRevalidationPayload(state, {
+      grill: {
+        ...initialPayload.grill,
+        context: { status: "changed", reason: "Runtime repair changed the final tree" },
+      },
+    });
+    const replacementReserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: replacementPayload,
+    }));
+
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: replacementReserved.ref, hash: replacementReserved.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(/fresh authenticated invocation/i);
+
+    await dispatchGrillRevalidation(
+      state,
+      replacementReserved,
+      replacementReserved.value.snapshot_tree,
+      2,
+    );
+    await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: replacementPayload,
+    }));
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: initial.ref, hash: initial.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(/latest grill revalidation replacement/i);
+  });
+
+  it("rejects an aggregate that cites a prewritten grill revalidation without its fresh invocation", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-missing-invocation");
+    const revalidation = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state),
+    }));
+
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(/fresh authenticated invocation/i);
+  });
+
   it("rejects mixed pre-grill talk trees and caller-supplied workspace trees", async () => {
     requireApi();
-    const state = fixture("interaction-tree-lineage-negative");
+    const state = await fixture("interaction-tree-lineage-negative");
     const writer = writerFor(state);
     const preGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
-    const round1 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: talkPayload(1, preGrillTree),
-    }));
+    const round1 = await publishDispatchedInteraction(state, writer, talkPayload(1, preGrillTree));
     writeFileSync(join(state.workspace.worktreeRoot, "CONTEXT.md"), "# Changed by grill\n");
     const postGrillTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
-    const round2 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: talkPayload(2, postGrillTree),
-    }));
-    const round3 = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: talkPayload(3, postGrillTree, { zeroQuestion: true }),
-    }));
+    const round2 = await publishDispatchedInteraction(state, writer, talkPayload(2, postGrillTree));
+    const round3 = await publishDispatchedInteraction(
+      state,
+      writer,
+      talkPayload(3, postGrillTree, { zeroQuestion: true }),
+    );
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: { ...grillPayload(preGrillTree), workspace_tree: preGrillTree },
     }))).rejects.toThrow(/caller-forbidden/i);
-    const grill = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: grillPayload(postGrillTree),
-    }));
+    const grill = await publishDispatchedInteraction(state, writer, grillPayload(postGrillTree));
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: {
@@ -933,20 +1543,18 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("rejects incomplete, wrong-type, and out-of-order interaction aggregates", async () => {
     requireApi();
-    const state = fixture("interaction-aggregate-negative");
+    const state = await fixture("interaction-aggregate-negative");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const talks = [];
     for (const roundNumber of [1, 2, 3]) {
-      talks.push(await invoke(() => writer.publish({
-        kind: "interaction-completion.v1",
-        payload: talkPayload(roundNumber, tree, { zeroQuestion: roundNumber === 3 }),
-      })));
+      talks.push(await publishDispatchedInteraction(
+        state,
+        writer,
+        talkPayload(roundNumber, tree, { zeroQuestion: roundNumber === 3 }),
+      ));
     }
-    const grill = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: grillPayload(tree),
-    }));
+    const grill = await publishDispatchedInteraction(state, writer, grillPayload(tree));
     const aggregate = (rounds, grillBinding) => ({
       interaction_type: "aggregate",
       rounds: rounds.map(({ ref, hash }) => ({ ref, hash })),
@@ -978,7 +1586,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     ["host-message refs", (round) => { round.questions[0].ask.ref = "host-message://ask/round-1-question-1"; }, /host-message refs.*globally unique/i],
   ])("rejects duplicate %s across talk rounds", async (_label, mutate, expected) => {
     requireApi();
-    const state = fixture(`interaction-aggregate-duplicate-${roots.length}`);
+    const state = await fixture(`interaction-aggregate-duplicate-${roots.length}`);
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const payloads = [1, 2, 3].map((roundNumber) => talkPayload(roundNumber, tree, {
@@ -987,12 +1595,9 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     mutate(payloads[1].rounds[0]);
     const talks = [];
     for (const payload of payloads) {
-      talks.push(await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload })));
+      talks.push(await publishDispatchedInteraction(state, writer, payload));
     }
-    const grill = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: grillPayload(tree),
-    }));
+    const grill = await publishDispatchedInteraction(state, writer, grillPayload(tree));
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: {
@@ -1007,7 +1612,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("requires real ask/reply/rerank bindings or explicit zero-question facts and complete grill exits", async () => {
     requireApi();
-    const state = fixture("interaction-facts-negative");
+    const state = await fixture("interaction-facts-negative");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const incompleteTalk = talkPayload(1, tree);
@@ -1028,10 +1633,11 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       kind: "interaction-completion.v1",
       payload: incompleteZeroQuestion,
     }))).rejects.toThrow(/candidate_queue/i);
-    await expect(invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: talkPayload(1, tree, { zeroQuestion: true }),
-    }))).resolves.toMatchObject({ value: { payload: { interaction_type: "talk" } } });
+    await expect(publishDispatchedInteraction(
+      state,
+      writer,
+      talkPayload(1, tree, { zeroQuestion: true }),
+    )).resolves.toMatchObject({ value: { payload: { interaction_type: "talk" } } });
     const incompleteGrill = grillPayload(tree);
     delete incompleteGrill.grill.exit_checks.file_references_checked;
     await expect(invoke(() => writer.publish({
@@ -1048,20 +1654,18 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("binds an aggregate to the exact canonical decision-log bytes", async () => {
     requireApi();
-    const state = fixture("interaction-decision-artifact");
+    const state = await fixture("interaction-decision-artifact");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const talks = [];
     for (const roundNumber of [1, 2, 3]) {
-      talks.push(await invoke(() => writer.publish({
-        kind: "interaction-completion.v1",
-        payload: talkPayload(roundNumber, tree, { zeroQuestion: roundNumber !== 1 }),
-      })));
+      talks.push(await publishDispatchedInteraction(
+        state,
+        writer,
+        talkPayload(roundNumber, tree, { zeroQuestion: roundNumber !== 1 }),
+      ));
     }
-    const grill = await invoke(() => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: grillPayload(tree),
-    }));
+    const grill = await publishDispatchedInteraction(state, writer, grillPayload(tree));
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: {
@@ -1076,7 +1680,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("requires the final decision only on aggregate and rejects a fourth talk round", async () => {
     requireApi();
-    const state = fixture("interaction-decision-boundary");
+    const state = await fixture("interaction-decision-boundary");
     const writer = writerFor(state);
     const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
     const talk = (roundNumber, selected, extra = {}) => ({
@@ -1085,7 +1689,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     });
 
     for (const [index, selected] of ["A", "B", "C"].entries()) {
-      await invoke(() => writer.publish({ kind: "interaction-completion.v1", payload: talk(index + 1, selected) }));
+      await publishDispatchedInteraction(state, writer, talk(index + 1, selected));
     }
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
@@ -1110,17 +1714,21 @@ describe("stage-content-evidence.v1 controlled writer", () => {
 
   it("minimizes secret-bearing fields before hashing and persistence", async () => {
     requireApi();
-    const state = fixture("secret-minimization");
+    const state = await fixture("secret-minimization");
     const secrets = [
       "token-value-must-not-persist",
       "password-value-must-not-persist",
       "authorization-value-must-not-persist",
       "private-session-must-not-persist",
       "full-card-text-must-not-persist",
+      "global-session-must-not-persist",
+      "global-session-trace-must-not-persist",
     ];
     const published = await invoke(() => writerFor(state).publish({
       kind: "stage-completion-facts.v1",
       payload: completionPayload({
+        session: secrets[5],
+        session_trace: secrets[6],
         private_metadata: {
           token: secrets[0],
           password: secrets[1],

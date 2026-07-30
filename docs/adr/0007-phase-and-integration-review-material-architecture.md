@@ -65,3 +65,15 @@ actionable cluster 才产生 `revise_required`。该值保持为 provider 质量
 ## Consequences
 
 最终审查身份必须明确为 `review_scope=integration`，并且覆盖链、seam 索引、AC 追踪和材料地图都必须可证伪；材料不足或违规材料如实记录，不能伪装为通过或用字节、时间、token 上限替代判断。代价是历史 trace 或语义 seam 事实不足的任务会显式停在 `MATERIAL_INCOMPLETE`，而不是用更大的审查包掩盖证据缺口。
+
+## Clarification — repair disposition without a pass loop (2026-07-30)
+
+The earlier wording that a repaired snapshot “re-enters a full review” is narrowed here. A first
+Phase or integration review verdict remains immutable quality evidence. Ordinary repair of its
+finding records a resolution plus focused verification of the affected code, tests, and AC; it
+does not automatically create a new provider dispatch or replace `revise_required` with `pass`.
+
+A separate full review is appropriate only when a separately planned frozen Phase identity or a
+materially different review subject is intentionally created. The existing serious-finding
+risk-pause boundary remains unchanged. This is not a relaxation of code or test quality, and it
+does not make review material, audit availability, or provider health a development gate.

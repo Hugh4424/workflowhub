@@ -6,26 +6,60 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runCapture } from "../workflows/build-code/capture.mjs";
+import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
-import { openAcceptedWorkspace } from "../core/workspace.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const temporary = [];
 const taskHandleModule = new URL("../core/task-handle.mjs", import.meta.url).pathname;
+function publishDecisionFixture(kernel, task, worktree, baselineCommit) {
+  const run = kernel.startStageRun("make-decision", { reason: "capture fixture" }).run;
+  const snapshotTree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
+  const decisionLog = "# Decision\n\nProceed.\n";
+  const decisionHash = createHash("sha256").update(decisionLog).digest("hex");
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, decisionLog);
+  const content = {
+    schema_version: "stage-content-evidence.v1", kind: "make-decision.capture-fixture",
+    task_id: task.identity.taskId, stage: "make-decision",
+    workflow_run_id: run.workflow_run_id, snapshot_tree: snapshotTree,
+  };
+  const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+  const contentHash = createHash("sha256").update(contentRaw).digest("hex");
+  const contentRef = `evidence/stage-content/${contentHash}/make-decision-capture-fixture.json`;
+  kernel.publishCanonicalRecord(contentRef, contentRaw);
+  const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
+  const unsignedSummary = {
+    schema_version: "stage-audit-summary.v1", task_id: task.identity.taskId,
+    stage_slug: "make-decision", workflow_run_id: run.workflow_run_id,
+    snapshot_tree: snapshotTree, verdict: "pass", content_evidence_refs: contentEvidenceRefs,
+  };
+  const summaryHash = hashAuditSummary(unsignedSummary);
+  const summaryRef = `evidence/audits/make-decision/${summaryHash}.json`;
+  kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  return kernel.publishAttempt("make-decision", { facts: {
+    worktree_root: worktree, baseline_commit: baselineCommit, snapshot_tree: snapshotTree,
+    decision_ref: decisionRef, decision_hash: decisionHash, audit_contract_version: "v1",
+    audit_summary_ref: summaryRef, audit_summary_hash: summaryHash, audit_verdict: "pass",
+    content_evidence_refs: contentEvidenceRefs,
+  } });
+}
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-capture-v2-"))); temporary.push(root);
-  const repo = join(root, "repo"); const worktree = join(root, "repo-capture-task"); mkdirSync(repo);
+  const repo = join(root, "repo"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
-  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/capture-task", worktree, sha], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "capture-task");
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "capture-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-  const kernel = createTaskKernel(task);
-  const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha } });
+  const candidate = prepareTaskWorkspace(task);
+  const worktree = candidate.worktreeRoot;
+  const sha = candidate.baselineCommit;
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
+  const attempt = publishDecisionFixture(kernel, task, worktree, sha);
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   return { root, taskPath, cwd: worktree, task, workspace, outputPath: "receipts/capture.json" };

@@ -123,8 +123,8 @@ files are accessed only through ArtifactDir. Components receive the content of
 named artifacts or controlled read/write callbacks; they never receive a root,
 task identifier, or authority to derive paths.
 
-Declared runtime components: `spec-specify`, conditional `spec-clarify`, `wh-review`, and
-the conditional review lenses declared by the manifest. `simplicity-guard` is
+Declared runtime components: `spec-specify`, conditional `spec-clarify`, and
+`wh-review`. `simplicity-guard` is
 provider-visible only inside `wh-review`; it is not a spec generation step.
 
 ## Named artifacts
@@ -360,3 +360,11 @@ the real host reply and use only the official `accept-review-risk` command.
 Minor, invalid-anchor/evidence, unavailable, timeout, and adapter failures do
 not open a risk override. With no serious finding build-spec remains automatic;
 accepted risk never changes the verdict or excuses missing structural evidence.
+
+## 当前材料 revision
+
+四材料任一或同时更新都追加 task-global `task-material-revision.v1`；writer 从认证
+ArtifactDir 计算 revision ID、changed files、content/source hashes，caller 不得自报。
+记录保留 parent、summary 和 source refs。旧 revision/accepted
+只读可追溯。该记录不是 reopen、reset、rebind、checkpoint 或 review 许可证，
+缺记录如实披露但不阻断继续完善规格。

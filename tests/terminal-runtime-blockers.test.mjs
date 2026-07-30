@@ -80,10 +80,14 @@ describe("verify close executor fail-stop", () => {
     const summaryHash=hashAuditSummary(unsignedSummary);
     const summaryRef=`evidence/audits/make-decision/${summaryHash}.json`;
     kernel.publishCanonicalRecord(summaryRef,`${JSON.stringify({...unsignedSummary,summary_hash:summaryHash},null,2)}\n`);
+    const decisionLog="# Decision\n\nProceed.\n";
+    const decisionHash=createHash("sha256").update(decisionLog).digest("hex");
+    const decisionRef=`receipts/decision-log/${decisionHash}.md`;
+    kernel.publishCanonicalRecord(decisionRef,decisionLog);
     const decision=kernel.publishAttempt("make-decision",{facts:{
       worktree_root:worktree,baseline_commit:head,audit_contract_version:"v1",
       audit_summary_ref:summaryRef,audit_summary_hash:summaryHash,audit_verdict:"pass",
-      content_evidence_refs:contentEvidenceRefs,
+      content_evidence_refs:contentEvidenceRefs,decision_ref:decisionRef,decision_hash:decisionHash,
     }});
     kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));
     const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;

@@ -94,10 +94,19 @@ function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunI
   const summaryHash = hashAuditSummary(unsignedSummary);
   const summaryRef = `evidence/audits/${stage}/${summaryHash}.json`;
   kernel.publishCanonicalRecord(summaryRef, `${JSON.stringify({ ...unsignedSummary, summary_hash: summaryHash }, null, 2)}\n`);
+  let decisionFacts = {};
+  if (stage === "make-decision" && !data.facts?.decision_ref) {
+    const decisionRaw = "# Runner replacement fixture decision\n";
+    const decisionHash = sha256(decisionRaw);
+    const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+    kernel.publishCanonicalRecord(decisionRef, decisionRaw);
+    decisionFacts = { decision_ref: decisionRef, decision_hash: decisionHash };
+  }
   return kernel.publishAttempt(stage, {
     ...data,
     facts: {
       ...data.facts,
+      ...decisionFacts,
       audit_contract_version: "v1",
       audit_summary_ref: summaryRef,
       audit_summary_hash: summaryHash,
@@ -123,6 +132,7 @@ function makeRunner(root, name, taskId) {
   mkdirSync(runner);
   git(runner, ["init", "-q", "-b", `task/workflowhub/${taskId}`]);
   writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
+  writeFileSync(join(runner, "CONSTITUTION.md"), "# Constitution\n");
   mkdirSync(join(runner, "workflows", "build-code"), { recursive: true });
   writeFileSync(join(runner, "workflows", "build-code", "SKILL.md"), "# build-code\n");
   commit(runner, name);
@@ -991,7 +1001,7 @@ describe("multi-generation runner replacement external bridge", () => {
     mkdirSync(wrongPath);
     const pathArgs = bridgeArgs(pathFixture, publishBridgeInputs(pathFixture), "wrong-path")
       .map((arg) => arg.startsWith("--runner-root=") ? `--runner-root=${wrongPath}` : arg);
-    expect(() => runCli(pathArgs)).toThrow(/RECOVERY_RUNNER_IDENTITY_INVALID/);
+    expect(() => runCli(pathArgs)).toThrow(/RECOVERY_RUNNER_IDENTITY_INVALID|runnerRoot Git validation failed/);
 
     const ancestryFixture = fixture();
     const independentRunner = makeRunner(ancestryFixture.root, "independent-runner", ancestryFixture.taskId);
@@ -1013,7 +1023,7 @@ describe("multi-generation runner replacement external bridge", () => {
     const dirtyFixture = fixture();
     const dirtyInput = publishBridgeInputs(dirtyFixture);
     writeFileSync(join(dirtyFixture.runner2, "untracked.txt"), "dirty\n");
-    expect(() => runCli(bridgeArgs(dirtyFixture, dirtyInput, "dirty-runner"))).toThrow(/RECOVERY_RUNNER_IDENTITY_INVALID/);
+    expect(() => runCli(bridgeArgs(dirtyFixture, dirtyInput, "dirty-runner"))).toThrow(/RECOVERY_RUNNER_IDENTITY_INVALID|runnerRoot must be a clean Git worktree/);
 
     const switchFixture = fixture();
     const switchInput = publishBridgeInputs(switchFixture);

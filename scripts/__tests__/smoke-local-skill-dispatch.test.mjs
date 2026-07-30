@@ -8,4 +8,5 @@ it("dispatches all five stages from a clean profile despite global same-name ski
   const result = await smokeLocalSkillDispatch(root);
   expect(result).toHaveLength(5);
   expect(new Set(result.map(item => item.stage)).size).toBe(5);
+  expect(result.every(item => item.dispatch_count > 0 && item.authenticated_outcome_count === item.dispatch_count)).toBe(true);
 });

@@ -8,15 +8,15 @@
     },
     {
       "path": "SKILL.md",
-      "sha256": "4920d6f0c9348d53116c7cbc794f0922301a1814cc561e6181aa2de4b1515670"
+      "sha256": "f4bd9073dea0119ccb6c0db7b73a9fd6d938b39a3f5689c17e09594c8bed89aa"
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "e324baeeec2dbc343db0b8b3e0f2346eb95f849d9c474a7d96294168a4a45242"
+      "sha256": "dc62f17f84ffd199987f75d488b0607fdf31e50ef6ba009324cb7cad4f3110a1"
     },
     {
       "path": "scripts/validate-response.mjs",
-      "sha256": "d83e9214e585f388d094264539811cb42cbd0a7c5669ab45083ad22c2c50da0b"
+      "sha256": "fcb76f709c8e4923c6e83964042576e75251f4b783e14da1c8d94fa01f5e2ea8"
     }
   ],
   "sources": [

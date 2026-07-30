@@ -28,3 +28,19 @@ Phase 0 的 `phase-pointer` 恢复继续采用追加记录：保留旧通过结�
 ## 受限增补：历史 PASS lineage（2026-07-25）
 
 已通过的历史 Phase 在同一任务内可以增加一份 `phase-trace-lineage` 记录，用于让 selector 重新核验既有 PASS。它不是恢复入口：不改旧 receipt、review、snapshot 或 current pointer，不改变连续路径选择，也不调用审查 provider。发布前必须逐项重新核验 task/project、stage/phase、Git tree、trace/material/schema、PASS review/ref；缺失、篡改、错绑、非 PASS 或重复绑定均拒绝。该记录只能追加，且只解除精确匹配的历史分支 untraced 阻塞。
+
+## 增补：make-decision 阶段恢复 run（2026-07-30）
+
+当同任务的 make-decision run 因真实调用缺失、宿主中断或旧快照过期而不能继续时，恢复
+追加一个新的 stage run。新 run 仅以 `previous_run_ref/hash` 和 `recovery_source_ref/hash`
+引用最近历史 run；它不复制旧 invocation、journal completion、receipt、review 或 accepted
+事实。旧 run 如需停止，另追加 invalidation 记录，历史字节不改。
+
+恢复只从 task/kernel 派生确定的已登记、无 symlink、干净的 recovery workspace；当前完整
+HEAD 是新 run baseline。调用方不能传 workspace、branch 或 baseline。普通 `prepare`、其他
+stage 和 accepted run 的工作区规则不放松。活动 make-decision recovery run 的后续命令及
+方向/详情审查继承同一认证工作区，避免把恢复 run 错送入普通 ancestry 检查。
+
+有效 invalidation 后，旧 run 可以作为下一次恢复的只读 source；同一未失效恢复 run 不能被
+重复消费。恢复 source 的配对 ref/hash 由 runtime 在锁内 CAS 写入，防止并发重复恢复。这些
+规则只保护事实真实性，不创建新的确认点、审计 Gate 或状态机。

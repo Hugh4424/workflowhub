@@ -144,4 +144,32 @@ describe("official component receipt authority", () => {
     }
     expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs } })).toThrow(/duplicate acceptance_criterion_id/i);
   });
+
+  it("publishes one canonical verify checklist receipt instead of trusting a completion claim", () => {
+    const { task } = fixture();
+    createTaskKernel(task).publishCanonicalRecord("evidence/verification-proof.json", "{\"verified\":true}\n");
+    const proof = { ref: "evidence/verification-proof.json", sha256: createHash("sha256").update("{\"verified\":true}\n").digest("hex") };
+    const receipt = writeOfficialComponentReceipt({
+      task,
+      stage: "verify-code",
+      component: "verification",
+      payload: {
+        items: [
+          { id: "current_materials", status: "pass", evidence_refs: [proof], reason: "current material revision verified" },
+          { id: "diff_scope", status: "pass", evidence_refs: [proof], reason: "diff and delivery scope verified" },
+          { id: "risk_tests", status: "pass", evidence_refs: [proof], reason: "risk tests verified" },
+          { id: "acceptance_criteria", status: "pass", evidence_refs: [proof], reason: "each AC verified" },
+          { id: "tasks_completion", status: "pass", evidence_refs: [proof], reason: "tasks completion verified" },
+          { id: "browser_qa", status: "not_applicable", evidence_refs: [], reason: "no UI AC applies" },
+          { id: "independent_review_resolution", status: "unknown", evidence_refs: [], reason: "review unavailable and disclosed" },
+          { id: "core_gaps", status: "pass", evidence_refs: [proof], reason: "no core delivery gap" },
+          { id: "human_handoff", status: "pass", evidence_refs: [proof], reason: "handoff recorded" },
+        ],
+      },
+    });
+    expect(receipt).toMatchObject({
+      ref: "receipts/verification.json",
+      value: { items: expect.arrayContaining([expect.objectContaining({ id: "human_handoff" })]) },
+    });
+  });
 });

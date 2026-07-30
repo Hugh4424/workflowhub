@@ -87,6 +87,22 @@ Use this complete public sequence without inventing flags or input shapes:
     Step 10. A later resolution does not repeat the Step.
 12. Publish the interaction aggregate and `decision-coverage-audit.v1`. They are
     required pre-confirmation content facts, not extra manifest Steps.
+    If a detail finding changes current materials after Step 10, preserve the
+    old receipt, Grill, Talk and review bytes. Append the current material
+    revision and decision receipt revision; Step 9 is not retried. Invoke one
+    real, focused `grill-with-docs` revalidation with
+    `grill-revalidation-1`, then publish `grill-revalidation` evidence.
+    The runtime derives the predecessor Grill and current material revision;
+    callers must not supply either binding. A revised aggregate may reuse the
+    three Talk refs, but it rejects a revalidation without that authenticated
+    host invocation. Record the detail finding resolution and focused evidence;
+    do not dispatch another provider review unless the user explicitly asks.
+    If fixing the revalidation/runtime path itself changes the Workspace again,
+    keep `0001` unchanged and allow exactly one `grill-revalidation-2`. Runtime
+    must derive its `supersedes_revalidation` binding to the completed `0001`
+    and the direct next material revision. `0002` needs its own authenticated
+    host invocation; `0003` is forbidden. This recovery exception never reruns
+    Talk or provider review.
 13. Put the run input under `$TMP_DIR` with exactly:
    `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
    When the latest authenticated action for a track is a verified resolution,
@@ -135,8 +151,7 @@ fail-loud entry error.
 
 Declared runtime components: three ordered invocations of `talk-with-zhipeng`,
 one full `grill-with-docs` invocation, `decision-log`, `wh-review`, conditional
-`anysearch`, conditional `debate`, and the review lenses declared by the
-manifest. `intake-decision-review` is a blind direction lens owned and invoked
+`anysearch`, and conditional `debate`. `intake-decision-review` is a blind direction lens owned and invoked
 only through `wh-review`; it is not a second review runner.
 
 ## Inputs and outputs
@@ -377,3 +392,20 @@ choice. Wait for the real host reply, then use the official
 invalid-anchor/evidence, unavailable, timeout, or adapter failures never open
 this override. A risk acceptance does not change the review verdict, excuse a
 structural/audit failure, or replace make-decision's normal final confirmation.
+
+## 当前材料 revision
+
+`decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 可在同一任务更新。更新时追加
+`task-material-revision.v1`，记录 parent、changed files、summary、source refs 和
+content hashes；task identity、revision ID、changed files 与全部 content/source hashes
+均由 task-global writer 读取当前 ArtifactDir 后生成，caller 只提交 summary 和 source refs。
+旧 revision 与 accepted 字节只读。
+revision 缺失只披露，不触发 reopen、reset、rebind、checkpoint、自动审查或开发阻断。
+
+## 同任务透明恢复
+
+恢复时先用 `recover-run` 建立 append-only 新 run；它只返回
+`waiting_for_host_response`，不能伪报完成或接受。用 `invoke-stage-skill` 先生成
+host 请求，收到真实 host response 后才写 invocation。用 `verify-recovery`
+只读核对旧 run 的 ref/hash、当前 invocation 结果、完成状态、journal offset、
+确认和 accepted 归属；该命令不得补写确认或接受记录。

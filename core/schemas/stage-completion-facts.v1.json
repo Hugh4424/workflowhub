@@ -25,6 +25,22 @@
     "confirmation_summary": { "$ref": "#/$defs/confirmationSummary" },
     "source_coverage": { "$ref": "#/$defs/sourceCoverage" },
     "risk_verification": { "type": "array", "items": { "$ref": "#/$defs/riskVerification" } },
+    "business_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "code", "tests", "acceptance_criteria"],
+      "properties": {
+        "content": { "enum": ["present", "not_applicable", "missing"] },
+        "code": { "enum": ["complete", "not_applicable", "incomplete"] },
+        "tests": { "enum": ["passed", "not_applicable", "failed"] },
+        "acceptance_criteria": { "enum": ["covered", "not_applicable", "missing"] }
+      }
+    },
+    "declared_components": { "type": "array", "items": { "$ref": "#/$defs/declaredComponent" } },
+    "invocation_facts": { "type": "array", "items": { "$ref": "#/$defs/invocationFact" } },
+    "audit_gaps": { "type": "array", "items": { "$ref": "#/$defs/auditGap" } },
+    "verification_items": { "type": "array", "items": { "$ref": "#/$defs/verificationItem" } },
+    "completion_effect": { "const": "disclose_only" },
     "missing_items": { "$ref": "#/$defs/stringList" },
     "risks": { "$ref": "#/$defs/stringList" },
     "dependencies": { "$ref": "#/$defs/stringList" },
@@ -42,6 +58,58 @@
   "$defs": {
     "ref": { "type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "minLength": 1 }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } },
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "declaredComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "stage", "workflow_run_id", "name", "invocation_key", "bundle_hash", "declared_trigger", "invocation"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "workflow_run_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "invocation_key": { "type": "string", "minLength": 1 },
+        "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "declared_trigger": { "type": "string", "minLength": 1 },
+        "invocation": { "enum": ["always", "conditional"] }
+      }
+    },
+    "invocationFact": {
+      "type": "object",
+      "required": ["task_id", "stage", "workflow_run_id", "name", "invocation_key", "bundle_hash", "declared_trigger", "status"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "workflow_run_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "invocation_key": { "type": "string", "minLength": 1 },
+        "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "declared_trigger": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["executed", "not_invoked", "trigger=false", "unavailable"] },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "auditGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status", "reason"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "verificationItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence_refs", "reason"],
+      "properties": {
+        "id": { "enum": ["current_materials", "diff_scope", "risk_tests", "acceptance_criteria", "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff"] },
+        "status": { "enum": ["pass", "fail", "unknown", "not_applicable"] },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,

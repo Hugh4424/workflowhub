@@ -3,8 +3,25 @@ import { assertTaskKernel } from "./task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
 import { requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
 import { inspectIntegrationReviewSubject } from "../skills/wh-review/scripts/integration-review-subject.mjs";
+import { fileURLToPath } from "node:url";
+import { loadStageSkillManifest } from "./stage-skill-runtime.mjs";
+
+const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
+function declaredBundleHash(root, dependency) {
+  const bundle = JSON.parse(readFileSync(resolve(root, dependency.bundle), "utf8"));
+  if (bundle?.schema_version !== 1 || bundle.skill !== dependency.name || !Array.isArray(bundle.files) || bundle.files.length === 0) {
+    throw new Error(`${dependency.name} declared skill bundle is invalid`);
+  }
+  const entries = bundle.files.map((entry) => ({
+    path: typeof entry === "string" ? entry : entry.path,
+    sha256: typeof entry === "string" ? null : entry.sha256 ?? null,
+  })).sort((left, right) => left.path.localeCompare(right.path));
+  return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+}
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -190,10 +207,40 @@ function withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, publication, o
 
 function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = []) {
   const trustedFlows = new Map(reviewFlowIdentities.map((identity) => [reviewSubjectKey(identity), identity]));
+  const completionInvocationFacts = () => {
+    const loaded = loadStageSkillManifest(RUNNER_ROOT, ctx.stage);
+    const declaredComponents = [];
+    const invocationFacts = [];
+    for (const dependency of loaded.manifest.skills) {
+      const bundleHash = declaredBundleHash(loaded.root, dependency);
+      const keys = ctx.stage === "make-decision" && dependency.name === "talk-with-zhipeng"
+        ? ["talk-1", "talk-2", "talk-3"]
+        : [ctx.stage === "make-decision" && dependency.name === "grill-with-docs" ? "grill" : "default"];
+      for (const invocationKey of keys) {
+        declaredComponents.push({
+          task_id: ctx.identity.taskId,
+          stage: ctx.stage,
+          workflow_run_id: ctx.workflowRunId,
+          name: dependency.name,
+          invocation_key: invocationKey,
+          bundle_hash: bundleHash,
+          declared_trigger: dependency.trigger,
+          invocation: dependency.invocation,
+        });
+        const observed = ctx.kernel.readStageSkillInvocation(ctx.stage, dependency.name, invocationKey);
+        if (observed) invocationFacts.push(observed.fact);
+      }
+    }
+    return Object.freeze({
+      declaredComponents: Object.freeze(declaredComponents),
+      invocationFacts: Object.freeze(invocationFacts),
+    });
+  };
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
     workflowRunId: ctx.workflowRunId,
+    readCompletionInvocationFacts: completionInvocationFacts,
     accepted: Object.freeze({ readInput: (slot) => ctx.kernel.readInput(slot) }),
     readReceipt: (ref) => {
       const raw = ctx.task.readRecord(ref);

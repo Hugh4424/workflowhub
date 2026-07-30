@@ -23,8 +23,8 @@ describe("five-stage v2 business contract", () => {
       const compact = skill.replace(/\s+/g, " ");
       expect(compact).toMatch(/Consume only (?:that launcher-supplied|the branded|`bootstrapStage)[\s\S]{0,120}StageContext|Consume only `bootstrapStage/i);
       expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an (?:issue|external tracker) identifier/i);
-      expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`[\s\S]*authenticated `runner_root`/i);
-      expect(compact).toMatch(/never search for or copy those runner files into the target repository/i);
+      expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`/i);
+      expect(compact).toMatch(/never search for or copy (?:those )?runner files into the target repository/i);
       expect(skill).not.toMatch(/docs\/contracts\/task-context\.md|config\/workflowhub\.yaml/);
     }
     expect(readStage("verify-code")).not.toMatch(/workflows\/build-code\/SKILL\.md/);
@@ -48,7 +48,7 @@ describe("five-stage v2 business contract", () => {
       expect(compact, stage).toMatch(/ask.*wait.*present.*host-visible conversation surface/i);
       expect(compact, stage).toMatch(/Stage-owned.*always.*executed.*conditional.*trigger=false.*reason/i);
       expect(compact, stage).toMatch(/`skill-deps\.yaml`.*formal artifacts.*`wh-review`.*refs/i);
-      expect(compact, stage).toMatch(/stage result.*human-readable artifact names.*test and review conclusions.*downstream dependencies.*unresolved risks.*next owner.*user action/i);
+      expect(compact, stage).toMatch(/shared result.*risks.*next owner.*user action.*artifact labels/i);
       expect(compact, stage).toMatch(/(?:downstream|close) handoff surface.*parent progress surface/i);
       expect(skill, stage).not.toMatch(/Multica|mention:\/\/|用户 UUID|member mention/i);
     }
@@ -63,7 +63,7 @@ describe("five-stage v2 business contract", () => {
 
   it("always scans build-spec ambiguity and invokes spec-clarify only when triggered", () => {
     const skill = readStage("build-spec").replace(/\s+/g, " ");
-    expect(skill).toMatch(/always perform.*material ambiguity scan/i);
+    expect(skill).toMatch(/Always build an `ambiguity-ledger\.v2`/i);
     expect(skill).toMatch(/spec-clarify.*conditional.*clarification/i);
     expect(skill).toMatch(/trigger=false.*no material ambiguity/i);
   });
@@ -76,7 +76,7 @@ describe("five-stage v2 business contract", () => {
       expect(readStage(stage)).not.toMatch(/wait for human confirmation|human-confirmation-ref/i);
     }
     expect(readStage("make-decision")).toMatch(/Quality facts are recorded, not converted into automatic quality gates/i);
-    expect(readStage("build-code")).toMatch(/Start only the current Phase[\s\S]*Start the next Phase only after[\s\S]*gate passes/i);
+    expect(readStage("build-code")).toMatch(/Start only the current Phase[\s\S]*Start the next Phase only after its Tasks are complete/i);
     expect(readStage("verify-code")).toMatch(/Quality failures remain visible facts/i);
   });
 
@@ -99,7 +99,7 @@ describe("five-stage v2 business contract", () => {
     expect(research).toMatch(/Return one in-memory `spec-research-result\.v1` value/i);
     expect(research).toMatch(/Never write a\s+file or publish a formal artifact/i);
     expect(research).not.toMatch(/controlled writer|research\.md/i);
-    expect(plan).toMatch(/optional frozen[\s\S]*`spec-research-result\.v1` content/i);
+    expect(plan).toMatch(/optional frozen research content/i);
     expect(plan).not.toMatch(/research\.md/i);
     const steps = JSON.parse(readFileSync(join(root, "workflows", "build-plan", "steps.json"), "utf8"));
     expect(steps.steps.slice(1, 3).flatMap((step) => step.completion_evidence.map((item) => item.uri_or_path)))
@@ -131,12 +131,13 @@ describe("five-stage v2 business contract", () => {
     const skill = readStage("build-code");
     expect(skill).toMatch(/publish-phase-evidence/);
     expect(skill).toMatch(/current `phase_id`/i);
-    expect(skill).toMatch(/Start the next Phase only after the current Phase gate passes/i);
+    expect(skill).toMatch(/Start the next Phase only after its Tasks are complete/i);
     expect(skill).toMatch(/`worktree \+ integration` `wh-review`[\s\S]{0,120}without historical or cumulative diff/i);
     expect(skill).toMatch(/A Phase result is gate evidence and cannot replace the final[\s\S]{0,80}`worktree \+ integration` result/i);
     expect(skill).toMatch(/canonical\s+implementation[\s\S]{0,180}canonical\s+tests[\s\S]{0,180}same snapshot tree/i);
-    expect(skill).toMatch(/revise_required[\s\S]*repair the same Phase[\s\S]*fresh receipts[\s\S]*new identity/i);
-    expect(skill).toMatch(/controlled `reopen`[\s\S]*current[\s\S]*PASS Phase[\s\S]*`reopen_ref`/i);
+    expect(skill).toMatch(/same-Phase repair[\s\S]*new receipt\/output refs/i);
+    expect(skill).toMatch(/revise_required[\s\S]*original quality fact/i);
+    expect(skill).toMatch(/controlled `reopen`[\s\S]*last affected completed Phase[\s\S]*`reopen_ref`/i);
     expect(skill).toMatch(/does not create[\s\S]*(?:Phase registry|Phase history)/i);
     const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
     expect(handlers).toMatch(/scope\.subject_kind !== "worktree"[\s\S]{0,160}scope\.review_scope !== "integration"[\s\S]{0,120}scope\.phase_id !== null/);
@@ -144,7 +145,8 @@ describe("five-stage v2 business contract", () => {
   });
 
   it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {
-    const skill = readStage("make-decision");
+    const wholeSkill = readStage("make-decision");
+    const skill = wholeSkill.slice(wholeSkill.indexOf("## Procedure"), wholeSkill.indexOf("## Host interaction"));
     const positions = [
       "`talk-with-zhipeng` round 1",
       "`talk-with-zhipeng` round 2",

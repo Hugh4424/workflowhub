@@ -68,7 +68,7 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **规范决策日志（canonical decision-log）**：
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
 
-**运行事实（runtime fact）**：
+**运行事实**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
 
 **运行事实第二版**：
@@ -102,6 +102,28 @@ make-decision 的完整决策记录；逐题保存问题、最终选择、推荐
 
 runner replacement generation 只属于 `legacy_pinned` 历史兼容。`per_invocation` 任务的正常
 WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态恢复仍使用恢复代次。
+
+**阶段恢复 run（stage recovery run）**：
+同一任务为恢复中断或已失效的正式阶段而追加的新的 stage run。它只引用旧 run 作为
+`recovery_source_ref/hash`，不继承旧 run 的 invocation、完成或 accepted 事实；新 run 必须
+在当前已认证、干净工作树的完整 HEAD 上重新产生自己的事实。它不是新的任务、不是重开
+许可，也不改写旧 run。
+
+**恢复来源（recovery source）**：
+被新阶段恢复 run 引用的最近历史 run。有效 invalidation 使旧 run 不能继续作为 active run，
+但仍可作为下一次恢复的只读来源；同一未失效恢复 run 不能被重复消费。make-decision 的
+活动恢复 run 后续命令与方向/详情审查使用同一已认证 recovery workspace；普通 `prepare`
+和已接受 run 仍使用原有严格工作区规则。
+
+**当前材料版本（current material revision）**：
+同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
+变更来源。旧版本、hash 和 checkpoint 保留为历史；它们不阻止当前材料继续开发或验证。
+
+**当前 requirements 指针（current requirements pointer）**：
+指向同一任务最新 requirements ledger 与 coverage 的受控选择记录。requirement ID、每代
+ledger/coverage 字节和 lineage 不可变；pointer 可在 append-only revision 后更新。复用
+当前 ledger 前必须同时核验 ledger 与 coverage 的 ref、hash 和实际内容，不能用指针本身
+冒充覆盖事实。
 
 **恢复门禁（recovery gate）**：
 恢复前按恢复目标一次性核验任务身份、来源、收据和工作树，任一不符即拒绝且不影响其他目标。
@@ -244,7 +266,7 @@ _避免_：把 reset 叫成“重置通过状态”或“重新打开 accepted�
 build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 存在且可读。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
 
 **正式写边界（formal write boundary）**：
-核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次 runtime 内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
+核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次运行内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
 
 **阶段完成判据（stage completion criteria）**：
 与推进资格不同的谓词。只有阶段核心交付、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。

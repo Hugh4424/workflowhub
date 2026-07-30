@@ -149,7 +149,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 5e81c3ac528c781da1cbad14da9bdd85c9e3294187d42f48bb48daadcba1a9c5
+    local_bundle_hash: 37c6ca828d9c5bead7e890dd4cc66ef7fbe90219abf67f4f8f6036a083fa958b
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -247,7 +247,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a833f93f04d3c0731defb35d01ee0e41cdea2c5a7fb48e7bf890988b74e8b9d4
+    local_bundle_hash: 451cfbbdb22a9605afa7a1f290b7b90728b61981656e6a5ca9dada3b8e27d0be
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -395,7 +395,7 @@ skills:
   - name: review-response
     path: skills/review-response/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 2d428c67ca51544eda3f82a1e2453f7fe9e777a72ab89515e3331e235a66188b
+    local_bundle_hash: 4f5f35ec66a05418d25cd5190ad0ec030e594f48a35072ef625a81244e8010f9
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 严格消费 revise_required finding
@@ -421,13 +421,13 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef
+    local_bundle_hash: aad3c1115050207ab42641391a155b7354914c05e093d4b6de1e381ab026bbe3
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     used_by_stages: [verify-code]
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "aad3c1115050207ab42641391a155b7354914c05e093d4b6de1e381ab026bbe3", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
     local_changes: 搬入完整闭包；去个人绝对路径；按 repo-relative manifest 调用
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录

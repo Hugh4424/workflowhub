@@ -19,6 +19,7 @@ const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL
 const providerPrompt = "Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const localReviewLocks = new Map();
+const subjectReviewFlights = new Map();
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const ATTEMPT_REF = /^reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -383,6 +384,105 @@ function readMatchingRecords(task, refs, identity) {
     if (matchesReviewIdentity(record, identity)) matches.push({ ref, record });
   }
   return matches;
+}
+
+function sameReviewSubject(record, { taskId, stage, reviewTrack, subject }) {
+  return record?.task_id === taskId
+    && record.stage === stage
+    && record.review_track === reviewTrack
+    && record.subject_kind === subject.subject_kind
+    && record.phase_id === subject.phase_id
+    && (record.review_scope ?? null) === subject.review_scope;
+}
+
+function storedSemanticOutcome(task, resultRef, result, identity) {
+  let attempt;
+  try { attempt = JSON.parse(task.readRecord(result.attempt_ref)); }
+  catch (error) { throw invalidEvidence(`result attempt cannot be read: ${error.message}`); }
+  try { validateSchema("attempt", attempt); }
+  catch (error) { throw invalidEvidence(`attempt schema is invalid: ${error.message}`); }
+  if (attempt.task_id !== result.task_id || attempt.stage !== result.stage
+      || attempt.review_track !== result.review_track || attempt.subject_kind !== result.subject_kind
+      || attempt.phase_id !== result.phase_id || (attempt.review_scope ?? null) !== (result.review_scope ?? null)
+      || attempt.snapshot_tree !== result.snapshot_tree || attempt.material_id !== result.material_id
+      || attempt.terminal_status !== "semantic" || attempt.error !== null) {
+    throw invalidEvidence("canonical subject head is not bound to its semantic attempt");
+  }
+  const storedPolicyFingerprint = attempt.review_policy === undefined ? null : hashCanonical(attempt.review_policy);
+  if (storedPolicyFingerprint !== identity.policyFingerprint) return null;
+  const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const providerOutputs = [];
+  for (const providerAttempt of attempt.provider_attempts) {
+    if (providerAttempt.output_ref === null) continue;
+    if (!providerAttempt.output_ref.startsWith(outputPrefix)) throw invalidEvidence("provider output is outside its canonical attempt");
+    let output;
+    try { output = JSON.parse(task.readRecord(providerAttempt.output_ref)); }
+    catch (error) { throw invalidEvidence(`provider output cannot be read: ${error.message}`); }
+    if (output.attempt_id !== attempt.attempt_id || output.provider !== providerAttempt.provider
+        || output.content_hash !== createHash("sha256").update(output.content).digest("hex")) {
+      throw invalidEvidence("stored provider output is misbound");
+    }
+    let review;
+    try { review = parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }); }
+    catch (error) { throw invalidEvidence(`stored provider output is invalid: ${error.message}`); }
+    providerOutputs.push({ ref: providerAttempt.output_ref, provider: providerAttempt.provider, review });
+  }
+  try {
+    authenticateCanonicalReviewResult({
+      attempt,
+      result,
+      providerOutputs,
+      fallbackMinimumReviewers: minimumReviewersForAttempt(attempt),
+      assess: (items) => items.map((item) => ({
+        ...item,
+        evidenceAnchors: item.review.findings.map((finding) => {
+          const cluster = result.adjudication?.clusters?.find((candidate) =>
+            candidate.path === finding.path && (candidate.line ?? null) === (finding.line ?? null)
+            && candidate.provider_findings?.some(({ provider }) => provider === item.provider));
+          return cluster?.provider_findings?.find(({ provider }) => provider === item.provider)?.evidence_anchor_valid ?? true;
+        }),
+      })),
+    });
+  } catch (error) {
+    throw invalidEvidence(error.message.replace(/^REVIEW_EVIDENCE_INVALID:\s*/, ""));
+  }
+  const runtimeIds = Object.fromEntries(attempt.provider_attempts.map((entry) => [entry.provider, entry.runtime_id ?? null]));
+  return {
+    status: "semantic", verdict: result.verdict, attemptRef: result.attempt_ref, resultRef,
+    snapshotTree: result.snapshot_tree, materialId: result.material_id, runtimeIds,
+    subjectKind: result.subject_kind, phaseId: result.phase_id, reviewScope: result.review_scope ?? null,
+    baseTree: result.base_tree, candidateTree: result.candidate_tree,
+    reportRef: result.report_ref ?? attempt.report_ref ?? null, reused: true,
+  };
+}
+
+function canonicalSubjectOutcome(task, identity) {
+  if ((identity.reviewChain?.round ?? "initial") !== "initial") return null;
+  const matches = [];
+  for (const ref of task.listCanonicalReviewResultRefs()) {
+    let record;
+    try { record = JSON.parse(task.readRecord(ref)); }
+    catch (error) { throw invalidEvidence(`canonical review record cannot be read: ${ref}: ${error.message}`); }
+    if (!sameReviewSubject(record, identity)) continue;
+    const raw = task.readRecord(ref);
+    const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
+    try {
+      const invalidation = JSON.parse(task.readRecord(invalidationRef));
+      if (invalidation.status === "binding_invalid" && invalidation.result_ref === ref) continue;
+      throw invalidEvidence("review binding invalidation does not bind the canonical result");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    matches.push({ ref, record });
+  }
+  if (matches.length === 0) return null;
+  const parentRefs = new Set(matches.map(({ record }) => record.review_chain?.parent_result_ref).filter(Boolean));
+  const heads = matches.filter(({ ref }) => !parentRefs.has(ref));
+  if (heads.length !== 1) return null;
+  const { ref, record } = heads[0];
+  try { validateSchema("result", record); }
+  catch (error) { throw invalidEvidence(`result schema is invalid: ${error.message}`); }
+  return storedSemanticOutcome(task, ref, record, identity);
 }
 
 function validateAttemptIdentity(attempt, attemptRef, identity) {
@@ -1073,7 +1173,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed });
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -1175,6 +1275,8 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
   const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle, reuseOptions)));
   const existing = await reusable();
   if (existing) return existing;
+  const subjectHead = canonicalSubjectOutcome(taskHandle, identity);
+  if (subjectHead) return subjectHead;
   const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
   const dispatchSequence = unavailableDispatchSequence(taskHandle, identity);
   const requestId = managedRequestId({ ...identity, hostProvider, providers, continuationRuntimeId, dispatchSequence });
@@ -1233,6 +1335,27 @@ export async function runReview({ sourceRoot, targetRepoRoot, workspace, candida
     validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
     return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
   }));
+}
+
+export async function runReview(options = {}) {
+  const taskHandle = assertTaskHandle(options.task);
+  const subjectLockRef = `locks/review-subjects/${createHash("sha256").update(JSON.stringify([
+    taskHandle.identity.projectName,
+    options.taskId,
+    options.stage,
+    options.reviewTrack ?? null,
+    options.phaseId ?? null,
+  ])).digest("hex")}.lock`;
+  const key = `${taskHandle.identity.projectName}:${taskHandle.identity.taskId}:${subjectLockRef}`;
+  const previous = subjectReviewFlights.get(key) ?? Promise.resolve();
+  const current = previous.then(() => runReviewOnce(options));
+  const flight = current.catch(() => {});
+  subjectReviewFlights.set(key, flight);
+  try {
+    return await current;
+  } finally {
+    if (subjectReviewFlights.get(key) === flight) subjectReviewFlights.delete(key);
+  }
 }
 
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */

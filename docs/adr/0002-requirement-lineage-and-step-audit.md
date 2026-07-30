@@ -44,3 +44,15 @@ This ADR records the shipped audit architecture. Canonical manifests, receipt/jo
 ## Migration
 
 Use `docs/migration-and-fallback.md` for old-to-new identifiers, caller cutover, and fallback. A caller first normalizes to `CanonicalSourceInput`, then consumes manifest expected steps and journal/receipt observed facts, invokes the aggregator, and carries its summary reference/hash. Unknown performance remains `unknown` with its source limitation; it is never inferred from audit completion.
+
+## Clarification — current requirements revision (2026-07-30)
+
+“Immutable requirement ledger” means immutable requirement IDs and immutable bytes of every
+published ledger/coverage generation. It does not mean that a task's current selection can never
+advance. A same-task `requirements/current` pointer may select a later append-only revision with
+explicit parent/supersedes lineage; old generations remain readable and are never overwritten.
+
+The pointer is only a selector, not evidence by itself. Before a consumer reuses it, the ledger
+and coverage refs, hashes, and actual bytes must all bind. A missing or mismatched coverage record
+must fail the publication rather than create a completion fact. This clarification preserves the
+original lineage and audit authorities; it adds no reopen, acceptance, or audit gate.

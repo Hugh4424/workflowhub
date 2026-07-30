@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeLedgerHash, computeRequirementContentHash } from '../core/requirement-ledger.mjs';
 import { buildAuditSummaryFromJournalEvents } from '../core/audit-aggregator.mjs';
 import { carryAuditSummary, verifyAuditCarrier } from '../core/audit-summary-carrier.mjs';
+import { publishCanonicalAuditSummaryRecord } from '../core/canonical-receipt-writer.mjs';
 
 const STAGES = ['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code'];
 const HASH = 'a'.repeat(64);
@@ -44,5 +45,25 @@ describe('P3 five-stage canonical audit E2E', () => {
     const order = buildAuditSummaryFromJournalEvents(reordered, stage, run, context(stage, [{ step_id: 1, order: 1, attempt_id: 'attempt-1', depends_on: [] }, { step_id: 2, order: 2, attempt_id: 'attempt-1', depends_on: [1] }])).audit_summary;
     expect(order.facts.out_of_order.length + order.facts.dependency.length).toBeGreaterThan(0);
     for (const summary of [legacy, skipped, crossed, order]) expect(summary.verdict).toBe('fail');
+  });
+
+  it('rejects a publication whose evidence hash is bound to another summary', () => {
+    const stage = 'build-code'; const run = 'run-wrong-binding';
+    const summary = buildAuditSummaryFromJournalEvents(
+      paired(stage, run),
+      stage,
+      run,
+      context(stage),
+    ).audit_summary;
+    const writes = [];
+    expect(() => publishCanonicalAuditSummaryRecord({
+      summary,
+      ref: 'evidence/audit-summary.json',
+      expectedHash: 'b'.repeat(64),
+      readExisting: () => undefined,
+      write: (...args) => writes.push(args),
+    }), 'ORACLE-COMP: mismatched publication evidence must fail before canonical write')
+      .toThrow(/HASH_MISMATCH/i);
+    expect(writes).toEqual([]);
   });
 });

@@ -434,3 +434,11 @@ never produces a risk acceptance. With no serious finding
 build-code remains automatic; accepted risk keeps the original verdict and
 cannot excuse missing current Task evidence, failed tests, unowned changes, or
 uncovered ACs.
+
+## 当前材料 revision
+
+开发始终读取当前四材料。任一材料更新可在同一任务追加
+`task-material-revision.v1`，旧 revision/accepted 保持只读。revision 只记录
+parent、changed files、summary、source refs、content hashes；task-global writer 从
+认证 ArtifactDir 注入 identity/revision ID 并复算 hashes，caller 不得自报；
+不得据此创建 reopen/reset/rebind/checkpoint gate 或自动 review。

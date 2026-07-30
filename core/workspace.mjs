@@ -203,6 +203,10 @@ function validateCandidate(task, expected, facts = {
   if (gitValue(realWorktree, ["rev-parse", "HEAD"], "task worktree HEAD") !== expected.baselineCommit) {
     throw new Error("task worktree HEAD must equal the make-decision baseline");
   }
+  if (expected.requireClean
+      && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "task worktree status") !== "") {
+    throw new Error("task worktree must remain clean");
+  }
   const identity = lstatSync(realWorktree);
   const validate = () => {
     const current = lstatSync(realWorktree);
@@ -213,6 +217,10 @@ function validateCandidate(task, expected, facts = {
     if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("CandidateWorkspace Git common directory changed");
     if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
     if (gitValue(realWorktree, ["rev-parse", "HEAD"], "CandidateWorkspace HEAD") !== expected.baselineCommit) throw new Error("CandidateWorkspace HEAD changed");
+    if (expected.requireClean
+        && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "CandidateWorkspace status") !== "") {
+      throw new Error("CandidateWorkspace must remain clean");
+    }
     return true;
   };
   const candidate = { baselineCommit: expected.baselineCommit, targetRepoRoot: expected.targetRepoRoot, branch: expected.branch };
@@ -274,6 +282,53 @@ export function prepareTaskWorkspace(taskHandle) {
     throw new Error("existing task worktree HEAD is not an ancestor of target repository HEAD; refusing fallback or baseline rebinding");
   }
   return validateCandidate(task, { ...deterministic, baselineCommit });
+}
+
+/**
+ * Authenticate the existing deterministic task worktree for a new recovery
+ * run. Unlike ordinary prepare, recovery deliberately binds the new run to the
+ * current clean HEAD and does not compare that HEAD with the target branch.
+ */
+export function recoverTaskWorkspace(taskHandle) {
+  if (arguments.length !== 1) throw new TypeError("recoverTaskWorkspace accepts only a TaskHandle; caller-supplied workspace identity is forbidden");
+  const task = assertTaskHandle(taskHandle);
+  assertNoAcceptedDecision(task);
+  const expected = deterministicWorkspace(task);
+  if (!existsSync(expected.worktreeRoot) || !branchExists(expected.targetRepoRoot, expected.branch)) {
+    throw new Error("recovery requires the existing deterministic registered task worktree and branch");
+  }
+  const realWorktree = realGitToplevel(expected.worktreeRoot, "recovery task worktree");
+  if (realWorktree !== expected.worktreeRoot) throw new Error("recovery task worktree realpath changed or is a symlink");
+  assertWorktreeRegistration(expected, "recovery task worktree");
+  if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) {
+    throw new Error("recovery task worktree and target repo must share the same Git common directory");
+  }
+  if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "recovery task worktree branch") !== expected.branch) {
+    throw new Error(`recovery task worktree must use deterministic branch ${expected.branch}`);
+  }
+  if (gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "recovery task worktree status") !== "") {
+    throw new Error("recovery task worktree must be clean");
+  }
+  const baselineCommit = gitValue(realWorktree, ["rev-parse", "--verify", "HEAD^{commit}"], "recovery task worktree HEAD");
+  if (!/^[a-f0-9]{40}$/.test(baselineCommit)) throw new Error("recovery task worktree HEAD must be a full Git commit OID");
+  const reflog = gitValue(expected.targetRepoRoot, ["reflog", "show", "--format=%H", `refs/heads/${expected.branch}`], "recovery branch reflog")
+    .split("\n").map((value) => value.trim()).filter(Boolean);
+  const originCommit = reflog.at(-1);
+  if (!/^[a-f0-9]{40}$/.test(originCommit ?? "")) throw new Error("recovery branch reflog origin must be a full Git commit OID");
+  gitValue(expected.targetRepoRoot, ["cat-file", "-e", `${originCommit}^{commit}`], "recovery branch reflog origin");
+  if (!isAncestor(expected.targetRepoRoot, originCommit, baselineCommit)) {
+    throw new Error("recovery branch reflog origin is not an ancestor of current HEAD; orphan or force-rewind rejected");
+  }
+  for (const historicalCommit of reflog) {
+    if (!/^[a-f0-9]{40}$/.test(historicalCommit)) {
+      throw new Error("recovery branch reflog entry must be a full Git commit OID");
+    }
+    gitValue(expected.targetRepoRoot, ["cat-file", "-e", `${historicalCommit}^{commit}`], "recovery branch reflog entry");
+    if (!isAncestor(expected.targetRepoRoot, historicalCommit, baselineCommit)) {
+      throw new Error("recovery branch reflog contains a commit outside current HEAD ancestry; force-rewind rejected");
+    }
+  }
+  return validateCandidate(task, { ...expected, baselineCommit, requireClean: true });
 }
 
 /** Revalidate attempt facts against the deterministic worktree before acceptance. */

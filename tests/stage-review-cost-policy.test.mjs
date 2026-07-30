@@ -48,14 +48,14 @@ describe("non-code review cost policy", () => {
     })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
   });
 
-  it.each(["build-spec", "build-plan", "verify-code"])("%s allows one structural full and blocks the second before dispatch", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s records structural repair without another provider dispatch", (stage) => {
     expect(selectReviewRound({
       stage,
       route,
       previousResult: previous,
       ledger: structural,
       currentSnapshotTree: structural.current_snapshot_tree,
-    })).toEqual({ round: "full", reason: "structural_rework" });
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
     expect(selectReviewRound({
       stage,
       route,

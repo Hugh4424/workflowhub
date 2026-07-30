@@ -2,47 +2,173 @@
   "schema_version": 1,
   "skill": "wh-review",
   "files": [
-    "SKILL.md",
-    "__tests__/human-brief-behavioral.test.mjs",
-    "contracts/build-code.md",
-    "contracts/build-plan.md",
-    "contracts/build-spec.md",
-    "contracts/make-decision.md",
-    "contracts/provider-protocol.md",
-    "contracts/verify-code.md",
-    "contracts/workflowhub-result.v1.json",
-    "contracts/workflowhub-result.v2.json",
-    "manifest.json",
-    "schemas/attempt.schema.json",
-    "schemas/result.schema.json",
-    "schemas/resolution.schema.json",
-    "schemas/ac-evidence-summary.schema.json",
-    "schemas/stage-materials.schema.json",
-    "scripts/__tests__/review-runner.test.mjs",
-    "scripts/__tests__/review-controller.test.mjs",
-    "scripts/__tests__/review-source-materials.test.mjs",
-    "scripts/__tests__/ac-evidence-summary.test.mjs",
-    "scripts/__tests__/simple-contracts.test.mjs",
-    "scripts/__tests__/simple-e2e-faults.test.mjs",
-    "scripts/__tests__/simple-reliability.red.test.mjs",
-    "scripts/__tests__/schema-validator.test.mjs",
-    "scripts/__tests__/third-review-host-config.test.mjs",
-    "scripts/__tests__/wh-review-cli.test.mjs",
-    "scripts/lib/safe-id.mjs",
-    "scripts/phase-review-subject.mjs",
-    "scripts/integration-review-subject.mjs",
-    "scripts/review-controller.mjs",
-    "scripts/review-materials.mjs",
-    "scripts/ac-evidence-summary.mjs",
-    "scripts/review-output.mjs",
-    "scripts/review-provider-client.mjs",
-    "scripts/review-result.mjs",
-    "scripts/review-runner.mjs",
-    "scripts/review-source.mjs",
-    "scripts/schema-validator.mjs",
-    "scripts/third-review-host-config.mjs",
-    "scripts/wh-review-cli.mjs",
-    "stage-materials.json",
-    "stage-skill-plan.json"
+    {
+      "path": "SKILL.md",
+      "sha256": "3211f3993ebae15d61519dcae187d5c6d692d5bf282e96c873312e459ef29b34"
+    },
+    {
+      "path": "__tests__/human-brief-behavioral.test.mjs",
+      "sha256": "5344d3ee10116ca6c1cea3ba1ea9df66b8bea0b4204028dfc23e4eb957a3d183"
+    },
+    {
+      "path": "contracts/build-code.md",
+      "sha256": "c9070a0f6c3147885fc3954f69c48dda95804fe4dc51863d42d96b10b8db6418"
+    },
+    {
+      "path": "contracts/build-plan.md",
+      "sha256": "b6f6d2e0e68296118e00f7534c8582a2da168a0e28f64f5b7a85b603a212be4e"
+    },
+    {
+      "path": "contracts/build-spec.md",
+      "sha256": "ab47854a7d5e2ad2ee5d47b60967c61b0f1dd301209d19f62aaff2e78f109c4e"
+    },
+    {
+      "path": "contracts/make-decision.md",
+      "sha256": "b55770b69aa57a5dcbc0115d3eaff53ab15b90c2b6838a12fe0d8e19b1aa7309"
+    },
+    {
+      "path": "contracts/provider-protocol.md",
+      "sha256": "bf00a9db1f1ee6df1e6c5e9d950f4d8ae7e9b8b1d88d51a294c352eaebab0733"
+    },
+    {
+      "path": "contracts/verify-code.md",
+      "sha256": "f09204e5364a45deb191b056d74f6d38fbd00adca7e9a9c21214ccbefe459881"
+    },
+    {
+      "path": "contracts/workflowhub-result.v1.json",
+      "sha256": "6f079be969acaed5e25c054b03fade459364ce7cf08d6d3ebeec2b639282d312"
+    },
+    {
+      "path": "contracts/workflowhub-result.v2.json",
+      "sha256": "e9ac467ef51418cfacf8546d515befc779b8fbb0a3cb34be4fdc013a91e0f6bc"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "ada13bffa2ba3b603f9013aa347d64f16cd93f6776acc97bb597343668d64211"
+    },
+    {
+      "path": "schemas/attempt.schema.json",
+      "sha256": "684d27f900c6c995e56193e6fb765b9db0be47374b2ef10d5504b1aaff7a6e23"
+    },
+    {
+      "path": "schemas/result.schema.json",
+      "sha256": "9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da"
+    },
+    {
+      "path": "schemas/resolution.schema.json",
+      "sha256": "f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182"
+    },
+    {
+      "path": "schemas/ac-evidence-summary.schema.json",
+      "sha256": "2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a"
+    },
+    {
+      "path": "schemas/stage-materials.schema.json",
+      "sha256": "fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837"
+    },
+    {
+      "path": "scripts/__tests__/review-runner.test.mjs",
+      "sha256": "d351df5dc28ddae456fb9637c4410f92109f12aab6c8df227ca96fe8a24527d0"
+    },
+    {
+      "path": "scripts/__tests__/review-controller.test.mjs",
+      "sha256": "fc3680da9e70e10b5cadf2c851a4a16f564f1b65f6bb86adb492818933e38a69"
+    },
+    {
+      "path": "scripts/__tests__/review-source-materials.test.mjs",
+      "sha256": "34dc24418f5dc967883831ae110bd1e78297ddf8270ddea37e0de90dcf21b755"
+    },
+    {
+      "path": "scripts/__tests__/ac-evidence-summary.test.mjs",
+      "sha256": "08f156a5c16e0fa853d7885556eaae00a04df1feaf0f76e8f1bff5240e1987be"
+    },
+    {
+      "path": "scripts/__tests__/simple-contracts.test.mjs",
+      "sha256": "008d5802b0fcca4fe714989a3f4daab9563804eba888d968a596851e0a8c4608"
+    },
+    {
+      "path": "scripts/__tests__/simple-e2e-faults.test.mjs",
+      "sha256": "5f5c6be860dea598fd738f270fe39eefa7a3e5bb6f8b561381294d08e650718c"
+    },
+    {
+      "path": "scripts/__tests__/simple-reliability.red.test.mjs",
+      "sha256": "d0d0c14aca4ae2834476fc68447f61be0cfa445be7461b7d355ec88f4545c226"
+    },
+    {
+      "path": "scripts/__tests__/schema-validator.test.mjs",
+      "sha256": "93f452766ed2eb09d169aa9b29886cd4b2e9141bbc354dcc4f37d5d548238d17"
+    },
+    {
+      "path": "scripts/__tests__/third-review-host-config.test.mjs",
+      "sha256": "e9822755b4df15a9fc57bb4607d92ec322e4ebf7d3c0f1c44cc34d10a9f398d4"
+    },
+    {
+      "path": "scripts/__tests__/wh-review-cli.test.mjs",
+      "sha256": "5150e63f1f3e57ee554ad36fbf0be0754771ca822ac8ca2f1da251470a324e0a"
+    },
+    {
+      "path": "scripts/lib/safe-id.mjs",
+      "sha256": "38bdda4bf49378bc90790e694390bb64da537a8b47b3bd582ea838feaf25dcb0"
+    },
+    {
+      "path": "scripts/phase-review-subject.mjs",
+      "sha256": "f16f3fcc6fa2f6fabe2375254a2392f88a67ae3cce3a5342256eb04c2d8c05a3"
+    },
+    {
+      "path": "scripts/integration-review-subject.mjs",
+      "sha256": "903463a8bf6d4551426972e0a9d276d9e54e5c7ab765b223689189d7acb999ee"
+    },
+    {
+      "path": "scripts/review-controller.mjs",
+      "sha256": "77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79"
+    },
+    {
+      "path": "scripts/review-materials.mjs",
+      "sha256": "43bddb53700ab0011c1cc7c1ffcdbba01faeddc332f9a77f20820d37b6307f39"
+    },
+    {
+      "path": "scripts/ac-evidence-summary.mjs",
+      "sha256": "862d320140fd940c6dd585bcbd6a17ccd00cc096706775e169b439733aa52305"
+    },
+    {
+      "path": "scripts/review-output.mjs",
+      "sha256": "6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744"
+    },
+    {
+      "path": "scripts/review-provider-client.mjs",
+      "sha256": "bf532a44d9d63f0adaffe5e0d9293539b34f654b55b60089ef5d84ef8ac4a712"
+    },
+    {
+      "path": "scripts/review-result.mjs",
+      "sha256": "eae4f772270aa427922145b6ccf97aad59b754dd782502d844bae0734290ff80"
+    },
+    {
+      "path": "scripts/review-runner.mjs",
+      "sha256": "037a4f2d5ce8a0f4433e20bb0cf06080fe6ead802555466dcab877130a060418"
+    },
+    {
+      "path": "scripts/review-source.mjs",
+      "sha256": "89ab2a68e4fe85b9db34587a7e11f10eb931280e0e208ff6f997712552a37b69"
+    },
+    {
+      "path": "scripts/schema-validator.mjs",
+      "sha256": "381ea2c4dfefa66008ca0c96981d22cb40290c5cf114c0904c785475ba7f7fea"
+    },
+    {
+      "path": "scripts/third-review-host-config.mjs",
+      "sha256": "da483bf6b3ed585019fe07bd1e2a6dc18b6d69a66038d250e90168bc41d6aaba"
+    },
+    {
+      "path": "scripts/wh-review-cli.mjs",
+      "sha256": "58a9fe9c9ff5b1ebb712d279f4e21d747a4a31bb8789e7bc960aba1c2817a47f"
+    },
+    {
+      "path": "stage-materials.json",
+      "sha256": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b"
+    },
+    {
+      "path": "stage-skill-plan.json",
+      "sha256": "2c55386409b978cccc18c156c856513196aaf49eef66231d210fe77e003b843f"
+    }
   ]
 }

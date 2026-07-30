@@ -17,6 +17,16 @@ import { runCapture as captureVerify } from "../../workflows/verify-code/capture
 
 const roots = [];
 const git = (cwd, args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
+function publishDecision(kernel, facts) {
+  const raw = "# Migration fixture decision\n";
+  const decisionHash = createHash("sha256").update(raw).digest("hex");
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, raw);
+  return kernel.publishAttempt("make-decision", {
+    facts: { ...facts, decision_ref: decisionRef, decision_hash: decisionHash },
+    missing_items: ["support:audit"],
+  });
+}
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-target-migration-"))); roots.push(root);
@@ -26,7 +36,7 @@ function fixture() {
   execFileSync("git", ["worktree", "add", "-qb", "task/Demo/migration", worktree, "main"], { cwd: repo });
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: other }); execFileSync("git", ["commit", "--allow-empty", "-qm", "other"], { cwd: other });
   const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "migration", created_at: new Date().toISOString(), target_repo_root: worktree, issue_ids: [], inputs: {} } });
-  const kernel = createTaskKernel(task), decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: git(repo, ["rev-parse", "main"]) } }); kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
+  const kernel = createTaskKernel(task), decision = publishDecision(kernel, { worktree_root: worktree, baseline_commit: git(repo, ["rev-parse", "main"]) }); kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
   return { root, repo, worktree, other, task };
 }
 
@@ -36,10 +46,17 @@ function acceptedWorkspaceFixture() {
   mkdirSync(repo);
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo }); execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo }); execFileSync("git", ["config", "user.name", "Test"], { cwd: repo }); execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
   execFileSync("git", ["worktree", "add", "-qb", "generation-two", source, "main"], { cwd: repo });
+  mkdirSync(join(source, "specs", "migration"), { recursive: true });
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    writeFileSync(join(source, "specs", "migration", name), name === "decision-log.md"
+      ? "# Migration fixture decision\n" : `# ${name}\n`);
+  }
+  execFileSync("git", ["add", "."], { cwd: source });
+  execFileSync("git", ["commit", "-qm", "seed current task materials"], { cwd: source });
   const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "migration", created_at: new Date().toISOString(), target_repo_root: source, issue_ids: [], inputs: {} } });
   const candidate = prepareTaskWorkspace(task);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
-  const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+  const attempt = publishDecision(kernel, { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit });
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
   return { repo, source, task, candidate };
 }
@@ -74,7 +91,7 @@ describe("target repository migration", () => {
       expect(context.manifest.target_repo_root).toBe(f.repo);
       if (stage !== "make-decision") expect(context.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
     }
-    expect(() => bootstrapStage("build-code", { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" })).toThrow(/accepted spec and plan/i);
+    expect(() => bootstrapStage("build-code", { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" })).not.toThrow();
     const snapshotHead = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD"]);
     const snapshotTree = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]);
     expect(await captureBuild("true", "receipts/migrated-build.json", { workspace: contexts["verify-code"].workspace, task: contexts["verify-code"].task })).toMatchObject({ snapshot_head: snapshotHead, snapshot_tree: snapshotTree });
@@ -95,7 +112,10 @@ describe("target repository migration", () => {
     const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
     const publishAndAccept = async (stage, handler) => {
       const stageContext = context(stage);
-      const result = await runStage(stage, stageContext, handler);
+      const result = await runStage(stage, stageContext, async (...args) => {
+        const value = await handler(...args);
+        return { ...value, missing_items: [...new Set([...(value.missing_items ?? []), "support:audit"])] };
+      });
       const request = { attemptRef: result.attempt_ref };
       if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(stageContext.kernel, stage, result);
       acceptStageAttempt(stage, stageContext, request);
@@ -104,14 +124,27 @@ describe("target repository migration", () => {
 
     await publishAndAccept("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: "specs/migration/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }; });
     await publishAndAccept("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: "specs/migration/plan.md", tasks_ref: "specs/migration/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }; });
-    await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true, acceptance_coverage: acceptanceCoverage } }));
+    await publishAndAccept("build-code", async () => ({ facts: {
+      changed: [], tests: testFacts("build"), review: review("pass"),
+      phase_completion: {
+        status: "completed",
+        evidence_ref: "specs/migration/tasks.md",
+        evidence_hash: createHash("sha256").update("# tasks.md\n").digest("hex"),
+        integration_review: { ref: "reviews/results/review.json", sha256: hash },
+        formal_record_status: { status: "unavailable", reason: "migration fixture has no Phase history" },
+      },
+      acceptance_coverage: acceptanceCoverage,
+    } }));
 
     const verifyContext = context("verify-code");
     const failureDetail = "AC-005 failed\n";
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.txt", failureDetail);
     const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [{ ref: "evidence/acceptance-ac-005.txt", sha256: createHash("sha256").update(failureDetail).digest("hex") }] }, null, 2)}\n`;
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
-    const failed = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: testFacts("verify"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
+    const failed = await runStage("verify-code", verifyContext, async () => ({
+      facts: { tests: testFacts("verify"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] },
+      missing_items: ["support:audit"],
+    }));
 
     expect(JSON.parse(migrated.task.readRecord(`results/verify-code/${failed.attempt_ref}`))).toMatchObject({ facts: { review: { verdict: "fail" }, evidence_refs: [{ ref: "evidence/acceptance-ac-005.json" }] } });
     expect(verifyContext.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
