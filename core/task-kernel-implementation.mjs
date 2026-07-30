@@ -856,10 +856,18 @@ export function buildTaskKernel(taskHandle, {
       } else if (run.continuation_hash !== undefined) {
         throw new Error(`${name} stage run continuation hash has no ref`);
       }
+      const hasRecoverySourceRef = run.recovery_source_ref !== undefined;
+      if (hasRecoverySourceRef !== (run.recovery_source_hash !== undefined)) {
+        throw new Error(`${name} stage run recovery source binding is incomplete`);
+      }
       if (sequence === 1) {
-        if (run.previous_run_ref !== null || run.previous_run_hash !== null) throw new Error(`${name} initial stage run lineage is invalid`);
+        if (run.previous_run_ref !== null || run.previous_run_hash !== null || hasRecoverySourceRef) throw new Error(`${name} initial stage run lineage is invalid`);
       } else if (run.previous_run_ref !== latest.ref || run.previous_run_hash !== latest.hash) {
         throw new Error(`${name} stage run lineage is broken`);
+      }
+      if (hasRecoverySourceRef
+          && (run.recovery_source_ref !== run.previous_run_ref || run.recovery_source_hash !== run.previous_run_hash)) {
+        throw new Error(`${name} stage run recovery source must equal previous run lineage`);
       }
       latest = { ref, hash: hash(raw), run, raw };
     }
@@ -1009,6 +1017,52 @@ export function buildTaskKernel(taskHandle, {
           completion_evidence: evidence,
         });
       }
+      return deepFreeze({ ref, hash: hash(raw), run });
+    });
+  };
+  const startRecoveryStageRun = (stage, input = {}) => {
+    const name = stageName(stage);
+    if (name !== "make-decision") throw new TypeError("recovery stage run is only valid for make-decision");
+    plain(input, "recovery stage run input");
+    rejectUnknown(input, new Set(["reason", "expected_previous_run_ref", "expected_previous_run_hash"]), "recovery stage run input");
+    const reason = nonemptyString(input.reason, "recovery stage run reason");
+    const expectedPreviousRef = nonemptyString(input.expected_previous_run_ref, "recovery expected previous run ref");
+    const expectedPreviousHash = nonemptyString(input.expected_previous_run_hash, "recovery expected previous run hash");
+    if (!/^runs\/make-decision\/run-[0-9]{4}\.json$/.test(expectedPreviousRef) || !HASH.test(expectedPreviousHash)) {
+      throw new TypeError("recovery expected previous run binding is invalid");
+    }
+    return task.withRecordLock(`locks/${name}.run.lock`, () => {
+      const previous = latestStageRun(name);
+      if (previous === null || previous.ref !== expectedPreviousRef || previous.hash !== expectedPreviousHash) {
+        throw new Error("recovery previous run CAS failed");
+      }
+      if (previous.run.recovery_source_ref !== undefined || previous.run.recovery_source_hash !== undefined) {
+        throw new Error("recovery previous run was already consumed");
+      }
+      const sequence = Number(previous.ref.match(/run-([0-9]{4})\.json$/)[1]) + 1;
+      if (sequence > 9999) throw new Error(`${name} stage run sequence exhausted`);
+      const ref = `runs/${name}/run-${String(sequence).padStart(4, "0")}.json`;
+      const run = {
+        schema_version: "stage-run.v1",
+        task_id: task.identity.taskId,
+        stage: name,
+        workflow_run_id: `${name}:${String(sequence).padStart(4, "0")}:${randomUUID()}`,
+        run_ref: ref,
+        previous_run_ref: previous.ref,
+        previous_run_hash: previous.hash,
+        recovery_source_ref: previous.ref,
+        recovery_source_hash: previous.hash,
+        reason,
+        created_at: now(),
+      };
+      const raw = `${JSON.stringify(run, null, 2)}\n`;
+      createKernelRecord(ref, raw);
+      const evidence = { kind: "stage_run", uri_or_path: ref, content_hash: hash(raw) };
+      completeMakeDecisionStageStep({
+        step_id: 1,
+        entry_evidence: evidence,
+        completion_evidence: evidence,
+      });
       return deepFreeze({ ref, hash: hash(raw), run });
     });
   };
@@ -3495,6 +3549,7 @@ export function buildTaskKernel(taskHandle, {
     recordReviewAttempt,
     recordReviewResolution,
     startStageRun,
+    startRecoveryStageRun,
     invalidateStageRun,
     invalidateStageStepAttempt,
     invalidateStageAttempt,

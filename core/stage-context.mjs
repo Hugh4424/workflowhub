@@ -13,6 +13,7 @@ import {
   openAcceptedCandidateWorkspace,
   openCurrentTaskWorkspace,
   prepareTaskWorkspace,
+  recoverTaskWorkspace,
   validateTaskWorkspaceAttempt,
 } from "./workspace.mjs";
 
@@ -76,6 +77,14 @@ export function prepareMakeDecisionWorkspace(context) {
     });
   }
   return bindCandidateWorkspace(context, prepareTaskWorkspace(task));
+}
+
+/** Bind only the authenticated existing worktree used by make-decision recover-run. */
+export function recoverMakeDecisionWorkspace(context) {
+  if (arguments.length !== 1 || !context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
+    throw new TypeError("unprepared make-decision StageContext required for recovery");
+  }
+  return bindCandidateWorkspace(context, recoverTaskWorkspace(context.task));
 }
 
 /** Revalidate the published attempt immediately before acceptance. */

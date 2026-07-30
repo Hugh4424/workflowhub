@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { createTask } from "../task-handle.mjs";
-import { assertWorkspace, createTaskWorktreeRemoval, openAcceptedWorkspace, openCurrentTaskWorkspace, prepareTaskWorkspace, validateTaskWorkspaceAttempt } from "../workspace.mjs";
+import { assertWorkspace, createTaskWorktreeRemoval, openAcceptedWorkspace, openCurrentTaskWorkspace, prepareTaskWorkspace, recoverTaskWorkspace, validateTaskWorkspaceAttempt } from "../workspace.mjs";
 import { canonical, sha256 } from "../task-recovery.mjs";
 import { runRecovery } from "../../scripts/task-recovery.mjs";
 
@@ -213,6 +213,54 @@ describe("deterministic WorktreeManager", () => {
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(baseline);
     expect({ dev: currentIdentity.dev, ino: currentIdentity.ino }).toEqual({ dev: firstIdentity.dev, ino: firstIdentity.ino });
     expect(registeredWorktrees(repo)).toEqual([realpathSync(repo), realpathSync(expectedRoot)]);
+  });
+
+  it("exposes a dedicated recovery API without weakening ordinary prepare", async () => {
+    const { task, expectedRoot } = fixture("dedicated-recovery-api");
+    const first = prepareTaskWorkspace(task);
+    const firstWorktreeRoot = first.worktreeRoot;
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "task-only commit"], { cwd: expectedRoot });
+
+    expect(() => prepareTaskWorkspace(task)).toThrow(/not an ancestor|fallback|baseline rebinding/i);
+
+    const workspaceApi = await import("../workspace.mjs");
+    expect(workspaceApi.recoverTaskWorkspace).toBeTypeOf("function");
+    const recovered = workspaceApi.recoverTaskWorkspace(task);
+    expect(recovered).toMatchObject({
+      worktreeRoot: firstWorktreeRoot,
+      baselineCommit: git(expectedRoot, ["rev-parse", "HEAD"]),
+      branch: "task/Demo/dedicated-recovery-api",
+    });
+  });
+
+  it("rejects recovery after the deterministic branch was orphaned or force-rewound from its reflog origin", () => {
+    const orphaned = fixture("recovery-orphaned");
+    const orphanedCandidate = prepareTaskWorkspace(orphaned.task);
+    const orphanedWorktreeRoot = orphanedCandidate.worktreeRoot;
+    const emptyTree = git(orphanedWorktreeRoot, ["mktree"]);
+    const orphan = String(execFileSync("git", ["commit-tree", emptyTree], {
+      cwd: orphanedWorktreeRoot,
+      encoding: "utf8",
+      input: "orphan replacement\n",
+    })).trim();
+    execFileSync("git", ["reset", "--hard", "-q", orphan], { cwd: orphanedWorktreeRoot });
+    expect(() => recoverTaskWorkspace(orphaned.task)).toThrow(/reflog|origin|ancestor|force/i);
+
+    const rewound = fixture("recovery-force-rewound");
+    const rewoundCandidate = prepareTaskWorkspace(rewound.task);
+    const rewoundWorktreeRoot = rewoundCandidate.worktreeRoot;
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "legitimate task work"], { cwd: rewoundWorktreeRoot });
+    execFileSync("git", ["reset", "--hard", "-q", rewound.baseline], { cwd: rewoundWorktreeRoot });
+    expect(() => recoverTaskWorkspace(rewound.task)).toThrow(/reflog|origin|ancestor|force/i);
+  });
+
+  it("rechecks cleanliness when a recovered workspace candidate is consumed", () => {
+    const { task } = fixture("recovery-dirtied-after-open");
+    const candidate = prepareTaskWorkspace(task);
+    const recovered = recoverTaskWorkspace(task);
+    writeFileSync(join(candidate.worktreeRoot, "late-dirty.txt"), "late user bytes\n");
+
+    expect(() => recovered.assertValid()).toThrow(/clean|dirty|status/i);
   });
 
   it.each([

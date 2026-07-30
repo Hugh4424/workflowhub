@@ -8,6 +8,7 @@ import {
   authenticateStageWriteBoundary,
   bootstrapStage,
   prepareMakeDecisionWorkspace,
+  recoverMakeDecisionWorkspace,
 } from "../core/stage-context.mjs";
 import { persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
@@ -119,7 +120,12 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   if (command === "publish-content-evidence" && (!values.kind || !values.input)) throw new TypeError("publish-content-evidence requires --kind and --input=<payload.json>");
   if (command === "start-run" && !values.reason) throw new TypeError("start-run requires --reason");
-  if (command === "recover-run" && !values.reason) throw new TypeError("recover-run requires --reason");
+  if (command === "recover-run") {
+    const allowed = new Set(["stage", "project", "task", "reason"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("recover-run accepts only --stage, --project, --task, and --reason");
+    if (values.stage !== "make-decision") throw new TypeError("recover-run is only valid for make-decision");
+    if (!values.reason) throw new TypeError("recover-run requires --reason");
+  }
   if (command === "invoke-stage-skill" && (!values.name || !values["invocation-key"])) {
     throw new TypeError("invoke-stage-skill requires --name and --invocation-key");
   }
@@ -258,8 +264,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       accepted_present: accepted,
     };
   }
+  let recoveryPrevious;
   if (values.stage === "make-decision") {
-    context = prepareMakeDecisionWorkspace(context);
+    if (command === "recover-run") {
+      recoveryPrevious = context.kernel.activeStageRun("make-decision", { required: false });
+      if (recoveryPrevious === null) throw new Error("recover-run requires an existing previous make-decision run");
+      if (recoveryPrevious.run.recovery_source_ref !== undefined
+          || recoveryPrevious.run.recovery_source_hash !== undefined) {
+        throw new Error("recover-run previous run was already consumed by recovery");
+      }
+      context = recoverMakeDecisionWorkspace(context);
+    } else {
+      context = prepareMakeDecisionWorkspace(context);
+    }
   }
   const writeBoundary = authenticateStageWriteBoundary(context, {
     runnerRoot: RUNNER_ROOT,
@@ -282,11 +299,17 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     return started;
   }
   if (command === "recover-run") {
-    const allowed = new Set(["stage", "project", "task", "reason"]);
-    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("recover-run accepts only --stage, --project, --task, and --reason");
-    const started = context.kernel.startStageRun(values.stage, { reason: values.reason });
+    const started = context.kernel.startRecoveryStageRun(values.stage, {
+      reason: values.reason,
+      expected_previous_run_ref: recoveryPrevious.ref,
+      expected_previous_run_hash: recoveryPrevious.hash,
+    });
     return {
       ...started,
+      worktree_root: context.candidateWorkspace.worktreeRoot,
+      baseline_commit: context.candidateWorkspace.baselineCommit,
+      previous_run_ref: started.run.previous_run_ref,
+      previous_run_hash: started.run.previous_run_hash,
       status: "waiting_for_host_response",
       completion: "incomplete",
       accepted: false,

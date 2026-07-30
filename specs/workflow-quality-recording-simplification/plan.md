@@ -393,7 +393,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ## 14. Implementation Order
 
-`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T015 → T013`。
+`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T016 → T017 → T015 → T013`。
 
 ## Phase 1：真实 invocation
 
@@ -623,13 +623,28 @@ Phase 1–5 的 facts 与宪法 Q1/Q2。
 - **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`scripts/stage-runtime.mjs`（仅作为 Phase 机器白名单）；T014 全量若只暴露既有基线，可机械修复既有 Markdown 白名单；authenticated smoke 仅修改 `scripts/smoke-local-skill-dispatch.mjs` 及其两个测试；lens-only closure/hash 仅修改 `core/check-skill-closure.mjs`、其测试、`skills/reuse-registry.md`、`skills/review-response/skill-bundle.json`、`skills/spec-tasks/skill-bundle.json`、`skills/isolated-browser-qa/skill-bundle.json`、`skills/catalog.yaml`。全量诊断确认的旧 fixture/断言可仅迁移到本任务已确认的新合同，白名单为 `tests/final-cutover-guards.red.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/m14b-fact-collection.test.mjs`、`tests/stage-orchestrator-v2.test.mjs`、`core/__tests__/task-target-repo-migration.test.mjs`、`core/__tests__/task-runner-root-migration.test.mjs`、`tests/stage-content-publication.test.mjs`、`tests/official-make-decision-cli.test.mjs`、`tests/p0-foundation-contracts.test.mjs`、`scripts/__tests__/runner-replacement-bridge.test.mjs`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`tests/design-stage-skill-order.red.test.mjs`、`tests/stage-review-cost-policy.test.mjs`、`skills/wh-review/scripts/__tests__/review-source-materials.test.mjs`、`tests/workflow-v2-contract.test.mjs`、`tests/stage-risk-acceptance.test.mjs`、`tests/build-code-capture.test.mjs`、`tests/build-code-preflight.red.test.mjs`、`tests/verify-code-capture.test.mjs`、`scripts/__tests__/ci-chain-check.test.mjs`、`tests/terminal-runtime-blockers.test.mjs`、`tests/spec-content-profile.test.mjs`、`tests/per-invocation-doc-contract.test.mjs`、`tests/template-content-quality-retention.test.mjs`；不得恢复旧 accepted/audit Gate、重复 stage lens dispatch 或弱化 runtime。
 - **DISCLOSE-ONLY**：`check-task-record-paths` 报出的 14 条旧生产路径治理不属于本任务，不得借 T014 修改生产实现、禁用 checker 或放宽断言。
 - **STEP INVENTORY SYNC**：`docs/stage-atomic-step-inventory.md` 仅可同步当前五份 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖，不改步骤合同或 runtime。
+- **RECOVERY WORKSPACE RED/GREEN**：T016/T017 仅修改 `core/workspace.mjs`、`core/stage-context.mjs`、`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/workspace-manager.test.mjs`，并新增 `scripts/__tests__/stage-runtime-recover-run.test.mjs`。kernel implementation 仅用于 runtime-owned previous-run CAS。普通 prepare 保持严格；不得新增 schema、认证 Gate 或 caller 可选路径。
 - **EXECUTE-ONLY（T013–T015）**：`skills/wh-review/scripts/wh-review-cli.mjs`、`scripts/stage-runtime.mjs`；三个收口 Task 不得现场修改实现，finding 必须返回 owning GREEN。
 - **DO NOT TOUCH**：旧 run 字节、provider route、Git refs。
 
 ### Tasks
 
-T014 验证最终候选 tree；T015 正式恢复 make-decision 并等待真实用户确认；
+T014 保存全量与聚焦事实；T016/T017 先以严格 RED/GREEN 修复 recovery workspace
+blocker；T015 再正式恢复 make-decision 并等待真实用户确认；
 确认后继续正式 build-spec/build-plan/build-code，最后由 T013 做唯一 integration review。
+
+### Strategy
+
+普通 `prepare` 继续拒绝非标准状态。只有 `recover-run` 的专用认证路径可接纳 exact、
+deterministic、已注册的 task worktree/branch 在当前 HEAD 相对旧 baseline 为 ahead 或
+diverged；新 run baseline 取当前 clean recovery HEAD。身份全部由 kernel/workspace
+解析，不接受 caller path、branch 或 baseline。进入前精确验证 path、branch、
+git-common-dir、无 symlink 和当前完整 HEAD；旧 run 的 previous ref/hash 由 kernel
+原样保留。不得改旧 run/历史，不新增 schema、认证 Gate 或宽松 fallback。
+独立审查的四项 finding 保留为待聚焦解决：验证 branch reflog origin ancestor 并拒绝
+orphan；recovery capability 持续复核 clean 且 dirty 不得写；recover-run 仅允许
+make-decision 并在任何写前拒绝 invalid args/stage；同一 expected previous ref/hash
+只允许一个新 run，第二次或并发调用由 runtime-owned CAS 拒绝。
 
 ### Verify
 
@@ -658,21 +673,21 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 - T001→T002→T003→T004 串行。
 - T005/T007/T009 的 fixture 准备可在 T004 后并行；各 GREEN 只消费自己的 RED。
 - T011 依赖 T004、T008、T010；T012 依赖 T006、T008、T010、T011。
-- T014 依赖全部 GREEN；T015 依赖 T014；T013 依赖 T015 后形成的正式
+- T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T015 依赖 T017；T013 依赖 T015 后形成的正式
   accepted build-plan/build-code lineage 与 fresh test facts。
-- T014、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
+- T014、T016、T017、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
 
 ## 16. Requirement and Verification Traceability
 
 | FR | Task IDs | AC IDs | Phase | Gate / evidence |
 | --- | --- | --- | --- | --- |
-| FR-INV-001..005 | T001,T002,T011,T012,T015 | AC-01,02,03,16 | 1,6,7 | ORACLE-INV/RECOVERY |
+| FR-INV-001..005 | T001,T002,T011,T012,T016,T017,T015 | AC-01,02,03,16 | 1,6,7 | ORACLE-INV/RECOVERY |
 | FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP/VERIFY |
 | FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
 | FR-MAT-001..005 | T007,T008,T011,T012 | AC-09,10,16 | 4,6 | ORACLE-MAT |
 | FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
 | FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
-| FR-REC-001..002 | T011,T012,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
+| FR-REC-001..002 | T011,T012,T016,T017,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
 
 ## 17. Phase Status Table
 
@@ -684,4 +699,4 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 | 4 Materials | T007,T008 | Phase 2,3 | ORACLE-MAT GREEN | T013 |
 | 5 Browser | T009,T010 | Phase 2 | ORACLE-BQA GREEN | T013 |
 | 6 Verify | T011,T012 | Phase 3,4,5 | ORACLE-VERIFY GREEN | T013 |
-| 7 Closure | T014,T015,T013 | Phase 6 | full→recovery→formal review | T013 only |
+| 7 Closure | T014,T016,T017,T015,T013 | Phase 6 | facts→recovery RED/GREEN→formal recovery→review | T013 only |
