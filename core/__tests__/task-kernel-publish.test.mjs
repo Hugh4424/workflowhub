@@ -1528,6 +1528,123 @@ describe("TaskKernel append-only publication", () => {
     expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
   });
 
+  it("uses the verified current material revision for design checkpoints without rewriting accepted decision history", () => {
+    const { task, kernel } = fixture();
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", { facts: {
+      worktree_root: candidate.worktreeRoot,
+      baseline_commit: candidate.baselineCommit,
+      ...coreDecision(kernel),
+    } });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const acceptedRaw = task.readRecord("results/make-decision/accepted.json");
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [file, content] of [
+      ["decision-log.md", "# Current Decision\n"],
+      ["spec.md", "# Spec\n"],
+      ["plan.md", "# Plan\n"],
+      ["tasks.md", "# Tasks\n"],
+    ]) artifacts.writeAtomic(file, content);
+    writeFileSync(join(workspace.worktreeRoot, "completed-code.js"), "export const completed = true;\n");
+    execFileSync("git", ["add", "--", "specs/task-one", "completed-code.js"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "completed code and current materials"], { cwd: workspace.worktreeRoot });
+    const integrationHead = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspace.worktreeRoot })).trim();
+    const bound = createAuditedTestKernel(task, { workspace, artifacts });
+
+    expect(() => bound.createCheckpoint("build-spec")).toThrow(/accepted|current material revision|ENOENT/i);
+    const firstRevision = bound.publishMaterialRevision({
+      change_summary: "authorize current four materials",
+      source_refs: ["results/make-decision/accepted.json"],
+    });
+    const specCheckpoint = bound.createCheckpoint("build-spec");
+    expect(specCheckpoint.parent_commit).toBe(integrationHead);
+    const specAttempt = bound.publishAttempt("build-spec", {
+      facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: specCheckpoint },
+      upstream_refs: [{
+        task_id: "task-one",
+        stage: "make-decision",
+        accepted_ref: "results/make-decision/accepted.json",
+      }],
+    });
+    const acceptedSpec = bound.acceptAttempt("build-spec", specAttempt.attempt_ref);
+    expect(task.readRecord("results/make-decision/accepted.json")).toBe(acceptedRaw);
+
+    writeFileSync(join(workspace.worktreeRoot, "post-spec-code.js"), "export const postSpec = true;\n");
+    execFileSync("git", ["add", "--", "post-spec-code.js"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "post spec code"], { cwd: workspace.worktreeRoot });
+    const postSpecHead = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspace.worktreeRoot })).trim();
+    artifacts.writeAtomic("decision-log.md", "# Revised Current Decision\n");
+    bound.publishMaterialRevision({
+      change_summary: "authorize revised current decision",
+      source_refs: ["results/make-decision/accepted.json"],
+      expected_current_ref: firstRevision.revision_ref,
+    });
+    const planCheckpoint = bound.createCheckpoint("build-plan");
+    const integrationParents = String(execFileSync("git", ["show", "-s", "--format=%P", planCheckpoint.parent_commit], {
+      cwd: workspace.worktreeRoot,
+    })).trim().split(" ");
+    expect(integrationParents).toEqual([postSpecHead, acceptedSpec.checkpoint.commit_oid]);
+
+    writeFileSync(join(workspace.worktreeRoot, "dirty-non-material.js"), "dirty\n");
+    expect(() => bound.publishAttempt("build-plan", {
+      facts: {
+        plan_ref: artifacts.reference("plan.md"),
+        tasks_ref: artifacts.reference("tasks.md"),
+        checkpoint: planCheckpoint,
+      },
+      upstream_refs: [{
+        task_id: "task-one",
+        stage: "build-spec",
+        accepted_ref: "results/build-spec/accepted.json",
+      }],
+    })).toThrow(/Workspace differs from authenticated upstream tree/i);
+    rmSync(join(workspace.worktreeRoot, "dirty-non-material.js"));
+    artifacts.writeAtomic("decision-log.md", "# Unrecorded Decision\n");
+    expect(() => bound.createCheckpoint("build-spec")).toThrow(/current material revision does not bind live decision-log\.md/i);
+    expect(() => bound.createCheckpoint("build-plan")).toThrow(/current material revision does not bind live decision-log\.md/i);
+  });
+
+  it("rejects a clean current HEAD unrelated to the accepted make-decision lineage", () => {
+    const { task, kernel } = fixture();
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", { facts: {
+      worktree_root: candidate.worktreeRoot,
+      baseline_commit: candidate.baselineCommit,
+      ...coreDecision(kernel),
+    } });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const inheritedTree = String(execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      cwd: workspace.worktreeRoot,
+    })).trim();
+    const unrelated = String(execFileSync("git", ["commit-tree", inheritedTree], {
+      cwd: workspace.worktreeRoot,
+      input: "unrelated clean head\n",
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Test",
+        GIT_AUTHOR_EMAIL: "test@example.com",
+        GIT_COMMITTER_NAME: "Test",
+        GIT_COMMITTER_EMAIL: "test@example.com",
+      },
+    })).trim();
+    execFileSync("git", ["reset", "--hard", "-q", unrelated], { cwd: workspace.worktreeRoot });
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [file, content] of [
+      ["decision-log.md", DEFAULT_CORE_DECISION],
+      ["spec.md", "# Spec\n"],
+      ["plan.md", "# Plan\n"],
+      ["tasks.md", "# Tasks\n"],
+    ]) artifacts.writeAtomic(file, content);
+    execFileSync("git", ["add", "--all"], { cwd: workspace.worktreeRoot });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "unrelated clean head"], { cwd: workspace.worktreeRoot });
+    const bound = createAuditedTestKernel(task, { workspace, artifacts });
+    expect(() => bound.createCheckpoint("build-spec"))
+      .toThrow(/accepted make-decision baseline is not an ancestor/i);
+  });
+
   it("replaces an accepted build-spec after a bound continuation invalidates its prior attempt", () => {
     const { task, artifacts, bound, first } = acceptedBuildSpecFixture();
     const acceptedV1Raw = task.readRecord("results/build-spec/accepted.json");

@@ -2246,39 +2246,161 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision core decision_ref does not bind the published decision bytes");
     }
   };
-  const acceptedDecisionMaterial = () => {
-    const decision = readAcceptedLocal("make-decision");
-    const content = artifacts.read("decision-log.md");
-    if (hash(content) !== decision.facts.decision_hash) {
-      throw new Error("live decision-log.md differs from the accepted make-decision material");
+  const readVerifiedCurrentMaterialRevision = () => {
+    let pointerRaw;
+    try {
+      pointerRaw = task.readRecord("materials/current.json");
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+    const pointer = parseJson(pointerRaw, "material current pointer");
+      if (pointer.schema_version !== "task-material-current.v1"
+          || pointer.task_id !== task.identity.taskId
+          || !Number.isInteger(pointer.generation) || pointer.generation < 1
+          || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+          || !HASH.test(pointer.revision_hash ?? "")) {
+        throw new Error("material current pointer is invalid or misbound");
+      }
+      const revisionRaw = task.readRecord(pointer.revision_ref);
+      const revision = parseJson(revisionRaw, "current material revision");
+      const validation = validateTaskMaterialRevision(revision);
+      if (hash(revisionRaw) !== pointer.revision_hash
+          || !validation.ok
+          || revision.task_id !== task.identity.taskId
+          || revision.revision_id !== pointer.revision_id
+          || revision.previous_ref !== (pointer.previous_ref ?? null)) {
+        throw new Error(`current material revision is invalid or misbound: ${validation.errors.join("; ")}`);
+      }
+      if (revision.previous_ref === null) {
+        if (revision.parent_revision !== null || revision.previous_hash !== null) {
+          throw new Error("current material root revision has a forged parent");
+        }
+      } else {
+        const priorRaw = task.readRecord(revision.previous_ref);
+        const prior = parseJson(priorRaw, "previous material revision");
+        if (hash(priorRaw) !== revision.previous_hash
+            || !validateTaskMaterialRevision(prior).ok
+            || prior.revision_id !== revision.parent_revision) {
+          throw new Error("current material revision parent does not match previous_ref");
+        }
+      }
+      for (const file of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+        if (hash(artifacts.read(file)) !== revision.hashes[file]) {
+          throw new Error(`current material revision does not bind live ${file}`);
+        }
+      }
+    return revision;
+  };
+  const checkpointMaterial = (name, acceptedHash) => {
+    const content = artifacts.read(name);
+    const revision = readVerifiedCurrentMaterialRevision();
+    const expectedHash = revision?.hashes?.[name] ?? acceptedHash;
+    if (!HASH.test(expectedHash ?? "") || hash(content) !== expectedHash) {
+      throw new Error(`live ${name} differs from accepted history without a valid current material revision`);
     }
     return {
-      path: artifacts.reference("decision-log.md"),
+      path: artifacts.reference(name),
       blob_oid: String(execFileSync(
         "git",
-        ["hash-object", "-w", "--no-filters", artifacts.path("decision-log.md")],
+        ["hash-object", "-w", "--no-filters", artifacts.path(name)],
         { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
       )).trim(),
     };
+  };
+  const acceptedDecisionMaterial = () => {
+    const decision = readAcceptedLocal("make-decision");
+    return checkpointMaterial("decision-log.md", decision.facts.decision_hash);
+  };
+  const gitAncestor = (ancestor, descendant) => {
+    try {
+      execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+        cwd: workspace.worktreeRoot,
+        stdio: "ignore",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const syntheticIntegrationBase = ({ tree, currentHead, acceptedCheckpoint }) => {
+    let mergeBase;
+    try {
+      mergeBase = String(execFileSync("git", ["merge-base", currentHead, acceptedCheckpoint], {
+        cwd: workspace.worktreeRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      })).trim();
+    } catch {
+      throw new Error("current integration HEAD is unrelated to the accepted build-spec checkpoint");
+    }
+    if (!GIT_OID.test(mergeBase)) {
+      throw new Error("current integration HEAD is unrelated to the accepted build-spec checkpoint");
+    }
+    const timestamp = String(execFileSync("git", ["show", "-s", "--format=%cI", currentHead], {
+      cwd: workspace.worktreeRoot,
+      encoding: "utf8",
+    })).trim();
+    return String(execFileSync("git", [
+      "commit-tree", tree, "-p", currentHead, "-p", acceptedCheckpoint,
+    ], {
+      cwd: workspace.worktreeRoot,
+      input: "WorkflowHub runtime-owned build-plan integration base\n",
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "WorkflowHub",
+        GIT_AUTHOR_EMAIL: "workflowhub@local",
+        GIT_COMMITTER_NAME: "WorkflowHub",
+        GIT_COMMITTER_EMAIL: "workflowhub@local",
+        GIT_AUTHOR_DATE: timestamp,
+        GIT_COMMITTER_DATE: timestamp,
+      },
+    })).trim();
   };
   const checkpointBase = (stage) => {
     const name = stageName(stage);
     if (name === "build-spec") {
       const decision = readAcceptedLocal("make-decision");
-      const baseCommit = decision.facts.baseline_commit;
-      const decisionBaseTree = decision.facts.snapshot_tree ?? String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
+      const snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot);
+      const baseCommit = snapshot.head;
+      if (!gitAncestor(decision.facts.baseline_commit, baseCommit)) {
+        throw new Error("accepted make-decision baseline is not an ancestor of the current integration HEAD");
+      }
+      const integrationTree = String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
         cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
       })).trim();
       const baseTree = overlayCheckpointArtifacts({
         repoRoot: workspace.worktreeRoot,
-        baseTree: decisionBaseTree,
+        baseTree: integrationTree,
         artifacts: [acceptedDecisionMaterial()],
       });
       return { baseCommit, baseTree };
     }
     if (name === "build-plan") {
       const spec = readAcceptedLocal("build-spec");
-      return { baseCommit: spec.accepted.checkpoint.commit_oid, baseTree: spec.accepted.checkpoint.tree_oid };
+      const snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot);
+      const currentHead = snapshot.head;
+      const integrationTree = String(execFileSync("git", ["rev-parse", `${currentHead}^{tree}`], {
+        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      })).trim();
+      const acceptedSpecHash = spec.accepted.checkpoint.artifacts
+        .find(({ path }) => path === artifacts.reference("spec.md"))?.content_hash;
+      const baseTree = overlayCheckpointArtifacts({
+        repoRoot: workspace.worktreeRoot,
+        baseTree: integrationTree,
+        artifacts: [
+          acceptedDecisionMaterial(),
+          checkpointMaterial("spec.md", acceptedSpecHash),
+        ],
+      });
+      const acceptedCheckpoint = spec.accepted.checkpoint.commit_oid;
+      const baseCommit = gitAncestor(acceptedCheckpoint, currentHead)
+        ? currentHead
+        : gitAncestor(currentHead, acceptedCheckpoint)
+          ? acceptedCheckpoint
+          : syntheticIntegrationBase({ tree: baseTree, currentHead, acceptedCheckpoint });
+      return { baseCommit, baseTree };
     }
     throw new Error(`stage does not produce a Git checkpoint: ${name}`);
   };
