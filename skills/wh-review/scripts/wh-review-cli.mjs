@@ -9,7 +9,7 @@ import { runReview, verifyFinal } from "./review-runner.mjs";
 import { capturePhaseReviewSource } from "./review-source.mjs";
 import { buildClassificationManifest, buildNonGateReviewResponseRecord, buildReviewChain, deriveChangeClassification, selectReviewRound } from "./review-controller.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
-import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
+import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace, recoverMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
 import { openTask } from "../../../core/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../../core/git-worktree-snapshot.mjs";
 
@@ -253,7 +253,10 @@ export function resolveTrustedReviewSubject(input) {
     runnerRoot: RUNNER_ROOT,
   });
   if (stage === "make-decision") {
-    context = prepareMakeDecisionWorkspace(context);
+    const active = context.kernel.activeStageRun("make-decision", { required: false });
+    context = active?.run.recovery_source_ref !== undefined
+      ? recoverMakeDecisionWorkspace(context)
+      : prepareMakeDecisionWorkspace(context);
     return {
       taskId,
       task: context.task,

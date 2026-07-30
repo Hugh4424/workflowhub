@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createTask, migrateTaskRunnerRoot } from "../../../../core/task-handle.mjs";
+import { createTaskKernel } from "../../../../core/task-kernel.mjs";
+import { prepareTaskWorkspace, recoverTaskWorkspace } from "../../../../core/workspace.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
@@ -231,6 +233,73 @@ describe("wh-review production CLI", () => {
     expect(subject.candidateWorkspace.targetRepoRoot).toBe(realpathSync(repo));
     expect(subject).not.toHaveProperty("sourceRoot");
     expect(subject).not.toHaveProperty("targetRepoRoot");
+  });
+
+  it("resolves make-decision review against the recovery CandidateWorkspace when the active run is a recovery", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-recovery-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
+    const task = createTask({ storageRoot: root, taskPath, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-30T00:00:00.000Z",
+      target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    const candidate = prepareTaskWorkspace(task);
+    const worktreeRoot = candidate.worktreeRoot;
+    const oldRun = createTaskKernel(task, { candidateWorkspace: candidate })
+      .startStageRun("make-decision", { reason: "interrupted run" });
+    writeFileSync(join(worktreeRoot, "task-only.txt"), "task-only recovery bytes\n");
+    execFileSync("git", ["add", "."], { cwd: worktreeRoot });
+    execFileSync("git", ["commit", "-qm", "task-only recovery head"], { cwd: worktreeRoot });
+    const recoveryCandidate = recoverTaskWorkspace(task);
+    createTaskKernel(task, { candidateWorkspace: recoveryCandidate }).startRecoveryStageRun("make-decision", {
+      reason: "transparent recovery",
+      expected_previous_run_ref: oldRun.ref,
+      expected_previous_run_hash: oldRun.hash,
+    });
+    expect(() => prepareTaskWorkspace(task)).toThrow(/not an ancestor|fallback|baseline rebinding/i);
+
+    const { resolveTrustedReviewSubject } = await import(cli.href);
+    const subject = resolveTrustedReviewSubject({
+      task_path: taskPath,
+      project_name: "Demo",
+      task_id: "task",
+      stage: "make-decision",
+    });
+
+    expect(subject.candidateWorkspace).toMatchObject({
+      worktreeRoot: realpathSync(worktreeRoot),
+      baselineCommit: execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: worktreeRoot,
+        encoding: "utf8",
+      }).trim(),
+    });
+  });
+
+  it("keeps ordinary make-decision review workspace behavior when no active recovery run exists", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-no-recovery-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
+    createTask({ storageRoot: root, taskPath, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-30T00:00:00.000Z",
+      target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    const { resolveTrustedReviewSubject } = await import(cli.href);
+    const subject = resolveTrustedReviewSubject({
+      task_path: taskPath,
+      project_name: "Demo",
+      task_id: "task",
+      stage: "make-decision",
+    });
+    expect(subject.candidateWorkspace.baselineCommit)
+      .toBe(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim());
   });
 
   it("uses a runner-bound TaskHandle without exposing a public runner field", async () => {

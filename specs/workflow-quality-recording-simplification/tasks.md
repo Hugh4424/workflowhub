@@ -38,7 +38,7 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 - **Phase**：Phase 1：真实 invocation
 - **goal**：复现未 hostInvoke 仍被标记 executed/complete。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-001"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-001"}]`
 - **输入**：五阶段声明与现有 runtime。
 - **依赖**：N/A — first task
 - **并行**：否 — RED/GREEN 串行
@@ -76,7 +76,7 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 - **Phase**：Phase 1：真实 invocation
 - **goal**：真实 dispatch 产生 runtime-owned fact，caller 不能伪造。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-001"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-001"}]`
 - **输入**：T001 RED。
 - **依赖**：T001
 - **并行**：否 — 消费 T001
@@ -147,7 +147,7 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 - **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
 - **goal**：复现内容齐全但调用缺失仍假绿，以及 audit missing 被阻断。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-002"}]`
 - **输入**：T002 invocation facts。
 - **依赖**：T002
 - **并行**：否 — RED/GREEN 串行
@@ -185,7 +185,7 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 - **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
 - **goal**：统一核对 invocation/business/audit 并输出真实 completion。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-002"}]`
 - **输入**：T003 RED。
 - **依赖**：T003
 - **并行**：否 — 消费 T003
@@ -256,7 +256,7 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 - **Phase**：Phase 3：review 生命周期与处理组 3
 - **goal**：复现重复 provider、强制二审、材料不全仍调用和 replay 误聚合。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-003"}]`
 - **输入**：现有 review controller/runner。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -294,7 +294,7 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 - **Phase**：Phase 3：review 生命周期与处理组 3
 - **goal**：同 subject 单 initial，修复追加 resolution，replay 精确验证。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-003"}]`
 - **输入**：T005 RED。
 - **依赖**：T005
 - **并行**：否 — 消费 T005
@@ -366,7 +366,7 @@ A-004；处理组 3 问题 9/15。
 - **Phase**：Phase 4：四材料 current revision
 - **goal**：复现四材料更新被旧 accepted/hash/checkpoint 阻断。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-004"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-004"}]`
 - **输入**：当前材料和 continuation 行为。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -404,7 +404,7 @@ A-004；处理组 3 问题 9/15。
 - **Phase**：Phase 4：四材料 current revision
 - **goal**：四材料和 requirements ledger 支持 append-only revision。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-004"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-004"}]`
 - **输入**：T007 RED、T006 review lifecycle。
 - **依赖**：T007、T006
 - **并行**：否 — 消费 T007
@@ -476,7 +476,7 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 - **Phase**：Phase 5：浏览器 QA 证据
 - **goal**：复现缺页面、auth、性能、截图、命令或 cleanup 仍通过。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-005"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-005"}]`
 - **输入**：现有 isolated-browser-qa 合同。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -514,7 +514,7 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 - **Phase**：Phase 5：浏览器 QA 证据
 - **goal**：UI AC 产出可定位、无凭据泄露的证据。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-005"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-005"}]`
 - **输入**：T009 RED。
 - **依赖**：T009
 - **并行**：否 — 消费 T009
@@ -585,7 +585,7 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 - **Phase**：Phase 6：verify-code 深化与五阶段接线
 - **goal**：复现缺 diff、测试、AC、tasks、UI 或调用仍假绿。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-002"}]`
 - **输入**：Phase 1–5 facts。
 - **依赖**：T004、T008、T010
 - **并行**：否 — RED/GREEN 串行
@@ -623,7 +623,7 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 - **Phase**：Phase 6：verify-code 深化与五阶段接线
 - **goal**：五阶段真实对账；verify 每项给状态、证据和原因。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-002"}]`
 - **输入**：T011 RED、T006/T008/T010 GREEN。
 - **依赖**：T011、T006、T008、T010
 - **并行**：否 — 消费 T011
@@ -691,7 +691,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`scripts/stage-runtime.mjs`（仅作为 Phase 机器白名单）；T014 全量若只暴露既有基线，可机械修复既有 Markdown 白名单；authenticated smoke、lens-only closure/hash 仍限既有白名单。全量诊断确认的 24 个旧 fixture/断言文件可仅迁移到本任务已确认的新合同；`docs/stage-atomic-step-inventory.md` 仅同步当前五份 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖。不得恢复旧 Gate、重复 stage lens dispatch 或弱化 runtime。`check-task-record-paths` 的 14 条旧生产路径治理仅披露，不纳入修改范围。
 - **EXECUTE-ONLY（T013–T015）**：`skills/wh-review/scripts/wh-review-cli.mjs`、`scripts/stage-runtime.mjs`；三个收口 Task 不得现场修改实现，finding 必须返回 owning GREEN。
-- **RECOVERY WORKSPACE RED/GREEN（T016/T017）**：files: `core/workspace.mjs`, `core/stage-context.mjs`, `scripts/stage-runtime.mjs`, `core/task-kernel-implementation.mjs`, `core/__tests__/workspace-manager.test.mjs`, `scripts/__tests__/stage-runtime-recover-run.test.mjs`; kernel implementation 仅用于 runtime-owned previous-run CAS；普通 prepare 保持严格，不新增 schema、认证 Gate 或 caller path/branch/baseline。
+- **RECOVERY WORKSPACE RED/GREEN（T016/T017）**：files: `core/workspace.mjs`, `core/stage-context.mjs`, `scripts/stage-runtime.mjs`, `core/task-kernel-implementation.mjs`, `core/__tests__/workspace-manager.test.mjs`, `scripts/__tests__/stage-runtime-recover-run.test.mjs`, `skills/wh-review/scripts/wh-review-cli.mjs`, `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`; `skills/wh-review/skill-bundle.json` 与 `skills/catalog.yaml` 仅同步受影响 bundle hash；kernel implementation 仅用于 runtime-owned previous-run CAS；active make-decision recovery run 的方向/详情审查继承 recovery workspace，普通/accepted run 与显式 prepare 不变；不新增 schema、认证 Gate 或 caller path/branch/baseline。
 - **DO NOT TOUCH**：旧 run 字节、provider route、Git refs。
 
 ### Tasks
@@ -702,7 +702,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：保存所有已执行全仓检查的真实结果，以代码、风险相关聚焦测试和逐 AC 事实判断完成；全量或审计缺失只披露、不作 Gate。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"AC-16"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"T014"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"AC-16"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"T014"}]`
 - **输入**：T001–T012 与全部 resolution。
 - **依赖**：T006、T008、T010、T012
 - **并行**：否 — 唯一全量
@@ -741,7 +741,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：用可证伪测试固定 recover-run 专用 recovery workspace 合同，同时证明普通 prepare 仍严格。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"T016"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"T016"}]`
 - **输入**：T014 保存的真实 blocker 与旧 run recovery source。
 - **依赖**：T014
 - **并行**：否 — T017 的严格 RED
@@ -779,22 +779,22 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：实现 recover-run 专用、kernel 派生且 fail-closed 的 recovery workspace，解除正式恢复 blocker。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"T017"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"T017"}]`
 - **输入**：T016 RED 与现有 TaskHandle/Workspace/kernel 身份。
 - **依赖**：T016
 - **并行**：否 — 同命令最小 GREEN
 - **FR**：FR-INV-001、FR-INV-002、FR-INV-003、FR-INV-004、FR-INV-005、FR-REC-001、FR-REC-002
 - **AC**：AC-01、AC-02、AC-03、AC-15、AC-16
-- **动作**：保持普通 prepare 严格；为 recover-run 增加窄的 authenticated recovery workspace：从 task/kernel 派生 deterministic registered worktree/branch，允许当前 clean HEAD 相对旧 baseline 为 ahead/diverged，并把该完整 HEAD 作为新 run baseline。精确核验 path、branch、git-common-dir、无 symlink、clean 与当前 full HEAD；不接受 caller path/branch/baseline；旧 run previous ref/hash 只由 kernel append-only 继承。聚焦解决四项 finding：验证 branch reflog origin ancestor 并拒绝 orphan；capability 每次写前持续复核 clean，dirty 不得写；recover-run 仅 make-decision 且 invalid args/stage 在任何写前拒绝；以 runtime-owned expected previous ref/hash CAS 保证同一旧 run 只能产生一个新 run，第二次/并发拒绝。不得新增 schema、认证 Gate、旧历史改写或 fallback。
-- **精确文件**：`core/workspace.mjs`、`core/stage-context.mjs`、`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/workspace-manager.test.mjs`、`scripts/__tests__/stage-runtime-recover-run.test.mjs`。
-- **boundary**：files: `core/workspace.mjs`, `core/stage-context.mjs`, `scripts/stage-runtime.mjs`, `core/task-kernel-implementation.mjs`, `core/__tests__/workspace-manager.test.mjs`, `scripts/__tests__/stage-runtime-recover-run.test.mjs`; symbols/regions: recover-run workspace authentication and runtime-owned previous-run CAS only.
+- **动作**：保持普通 prepare 严格；为 recover-run 增加窄的 authenticated recovery workspace：从 task/kernel 派生 deterministic registered worktree/branch，允许当前 clean HEAD 相对旧 baseline 为 ahead/diverged，并把该完整 HEAD 作为新 run baseline。精确核验 path、branch、git-common-dir、无 symlink、clean 与当前 full HEAD；不接受 caller path/branch/baseline；旧 run previous ref/hash 只由 kernel append-only 继承。聚焦解决四项 finding：验证 branch reflog origin ancestor 并拒绝 orphan；capability 每次写前持续复核 clean，dirty 不得写；recover-run 仅 make-decision 且 invalid args/stage 在任何写前拒绝；以 runtime-owned expected previous ref/hash CAS 保证同一旧 run 只能产生一个新 run，第二次/并发拒绝。active make-decision recovery run 的方向/详情审查必须继承 recovery workspace；普通 run、accepted run 与显式 prepare 保持原语义。不得新增 schema、认证 Gate、旧历史改写或 fallback。
+- **精确文件**：`core/workspace.mjs`、`core/stage-context.mjs`、`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/workspace-manager.test.mjs`、`scripts/__tests__/stage-runtime-recover-run.test.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`skills/wh-review/skill-bundle.json`、`skills/catalog.yaml` 仅同步受影响 bundle hash。
+- **boundary**：files: `core/workspace.mjs`, `core/stage-context.mjs`, `scripts/stage-runtime.mjs`, `core/task-kernel-implementation.mjs`, `core/__tests__/workspace-manager.test.mjs`, `scripts/__tests__/stage-runtime-recover-run.test.mjs`, `skills/wh-review/scripts/wh-review-cli.mjs`, `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`, `skills/wh-review/skill-bundle.json`, `skills/catalog.yaml`; symbols/regions: recover-run workspace authentication, runtime-owned previous-run CAS, active recovery run direction/detail review workspace inheritance, and affected bundle hash synchronization only.
 - **输出**：专用 recovery workspace 能从当前 clean recovery HEAD 建立新 run，普通 prepare 和反例不回归。
 - **Knowledge**：当前 clean recovery HEAD 是新 run baseline；旧 baseline 只作为 previous lineage，不决定新 run 可否开始。
 - **verification_role**：GREEN
 - **paired_task**：T016
 - **gate_cmd**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs`
 - **expected_exit**：0
-- **oracle**：ORACLE-RECOVERY-WORKSPACE — exact registered identity + clean full HEAD + branch reflog origin ancestor 才成功；orphan、caller identity、symlink/dirty/mismatch、非 make-decision、invalid args/stage 均在写前失败；capability 持续复核 clean；旧 run previous ref/hash 不变，新 run baseline 等于当前 HEAD，且 expected previous ref/hash CAS 只允许一个新 run。
+- **oracle**：ORACLE-RECOVERY-WORKSPACE — exact registered identity + clean full HEAD + branch reflog origin ancestor 才成功；orphan、caller identity、symlink/dirty/mismatch、非 make-decision、invalid args/stage 均在写前失败；capability 持续复核 clean；旧 run previous ref/hash 不变，新 run baseline 等于当前 HEAD，且 expected previous ref/hash CAS 只允许一个新 run；active make-decision recovery run 的方向/详情审查使用同一 recovery workspace，普通/accepted run 不变。
 - **evidence_path**：`apply/evidence/T017-recovery-workspace-green.stdout`
 - **STOP**：需要新 schema/Gate、放松普通 prepare、信任 caller 字段、改旧 run、只核 abbreviated HEAD，或无法在任何写前拒绝 orphan/dirty/invalid stage/重复并发 recovery。
 - **recovery**：回退 T017 六文件；保留 T016 RED。
@@ -804,11 +804,11 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`complete`
-- **actual_changes**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。另公开只读 `latestHistoricalStageRun(stage)`：返回已验证 lineage 的最新历史 run（含有效 invalidated run），仅供 recover-run 选源；同一 active recovery run 的后续 make-decision 命令继续使用 recovery workspace，明确 `prepare` 仍走普通严格路径。`activeStageRun` 语义不变，不复活旧 run；其他 stage、旧 run/历史与 schema 均未改。
-- **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，2 files、30/30 tests pass；`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，1 file、8/8 tests pass；同一单文件 continuation 聚焦验证 → exit 0，9/9 tests pass；`git diff --check` → exit 0。
-- **evidence_refs**：初始 GREEN `/tmp/T017-recovery-green.stdout`，sha256 `2de074943b759c5dc4aa0e925c79043bb9d490975f0949cffc6c3f533cdc68ed`；审查 finding 聚焦验证 `/tmp/T017-review-findings-green.stdout`，sha256 `4a94ed99f4fc4017907709a5001d0edb232a5c1a99933aba03d2f5469a2cbece`；invalidated historical source 聚焦验证 `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；recovery continuation 聚焦验证 `/tmp/T015-recovery-continuation-green.stdout`，sha256 `be0b551b6b1824c16dcbe862c06ecdd0cbb82c80883730a29ec6b359b3e9d59d`。
+- **actual_changes**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。另公开只读 `latestHistoricalStageRun(stage)`：返回已验证 lineage 的最新历史 run（含有效 invalidated run），仅供 recover-run 选源；同一 active recovery run 的后续 make-decision 命令继续使用 recovery workspace，明确 `prepare` 仍走普通严格路径。wh-review trusted make-decision subject 只从 TaskKernel 读取 active run：仅 reader 已验证的 recovery source 使用 recovery workspace；普通/accepted run、`activeStageRun` 与其他 stage 语义不变，不接受 caller recovery 字段或路径。机械刷新 wh-review bundle 文件 hash 与 catalog hash；旧 run/历史、SKILL 内容与 schema 均未改。
+- **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，2 files、30/30 tests pass；recover-run 单文件先 8/8、continuation 后 9/9 pass；`npx vitest run --maxWorkers=1 skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs` → exit 0，18/18 tests pass；新 tree 仅一次 `npm run check:skill-closure` → exit 0；`git diff --check` → exit 0。
+- **evidence_refs**：初始 GREEN `/tmp/T017-recovery-green.stdout`，sha256 `2de074943b759c5dc4aa0e925c79043bb9d490975f0949cffc6c3f533cdc68ed`；审查 finding 聚焦验证 `/tmp/T017-review-findings-green.stdout`，sha256 `4a94ed99f4fc4017907709a5001d0edb232a5c1a99933aba03d2f5469a2cbece`；invalidated historical source `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；recovery continuation `/tmp/T015-recovery-continuation-green.stdout`，sha256 `be0b551b6b1824c16dcbe862c06ecdd0cbb82c80883730a29ec6b359b3e9d59d`；方向 review 实跑在 provider 前因普通 workspace ancestor 校验失败，作为本轮新增 RED，未创建 provider attempt；wh-review recovery GREEN `/tmp/T017-wh-review-recovery-green.stdout`，sha256 `b8c6e2a37e06923eeb5231c21fabdd37f66a01b42de58a68b2ca98a26bf87061`；closure `/tmp/T017-wh-review-recovery-closure.stdout`，sha256 `81ae1ce22680bb6c998e94229705a18a0ba9d82af3932a0f94f6f01db7bfaf45`。
 - **covered_ac**：AC-01、AC-02、AC-03、AC-15、AC-16。
-- **review_fact**：独立审查原 verdict=`revise_required` 保留；branch origin、持续 clean、write-before-validation、previous-run CAS 四项 finding 已聚焦修复并由 30/30 验证；按规则未强制二审、未改写为 pass。
+- **review_fact**：独立审查原 verdict=`revise_required` 保留；branch origin、持续 clean、write-before-validation、previous-run CAS 四项 finding 已聚焦修复并由 30/30 验证。随后方向 review 在 provider 前暴露的 active recovery run 普通 workspace ancestor 校验问题已聚焦修复，并由 18/18 与 closure 验证；该 RED 未创建 provider attempt，未二审、未改写为 pass。
 - **completed_at**：2026-07-30。
 
 #### T015: 同任务透明恢复与正式重跑
@@ -817,7 +817,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：旧 run 保持 incomplete，新 run 真实执行声明组件。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"T015"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"T015"}]`
 - **输入**：T017 GREEN 与旧 run recovery source；完成后等待真实用户确认。
 - **依赖**：T017
 - **并行**：否 — 单一正式 run
@@ -855,7 +855,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：异源审查完整候选且不为 pass 重试。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ef5447dee9cdf0d88bded39e82bbcb198e6154253279d2a6569a8efb1c768d3b","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"e1b9fba90bc4bc092ee8825c979d5ad044287d09b951eb0a8fb549d6bf4fa294","id":"DEC-003"}]`
 - **输入**：T015 恢复后的 accepted lineage、正式 build-spec/build-plan/build-code Phase facts、fresh tests、当前 diff 和四材料。
 - **依赖**：T015，以及恢复后正式 accepted build-plan/build-code lineage
 - **并行**：否 — 唯一 review
