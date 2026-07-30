@@ -1418,15 +1418,20 @@ export function buildTaskKernel(taskHandle, {
     task.appendJournal(event);
     return deepFreeze({ workflow_run_id: event.workflow_run_id });
   };
-  const completeMakeDecisionStageStep = (input = {}) => {
-    const name = "make-decision";
+  const completeRuntimeOwnedStageStep = (name, input = {}) => {
+    if (name !== "make-decision" && name !== "build-plan") {
+      throw new TypeError(`unsupported runtime-owned stage: ${name}`);
+    }
     plain(input, "runtime-owned stage step input");
     rejectUnknown(input, new Set(["step_id", "entry_evidence", "completion_evidence", "terminal_status", "skip_reason"]), "runtime-owned stage step input");
+    if (name === "build-plan" && !new Set([7, 8]).has(input.step_id)) {
+      throw new Error("runtime-owned build-plan completion is limited to steps 7 and 8");
+    }
     const terminalStatus = input.terminal_status ?? "success";
     if (!new Set(["success", "skipped"]).has(terminalStatus)) {
       throw new Error("runtime-owned stage step terminal_status must be success or skipped");
     }
-    const isResearchSkip = input.step_id === 4 && terminalStatus === "skipped";
+    const isResearchSkip = name === "make-decision" && input.step_id === 4 && terminalStatus === "skipped";
     if (terminalStatus === "skipped" && (!isResearchSkip || typeof input.skip_reason !== "string" || input.skip_reason.trim() === "")) {
       throw new Error("runtime-owned skipped status is only valid for make-decision research with a skip_reason");
     }
@@ -1490,6 +1495,8 @@ export function buildTaskKernel(taskHandle, {
       return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: false });
     });
   };
+  const completeMakeDecisionStageStep = (input = {}) =>
+    completeRuntimeOwnedStageStep("make-decision", input);
   const completedMakeDecisionDependency = (workflowRunId, stepId) => {
     let events = [];
     try {
@@ -1668,6 +1675,20 @@ export function buildTaskKernel(taskHandle, {
       if (error?.code !== "ENOENT") throw error;
       return `task-current:${name}:${nonemptyString(task.manifest.created_at, "task created_at")}`;
     }
+  };
+  const buildPlanPreConfirmationAudit = (attempt) => {
+    if (attempt?.stage !== "build-plan" || typeof attempt.facts?.audit_summary_ref !== "string") return null;
+    const raw = task.readRecord(attempt.facts.audit_summary_ref);
+    const value = parseJson(raw, "build-plan pre-confirmation audit");
+    if (value.through_step_id !== 6) return null;
+    if (value.summary_hash !== attempt.facts.audit_summary_hash
+        || value.verdict !== "pass" || attempt.facts.audit_verdict !== "pass"
+        || hashAuditSummary(value) !== value.summary_hash
+        || value.task_id !== task.identity.taskId || value.stage_slug !== "build-plan"
+        || value.workflow_run_id !== deriveStageWorkflowRunId("build-plan")) {
+      throw new Error("build-plan pre-confirmation audit binding mismatch");
+    }
+    return { raw, value };
   };
   const verifyAuditPublication = (stage, facts) => {
     const raw = task.readRecord(facts.audit_summary_ref);
@@ -3690,6 +3711,7 @@ export function buildTaskKernel(taskHandle, {
       if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
       if (!new Set(["accepted", "rejected"]).has(decision)) throw new TypeError("explicit confirmation decision must be accepted or rejected");
       const attempt = validateAttempt(parseJson(task.readRecord(`results/${name}/${attemptRef}`), `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+      const buildPlanPreAudit = buildPlanPreConfirmationAudit(attempt);
       const ref = `confirmations/${name}/${attemptRef}`;
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let record;
@@ -3709,7 +3731,21 @@ export function buildTaskKernel(taskHandle, {
           completeMakeDecisionStageStep({
             step_id: 11,
             entry_evidence: { kind: "stage_attempt", uri_or_path: `results/${name}/${attemptRef}`, content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)) },
-            completion_evidence: { kind: "human_confirmation", uri_or_path: ref, content_hash: hash(raw) },
+              completion_evidence: { kind: "human_confirmation", uri_or_path: ref, content_hash: hash(raw) },
+          });
+        } else if (buildPlanPreAudit && decision === "accepted") {
+          completeRuntimeOwnedStageStep("build-plan", {
+            step_id: 7,
+            entry_evidence: {
+              kind: "stage_attempt",
+              uri_or_path: `results/${name}/${attemptRef}`,
+              content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)),
+            },
+            completion_evidence: {
+              kind: "human_confirmation",
+              uri_or_path: ref,
+              content_hash: hash(raw),
+            },
           });
         }
         return deepFreeze({ ref, confirmation: record });
@@ -3731,6 +3767,7 @@ export function buildTaskKernel(taskHandle, {
         if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
         const attemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
         const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name });
+        const buildPlanPreAudit = buildPlanPreConfirmationAudit(attempt);
         let fullAudit;
         if (name === "verify-code" && attempt.verification_failure === true) {
           throw new Error("cannot accept a failed verify-code attempt");
@@ -3876,8 +3913,42 @@ export function buildTaskKernel(taskHandle, {
               || audit.snapshot_tree !== attempt.facts.snapshot_tree) {
             throw new Error("make-decision acceptance requires a canonical passing full audit through step 12");
           }
-        } else if (options.full_audit_writer !== undefined) {
-          throw new Error("full audit writer is only valid for a bounded make-decision attempt");
+        } else if (buildPlanPreAudit) {
+          if (typeof options.full_audit_writer !== "function") {
+            throw new Error("build-plan acceptance requires the runtime-owned full audit writer");
+          }
+          completeRuntimeOwnedStageStep("build-plan", {
+            step_id: 8,
+            entry_evidence: {
+              kind: "human_confirmation",
+              uri_or_path: humanConfirmationRef,
+              content_hash: hash(confirmationRaw),
+            },
+            completion_evidence: {
+              kind: "stage_attempt",
+              uri_or_path: `results/${name}/${attemptRef}`,
+              content_hash: hash(attemptRaw),
+            },
+          });
+          const buildPlanFullAudit = plain(options.full_audit_writer(), "build-plan full audit");
+          rejectUnknown(buildPlanFullAudit, new Set(["ref", "hash", "summary_hash"]), "build-plan full audit");
+          const preAudit = buildPlanPreAudit.value;
+          const auditRaw = task.readRecord(buildPlanFullAudit.ref);
+          const audit = parseJson(auditRaw, "build-plan full audit");
+          if (hash(auditRaw) !== buildPlanFullAudit.hash || audit.summary_hash !== buildPlanFullAudit.summary_hash
+              || hashAuditSummary(audit) !== audit.summary_hash
+              || hashAuditSummary(preAudit) !== preAudit.summary_hash
+              || audit.verdict !== "pass" || audit.stage_slug !== name
+              || audit.task_id !== task.identity.taskId || audit.through_step_id !== 8
+              || preAudit.verdict !== "pass" || preAudit.stage_slug !== name
+              || preAudit.task_id !== task.identity.taskId || preAudit.through_step_id !== 6
+              || audit.workflow_run_id !== preAudit.workflow_run_id
+              || audit.snapshot_tree !== preAudit.snapshot_tree
+              || JSON.stringify(audit.content_evidence_refs) !== JSON.stringify(preAudit.content_evidence_refs)) {
+            throw new Error("build-plan acceptance requires a canonical passing full audit through step 8");
+          }
+        } else if (options.full_audit_writer !== undefined && name !== "build-plan") {
+          throw new Error("full audit writer is only valid for a bounded human-confirmation attempt");
         }
         revalidateControlledVerifyPassing?.("pre");
         let acceptedCheckpoint;

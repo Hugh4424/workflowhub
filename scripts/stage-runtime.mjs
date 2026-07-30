@@ -428,7 +428,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       ...(values.stage === "make-decision" && input.receipts.decision_revision
         ? { decisionRef: input.receipts.decision_revision }
         : {}),
-      ...(values.stage === "make-decision" ? { throughStepId: 10 } : {}),
+      ...(values.stage === "make-decision"
+        ? { throughStepId: 10 }
+        : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
     });
     const controlledInput = { ...input, receipts: { ...input.receipts, audit: audit.audit_summary_ref } };
     const attempt = await runOfficialStage(values.stage, context, controlledInput, {
@@ -452,8 +454,21 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   const acceptedResult = acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
-    ...(values.stage !== "make-decision" ? {} : {
+    ...(!new Set(["make-decision", "build-plan"]).has(values.stage) ? {} : {
       fullAuditWriter: () => {
+        if (values.stage === "build-plan") {
+          const audit = writeCanonicalAuditSummary({
+            task: context.task,
+            workspace: context.workspace,
+            stage: "build-plan",
+            throughStepId: 8,
+          });
+          return {
+            ref: audit.audit_summary_ref,
+            hash: audit.audit_record_hash,
+            summary_hash: audit.audit_summary_hash,
+          };
+        }
         const attemptRaw = context.task.readRecord(`results/make-decision/${values.attempt}`);
         const attempt = JSON.parse(attemptRaw);
         const decisionRevisionRef = attempt.evidence_refs?.find((entry) =>
