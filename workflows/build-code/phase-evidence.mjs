@@ -317,30 +317,31 @@ function phaseSubject(task, workspace, phaseResult) {
   };
 }
 
-function tasksOnlyBaseline(task, workspace, previous) {
-  const previousCommit = previous.scan.implementation_commit;
+function validateTasksCompletionSeam(task, workspace, {
+  beforeCommit,
+  phaseId,
+  implementationReceiptRef,
+  greenTestReceiptRef,
+  reviewRef,
+}) {
   const tasksPath = `specs/${task.identity.taskId}/tasks.md`;
-  const before = execFileSync("git", ["show", `${previousCommit}:${tasksPath}`], {
+  const before = execFileSync("git", ["show", `${beforeCommit}:${tasksPath}`], {
     cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
   });
   const after = readFileSync(resolve(workspace.worktreeRoot, tasksPath), "utf8");
   const phaseTasks = resolvePhaseTaskIds({
     plan: readFileSync(resolve(workspace.worktreeRoot, `specs/${task.identity.taskId}/plan.md`), "utf8"),
     tasks: after,
-    phaseId: previous.phaseResult.phase_id,
+    phaseId,
   });
-  const requiredRefs = [
-    previous.phaseResult.evidence?.implementation_receipt_ref,
-    previous.phaseResult.evidence?.green_test_receipt_ref,
-    currentPhaseReviewRef(previous.phaseResult),
-  ];
+  const requiredRefs = [implementationReceiptRef, greenTestReceiptRef, reviewRef];
   const requiredBindings = requiredRefs.map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
   const seam = validateTasksOnlyCompletionSeam({
     before,
     after,
     allowedTaskIds: phaseTasks.task_ids,
     requiredBindings,
-    expectedReviewRef: currentPhaseReviewRef(previous.phaseResult),
+    expectedReviewRef: reviewRef,
     completionEvidence: ({ ref }) => {
       try { return task.readRecord(ref); }
       catch (error) {
@@ -350,6 +351,18 @@ function tasksOnlyBaseline(task, workspace, previous) {
     },
   });
   if (!seam.ok) throw new Error(`invalid tasks-only completion seam: ${seam.errors.join("; ")}`);
+  return { tasksPath, after };
+}
+
+function tasksOnlyBaseline(task, workspace, previous) {
+  const previousCommit = previous.scan.implementation_commit;
+  const { tasksPath, after } = validateTasksCompletionSeam(task, workspace, {
+    beforeCommit: previousCommit,
+    phaseId: previous.phaseResult.phase_id,
+    implementationReceiptRef: previous.phaseResult.evidence?.implementation_receipt_ref,
+    greenTestReceiptRef: previous.phaseResult.evidence?.green_test_receipt_ref,
+    reviewRef: currentPhaseReviewRef(previous.phaseResult),
+  });
   const index = resolve(tmpdir(), `workflowhub-tasks-seam-${randomUUID()}.index`);
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {
@@ -493,8 +506,35 @@ function phaseCommit(workspace, tree, baseline, phaseId) {
   }).trim();
 }
 
-function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot) {
+function assertLiveWorkspaceMatchesImplementation(task, workspace, implementation, snapshot, current, input) {
   if (snapshot.tree === implementation.value.snapshot_tree) return;
+  const tasksSeamEligible = current?.phase_id === input.phase_id
+    && current.status === "awaiting_review"
+    && input.review_result_ref !== undefined
+    && current.evidence?.implementation_receipt_ref === input.implementation_receipt_ref
+    && current.evidence?.green_test_receipt_ref === input.green_test_receipt_ref
+    && current.evidence?.red_evidence_ref === input.red_evidence_ref;
+  if (tasksSeamEligible) {
+    const tasksPath = `specs/${task.identity.taskId}/tasks.md`;
+    const tasksOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "tasks-completion");
+    const tasksOnly = createPhaseDiffScan({
+      sourceRoot: workspace.worktreeRoot,
+      phaseId: "tasks-completion",
+      baselineCommit: implementation.value.snapshot_commit,
+      implementationCommit: tasksOnlyCommit,
+      allowedFiles: [tasksPath],
+    });
+    if (tasksOnly.safe && tasksOnly.changed_files.length === 1 && tasksOnly.changed_files[0] === tasksPath) {
+      validateTasksCompletionSeam(task, workspace, {
+        beforeCommit: implementation.value.snapshot_commit,
+        phaseId: input.phase_id,
+        implementationReceiptRef: input.implementation_receipt_ref,
+        greenTestReceiptRef: input.green_test_receipt_ref,
+        reviewRef: input.review_result_ref,
+      });
+      return;
+    }
+  }
   const runtimeOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "runtime-context");
   const runtimeOnly = createPhaseDiffScan({
     sourceRoot: workspace.worktreeRoot,
@@ -624,8 +664,10 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         snapshotTree: implementation.value.snapshot_tree,
       });
     const before = captureWorkspaceSnapshot(workspace);
-    if (input.recovery_ref === undefined) assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
+    if (input.recovery_ref === undefined) {
+      assertLiveWorkspaceMatchesImplementation(task, workspace, implementation, before, current, input);
+    }
     if (current?.recovery_ref !== undefined) {
       if (input.recovery_ref !== current.recovery_ref || input.recovery_hash !== current.recovery_hash) throw new Error("recovered Phase publication requires the current recovery_ref and recovery_hash");
       const generation = readRecoveryGeneration(task, "phase-pointer");

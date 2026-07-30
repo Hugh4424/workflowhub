@@ -409,6 +409,48 @@ describe("build-code phase evidence publication", () => {
       .toThrow(/live artifact differs from checkpoint: .*tasks\.md/i);
   });
 
+  it("finalizes a reviewed Phase across only its authenticated tasks completion seam", () => {
+    const completed = fixture("phase-finalize-tasks-seam");
+    const completedReceipts = phaseReceipts(completed, "phase-1");
+    const pending = publish(completed, "phase-1", completedReceipts);
+    const review = formalPhaseReview(completed, pending);
+    recordPhaseTaskCompletion(completed, "phase-1", review);
+    const finalized = publish(completed, "phase-1", completedReceipts, { review_result_ref: review });
+    expect(finalized.review_verdict).toBe("pass");
+    expect(JSON.parse(completed.task.readRecord("phase-result.json"))).toMatchObject({
+      phase_id: "phase-1",
+      status: "done",
+      review: { result_ref: review, verdict: "pass" },
+    });
+
+    const extraFile = fixture("phase-finalize-extra-drift");
+    const extraReceipts = phaseReceipts(extraFile, "phase-1");
+    const extraPending = publish(extraFile, "phase-1", extraReceipts);
+    const extraReview = formalPhaseReview(extraFile, extraPending);
+    recordPhaseTaskCompletion(extraFile, "phase-1", extraReview);
+    writeFileSync(join(extraFile.workspace.worktreeRoot, "unexpected.txt"), "not part of the tasks seam\n");
+    expect(() => publish(extraFile, "phase-1", extraReceipts, { review_result_ref: extraReview }))
+      .toThrow(/live Workspace snapshot drifted|tasks-only completion seam/i);
+
+    const nonStatus = fixture("phase-finalize-non-status-drift");
+    const nonStatusReceipts = phaseReceipts(nonStatus, "phase-1");
+    const nonStatusPending = publish(nonStatus, "phase-1", nonStatusReceipts);
+    const nonStatusReview = formalPhaseReview(nonStatus, nonStatusPending);
+    recordPhaseTaskCompletion(nonStatus, "phase-1", nonStatusReview);
+    const nonStatusTasks = join(
+      nonStatus.workspace.worktreeRoot,
+      "specs",
+      nonStatus.task.identity.taskId,
+      "tasks.md",
+    );
+    writeFileSync(
+      nonStatusTasks,
+      readFileSync(nonStatusTasks, "utf8").replace("#### T001 — Phase 1", "#### T001 — Changed contract title"),
+    );
+    expect(() => publish(nonStatus, "phase-1", nonStatusReceipts, { review_result_ref: nonStatusReview }))
+      .toThrow(/tasks-only completion seam|live Workspace snapshot drifted/i);
+  });
+
   it("seals a non-ignored untracked file into the first Phase only, while rejecting later workspace drift", () => {
     const state = fixture("phase-untracked-snapshot");
     const firstReceipts = phaseReceipts(state, "phase-1", {
