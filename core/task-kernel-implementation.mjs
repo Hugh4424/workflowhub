@@ -2379,7 +2379,7 @@ export function buildTaskKernel(taskHandle, {
       return { baseCommit, baseTree };
     }
     if (name === "build-plan") {
-      const spec = readAcceptedLocal("build-spec");
+      const spec = readAcceptedLocal("build-spec", { liveCheckpoint: false });
       const snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot);
       const currentHead = snapshot.head;
       const integrationTree = String(execFileSync("git", ["rev-parse", `${currentHead}^{tree}`], {

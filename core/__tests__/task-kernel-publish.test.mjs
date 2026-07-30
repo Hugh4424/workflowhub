@@ -1575,8 +1575,9 @@ describe("TaskKernel append-only publication", () => {
     execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "post spec code"], { cwd: workspace.worktreeRoot });
     const postSpecHead = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspace.worktreeRoot })).trim();
     artifacts.writeAtomic("decision-log.md", "# Revised Current Decision\n");
+    artifacts.writeAtomic("spec.md", "# Revised Current Spec\n");
     bound.publishMaterialRevision({
-      change_summary: "authorize revised current decision",
+      change_summary: "authorize revised current decision and spec",
       source_refs: ["results/make-decision/accepted.json"],
       expected_current_ref: firstRevision.revision_ref,
     });
@@ -1603,6 +1604,9 @@ describe("TaskKernel append-only publication", () => {
     artifacts.writeAtomic("decision-log.md", "# Unrecorded Decision\n");
     expect(() => bound.createCheckpoint("build-spec")).toThrow(/current material revision does not bind live decision-log\.md/i);
     expect(() => bound.createCheckpoint("build-plan")).toThrow(/current material revision does not bind live decision-log\.md/i);
+    artifacts.writeAtomic("decision-log.md", "# Revised Current Decision\n");
+    artifacts.writeAtomic("spec.md", "# Unrecorded Spec\n");
+    expect(() => bound.createCheckpoint("build-plan")).toThrow(/current material revision does not bind live spec\.md/i);
   });
 
   it("rejects a clean current HEAD unrelated to the accepted make-decision lineage", () => {
