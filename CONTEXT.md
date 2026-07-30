@@ -103,6 +103,28 @@ make-decision 的完整决策记录；逐题保存问题、最终选择、推荐
 runner replacement generation 只属于 `legacy_pinned` 历史兼容。`per_invocation` 任务的正常
 WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态恢复仍使用恢复代次。
 
+**阶段恢复 run（stage recovery run）**：
+同一任务为恢复中断或已失效的正式阶段而追加的新的 stage run。它只引用旧 run 作为
+`recovery_source_ref/hash`，不继承旧 run 的 invocation、完成或 accepted 事实；新 run 必须
+在当前已认证、干净工作树的完整 HEAD 上重新产生自己的事实。它不是新的任务、不是重开
+许可，也不改写旧 run。
+
+**恢复来源（recovery source）**：
+被新阶段恢复 run 引用的最近历史 run。有效 invalidation 使旧 run 不能继续作为 active run，
+但仍可作为下一次恢复的只读来源；同一未失效恢复 run 不能被重复消费。make-decision 的
+活动恢复 run 后续命令与方向/详情审查使用同一已认证 recovery workspace；普通 `prepare`
+和已接受 run 仍使用原有严格工作区规则。
+
+**当前材料版本（current material revision）**：
+同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
+变更来源。旧版本、hash 和 checkpoint 保留为历史；它们不阻止当前材料继续开发或验证。
+
+**当前 requirements 指针（current requirements pointer）**：
+指向同一任务最新 requirements ledger 与 coverage 的受控选择记录。requirement ID、每代
+ledger/coverage 字节和 lineage 不可变；pointer 可在 append-only revision 后更新。复用
+当前 ledger 前必须同时核验 ledger 与 coverage 的 ref、hash 和实际内容，不能用指针本身
+冒充覆盖事实。
+
 **恢复门禁（recovery gate）**：
 恢复前按恢复目标一次性核验任务身份、来源、收据和工作树，任一不符即拒绝且不影响其他目标。
 

@@ -1,7 +1,7 @@
 # 实现计划：WorkflowHub 核心质量流程真实执行与轻量记录
 
 - **Input**：`specs/workflow-quality-recording-simplification/spec.md`
-- **Status**：In progress — transparent recovery；T001–T008 complete，T009 current
+- **Status**：In progress — transparent recovery；T001–T014、T016–T017 complete，T015 当前执行 run-0005
 - **Template version**：`plan-task.v3`
 
 ## 1. 速读卡
@@ -11,7 +11,7 @@
 - **Before**：手写 payload、receipt 或 journal 可被误当成 Skill 已执行，质量步骤与完成声明脱节。
 - **After**：真实 `hostInvoke` 产生 invocation fact；统一 reconcile 用真实调用和业务事实判断完成。
 - **Main risk**：把“真实执行”误实现为新的开发进入 Gate。
-- **Next step**：完成 T009 干净 RED，再执行 T010 GREEN 与 Phase 5 独立审查。
+- **Next step**：完成 run-0005 的 grill、决策收据、详情审查和 attempt；仅在真实用户确认后进入正式 build lineage。
 
 ## 2. Technical Context and Constraints
 
@@ -24,8 +24,7 @@
 - **Performance goals**：同一 review subject 最多一次 initial provider dispatch；普通修复 provider 调用数为 0。
 - **Scale / scope**：五阶段、15 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
 - **Relevant ADR / context**：`CONSTITUTION.md`、`CONTEXT.md`、处理组 3 问题 9/15。
-- **Current unresolved fact**：T009 的完整三文件 Gate 仍受慢 fixture 影响；
-  必须形成只含 ORACLE-BQA 目标失败的 RED，或按 STOP 规则如实记录，不能跳到 Phase 6。
+- **Current unresolved fact**：run-0005 尚未获得最终人类确认；T013 的 build-code 独立审查还受本机 provider priority 配置警告影响，未经用户单独授权不得改全局配置。
 
 ### Global Constraints
 

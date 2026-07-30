@@ -3,7 +3,7 @@
 ## 恢复状态
 
 - 当前任务采用“同任务透明恢复”。
-- 两次 `make-decision` run 均保留为历史并已正式标记 invalidated/incomplete；它们不能称为 accepted 或 pass。
+- `make-decision` run-0001 至 run-0004 均保留为历史并已正式标记 invalidated/incomplete；它们不能称为 accepted 或 pass。
 - 原因：正式 runtime 没有调用 `skill-deps.yaml` 声明的组件，caller 可以直接发布 payload、receipt 或 journal 来完成步骤。
 - 不删除、不覆盖、不倒填旧记录；不把手写 payload 改称真实 Skill invocation。
 - 先在当前 task/worktree 维护四材料并修复通用编排；修复后从正式入口重跑 `make-decision`。
@@ -88,3 +88,8 @@
 - 用户纠正：问题不是修改 talk Skill，而是五阶段声明的质量流程可被跳过。
 - 用户决定：采用同任务透明恢复。
 - `CONSTITUTION.md` v1.5.0：F1、F3、F4、F5、F8、F9、F10、Q1、Q2、Q3、S7、S8。
+
+## 开放事项
+
+- 当前 run-0005 正在以真实 invocation 完成正式 make-decision；最终人类确认尚未发生，不能称 accepted。
+- 方向审查已提示本机 build-code provider priority 排序配置警告。它不改变本任务方向；若它在后续 T013 实际阻断独立审查，必须如实报告并取得用户对全局配置变更的单独授权，不能静默修改。
