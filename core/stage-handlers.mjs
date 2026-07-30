@@ -1112,16 +1112,14 @@ HANDLERS.set("verify-code", async (worker, input) => {
   authenticateReviewHead(worker, review, {
     stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: "integration",
   });
-  authenticateReviewHead(worker, qualityReview, {
-    stage: "verify-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: null,
-  });
   const evidence = receipt(worker, input, "evidence");
   const verification = input.receipts.verification === undefined ? null : receipt(worker, input, "verification");
   if (verification !== null && !Array.isArray(verification.value.items)) throw new TypeError("verification.items must be array");
   const current = worker.snapshotWorkspace();
-  if (qualityReview.facts.snapshot_tree !== current.tree) {
-    throw new Error("verify-code quality review does not bind the current verification snapshot");
-  }
+  const qualityReviewBinding = bindFinalReview(worker, input, qualityReview, current.tree, {
+    stage: "verify-code",
+    resolutionName: "quality_review_resolution",
+  });
   const acceptedReview = acceptedBuild.facts.review ?? {};
   const acceptedRef = acceptedReview.result_ref ?? acceptedReview.attempt_ref;
   const acceptedHash = acceptedReview.result_hash ?? acceptedReview.attempt_hash;
@@ -1192,7 +1190,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   }
   const result = addCompletion("verify-code", {
     facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), ...audit.facts },
-    evidence_refs: [tests.evidence, review.evidence, qualityReview.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), audit.evidence, ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
+    evidence_refs: [tests.evidence, review.evidence, qualityReview.evidence, ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), audit.evidence, ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
     missing_items: [...mismatches, ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : [])],
   }, {
     worker,

@@ -200,7 +200,11 @@ idempotent. Other attempts against a closed stage remain rejected.
    `node scripts/stage-runtime.mjs publish-acceptance-evidence
    --stage=verify-code --project=<project> --task=<task>
    --input=$TMP_DIR/acceptance-evidence.json`. The exact input shape is
-   `{"acceptance_criterion_id":"<AC-ID>","result":"pass|fail","refs":[{"ref":"<canonical evidence ref>","sha256":"<writer-returned hash>"}]}`.
+   `{"acceptance_criterion_id":"<AC-ID>","result":"pass|fail","refs":[{"ref":"<canonical evidence ref>","sha256":"<writer-returned hash>"}],"summary":{"scenario":"<scenario>","oracle":"<expected result>","actual_outcome":"<observed result>","evidence_type":"structured_observation","coverage_limits":["<limit or none>"],"exceptions":["<exception or none>"]}}`.
+   `summary` is optional for compatibility, but when supplied it must contain
+   at least one validated non-empty field. The caller may not supply
+   `snapshot_tree`; the runtime injects the authenticated current Workspace
+   tree.
    The runtime verifies every nested current-task ref and hash, chooses the
    deterministic leaf path, and rejects duplicate publication. The caller may
    not choose an output path. Aggregate only the returned leaf refs and hashes

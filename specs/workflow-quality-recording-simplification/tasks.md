@@ -1121,6 +1121,86 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **review_fact**：独立审查 `PASS`，无阻断 finding；schema、task/stage、flow head、ref/hash、scope、tree 认证均保留，非 preflight 空 provider attempts 仍失败。
 - **completed_at**：2026-07-30。
 
+#### T024: RED：acceptance summary 与 verify resolution 恢复链断裂
+
+- **ID**：T024
+- **Phase**：Phase 9：verify review 证据闭环与失败恢复
+- **goal**：复现正式 publisher 丢失结构化 AC 语义，以及 verify handler 无法消费最新 quality resolution。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"1c7ed5906303a83740f57327cc0c7d3ff6e49225d4e287883273a88757930aab","id":"T024"}]`
+- **输入**：首次 verify-code `revise_required`、AC-11/AC-16 失败 leaf、canonical response resolution。
+- **依赖**：T013
+- **并行**：否 — T025 的严格 RED
+- **FR**：FR-BQA-001、FR-BQA-002、FR-VER-001、FR-VER-002
+- **AC**：AC-11、AC-13、AC-14、AC-16
+- **动作**：官方 acceptance publication 增加完整 summary、空 summary、caller snapshot 反例；verify handler 增加 latest quality resolution 消费反例。
+- **精确文件**：`scripts/__tests__/stage-runtime-acceptance-publication.test.mjs`、`tests/final-cutover-guards.red.test.mjs`
+- **boundary**：files: `scripts/__tests__/stage-runtime-acceptance-publication.test.mjs`, `tests/final-cutover-guards.red.test.mjs`; symbols/regions: acceptance publication and verify quality resolution fixtures only.
+- **输出**：ORACLE-VERIFY-REVIEW-RECOVERY RED。
+- **Knowledge**：verify review F-37908fd4d5d6、F-638d5d6dbbce、F-ddd3288061e3。
+- **verification_role**：RED
+- **paired_task**：T025
+- **gate_cmd**：`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-acceptance-publication.test.mjs tests/final-cutover-guards.red.test.mjs -t "verify-code acceptance publication input|consumes the latest verify-code quality review resolution"`
+- **expected_exit**：1，两个新 oracle 至少各失败一次。
+- **oracle**：ORACLE-VERIFY-REVIEW-RECOVERY — summary 可通过正式入口发布且 snapshot runtime-owned；最新 resolution 可被 verify handler 认证。
+- **evidence_path**：`apply/evidence/T024-verify-review-recovery-red.stdout`
+- **STOP**：caller 自报 snapshot、绕过 flow/ref/hash/scope/tree、覆盖旧 leaf 或重跑 provider。
+- **recovery**：只回退本 Task 测试字节，保留原 review、resolution 和失败 AC。
+- **task risk**：fixture 直接调用 validator 造成假 GREEN。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes_history**：新增官方 acceptance publication 的结构化 summary、runtime snapshot、空 summary、caller field RED；新增 latest quality resolution 跨 snapshot RED。
+- **actual_changes**：`[]`
+- **executed_commands**：`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-acceptance-publication.test.mjs tests/final-cutover-guards.red.test.mjs -t "verify-code acceptance publication input|consumes the latest verify-code quality review resolution"` → exit 1，summary publisher 5 个目标失败，resolution 消费 1 个目标失败；修复 finding 后 distinct-tree resolution RED 再次精确命中旧 tree 检查。
+- **evidence_history**：首次 verify review、AC-11/AC-16 失败 leaf、canonical response resolution 与聚焦 RED stdout；无 canonical Phase test receipt。
+- **evidence_refs**：`[{"ref":"evidence/acceptance-8cd7fbab1ed15d5f2e88dd303abb6ecb889293b96a7e52c7c6e54fec7fa0d6cd.json","sha256":"8cd7fbab1ed15d5f2e88dd303abb6ecb889293b96a7e52c7c6e54fec7fa0d6cd","kind":"task_record"},{"ref":"evidence/acceptance-429d79dff5ca84d6d16c831668863245f8fadc5402c8dc30da3323cb6982f72d.json","sha256":"429d79dff5ca84d6d16c831668863245f8fadc5402c8dc30da3323cb6982f72d","kind":"task_record"}]`
+- **covered_ac**：AC-11、AC-13、AC-14、AC-16。
+- **review_fact**：RED 阶段不单独审查；由 T025 聚焦独立审查覆盖。
+- **completed_at**：2026-07-30。
+
+#### T025: GREEN：结构化 acceptance publication 与 resolution-aware verify
+
+- **ID**：T025
+- **Phase**：Phase 9：verify review 证据闭环与失败恢复
+- **goal**：让正式 verify packet 暴露可验证的场景/oracle，并让修复处置能进入失败或通过结论。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"1c7ed5906303a83740f57327cc0c7d3ff6e49225d4e287883273a88757930aab","id":"T025"}]`
+- **输入**：T024 RED。
+- **依赖**：T024
+- **并行**：否 — 消费 T024
+- **FR**：FR-BQA-001、FR-BQA-002、FR-VER-001、FR-VER-002、FR-VER-003
+- **AC**：AC-11、AC-13、AC-14、AC-16
+- **动作**：`publish-acceptance-evidence` 接受 validator 已支持的可选 summary 并注入当前 snapshot；verify handler 以 canonical `quality_review_resolution` 验证最新 flow action；同步 verify Skill 精确输入合同。
+- **精确文件**：`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/stage-handlers.mjs`、`workflows/verify-code/SKILL.md`、`scripts/__tests__/stage-runtime-acceptance-publication.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/final-cutover-guards.red.test.mjs`、`specs/workflow-quality-recording-simplification/plan.md`、`specs/workflow-quality-recording-simplification/tasks.md`
+- **boundary**：files: `scripts/stage-runtime.mjs`, `core/task-kernel-implementation.mjs`, `core/stage-handlers.mjs`, `workflows/verify-code/SKILL.md`, `scripts/__tests__/stage-runtime-acceptance-publication.test.mjs`, `scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`, `tests/final-cutover-guards.red.test.mjs`, `specs/workflow-quality-recording-simplification/plan.md`, `specs/workflow-quality-recording-simplification/tasks.md`; symbols/regions: acceptance evidence input normalization, verify quality resolution binding, exact regression expectation, and Phase 9 material/completion records only.
+- **输出**：ORACLE-VERIFY-REVIEW-RECOVERY GREEN；旧无 summary 调用兼容。
+- **Knowledge**：unknown 保留为真实未知；review resolution 是审计处置，不升级旧 verdict。
+- **verification_role**：GREEN
+- **paired_task**：T024
+- **gate_cmd**：`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-acceptance-publication.test.mjs tests/final-cutover-guards.red.test.mjs -t "verify-code acceptance publication input|consumes the latest verify-code quality review resolution"`
+- **expected_exit**：0。
+- **oracle**：ORACLE-VERIFY-REVIEW-RECOVERY。
+- **evidence_path**：`apply/evidence/T025-verify-review-recovery-green.stdout`
+- **STOP**：让 summary 绕过 refs、允许 caller snapshot、吞 resolution mismatch、自动二审或运行全量测试。
+- **recovery**：回退新增代码；旧 evidence/review/resolution 保持不变。
+- **task risk**：summary 成为未认证 PASS，或 resolution 被用作 verdict 替代。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes_history**：official publisher 接受可选结构化 summary 并注入认证 Workspace tree；空 summary 与 caller snapshot/未知字段失败。verify handler 复用 `bindFinalReview` 消费 canonical quality resolution，允许严格认证的旧 review→当前修复 tree 桥接。
+- **actual_changes**：`["core/stage-handlers.mjs","core/task-kernel-implementation.mjs","scripts/stage-runtime.mjs","scripts/__tests__/stage-runtime-acceptance-publication.test.mjs","scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs","specs/workflow-quality-recording-simplification/plan.md","tests/final-cutover-guards.red.test.mjs","workflows/verify-code/SKILL.md"]`
+- **executed_commands**：`[{"command":"npx vitest run --maxWorkers=1 core/__tests__/stage-skill-runtime.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/stage-content-evidence.test.mjs tests/stage-completion-facts.test.mjs tests/five-stage-facts-v2.test.mjs tests/final-cutover-guards.red.test.mjs scripts/__tests__/stage-runtime-acceptance-publication.test.mjs -t \"verify-code acceptance publication input|consumes the latest verify-code quality review resolution|records an always dependency as executed only after hostInvoke returns an outcome|records an untriggered conditional skill without invoking the host|records a truthful unavailable fact before propagating a hostInvoke failure|uses the verified current material revision for design checkpoints|publishes complete browser QA evidence bound to the runtime snapshot and identity|accepts explicit non-UI N/A without creating a global browser Gate|rejects private browser field|accepts a complete itemized verify result with status, evidence, and reason per item|keeps review unavailable and audit missing as disclosures|preserves itemized verify status without turning audit disclosure into a Gate\"","exit_code":0},{"command":"npx vitest run --maxWorkers=1 --reporter=json scripts/__tests__/stage-runtime-acceptance-publication.test.mjs tests/final-cutover-guards.red.test.mjs -t \"verify-code acceptance publication input|consumes the latest verify-code quality review resolution\" 2>/dev/null","exit_code":0}]`
+- **evidence_history**：聚焦 GREEN stdout；独立 Phase review 原 verdict=`revise_required`，发现同 tree fixture 假 GREEN；修复后 distinct-tree 聚焦测试通过，未再次调用 reviewer；正式 integration review 因旧任务没有 canonical Phase map trace 记录为 `unavailable/MATERIAL_INCOMPLETE`，未伪造 provider PASS，也未把审计缺失变成 Gate。
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/c38c1d3826580bd6fc5b48ac48843777876149bfd342b625afe40cf47d66e181.json","sha256":"2d6cbc0064c4798cb5e800f9323a3cbf5842dda51bfb4fdecf7cd333e8fb8d6d","kind":"task_record"},{"ref":"receipts/build-tests-phase9-final2.json","sha256":"4e6489c69584c978644add9d909f18a93548d8286fb9ef93bf11268e473fb14a","kind":"test_run"},{"ref":"evidence/build-tests-phase9-coverage.json","sha256":"5059a27542b2533f93a85a81aff836353267c69d853207351a13aae2aab3471b","kind":"task_record"},{"ref":"reviews/attempts/d5c9b645-b434-4e85-9e06-1ff7533556cc/attempt.json","sha256":"6b70d25a4a4a08b9159068a7c99b9ab29109a89b749b829d985e5a28043f66d6","kind":"review_fact"},{"ref":"results/build-code/revisions/reopen-0001.json","sha256":"a5a864b1868198c4edf5ec7e94e3812187edb380ebe1c66a3b2c9392ac2ddc18","kind":"task_record"},{"ref":"evidence/acceptance-ffa4444c1507a57c6a1d3495ba7d4fac1130d9004543a2ff22d322e669d1e128.json","sha256":"ffa4444c1507a57c6a1d3495ba7d4fac1130d9004543a2ff22d322e669d1e128","kind":"task_record"},{"ref":"evidence/acceptance-da29af767bd1834a48872358e4ae433e768b2ecbf24bcf799cb2d4e70129d4b9.json","sha256":"da29af767bd1834a48872358e4ae433e768b2ecbf24bcf799cb2d4e70129d4b9","kind":"task_record"}]`
+- **covered_ac**：AC-11、AC-13、AC-14、AC-16。
+- **review_fact**：独立审查原 `revise_required` 保留；finding 为旧 review tree 检查抵消 resolution，已通过 distinct previous/current tree 的聚焦 RED→GREEN 验证；按本任务合同未二审。正式 integration review 为 `unavailable/MATERIAL_INCOMPLETE`，原因仅是历史 Phase trace 缺失，作为审计披露保留。
+- **completed_at**：2026-07-30。
+
 #### T013: 唯一独立 integration review
 
 - **ID**：T013
@@ -1189,7 +1269,7 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 
 ## 3. Dependency Graph
 
-`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T018→T019→T020→T021→T015→T013`
+`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T018→T019→T020→T021→T015→T013→T024→T025`
 
 ## 4. Requirement and Verification Traceability
 
@@ -1199,15 +1279,16 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 | FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP |
 | FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
 | FR-MAT-001..007 | T007,T008,T011,T012,T018,T019,T020,T021 | AC-09,10,16,17,18 | 4,6,7,8 | ORACLE-MAT |
-| FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
-| FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
+| FR-BQA-001..003 | T009,T010,T011,T012,T024,T025 | AC-11,12,16 | 5,6,9 | ORACLE-BQA/VERIFY-REVIEW-RECOVERY |
+| FR-VER-001..003 | T011,T012,T013,T014,T024,T025 | AC-13,14,16 | 6,7,9 | ORACLE-VERIFY/VERIFY-REVIEW-RECOVERY |
 | FR-REC-001..002 | T011,T012,T016,T017,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
 
 ## 5. Final Boundary Check
 
-- T001–T012、T014–T021 已 complete；T013 保持 pending，等待最终 integration review。
+- T001–T023 已 complete；T024/T025 是首次 verify review 触发的同任务透明恢复。
 - T001–T012 为六对严格 RED/GREEN；T016/T017 为恢复 blocker 的第七对，T018/T019 为 post-Grill 第八对，T020/T021 为 resolution/replacement 第九对。
 - T013–T015 中 T013/T015 是有理由的 non-behavior task，T014 保存真实验证事实。
+- T024/T025 是第十对严格 RED/GREEN；原 verify review 不覆盖、不二审。
 - commit/push/merge/archive/cleanup 均未授权。
 
 ## Appendix A. Legacy import

@@ -1044,7 +1044,7 @@ describe("official five-stage CLI", () => {
     writeFileSync(callerPathInput, `${JSON.stringify({ acceptance_criterion_id: "AC-01", result: "pass", refs: [{ ref: verifyTests.output_ref, sha256: verifyTests.output_hash }], output_ref: "evidence/caller-selected.json" })}\n`);
     const rejectedCallerPath = spawnSync(process.execPath, [runtime, "publish-acceptance-evidence", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${callerPathInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
     expect(rejectedCallerPath.status).not.toBe(0);
-    expect(rejectedCallerPath.stderr).toMatch(/requires acceptance_criterion_id, result, and refs only/i);
+    expect(rejectedCallerPath.stderr).toMatch(/caller-forbidden|unknown field/i);
     const acceptance = run(root, repo, ["publish-acceptance-evidence", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${acceptanceInput}`]);
     expect(acceptance).toMatchObject({ acceptance_criterion_id: "AC-01", result: "pass" });
     expect(acceptance.evidence_ref).toMatch(/^evidence\/acceptance-[a-f0-9]{64}\.json$/);

@@ -1001,6 +1001,72 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).toHaveLength(5);
   });
 
+  it("consumes the latest verify-code quality review resolution", async () => {
+    const stage = "verify-code";
+    const previousTree = "c".repeat(40);
+    const qualityRef = "reviews/results/quality.json";
+    const resolutionRef = `reviews/resolutions/${"d".repeat(64)}.json`;
+    const quality = qualityReviewReceipt(previousTree);
+    const ledger = {
+      version: "wh-review-response-ledger.v1",
+      previous_result_ref: qualityRef,
+      previous_snapshot_tree: previousTree,
+      current_snapshot_tree: tree,
+      responses: [],
+      change: {
+        changed_dimensions: [],
+        rationale: "focused quality findings verified",
+        evidence_refs: ["evidence/proof.txt"],
+      },
+    };
+    const resolution = buildNonGateReviewResponseRecord({
+      taskId: "task",
+      stage,
+      previousResult: { ...quality, result_ref: qualityRef },
+      previousAttempt: {
+        version: "wh-review-attempt.v1",
+        task_id: "task",
+        stage,
+        snapshot_tree: previousTree,
+      },
+      previousResultSha256: sha,
+      ledger,
+      currentSnapshotTree: tree,
+    });
+    const values = {
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+      [qualityRef]: quality,
+      [resolutionRef]: resolution,
+      "evidence/proof.txt": "proof",
+      "evidence/manifest.json": canonical(stage, {
+        producer: { stage, component: "evidence", version: "1" },
+        refs: [],
+      }),
+    };
+    const worker = workerFor(stage, values);
+    const readFlow = worker.readAuthenticatedReviewFlow;
+    worker.readAuthenticatedReviewFlow = (subject) => subject.stage === stage
+      ? reviewFlow(qualityRef, quality, {
+        event_kind: "resolution",
+        action_ref: resolutionRef,
+        action_sha256: sha,
+      })
+      : readFlow(subject);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: {
+        tests: "receipts/tests.json",
+        review: "reviews/results/review.json",
+        quality_review: qualityRef,
+        quality_review_resolution: resolutionRef,
+        evidence: "evidence/manifest.json",
+        audit: worker.auditRef,
+      },
+    })).resolves.toMatchObject({
+      evidence_refs: expect.arrayContaining([{ ref: resolutionRef, sha256: sha }]),
+    });
+  });
+
   it("rejects acceptance evidence without stable criterion identity and schema", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),

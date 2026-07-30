@@ -721,6 +721,60 @@ D-11、D-12；FR-MAT-006/007；AC-17/18；宪法 Q1/Q2/Q3、F5/F10。
 风险是把一次性恢复扩成通用循环。若 replacement 身份或材料直系关系不成立，立即
 fail-loud，并保留所有既有事实。
 
+## Phase 9：verify review 证据闭环与失败恢复
+
+### Goal
+
+修复 verify-code 首次独立审查确认的两个接口断裂：正式 acceptance publisher 无法
+携带已经被核心 validator 支持的结构化 summary；verify-code 已记录
+`quality_review_resolution` 后，handler 仍按无 resolution 的旧 flow head 校验。
+原 `revise_required`、失败 AC、resolution 和旧 evidence 全部只读保留。
+
+### Files
+
+- **MODIFY**：`scripts/stage-runtime.mjs`、`core/stage-handlers.mjs`、`workflows/verify-code/SKILL.md`。
+- **TEST**：`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs` 及一个最小 acceptance publisher 聚焦测试。
+- **MATERIALS**：只追加 T024/T025、失败验证事实和修复后的 canonical evidence。
+- **DO NOT TOUCH**：原 verify review result、provider route、旧 acceptance leaves、旧 verify evidence receipt。
+
+### Tasks
+
+T024 先复现 summary 被 CLI 拒绝和 latest resolution 无法消费；T025 只开放
+validator 已支持的 summary 字段，由 runtime 注入当前 snapshot，并让 verify handler
+用同一 canonical resolution 认证最新 flow action。
+
+### Strategy
+
+`summary` 仍由 `validateAcceptanceEvidence` 严格限制字段与非空值，caller 不得传
+`snapshot_tree`。runtime 从认证 Workspace 注入 snapshot；无 summary 的旧调用保持
+兼容并继续显式产生 `unknown`。verify handler 复用 `bindFinalReview`，不宽化 result、
+resolution、flow、scope、tree、ref 或 hash 校验。
+
+### Verify
+
+同一聚焦命令保存 RED/GREEN；另外只运行 T009/T010 browser evidence 合同测试和
+AC-16 七类风险对应的聚焦用例，不运行全量测试。修复后追加 response ledger 和
+canonical acceptance summary；不重复原 verify provider review。
+
+### Knowledge
+
+原 verify review 三项 finding、AC-11、AC-16、FR-BQA-001/002、FR-VER-001/002。
+
+### STOP
+
+伪造 PASS、覆盖旧 leaf、caller 自报 snapshot、放宽 flow head、重新完整审查或运行
+全量测试。
+
+### Done
+
+正式 publisher 可发布带结构化 summary 的新 leaf；verify handler 可消费最新
+resolution；AC-11/AC-16 聚焦证据完整，旧失败链保持可追溯。
+
+### Risks and rollback
+
+风险是把 summary 变成未认证陈述，或让任意 resolution 绕过 flow。失败时回退新增
+代码，保留 RED、原 review 和失败 AC。
+
 ## 15. Dependencies and Parallelism
 
 - T001→T002→T003→T004 串行。
@@ -729,6 +783,8 @@ fail-loud，并保留所有既有事实。
 - T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T018 依赖 T017 和 T015 已完成的 Step 10，T019 依赖 T018，T020 依赖 T019，T021 依赖 T020，T015 依赖 T021；T013 依赖 T015 后形成的正式
   accepted build-plan/build-code lineage 与 fresh test facts。
 - T014、T016、T017、T018、T019、T020、T021、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
+- T024 依赖首次 verify-code `revise_required` 与失败 AC；T025 依赖 T024。Phase 9
+  只做同一失败链的聚焦修复，不与 verify/build-code 正式发布并行。
 
 ## 16. Requirement and Verification Traceability
 
@@ -738,8 +794,8 @@ fail-loud，并保留所有既有事实。
 | FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP/VERIFY |
 | FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
 | FR-MAT-001..007 | T007,T008,T011,T012,T018,T019,T020,T021 | AC-09,10,16,17,18 | 4,6,7,8 | ORACLE-MAT/POST-GRILL |
-| FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
-| FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
+| FR-BQA-001..003 | T009,T010,T011,T012,T024,T025 | AC-11,12,16 | 5,6,9 | ORACLE-BQA/SUMMARY |
+| FR-VER-001..003 | T011,T012,T013,T014,T024,T025 | AC-13,14,16 | 6,7,9 | ORACLE-VERIFY/RESOLUTION |
 | FR-REC-001..002 | T011,T012,T016,T017,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
 
 ## 17. Phase Status Table
@@ -754,3 +810,4 @@ fail-loud，并保留所有既有事实。
 | 6 Verify | T011,T012 | Phase 3,4,5 | ORACLE-VERIFY GREEN | T013 |
 | 7 Closure | T014,T016,T017,T015,T022,T023,T013 | Phase 6,8 | facts→recovery→pre-dispatch unavailable RED/GREEN→review | T013 only |
 | 8 Resolution replacement | T018,T019,T020,T021 | Phase 7 recovery fix | two RED/GREEN pairs before T015 | focused verification only |
+| 9 Verify evidence recovery | T024,T025 | failed verify review | summary + resolution RED/GREEN | focused Phase review |

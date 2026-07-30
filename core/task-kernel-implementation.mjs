@@ -158,6 +158,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
     if (!value.summary || typeof value.summary !== "object" || Array.isArray(value.summary)) throw new Error(`${label}.summary must be an object`);
     const fields = ["scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions"];
     for (const key of Object.keys(value.summary)) if (!fields.includes(key)) throw new Error(`${label}.summary has unknown field ${key}`);
+    if (Object.keys(value.summary).length === 0) throw new Error(`${label}.summary must contain at least one non-empty field`);
     summary = {};
     for (const key of ["scenario", "oracle", "actual_outcome", "evidence_type"]) {
       if (value.summary[key] !== undefined) {

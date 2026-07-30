@@ -38,6 +38,30 @@ const DESIGN_ARTIFACTS = Object.freeze({
 const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
+const GIT_OID = /^[a-f0-9]{40,64}$/;
+
+export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
+  if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.acceptance_criterion_id !== "string"
+      || !new Set(["pass", "fail"]).has(input.result)
+      || !Array.isArray(input.refs)) {
+    throw new TypeError("acceptance evidence input requires acceptance_criterion_id, result, refs, and optional summary");
+  }
+  const allowed = new Set(["acceptance_criterion_id", "result", "refs", "summary"]);
+  const unknown = Object.keys(input).filter((key) => !allowed.has(key));
+  if (unknown.length) {
+    throw new TypeError(`acceptance evidence input has caller-forbidden or unknown field: ${unknown.join(", ")}`);
+  }
+  if (!GIT_OID.test(snapshotTree ?? "")) throw new TypeError("acceptance evidence runtime snapshot_tree is required");
+  return validateAcceptanceEvidence({
+    schema_version: "acceptance-evidence.v1",
+    acceptance_criterion_id: input.acceptance_criterion_id,
+    result: input.result,
+    refs: input.refs,
+    ...(input.summary === undefined ? {} : { summary: input.summary }),
+    snapshot_tree: snapshotTree,
+  });
+}
 
 function publishAcceptedDecisionLog(context, accepted) {
   if (accepted?.stage !== "make-decision") return;
@@ -534,19 +558,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     });
   }
   if (command === "publish-acceptance-evidence") {
-    if (!input || typeof input !== "object" || Array.isArray(input)
-      || typeof input.acceptance_criterion_id !== "string"
-      || !new Set(["pass", "fail"]).has(input.result)
-      || !Array.isArray(input.refs)
-      || Object.keys(input).some((key) => !new Set(["acceptance_criterion_id", "result", "refs"]).has(key))) {
-      throw new TypeError("acceptance evidence input requires acceptance_criterion_id, result, and refs only");
-    }
-    const value = validateAcceptanceEvidence({
-      schema_version: "acceptance-evidence.v1",
-      acceptance_criterion_id: input.acceptance_criterion_id,
-      result: input.result,
-      refs: input.refs,
-    });
+    const snapshot = captureGitWorktreeSnapshot((context.candidateWorkspace ?? context.workspace).worktreeRoot);
+    const value = normalizeAcceptanceEvidencePublication(input, snapshot.tree);
     for (const nested of value.refs) {
       const raw = context.task.readRecord(nested.ref);
       const actual = createHash("sha256").update(raw).digest("hex");
