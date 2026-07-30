@@ -15,6 +15,7 @@ import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
 import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../core/stage-review-disposition.mjs";
 import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../core/stage-content-contracts.mjs";
+import { readCurrentTaskMaterialRevision } from "../../core/stage-content-evidence.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -379,26 +380,40 @@ function tasksOnlyBaseline(task, workspace, previous) {
 }
 
 function currentMaterialsBaseline(task, kernel, workspace) {
+  let acceptedPlan;
   try {
-    return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
+    acceptedPlan = kernel.readAcceptedAudit("build-plan");
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+  const revision = readCurrentTaskMaterialRevision({ task });
+  if (acceptedPlan !== undefined && revision === undefined) {
+    return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
+  }
   const root = workspace.worktreeRoot;
-  const head = execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
+  const base = acceptedPlan?.accepted.checkpoint.commit_oid
+    ?? execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
   const index = resolve(tmpdir(), `workflowhub-current-materials-${randomUUID()}.index`);
   const env = { ...process.env, GIT_INDEX_FILE: index };
   const taskRoot = `specs/${task.identity.taskId}`;
-  const paths = ["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => `${taskRoot}/${name}`);
+  const names = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+  const paths = names.map((name) => `${taskRoot}/${name}`);
+  if (revision !== undefined) {
+    for (const name of names) {
+      if (sha256(readFileSync(resolve(root, taskRoot, name))) !== revision.value.hashes[name]) {
+        throw new Error(`current material revision does not bind live ${name}`);
+      }
+    }
+  }
   try {
-    execFileSync("git", ["read-tree", `${head}^{tree}`], { cwd: root, env, stdio: "ignore" });
+    execFileSync("git", ["read-tree", `${base}^{tree}`], { cwd: root, env, stdio: "ignore" });
     execFileSync("git", ["add", "--", ...paths], { cwd: root, env, stdio: "ignore" });
     const tree = execFileSync("git", ["write-tree"], {
       cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
-    return execFileSync("git", ["commit-tree", tree, "-p", head, "-m", "workflowhub current task materials baseline"], {
+    return execFileSync("git", ["commit-tree", tree, "-p", base, "-m", "workflowhub current task materials baseline"], {
       cwd: root,
       env: {
         ...env,

@@ -371,6 +371,44 @@ function controlledReopen(state, published, receipts, reviewRef) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("build-code phase evidence publication", () => {
+  it("uses a verified current task-material revision as the first Phase baseline and rejects unrecorded material drift", () => {
+    const revised = fixture("phase-current-materials");
+    const revisedTasksPath = join(
+      revised.workspace.worktreeRoot,
+      "specs",
+      revised.task.identity.taskId,
+      "tasks.md",
+    );
+    writeFileSync(revisedTasksPath, `${readFileSync(revisedTasksPath, "utf8")}\n<!-- authorized current tasks -->\n`);
+    revised.kernel.publishMaterialRevision({
+      change_summary: "authorize the current tasks before build-code",
+      source_refs: ["results/build-plan/accepted.json"],
+    });
+    const receipts = phaseReceipts(revised, "phase-1");
+    const first = publish(revised, "phase-1", receipts);
+    const acceptedPlanCommit = revised.kernel.readAcceptedAudit("build-plan").accepted.checkpoint.commit_oid;
+
+    expect(first.baseline_commit).not.toBe(acceptedPlanCommit);
+    expect(git(revised.workspace.worktreeRoot, ["rev-parse", `${first.baseline_commit}^`])).toBe(acceptedPlanCommit);
+    expect(git(revised.workspace.worktreeRoot, [
+      "show",
+      `${first.baseline_commit}:specs/${revised.task.identity.taskId}/tasks.md`,
+    ])).toContain("authorized current tasks");
+    expect(JSON.parse(revised.task.readRecord(first.diff_scan_ref)).changed_files).toEqual(["phase-1.txt"]);
+
+    const unrecorded = fixture("phase-unrecorded-materials");
+    const unrecordedTasksPath = join(
+      unrecorded.workspace.worktreeRoot,
+      "specs",
+      unrecorded.task.identity.taskId,
+      "tasks.md",
+    );
+    writeFileSync(unrecordedTasksPath, `${readFileSync(unrecordedTasksPath, "utf8")}\n<!-- unrecorded tasks -->\n`);
+    const unrecordedReceipts = phaseReceipts(unrecorded, "phase-1");
+    expect(() => publish(unrecorded, "phase-1", unrecordedReceipts))
+      .toThrow(/live artifact differs from checkpoint: .*tasks\.md/i);
+  });
+
   it("seals a non-ignored untracked file into the first Phase only, while rejecting later workspace drift", () => {
     const state = fixture("phase-untracked-snapshot");
     const firstReceipts = phaseReceipts(state, "phase-1", {
