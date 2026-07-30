@@ -463,7 +463,11 @@ function canonicalSubjectOutcome(task, identity) {
     let record;
     try { record = JSON.parse(task.readRecord(ref)); }
     catch (error) { throw invalidEvidence(`canonical review record cannot be read: ${ref}: ${error.message}`); }
-    if (!sameReviewSubject(record, identity)) continue;
+    const snapshotScopedPhase = identity.subject.subject_kind === "phase"
+      && identity.subject.review_scope === "phase";
+    if (snapshotScopedPhase
+      ? !matchesReviewIdentity(record, identity)
+      : !sameReviewSubject(record, identity)) continue;
     const raw = task.readRecord(ref);
     const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
     try {

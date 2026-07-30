@@ -1067,6 +1067,54 @@ describe("aggregation and runner", () => {
     expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
   });
 
+  it("creates a new semantic result for a new snapshot of the same Phase without reusing the old snapshot", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-phase-new-snapshot-");
+    const calls = [];
+    const providerClient = {
+      run: async () => {
+        calls.push(true);
+        return {
+          runtimeId: `runtime-${calls.length}`,
+          provider: {
+            provider: "kimi",
+            status: "completed",
+            session_id: `session-${calls.length}`,
+            output: pass,
+            error: null,
+          },
+        };
+      },
+    };
+    const firstSource = { ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) };
+    const secondSource = { ...firstSource, snapshotTree: "8".repeat(40) };
+    const base = {
+      task,
+      attachmentRoot,
+      taskId: "task",
+      stage: "build-code",
+      phaseId: "phase-1",
+      materials: {},
+      hostProvider: "codex",
+      providers: ["kimi"],
+      providerClient,
+      buildMaterials: ({ source: captured }) => ({
+        bundleRoot: attachmentRoot,
+        materialId: createHash("sha256").update(captured.snapshotTree).digest("hex"),
+        manifest: [],
+      }),
+    };
+
+    const first = await runReviewFixture({ ...base, capturePhaseSource: () => firstSource });
+    const second = await runReviewFixture({ ...base, capturePhaseSource: () => secondSource });
+
+    expect(second).not.toMatchObject({ reused: true });
+    expect(second.resultRef).not.toBe(first.resultRef);
+    expect(second.snapshotTree).toBe(secondSource.snapshotTree);
+    expect(JSON.parse(task.readRecord(first.resultRef)).snapshot_tree).toBe(firstSource.snapshotTree);
+    expect(JSON.parse(task.readRecord(second.resultRef)).snapshot_tree).toBe(secondSource.snapshotTree);
+    expect(calls).toHaveLength(2);
+  });
+
   it("never calls a provider when source capture reports mutation", async () => {
     const { attachmentRoot, task } = fixture("simple-review-source-mutated-"); const calls = [];
     await expect(runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: { run: async (request) => { calls.push(request); } }, captureSource: () => { throw new Error("SOURCE_CHANGED_DURING_CAPTURE"); } })).rejects.toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);
