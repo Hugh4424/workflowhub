@@ -439,10 +439,18 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new TypeError("talk/grill interaction evidence is create-only and cannot be revised");
       }
       plain(input.payload, "stage content payload");
+      let snapshot;
+      if (input.kind === "interaction-completion.v1") {
+        snapshot = captureSnapshot(workspace);
+        if (Object.hasOwn(input.payload, "workspace_tree")) {
+          throw new TypeError("payload.workspace_tree is a caller-forbidden identity or path field");
+        }
+      }
       const aggregate = input.kind === "interaction-completion.v1"
         && input.payload.interaction_type === "aggregate";
       rejectIdentityKeys(input.payload, "payload", aggregate);
       const payload = minimize(structuredClone(input.payload));
+      if (input.kind === "interaction-completion.v1") payload.workspace_tree = snapshot.tree;
       validatePayload(input.kind, payload);
       if (stage === "build-spec" && input.kind === "ambiguity-ledger.v2") {
         if (payload.content_profile !== "spec-content.v3") {
@@ -462,7 +470,7 @@ export function createStageContentEvidenceWriter(options = {}) {
         }
       }
       validateAggregateBindings(payload);
-      const snapshot = captureSnapshot(workspace);
+      snapshot ??= captureSnapshot(workspace);
       if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {
         throw new Error("interaction completion workspace tree does not match the current Workspace");
       }

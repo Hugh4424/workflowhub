@@ -59,7 +59,7 @@ function requireApi() {
   expect(requiredStageContentKinds).toBeTypeOf("function");
 }
 
-function talkPayload(roundNumber, workspaceTree, {
+function talkPayload(roundNumber, _workspaceTree, {
   selected = "A",
   zeroQuestion = false,
 } = {}) {
@@ -100,11 +100,10 @@ function talkPayload(roundNumber, workspaceTree, {
       zero_question_reason: zeroQuestion ? `round ${roundNumber} queue was empty after factual re-ranking` : null,
     }],
     grill: null,
-    workspace_tree: workspaceTree,
   };
 }
 
-function grillPayload(workspaceTree) {
+function grillPayload(_workspaceTree) {
   return {
     interaction_type: "grill",
     rounds: [],
@@ -120,7 +119,6 @@ function grillPayload(workspaceTree) {
         file_references_checked: true,
       },
     },
-    workspace_tree: workspaceTree,
   };
 }
 
@@ -273,7 +271,6 @@ function fixture(taskId = "stage-content-evidence") {
       interaction_type: "aggregate",
       rounds: setupTalks.map(({ ref, hash }) => ({ ref, hash })),
       grill: { ref: setupGrill.ref, hash: setupGrill.hash },
-      workspace_tree: setupTree,
       decision_ref: setupDecisionRef,
       decision_hash: setupDecisionHash,
     },
@@ -790,6 +787,18 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     })).toBeUndefined();
   });
 
+  it("injects the authenticated Workspace tree into interaction evidence", async () => {
+    requireApi();
+    const state = fixture("interaction-workspace-tree");
+    const writer = writerFor(state);
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const published = await invoke(() => writer.publish({
+      kind: "interaction-completion.v1",
+      payload: talkPayload(1, tree),
+    }));
+    expect(JSON.parse(state.task.readRecord(published.ref)).payload.workspace_tree).toBe(tree);
+  });
+
   it("accepts canonical ref/hash bindings inside a revised decision coverage payload", async () => {
     requireApi();
     const state = fixture("coverage-revision");
@@ -866,7 +875,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
           { ref: round3.ref, hash: round3.hash },
         ],
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: postGrillTree,
         decision_ref: state.decisionRef,
         decision_hash: state.decisionHash,
       },
@@ -884,7 +892,7 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(postGrillTree).not.toBe(preGrillTree);
   });
 
-  it("rejects mixed pre-grill talk trees and a grill that does not bind the final tree", async () => {
+  it("rejects mixed pre-grill talk trees and caller-supplied workspace trees", async () => {
     requireApi();
     const state = fixture("interaction-tree-lineage-negative");
     const writer = writerFor(state);
@@ -905,8 +913,8 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     }));
     await expect(invoke(() => writer.publish({
       kind: "interaction-completion.v1",
-      payload: grillPayload(preGrillTree),
-    }))).rejects.toThrow(/current Workspace|tree/i);
+      payload: { ...grillPayload(preGrillTree), workspace_tree: preGrillTree },
+    }))).rejects.toThrow(/caller-forbidden/i);
     const grill = await invoke(() => writer.publish({
       kind: "interaction-completion.v1",
       payload: grillPayload(postGrillTree),
@@ -917,7 +925,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
         interaction_type: "aggregate",
         rounds: [round1, round2, round3].map(({ ref, hash }) => ({ ref, hash })),
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: postGrillTree,
         decision_ref: state.decisionRef,
         decision_hash: state.decisionHash,
       },
@@ -944,7 +951,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
       interaction_type: "aggregate",
       rounds: rounds.map(({ ref, hash }) => ({ ref, hash })),
       grill: grillBinding,
-      workspace_tree: tree,
       decision_ref: state.decisionRef,
       decision_hash: state.decisionHash,
     });
@@ -993,7 +999,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
         interaction_type: "aggregate",
         rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: tree,
         decision_ref: state.decisionRef,
         decision_hash: state.decisionHash,
       },
@@ -1063,7 +1068,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
         interaction_type: "aggregate",
         rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
         grill: { ref: grill.ref, hash: grill.hash },
-        workspace_tree: tree,
         decision_ref: state.decisionRef,
         decision_hash: "0".repeat(64),
       },
@@ -1100,7 +1104,6 @@ describe("stage-content-evidence.v1 controlled writer", () => {
         interaction_type: "aggregate",
         rounds: [],
         grill: null,
-        workspace_tree: tree,
       },
     }))).rejects.toThrow(/decision_ref|decision_hash|required/i);
   });
