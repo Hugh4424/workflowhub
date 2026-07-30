@@ -22,9 +22,9 @@
 - **Target environment**：macOS 本地 WorkflowHub，可由不同宿主提供 `hostInvoke`。
 - **Project type**：可搬运的 AI 开发工作流编排工具。
 - **Performance goals**：同一 review subject 最多一次 initial provider dispatch；普通修复 provider 调用数为 0。
-- **Scale / scope**：五阶段、17 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
+- **Scale / scope**：五阶段、21 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
 - **Relevant ADR / context**：`CONSTITUTION.md`、`CONTEXT.md`、处理组 3 问题 9/15。
-- **Current unresolved fact**：run-0005 Step 1–10 已完成，正式 detail result 永久保留 `revise_required`；三项材料缺口正在补充，尚未做 focused verification。最终 attempt 与人类确认尚未发生；T013 的 build-code 独立审查还受本机 provider priority 配置警告影响，未经用户单独授权不得改全局配置。
+- **Current unresolved fact**：make-decision 与 build-spec 已正式接受；原 `revise_required` review 及其 resolution 均保留。build-spec runtime、completion audit、可恢复 attempt 与 current-revision checkpoint 已完成聚焦验证。当前只剩 build-plan 正式审查/确认、build-code 的 T013 唯一 integration review，以及 verify-code；不得为 provider warning 重跑 review 或改全局配置。
 
 ### Global Constraints
 
@@ -224,6 +224,9 @@ review controller 持有 canonical head。同 subject 不重复 initial；普通
 - T002 在其返回值之后追加 runtime-owned invocation fact；若后续收窄签名，
   必须保留现有调用点兼容测试，不得按不存在的接口直接实现。
 - completion reconcile 输入认证 manifests/facts，输出 `{status, components, missing, unavailable, audit_gaps}`。
+- conditional Skill 未触发时由 public CLI 写入 runtime-owned `trigger=false`、`notInvokedReason` 和当前 `workflow_run_id`；不得伪造 executed。
+- build-spec `run` 只审计到 Step 5；exact attempt 发布后由 runtime-owned Step 6 绑定，completion audit 只作耐久记录。崩溃恢复复用同一个未发布 attempt，不新建历史。
+- current material revision 通过内容、父 revision 和 hash 校验后进入 checkpoint；build-plan 必须同时保留当前 HEAD 与 accepted spec checkpoint 的 ancestry，同源分叉使用 runtime-owned 双亲 integration base，无关 HEAD 明确拒绝。
 - content writer 新增 allowlisted kinds，不接受 caller 提供 task/stage/run/root/producer。
 - 不新增 HTTP API；CLI 保持 `stage-runtime` 现有入口，错误使用明确分类。
 
@@ -317,7 +320,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ### Versioned identity and context projection
 
-- **Spec binding**：`{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"e4e617a4b71f8d8d6794832f2cc27a6628d5ffbb2f209117090e1c1a83529288","id":"WORKFLOW-QUALITY-RECORDING-SIMPLIFICATION"}`
+- **Spec binding**：`{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"WORKFLOW-QUALITY-RECORDING-SIMPLIFICATION"}`
 - **read_now**：`core/stage-skill-runtime.mjs`、`core/stage-completion-facts.mjs`、review controller、v3 contract。
 - **must_read_before_task**：每 Task 卡列出的 producer、schema、consumer 和测试锚点。
 - **Context mode**：Full — 跨五阶段；按 Phase 限制文件和测试。
@@ -383,7 +386,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ## 13. Test Strategy
 
-- **Target**：全部 29 个 FR、16 个 AC、五阶段 always/conditional 调用。
+- **Target**：全部 31 个 FR、18 个 AC、五阶段 always/conditional 调用。
 - **gate_cmd**：每对 RED/GREEN 使用 tasks.md 中同一命令；T014 才运行 `npm run check`。
 - **expected_exit**：RED 非零且命中目标 oracle；GREEN 为 0。
 - **evidence_path**：`apply/evidence/Txxx-*.stdout`、`.stderr` 和 canonical review/result refs。
@@ -392,7 +395,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ## 14. Implementation Order
 
-`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T016 → T017 → T015 → T013`。
+`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T016 → T017 → T018 → T019 → T020 → T021 → T015 → T013`。
 
 ## Phase 1：真实 invocation
 
@@ -749,5 +752,5 @@ fail-loud，并保留所有既有事实。
 | 4 Materials | T007,T008 | Phase 2,3 | ORACLE-MAT GREEN | T013 |
 | 5 Browser | T009,T010 | Phase 2 | ORACLE-BQA GREEN | T013 |
 | 6 Verify | T011,T012 | Phase 3,4,5 | ORACLE-VERIFY GREEN | T013 |
-| 7 Closure | T014,T016,T017,T015,T013 | Phase 6 | facts→recovery RED/GREEN→formal recovery→review | T013 only |
-| 8 Resolution replacement | T020,T021 | Phase 7/T019 | ORACLE-RESOLUTION-REPLACEMENT | independent Phase review |
+| 7 Closure | T014,T016,T017,T015,T013 | Phase 6,8 | facts→recovery RED/GREEN→formal recovery→review | T013 only |
+| 8 Resolution replacement | T018,T019,T020,T021 | Phase 7 recovery fix | two RED/GREEN pairs before T015 | focused verification only |
