@@ -602,7 +602,7 @@ verify-code 展示完整事实，但审计记录是否齐全不替代业务完�
   - **证据类型**：`test`
 
 - [ ] **AC-16**：聚焦 RED/GREEN 覆盖五阶段漏调、conditional skip、host unavailable、重复 review、材料 revision、browser evidence 和 verify incomplete
-  - **需求**：FR-INV-001、FR-INV-004、FR-REC-002
+  - **需求**：FR-INV-001、FR-INV-004、FR-REV-002、FR-REV-004、FR-MAT-001、FR-MAT-004、FR-BQA-001、FR-BQA-003、FR-VER-001、FR-VER-002、FR-REC-002
   - **验证方法**：核对各风险路径至少有一组先失败后通过的聚焦验证
   - **通过条件**：列出的每类风险都有可复现的 RED/GREEN 证据
   - **失败条件**：只测 make-decision happy path

@@ -6,7 +6,8 @@
 - `make-decision` run-0001 至 run-0004 均保留为历史并已正式标记 invalidated/incomplete；它们不能称为 accepted 或 pass。
 - 原因：正式 runtime 没有调用 `skill-deps.yaml` 声明的组件，caller 可以直接发布 payload、receipt 或 journal 来完成步骤。
 - 不删除、不覆盖、不倒填旧记录；不把手写 payload 改称真实 Skill invocation。
-- 先在当前 task/worktree 维护四材料并修复通用编排；修复后从正式入口重跑 `make-decision`。
+- 修复通用编排后，run-0005 已从正式入口真实重跑；原 detail verdict=`revise_required` 永久保留，材料修复以 resolution 和聚焦验证记录，没有自动 full review。
+- 用户已确认正式 attempt；`results/make-decision/accepted.json`、confirmation、Steps 11–12 和 through Step 12 full audit 已追加。旧 run 与旧 review 历史保持不变。
 
 ## 已接受方向
 
