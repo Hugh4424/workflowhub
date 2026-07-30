@@ -63,7 +63,8 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 always 漏调、conditional 无 outcome、host unavailable、直接发布内容绕过等 RED 反例；同步修正既有 `ambiguity-ledger.v2` 断言。
+- **actual_changes_history**：新增 always 漏调、conditional 无 outcome、host unavailable、直接发布内容绕过等 RED 反例；同步修正既有 `ambiguity-ledger.v2` 断言。
+- **actual_changes**：`[]`
 - **executed_commands**：`./node_modules/.bin/vitest run core/__tests__/stage-skill-runtime.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-interaction-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1` → exit 1，24/28 pass，4 个目标失败；`git diff --check` → exit 0。
 - **evidence_history**：RED 原始临时输出已被宿主清理，`formal_record_status=unavailable`；失败名称与计数保留于本任务记录和 Phase review。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -102,7 +103,8 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 runtime-owned invocation schema/writer；executed 绑定 canonical outcome ref/hash 与 snapshot tree；caller 结构伪造和 no-op 解锁被拒；hostInvoke throw 先记录 truthful unavailable 再传播；同 identity 同语义幂等复用、不同语义明确失败；completion reconcile 要求 invocation 与 evidence/snapshot 一致。
+- **actual_changes_history**：新增 runtime-owned invocation schema/writer；executed 绑定 canonical outcome ref/hash 与 snapshot tree；caller 结构伪造和 no-op 解锁被拒；hostInvoke throw 先记录 truthful unavailable 再传播；同 identity 同语义幂等复用、不同语义明确失败；completion reconcile 要求 invocation 与 evidence/snapshot 一致。
+- **actual_changes**：`[]`
 - **executed_commands**：同一聚焦 Vitest 命令 → exit 0，29/29 pass，105.62s；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical 临时测试输出 `/tmp/T002-focused-resolution.stdout`，sha256 `72351efba292d63673994b4182ed9d586d7fe0c1c7b43f4bf0e045bab8dc9704`；正式 Phase receipt 因同任务透明恢复不可用，`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -174,7 +176,8 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增三组独立反例：内容齐但 invocation 缺失、业务完成但 audit 缺失、publication/evidence 错绑；没有把业务缺失和审计缺失混成同一断言。
+- **actual_changes_history**：新增三组独立反例：内容齐但 invocation 缺失、业务完成但 audit 缺失、publication/evidence 错绑；没有把业务缺失和审计缺失混成同一断言。
+- **actual_changes**：`[]`
 - **executed_commands**：`./node_modules/.bin/vitest run tests/stage-completion-facts.test.mjs tests/audit-aggregator.test.mjs tests/five-stage-audit-e2e.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1` → exit 1，27/30 pass，3 个目标失败；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T003-completion-red.stdout`，sha256 `ef923b7d6fe42c8240dfcb5ad9789fe45612a32da0f50c36ed81e16418b978b6`；`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -213,7 +216,8 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：production handler 经 stage-runner 消费 manifest-derived declarations 与 TaskKernel invocation facts；reconciler 强制 business/invocation/audit 输入；conditional false 要求完整 identity/trigger/reason；canonical writer 在错绑落盘前失败；writer、handler、stage facts、publication binding、attempt invalidation、make-decision full audit 与 accepted schema 的 audit pass Gate 改为 pass/fail 均保留、fail 仅披露。
+- **actual_changes_history**：production handler 经 stage-runner 消费 manifest-derived declarations 与 TaskKernel invocation facts；reconciler 强制 business/invocation/audit 输入；conditional false 要求完整 identity/trigger/reason；canonical writer 在错绑落盘前失败；writer、handler、stage facts、publication binding、attempt invalidation、make-decision full audit 与 accepted schema 的 audit pass Gate 改为 pass/fail 均保留、fail 仅披露。
+- **actual_changes**：`[]`
 - **executed_commands**：Phase 2 主 Gate → exit 0，33/33 pass；相关 schema/handler 聚焦测试 → exit 0，43/43 pass；五阶段 production E2E → exit 0，5/5 pass；`git diff --check` → exit 0。额外 `stage-content-evidence.test.mjs` → 43 个旧 fixture 因缺 Phase 1 invocation facts 失败，已登记给 T012，不在本 Task 白名单内。
 - **evidence_history**：非 canonical `/tmp/T004-focused-resolution.stdout`，sha256 `259f7bac7b18ddcf28d298cd4d0a0deaec12497d43431c87111358918174e98c`；`/tmp/T004-handler-focused.stdout`，sha256 `ca7275b5b9f3bb410027d243a17657327fcbf7492e294c9cd3e4e5214ca2670c`；正式 Phase receipt `formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -285,7 +289,8 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增同 subject 重复 initial、resolution 零 provider、stale ref、profile/anchor/finding mismatch 反例；保留 MATERIAL_INCOMPLETE provider 前失败与真实入口 spy。
+- **actual_changes_history**：新增同 subject 重复 initial、resolution 零 provider、stale ref、profile/anchor/finding mismatch 反例；保留 MATERIAL_INCOMPLETE provider 前失败与真实入口 spy。
+- **actual_changes**：`[]`
 - **executed_commands**：Phase 3 四文件 Gate → exit 1，102/109 pass，7 个目标失败；真实 runner provider spy=0，未访问网络；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T005-review-red.stdout`，sha256 `f45998bb9cb1f45d8c102993063b8e528bc6c9cb8d5ca1e64ab09aa8ca566020`；`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -324,7 +329,8 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：同 subject 后续材料/快照变化复用 canonical semantic head；subject 级锁保证并发 initial 只 dispatch 一次；resolution 保留 previous_verdict、finding dispositions、focused validation 与 provider_calls=0；replay 从受信 prior attempt/result/aggregation 精确核对 ref/profiles/anchor/finding；canonical head 按 parent/root lineage 选择并使用旧聚合 anchor；build-code 支持统一 append-only resolution。
+- **actual_changes_history**：同 subject 后续材料/快照变化复用 canonical semantic head；subject 级锁保证并发 initial 只 dispatch 一次；resolution 保留 previous_verdict、finding dispositions、focused validation 与 provider_calls=0；replay 从受信 prior attempt/result/aggregation 精确核对 ref/profiles/anchor/finding；canonical head 按 parent/root lineage 选择并使用旧聚合 anchor；build-code 支持统一 append-only resolution。
+- **actual_changes**：`[]`
 - **executed_commands**：Phase 3 四文件 Gate → exit 0，111/111 pass；schema/handler 聚焦测试 → exit 0，30/30 pass；`git diff --check` → exit 0。额外 `stage-risk-acceptance` 的业务测试 24 项通过，4 个断言因测试仍固定宪法 1.3.0、当前为 1.5.0 失败，非本 Phase 改动。
 - **evidence_history**：非 canonical `/tmp/T006-focused-resolution.stdout`，sha256 `880e9a7d120dce893b2c1b09781219c05c827e65ff839b6636f12a8e0f03649c`；正式 Phase receipt `formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -397,7 +403,8 @@ A-004；处理组 3 问题 9/15。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 decision/spec/plan/tasks 单独更新、四份同时更新、requirements ledger 同 task 二次发布反例；fixture 跟进 invocation runtime，旧 accepted 字节保持只读。
+- **actual_changes_history**：新增 decision/spec/plan/tasks 单独更新、四份同时更新、requirements ledger 同 task 二次发布反例；fixture 跟进 invocation runtime，旧 accepted 字节保持只读。
+- **actual_changes**：`[]`
 - **executed_commands**：Phase 4 三文件 Gate → exit 1，36/42 pass，6 个目标失败；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T007-material-red.stdout`，sha256 `dd6e66d745ab001c12653a4bfe6577c277d80553c2229c640d6cda3f232933cd`；`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -436,7 +443,8 @@ A-004；处理组 3 问题 9/15。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：实现 task-global material writer/CLI/consumer；writer 从认证 ArtifactDir 计算 identity、revision、changed files 与 hashes；material/requirements current pointer 使用窄 CAS，旧 revision 只读；requirements 第二/第三版保持严格 parent/supersedes 链；正式 audit 读取并认证 current requirements；五阶段明确 revision 非 reopen/reset/rebind/checkpoint/review Gate。
+- **actual_changes_history**：实现 task-global material writer/CLI/consumer；writer 从认证 ArtifactDir 计算 identity、revision、changed files 与 hashes；material/requirements current pointer 使用窄 CAS，旧 revision 只读；requirements 第二/第三版保持严格 parent/supersedes 链；正式 audit 读取并认证 current requirements；五阶段明确 revision 非 reopen/reset/rebind/checkpoint/review Gate。
+- **actual_changes**：`[]`
 - **executed_commands**：Phase 4 三文件 Gate → exit 0，43/43 pass；receipt-writer 聚焦测试 → exit 0，8/8 pass；node checks 与 `git diff --check` → exit 0。额外 stage-content-publication 的 2 个旧预期失败归因 Phase 1 invocation 收紧，已登记 T012。
 - **evidence_history**：非 canonical `/tmp/T008-focused-resolution.stdout`，sha256 `4194c9c006b8340cce20870a11467f863e6d0f91bf8475b3997e5b81f9ec27a5`；正式 Phase receipt `formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -509,7 +517,8 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 UI browser evidence 顶层/嵌套逐字段缺失、非 UI N/A、performance 三态、auth 三态、隐私字段、producer→consumer、状态一致性和错绑字节反例；同步修复旧 interaction fixture，使用正式 dispatch helper 生成 runtime-owned invocation，不放宽断言。
+- **actual_changes_history**：新增 UI browser evidence 顶层/嵌套逐字段缺失、非 UI N/A、performance 三态、auth 三态、隐私字段、producer→consumer、状态一致性和错绑字节反例；同步修复旧 interaction fixture，使用正式 dispatch helper 生成 runtime-owned invocation，不放宽断言。
+- **actual_changes**：`[]`
 - **executed_commands**：原三文件 exact Gate 在隔离 pre-GREEN tree → exit 1，91/106 pass，15 个失败全部为 ORACLE-BQA 目标；当前 fixture 聚焦 3/3、9/9 pass；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T009-browser-red-full.stdout`，sha256 `9748bffdfa2b665722c0f046e06306b8f7b0db54d90685df5abeb6e90d87f7f2`；隔离反向 hunks `/tmp/T009-pre-green-reversed-hunks.diff`，sha256 `23adf0a657aecf925d9e495b6e28400d303d64f3109469b7e47635ff73a8dad7`；tree 说明 sha256 `aa35a932da8a92205af33042fcb71a24a3e98f4149ab3a1636fd973af5237976`；`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -548,7 +557,8 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增正式 browser evidence schema/envelope kind；verify 只消费 canonical ref/hash 并核 task/kind/snapshot；截图和测试输出读取 canonical 字节复核 hash；pass/fail/blocked/unknown 与 exit、cleanup、app service 状态一致；恢复全局 session 隐私过滤并仅对 browser 顶层精确例外；auth/performance 与 spec 三态一致；Skill 输出记录 route/scenario/tool/engine/derived session/login reuse/performance/screenshots/test/cleanup/snapshot，非 UI N/A 不成 Gate。
+- **actual_changes_history**：新增正式 browser evidence schema/envelope kind；verify 只消费 canonical ref/hash 并核 task/kind/snapshot；截图和测试输出读取 canonical 字节复核 hash；pass/fail/blocked/unknown 与 exit、cleanup、app service 状态一致；恢复全局 session 隐私过滤并仅对 browser 顶层精确例外；auth/performance 与 spec 三态一致；Skill 输出记录 route/scenario/tool/engine/derived session/login reuse/performance/screenshots/test/cleanup/snapshot，非 UI N/A 不成 Gate。
+- **actual_changes**：`[]`
 - **executed_commands**：原三文件 exact Gate → exit 0，120/120 pass，457.87s；`git diff --check` → exit 0。未启动真实浏览器、未读取或保存 profile/cookie/token；本 Phase 验证的是通用证据合同。
 - **evidence_history**：非 canonical `/tmp/T010-browser-focused-resolution.stdout`，sha256 `41125b616f2b5aec56ae39dd7f998585dbe559ce379cec2c62c6fa04a6f8b293`；正式 Phase receipt `formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -620,7 +630,8 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 verification_items 九类完整性及逐项缺失、canonical verification receipt、review unavailable/audit gap 非 Gate、五阶段漏调和正式 recovery/host bridge 反例；先修正 build-code final review_scope 的既有 integration/null 契约矛盾，再取得干净 RED。
+- **actual_changes_history**：新增 verification_items 九类完整性及逐项缺失、canonical verification receipt、review unavailable/audit gap 非 Gate、五阶段漏调和正式 recovery/host bridge 反例；先修正 build-code final review_scope 的既有 integration/null 契约矛盾，再取得干净 RED。
+- **actual_changes**：`[]`
 - **executed_commands**：原四文件 exact Gate → exit 1，67/79 pass，12 个失败全部为 ORACLE-VERIFY 目标；build-code final review_scope 单一 E2E → exit 0，1/1 pass；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T011-verify-red-clean.stdout`，sha256 `3185019140804c7a306199d667fe63101a7df0be4d0571a2847f5128a78df8b0`；`formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -663,7 +674,8 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：verification_items 九类使用 canonical status/evidence/reason；verification receipt 变为必需且 pass 必须绑定可读取证据，N/A 必须空证据并说明原因；review unavailable/audit gap 只披露；五阶段声明统一 reconcile。`invoke-stage-skill` 移除 caller outcome `--input`，改为 runtime 先发完整 request、再从 stdin 接收唯一 host response；缺失、重复、预提交、乱序失败。`recover-run`/oracle 核旧 hash/run 链、talk1/2/3+grill outcomes、完整 completion、journal offsets、无 confirmation/accepted；统一 `human_handoff`。
+- **actual_changes_history**：verification_items 九类使用 canonical status/evidence/reason；verification receipt 变为必需且 pass 必须绑定可读取证据，N/A 必须空证据并说明原因；review unavailable/audit gap 只披露；五阶段声明统一 reconcile。`invoke-stage-skill` 移除 caller outcome `--input`，改为 runtime 先发完整 request、再从 stdin 接收唯一 host response；缺失、重复、预提交、乱序失败。`recover-run`/oracle 核旧 hash/run 链、talk1/2/3+grill outcomes、完整 completion、journal offsets、无 confirmation/accepted；统一 `human_handoff`。
+- **actual_changes**：`[]`
 - **executed_commands**：最终原四文件 exact Gate → exit 0，80/80 pass；真实 spawn/recovery fixture → exit 0，1/1 pass；stage-skill focused → exit 0，10/10 pass；事实/receipt/completion focused → exit 0，72/72 pass；`git diff --check` → exit 0。
 - **evidence_history**：非 canonical `/tmp/T012-focused-resolution.stdout`，sha256 `af4c4ecd73f9eca73d7fe318893d1c91b1e29c10d3b2ab2666eb1be4f13e23bc`；正式 Phase receipt `formal_record_status=unavailable`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -740,7 +752,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：修正全量暴露的既有 Markdown/结构文本、authenticated smoke、lens-only closure/hash、step inventory，以及 A/B/C 共 24 个旧 fixture/断言；未修改 `check-task-record-paths` 的 14 条旧生产治理。
+- **actual_changes_history**：修正全量暴露的既有 Markdown/结构文本、authenticated smoke、lens-only closure/hash、step inventory，以及 A/B/C 共 24 个旧 fixture/断言；未修改 `check-task-record-paths` 的 14 条旧生产治理。
+- **actual_changes**：`[]`
 - **executed_commands**：`npm run check` 共三次均 exit 1：第一次为 Markdown 基线，第二次为 checklist/CONTEXT 结构基线，第三次只剩 14 条旧 `check-task-record-paths`；旧 tree 一次完整 `npm test`：safe 129 files（101 pass/28 fail）、1613 tests（1466 pass/147 fail），exit 1，exclusive 未运行；当前新 tree 一次 `npm test` 被用户明确叫停，输出不完整、无最终 exit，未重跑。A 组 10 files/203 tests、B 组 6 files/109 tests、C 组分组 106 tests、closure/smoke 3 files/7 tests 均聚焦 GREEN；`git diff --check` → exit 0。
 - **evidence_history**：三次 check：`/tmp/T014-final-check.stdout` sha256 `dee829950de91b3a4cf62d9dde280cf426f002d6feda3e161bbdc13d220eeae9`、`/tmp/T014-final-check-v2.stdout` sha256 `73517b17f87dee4795773e36d8bb0e68cbf609f5c84644a74139e00343913cd6`、`/tmp/T014-final-check-v3.stdout` sha256 `252e147185869db696ead95784994c91154c03c2b34c3a7d0f12e51d253a549c`；旧完整 npm test：`/tmp/T014-full-vitest.stdout` sha256 `9b9ff9963cd4665de76514a50b27d2081d6df4276aec907b8b16188d7d2318cd`；新 tree 中止输出：`/tmp/T014-full-vitest-v2.stdout` sha256 `3d437aa5747f03d494c8ba61b7d7db8e35b7166b9eb9e4633039d38e3e1f1186`，开始 tree `e0cfabce91060099c4abc060c27bc9e41b93833f`，无完成 tree。C 组证据 sha256：runtime `96e21f2f42d5864f50cbd6a4dd4bfbb530afb7e4c6066b5b19634465dc5aac5e`、contracts `61be6f5f7349d7108c24b30e5eea8f066ab55c9bdacbb0a4d8df4daffd31161a`、verify `e4f9d010ee3777041ef1d01b3458fb43bf041e4074f295c4e624cacf00e93c06`、ci `5575da1a8bdfb766a80f2b7afd04ce3bd3ff1e9b88cc2f5a2d3c09ae5ab38a3d`、host `1c5b4b7e31ed1bac78179e54bec0a4694622f52d3afc746dd90cb6a8e93b74fc`；closure/smoke `/tmp/T014-skill-closure-smoke-focused-v2.stdout` sha256 `cf09fca9651c357392162666b5d04656cb4e0addf54d899c782862de46c05b2c`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -779,7 +792,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增普通 prepare 不放宽、专用 recover-run 当前 HEAD baseline、caller identity 与无旧 run 拒绝的行为 RED。
+- **actual_changes_history**：新增普通 prepare 不放宽、专用 recover-run 当前 HEAD baseline、caller identity 与无旧 run 拒绝的行为 RED。
+- **actual_changes**：`[]`
 - **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 1，20/23 pass，3 个目标失败。
 - **evidence_history**：`/tmp/T016-recovery-red.stdout`，sha256 `850f64bf9acc3fb0cbf773769745c0987eced7924215a36ee1b31bd50773de72`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -818,7 +832,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。另公开只读 `latestHistoricalStageRun(stage)`：返回已验证 lineage 的最新历史 run（含有效 invalidated run），仅供 recover-run 选源；同一 active recovery run 的后续 make-decision 命令继续使用 recovery workspace，明确 `prepare` 仍走普通严格路径。有效 invalidated recovery run 可成为下一次 recovery 的 previous/source；未 invalidated 的 recovery run 仍由 kernel 锁内拒绝，CAS 不变。`publishRequirementsLedger` 命中同一 current pointer 时先验证 ledger 与 coverage ref/hash 的实际内容绑定，再复用 canonical ledger evidence 为当前 active make-decision run 完成 runtime-owned Step 2；coverage 缺失/错绑在 journal 写入前以 `requirements current pointer is invalid or misbound` 失败，不改 pointer/ledger/coverage、不造 revision。wh-review trusted make-decision subject 只从 TaskKernel 读取 active run：仅 reader 已验证的 recovery source 使用 recovery workspace；普通/accepted run、`activeStageRun` 与其他 stage 语义不变，不接受 caller recovery 字段或路径。机械刷新 wh-review bundle 文件 hash 与 catalog hash；旧 run/历史、SKILL 内容与 schema 均未改。
+- **actual_changes_history**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。另公开只读 `latestHistoricalStageRun(stage)`：返回已验证 lineage 的最新历史 run（含有效 invalidated run），仅供 recover-run 选源；同一 active recovery run 的后续 make-decision 命令继续使用 recovery workspace，明确 `prepare` 仍走普通严格路径。有效 invalidated recovery run 可成为下一次 recovery 的 previous/source；未 invalidated 的 recovery run 仍由 kernel 锁内拒绝，CAS 不变。`publishRequirementsLedger` 命中同一 current pointer 时先验证 ledger 与 coverage ref/hash 的实际内容绑定，再复用 canonical ledger evidence 为当前 active make-decision run 完成 runtime-owned Step 2；coverage 缺失/错绑在 journal 写入前以 `requirements current pointer is invalid or misbound` 失败，不改 pointer/ledger/coverage、不造 revision。wh-review trusted make-decision subject 只从 TaskKernel 读取 active run：仅 reader 已验证的 recovery source 使用 recovery workspace；普通/accepted run、`activeStageRun` 与其他 stage 语义不变，不接受 caller recovery 字段或路径。机械刷新 wh-review bundle 文件 hash 与 catalog hash；旧 run/历史、SKILL 内容与 schema 均未改。
+- **actual_changes**：`[]`
 - **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，2 files、30/30 tests pass；recover-run 单文件先 8/8、continuation 后 9/9、invalidated recovery source 后 10/10 pass；`npx vitest run --maxWorkers=1 skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs` → exit 0，18/18 tests pass；`npx vitest run --maxWorkers=1 core/__tests__/task-kernel-publish.test.mjs` → idempotent Step 2 为 62/62、coverage binding 后 63/63 tests pass；新 tree 仅一次 `npm run check:skill-closure` → exit 0；`git diff --check` → exit 0。
 - **evidence_history**：初始 GREEN `/tmp/T017-recovery-green.stdout`，sha256 `2de074943b759c5dc4aa0e925c79043bb9d490975f0949cffc6c3f533cdc68ed`；审查 finding 聚焦验证 `/tmp/T017-review-findings-green.stdout`，sha256 `4a94ed99f4fc4017907709a5001d0edb232a5c1a99933aba03d2f5469a2cbece`；invalidated historical source `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；recovery continuation `/tmp/T015-recovery-continuation-green.stdout`，sha256 `be0b551b6b1824c16dcbe862c06ecdd0cbb82c80883730a29ec6b359b3e9d59d`；invalidated recovery source `/tmp/T015-invalidated-recovery-source-green.stdout`，sha256 `bdb5d39d25fea7aa9c6520bbedee69c0f52ec44a1f399245e1a759ad4c55e809`；方向 review 实跑在 provider 前因普通 workspace ancestor 校验失败，作为本轮新增 RED，未创建 provider attempt；wh-review recovery GREEN `/tmp/T017-wh-review-recovery-green.stdout`，sha256 `b8c6e2a37e06923eeb5231c21fabdd37f66a01b42de58a68b2ca98a26bf87061`；closure `/tmp/T017-wh-review-recovery-closure.stdout`，sha256 `81ae1ce22680bb6c998e94229705a18a0ba9d82af3932a0f94f6f01db7bfaf45`；正式 run-0004 Step 2 pre-write failure 保留；idempotent ledger GREEN `/tmp/T017-idempotent-ledger-green.stdout`，sha256 `89f7b79ae362e60f9dffcdba0253869aedf4d1cb58c6db89b6f9f6ed2d12d2de`；coverage binding GREEN `/tmp/T017-coverage-binding-green.stdout`，sha256 `b10cf45149bab84ca93944b19411e3742f4f800d35045bb3b51a541f3bbe7e85`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -857,7 +872,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。材料补齐后追加 generation 2 material revision、decision receipt revision、detail resolution、真实 `grill-revalidation-0002` 与最新 aggregate；未重跑 Talk/provider 或 full review。用户确认后生成正式 attempt、confirmation、Steps 11–12、through Step 12 full audit 与 accepted。
+- **actual_changes_history**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。材料补齐后追加 generation 2 material revision、decision receipt revision、detail resolution、真实 `grill-revalidation-0002` 与最新 aggregate；未重跑 Talk/provider 或 full review。用户确认后生成正式 attempt、confirmation、Steps 11–12、through Step 12 full audit 与 accepted。
+- **actual_changes**：`[]`
 - **executed_commands**：前置实现聚焦验证 `npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，先 8/8、continuation 后 9/9、invalidated recovery source 后 10/10 tests pass；`node scripts/stage-runtime.mjs invalidate-run ... run-0004` → exit 0；`recover-run ... transparent-recovery-after-ledger-binding-fix` → exit 0，生成 run-0005；run-0005 的 Step 1–10 与 detail review 已执行；T019 聚焦 receipt/revalidation tests 4/4 pass、独立 focused verification pass；未跑全量。
 - **evidence_history**：run-0004 invalidation `runs/make-decision/invalidations/321162652d0b87198a8be6c697a4d7232ffa020ab6895883841c3ae573f6e960.json`；run-0005 `runs/make-decision/run-0005.json`；generation 2 material revision `materials/revisions/140e06fd19330c3ba7981145ca3ec067b1962509142670c4030b3a2565ab7ee9.json`；detail resolution `reviews/resolutions/c47d947d015ed33dae0756aef889510b06e9ddce4c8f5bfe31b12c27c591d22c.json`；revalidation `evidence/stage-content/43bbe9d000b580288aa7662d6f86158400a83a35b1965831e9437eacaf09a973/interaction-completion.grill-revalidation-0002.json`；aggregate 同目录 `interaction-completion.aggregate.json`；attempt `results/make-decision/attempt-0001.json`，integrity `e756a89b2ccd746d74605c03ea275a4ba69358c8d54a498bd61dbb6ad327cf07`；confirmation `confirmations/make-decision/attempt-0001.json`；accepted `results/make-decision/accepted.json`；full audit `evidence/audits/make-decision/0c954a4bafbe67629da7b1595afaee0b930a0653f8b477679a71b70cc5c8c1fc.json`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -896,7 +912,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：已复现 Step 9 `already has different canonical evidence or status` 与未知 `grill-revalidation` 类型；aggregate 未核新 invocation 的缺口由独立审查逐行确认，后续由 T019 的负向聚焦测试固定。
+- **actual_changes_history**：已复现 Step 9 `already has different canonical evidence or status` 与未知 `grill-revalidation` 类型；aggregate 未核新 invocation 的缺口由独立审查逐行确认，后续由 T019 的负向聚焦测试固定。
+- **actual_changes**：`[]`
 - **executed_commands**：receipt revision 实际运行失败并保留错误；初始 interaction 聚焦测试失败；无全量测试。
 - **evidence_history**：非 canonical 聚焦 stdout 待本轮收集。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -935,7 +952,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：新版 receipt 只在本 run Step 10 后作为当前材料，旧 Step 9 bytes 不重绑、不重试；`grill-revalidation-0001` 固定绑定原 Grill，writer 自动注入原 Grill/current material revision，aggregate 必须核对新 authenticated invocation。真实 `0001`、direction/detail 零 provider resolution 已追加；旧 verdict 和 Talk/provider 均未改写或重跑。其后发现 resolution post-write reset runtime defect，转 T020/T021。
+- **actual_changes_history**：新版 receipt 只在本 run Step 10 后作为当前材料，旧 Step 9 bytes 不重绑、不重试；`grill-revalidation-0001` 固定绑定原 Grill，writer 自动注入原 Grill/current material revision，aggregate 必须核对新 authenticated invocation。真实 `0001`、direction/detail 零 provider resolution 已追加；旧 verdict 和 Talk/provider 均未改写或重跑。其后发现 resolution post-write reset runtime defect，转 T020/T021。
+- **actual_changes**：`[]`
 - **executed_commands**：`vitest ... -t "accepts a verified decision revision"` → 1/1 pass；`vitest ... -t "appends a controlled grill revalidation|permits only one focused grill revalidation"` → 2/2 pass；此前 caller forged binding 与 prewritten-without-invocation 两条各 1/1 pass；无全量测试。
 - **evidence_history**：`evidence/stage-content/43bbe9d157e9fdd1a69aa704c919bc6e4ffb2fe67a4a4bda8a12e641660542b3/interaction-completion.grill-revalidation-0001.json`；material revision `materials/revisions/0c6a93c1d7eb0a7b7a9ec2d55ea9001b44eb5b94023dcd19b6c4bbc304ce6dc4.json`；direction resolution `reviews/resolutions/a298bbe6826c387fa263e90123b01a06f9530b0fd8ebfac1ffb1644992d5bc9d.json`；detail resolution 已 canonical 写入且原 CLI post-write error 由 T020 固定。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -974,7 +992,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：两个 RED 已分别命中 `review flow reset is only supported for open design and verification stages` 与 `make-decision permits only one focused grill revalidation per workflow run`。
+- **actual_changes_history**：两个 RED 已分别命中 `review flow reset is only supported for open design and verification stages` 与 `make-decision permits only one focused grill revalidation per workflow run`。
+- **actual_changes**：`[]`
 - **executed_commands**：上述 gate 聚焦运行 → exit 1，2 tests failed；修正 test fixture 的 tree OID 后，resolution RED 精确命中 runtime defect。
 - **evidence_history**：当前会话聚焦 stdout；无 canonical Phase receipt。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -1013,7 +1032,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：所有 Stage 的 structural resolution 不再自动进入 reset；显式 reset 能力仍受原 Stage/身份约束。`0002` 只从 completed `0001`、direct-next material 和新 tree 派生，caller 不能传 binding；`0003`、缺 invocation 与 stale aggregate 拒绝，aggregate 复用原 Talk。
+- **actual_changes_history**：所有 Stage 的 structural resolution 不再自动进入 reset；显式 reset 能力仍受原 Stage/身份约束。`0002` 只从 completed `0001`、direct-next material 和新 tree 派生，caller 不能传 binding；`0003`、缺 invocation 与 stale aggregate 拒绝，aggregate 复用原 Talk。
+- **actual_changes**：`[]`
 - **executed_commands**：初始 GREEN：TaskKernel 相关 4 tests pass、stage-content grill revalidation 5 tests pass；finding 修复后 TaskKernel 聚焦 5/5 pass，stage-content revalidation 聚焦 6/6 pass；材料最小可执行合同 1/1 pass；`node --check`、`git diff --check` pass；无全量测试。
 - **evidence_history**：当前会话聚焦 stdout；独立 review verdict=`revise_required` 及两项 finding 保留在本任务记录。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -1052,7 +1072,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：在 `tests/final-cutover-guards.red.test.mjs` 新增合法 pre-dispatch unavailable 和伪造 provider failure 两个反例。
+- **actual_changes_history**：在 `tests/final-cutover-guards.red.test.mjs` 新增合法 pre-dispatch unavailable 和伪造 provider failure 两个反例。
+- **actual_changes**：`[]`
 - **executed_commands**：同 T023 聚焦命令；修复前合法用例命中 `review unavailable attempt must contain provider attempts`。
 - **evidence_history**：T013 canonical attempt `reviews/attempts/5909ee66-5ae3-4ac2-b386-77a12f29136e/attempt.json`；聚焦测试输出由 T023 记录。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -1091,7 +1112,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：`core/stage-handlers.mjs` 仅允许 `MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN` 的 canonical pre-dispatch unavailable 使用空 provider attempts；`tests/final-cutover-guards.red.test.mjs` 增加正反例。
+- **actual_changes_history**：`core/stage-handlers.mjs` 仅允许 `MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN` 的 canonical pre-dispatch unavailable 使用空 provider attempts；`tests/final-cutover-guards.red.test.mjs` 增加正反例。
+- **actual_changes**：`[]`
 - **executed_commands**：`npx vitest run tests/final-cutover-guards.red.test.mjs -t "consumes a canonical pre-dispatch unavailable integration review|rejects an empty-provider unavailable attempt"` → exit 0，2 passed、56 skipped；`git diff --check` → exit 0。
 - **evidence_history**：T013 canonical attempt `reviews/attempts/5909ee66-5ae3-4ac2-b386-77a12f29136e/attempt.json`；聚焦测试控制台输出；当前 Git diff。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
@@ -1131,7 +1153,8 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：未修改业务代码；按正式 build-code integration 入口提交当前 snapshot、fresh focused tests 与现有 Phase 历史。
+- **actual_changes_history**：未修改业务代码；按正式 build-code integration 入口提交当前 snapshot、fresh focused tests 与现有 Phase 历史。
+- **actual_changes**：`[]`
 - **executed_commands**：`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-spec-recovery.test.mjs core/__tests__/task-kernel-publish.test.mjs tests/final-cutover-guards.red.test.mjs -t "resumes only the exact unpublished attempt|durably discloses unavailable completion audit|durably binds a recorded completion audit|records a conditional trigger=false fact|uses the verified current material revision|rejects a clean current HEAD unrelated|consumes a canonical pre-dispatch unavailable integration review|rejects an empty-provider unavailable attempt"` → exit 0，8 个关键场景通过；`wh-review-cli.mjs run` → exit 0，provider dispatch 前返回 canonical `unavailable`；未重试、未跑全量测试。
 - **evidence_history**：`receipts/revisions/implementation/ff499b1e5ad48d79df83c1435bef2f22d86183d23639cf8349f874e83e836cfc.json` sha256 `916a0652b995b8a648e0f452c2113520ca08fa4f212fc4c8b69ad3ac621c4c4c`；`receipts/build-tests-t023.json` sha256 `acd8756ec95e1243a988cadb4611fe00a7227a6ebab90896830535ce9473206a`；`evidence/build-tests-t023.output` sha256 `625b08ba83222378c8958cbad70d72f6f860139753a7b5d0a84a99f92d145c77`；`evidence/acceptance-coverage/build-code-t023.json` sha256 `1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a`；`reviews/attempts/de3dcc68-72bd-4081-b600-d983fa96a46a/attempt.json` sha256 `ff370d6a201b73ffddb34a22ee7e0140e93306bfc7ad2c9591d07f19001aabc9`；`reviews/reports/de3dcc68-72bd-4081-b600-d983fa96a46a.md`。
 - **evidence_refs**：`[{"ref":"evidence/acceptance-coverage/build-code-t023.json","sha256":"1b4d0da939cfde1089677cce81a6a0f8d4b9100db5831ffdb38df2c19ce9e47a","kind":"task_record"}]`
