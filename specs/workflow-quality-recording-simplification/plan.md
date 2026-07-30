@@ -1,8 +1,8 @@
 # 实现计划：WorkflowHub 核心质量流程真实执行与轻量记录
 
 - **Input**：`specs/workflow-quality-recording-simplification/spec.md`
-- **Status**：In progress — transparent recovery；T001–T014、T016–T017 complete；T015 run-0005 已完成 Step 1–10，detail verdict=`revise_required`，材料 finding 正在补充
-- **Template version**：`plan-task.v3`
+- **Status**：In progress — transparent recovery；T001–T012、T014–T021 complete；make-decision 与 build-spec 已正式接受；T013 等待最终 integration review
+- **Template version**：`plan-task.v2`
 
 ## 1. 速读卡
 
@@ -11,7 +11,7 @@
 - **Before**：手写 payload、receipt 或 journal 可被误当成 Skill 已执行，质量步骤与完成声明脱节。
 - **After**：真实 `hostInvoke` 产生 invocation fact；统一 reconcile 用真实调用和业务事实判断完成。
 - **Main risk**：把“真实执行”误实现为新的开发进入 Gate。
-- **Next step**：补充 detail review 指出的决策卡、grill 结论和开放交付风险，只做 focused verification、不自动 full re-review；最终 attempt 与真实用户确认完成后才进入正式 build lineage。
+- **Next step**：完成 build-plan 正式审查与确认，再以当前已完成 Phase 证据进入最终 integration review；不重复全量测试或 provider review。
 
 ## 2. Technical Context and Constraints
 
