@@ -78,6 +78,9 @@
   也不触发自动 full review。
 - **FR-MAT-005**：requirements ledger 在同一 task 内支持 append-only revision/supersede，
   不再因 intake 范围补充而要求新 TaskHandle。
+- **FR-MAT-006**：detail review 后四材料变更使 Grill 绑定树变化时，只追加一次
+  真实、聚焦的 Grill revalidation；它绑定原 Grill、当前 material revision 和新树，
+  不重跑 Talk 或 full review，也不覆盖原 review verdict。
 
 ### 3.5 浏览器证据
 
@@ -134,6 +137,9 @@
 - **AC-10**：requirements ledger 可同 task 追加新 revision，
   旧 revision 只读保留。
   **失败条件**：补充范围必须创建新 TaskHandle。
+- **AC-17**：post-Grill 四材料更新可追加当前 decision receipt 与受控 Grill
+  revalidation；没有新 authenticated invocation 时，aggregate 必须拒绝。
+  **失败条件**：旧 Step 9 被重绑/重试，或只写新 evidence 就能伪称完成。
 - **AC-11**：UI 验收记录页面、场景、工具、登录态、性能状态、
   截图、测试文件/命令/exit、cleanup，并绑定当前 snapshot。
   **失败条件**：只有“页面测试通过”或证据不可定位。

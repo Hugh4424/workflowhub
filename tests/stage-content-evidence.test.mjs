@@ -481,6 +481,92 @@ async function publishDispatchedInteraction(state, writer, payload) {
   return published;
 }
 
+async function completedGrillRevalidationFixture(taskId) {
+  const state = await fixture(taskId);
+  const writer = writerFor(state);
+  const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+  const talks = [];
+  for (const [index, selected] of ["A", "B", "C"].entries()) {
+    talks.push(await publishDispatchedInteraction(
+      state,
+      writer,
+      talkPayload(index + 1, tree, { selected }),
+    ));
+  }
+  const grill = await publishDispatchedInteraction(state, writer, grillPayload(tree));
+  const aggregate = await invoke(() => writer.publish({
+    kind: "interaction-completion.v1",
+    payload: {
+      interaction_type: "aggregate",
+      rounds: talks.map(({ ref, hash }) => ({ ref, hash })),
+      grill: { ref: grill.ref, hash: grill.hash },
+      decision_ref: state.decisionRef,
+      decision_hash: state.decisionHash,
+    },
+  }));
+  const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+  artifacts.writeAtomic("decision-log.md", "# Revised decision\n");
+  artifacts.writeAtomic("spec.md", "# Spec\n");
+  artifacts.writeAtomic("plan.md", "# Plan\n");
+  artifacts.writeAtomic("tasks.md", "# Tasks\n");
+  const materialRevision = createTaskKernel(state.task, { workspace: state.workspace })
+    .publishMaterialRevision({
+      change_summary: "Focused detail-review material corrections",
+      source_refs: [grill.ref],
+    });
+  const decisionLog = artifacts.read("decision-log.md").toString();
+  const decisionHash = sha256(decisionLog);
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  createTaskKernel(state.task).publishCanonicalRecord(decisionRef, decisionLog);
+  return {
+    ...state,
+    writer,
+    talks,
+    grill,
+    aggregate,
+    materialRevision,
+    decisionRef,
+    decisionHash,
+    currentTree: captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree,
+  };
+}
+
+function grillRevalidationPayload(state, overrides = {}) {
+  return {
+    interaction_type: "grill-revalidation",
+    rounds: [],
+    grill: {
+      ...grillPayload(state.currentTree).grill,
+      context: { status: "changed", reason: "Focused material findings were applied" },
+      conflicts: { status: "resolved", reason: "The reviewed material gaps are now reconciled" },
+      file_references: [
+        "CONTEXT.md",
+        "specs/task/decision-log.md",
+        "specs/task/spec.md",
+        "specs/task/plan.md",
+        "specs/task/tasks.md",
+      ],
+    },
+    ...overrides,
+  };
+}
+
+async function dispatchGrillRevalidation(state, reserved, snapshotTree = reserved.value.snapshot_tree) {
+  return dispatchStageSkill({
+    packageRoot: realpathSync(join(import.meta.dirname, "..")),
+    stage: "make-decision",
+    name: "grill-with-docs",
+    invocationKey: "grill-revalidation-1",
+    kernel: createTaskKernel(state.task),
+    hostInvoke: () => ({
+      outcome: "done",
+      outcome_ref: reserved.ref,
+      outcome_hash: reserved.hash,
+      snapshot_tree: snapshotTree,
+    }),
+  });
+}
+
 function ambiguityLedgerV2(overrides = {}, frId = "FR-SPEC-001") {
   const specHash = "a".repeat(64);
   const binding = (id, artifact_kind = "spec") => ({
@@ -1182,6 +1268,115 @@ describe("stage-content-evidence.v1 controlled writer", () => {
     expect(round1.value.snapshot_tree).toBe(preGrillTree);
     expect(grill.value.snapshot_tree).toBe(postGrillTree);
     expect(postGrillTree).not.toBe(preGrillTree);
+  });
+
+  it("appends a controlled grill revalidation and reuses the three talks in a revised aggregate", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-positive");
+    expect(state.currentTree).not.toBe(state.grill.value.snapshot_tree);
+    const payload = grillRevalidationPayload(state);
+
+    const reserved = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload,
+    }));
+    await dispatchGrillRevalidation(state, reserved);
+    const revalidation = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload,
+    }));
+    const aggregate = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }));
+
+    expect(revalidation.ref).toMatch(/interaction-completion\.grill-revalidation-0001\.json$/);
+    expect(revalidation.value).toMatchObject({
+      snapshot_tree: state.currentTree,
+      payload: {
+        interaction_type: "grill-revalidation",
+        previous_grill: { ref: state.grill.ref, hash: state.grill.hash },
+        material_revision: {
+          ref: state.materialRevision.revision_ref,
+          hash: state.materialRevision.revision_hash,
+        },
+      },
+    });
+    expect(aggregate.value).toMatchObject({
+      revision: { number: 2, previous_ref: state.aggregate.ref, previous_hash: state.aggregate.hash },
+      payload: {
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+      },
+    });
+  });
+
+  it("permits only one focused grill revalidation for a workflow run", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-once");
+    const payload = grillRevalidationPayload(state);
+    const reserved = await invoke(() => state.writer.publish({ kind: "interaction-completion.v1", payload }));
+    await dispatchGrillRevalidation(state, reserved);
+    await invoke(() => state.writer.publish({ kind: "interaction-completion.v1", payload }));
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("decision-log.md", "# Revised decision again\n");
+    createTaskKernel(state.task, { workspace: state.workspace }).publishMaterialRevision({
+      change_summary: "A later material change cannot open another grill loop",
+      source_refs: [reserved.ref],
+    });
+
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state, {
+        grill: {
+          ...payload.grill,
+          context: { status: "changed", reason: "This would be a second focused review" },
+        },
+      }),
+    }))).rejects.toThrow(/only one focused grill revalidation/i);
+  });
+
+  it("rejects caller-forged grill revalidation predecessor and material bindings", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-predecessor");
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state, {
+        previous_grill: { ref: state.grill.ref, hash: state.grill.hash },
+        material_revision: {
+          ref: state.materialRevision.revision_ref,
+          hash: state.materialRevision.revision_hash,
+        },
+      }),
+    }))).rejects.toThrow(/caller.*forbidden|previous_grill|material_revision/i);
+  });
+
+  it("rejects an aggregate that cites a prewritten grill revalidation without its fresh invocation", async () => {
+    requireApi();
+    const state = await completedGrillRevalidationFixture("grill-revalidation-missing-invocation");
+    const revalidation = await invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      payload: grillRevalidationPayload(state),
+    }));
+
+    await expect(invoke(() => state.writer.publish({
+      kind: "interaction-completion.v1",
+      revision: 2,
+      payload: {
+        interaction_type: "aggregate",
+        rounds: state.talks.map(({ ref, hash }) => ({ ref, hash })),
+        grill: { ref: revalidation.ref, hash: revalidation.hash },
+        decision_ref: state.decisionRef,
+        decision_hash: state.decisionHash,
+      },
+    }))).rejects.toThrow(/fresh authenticated invocation/i);
   });
 
   it("rejects mixed pre-grill talk trees and caller-supplied workspace trees", async () => {

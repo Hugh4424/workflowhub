@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFile, execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 
 import { createTask } from "../task-handle.mjs";
@@ -18,6 +18,7 @@ import { assertAuthenticatedReviewHead } from "../review-flow-authority.mjs";
 import { captureGitWorktreeSnapshot } from "../git-worktree-snapshot.mjs";
 import { createCanonicalSource, createSourceManifest } from "../canonical-source.mjs";
 import { createStageSkillInvocation } from "../stage-skill-invocation.mjs";
+import { writeOfficialComponentReceipt } from "../canonical-receipt-writer.mjs";
 import {
   buildClassificationManifest,
   buildNonGateReviewResponseRecord,
@@ -2091,6 +2092,113 @@ describe("TaskKernel append-only publication", () => {
         content_hash: "b".repeat(64),
       },
     })).toThrow(/requires completed step 3/i);
+  });
+
+  it("accepts a verified decision revision as current material without rebinding or retrying completed Step 9", () => {
+    const { task, kernel } = fixture();
+    const started = kernel.startStageRun("make-decision", { reason: "decision revision fixture" });
+    for (let stepId = 2; stepId <= 8; stepId += 1) {
+      const journalEntryId = randomUUID();
+      const evidence = {
+        kind: "fixture",
+        uri_or_path: `evidence/make-decision-step-${stepId}.json`,
+        content_hash: createHash("sha256").update(`step-${stepId}`).digest("hex"),
+      };
+      task.appendJournal({
+        schema_version: "v1",
+        event_type: "step_entry",
+        workflow_run_id: started.run.workflow_run_id,
+        stage_slug: "make-decision",
+        step_id: stepId,
+        attempt_id: "attempt-1",
+        timestamp: "2026-07-30T00:00:00.000Z",
+        journal_entry_id: journalEntryId,
+        entry_evidence: evidence,
+        manifest_schema_version: "2.0.0",
+      });
+      task.appendJournal({
+        schema_version: "v1",
+        event_type: "step_exit",
+        workflow_run_id: started.run.workflow_run_id,
+        stage_slug: "make-decision",
+        step_id: stepId,
+        attempt_id: "attempt-1",
+        timestamp: "2026-07-30T00:00:01.000Z",
+        entry_journal_entry_id: journalEntryId,
+        terminal_status: "success",
+        completion_evidence: evidence,
+        manifest_schema_version: "2.0.0",
+      });
+    }
+    const base = writeOfficialComponentReceipt({
+      task,
+      stage: "make-decision",
+      component: "decision",
+      payload: { decision_log: "# Decision\n\nBase.\n" },
+    });
+    kernel.completeMakeDecisionReceipt({ receipt_ref: base.ref, receipt_hash: base.sha256 });
+    const baseStep9Events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)
+      .filter((event) => event.workflow_run_id === started.run.workflow_run_id && event.step_id === 9);
+    const baseStep9Bytes = baseStep9Events.map((event) => JSON.stringify(event));
+    const revision = writeOfficialComponentReceipt({
+      task,
+      stage: "make-decision",
+      component: "decision",
+      revisionOf: base.ref,
+      payload: { decision_log: "# Decision\n\nBase plus verified grill corrections.\n" },
+    });
+
+    expect(() => kernel.completeMakeDecisionReceipt({
+      receipt_ref: revision.ref,
+      receipt_hash: revision.sha256,
+    })).toThrow(/requires completed step 10/i);
+    expect(task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)
+      .filter((event) => event.workflow_run_id === started.run.workflow_run_id && event.step_id === 9)
+      .map((event) => JSON.stringify(event))).toEqual(baseStep9Bytes);
+    const step10Entry = randomUUID();
+    const step10Evidence = {
+      kind: "fixture_detail_review",
+      uri_or_path: "reviews/results/fixture-detail.json",
+      content_hash: createHash("sha256").update("fixture-detail").digest("hex"),
+    };
+    task.appendJournal({
+      schema_version: "v1",
+      event_type: "step_entry",
+      workflow_run_id: started.run.workflow_run_id,
+      stage_slug: "make-decision",
+      step_id: 10,
+      attempt_id: "attempt-1",
+      timestamp: "2026-07-30T00:00:02.000Z",
+      journal_entry_id: step10Entry,
+      entry_evidence: step10Evidence,
+      manifest_schema_version: "2.0.0",
+    });
+    task.appendJournal({
+      schema_version: "v1",
+      event_type: "step_exit",
+      workflow_run_id: started.run.workflow_run_id,
+      stage_slug: "make-decision",
+      step_id: 10,
+      attempt_id: "attempt-1",
+      timestamp: "2026-07-30T00:00:03.000Z",
+      entry_journal_entry_id: step10Entry,
+      terminal_status: "success",
+      completion_evidence: step10Evidence,
+      manifest_schema_version: "2.0.0",
+    });
+    kernel.completeMakeDecisionReceipt({
+      receipt_ref: revision.ref,
+      receipt_hash: revision.sha256,
+    });
+
+    const currentStep9Events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse)
+      .filter((event) => event.workflow_run_id === started.run.workflow_run_id && event.step_id === 9);
+    expect(currentStep9Events.map((event) => JSON.stringify(event))).toEqual(baseStep9Bytes);
+    expect(JSON.parse(task.readRecord(revision.ref))).toMatchObject({
+      decision_ref: revision.value.decision_ref,
+      decision_hash: revision.value.decision_hash,
+      revision: { previous_ref: base.ref, previous_hash: base.sha256 },
+    });
   });
 
   it("completes make-decision step 2 when a new run idempotently reuses the current requirements ledger", () => {

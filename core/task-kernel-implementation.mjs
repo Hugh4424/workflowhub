@@ -45,7 +45,7 @@ const ADJUDICATION_CORRECTION_REF = /^results\/build-code\/revisions\/adjudicati
 const BASELINE_REBIND_REF = /^results\/build-plan\/revisions\/baseline-rebind-([0-9]{4})\.json$/;
 const CONTINUATION_REF = /^results\/(make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-([0-9]{4})\.json$/;
 const HASH = /^[a-f0-9]{64}$/;
-const STAGE_CONTENT_REF = /^evidence\/stage-content\/([a-f0-9]{64})\/interaction-completion\.(?:talk-[0-9]{4}|grill|aggregate)\.json$/;
+const STAGE_CONTENT_REF = /^evidence\/stage-content\/([a-f0-9]{64})\/interaction-completion\.(?:talk-[0-9]{4}|grill|grill-revalidation-[0-9]{4}|aggregate)\.json$/;
 const DECISION_RECEIPT_REF = "receipts/decision.json";
 const RESULT_REF_FOR_FLOW = /^reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const ATTEMPT_REF_FOR_FLOW = /^reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
@@ -1891,7 +1891,7 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision talk evidence must bind round 1, 2, or 3");
     }
     if (payload?.interaction_type === "grill") return 8;
-    if (payload?.interaction_type === "aggregate") return null;
+    if (payload?.interaction_type === "aggregate" || payload?.interaction_type === "grill-revalidation") return null;
     throw new Error("make-decision interaction evidence type is invalid");
   };
   const prepareMakeDecisionInteractionPublication = (input = {}) => {
@@ -1929,11 +1929,19 @@ export function buildTaskKernel(taskHandle, {
       throw new Error("make-decision interaction evidence identity or content binding mismatch");
     }
     const stepId = interactionStepId(value.payload);
-    if (stepId === null) return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
+    if (value.payload.interaction_type === "aggregate") {
+      return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
+    }
     const skillName = value.payload.interaction_type === "talk" ? "talk-with-zhipeng" : "grill-with-docs";
     const invocationKey = value.payload.interaction_type === "talk"
       ? `talk-${value.payload.rounds[0].round_number}`
-      : "grill";
+      : value.payload.interaction_type === "grill-revalidation"
+        ? (() => {
+          const revalidation = /interaction-completion\.grill-revalidation-(\d{4})\.json$/.exec(evidenceRef);
+          if (!revalidation) throw new Error("make-decision grill revalidation evidence ref is invalid");
+          return `grill-revalidation-${Number(revalidation[1])}`;
+        })()
+        : "grill";
     const invocation = kernel.readStageSkillInvocation("make-decision", skillName, invocationKey);
     if (invocation?.fact?.status !== "executed"
         || invocation.fact.outcome_ref !== evidenceRef
@@ -1946,13 +1954,22 @@ export function buildTaskKernel(taskHandle, {
         missing_invocation: `${skillName}/${invocationKey}`,
       });
     }
-    assertMakeDecisionProducerPredecessor(stepId);
+    if (stepId === null) {
+      if (!completedMakeDecisionDependency(active.run.workflow_run_id, 10)) {
+        throw new Error("make-decision grill revalidation requires completed step 10");
+      }
+    } else {
+      assertMakeDecisionProducerPredecessor(stepId);
+    }
     const activeWorkspace = candidate ?? workspace;
     if (!activeWorkspace) throw new Error("make-decision interaction completion requires CandidateWorkspace");
     const snapshot = typeof activeWorkspace.captureSnapshot === "function"
       ? activeWorkspace.captureSnapshot() : captureGitWorktreeSnapshot(activeWorkspace.worktreeRoot);
     if (value.snapshot_tree !== snapshot.tree || value.payload?.workspace_tree !== snapshot.tree) {
       throw new Error("make-decision interaction evidence does not bind the current Workspace");
+    }
+    if (stepId === null) {
+      return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true, revalidated: true });
     }
     const evidence = { kind: "stage_content", uri_or_path: evidenceRef, content_hash: evidenceHash };
     return completeMakeDecisionStageStep({
@@ -2028,6 +2045,18 @@ export function buildTaskKernel(taskHandle, {
         || receipt.decision_hash !== hash(decisionRaw)
         || receipt.content_hash !== receipt.decision_hash) {
       throw new Error("make-decision decision receipt canonical binding mismatch");
+    }
+    // Step 9 proves that a decision receipt was first produced.  A later
+    // append-only revision is the current decision material, not a rewrite of
+    // that historical completion.  Its provenance has been checked above, so
+    // keep the old journal evidence immutable and let downstream consumers
+    // select the explicit revision receipt.
+    const active = activeStageRun("make-decision");
+    if (isDecisionRevision && completedMakeDecisionDependency(active.run.workflow_run_id, 9)) {
+      if (!completedMakeDecisionDependency(active.run.workflow_run_id, 10)) {
+        throw new Error("make-decision decision revision requires completed step 10");
+      }
+      return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true, revision: true });
     }
     const evidence = { kind: "decision_receipt", uri_or_path: input.receipt_ref, content_hash: input.receipt_hash };
     return completeMakeDecisionStageStep({

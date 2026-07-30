@@ -309,6 +309,15 @@ function validateInteractionSemantics(payload) {
     validateGrillFacts(payload.grill);
     return;
   }
+  if (payload.interaction_type === "grill-revalidation") {
+    if (!Array.isArray(payload.rounds) || payload.rounds.length !== 0) {
+      throw new TypeError("grill revalidation cannot contain talk rounds");
+    }
+    validateGrillFacts(payload.grill);
+    requireBinding(payload.previous_grill, "grill revalidation previous grill");
+    requireBinding(payload.material_revision, "grill revalidation material revision");
+    return;
+  }
   if (payload.interaction_type === "aggregate") {
     if (!Array.isArray(payload.rounds) || payload.rounds.length !== 3) {
       throw new TypeError("interaction aggregate requires exactly three ordered talk rounds");
@@ -350,6 +359,19 @@ export function createStageContentEvidenceWriter(options = {}) {
     if (type === "grill" || type === "aggregate") {
       return `${refRoot}/interaction-completion.${type}.json`;
     }
+    if (type === "grill-revalidation") {
+      const candidate = `${refRoot}/interaction-completion.grill-revalidation-0001.json`;
+      const existing = readOptional(task, candidate);
+      if (existing === undefined) return candidate;
+      try {
+        const value = JSON.parse(existing);
+        if (value.kind === "interaction-completion.v1"
+            && value.content_hash === sha256(JSON.stringify(payload))) return candidate;
+      } catch {
+        throw new Error(`existing interaction evidence is invalid: ${candidate}`);
+      }
+      throw new Error("make-decision permits only one focused grill revalidation per workflow run");
+    }
     const prefix = `${refRoot}/interaction-completion.${type}-`;
     const limit = type === "talk" ? 3 : 9999;
     for (let sequence = 1; sequence <= limit; sequence += 1) {
@@ -367,16 +389,61 @@ export function createStageContentEvidenceWriter(options = {}) {
     throw new Error(`${type} interaction sequence is complete for this workflow run`);
   }
 
+  function trustedCurrentMaterialBinding() {
+    const current = readCurrentTaskMaterialRevision({ task });
+    if (!current) throw new Error("grill revalidation requires a current material revision");
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [file, expectedHash] of Object.entries(current.value.hashes)) {
+      if (sha256(artifacts.read(file)) !== expectedHash) {
+        throw new Error("grill revalidation material revision does not bind the current materials");
+      }
+    }
+    return { ref: current.ref, hash: current.hash };
+  }
+
+  function trustedPreviousGrill() {
+    const ref = `${refRoot}/interaction-completion.grill.json`;
+    const raw = readOptional(task, ref);
+    if (raw === undefined) throw new Error("grill revalidation requires the original grill evidence");
+    const binding = { ref, hash: sha256(raw) };
+    const value = verifyStageContentEvidence({
+      task, ref: binding.ref, hash: binding.hash, expectedStage: stage,
+      expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (value.payload?.interaction_type !== "grill") {
+      throw new Error("grill revalidation predecessor is not grill evidence");
+    }
+    return binding;
+  }
+
+  function validateGrillRevalidationBindings(payload) {
+    if (payload.interaction_type !== "grill-revalidation") return;
+    const predecessor = verifyStageContentEvidence({
+      task, ref: payload.previous_grill.ref, hash: payload.previous_grill.hash,
+      expectedStage: stage, expectedRunId: workflowRunId, expectedKind: "interaction-completion.v1",
+    });
+    if (predecessor.payload?.interaction_type !== "grill") {
+      throw new Error("grill revalidation predecessor is not grill evidence");
+    }
+    if (predecessor.snapshot_tree === payload.workspace_tree) {
+      throw new Error("grill revalidation requires a changed Workspace tree");
+    }
+    const current = trustedCurrentMaterialBinding();
+    if (payload.material_revision.ref !== current.ref || payload.material_revision.hash !== current.hash) {
+      throw new Error("grill revalidation does not bind the current material revision");
+    }
+  }
+
   function validateAggregateBindings(payload) {
     if (payload.interaction_type !== "aggregate") return;
     const questionIds = new Set();
     const hostMessageRefs = new Set();
     let preGrillTree;
     const bindings = [
-      ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, "talk", index + 1]),
-      ["grill", payload.grill, "grill", null],
+      ...payload.rounds.map((binding, index) => [`round ${index + 1}`, binding, new Set(["talk"]), index + 1]),
+      ["grill", payload.grill, new Set(["grill", "grill-revalidation"]), null],
     ];
-    for (const [label, binding, expectedType, expectedRound] of bindings) {
+    for (const [label, binding, expectedTypes, expectedRound] of bindings) {
       if (!binding || typeof binding !== "object"
         || Object.keys(binding).some((key) => key !== "ref" && key !== "hash")
         || !EVIDENCE_REF.test(binding.ref ?? "")
@@ -389,16 +456,16 @@ export function createStageContentEvidenceWriter(options = {}) {
         hash: binding.hash,
         expectedStage: stage,
         expectedRunId: workflowRunId,
-        ...(expectedType === "grill" ? { expectedTree: payload.workspace_tree } : {}),
+        ...(label === "grill" ? { expectedTree: payload.workspace_tree } : {}),
         expectedKind: "interaction-completion.v1",
       });
-      if (child.payload?.interaction_type !== expectedType) {
+      if (!expectedTypes.has(child.payload?.interaction_type)) {
         throw new Error(`aggregate ${label} binds the wrong interaction type`);
       }
       if (expectedRound !== null && child.payload.rounds?.[0]?.round_number !== expectedRound) {
         throw new Error(`aggregate ${label} is out of order`);
       }
-      if (expectedType === "talk") {
+      if (expectedTypes.has("talk")) {
         if (child.payload?.workspace_tree !== child.snapshot_tree) {
           throw new Error(`aggregate ${label} payload tree binding mismatch`);
         }
@@ -419,8 +486,20 @@ export function createStageContentEvidenceWriter(options = {}) {
             hostMessageRefs.add(hostRef);
           }
         }
-      } else if (child.payload?.workspace_tree !== payload.workspace_tree) {
-        throw new Error("aggregate grill must bind the final post-grill tree");
+      } else {
+        if (child.payload?.workspace_tree !== payload.workspace_tree) {
+          throw new Error("aggregate grill must bind the final post-grill tree");
+        }
+        validateGrillRevalidationBindings(child.payload);
+        if (child.payload?.interaction_type === "grill-revalidation") {
+          const completion = kernel.completeMakeDecisionInteractionPublication({
+            evidence_ref: binding.ref,
+            evidence_hash: binding.hash,
+          });
+          if (completion.completed === false) {
+            throw new Error("aggregate grill revalidation requires a fresh authenticated invocation");
+          }
+        }
       }
     }
     const decisionMatch = DECISION_LOG_REF.exec(payload.decision_ref ?? "");
@@ -476,6 +555,12 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new TypeError("talk/grill interaction evidence is create-only and cannot be revised");
       }
       plain(input.payload, "stage content payload");
+      const grillRevalidation = input.kind === "interaction-completion.v1"
+        && input.payload.interaction_type === "grill-revalidation";
+      if (grillRevalidation && (Object.hasOwn(input.payload, "previous_grill")
+          || Object.hasOwn(input.payload, "material_revision"))) {
+        throw new TypeError("grill revalidation predecessor and material bindings are caller-forbidden and runtime-derived");
+      }
       if (input.kind === "browser-qa-evidence.v1") rejectBrowserPrivateKeys(input.payload);
       let snapshot;
       if (input.kind === "interaction-completion.v1") {
@@ -490,7 +575,13 @@ export function createStageContentEvidenceWriter(options = {}) {
       const payload = minimize(structuredClone(input.payload), {
         allowBrowserSession: input.kind === "browser-qa-evidence.v1",
       });
-      if (input.kind === "interaction-completion.v1") payload.workspace_tree = snapshot.tree;
+      if (input.kind === "interaction-completion.v1") {
+        payload.workspace_tree = snapshot.tree;
+        if (grillRevalidation) {
+          payload.previous_grill = trustedPreviousGrill();
+          payload.material_revision = trustedCurrentMaterialBinding();
+        }
+      }
       validatePayload(input.kind, payload);
       if (input.kind === "browser-qa-evidence.v1") verifyBrowserAssets(task, payload);
       if (stage === "build-spec" && input.kind === "ambiguity-ledger.v2") {
@@ -511,6 +602,7 @@ export function createStageContentEvidenceWriter(options = {}) {
         }
       }
       validateAggregateBindings(payload);
+      validateGrillRevalidationBindings(payload);
       snapshot ??= captureSnapshot(workspace);
       if (input.kind === "interaction-completion.v1" && payload.workspace_tree !== snapshot.tree) {
         throw new Error("interaction completion workspace tree does not match the current Workspace");

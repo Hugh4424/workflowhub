@@ -623,13 +623,15 @@ Phase 1–5 的 facts 与宪法 Q1/Q2。
 - **DISCLOSE-ONLY**：`check-task-record-paths` 报出的 14 条旧生产路径治理不属于本任务，不得借 T014 修改生产实现、禁用 checker 或放宽断言。
 - **STEP INVENTORY SYNC**：`docs/stage-atomic-step-inventory.md` 仅可同步当前五份 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖，不改步骤合同或 runtime。
 - **RECOVERY WORKSPACE RED/GREEN**：T016/T017 仅修改 `core/workspace.mjs`、`core/stage-context.mjs`、`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/workspace-manager.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-recover-run.test.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`skills/wh-review/skill-bundle.json` 与 `skills/catalog.yaml` 仅同步受影响 bundle hash。kernel implementation 仅用于 runtime-owned previous-run CAS，以及同一 current requirements pointer 在新 active make-decision run 内的 runtime-owned Step 2 完成；idempotent 命中必须先验证 ledger 与 coverage ref/hash 的实际内容绑定，不得创建冗余 ledger/revision。active make-decision recovery run 的方向/详情审查继承 recovery workspace；普通 run、accepted run 与显式 prepare 保持原严格语义。不得新增 schema、认证 Gate 或 caller 可选路径。
+- **POST-GRILL MATERIAL GREEN（T018）**：仅修改 `core/schemas/interaction-completion.v1.json`、`core/stage-content-evidence.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`、`workflows/make-decision/SKILL.md`；新版 decision receipt 只作为当前材料，不重绑 Step 9。`grill-revalidation` 必须由真实同名 Skill invocation 绑定当前 tree、原 Grill 与 current material revision；Talk 和原 review 不重复，aggregate 未见新 invocation 必须拒绝。不得覆盖旧 evidence、创建 review Gate 或接受 caller 指定 binding。
 - **EXECUTE-ONLY（T013–T015）**：`skills/wh-review/scripts/wh-review-cli.mjs`、`scripts/stage-runtime.mjs`；三个收口 Task 不得现场修改实现，finding 必须返回 owning GREEN。
 - **DO NOT TOUCH**：旧 run 字节、provider route、Git refs。
 
 ### Tasks
 
 T014 保存全量与聚焦事实；T016/T017 先以严格 RED/GREEN 修复 recovery workspace
-blocker；T015 再正式恢复 make-decision 并等待真实用户确认；
+blocker；T015 再正式恢复 make-decision；T018/T019 在 post-Grill 材料整改后先 RED 再追加真实聚焦复核，
+再等待真实用户确认；
 确认后继续正式 build-spec/build-plan/build-code，最后由 T013 做唯一 integration review。
 
 ### Strategy
@@ -672,7 +674,7 @@ ORACLE-RECOVERY；旧字节不变，新 run 有真实 invocation facts。T014 �
 - T001→T002→T003→T004 串行。
 - T005/T007/T009 的 fixture 准备可在 T004 后并行；各 GREEN 只消费自己的 RED。
 - T011 依赖 T004、T008、T010；T012 依赖 T006、T008、T010、T011。
-- T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T015 依赖 T017；T013 依赖 T015 后形成的正式
+- T014 依赖全部 GREEN；T016 依赖 T014，T017 依赖 T016，T015 依赖 T017，T018 依赖 T015 的 Step 10，T019 依赖 T018；T013 依赖 T019 后形成的正式
   accepted build-plan/build-code lineage 与 fresh test facts。
 - T014、T016、T017、T015、T013 串行；不得并行创建第二正式 run 或在 fresh tests 前 review。
 

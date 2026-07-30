@@ -87,6 +87,16 @@ Use this complete public sequence without inventing flags or input shapes:
     Step 10. A later resolution does not repeat the Step.
 12. Publish the interaction aggregate and `decision-coverage-audit.v1`. They are
     required pre-confirmation content facts, not extra manifest Steps.
+    If a detail finding changes current materials after Step 10, preserve the
+    old receipt, Grill, Talk and review bytes. Append the current material
+    revision and decision receipt revision; Step 9 is not retried. Invoke one
+    real, focused `grill-with-docs` revalidation with its next
+    `grill-revalidation-N` host key, then publish `grill-revalidation` evidence.
+    The runtime derives the predecessor Grill and current material revision;
+    callers must not supply either binding. A revised aggregate may reuse the
+    three Talk refs, but it rejects a revalidation without that authenticated
+    host invocation. Record the detail finding resolution and focused evidence;
+    do not dispatch another provider review unless the user explicitly asks.
 13. Put the run input under `$TMP_DIR` with exactly:
    `{"receipts":{"decision":"receipts/decision.json","direction_review":"<canonical direction result-or-unavailable-attempt ref>","detail_review":"<canonical detail result-or-unavailable-attempt ref>"}}`.
    When the latest authenticated action for a track is a verified resolution,

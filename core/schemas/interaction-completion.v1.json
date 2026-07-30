@@ -5,9 +5,27 @@
   "additionalProperties": false,
   "required": ["interaction_type", "rounds", "grill", "workspace_tree"],
   "properties": {
-    "interaction_type": { "enum": ["talk", "grill", "spec-clarify", "aggregate"] },
+    "interaction_type": { "enum": ["talk", "grill", "grill-revalidation", "spec-clarify", "aggregate"] },
     "rounds": { "type": "array", "items": { "type": "object" } },
     "grill": { "type": ["object", "null"] },
+    "previous_grill": {
+      "type": "object",
+      "required": ["ref", "hash"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "material_revision": {
+      "type": "object",
+      "required": ["ref", "hash"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^materials/revisions/[a-f0-9]{64}\\.json$" },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "workspace_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "decision_ref": { "type": "string", "minLength": 1 },
     "decision_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
@@ -22,7 +40,14 @@
     },
     {
       "if": {
-        "properties": { "interaction_type": { "enum": ["talk", "grill", "spec-clarify"] } },
+        "properties": { "interaction_type": { "const": "grill-revalidation" } },
+        "required": ["interaction_type"]
+      },
+      "then": { "required": ["previous_grill", "material_revision"] }
+    },
+    {
+      "if": {
+        "properties": { "interaction_type": { "enum": ["talk", "grill", "grill-revalidation", "spec-clarify"] } },
         "required": ["interaction_type"]
       },
       "then": {

@@ -842,11 +842,87 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [ ] **任务完成**
 - **status**：`pending`
-- **actual_changes**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 已真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。审查指出的三个当前材料缺口——逐决策卡、grill 结论、provider priority 开放风险——正在本次补充；随后只做 focused verification，不自动 full re-review。最终 attempt 与人类确认仍未发生，不能称修完、pass 或 accepted。
-- **executed_commands**：前置实现聚焦验证 `npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，先 8/8、continuation 后 9/9、invalidated recovery source 后 10/10 tests pass；`node scripts/stage-runtime.mjs invalidate-run ... run-0004` → exit 0；`recover-run ... transparent-recovery-after-ledger-binding-fix` → exit 0，生成 run-0005；run-0005 的 Step 1–10 与 detail review 已执行；本轮仅补充四材料，focused verification 尚未执行。
+- **actual_changes**：run-0004 的 Step 2 pre-write failure 与 invalidation 均保留。run-0005 已真实完成 Step 1–10；正式 detail verdict=`revise_required` 永久保留。三个当前材料缺口已补齐，并以 T018/T019 的 receipt revision 与一次受控 Grill revalidation 合同做 focused 验证；未自动 full re-review。当前仍缺正式 material revision、detail resolution、真实 revalidation evidence、最终 attempt 与人类确认，不能称 accepted。
+- **executed_commands**：前置实现聚焦验证 `npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，先 8/8、continuation 后 9/9、invalidated recovery source 后 10/10 tests pass；`node scripts/stage-runtime.mjs invalidate-run ... run-0004` → exit 0；`recover-run ... transparent-recovery-after-ledger-binding-fix` → exit 0，生成 run-0005；run-0005 的 Step 1–10 与 detail review 已执行；T019 聚焦 receipt/revalidation tests 4/4 pass、独立 focused verification pass；未跑全量。
 - **evidence_refs**：前置实现非 canonical 证据 `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；`/tmp/T015-recovery-continuation-green.stdout`，sha256 `be0b551b6b1824c16dcbe862c06ecdd0cbb82c80883730a29ec6b359b3e9d59d`；`/tmp/T015-invalidated-recovery-source-green.stdout`，sha256 `bdb5d39d25fea7aa9c6520bbedee69c0f52ec44a1f399245e1a759ad4c55e809`；run-0004 invalidation `runs/make-decision/invalidations/321162652d0b87198a8be6c697a4d7232ffa020ab6895883841c3ae573f6e960.json`，sha256 `bc0a94e0870e6dc38b86525efc958e134c35e68b7464b26e6d9ec640d89b571d`；run-0005 `runs/make-decision/run-0005.json`，sha256 `c378ccc5e3e25c1328bc7aa523488096862f90519233cd39e004a93115fb051a`；detail result `reviews/results/make-decision-detail-dcc2070a4c8dda2bf5bd9a0e745c9cef9fa43ec9-3718f76f-1b62-4fc5-8068-dbe599eef4ad.json`，verdict=`revise_required`；最终 attempt/确认 evidence 尚不存在。
 - **covered_ac**：前置实现覆盖 AC-01、AC-02、AC-03、AC-15、AC-16；T015 正式执行仍 pending。
-- **review_fact**：T017 独立审查原 verdict=`revise_required` 保留；run-0005 detail result verdict=`revise_required` 也永久保留。三个材料 finding 正在补充，随后仅做 focused verification；未自动 full re-review，未改写为 pass。
+- **review_fact**：T017 独立审查原 verdict=`revise_required` 保留；run-0005 detail result verdict=`revise_required` 也永久保留。detail finding 的材料补齐与 T019 独立 focused verification 已记录，未自动 full re-review，未改写为 pass。
+- **completed_at**：N/A — not completed
+
+#### T018: RED：post-Grill current material revalidation
+
+- **ID**：T018
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：先证明 post-Grill 材料整改会被旧 receipt/Grill 树错误阻断。
+- **design_state**：ready
+- **versioned_refs**：`[]`
+- **输入**：run-0005 Step 10、原 Grill、current material revision、detail finding resolution。
+- **依赖**：T015
+- **并行**：否 — 单一 active make-decision run
+- **FR**：FR-MAT-001、FR-MAT-002、FR-MAT-004、FR-MAT-006、FR-INV-001、FR-INV-003
+- **AC**：AC-03、AC-05、AC-09、AC-16、AC-17
+- **动作**：新增最小聚焦反例：decision revision 不得触发 Step 9 retry；旧 Grill 不能直绑新 tree；伪造/缺失新 invocation 的 revalidation 不能被 aggregate 接受。
+- **精确文件**：`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`
+- **boundary**：files: `core/__tests__/task-kernel-publish.test.mjs`, `tests/stage-content-evidence.test.mjs`; symbols/regions: decision revision and post-Grill revalidation tests only.
+- **输出**：失败的聚焦行为测试。
+- **Knowledge**：D-05、D-06、D-11；原 `revise_required` 永久保留。
+- **verification_role**：RED
+- **paired_task**：T019
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/task-kernel-publish.test.mjs tests/stage-content-evidence.test.mjs -t "decision revision|grill revalidation" --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-POST-GRILL — 旧 Step 9/Grill bytes 不变；新版 receipt 不重试；revalidation 需要真实新 invocation，Talk 和 provider review 均不新增。
+- **evidence_path**：`apply/evidence/T018-post-grill-focused.stdout`
+- **STOP**：重写历史、重跑 Talk/full review、把 audit/review 变 Gate，或接受 caller binding。
+- **recovery**：保留旧事实；缺 invocation 只记录 incomplete，继续修复。
+- **task risk**：新版材料被误当旧 Grill 已验证，或 revalidation 成为重复认证手续。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：已复现 Step 9 `already has different canonical evidence or status` 与未知 `grill-revalidation` 类型；aggregate 未核新 invocation 的缺口由独立审查逐行确认，后续由 T019 的负向聚焦测试固定。
+- **executed_commands**：receipt revision 实际运行失败并保留错误；初始 interaction 聚焦测试失败；无全量测试。
+- **evidence_refs**：非 canonical 聚焦 stdout 待本轮收集。
+- **covered_ac**：AC-03、AC-05、AC-09、AC-16、AC-17。
+- **review_fact**：N/A — RED 不审查；detail review 原 verdict=`revise_required` 不变。
+- **completed_at**：2026-07-30。
+
+#### T019: GREEN：post-Grill current material revalidation
+
+- **ID**：T019
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：让 post-Grill 材料整改继续同一 run，不伪造旧 Grill，也不重跑 Talk/full review。
+- **design_state**：ready
+- **versioned_refs**：`[]`
+- **输入**：T018 RED、run-0005 Step 10、原 Grill、current material revision、detail finding resolution。
+- **依赖**：T018
+- **并行**：否 — 单一 active make-decision run
+- **FR**：FR-MAT-001、FR-MAT-002、FR-MAT-004、FR-MAT-006、FR-INV-001、FR-INV-003
+- **AC**：AC-03、AC-05、AC-09、AC-16、AC-17
+- **动作**：新版 decision receipt 保持 Step 9 历史不变；真实 `grill-with-docs` 只复核材料整改，writer 从可信原 Grill/current material revision 注入 binding；aggregate 复用三轮 Talk，缺新 invocation 拒绝。
+- **精确文件**：`core/schemas/interaction-completion.v1.json`、`core/stage-content-evidence.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-content-evidence.test.mjs`、`workflows/make-decision/SKILL.md`
+- **boundary**：files: `core/schemas/interaction-completion.v1.json`, `core/stage-content-evidence.mjs`, `core/task-kernel-implementation.mjs`, `core/__tests__/task-kernel-publish.test.mjs`, `tests/stage-content-evidence.test.mjs`, `workflows/make-decision/SKILL.md`; symbols/regions: decision receipt revision and post-Grill revalidation only.
+- **输出**：append-only receipt revision、revalidation evidence 与 aggregate revision。
+- **Knowledge**：D-05、D-06、D-11；原 `revise_required` 永久保留。
+- **verification_role**：GREEN
+- **paired_task**：T018
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/task-kernel-publish.test.mjs tests/stage-content-evidence.test.mjs -t "decision revision|grill revalidation" --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-POST-GRILL — 旧 Step 9/Grill bytes 不变；新版 receipt 不重试；revalidation 需要真实新 invocation，Talk 和 provider review 均不新增。
+- **evidence_path**：`apply/evidence/T019-post-grill-focused.stdout`
+- **STOP**：重写历史、重跑 Talk/full review、把 audit/review 变 Gate，或接受 caller binding。
+- **recovery**：保留旧事实；缺 invocation 只记录 incomplete，继续修复。
+- **task risk**：新版材料被误当旧 Grill 已验证，或 revalidation 成为重复认证手续。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：新版 receipt 只在本 run Step 10 后作为当前材料，旧 Step 9 bytes 不重绑、不重试；`grill-revalidation` 只允许一次、固定绑定原 Grill，writer 自动注入原 Grill/current material revision，aggregate 必须核对新 authenticated invocation。独立审查的两个 finding 已做 focused 修复；真实 revalidation invocation、resolution 与正式 attempt 尚待执行。
+- **executed_commands**：`vitest ... -t "accepts a verified decision revision"` → 1/1 pass；`vitest ... -t "appends a controlled grill revalidation|permits only one focused grill revalidation"` → 2/2 pass；此前 caller forged binding 与 prewritten-without-invocation 两条各 1/1 pass；无全量测试。
+- **evidence_refs**：当前会话的非 canonical 聚焦输出；正式 revalidation/receipt/resolution ref 尚不存在。
+- **covered_ac**：AC-03、AC-05、AC-09、AC-16、AC-17。
+- **review_fact**：独立审查原 verdict=`revise_required` 保留；Step 10 前 revision 与多次 revalidation 循环两项 finding 均已由上述 focused tests 验证修复，未自动 full review、未产生新 provider verdict。detail review 原 verdict=`revise_required` 不变。
 - **completed_at**：N/A — not completed
 
 #### T013: 唯一独立 integration review
@@ -914,7 +990,7 @@ build lineage 真实；fresh tests 后的一次 integration review 有正式结�
 
 ## 3. Dependency Graph
 
-`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T015→T013`
+`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T016→T017→T015→T018→T019→T013`
 
 ## 4. Requirement and Verification Traceability
 

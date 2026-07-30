@@ -164,6 +164,16 @@
 - **开放项**：无。
 - **supersedes**：无。
 
+### D-11：post-Grill 材料修订的聚焦复核
+
+- **来源**：detail review 整改后，current material tree 已不同于原 Grill tree。
+- **事实/约束**：直接把旧 Grill 重绑到新树会伪造事实；重跑 Talk 或 full review 又违反一次审查原则。
+- **选择及理由**：新版 decision receipt 不改写 Step 9；追加一次真实 `grill-revalidation`，由 runtime 注入原 Grill 和当前 material revision，再让 aggregate 复用三轮 Talk。
+- **影响/风险**：只复核变更后的材料；缺少新的 authenticated invocation 时不能引用该 revalidation。
+- **拒绝方案**：重写旧 Grill/hash、整 run 重跑 Talk/full review，或把 revision 变成 Step 9 retry 手续。
+- **开放项**：无。
+- **supersedes**：D-06 的 post-Grill material 更新细化，不覆盖 D-06。
+
 ## Grill 结论
 
 - `CONTEXT.md` 已更新，补齐本任务使用的恢复、当前材料和 requirements 指针术语。
