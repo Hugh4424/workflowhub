@@ -66,6 +66,15 @@ function fixture(overrides = {}) {
       red: { status: "failed-as-expected", ref: "evidence/red.json", hash: HASH },
       green: { status: "passed", ref: "evidence/green.json", hash: HASH },
     }],
+    business_facts: {
+      content: "present",
+      code: "complete",
+      tests: "passed",
+      acceptance_criteria: "covered",
+    },
+    declared_components: [],
+    invocation_facts: [],
+    audit_gaps: [],
     missing_items: [],
     risks: ["只验证了本阶段相关路径"],
     dependencies: ["已接受的实现计划"],
@@ -78,6 +87,111 @@ function fixture(overrides = {}) {
 }
 
 describe("stage completion facts", () => {
+  it("rejects a passed completion that omits authenticated reconciliation inputs", () => {
+    expect(() => createStageCompletionFacts({
+      result: "passed",
+      objective: "x", approach: "x", effect: "x",
+      verification: { conclusion: "x", limits: [] },
+      artifacts: [],
+      review: { conclusion: "x", status: "pass", providers: [], duration_ms: null, tokens: null, findings: [], refs: [] },
+      components: [],
+      missing_items: [], risks: [], dependencies: [], recovery_conditions: [],
+      downstream_read_rule: "x", next_owner: "x", user_action: "x",
+    })).toThrow(/business_facts|declared_components|invocation_facts|audit_gaps/i);
+  });
+
+  it("does not accept a conditional false fact with missing reason or mismatched identity", () => {
+    const declared = {
+      task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+      name: "spec-research", invocation_key: "default", bundle_hash: HASH,
+      declared_trigger: "in_memory_research", invocation: "conditional",
+    };
+    for (const fact of [
+      { ...declared, status: "not_invoked", reason: "" },
+      { ...declared, workflow_run_id: "another-run", status: "not_invoked", reason: "trigger_false" },
+    ]) {
+      const system = renderSystemCompletion(fixture({
+        declared_components: [declared],
+        invocation_facts: [fact],
+      }));
+      expect(system.result).toBe("incomplete");
+      expect(system.missing_items).toContain("spec-research invocation is missing");
+    }
+  });
+
+  it("accepts conditional false only with the complete declared invocation binding", () => {
+    const declared = {
+      task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+      name: "spec-research", invocation_key: "default", bundle_hash: HASH,
+      declared_trigger: "in_memory_research", invocation: "conditional",
+    };
+    const system = renderSystemCompletion(fixture({
+      declared_components: [declared],
+      invocation_facts: [{ ...declared, status: "not_invoked", reason: "trigger_false" }],
+    }));
+    expect(system.result).toBe("passed");
+    expect(system.missing_items).toEqual([]);
+  });
+
+  it("keeps business/content present incomplete when a declared invocation is missing", () => {
+    const facts = fixture({
+      result: "passed",
+      business_facts: {
+        content: "present",
+        code: "complete",
+        tests: "passed",
+        acceptance_criteria: "covered",
+      },
+      declared_components: [{
+        task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+        name: "spec-plan", invocation_key: "default", bundle_hash: HASH,
+        declared_trigger: "planning", invocation: "always",
+      }],
+      invocation_facts: [],
+      audit_gaps: [],
+    });
+    const system = renderSystemCompletion(facts);
+    expect(system, "ORACLE-COMP: content and business facts cannot substitute for invocation").toMatchObject({
+      result: "incomplete",
+      missing_items: [expect.stringMatching(/spec-plan.*invocation|invocation.*spec-plan/i)],
+    });
+  });
+
+  it("keeps business completion usable while disclosing a missing audit record", () => {
+    const facts = fixture({
+      result: "passed",
+      business_facts: {
+        content: "present",
+        code: "complete",
+        tests: "passed",
+        acceptance_criteria: "covered",
+      },
+      declared_components: [{
+        task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+        name: "spec-plan", invocation_key: "default", bundle_hash: HASH,
+        declared_trigger: "planning", invocation: "always",
+      }],
+      invocation_facts: [{
+        task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+        name: "spec-plan", invocation_key: "default", bundle_hash: HASH,
+        declared_trigger: "planning", status: "executed", result: { outcome: "done" },
+      }],
+      audit_gaps: [{
+        kind: "audit_summary",
+        status: "missing",
+        reason: "no canonical audit record exists",
+      }],
+    });
+    const system = renderSystemCompletion(facts);
+    expect(system.result, "ORACLE-COMP: an audit gap is disclosure, not a business Gate").toBe("passed");
+    expect(system.audit_gaps).toEqual([{
+      kind: "audit_summary",
+      status: "missing",
+      reason: "no canonical audit record exists",
+    }]);
+    expect(system.missing_items).toEqual([]);
+  });
+
   it("completion evidence: cannot render a passed handoff while required items are missing", () => {
     expect(() => fixture({
       result: "passed",
@@ -218,8 +332,8 @@ describe("stage completion facts", () => {
     });
   });
 
-  it("does not call an unavailable formal review passed", () => {
-    expect(() => fixture({
+  it("keeps an unavailable formal review as disclosure without changing the business result", () => {
+    const facts = fixture({
       result: "passed",
       review: {
         conclusion: "正式审查暂不可用",
@@ -230,7 +344,23 @@ describe("stage completion facts", () => {
         findings: [],
         refs: [{ ref: "reviews/attempts/unavailable/attempt.json", hash: HASH }],
       },
-    })).toThrow(/unavailable.*pass|pass.*unavailable/i);
+    });
+    expect(renderSystemCompletion(facts)).toMatchObject({
+      result: "passed",
+      review: { status: "unavailable" },
+    });
+    expect(() => fixture({
+      result: "passed",
+      review: {
+        conclusion: "review passed",
+        status: "unavailable",
+        providers: [],
+        duration_ms: null,
+        tokens: null,
+        findings: [],
+        refs: [{ ref: "reviews/attempts/unavailable/attempt.json", hash: HASH }],
+      },
+    })).toThrow(/unavailable.*review.*pass|review.*pass.*unavailable/i);
   });
 
   it("requires every declared component to be executed or trigger=false with a concrete reason", () => {
@@ -243,5 +373,38 @@ describe("stage completion facts", () => {
     expect(() => fixture({
       components: [{ name: "wh-review", status: "trigger=false", reason: "" }],
     })).toThrow(/components.*reason/i);
+  });
+
+  it("preserves itemized verify status without turning audit disclosure into a Gate", () => {
+    const verification_items = [
+      { id: "current_materials", status: "pass", evidence_refs: [{ ref: "evidence/materials.json", hash: HASH }], reason: "current revisions verified" },
+      { id: "diff_scope", status: "pass", evidence_refs: [{ ref: "evidence/diff.json", hash: HASH }], reason: "delivery scope verified" },
+      { id: "risk_tests", status: "pass", evidence_refs: [{ ref: "evidence/risk-tests.json", hash: HASH }], reason: "risk tests passed" },
+      { id: "acceptance_criteria", status: "pass", evidence_refs: [{ ref: "evidence/ac.json", hash: HASH }], reason: "each AC has a result" },
+      { id: "tasks_completion", status: "pass", evidence_refs: [{ ref: "evidence/tasks.json", hash: HASH }], reason: "task completion checked" },
+      { id: "browser_qa", status: "not_applicable", evidence_refs: [], reason: "no UI AC applies" },
+      { id: "independent_review_resolution", status: "unknown", evidence_refs: [], reason: "provider unavailable; disclosed only" },
+      { id: "core_gaps", status: "pass", evidence_refs: [{ ref: "evidence/gaps.json", hash: HASH }], reason: "no core delivery gap" },
+      { id: "human_handoff", status: "pass", evidence_refs: [{ ref: "evidence/handoff.json", hash: HASH }], reason: "handoff is explicit" },
+    ];
+    const facts = fixture({
+      verification_items,
+      review: {
+        conclusion: "独立审查不可用，已如实披露",
+        status: "unavailable",
+        providers: [],
+        duration_ms: null,
+        tokens: null,
+        findings: [],
+        refs: [{ ref: "reviews/attempts/unavailable.json", hash: HASH }],
+      },
+      audit_gaps: [{ kind: "audit_summary", status: "missing", reason: "no canonical audit summary" }],
+    });
+    expect(renderSystemCompletion(facts)).toMatchObject({
+      result: "passed",
+      verification_items,
+      audit_gaps: [{ status: "missing" }],
+      review: { status: "unavailable" },
+    });
   });
 });

@@ -8,7 +8,7 @@ const RESPONSE_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk"]
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const NON_STRUCTURAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "verify-code"]);
+const NON_STRUCTURAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const CHANGE_CLASSIFICATION_VERSION = "wh-review-change-classification.v1";
 const MATERIAL_CATEGORY = Object.freeze({
   raw_requirement: "decision", objective_facts: "evidence", approved_direction: "decision",
@@ -72,6 +72,7 @@ function responseLedger(value) {
     return {
       finding_id: findingId, status: entry.status, rationale: entry.rationale,
       changed_dimensions: [...entry.changed_dimensions], evidence_refs: [...entry.evidence_refs],
+      ...(entry.replay === undefined ? {} : { replay: entry.replay }),
       ...(entry.status === "accepted_risk" ? { accepted_snapshot_tree: entry.accepted_snapshot_tree, affected_paths: [...entry.affected_paths] } : {}),
     };
   });
@@ -137,7 +138,32 @@ function actionableFindingIds(result) {
   return result.adjudication.clusters.filter(({ disposition }) => disposition === "actionable").map(({ id }) => id).sort();
 }
 
-function boundActionableLedger(previousResult, ledger, currentSnapshotTree) {
+function trustedReplay(previousResult, previousAttempt, entry) {
+  if (entry.replay === undefined) return;
+  const mismatch = (message) => { throw new TypeError(`REPLAY_MISMATCH: ${message}`); };
+  if (!entry.replay || typeof entry.replay !== "object" || Array.isArray(entry.replay)) {
+    mismatch("replay binding must be an object");
+  }
+  if (!previousAttempt || previousAttempt.task_id !== previousResult.task_id
+      || previousAttempt.stage !== previousResult.stage
+      || previousAttempt.review_track !== previousResult.review_track
+      || previousAttempt.terminal_status !== "semantic") {
+    mismatch("trusted prior attempt/result binding is missing");
+  }
+  const profiles = previousAttempt.review_policy?.requested_profiles
+    ?? [...new Set((previousAttempt.provider_attempts ?? []).map(({ provider }) => provider))];
+  const cluster = previousResult.adjudication?.clusters?.find(({ id }) => id === entry.finding_id);
+  const anchorValid = (cluster?.provider_findings ?? []).length > 0
+    && cluster.provider_findings.every(({ evidence_anchor_valid: valid }) => valid === true);
+  if (entry.replay.previous_result_ref !== previousResult.result_ref
+      || entry.replay.finding_id !== entry.finding_id
+      || canonicalJson(entry.replay.requested_profiles) !== canonicalJson(profiles)
+      || entry.replay.evidence_anchor_valid !== anchorValid) {
+    mismatch("request differs from authenticated prior review evidence");
+  }
+}
+
+function boundActionableLedger(previousResult, ledger, currentSnapshotTree, previousAttempt = null) {
   const checked = responseLedger(ledger);
   const actionable = actionableFindingIds(previousResult);
   if (actionable === null) throw new TypeError("response_ledger requires a v2-adjudicated previous result");
@@ -148,6 +174,7 @@ function boundActionableLedger(previousResult, ledger, currentSnapshotTree) {
   if (!checked.responses.every(({ finding_id }) => actionable.includes(finding_id)) || checked.responses.length !== actionable.length) {
     throw new TypeError("response_ledger must resolve every and only actionable finding");
   }
+  checked.responses.forEach((entry) => trustedReplay(previousResult, previousAttempt, entry));
   return checked;
 }
 
@@ -236,8 +263,8 @@ export function buildClassificationManifest(materials = {}) {
   return Object.freeze({ version: "wh-review-classification-manifest.v1", entries: Object.freeze(entries) });
 }
 
-function resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification = null) {
-  const checked = boundActionableLedger(previousResult, ledger, currentSnapshotTree);
+function resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification = null, previousAttempt = null) {
+  const checked = boundActionableLedger(previousResult, ledger, currentSnapshotTree, previousAttempt);
   const classification = changeClassification(machineClassification ?? checked.change_classification ?? null, previousResult, currentSnapshotTree);
   const hasStructuralChange = classification?.structural ?? (
     (checked.change?.changed_dimensions.length ?? 0) > 0
@@ -257,7 +284,7 @@ export function responseLedgerSha256(ledger) {
  * is useful audit evidence, never a pass gate: absent or invalid evidence is
  * recorded as unverified instead of blocking the stage or claiming a repair.
  */
-export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = null, previousResult, previousResultSha256, ledger = null, currentSnapshotTree, changeClassification: machineClassification = null } = {}) {
+export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = null, previousResult, previousAttempt = null, previousResultSha256, ledger = null, currentSnapshotTree, changeClassification: machineClassification = null } = {}) {
   if (typeof taskId !== "string" || taskId.trim() === "") throw new TypeError("resolution taskId must be non-empty");
   if (!NON_STRUCTURAL_STAGES.has(stage)) throw new TypeError("non-gate review response is not allowed for this stage");
   if (stage === "make-decision") {
@@ -270,6 +297,8 @@ export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = 
     stage,
     review_track: reviewTrack,
     outcome: "recorded_non_gate_response",
+    previous_verdict: previousResult.verdict,
+    provider_calls: 0,
     previous_result_ref: previousResult.result_ref,
     previous_result_sha256: previousResultSha256,
     previous_snapshot_tree: previousResult.snapshot_tree,
@@ -277,7 +306,7 @@ export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = 
   };
   const assertedClassification = changeClassification(machineClassification, previousResult, currentSnapshotTree);
   try {
-    const state = resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification);
+    const state = resolutionState(previousResult, ledger, currentSnapshotTree, machineClassification, previousAttempt);
     return {
       ...base, evidence_state: "verified", response_ledger: state.checked,
       response_ledger_sha256: responseLedgerSha256(state.checked), unverified_reason: null,
@@ -285,6 +314,10 @@ export function buildNonGateReviewResponseRecord({ taskId, stage, reviewTrack = 
       ...(state.classification ? { change_classification: state.classification } : {}),
     };
   } catch (error) {
+    if (error.message?.startsWith("REPLAY_MISMATCH:")) {
+      error.code = "REPLAY_MISMATCH";
+      throw error;
+    }
     if (assertedClassification?.structural) {
       throw new Error(`structural change requires a complete bound response ledger: ${error.message}`);
     }

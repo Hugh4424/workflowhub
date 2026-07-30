@@ -14,6 +14,8 @@ import decisionLogSchema from "./schemas/decision-log-contract.v1.json" with { t
 import planTaskSchema from "./schemas/plan-task-contract.v1.json" with { type: "json" };
 import planTaskV2Schema from "./schemas/plan-task-contract.v2.json" with { type: "json" };
 import completionSchema from "./schemas/stage-completion-facts.v1.json" with { type: "json" };
+import materialRevisionSchema from "./schemas/task-material-revision.v1.json" with { type: "json" };
+import browserQaSchema from "./schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
@@ -44,6 +46,7 @@ const FORBIDDEN_IDENTITY_KEYS = new Set([
   "root", "task_path", "taskPath", "cwd", "repository", "repo_root",
 ]);
 const PRIVATE_KEYS = /^(?:private(?:_|$)|secret(?:_|$)|token$|password$|authorization$|cookie$|full_card$|session(?:_|$)|api_?key$)/i;
+const BROWSER_PRIVATE_KEYS = /^(?:private(?:_|$)|secret(?:_|$)|token$|password$|authorization$|cookie$|full_card$|api_?key$|profile_content$|profile_data$)/i;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const payloadSchemas = new Map([
   ["interaction-completion.v1", interactionSchema],
@@ -57,6 +60,7 @@ const payloadSchemas = new Map([
   ["plan-task-contract.v1", planTaskSchema],
   ["plan-task-contract.v2", planTaskV2Schema],
   ["stage-completion-facts.v1", completionSchema],
+  ["browser-qa-evidence.v1", browserQaSchema],
 ]);
 const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
   "make-decision": Object.freeze(["interaction-completion.v1", "decision-coverage-audit.v1"]),
@@ -68,6 +72,7 @@ const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validateEnvelope = ajv.compile(envelopeSchema);
 const payloadValidators = new Map([...payloadSchemas].map(([kind, schema]) => [kind, ajv.compile(schema)]));
+const validateMaterialRevision = ajv.compile(materialRevisionSchema);
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -123,12 +128,26 @@ function rejectIdentityKeys(value, label, allowEvidenceBinding = false) {
   }
 }
 
-function minimize(value) {
-  if (Array.isArray(value)) return value.map(minimize);
+function minimize(value, { allowBrowserSession = false, depth = 0 } = {}) {
+  if (Array.isArray(value)) return value.map((entry) => minimize(entry, { allowBrowserSession, depth: depth + 1 }));
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !PRIVATE_KEYS.test(key))
-    .map(([key, child]) => [key, minimize(child)]));
+    .filter(([key]) => (allowBrowserSession && depth === 0 && key === "session") || !PRIVATE_KEYS.test(key))
+    .map(([key, child]) => [key, minimize(child, { allowBrowserSession, depth: depth + 1 })]));
+}
+
+function rejectBrowserPrivateKeys(value, label = "browser QA payload") {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => rejectBrowserPrivateKeys(entry, `${label}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (BROWSER_PRIVATE_KEYS.test(key)) {
+      throw new TypeError(`${label}.${key} is a forbidden private credential or profile field`);
+    }
+    rejectBrowserPrivateKeys(child, `${label}.${key}`);
+  }
 }
 
 function schemaErrors(validate) {
@@ -144,6 +163,24 @@ function validatePayload(kind, payload) {
     const contract = validateAmbiguityLedgerV2(payload);
     if (!contract.ok) throw new TypeError(`${kind} payload violates identity contract: ${contract.errors.join("; ")}`);
   }
+}
+
+function verifyBrowserAsset(task, ref, hash, label) {
+  if (typeof ref !== "string" || ref.trim() === "" || !HASH.test(hash ?? "")) {
+    throw new TypeError(`${label} must contain a canonical ref and sha256 hash`);
+  }
+  let raw;
+  try { raw = task.readRecord(ref); }
+  catch (error) { throw new Error(`${label} canonical bytes are unavailable: ${error.message}`); }
+  if (sha256(raw) !== hash) throw new Error(`${label} canonical bytes hash mismatch`);
+}
+
+function verifyBrowserAssets(task, payload) {
+  if (payload.applicability !== "ui") return;
+  payload.screenshots.forEach((binding, index) => {
+    verifyBrowserAsset(task, binding.ref, binding.hash, `browser screenshot ${index + 1}`);
+  });
+  verifyBrowserAsset(task, payload.test.output_ref, payload.test.output_hash, "browser test output");
 }
 
 function requireBinding(value, label) {
@@ -439,11 +476,15 @@ export function createStageContentEvidenceWriter(options = {}) {
         throw new TypeError("talk/grill interaction evidence is create-only and cannot be revised");
       }
       plain(input.payload, "stage content payload");
+      if (input.kind === "browser-qa-evidence.v1") rejectBrowserPrivateKeys(input.payload);
       const aggregate = input.kind === "interaction-completion.v1"
         && input.payload.interaction_type === "aggregate";
       rejectIdentityKeys(input.payload, "payload", aggregate);
-      const payload = minimize(structuredClone(input.payload));
+      const payload = minimize(structuredClone(input.payload), {
+        allowBrowserSession: input.kind === "browser-qa-evidence.v1",
+      });
       validatePayload(input.kind, payload);
+      if (input.kind === "browser-qa-evidence.v1") verifyBrowserAssets(task, payload);
       if (stage === "build-spec" && input.kind === "ambiguity-ledger.v2") {
         if (payload.content_profile !== "spec-content.v3") {
           throw new TypeError("new build-spec publication requires spec-content.v3; legacy ledgers are read-only");
@@ -613,6 +654,50 @@ export function readLatestStageContentEvidence({ task, stage, workflowRunId, kin
   return Object.freeze({ ref: pointer.ref, hash: pointer.hash, value, pointer_ref: pointerRef });
 }
 
+export function readCurrentTaskMaterialRevision({ task } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const pointerRaw = readOptional(safeTask, "materials/current.json");
+  if (pointerRaw === undefined) return undefined;
+  let pointer;
+  try { pointer = JSON.parse(pointerRaw); }
+  catch { throw new Error("material current pointer is invalid"); }
+  if (pointer?.schema_version !== "task-material-current.v1"
+      || pointer.task_id !== safeTask.identity.taskId
+      || !Number.isInteger(pointer.generation) || pointer.generation < 1
+      || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+      || !HASH.test(pointer.revision_hash ?? "")) {
+    throw new Error("material current pointer binding is invalid");
+  }
+  const raw = safeTask.readRecord(pointer.revision_ref);
+  if (sha256(raw) !== pointer.revision_hash) throw new Error("material current revision hash mismatch");
+  let revision;
+  try { revision = JSON.parse(raw); } catch { throw new Error("material current revision is invalid JSON"); }
+  if (!validateMaterialRevision(revision) || revision.task_id !== safeTask.identity.taskId
+      || revision.revision_id !== pointer.revision_id
+      || revision.previous_ref !== (pointer.previous_ref ?? null)) {
+    throw new Error(`material current revision is invalid: ${schemaErrors(validateMaterialRevision)}`);
+  }
+  if (revision.previous_ref === null) {
+    if (revision.parent_revision !== null || revision.previous_hash !== null) {
+      throw new Error("material root revision has a forged parent");
+    }
+  } else {
+    const priorRaw = safeTask.readRecord(revision.previous_ref);
+    if (sha256(priorRaw) !== revision.previous_hash) throw new Error("material previous revision hash mismatch");
+    const prior = JSON.parse(priorRaw);
+    if (!validateMaterialRevision(prior) || prior.revision_id !== revision.parent_revision) {
+      throw new Error("material parent revision does not match previous_ref");
+    }
+  }
+  return Object.freeze({
+    pointer_ref: "materials/current.json",
+    pointer: Object.freeze(pointer),
+    ref: pointer.revision_ref,
+    hash: pointer.revision_hash,
+    value: Object.freeze(revision),
+  });
+}
+
 export function verifyStageContentEvidence({
   task, ref, hash, expectedStage, expectedRunId, expectedTree, expectedKind,
 } = {}) {
@@ -630,6 +715,24 @@ export function verifyStageContentEvidence({
   if (expectedTree !== undefined && (!TREE.test(expectedTree) || value.snapshot_tree !== expectedTree)) throw new Error("stage content evidence snapshot tree binding mismatch");
   if (expectedKind !== undefined && value.kind !== expectedKind) throw new Error("stage content evidence kind binding mismatch");
   return Object.freeze(value);
+}
+
+export function verifyBrowserQaEvidenceBinding({
+  task, binding, expectedRunId, expectedTree,
+} = {}) {
+  plain(binding, "browser QA evidence binding");
+  if (Object.keys(binding).some((key) => key !== "ref" && key !== "hash")) {
+    throw new TypeError("browser QA evidence binding accepts only ref and hash");
+  }
+  return verifyStageContentEvidence({
+    task,
+    ref: binding.ref,
+    hash: binding.hash,
+    expectedStage: "verify-code",
+    expectedRunId,
+    expectedTree,
+    expectedKind: "browser-qa-evidence.v1",
+  });
 }
 
 export function requiredStageContentKinds(stage) {

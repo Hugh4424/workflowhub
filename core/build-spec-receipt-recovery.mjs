@@ -4,6 +4,7 @@ import { assertArtifactDir } from "./artifact-dir.mjs";
 import { canonical } from "./canonical-utils.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { assertWorkspace } from "./workspace.mjs";
+import { validateTaskMaterialRevision } from "./stage-content-contracts.mjs";
 
 const BASE_REF = "receipts/spec.json";
 const MARKER_REF = "receipts/recoveries/spec.json";
@@ -364,7 +365,47 @@ export function assertLatestBuildSpecReceipt({ worker, item, binding } = {}) {
     const baseRaw = canonicalJson(item.value);
     validateBuildSpecBase(item.value, baseRaw, worker.identity.taskId);
     if (item.evidence.sha256 !== sha256(baseRaw)) throw new Error("build-spec base receipt is not canonical");
-    return;
+    const pointerRecord = worker.readOptionalReceipt("materials/current.json");
+    if (pointerRecord === null) return;
+    const pointer = pointerRecord.value;
+    if (pointer?.schema_version !== "task-material-current.v1"
+        || pointer.task_id !== worker.identity.taskId
+        || !Number.isInteger(pointer.generation) || pointer.generation < 1
+        || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+        || !HASH.test(pointer.revision_hash ?? "")) {
+      throw new Error("build-spec material current pointer is invalid");
+    }
+    const revisionRecord = worker.readReceipt(pointer.revision_ref);
+    const revision = revisionRecord.value;
+    const revisionValidation = validateTaskMaterialRevision(revision);
+    if (!revisionValidation.ok
+        || revisionRecord.sha256 !== pointer.revision_hash
+        || revision.task_id !== worker.identity.taskId
+        || revision.revision_id !== pointer.revision_id
+        || revision.previous_ref !== (pointer.previous_ref ?? null)
+        || revision.hashes?.["spec.md"] !== sha256(binding.artifactContent)) {
+      throw new Error("build-spec current material revision does not bind current spec.md");
+    }
+    if (revision.previous_ref === null) {
+      if (revision.parent_revision !== null || revision.previous_hash !== null) {
+        throw new Error("build-spec root material revision has a forged parent");
+      }
+    } else {
+      const priorRecord = worker.readReceipt(revision.previous_ref);
+      if (priorRecord.sha256 !== revision.previous_hash
+          || !validateTaskMaterialRevision(priorRecord.value).ok
+          || priorRecord.value.revision_id !== revision.parent_revision) {
+        throw new Error("build-spec material revision parent does not match previous_ref");
+      }
+    }
+    return Object.freeze({
+      current_material_revision: Object.freeze({
+        ref: pointer.revision_ref,
+        hash: pointer.revision_hash,
+        revision_id: revision.revision_id,
+      }),
+      accepted_history: "read_only",
+    });
   }
   if (item.ref === BASE_REF) throw new Error("build-spec spec consumer rejects the stale base receipt after recovery");
   if (!REVISION_REF.test(item.ref)) throw new Error("build-spec spec consumer requires the latest recovered receipt");

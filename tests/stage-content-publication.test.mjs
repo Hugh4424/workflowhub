@@ -405,7 +405,7 @@ describe("official Stage run, requirements ledger, and journal producers", () =>
     },
   );
 
-  it("writes canonical ledger and journal bytes through the narrow official producers", async () => {
+  it("writes the canonical ledger while keeping make-decision journal mutation runtime-owned", async () => {
     const state = fixture("official-run-producers");
 
     state.kernel.startStageRun(STAGE, { reason: "initial execution" });
@@ -419,33 +419,22 @@ describe("official Stage run, requirements ledger, and journal producers", () =>
       coverage_ref: "requirements/coverage.json",
     });
 
-    const entry = await state.kernel.writeStageStepEntry(STAGE, {
+    expect(() => state.kernel.writeStageStepEntry(STAGE, {
       step_id: 1,
       attempt_id: "attempt-1",
       entry_evidence: { kind: "command", uri_or_path: "evidence/entry-1.json", content_hash: "a".repeat(64) },
-    });
-    await state.kernel.writeStageStepExit(STAGE, {
-      step_id: 1,
-      attempt_id: "attempt-1",
-      entry_journal_entry_id: entry.journal_entry_id,
-      terminal_status: "success",
-      completion_evidence: { kind: "command", uri_or_path: "evidence/exit-1.json", content_hash: "b".repeat(64) },
-    });
-
-    const journal = state.task.readRecord("journal.jsonl").trim().split("\n").map(JSON.parse);
-    expect(journal).toHaveLength(2);
-    expect(journal.map((event) => event.workflow_run_id)).toEqual([
-      expect.any(String),
-      expect.any(String),
-    ]);
-    expect(new Set(journal.map((event) => event.workflow_run_id)).size).toBe(1);
+    })).toThrow(/runtime-owned/i);
   });
 
-  it("does not invent journal steps merely because a run was started", () => {
+  it("records only the runtime-owned bootstrap step when a run is started", () => {
     const state = fixture("run-does-not-complete-work");
     state.kernel.startStageRun(STAGE, { reason: "initial execution" });
 
-    expect(() => state.task.readRecord("journal.jsonl")).toThrow(/ENOENT|no such file/i);
+    const journal = state.task.readRecord("journal.jsonl").trim().split("\n").map(JSON.parse);
+    expect(journal.map(({ event_type, step_id }) => ({ event_type, step_id }))).toEqual([
+      { event_type: "step_entry", step_id: 1 },
+      { event_type: "step_exit", step_id: 1 },
+    ]);
     expect(attemptExists(state.task)).toBe(false);
   });
 });

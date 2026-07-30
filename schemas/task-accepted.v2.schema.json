@@ -20,7 +20,7 @@
     },
     "full_audit_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "full_audit_summary_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "full_audit_verdict": { "const": "pass" }
+    "full_audit_verdict": { "enum": ["pass", "fail"] }
   },
   "oneOf": [
     {

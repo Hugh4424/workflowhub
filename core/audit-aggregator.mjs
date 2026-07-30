@@ -359,6 +359,7 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     requirement_coverage,
     facts,
     verdict,
+    completion_effect: "disclose_only",
     evidence_refs: uniqueEvidenceRefs(evidenceRefs),
     ledger_hash: auditContext.ledger?.ledger_hash ?? null,
     manifest_hash: auditContext.manifest?.manifest_hash ?? null,

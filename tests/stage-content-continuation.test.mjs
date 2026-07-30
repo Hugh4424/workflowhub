@@ -13,6 +13,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask, createTaskKernel } from "../core/task-handle.mjs";
+import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { ArtifactDir } from "../core/artifact-dir.mjs";
+import { readCurrentTaskMaterialRevision } from "../core/stage-content-evidence.mjs";
 import { validateReplayRecordSet } from "../scripts/validate-stage-replay.mjs";
 
 const temporary = [];
@@ -27,7 +30,12 @@ function fixture() {
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   writeFileSync(join(repo, "README.md"), "fixture\n");
-  execFileSync("git", ["add", "README.md"], { cwd: repo });
+  const materialRoot = join(repo, "specs", "legacy-task");
+  mkdirSync(materialRoot, { recursive: true });
+  for (const file of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    writeFileSync(join(materialRoot, file), `initial ${file}\n`);
+  }
+  execFileSync("git", ["add", "."], { cwd: repo });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
   const task = createTask({
     storageRoot,
@@ -41,7 +49,8 @@ function fixture() {
       inputs: {},
     },
   });
-  return { repo, task, kernel: createTaskKernel(task) };
+  const artifacts = ArtifactDir.open(repo, task);
+  return { repo, task, artifacts, kernel: createTaskKernel(task, { artifacts }) };
 }
 
 function installHistoricalAccepted({ repo, task }) {
@@ -113,6 +122,107 @@ describe("legacy accepted content compatibility", () => {
 });
 
 describe("append-only stage continuation", () => {
+  it("publishes one task-global current material chain from authenticated artifact bytes", () => {
+    const { repo, task, artifacts, kernel } = fixture();
+    const first = kernel.publishMaterialRevision({
+      change_summary: "capture initial current materials",
+      source_refs: ["task.json"],
+    });
+    const firstRaw = task.readRecord(first.revision_ref);
+    artifacts.writeAtomic("spec.md", "updated spec\n");
+    const secondKernel = createTaskKernel(task, { artifacts: ArtifactDir.open(repo, task) });
+    const second = secondKernel.publishMaterialRevision({
+      change_summary: "update spec",
+      source_refs: ["task.json"],
+      expected_current_ref: first.revision_ref,
+    });
+    const current = readCurrentTaskMaterialRevision({ task });
+    expect(current.value).toMatchObject({
+      task_id: "legacy-task",
+      parent_revision: first.revision_id,
+      previous_ref: first.revision_ref,
+      changed_files: ["spec.md"],
+      change_summary: "update spec",
+    });
+    expect(current.value.hashes["spec.md"]).toBe(sha256("updated spec\n"));
+    expect(task.readRecord(first.revision_ref)).toBe(firstRaw);
+    expect(() => secondKernel.publishMaterialRevision({
+      change_summary: "forged hash",
+      source_refs: ["task.json"],
+      hashes: { "spec.md": "f".repeat(64) },
+    })).toThrow(/caller fields are forbidden|unknown/i);
+    expect(() => secondKernel.publishMaterialRevision({
+      change_summary: "stale writer",
+      source_refs: ["task.json"],
+      expected_current_ref: first.revision_ref,
+    })).toThrow(/MATERIAL_REVISION_CONFLICT/);
+    expect(second.current).toBe(true);
+  });
+
+  it("appends and supersedes the requirements ledger for the same task without replacing old bytes", () => {
+    const { task, kernel } = fixture();
+    kernel.startStageRun("build-spec", { reason: "requirements revision fixture" });
+    const input = (revision, text, supersedes = []) => {
+      const canonicalSource = createCanonicalSource({
+        source_type: "offline_fixture",
+        source_id: "same-task-requirements",
+        revision,
+        requirements: ["R1"],
+      });
+      const sourceManifest = createSourceManifest({
+        canonical_source: canonicalSource,
+        atoms: [{
+          requirement_id: "R1",
+          text,
+          owner: "product",
+          authority: "test",
+          derived_from: [],
+          supersedes,
+          status: "accepted",
+          stale: false,
+        }],
+      }).manifest;
+      return {
+        source_manifest: sourceManifest,
+        mappings: {
+          R1: {
+            decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+            artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+            acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+          },
+        },
+      };
+    };
+    const first = kernel.publishRequirementsLedger("build-spec", input("r1", "Initial requirement."));
+    const firstRaw = task.readRecord(first.ledger_ref);
+    const second = kernel.publishRequirementsLedger("build-spec", input("r2", "Updated requirement."));
+    const secondRaw = task.readRecord(second.ledger_ref);
+    const third = kernel.publishRequirementsLedger("build-spec", input("r3", "Third requirement."));
+
+    expect(second, "ORACLE-MAT: same-task requirements changes append a superseding ledger revision").toMatchObject({
+      parent_ref: first.ledger_ref,
+      current: true,
+    });
+    expect(second.ledger_ref).not.toBe(first.ledger_ref);
+    expect(task.readRecord(first.ledger_ref)).toBe(firstRaw);
+    expect(JSON.parse(secondRaw)).toMatchObject({
+      schema_version: "requirements-ledger-revision.v1",
+      parent_ref: first.ledger_ref,
+      supersedes: [first.ledger_ref],
+    });
+    expect(third).toMatchObject({
+      parent_ref: second.ledger_ref,
+      supersedes: [second.ledger_ref],
+      current: true,
+    });
+    expect(task.readRecord(second.ledger_ref)).toBe(secondRaw);
+    expect(JSON.parse(task.readRecord(third.ledger_ref))).toMatchObject({
+      parent_ref: second.ledger_ref,
+      supersedes: [second.ledger_ref],
+    });
+    expect(JSON.parse(task.readRecord("requirements/current.json")).ledger_ref).toBe(third.ledger_ref);
+  });
+
   it("binds an unaccepted historical attempt and reviews without changing their bytes", () => {
     const { repo, task, kernel } = fixture();
     const attemptRef = "results/make-decision/attempt-0001.json";

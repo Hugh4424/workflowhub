@@ -1,0 +1,860 @@
+# 任务清单：WorkflowHub 核心质量流程真实执行与轻量记录
+
+- **Input**：`specs/workflow-quality-recording-simplification/spec.md`、`specs/workflow-quality-recording-simplification/plan.md`
+- **Status**：Draft — transparent recovery
+- **Template version**：`plan-task.v3`
+
+## 1. 执行摘要
+
+T001–T012 完成六组 RED/GREEN；每个 Phase 的最终 GREEN 做一次聚焦独立 review；
+T013 做唯一 integration review；T014 对每个最终候选 tree 做一次全量；T015 同任务正式恢复。
+
+## 2. Global Constraints
+
+- 每个行为变化先 RED，再用相同命令和 oracle GREEN。
+- 每 Task 只修改精确文件；越界先 STOP 回 plan。
+- audit 不作 Gate；历史记录不回填；review finding 修复不二审。
+- 每个 Phase 首次聚焦 review 真实执行或如实 unavailable；修复后只追加 resolution，不重跑 provider。
+- 只有 T014 可运行 `npm run check`；同一候选 tree 禁止无变化重跑。
+- T014 失败后若修改实现，新的 tree 必须重新运行全量并追加结果，不覆盖旧失败。
+
+## Phase 1：真实 invocation
+
+### Goal
+
+真实 hostInvoke 是 executed 的唯一来源。
+
+### Files
+
+- **NEW**：`core/stage-skill-invocation.mjs`、`core/schemas/stage-skill-invocation.v1.json`
+- **MODIFY**：`core/stage-skill-runtime.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/skill-deps.yaml`、`core/__tests__/stage-skill-runtime.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-interaction-contract.test.mjs`
+- **DO NOT TOUCH**：talk/grill Skill 正文、历史 run。
+
+### Tasks
+
+#### T001: RED：声明 Skill 可被手写记录绕过
+
+- **ID**：T001
+- **Phase**：Phase 1：真实 invocation
+- **goal**：复现未 hostInvoke 仍被标记 executed/complete。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-001"}]`
+- **输入**：五阶段声明与现有 runtime。
+- **依赖**：N/A — first task
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-INV-001、FR-INV-002、FR-INV-003、FR-INV-004、FR-INV-005
+- **AC**：AC-01、AC-02、AC-03、AC-16
+- **动作**：新增 zero-question、always 漏调、conditional 无 outcome、host unavailable 反例。
+- **精确文件**：`core/__tests__/stage-skill-runtime.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-interaction-contract.test.mjs`
+- **boundary**：files: `core/__tests__/stage-skill-runtime.test.mjs`, `scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`, `tests/stage-interaction-contract.test.mjs`; symbols/regions: test fixtures only.
+- **输出**：ORACLE-INV RED。
+- **Knowledge**：`dispatchStageSkill` 已要求显式 hostInvoke。
+- **verification_role**：RED
+- **paired_task**：T002
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/stage-skill-runtime.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-interaction-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-INV — 手写内容不能证明真实调用。
+- **evidence_path**：`apply/evidence/T001-invocation-red.stdout`
+- **STOP**：setup/fixture 失败，或需修改正式 record 才能复现。
+- **recovery**：只回退本 Task 测试字节。
+- **task risk**：假 RED。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增 always 漏调、conditional 无 outcome、host unavailable、直接发布内容绕过等 RED 反例；同步修正既有 `ambiguity-ledger.v2` 断言。
+- **executed_commands**：`./node_modules/.bin/vitest run core/__tests__/stage-skill-runtime.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-interaction-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1` → exit 1，24/28 pass，4 个目标失败；`git diff --check` → exit 0。
+- **evidence_refs**：RED 原始临时输出已被宿主清理，`formal_record_status=unavailable`；失败名称与计数保留于本任务记录和 Phase review。
+- **covered_ac**：AC-01、AC-02、AC-03、AC-16。
+- **review_fact**：Phase 1 独立审查原 verdict=`revise_required`；发现 caller 伪造/no-op 解锁、outcome/snapshot 未绑定、throw 未留 unavailable、重复调用不幂等。原结论保留，处置见 T002 聚焦修复。
+- **completed_at**：2026-07-30T01:21:33Z
+
+#### T002: GREEN：统一 hostInvoke 与 invocation fact
+
+- **ID**：T002
+- **Phase**：Phase 1：真实 invocation
+- **goal**：真实 dispatch 产生 runtime-owned fact，caller 不能伪造。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-001"}]`
+- **输入**：T001 RED。
+- **依赖**：T001
+- **并行**：否 — 消费 T001
+- **FR**：FR-INV-001、FR-INV-002、FR-INV-003、FR-INV-004、FR-INV-005
+- **AC**：AC-01、AC-02、AC-03、AC-16
+- **动作**：实现窄 invocation writer、真实 dispatch 写入和五阶段 deps 接线。
+- **精确文件**：`core/stage-skill-invocation.mjs`、`core/schemas/stage-skill-invocation.v1.json`、`core/stage-skill-runtime.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/skill-deps.yaml`
+- **boundary**：files: `core/stage-skill-invocation.mjs`, `core/schemas/stage-skill-invocation.v1.json`, `core/stage-skill-runtime.mjs`, `core/task-kernel-implementation.mjs`, `scripts/stage-runtime.mjs`, `workflows/make-decision/skill-deps.yaml`, `workflows/build-spec/skill-deps.yaml`, `workflows/build-plan/skill-deps.yaml`, `workflows/build-code/skill-deps.yaml`, `workflows/verify-code/skill-deps.yaml`; symbols/regions: invocation path only.
+- **输出**：ORACLE-INV GREEN。
+- **Knowledge**：content evidence 不授予 executed。
+- **verification_role**：GREEN
+- **paired_task**：T001
+- **gate_cmd**：`./node_modules/.bin/vitest run core/__tests__/stage-skill-runtime.test.mjs scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/stage-interaction-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-INV — 手写内容不能证明真实调用。
+- **evidence_path**：`apply/evidence/T002-invocation-green.stdout`
+- **STOP**：需要宿主签名、真人阅读证明或第二状态机。
+- **recovery**：回退 writer/runtime 当前字节，保留 RED。
+- **task risk**：owner 重复 dispatch。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增 runtime-owned invocation schema/writer；executed 绑定 canonical outcome ref/hash 与 snapshot tree；caller 结构伪造和 no-op 解锁被拒；hostInvoke throw 先记录 truthful unavailable 再传播；同 identity 同语义幂等复用、不同语义明确失败；completion reconcile 要求 invocation 与 evidence/snapshot 一致。
+- **executed_commands**：同一聚焦 Vitest 命令 → exit 0，29/29 pass，105.62s；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical 临时测试输出 `/tmp/T002-focused-resolution.stdout`，sha256 `72351efba292d63673994b4182ed9d586d7fe0c1c7b43f4bf0e045bab8dc9704`；正式 Phase receipt 因同任务透明恢复不可用，`formal_record_status=unavailable`。
+- **covered_ac**：AC-01、AC-02、AC-03、AC-16。
+- **review_fact**：原 Phase 1 verdict=`revise_required` 保留；四项发现均已修复并由新增反例及 29/29 聚焦测试验证；按规则未强制二审、未改写为 pass。
+- **completed_at**：2026-07-30T01:21:33Z
+
+### Verify
+
+T001/T002 同一命令；ORACLE-INV RED→GREEN。
+
+### Knowledge
+
+A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
+
+### STOP
+
+方案需要宿主签名、真人阅读证明或第二状态机。
+
+### Done
+
+五阶段调用可对账，手写 payload 仍为 missing。
+
+### Risks and rollback
+
+风险是重复 dispatch；只回退本 Phase runtime/writer 字节。
+
+## Phase 2：completion reconcile 与 audit 非 Gate
+
+### Goal
+
+统一完成核对，同时保持审计缺口非阻断。
+
+### Files
+
+- **MODIFY**：`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`schemas/task-accepted.v2.schema.json`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/audit-aggregator.test.mjs`、`tests/five-stage-audit-e2e.test.mjs`
+- **DO NOT TOUCH**：阶段进入条件、历史结果。
+
+### Tasks
+
+#### T003: RED：假完成与 audit Gate
+
+- **ID**：T003
+- **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
+- **goal**：复现内容齐全但调用缺失仍假绿，以及 audit missing 被阻断。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-002"}]`
+- **输入**：T002 invocation facts。
+- **依赖**：T002
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-COMP-001、FR-COMP-002、FR-COMP-003、FR-COMP-004、FR-COMP-005
+- **AC**：AC-03、AC-04、AC-13、AC-14、AC-16
+- **动作**：覆盖 missing invocation/content present、audit missing/business complete、错绑 publication。
+- **精确文件**：`tests/stage-completion-facts.test.mjs`、`tests/audit-aggregator.test.mjs`、`tests/five-stage-audit-e2e.test.mjs`
+- **boundary**：files: `tests/stage-completion-facts.test.mjs`, `tests/audit-aggregator.test.mjs`, `tests/five-stage-audit-e2e.test.mjs`; symbols/regions: tests only.
+- **输出**：ORACLE-COMP RED。
+- **Knowledge**：F3/Q2 三谓词。
+- **verification_role**：RED
+- **paired_task**：T004
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/stage-completion-facts.test.mjs tests/audit-aggregator.test.mjs tests/five-stage-audit-e2e.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-COMP — audit missing 可继续，业务缺失不能 complete。
+- **evidence_path**：`apply/evidence/T003-completion-red.stdout`
+- **STOP**：测试把业务缺失与 audit 缺失混成一个断言。
+- **recovery**：回退测试字节。
+- **task risk**：错误 oracle。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增三组独立反例：内容齐但 invocation 缺失、业务完成但 audit 缺失、publication/evidence 错绑；没有把业务缺失和审计缺失混成同一断言。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/stage-completion-facts.test.mjs tests/audit-aggregator.test.mjs tests/five-stage-audit-e2e.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1` → exit 1，27/30 pass，3 个目标失败；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T003-completion-red.stdout`，sha256 `ef923b7d6fe42c8240dfcb5ad9789fe45612a32da0f50c36ed81e16418b978b6`；`formal_record_status=unavailable`。
+- **covered_ac**：AC-03、AC-04、AC-13、AC-14、AC-16。
+- **review_fact**：Phase 2 独立审查原 verdict=`revise_required`；发现缺省输入绕过、生产 handler 未消费认证事实、conditional false 绑定不足、错绑未走 canonical writer、旧 audit pass Gate 仍存在。处置见 T004。
+- **completed_at**：2026-07-30T01:42:19Z
+
+#### T004: GREEN：单一 reconciler
+
+- **ID**：T004
+- **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
+- **goal**：统一核对 invocation/business/audit 并输出真实 completion。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-002"}]`
+- **输入**：T003 RED。
+- **依赖**：T003
+- **并行**：否 — 消费 T003
+- **FR**：FR-COMP-001、FR-COMP-002、FR-COMP-003、FR-COMP-004、FR-COMP-005
+- **AC**：AC-03、AC-04、AC-13、AC-14、AC-16
+- **动作**：扩展 completion facts 与 audit disclosure，保持结构写边界。
+- **精确文件**：`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`schemas/task-accepted.v2.schema.json`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`
+- **boundary**：files: `core/stage-completion-facts.mjs`, `core/schemas/stage-completion-facts.v1.json`, `schemas/task-accepted.v2.schema.json`, `core/audit-aggregator.mjs`, `core/canonical-receipt-writer.mjs`, `core/stage-handlers.mjs`, `core/stage-runner.mjs`, `core/task-kernel-implementation.mjs`, `scripts/stage-runtime.mjs`; symbols/regions: reconcile/publication only.
+- **输出**：ORACLE-COMP GREEN。
+- **Knowledge**：A-002；audit 与业务结论分离。
+- **verification_role**：GREEN
+- **paired_task**：T003
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/stage-completion-facts.test.mjs tests/audit-aggregator.test.mjs tests/five-stage-audit-e2e.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-COMP — audit missing 可继续，业务缺失不能 complete。
+- **evidence_path**：`apply/evidence/T004-completion-green.stdout`
+- **STOP**：invocation/audit missing 被用作开发进入 Gate。
+- **recovery**：回退 reconciler 映射。
+- **task risk**：假绿或新 Gate。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：production handler 经 stage-runner 消费 manifest-derived declarations 与 TaskKernel invocation facts；reconciler 强制 business/invocation/audit 输入；conditional false 要求完整 identity/trigger/reason；canonical writer 在错绑落盘前失败；writer、handler、stage facts、publication binding、attempt invalidation、make-decision full audit 与 accepted schema 的 audit pass Gate 改为 pass/fail 均保留、fail 仅披露。
+- **executed_commands**：Phase 2 主 Gate → exit 0，33/33 pass；相关 schema/handler 聚焦测试 → exit 0，43/43 pass；五阶段 production E2E → exit 0，5/5 pass；`git diff --check` → exit 0。额外 `stage-content-evidence.test.mjs` → 43 个旧 fixture 因缺 Phase 1 invocation facts 失败，已登记给 T012，不在本 Task 白名单内。
+- **evidence_refs**：非 canonical `/tmp/T004-focused-resolution.stdout`，sha256 `259f7bac7b18ddcf28d298cd4d0a0deaec12497d43431c87111358918174e98c`；`/tmp/T004-handler-focused.stdout`，sha256 `ca7275b5b9f3bb410027d243a17657327fcbf7492e294c9cd3e4e5214ca2670c`；正式 Phase receipt `formal_record_status=unavailable`。
+- **covered_ac**：AC-03、AC-04、AC-13、AC-14、AC-16。
+- **review_fact**：原 Phase 2 verdict=`revise_required` 保留；全部审查发现已聚焦修复并由 33/33、43/43、5/5 验证；按规则未强制二审、未改写为 pass。旧 fixture 兼容问题保留给计划内 T012。
+- **completed_at**：2026-07-30T01:42:19Z
+
+### Verify
+
+T003/T004 同一命令；ORACLE-COMP RED→GREEN。
+
+### Knowledge
+
+A-002 与宪法 F3/Q2。
+
+### STOP
+
+invocation 或 audit 缺失被用作开发进入 Gate。
+
+### Done
+
+三谓词结果可独立观察。
+
+### Risks and rollback
+
+风险是假绿或新 Gate；回退 reconciler 消费映射。
+
+## Phase 3：review 生命周期与处理组 3
+
+### Goal
+
+一次审查、append-only resolution、同 subject 去重、replay 精确。
+
+### Files
+
+- **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/schemas/resolution.schema.json`、`skills/review-response/SKILL.md`、`skills/review-response/scripts/validate-response.mjs`、`core/stage-handlers.mjs`、`skills/wh-review/scripts/__tests__/review-controller.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`、`skills/review-response/__tests__/skill-contract.test.mjs`
+- **DO NOT TOUCH**：provider 配置、旧 result 字节。
+
+### Tasks
+
+#### T005: RED：重复 review 与 replay 丢失
+
+- **ID**：T005
+- **Phase**：Phase 3：review 生命周期与处理组 3
+- **goal**：复现重复 provider、强制二审、材料不全仍调用和 replay 误聚合。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-003"}]`
+- **输入**：现有 review controller/runner。
+- **依赖**：T004
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-REV-001、FR-REV-002、FR-REV-003、FR-REV-004、FR-REV-005、FR-REV-006
+- **AC**：AC-05、AC-06、AC-07、AC-08、AC-16
+- **动作**：新增同 subject 双 initial、stale ref、MATERIAL_INCOMPLETE、profile/anchor mismatch 反例。
+- **精确文件**：`skills/wh-review/scripts/__tests__/review-controller.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`、`skills/review-response/__tests__/skill-contract.test.mjs`
+- **boundary**：files: `skills/wh-review/scripts/__tests__/review-controller.test.mjs`, `skills/wh-review/scripts/__tests__/review-runner.test.mjs`, `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`, `skills/review-response/__tests__/skill-contract.test.mjs`; symbols/regions: tests only.
+- **输出**：ORACLE-REVIEW RED。
+- **Knowledge**：处理组 3 问题 9/15。
+- **verification_role**：RED
+- **paired_task**：T006
+- **gate_cmd**：`./node_modules/.bin/vitest run skills/wh-review/scripts/__tests__/review-controller.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/review-response/__tests__/skill-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-REVIEW — 同 subject 单 initial，普通修复零 provider，replay 精确。
+- **evidence_path**：`apply/evidence/T005-review-red.stdout`
+- **STOP**：RED 需要真实 provider 或网络。
+- **recovery**：回退测试字节。
+- **task risk**：provider spy 未命中真实入口。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增同 subject 重复 initial、resolution 零 provider、stale ref、profile/anchor/finding mismatch 反例；保留 MATERIAL_INCOMPLETE provider 前失败与真实入口 spy。
+- **executed_commands**：Phase 3 四文件 Gate → exit 1，102/109 pass，7 个目标失败；真实 runner provider spy=0，未访问网络；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T005-review-red.stdout`，sha256 `f45998bb9cb1f45d8c102993063b8e528bc6c9cb8d5ca1e64ab09aa8ca566020`；`formal_record_status=unavailable`。
+- **covered_ac**：AC-05、AC-06、AC-07、AC-08、AC-16。
+- **review_fact**：Phase 3 独立审查原 verdict=`revise_required`；发现 replay 自报互证、subject 锁非并发安全、canonical head/旧 anchor 漂移、build-code resolution 未覆盖。处置见 T006。
+- **completed_at**：2026-07-30T02:01:49Z
+
+#### T006: GREEN：canonical head 与 resolution
+
+- **ID**：T006
+- **Phase**：Phase 3：review 生命周期与处理组 3
+- **goal**：同 subject 单 initial，修复追加 resolution，replay 精确验证。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-003"}]`
+- **输入**：T005 RED。
+- **依赖**：T005
+- **并行**：否 — 消费 T005
+- **FR**：FR-REV-001、FR-REV-002、FR-REV-003、FR-REV-004、FR-REV-005、FR-REV-006
+- **AC**：AC-05、AC-06、AC-07、AC-08、AC-16
+- **动作**：controller 自查 head；resolution 零 provider；材料 preflight；finding id 精确 replay。
+- **精确文件**：`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/schemas/resolution.schema.json`、`skills/review-response/SKILL.md`、`skills/review-response/scripts/validate-response.mjs`、`core/stage-handlers.mjs`
+- **boundary**：files: `skills/wh-review/scripts/review-controller.mjs`, `skills/wh-review/scripts/review-runner.mjs`, `skills/wh-review/scripts/wh-review-cli.mjs`, `skills/wh-review/scripts/review-materials.mjs`, `skills/wh-review/schemas/resolution.schema.json`, `skills/review-response/SKILL.md`, `skills/review-response/scripts/validate-response.mjs`, `core/stage-handlers.mjs`; symbols/regions: review lifecycle only.
+- **输出**：ORACLE-REVIEW GREEN。
+- **Knowledge**：A-004；旧 verdict 永久保留。
+- **verification_role**：GREEN
+- **paired_task**：T005
+- **gate_cmd**：`./node_modules/.bin/vitest run skills/wh-review/scripts/__tests__/review-controller.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/review-response/__tests__/skill-contract.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-REVIEW — 同 subject 单 initial，普通修复零 provider，replay 精确。
+- **evidence_path**：`apply/evidence/T006-review-green.stdout`
+- **STOP**：需要覆盖旧 verdict、自动 full review 或制造新 pass。
+- **recovery**：回退 controller 接线，不改历史。
+- **task risk**：误复用不同 subject。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：同 subject 后续材料/快照变化复用 canonical semantic head；subject 级锁保证并发 initial 只 dispatch 一次；resolution 保留 previous_verdict、finding dispositions、focused validation 与 provider_calls=0；replay 从受信 prior attempt/result/aggregation 精确核对 ref/profiles/anchor/finding；canonical head 按 parent/root lineage 选择并使用旧聚合 anchor；build-code 支持统一 append-only resolution。
+- **executed_commands**：Phase 3 四文件 Gate → exit 0，111/111 pass；schema/handler 聚焦测试 → exit 0，30/30 pass；`git diff --check` → exit 0。额外 `stage-risk-acceptance` 的业务测试 24 项通过，4 个断言因测试仍固定宪法 1.3.0、当前为 1.5.0 失败，非本 Phase 改动。
+- **evidence_refs**：非 canonical `/tmp/T006-focused-resolution.stdout`，sha256 `880e9a7d120dce893b2c1b09781219c05c827e65ff839b6636f12a8e0f03649c`；正式 Phase receipt `formal_record_status=unavailable`。
+- **covered_ac**：AC-05、AC-06、AC-07、AC-08、AC-16。
+- **review_fact**：原 Phase 3 verdict=`revise_required` 保留；全部审查发现已聚焦修复并由 111/111、30/30 验证；按规则未强制二审、未改写为 pass。
+- **completed_at**：2026-07-30T02:01:49Z
+
+### Verify
+
+T005/T006 同一命令；ORACLE-REVIEW RED→GREEN。
+
+### Knowledge
+
+A-004；处理组 3 问题 9/15。
+
+### STOP
+
+需要覆盖旧 verdict、自动 full review 或真实网络。
+
+### Done
+
+重复审查、材料预检和 replay 反例全部 GREEN。
+
+### Risks and rollback
+
+风险是误复用不同 subject；回退 controller 接线，不改历史。
+
+## Phase 4：四材料 current revision
+
+### Goal
+
+四材料和 requirements ledger 同任务可更新且可追溯。
+
+### Files
+
+- **NEW**：`core/schemas/task-material-revision.v1.json`
+- **MODIFY**：`core/stage-content-contracts.mjs`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`tests/stage-plan-task-contract-v3.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`tests/stage-content-continuation.test.mjs`
+- **DO NOT TOUCH**：旧 accepted/hash/checkpoint 字节。
+
+### Tasks
+
+#### T007: RED：旧 hash 阻断当前材料
+
+- **ID**：T007
+- **Phase**：Phase 4：四材料 current revision
+- **goal**：复现四材料更新被旧 accepted/hash/checkpoint 阻断。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-004"}]`
+- **输入**：当前材料和 continuation 行为。
+- **依赖**：T004
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-MAT-001、FR-MAT-002、FR-MAT-003、FR-MAT-004、FR-MAT-005
+- **AC**：AC-09、AC-10、AC-16
+- **动作**：分别/同时更新四材料并追加 requirements，验证旧版本只读。
+- **精确文件**：`tests/stage-plan-task-contract-v3.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`tests/stage-content-continuation.test.mjs`
+- **boundary**：files: `tests/stage-plan-task-contract-v3.test.mjs`, `scripts/__tests__/stage-runtime-spec-recovery.test.mjs`, `tests/stage-content-continuation.test.mjs`; symbols/regions: tests only.
+- **输出**：ORACLE-MAT RED。
+- **Knowledge**：四材料是 current materials。
+- **verification_role**：RED
+- **paired_task**：T008
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/stage-plan-task-contract-v3.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs tests/stage-content-continuation.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-MAT — 任意材料更新可继续，旧版本只读可追溯。
+- **evidence_path**：`apply/evidence/T007-material-red.stdout`
+- **STOP**：测试通过覆盖旧 canonical 字节实现。
+- **recovery**：回退测试字节。
+- **task risk**：旧行为未被真实触发。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增 decision/spec/plan/tasks 单独更新、四份同时更新、requirements ledger 同 task 二次发布反例；fixture 跟进 invocation runtime，旧 accepted 字节保持只读。
+- **executed_commands**：Phase 4 三文件 Gate → exit 1，36/42 pass，6 个目标失败；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T007-material-red.stdout`，sha256 `dd6e66d745ab001c12653a4bfe6577c277d80553c2229c640d6cda3f232933cd`；`formal_record_status=unavailable`。
+- **covered_ac**：AC-09、AC-10、AC-16。
+- **review_fact**：Phase 4 独立审查原 verdict=`revise_required`；发现只有 schema 无真实 task-global writer/consumer、多个 current、caller 自报 hash、正式 consumer 固定读旧 ledger。处置见 T008。
+- **completed_at**：2026-07-30T02:37:03Z
+
+#### T008: GREEN：轻量 current revision
+
+- **ID**：T008
+- **Phase**：Phase 4：四材料 current revision
+- **goal**：四材料和 requirements ledger 支持 append-only revision。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-004"}]`
+- **输入**：T007 RED、T006 review lifecycle。
+- **依赖**：T007、T006
+- **并行**：否 — 消费 T007
+- **FR**：FR-MAT-001、FR-MAT-002、FR-MAT-003、FR-MAT-004、FR-MAT-005
+- **AC**：AC-09、AC-10、AC-16
+- **动作**：实现 revision/parent/files/summary/source/hash，不自动 review。
+- **精确文件**：`core/schemas/task-material-revision.v1.json`、`core/stage-content-contracts.mjs`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`
+- **boundary**：files: `core/schemas/task-material-revision.v1.json`, `core/stage-content-contracts.mjs`, `core/stage-content-evidence.mjs`, `core/schemas/stage-content-evidence.v1.json`, `core/task-kernel-implementation.mjs`, `core/task-handle.mjs`, `core/build-spec-receipt-recovery.mjs`, `core/canonical-receipt-writer.mjs`, `scripts/stage-runtime.mjs`, `workflows/make-decision/SKILL.md`, `workflows/build-spec/SKILL.md`, `workflows/build-plan/SKILL.md`, `workflows/build-code/SKILL.md`, `workflows/verify-code/SKILL.md`; symbols/regions: material revision only.
+- **输出**：ORACLE-MAT GREEN。
+- **Knowledge**：typed writer 注入身份。
+- **verification_role**：GREEN
+- **paired_task**：T007
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/stage-plan-task-contract-v3.test.mjs scripts/__tests__/stage-runtime-spec-recovery.test.mjs tests/stage-content-continuation.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-MAT — 任意材料更新可继续，旧版本只读可追溯。
+- **evidence_path**：`apply/evidence/T008-material-green.stdout`
+- **STOP**：引入 reopen/reset/rebind 或第二任务状态机。
+- **recovery**：回退 revision writer，保留 current 文件。
+- **task risk**：revision lineage 变 Gate。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：实现 task-global material writer/CLI/consumer；writer 从认证 ArtifactDir 计算 identity、revision、changed files 与 hashes；material/requirements current pointer 使用窄 CAS，旧 revision 只读；requirements 第二/第三版保持严格 parent/supersedes 链；正式 audit 读取并认证 current requirements；五阶段明确 revision 非 reopen/reset/rebind/checkpoint/review Gate。
+- **executed_commands**：Phase 4 三文件 Gate → exit 0，43/43 pass；receipt-writer 聚焦测试 → exit 0，8/8 pass；node checks 与 `git diff --check` → exit 0。额外 stage-content-publication 的 2 个旧预期失败归因 Phase 1 invocation 收紧，已登记 T012。
+- **evidence_refs**：非 canonical `/tmp/T008-focused-resolution.stdout`，sha256 `4194c9c006b8340cce20870a11467f863e6d0f91bf8475b3997e5b81f9ec27a5`；正式 Phase receipt `formal_record_status=unavailable`。
+- **covered_ac**：AC-09、AC-10、AC-16。
+- **review_fact**：原 Phase 4 verdict=`revise_required` 保留；全部审查发现已聚焦修复并由 43/43、8/8 验证；按规则未强制二审、未改写为 pass。
+- **completed_at**：2026-07-30T02:37:03Z
+
+### Verify
+
+T007/T008 同一命令；ORACLE-MAT RED→GREEN。
+
+### Knowledge
+
+F3/Q2 与现有 typed writer。
+
+### STOP
+
+引入 reopen/reset/rebind 或第二任务状态机。
+
+### Done
+
+current revision 生效，旧 revision 只读可追溯。
+
+### Risks and rollback
+
+风险是 lineage 变 Gate；回退 revision writer，不删除 current 文件。
+
+## Phase 5：浏览器 QA 证据
+
+### Goal
+
+UI 验收有通用、可定位且不泄露凭据的证据。
+
+### Files
+
+- **NEW**：`core/schemas/browser-qa-evidence.v1.json`
+- **MODIFY**：`skills/isolated-browser-qa/SKILL.md`、`workflows/verify-code/isolated-browser-qa.md`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`workflows/verify-code/SKILL.md`、`skills/isolated-browser-qa/__tests__/skill-contract.test.mjs`、`tests/stage-content-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`
+- **DO NOT TOUCH**：browser profile/cookie/token。
+
+### Tasks
+
+#### T009: RED：空泛页面通过
+
+- **ID**：T009
+- **Phase**：Phase 5：浏览器 QA 证据
+- **goal**：复现缺页面、auth、性能、截图、命令或 cleanup 仍通过。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-005"}]`
+- **输入**：现有 isolated-browser-qa 合同。
+- **依赖**：T004
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-BQA-001、FR-BQA-002、FR-BQA-003
+- **AC**：AC-11、AC-12、AC-16
+- **动作**：逐字段删除反例；非 UI N/A 和性能 not_measured 正例。
+- **精确文件**：`skills/isolated-browser-qa/__tests__/skill-contract.test.mjs`、`tests/stage-content-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`
+- **boundary**：files: `skills/isolated-browser-qa/__tests__/skill-contract.test.mjs`, `tests/stage-content-evidence.test.mjs`, `tests/five-stage-facts-v2.test.mjs`; symbols/regions: tests only.
+- **输出**：ORACLE-BQA RED。
+- **Knowledge**：现有 Skill 已管理隔离/auth/cleanup。
+- **verification_role**：RED
+- **paired_task**：T010
+- **gate_cmd**：`./node_modules/.bin/vitest run skills/isolated-browser-qa/__tests__/skill-contract.test.mjs tests/stage-content-evidence.test.mjs tests/five-stage-facts-v2.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-BQA — UI 证据完整，非 UI 不形成 Gate。
+- **evidence_path**：`apply/evidence/T009-browser-red.stdout`
+- **STOP**：测试依赖真实浏览器或登录凭据。
+- **recovery**：回退测试字节。
+- **task risk**：把工具行为和事实合同混测。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增 UI browser evidence 顶层/嵌套逐字段缺失、非 UI N/A、performance 三态、auth 三态、隐私字段、producer→consumer、状态一致性和错绑字节反例；同步修复旧 interaction fixture，使用正式 dispatch helper 生成 runtime-owned invocation，不放宽断言。
+- **executed_commands**：原三文件 exact Gate 在隔离 pre-GREEN tree → exit 1，91/106 pass，15 个失败全部为 ORACLE-BQA 目标；当前 fixture 聚焦 3/3、9/9 pass；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T009-browser-red-full.stdout`，sha256 `9748bffdfa2b665722c0f046e06306b8f7b0db54d90685df5abeb6e90d87f7f2`；隔离反向 hunks `/tmp/T009-pre-green-reversed-hunks.diff`，sha256 `23adf0a657aecf925d9e495b6e28400d303d64f3109469b7e47635ff73a8dad7`；tree 说明 sha256 `aa35a932da8a92205af33042fcb71a24a3e98f4149ab3a1636fd973af5237976`；`formal_record_status=unavailable`。
+- **covered_ac**：AC-11、AC-12、AC-16。
+- **review_fact**：Phase 5 独立审查原 verdict=`revise_required`；发现 producer/consumer 未绑定、状态可矛盾、截图/输出未核字节、session 隐私回归、正式 envelope/schema 与 spec 不一致。处置见 T010。
+- **completed_at**：2026-07-30T04:17:03Z
+
+#### T010: GREEN：通用 browser evidence
+
+- **ID**：T010
+- **Phase**：Phase 5：浏览器 QA 证据
+- **goal**：UI AC 产出可定位、无凭据泄露的证据。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-005"}]`
+- **输入**：T009 RED。
+- **依赖**：T009
+- **并行**：否 — 消费 T009
+- **FR**：FR-BQA-001、FR-BQA-002、FR-BQA-003
+- **AC**：AC-11、AC-12、AC-16
+- **动作**：新增 schema/allowlist，Skill 输出 route/scenario/tool/auth/performance/screenshots/test/cleanup/snapshot。
+- **精确文件**：`core/schemas/browser-qa-evidence.v1.json`、`skills/isolated-browser-qa/SKILL.md`、`workflows/verify-code/isolated-browser-qa.md`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`workflows/verify-code/SKILL.md`
+- **boundary**：files: `core/schemas/browser-qa-evidence.v1.json`, `skills/isolated-browser-qa/SKILL.md`, `workflows/verify-code/isolated-browser-qa.md`, `core/stage-content-evidence.mjs`, `core/schemas/stage-content-evidence.v1.json`, `core/task-kernel-implementation.mjs`, `workflows/verify-code/SKILL.md`; symbols/regions: browser evidence only.
+- **输出**：ORACLE-BQA GREEN。
+- **Knowledge**：A-005。
+- **verification_role**：GREEN
+- **paired_task**：T009
+- **gate_cmd**：`./node_modules/.bin/vitest run skills/isolated-browser-qa/__tests__/skill-contract.test.mjs tests/stage-content-evidence.test.mjs tests/five-stage-facts-v2.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-BQA — UI 证据完整，非 UI 不形成 Gate。
+- **evidence_path**：`apply/evidence/T010-browser-green.stdout`
+- **STOP**：要求保存 cookie/token 或所有任务必填。
+- **recovery**：回退 schema allowlist，不删除证据。
+- **task risk**：schema 膨胀。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增正式 browser evidence schema/envelope kind；verify 只消费 canonical ref/hash 并核 task/kind/snapshot；截图和测试输出读取 canonical 字节复核 hash；pass/fail/blocked/unknown 与 exit、cleanup、app service 状态一致；恢复全局 session 隐私过滤并仅对 browser 顶层精确例外；auth/performance 与 spec 三态一致；Skill 输出记录 route/scenario/tool/engine/derived session/login reuse/performance/screenshots/test/cleanup/snapshot，非 UI N/A 不成 Gate。
+- **executed_commands**：原三文件 exact Gate → exit 0，120/120 pass，457.87s；`git diff --check` → exit 0。未启动真实浏览器、未读取或保存 profile/cookie/token；本 Phase 验证的是通用证据合同。
+- **evidence_refs**：非 canonical `/tmp/T010-browser-focused-resolution.stdout`，sha256 `41125b616f2b5aec56ae39dd7f998585dbe559ce379cec2c62c6fa04a6f8b293`；正式 Phase receipt `formal_record_status=unavailable`。
+- **covered_ac**：AC-11、AC-12、AC-16。
+- **review_fact**：原 Phase 5 verdict=`revise_required` 保留；全部 finding 已聚焦修复并由 120/120 exact Gate 验证；按规则未强制二审、未改写为 pass。
+- **completed_at**：2026-07-30T04:17:03Z
+
+### Verify
+
+T009/T010 同一命令；ORACLE-BQA RED→GREEN。
+
+### Knowledge
+
+A-005 与现有 cleanup/auth 参考。
+
+### STOP
+
+需要真实凭据或把 UI 证据变成全局 Gate。
+
+### Done
+
+九类 UI 证据字段可复核，非 UI N/A。
+
+### Risks and rollback
+
+风险是 schema 过宽；回退 allowlist，不删除测试证据。
+
+## Phase 6：verify-code 深化与五阶段接线
+
+### Goal
+
+verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
+
+### Files
+
+- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/skill-deps.yaml`、`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`core/stage-handlers.mjs`、`core/task-kernel-implementation.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/stage-completion-facts.test.mjs`
+- **DO NOT TOUCH**：确认数量、close 授权、provider route。
+
+### Tasks
+
+#### T011: RED：快速 verify 漏核
+
+- **ID**：T011
+- **Phase**：Phase 6：verify-code 深化与五阶段接线
+- **goal**：复现缺 diff、测试、AC、tasks、UI 或调用仍假绿。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-002"}]`
+- **输入**：Phase 1–5 facts。
+- **依赖**：T004、T008、T010
+- **并行**：否 — RED/GREEN 串行
+- **FR**：FR-VER-001、FR-VER-002、FR-VER-003、FR-REC-001、FR-REC-002
+- **AC**：AC-13、AC-14、AC-15、AC-16
+- **动作**：逐项缺失、review unavailable、audit missing、human handoff、五阶段漏调反例。
+- **精确文件**：`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/stage-completion-facts.test.mjs`
+- **boundary**：files: `scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`, `tests/five-stage-facts-v2.test.mjs`, `tests/official-component-receipts.test.mjs`, `tests/stage-completion-facts.test.mjs`; symbols/regions: tests only.
+- **输出**：ORACLE-VERIFY RED。
+- **Knowledge**：verify 业务事实与 audit disclosure 分离。
+- **verification_role**：RED
+- **paired_task**：T012
+- **gate_cmd**：`./node_modules/.bin/vitest run scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/five-stage-facts-v2.test.mjs tests/official-component-receipts.test.mjs tests/stage-completion-facts.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：1
+- **oracle**：ORACLE-VERIFY — 核心缺失不 complete，audit gap 只披露。
+- **evidence_path**：`apply/evidence/T011-verify-red.stdout`
+- **STOP**：把 review verdict 当 pass Gate。
+- **recovery**：回退测试字节。
+- **task risk**：漏掉某阶段调用类型。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：新增 verification_items 九类完整性及逐项缺失、canonical verification receipt、review unavailable/audit gap 非 Gate、五阶段漏调和正式 recovery/host bridge 反例；先修正 build-code final review_scope 的既有 integration/null 契约矛盾，再取得干净 RED。
+- **executed_commands**：原四文件 exact Gate → exit 1，67/79 pass，12 个失败全部为 ORACLE-VERIFY 目标；build-code final review_scope 单一 E2E → exit 0，1/1 pass；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T011-verify-red-clean.stdout`，sha256 `3185019140804c7a306199d667fe63101a7df0be4d0571a2847f5128a78df8b0`；`formal_record_status=unavailable`。
+- **covered_ac**：AC-13、AC-14、AC-15、AC-16。
+- **review_fact**：Phase 6 独立审查原 verdict=`revise_required`；发现 host bridge 仍可 caller 自报、verification receipt 可省略并合成、pass 可空证据、recovery oracle/E2E 不完整、handoff 名称漂移。处置见 T012。
+- **completed_at**：2026-07-30T05:06:41Z
+
+#### T012: GREEN：verify 明细与五阶段接线
+
+- **ID**：T012
+- **Phase**：Phase 6：verify-code 深化与五阶段接线
+- **goal**：五阶段真实对账；verify 每项给状态、证据和原因。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-002"}]`
+- **输入**：T011 RED、T006/T008/T010 GREEN。
+- **依赖**：T011、T006、T008、T010
+- **并行**：否 — 消费 T011
+- **FR**：FR-VER-001、FR-VER-002、FR-VER-003、FR-REC-001、FR-REC-002
+- **AC**：AC-13、AC-14、AC-15、AC-16
+- **动作**：五阶段调用接线；verify 输出 pass/fail/unknown/N/A；audit 独立披露；
+  在 `stage-runtime` 增加正式交互式 host bridge/recovery 入口，由 runtime 发 invocation request、
+  只在真实 host response 后写 runtime-owned fact，并阻止 completion incomplete 的 attempt
+  被误称完成；同时提供只读 recovery oracle，验证旧字节、run 继承、invocation、
+  completion、未 confirm/accept 和 journal 新增行范围。
+- **精确文件**：`workflows/make-decision/SKILL.md`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/skill-deps.yaml`、`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`core/stage-handlers.mjs`、`core/task-kernel-implementation.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`
+- **boundary**：files: `workflows/make-decision/SKILL.md`, `workflows/make-decision/skill-deps.yaml`, `workflows/build-spec/SKILL.md`, `workflows/build-spec/skill-deps.yaml`, `workflows/build-plan/SKILL.md`, `workflows/build-plan/skill-deps.yaml`, `workflows/build-code/SKILL.md`, `workflows/build-code/skill-deps.yaml`, `workflows/verify-code/SKILL.md`, `workflows/verify-code/skill-deps.yaml`, `core/stage-completion-facts.mjs`, `core/schemas/stage-completion-facts.v1.json`, `core/stage-handlers.mjs`, `core/task-kernel-implementation.mjs`, `core/canonical-receipt-writer.mjs`, `scripts/stage-runtime.mjs`; symbols/regions: five-stage reconcile, verification_items, and verification receipt only.
+- **输出**：ORACLE-VERIFY GREEN。
+- **Knowledge**：Phase 1–5 typed facts。
+- **verification_role**：GREEN
+- **paired_task**：T011
+- **gate_cmd**：`./node_modules/.bin/vitest run scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs tests/five-stage-facts-v2.test.mjs tests/official-component-receipts.test.mjs tests/stage-completion-facts.test.mjs --pool=forks --maxWorkers=1 --minWorkers=1`
+- **expected_exit**：0
+- **oracle**：ORACLE-VERIFY — 核心缺失不 complete，audit gap 只披露。
+- **evidence_path**：`apply/evidence/T012-verify-green.stdout`
+- **STOP**：新增确认点、重复 dispatch lens 或 audit 决定业务结论。
+- **recovery**：回退消费映射。
+- **task risk**：verify 变重 Gate。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：verification_items 九类使用 canonical status/evidence/reason；verification receipt 变为必需且 pass 必须绑定可读取证据，N/A 必须空证据并说明原因；review unavailable/audit gap 只披露；五阶段声明统一 reconcile。`invoke-stage-skill` 移除 caller outcome `--input`，改为 runtime 先发完整 request、再从 stdin 接收唯一 host response；缺失、重复、预提交、乱序失败。`recover-run`/oracle 核旧 hash/run 链、talk1/2/3+grill outcomes、完整 completion、journal offsets、无 confirmation/accepted；统一 `human_handoff`。
+- **executed_commands**：最终原四文件 exact Gate → exit 0，80/80 pass；真实 spawn/recovery fixture → exit 0，1/1 pass；stage-skill focused → exit 0，10/10 pass；事实/receipt/completion focused → exit 0，72/72 pass；`git diff --check` → exit 0。
+- **evidence_refs**：非 canonical `/tmp/T012-focused-resolution.stdout`，sha256 `af4c4ecd73f9eca73d7fe318893d1c91b1e29c10d3b2ab2666eb1be4f13e23bc`；正式 Phase receipt `formal_record_status=unavailable`。
+- **covered_ac**：AC-13、AC-14、AC-15、AC-16。
+- **review_fact**：原 Phase 6 verdict=`revise_required` 保留；全部 finding 已聚焦修复并由 80/80、真实 spawn/recovery 1/1、10/10、72/72 验证；按规则未强制二审、未改写为 pass。
+- **completed_at**：2026-07-30T05:06:41Z
+
+### Verify
+
+T011/T012 同一命令；ORACLE-VERIFY RED→GREEN。
+
+### Knowledge
+
+Phase 1–5 facts 与 Q1/Q2。
+
+### STOP
+
+新增确认点、重复 dispatch lens 或 audit 决定业务结论。
+
+### Done
+
+核心缺失不 complete；audit 缺失不伪造业务 fail/pass。
+
+### Risks and rollback
+
+风险是 verify 变重 Gate；回退消费映射。
+
+## Phase 7：一次审查、一次全量、透明恢复
+
+### Goal
+
+先做最终候选 tree 全量，再正式恢复 lineage；真实用户确认后推进正式
+build-spec/build-plan/build-code，并在 fresh tests 后做唯一 integration review。
+
+### Files
+
+- **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`scripts/stage-runtime.mjs`（仅作为 Phase 机器白名单）；T014 全量若只暴露既有基线，可机械修复既有 Markdown 白名单；authenticated smoke、lens-only closure/hash 仍限既有白名单。全量诊断确认的 24 个旧 fixture/断言文件可仅迁移到本任务已确认的新合同；`docs/stage-atomic-step-inventory.md` 仅同步当前五份 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖。不得恢复旧 Gate、重复 stage lens dispatch 或弱化 runtime。`check-task-record-paths` 的 14 条旧生产路径治理仅披露，不纳入修改范围。
+- **EXECUTE-ONLY（T013–T015）**：`skills/wh-review/scripts/wh-review-cli.mjs`、`scripts/stage-runtime.mjs`；三个收口 Task 不得现场修改实现，finding 必须返回 owning GREEN。
+- **DO NOT TOUCH**：旧 run 字节、provider route、Git refs。
+
+### Tasks
+
+#### T014: 唯一最终全量
+
+- **ID**：T014
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：保存所有已执行全仓检查的真实结果，以代码、风险相关聚焦测试和逐 AC 事实判断完成；全量或审计缺失只披露、不作 Gate。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"AC-16"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"T014"}]`
+- **输入**：T001–T012 与全部 resolution。
+- **依赖**：T006、T008、T010、T012
+- **并行**：否 — 唯一全量
+- **FR**：FR-VER-001、FR-VER-002、FR-VER-003
+- **AC**：AC-13、AC-14、AC-16
+- **动作**：保留三次 `npm run check` 失败、旧 tree 一次完整 `npm test` 失败和当前新 tree 被用户叫停的未完成输出；不得补跑或把它们写成通过。汇总 A/B/C、closure/smoke 聚焦 GREEN 和逐 AC 结果作为完成依据。
+- **精确文件**：`scripts/stage-runtime.mjs`；既有 Phase 机器白名单；`docs/stage-atomic-step-inventory.md`；以及 `tests/final-cutover-guards.red.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/m14b-fact-collection.test.mjs`、`tests/stage-orchestrator-v2.test.mjs`、`core/__tests__/task-target-repo-migration.test.mjs`、`core/__tests__/task-runner-root-migration.test.mjs`、`tests/stage-content-publication.test.mjs`、`tests/official-make-decision-cli.test.mjs`、`tests/p0-foundation-contracts.test.mjs`、`scripts/__tests__/runner-replacement-bridge.test.mjs`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`tests/design-stage-skill-order.red.test.mjs`、`tests/stage-review-cost-policy.test.mjs`、`skills/wh-review/scripts/__tests__/review-source-materials.test.mjs`、`tests/workflow-v2-contract.test.mjs`、`tests/stage-risk-acceptance.test.mjs`、`tests/build-code-capture.test.mjs`、`tests/build-code-preflight.red.test.mjs`、`tests/verify-code-capture.test.mjs`、`scripts/__tests__/ci-chain-check.test.mjs`、`tests/terminal-runtime-blockers.test.mjs`、`tests/spec-content-profile.test.mjs`、`tests/per-invocation-doc-contract.test.mjs`、`tests/template-content-quality-retention.test.mjs`；inventory 仅同步当前 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖，后 24 个文件仅迁移旧 fixture/断言到已确认新合同。
+- **boundary**：files: `scripts/stage-runtime.mjs`, `.markdownlint-cli2.jsonc`, `specs/workflow-quality-recording-simplification/plan.md`, `specs/workflow-quality-recording-simplification/tasks.md`, `specs/review-flow-reset/plan.md`, `specs/review-flow-reset/tasks.md`, `skills/spec-tasks/templates/tasks-template.md`, `skills/wh-review/contracts/provider-protocol.md`, `constitution-checklist.md`, `CONTEXT.md`, `scripts/smoke-local-skill-dispatch.mjs`, `scripts/__tests__/smoke-local-skill-dispatch.test.mjs`, `scripts/__tests__/canonical-archive-skill-dispatch.test.mjs`, `core/check-skill-closure.mjs`, `core/__tests__/check-skill-closure.test.mjs`, `skills/reuse-registry.md`, `skills/review-response/skill-bundle.json`, `skills/spec-tasks/skill-bundle.json`, `skills/isolated-browser-qa/skill-bundle.json`, `skills/catalog.yaml`, `tests/final-cutover-guards.red.test.mjs`, `core/__tests__/task-kernel-publish.test.mjs`, `tests/m14b-fact-collection.test.mjs`, `tests/stage-orchestrator-v2.test.mjs`, `core/__tests__/task-target-repo-migration.test.mjs`, `core/__tests__/task-runner-root-migration.test.mjs`, `tests/stage-content-publication.test.mjs`, `tests/official-make-decision-cli.test.mjs`, `tests/p0-foundation-contracts.test.mjs`, `scripts/__tests__/runner-replacement-bridge.test.mjs`, `skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`, `tests/design-stage-skill-order.red.test.mjs`, `tests/stage-review-cost-policy.test.mjs`, `skills/wh-review/scripts/__tests__/review-source-materials.test.mjs`, `tests/workflow-v2-contract.test.mjs`, `tests/stage-risk-acceptance.test.mjs`, `tests/build-code-capture.test.mjs`, `tests/build-code-preflight.red.test.mjs`, `tests/verify-code-capture.test.mjs`, `scripts/__tests__/ci-chain-check.test.mjs`, `tests/terminal-runtime-blockers.test.mjs`, `tests/spec-content-profile.test.mjs`, `tests/per-invocation-doc-contract.test.mjs`, `tests/template-content-quality-retention.test.mjs`; symbols/regions: full check, baseline text alignment, authenticated smoke fixture, lens-only closure, mechanical bundle/catalog hashes, and confirmed stale fixture/assertion migration only; excludes all 14 old `check-task-record-paths` production findings, business implementation edits, checker weakening, and repeated stage lens dispatch.
+- **boundary addition**：files: `docs/stage-atomic-step-inventory.md`; symbols/regions: only current five `steps.json` numeric `step_id` + `step_slug` bidirectional coverage.
+- **输出**：全部真实全量结果和中止事实 append-only 保留；聚焦代码/测试/AC 完成结果与 disclosure 分开记录。
+- **Knowledge**：同一 tree 不为刷绿重跑；全量或审计缺失只披露，不能覆盖已证实的代码、聚焦测试和 AC 结论。
+- **verification_role**：N/A — non-behavior change: final regression
+- **paired_task**：N/A — final regression has no RED/GREEN pair
+- **gate_cmd**：`npm run check`
+- **expected_exit**：记录真实结果；不得把失败或中止改写为 0。
+- **oracle**：ORACLE-FINAL — 代码、风险相关聚焦测试和逐 AC 结果决定完成；全量/审计缺失及 14 条旧 path finding 如实披露，不作 Gate，不伪报全量通过。
+- **evidence_path**：`/tmp/T014-final-check.stdout`、`/tmp/T014-final-check-v2.stdout`、`/tmp/T014-final-check-v3.stdout`、`/tmp/T014-full-vitest.stdout`、`/tmp/T014-full-vitest-v2.stdout` 及 A/B/C、closure/smoke 聚焦输出。
+- **STOP**：未改实现却重复全量刷绿，或修复后未验证新的最终 tree。
+- **recovery**：保留失败结果；只跑相关聚焦命令定位/修复；产生新 tree 后追加一次新全量。
+- **task risk**：baseline failure 与本任务失败混淆。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：修正全量暴露的既有 Markdown/结构文本、authenticated smoke、lens-only closure/hash、step inventory，以及 A/B/C 共 24 个旧 fixture/断言；未修改 `check-task-record-paths` 的 14 条旧生产治理。
+- **executed_commands**：`npm run check` 共三次均 exit 1：第一次为 Markdown 基线，第二次为 checklist/CONTEXT 结构基线，第三次只剩 14 条旧 `check-task-record-paths`；旧 tree 一次完整 `npm test`：safe 129 files（101 pass/28 fail）、1613 tests（1466 pass/147 fail），exit 1，exclusive 未运行；当前新 tree 一次 `npm test` 被用户明确叫停，输出不完整、无最终 exit，未重跑。A 组 10 files/203 tests、B 组 6 files/109 tests、C 组分组 106 tests、closure/smoke 3 files/7 tests 均聚焦 GREEN；`git diff --check` → exit 0。
+- **evidence_refs**：三次 check：`/tmp/T014-final-check.stdout` sha256 `dee829950de91b3a4cf62d9dde280cf426f002d6feda3e161bbdc13d220eeae9`、`/tmp/T014-final-check-v2.stdout` sha256 `73517b17f87dee4795773e36d8bb0e68cbf609f5c84644a74139e00343913cd6`、`/tmp/T014-final-check-v3.stdout` sha256 `252e147185869db696ead95784994c91154c03c2b34c3a7d0f12e51d253a549c`；旧完整 npm test：`/tmp/T014-full-vitest.stdout` sha256 `9b9ff9963cd4665de76514a50b27d2081d6df4276aec907b8b16188d7d2318cd`；新 tree 中止输出：`/tmp/T014-full-vitest-v2.stdout` sha256 `3d437aa5747f03d494c8ba61b7d7db8e35b7166b9eb9e4633039d38e3e1f1186`，开始 tree `e0cfabce91060099c4abc060c27bc9e41b93833f`，无完成 tree。C 组证据 sha256：runtime `96e21f2f42d5864f50cbd6a4dd4bfbb530afb7e4c6066b5b19634465dc5aac5e`、contracts `61be6f5f7349d7108c24b30e5eea8f066ab55c9bdacbb0a4d8df4daffd31161a`、verify `e4f9d010ee3777041ef1d01b3458fb43bf041e4074f295c4e624cacf00e93c06`、ci `5575da1a8bdfb766a80f2b7afd04ce3bd3ff1e9b88cc2f5a2d3c09ae5ab38a3d`、host `1c5b4b7e31ed1bac78179e54bec0a4694622f52d3afc746dd90cb6a8e93b74fc`；closure/smoke `/tmp/T014-skill-closure-smoke-focused-v2.stdout` sha256 `cf09fca9651c357392162666b5d04656cb4e0addf54d899c782862de46c05b2c`。
+- **covered_ac**：AC-13、AC-14、AC-16；依据代码、A/B/C 聚焦测试、closure/smoke 和 T011/T012 已记录的逐 AC 事实完成。
+- **review_fact**：三次 check、旧 tree 完整 test 失败和新 tree 用户中止均保留原事实；14 条旧 path finding 为 disclosure-only。没有写“全量通过”，没有把审计/全量缺失变成 Gate。
+- **completed_at**：2026-07-30。
+
+#### T015: 同任务透明恢复与正式重跑
+
+- **ID**：T015
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：旧 run 保持 incomplete，新 run 真实执行声明组件。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"T015"}]`
+- **输入**：T014 与旧 run recovery source；完成后等待真实用户确认。
+- **依赖**：T014
+- **并行**：否 — 单一正式 run
+- **FR**：FR-INV-001、FR-INV-002、FR-INV-003、FR-INV-004、FR-INV-005、FR-COMP-001、FR-COMP-002、FR-COMP-003、FR-COMP-004、FR-COMP-005、FR-REC-001、FR-REC-002
+- **AC**：AC-01、AC-02、AC-03、AC-04、AC-15、AC-16
+- **动作**：正式重跑 make-decision，引用 recovery source，不继承伪 facts。
+- **精确文件**：`scripts/stage-runtime.mjs`
+- **boundary**：files: `scripts/stage-runtime.mjs`; symbols/regions: runtime invocation only; records append-only.
+- **输出**：新 run 真实 invocation 与 completion facts。
+- **Knowledge**：仍需真实用户确认才可 accepted。
+- **verification_role**：N/A — non-behavior change: formal recovery run
+- **paired_task**：N/A — recovery run has no RED/GREEN pair
+- **gate_cmd**：`node scripts/stage-runtime.mjs recover-run --stage=make-decision --project=workflowhub --task=workflow-quality-recording-simplification --reason=transparent-recovery`
+- **expected_exit**：0
+- **oracle**：ORACLE-RECOVERY — 命令执行 `prepare → start-run → 正式 host bridge dispatch → make-decision Step 2–10 → run → 只读 recovery audit`；旧 run scoped canonical 文件 hash 不变，journal 仅追加新 run 行；新 run 绑定旧 run、真实 invocation/outcome 与完整 completion；confirmation 和 accepted 均不存在，等待真实用户确认。
+- **evidence_path**：`apply/evidence/T015-recovery.stdout`
+- **STOP**：需要删除旧历史、倒填、跳过用户确认或自动 close。
+- **recovery**：保留旧/新 append-only 事实，停止未授权动作。
+- **task risk**：新 run 未完成真实交互即被误称 accepted。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：`pending`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — not reviewed
+- **completed_at**：N/A — not completed
+
+#### T013: 唯一独立 integration review
+
+- **ID**：T013
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：异源审查完整候选且不为 pass 重试。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"4e479cbcaae3ebd0abbec25c9261e35103c40fddd8e532cc4a630c8eed101576","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"ae30a976af99a73b7d9c698d1e418234d6df1fefe4931f8f94513d0a334d4c54","id":"DEC-003"}]`
+- **输入**：T015 恢复后的 accepted lineage、正式 build-spec/build-plan/build-code Phase facts、fresh tests、当前 diff 和四材料。
+- **依赖**：T015，以及恢复后正式 accepted build-plan/build-code lineage
+- **并行**：否 — 唯一 review
+- **FR**：FR-REV-001、FR-REV-002、FR-REV-003、FR-VER-003
+- **AC**：AC-05、AC-06、AC-13、AC-14、AC-16
+- **动作**：真实用户确认 T015 后，按正式入口执行 build-spec、build-plan、build-code；
+  在 build-code fresh tests 之后正式 wh-review 一次；finding 只回对应 GREEN 修复并追加 resolution。
+- **精确文件**：`skills/wh-review/scripts/review-controller.mjs`
+- **boundary**：files: `skills/wh-review/scripts/review-controller.mjs`; symbols/regions: no review-time edits; resolution-only reference.
+- **输出**：canonical review result/ref。
+- **Knowledge**：Q3 独立来源。
+- **verification_role**：N/A — non-behavior change: independent review
+- **paired_task**：N/A — independent review has no RED/GREEN pair
+- **gate_cmd**：`node skills/wh-review/scripts/wh-review-cli.mjs run < apply/evidence/T013-review-input.json`
+- **expected_exit**：0
+- **oracle**：ORACLE-INTEGRATION — 一次真实 verdict 或真实 unavailable，不二审。
+- **evidence_path**：`apply/evidence/T013-review-result.json`
+- **STOP**：需要手写 provider result、扩大 route 或再次 full review。
+- **recovery**：不改业务字节；保留真实 verdict。
+- **task risk**：review 输入未绑定当前 tree。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [ ] **任务完成**
+- **status**：`pending`
+- **actual_changes**：N/A — not started
+- **executed_commands**：N/A — not started
+- **evidence_refs**：N/A — not started
+- **covered_ac**：N/A — not started
+- **review_fact**：N/A — not reviewed
+- **completed_at**：N/A — not completed
+
+### Verify
+
+T014 对最终候选 tree 一次全量；T015 新 run 真实 facts并等待用户确认；
+确认后形成正式 build lineage，T013 在 fresh tests 后一次 review。
+
+### Knowledge
+
+所有 GREEN、canonical review 与真实用户确认边界。
+
+### STOP
+
+计划二审、第二次全量、倒填历史或自动确认。
+
+### Done
+
+最终 tree 全量有真实结果；新 run 与后续 build lineage 真实；fresh tests 后的一次
+integration review 有正式结果，然后才可进入 verify-code。
+
+### Risks and rollback
+
+风险是为追 pass 重跑；停止并如实记录，不覆盖事实。
+
+## 3. Dependency Graph
+
+`T001→T002→T003→T004→{T005→T006,T007→T008,T009→T010}; {T004,T008,T010}→T011; {T006,T008,T010,T011}→T012→T014→T015→T013`
+
+## 4. Requirement and Verification Traceability
+
+| FR | Task IDs | AC IDs | Phase | Gate / evidence |
+| --- | --- | --- | --- | --- |
+| FR-INV-001..005 | T001,T002,T011,T012,T015 | AC-01,02,03,16 | 1,6,7 | ORACLE-INV |
+| FR-COMP-001..005 | T003,T004,T011,T012,T015 | AC-03,04,13,14,16 | 2,6,7 | ORACLE-COMP |
+| FR-REV-001..006 | T005,T006,T013 | AC-05,06,07,08,16 | 3,7 | ORACLE-REVIEW |
+| FR-MAT-001..005 | T007,T008,T011,T012 | AC-09,10,16 | 4,6 | ORACLE-MAT |
+| FR-BQA-001..003 | T009,T010,T011,T012 | AC-11,12,16 | 5,6 | ORACLE-BQA |
+| FR-VER-001..003 | T011,T012,T013,T014 | AC-13,14,16 | 6,7 | ORACLE-VERIFY |
+| FR-REC-001..002 | T011,T012,T015 | AC-15,16 | 6,7 | ORACLE-RECOVERY |
+
+## 5. Final Boundary Check
+
+- T001–T008 已 complete；T009–T015 保持 pending。
+- T001–T012 为六对严格 RED/GREEN。
+- T013–T015 是有理由的 non-behavior task。
+- commit/push/merge/archive/cleanup 均未授权。
+
+## Appendix A. Legacy import
+
+旧 make-decision run 只读，缺 invocation 标 incomplete；不倒填、不删除、不改 verdict。

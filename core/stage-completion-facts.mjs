@@ -110,6 +110,111 @@ function riskVerification(value) {
   });
 }
 
+const VERIFY_ITEM_IDS = Object.freeze([
+  "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+  "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+]);
+
+function verificationItems(value) {
+  if (!Array.isArray(value)) throw new TypeError("verification_items must be an array");
+  const seen = new Set();
+  const items = value.map((entry, index) => {
+    const item = object(entry, `verification_items[${index}]`);
+    const id = text(item.id, `verification_items[${index}].id`);
+    if (!VERIFY_ITEM_IDS.includes(id) || seen.has(id)) throw new TypeError(`verification item ${id} is unknown or duplicate`);
+    seen.add(id);
+    const status = text(item.status, `verification_items[${index}].status`);
+    if (!new Set(["pass", "fail", "unknown", "not_applicable"]).has(status)) {
+      throw new TypeError(`verification item ${id} status is invalid`);
+    }
+    if (!Array.isArray(item.evidence_refs)) throw new TypeError(`verification item ${id} evidence_refs must be an array`);
+    return {
+      id,
+      status,
+      evidence_refs: item.evidence_refs.map((binding, bindingIndex) => ref(binding, `verification_items[${index}].evidence_refs[${bindingIndex}]`)),
+      reason: text(item.reason, `verification_items[${index}].reason`),
+    };
+  });
+  for (const id of VERIFY_ITEM_IDS) if (!seen.has(id)) throw new Error(`missing verify item: ${id}`);
+  return items;
+}
+
+export function reconcileStageCompletion({
+  result,
+  missingItems,
+  businessFacts,
+  declaredComponents,
+  invocationFacts,
+  auditGaps,
+  verificationItems: itemizedVerification,
+}) {
+  const derivedMissing = [];
+  const business = object(businessFacts, "business_facts");
+  for (const [name, accepted] of Object.entries({
+    content: new Set(["present", "not_applicable"]),
+    code: new Set(["complete", "not_applicable"]),
+    tests: new Set(["passed", "not_applicable"]),
+    acceptance_criteria: new Set(["covered", "not_applicable"]),
+  })) {
+    if (!accepted.has(business[name])) derivedMissing.push(`business ${name} is incomplete`);
+  }
+  const declared = declaredComponents;
+  const invocations = invocationFacts;
+  if (!Array.isArray(declared) || !Array.isArray(invocations)) {
+    throw new TypeError("declared_components and invocation_facts must be arrays");
+  }
+  for (const component of declared) {
+    const name = text(component?.name, "declared_components[].name");
+    const invocation = text(component?.invocation, "declared_components[].invocation");
+    const requiredBinding = {
+      task_id: text(component?.task_id, "declared_components[].task_id"),
+      stage: text(component?.stage, "declared_components[].stage"),
+      workflow_run_id: text(component?.workflow_run_id, "declared_components[].workflow_run_id"),
+      name,
+      invocation_key: text(component?.invocation_key, "declared_components[].invocation_key"),
+      bundle_hash: text(component?.bundle_hash, "declared_components[].bundle_hash"),
+      declared_trigger: text(component?.declared_trigger, "declared_components[].declared_trigger"),
+    };
+    const observed = invocations.find((fact) => Object.entries(requiredBinding)
+      .every(([key, expected]) => fact?.[key] === expected));
+    const satisfied = observed?.status === "executed"
+      || (invocation === "conditional"
+        && new Set(["not_invoked", "trigger=false"]).has(observed?.status)
+        && typeof observed.reason === "string" && observed.reason.trim() !== "");
+    if (!satisfied) derivedMissing.push(`${name} invocation is missing`);
+  }
+  const gaps = auditGaps;
+  if (!Array.isArray(gaps)) throw new TypeError("audit_gaps must be an array");
+  const normalizedGaps = gaps.map((gap, index) => ({
+    kind: text(gap?.kind, `audit_gaps[${index}].kind`),
+    status: text(gap?.status, `audit_gaps[${index}].status`),
+    reason: text(gap?.reason, `audit_gaps[${index}].reason`),
+  }));
+  const normalizedVerification = itemizedVerification === undefined ? undefined : verificationItems(itemizedVerification);
+  if (normalizedVerification !== undefined) {
+    const businessCritical = new Set([
+      "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+      "tasks_completion", "browser_qa", "core_gaps", "human_handoff",
+    ]);
+    for (const item of normalizedVerification) {
+      if (businessCritical.has(item.id) && !new Set(["pass", "not_applicable"]).has(item.status)) {
+        derivedMissing.push(`verify item ${item.id} is ${item.status}`);
+      }
+    }
+  }
+  const combinedMissing = [...missingItems, ...derivedMissing];
+  return {
+    result: derivedMissing.length > 0 ? "incomplete" : result,
+    missing_items: combinedMissing,
+    business_facts: structuredClone(businessFacts),
+    declared_components: structuredClone(declared),
+    invocation_facts: structuredClone(invocations),
+    audit_gaps: normalizedGaps,
+    completion_effect: "disclose_only",
+    ...(normalizedVerification === undefined ? {} : { verification_items: normalizedVerification }),
+  };
+}
+
 export function createStageCompletionFacts(input) {
   const value = object(input, "completion facts");
   const verification = object(value.verification, "verification");
@@ -119,12 +224,21 @@ export function createStageCompletionFacts(input) {
   if (result === "passed" && missingItems.length > 0) {
     throw new TypeError("passed completion evidence requires empty missing_items");
   }
-  if (value.result === "passed" && review.status === "unavailable") {
-    throw new TypeError("review unavailable cannot be reported as pass");
+  if (review.status === "unavailable" && /(?:\bpass(?:ed)?\b|通过)/i.test(review.conclusion ?? "")) {
+    throw new TypeError("unavailable review cannot call its own review verdict pass");
   }
+  const reconciled = reconcileStageCompletion({
+    result,
+    missingItems,
+    businessFacts: value.business_facts,
+    declaredComponents: value.declared_components,
+    invocationFacts: value.invocation_facts,
+    auditGaps: value.audit_gaps,
+    verificationItems: value.verification_items,
+  });
   const facts = {
     schema_version: "stage-completion-facts.v1",
-    result,
+    result: reconciled.result,
     objective: text(value.objective, "objective"),
     approach: text(value.approach, "approach"),
     effect: text(value.effect, "effect"),
@@ -152,7 +266,15 @@ export function createStageCompletionFacts(input) {
     ...(value.risk_verification === undefined ? {} : {
       risk_verification: riskVerification(value.risk_verification),
     }),
-    missing_items: missingItems,
+    missing_items: reconciled.missing_items,
+    business_facts: reconciled.business_facts,
+    declared_components: reconciled.declared_components,
+    invocation_facts: reconciled.invocation_facts,
+    audit_gaps: reconciled.audit_gaps,
+    completion_effect: reconciled.completion_effect,
+    ...(reconciled.verification_items === undefined ? {} : {
+      verification_items: reconciled.verification_items,
+    }),
     risks: stringList(value.risks, "risks"),
     dependencies: stringList(value.dependencies, "dependencies"),
     recovery_conditions: stringList(value.recovery_conditions, "recovery_conditions"),

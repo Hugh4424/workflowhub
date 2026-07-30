@@ -6,7 +6,7 @@
   "required": ["schema_version", "kind", "task_id", "stage", "workflow_run_id", "producer", "content_hash", "snapshot_head", "snapshot_tree", "created_at", "payload"],
   "properties": {
     "schema_version": { "const": "stage-content-evidence.v1" },
-    "kind": { "enum": ["interaction-completion.v1", "ambiguity-ledger.v1", "ambiguity-ledger.v2", "decision-entry.v1", "decision-coverage-audit.v1", "decision-omission-acceptance.v1", "decision-correction-appendix.v1", "decision-log-contract.v1", "plan-task-contract.v1", "plan-task-contract.v2", "stage-completion-facts.v1", "risk-acceptance.v1"] },
+    "kind": { "enum": ["interaction-completion.v1", "ambiguity-ledger.v1", "ambiguity-ledger.v2", "decision-entry.v1", "decision-coverage-audit.v1", "decision-omission-acceptance.v1", "decision-correction-appendix.v1", "decision-log-contract.v1", "plan-task-contract.v1", "plan-task-contract.v2", "stage-completion-facts.v1", "risk-acceptance.v1", "browser-qa-evidence.v1"] },
     "task_id": { "type": "string", "minLength": 1 },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "workflow_run_id": { "type": "string", "minLength": 1, "maxLength": 256 },

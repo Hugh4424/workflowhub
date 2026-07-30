@@ -34,3 +34,22 @@ describe("isolated-browser-qa executable context", () => {
     })).toThrow();
   });
 });
+
+describe("isolated-browser-qa evidence contract", () => {
+  it.each([
+    ["route/page and scenario", /route[\s\S]{0,100}page[\s\S]{0,120}scenario/i],
+    ["tool, engine, and derived session", /tool[\s\S]{0,100}engine[\s\S]{0,120}(?:derived )?session/i],
+    ["auth mode and login-state reuse", /auth(?:entication)? mode[\s\S]{0,140}(?:login state|登录态)[\s\S]{0,80}reus/i],
+    ["measured or explained performance", /performance[\s\S]{0,160}(?:measured|not_measured)[\s\S]{0,120}reason/i],
+    ["screenshot references", /screenshots?[\s\S]{0,100}(?:ref|reference)/i],
+    ["test command, file, output, and exit", /test command[\s\S]{0,100}test file[\s\S]{0,100}output[\s\S]{0,100}exit/i],
+    ["completed cleanup", /cleanup[\s\S]{0,100}completed/i],
+    ["no engine switch", /engine_switch[\s\S]{0,40}no/i],
+  ])("requires %s in the reportable evidence", (_label, pattern) => {
+    expect(skill, `ORACLE-BQA: missing ${_label} contract`).toMatch(pattern);
+  });
+
+  it("forbids credential and profile contents in evidence", () => {
+    expect(skill).toMatch(/(?:cookie|token|profile content)[\s\S]{0,180}(?:must not|never|禁止|不得)/i);
+  });
+});

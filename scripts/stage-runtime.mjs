@@ -27,6 +27,8 @@ import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evi
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
+import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
+import { dispatchStageSkill, loadStageSkillManifest, preflightStageSkills } from "../core/stage-skill-runtime.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -86,8 +88,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "continue-stage", "start-run", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|invalidate-run|publish-requirements-ledger|record-step-entry|record-step-exit|rebind|artifact|receipt|recover-spec-receipt|capture-tests|publish-content-evidence|publish-phase-evidence|publish-phase-trace-lineage|supersede-phase-trace-lineage|publish-acceptance-evidence|review-risk-pause|accept-review-risk|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "continue-stage", "start-run", "recover-run", "invoke-stage-skill", "verify-recovery", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "publish-material-revision", "record-step-entry", "record-step-exit", "record-research", "rebind", "artifact", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|continue-stage|start-run|recover-run|invoke-stage-skill|verify-recovery|...> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -117,6 +119,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "capture-tests" && (!new Set(["build-code", "verify-code"]).has(values.stage) || !values.input)) throw new TypeError("capture-tests requires --stage=build-code|verify-code --input=<test-capture.json>");
   if (command === "publish-content-evidence" && (!values.kind || !values.input)) throw new TypeError("publish-content-evidence requires --kind and --input=<payload.json>");
   if (command === "start-run" && !values.reason) throw new TypeError("start-run requires --reason");
+  if (command === "recover-run" && !values.reason) throw new TypeError("recover-run requires --reason");
+  if (command === "invoke-stage-skill" && (!values.name || !values["invocation-key"])) {
+    throw new TypeError("invoke-stage-skill requires --name and --invocation-key");
+  }
   if (command === "continue-stage" && !values.input) throw new TypeError("continue-stage requires --input=<continuation.json>");
   if (command === "invalidate-run" && !values.input) throw new TypeError("invalidate-run requires --input=<invalidation.json>");
   if (command === "invalidate-step-attempt" && !values.input) throw new TypeError("invalidate-step-attempt requires --input=<invalidation.json>");
@@ -154,15 +160,104 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "receipt" && Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
   if (command === "receipt" && values.revision === "true" && !values.recover) throw new TypeError("receipt revision requires --recover=<previous-receipt-ref>");
   if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
+  if (command === "publish-material-revision" && !values.input) throw new TypeError("publish-material-revision requires --input=<revision-source.json>");
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
     projectName: values.project,
     taskId: values.task,
     runnerRoot: RUNNER_ROOT,
   });
-  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "record-step-entry", "record-step-exit", "record-research", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+  const input = new Set(["continue-stage", "invalidate-run", "invalidate-step-attempt", "invalidate-stage-attempt", "invalidate-review-binding", "publish-requirements-ledger", "publish-material-revision", "record-step-entry", "record-step-exit", "record-research", "receipt", "recover-spec-receipt", "capture-tests", "publish-content-evidence", "publish-phase-evidence", "publish-phase-trace-lineage", "supersede-phase-trace-lineage", "publish-acceptance-evidence", "review-risk-pause", "accept-review-risk", "run", "publish-verify-passing"]).has(command)
+      && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
+  if (command === "verify-recovery") {
+    const active = context.kernel.activeStageRun(values.stage, { required: false });
+    if (active === null) {
+      return { schema_version: "recovery-oracle.v1", stage: values.stage, status: "no_run", read_only: true };
+    }
+    const journalRaw = (() => {
+      try { return context.task.readRecord("journal.jsonl"); }
+      catch (error) { if (error?.code === "ENOENT") return ""; throw error; }
+    })();
+    let journalOffset = 0;
+    let runJournalStartOffset = null;
+    const journalEvents = [];
+    for (const line of journalRaw.split(/(?<=\n)/)) {
+      const raw = line.endsWith("\n") ? line.slice(0, -1) : line;
+      if (raw !== "") {
+        const event = JSON.parse(raw);
+        if (event.workflow_run_id === active.run.workflow_run_id) {
+          if (runJournalStartOffset === null) runJournalStartOffset = journalOffset;
+          journalEvents.push(event);
+        }
+      }
+      journalOffset += Buffer.byteLength(line);
+    }
+    const runEvents = journalEvents;
+    const invocationOutcomes = [];
+    for (const dependency of loadStageSkillManifest(RUNNER_ROOT, values.stage).manifest.skills) {
+      const invocationKeys = dependency.name === "talk-with-zhipeng"
+        ? ["talk-1", "talk-2", "talk-3"]
+        : dependency.name === "grill-with-docs" ? ["grill", "default"] : ["default"];
+      for (const invocationKey of invocationKeys) {
+        const observed = context.kernel.readStageSkillInvocation(values.stage, dependency.name, invocationKey);
+        if (observed) {
+          const fact = observed.fact;
+          if (fact.task_id !== context.task.identity.taskId
+              || fact.stage !== values.stage
+              || fact.workflow_run_id !== active.run.workflow_run_id
+              || fact.name !== dependency.name
+              || fact.invocation_key !== invocationKey
+              || fact.bundle_hash !== preflightStageSkills({ packageRoot: RUNNER_ROOT, stage: values.stage }).payloads.get(dependency.name).bundle_hash
+              || fact.declared_trigger !== dependency.trigger) {
+            throw new Error(`recovery invocation identity mismatch: ${dependency.name}/${invocationKey}`);
+          }
+          if (fact.status === "executed") {
+            const outcomeRaw = context.task.readRecord(fact.outcome_ref);
+            if (sha256(outcomeRaw) !== fact.outcome_hash
+                || JSON.parse(outcomeRaw).snapshot_tree !== fact.snapshot_tree) {
+              throw new Error(`recovery invocation outcome mismatch: ${dependency.name}/${invocationKey}`);
+            }
+          }
+          invocationOutcomes.push({ ...fact, ref: observed.ref });
+        }
+      }
+    }
+    let accepted = false;
+    try {
+      const acceptedRecord = JSON.parse(context.task.readRecord(`results/${values.stage}/accepted.json`));
+      const attempt = JSON.parse(context.task.readRecord(`results/${values.stage}/${acceptedRecord.attempt_ref}`));
+      accepted = attempt.workflow_run_id === active.run.workflow_run_id;
+    }
+    catch (error) { if (error?.code !== "ENOENT") throw error; }
+    const requiredRecoveryInvocations = values.stage === "make-decision"
+      ? ["talk-with-zhipeng/talk-1", "talk-with-zhipeng/talk-2", "talk-with-zhipeng/talk-3", "grill-with-docs/grill"]
+      : [];
+    const observedRecoveryInvocations = new Set(invocationOutcomes.map((item) => `${item.name}/${item.invocation_key}`));
+    const invocationMissing = requiredRecoveryInvocations.filter((item) => !observedRecoveryInvocations.has(item));
+    return {
+      schema_version: "recovery-oracle.v1",
+      stage: values.stage,
+      status: "observed",
+      read_only: true,
+      run_ref: active.ref,
+      run_hash: active.hash,
+      previous_run_ref: active.run.previous_run_ref,
+      previous_run_hash: active.run.previous_run_hash,
+      workflow_run_id: active.run.workflow_run_id,
+      invocation_outcomes: invocationOutcomes,
+      completion: {
+        journal_event_count: runEvents.length,
+        run_journal_start_offset: runJournalStartOffset,
+        last_journal_offset: Buffer.byteLength(journalRaw),
+        invocation_missing: invocationMissing,
+        complete: invocationMissing.length === 0,
+      },
+      confirmation_present: runEvents.some((event) => event.event_type === "human_confirmation"),
+      accepted_present: accepted,
+    };
+  }
   if (values.stage === "make-decision") {
     context = prepareMakeDecisionWorkspace(context);
   }
@@ -185,6 +280,62 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       ...(values["continuation-ref"] ? { continuation_ref: values["continuation-ref"] } : {}),
     });
     return started;
+  }
+  if (command === "recover-run") {
+    const allowed = new Set(["stage", "project", "task", "reason"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("recover-run accepts only --stage, --project, --task, and --reason");
+    const started = context.kernel.startStageRun(values.stage, { reason: values.reason });
+    return {
+      ...started,
+      status: "waiting_for_host_response",
+      completion: "incomplete",
+      accepted: false,
+      next_command: "invoke-stage-skill",
+    };
+  }
+  if (command === "invoke-stage-skill") {
+    const allowed = new Set(["stage", "project", "task", "name", "invocation-key"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invoke-stage-skill accepts only identity, name, and invocation-key");
+    const prepared = preflightStageSkills({ packageRoot: RUNNER_ROOT, stage: values.stage });
+    const dependency = prepared.manifest.skills.find((item) => item.name === values.name);
+    if (!dependency) throw new Error(`${values.stage}: undeclared skill ${values.name}`);
+    const request = {
+      schema_version: "host-invocation-request.v1",
+      task_id: context.task.identity.taskId,
+      stage: values.stage,
+      workflow_run_id: context.kernel.deriveStageWorkflowRunId(values.stage),
+      name: values.name,
+      invocation_key: values["invocation-key"],
+      bundle_hash: prepared.payloads.get(values.name).bundle_hash,
+      declared_trigger: dependency.trigger,
+      snapshot_tree: captureGitWorktreeSnapshot(context.candidateWorkspace.worktreeRoot).tree,
+    };
+    process.stdout.write(`${JSON.stringify(request)}\n`);
+    const responseRaw = await new Promise((resolve, reject) => {
+      let body = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => { body += chunk; });
+      process.stdin.on("end", () => resolve(body));
+      process.stdin.on("error", reject);
+    });
+    const lines = responseRaw.split("\n").filter((line) => line.trim() !== "");
+    if (lines.length !== 1) throw new Error("host bridge requires exactly one response after request");
+    let response;
+    try { response = JSON.parse(lines[0]); } catch { throw new Error("host bridge response must be one JSON line"); }
+    const allowedResponse = new Set(["outcome_ref", "outcome_hash", "snapshot_tree"]);
+    if (!response || typeof response !== "object" || Array.isArray(response)
+        || Object.keys(response).some((key) => !allowedResponse.has(key))) {
+      throw new TypeError("host response must contain only outcome_ref, outcome_hash, and snapshot_tree");
+    }
+    const fact = await dispatchStageSkill({
+      packageRoot: RUNNER_ROOT,
+      stage: values.stage,
+      name: values.name,
+      invocationKey: values["invocation-key"],
+      kernel: context.kernel,
+      hostInvoke: async () => response,
+    });
+    return { status: "executed", invocation: fact };
   }
   if (command === "continue-stage") {
     const allowed = new Set(["stage", "project", "task", "input"]);
@@ -216,6 +367,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-requirements-ledger accepts only --stage, --project, --task, and --input");
     const published = context.kernel.publishRequirementsLedger(values.stage, input);
     return published;
+  }
+  if (command === "publish-material-revision") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) {
+      throw new TypeError("publish-material-revision accepts only --stage, --project, --task, and --input");
+    }
+    return context.kernel.publishMaterialRevision(input);
   }
   if (command === "record-step-entry") {
     if (values.stage === "make-decision") throw new Error("make-decision journal entries are runtime-owned");

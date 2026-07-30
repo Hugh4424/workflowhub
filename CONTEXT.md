@@ -68,7 +68,7 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **规范决策日志（canonical decision-log）**：
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
 
-**运行事实（runtime fact）**：
+**运行事实**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
 
 **运行事实第二版**：
@@ -244,7 +244,7 @@ _避免_：把 reset 叫成“重置通过状态”或“重新打开 accepted�
 build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 存在且可读。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
 
 **正式写边界（formal write boundary）**：
-核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次 runtime 内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
+核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次运行内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
 
 **阶段完成判据（stage completion criteria）**：
 与推进资格不同的谓词。只有阶段核心交付、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。

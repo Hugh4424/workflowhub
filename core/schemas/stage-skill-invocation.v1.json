@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-skill-invocation.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage",
+    "name",
+    "invocation_key",
+    "declared_trigger",
+    "bundle_hash",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "stage-skill-invocation.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "workflow_run_id": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "invocation_key": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "declared_trigger": { "type": "string", "minLength": 1 },
+    "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "status": { "enum": ["executed", "not_invoked", "unavailable"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "result_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "outcome_ref": { "type": "string", "minLength": 1 },
+    "outcome_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "executed" } } },
+      "then": { "required": ["outcome_ref", "outcome_hash", "snapshot_tree", "result_hash"] }
+    }
+  ],
+  "additionalProperties": true
+}

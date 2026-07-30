@@ -827,9 +827,14 @@ describe("aggregation and runner", () => {
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = runReviewFixture(options);
     await firstStarted;
-    const second = runReviewFixture({ ...options, task: openTask(task.taskPath, task.identity) });
+    const second = runReviewFixture({
+      ...options,
+      task: openTask(task.taskPath, task.identity),
+      captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }),
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }),
+    });
     await new Promise((resolve) => setImmediate(resolve));
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     expect(new Set(calls).size).toBe(1);
     expect(dispatches.size).toBe(1);
     releaseFirst();
@@ -987,9 +992,14 @@ describe("aggregation and runner", () => {
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     const first = runReviewFixture(options);
     await firstStarted;
-    const second = runReviewFixture({ ...options, task: openTask(task.taskPath, task.identity) });
+    const second = runReviewFixture({
+      ...options,
+      task: openTask(task.taskPath, task.identity),
+      captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }),
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }),
+    });
     await new Promise((resolve) => setImmediate(resolve));
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     expect(new Set(calls).size).toBe(1);
     expect(dispatches.size).toBe(1);
     releaseFirst();
@@ -998,14 +1008,14 @@ describe("aggregation and runner", () => {
     expect(dispatches.size).toBe(1);
   });
 
-  it("calls providers again when material or snapshot changes", async () => {
+  it("does not dispatch a second initial review for the same subject when material or snapshot changes", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-change-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
     const base = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient };
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }), buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
-    expect(calls).toHaveLength(3);
+    expect(calls, "ORACLE-REVIEW: one subject has one initial provider dispatch; repairs use resolution/focused verification").toHaveLength(1);
   });
 
   it("fails loudly without a provider call when canonical aggregation was changed", async () => {

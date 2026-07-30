@@ -35,7 +35,7 @@
 
 ## 仓内运行技能
 
-共同规则：所有路径都在 `skills/`；通过 stage 的 `skill-deps.yaml` 显式加载；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
+共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，review lens 只通过 wh-review 的 `stage-skill-plan.json` 间接声明，不重复 stage dispatch；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
 - `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。

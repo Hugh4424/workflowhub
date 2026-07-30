@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../core/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
+import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
 
 const temporary = [];
 function fixture() {
@@ -30,23 +31,122 @@ function publishFailure(kernel, evidenceRef, acceptanceCriterionId) {
 function acceptanceCoverage(snapshotTree) {
   return { snapshot_tree: snapshotTree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] };
 }
+async function runStage(stage, context, handler, publication) {
+  const wrapped = async (...args) => {
+    const result = await handler(...args);
+    if (stage !== "make-decision") {
+      let facts = result.facts;
+      if (stage === "build-code" && typeof facts?.phase_completion === "boolean") {
+        const activeWorkspace = args[0].candidateWorkspace ?? args[0].workspace;
+        const tasksRef = `specs/${context.identity.taskId}/tasks.md`;
+        const tasksRaw = readFileSync(join(activeWorkspace.worktreeRoot, tasksRef), "utf8");
+        facts = {
+          ...facts,
+          phase_completion: {
+            status: facts.phase_completion ? "completed" : "incomplete",
+            evidence_ref: tasksRef,
+            evidence_hash: createHash("sha256").update(tasksRaw).digest("hex"),
+            integration_review: {
+              ref: facts.review.result_ref,
+              sha256: facts.review.result_hash,
+            },
+            formal_record_status: { status: "unavailable", reason: "legacy fixture has no Phase history" },
+          },
+        };
+      }
+      if (stage === "verify-code") {
+        const activeWorkspace = args[0].candidateWorkspace ?? args[0].workspace;
+        const snapshot = captureGitWorktreeSnapshot(activeWorkspace.worktreeRoot);
+        const content = {
+          schema_version: "stage-content-evidence.v1",
+          kind: "verify-code.fixture",
+          task_id: context.identity.taskId,
+          stage,
+          workflow_run_id: context.workflowRunId,
+          snapshot_tree: snapshot.tree,
+        };
+        const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
+        const contentHash = createHash("sha256").update(contentRaw).digest("hex");
+        const contentRef = `evidence/stage-content/${contentHash}/verify-code-fixture.json`;
+        try {
+          context.kernel.publishCanonicalRecord(contentRef, contentRaw);
+        } catch (error) {
+          if (error?.code !== "EEXIST" || context.task.readRecord(contentRef) !== contentRaw) throw error;
+        }
+        const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
+        const unsigned = {
+          schema_version: "stage-audit-summary.v1",
+          task_id: context.identity.taskId,
+          stage_slug: stage,
+          workflow_run_id: context.workflowRunId,
+          snapshot_tree: snapshot.tree,
+          verdict: "pass",
+          content_evidence_refs: contentEvidenceRefs,
+        };
+        const auditHash = hashAuditSummary(unsigned);
+        const auditRef = `evidence/audits/${stage}/${auditHash}.json`;
+        const auditRaw = `${JSON.stringify({ ...unsigned, summary_hash: auditHash }, null, 2)}\n`;
+        try {
+          context.kernel.publishCanonicalRecord(auditRef, auditRaw);
+        } catch (error) {
+          if (error?.code !== "EEXIST" || context.task.readRecord(auditRef) !== auditRaw) throw error;
+        }
+        facts = {
+          ...facts,
+          audit_contract_version: "v1",
+          audit_summary_ref: auditRef,
+          audit_summary_hash: auditHash,
+          audit_verdict: "pass",
+          content_evidence_refs: contentEvidenceRefs,
+        };
+        return { ...result, facts };
+      }
+      return { ...result, facts, missing_items: [...new Set([...(result.missing_items ?? []), "support:audit"])] };
+    }
+    const decisionRaw = "# Stage runner fixture decision\n";
+    const decisionHash = createHash("sha256").update(decisionRaw).digest("hex");
+    const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+    try {
+      context.kernel.publishCanonicalRecord(decisionRef, decisionRaw);
+    } catch (error) {
+      if (error?.code !== "EEXIST" || context.task.readRecord(decisionRef) !== decisionRaw) throw error;
+    }
+    const activeWorkspace = args[0].candidateWorkspace ?? args[0].workspace;
+    const worktreeRoot = activeWorkspace?.worktreeRoot ?? result.facts?.worktree_root;
+    const artifactRoot = join(worktreeRoot, "specs", context.identity.taskId);
+    mkdirSync(artifactRoot, { recursive: true });
+    writeFileSync(join(artifactRoot, "decision-log.md"), decisionRaw);
+    return {
+      ...result,
+      facts: {
+        ...result.facts,
+        snapshot_tree: captureGitWorktreeSnapshot(worktreeRoot).tree,
+        decision_ref: decisionRef,
+        decision_hash: decisionHash,
+      },
+      missing_items: [...new Set([...(result.missing_items ?? []), "support:audit"])],
+    };
+  };
+  const runtime = await import("../core/stage-runner.mjs");
+  return runtime.runStage(stage, context, wrapped, publication);
+}
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 describe("stage-runner capability unit", () => {
   it("fails closed when task manifest changes between bootstrap and publish", async()=>{
-    const {task,taskPath,worktree,oid}=fixture();const {runStage}=await import("../core/stage-runner.mjs");const {bootstrapStage}=await import("../core/stage-context.mjs");const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
+    const {task,taskPath,worktree,oid}=fixture();const {bootstrapStage}=await import("../core/stage-context.mjs");const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
     writeFileSync(join(task.taskPath,"task.json"),JSON.stringify({...task.manifest,project_name:"Forged"}));
     await expect(runStage("make-decision",context,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}))).rejects.toThrow(/manifest|identity|changed|tamper/i);
     expect(()=>task.readRecord("results/make-decision/attempt-0001.json")).toThrow();
   });
   it("gives handlers a least-authority worker context without task, kernel, or accept", async () => {
-    const {taskPath,worktree,oid}=fixture();const {runStage}=await import("../core/stage-runner.mjs");const {bootstrapStage}=await import("../core/stage-context.mjs");const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
+    const {taskPath,worktree,oid}=fixture();const {bootstrapStage}=await import("../core/stage-context.mjs");const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
     await runStage("make-decision",context,async(worker)=>{expect(worker).not.toHaveProperty("task");expect(worker).not.toHaveProperty("kernel");expect(worker).not.toHaveProperty("accept");return{facts:{worktree_root:worktree,baseline_commit:oid}};});
   });
   it("keeps a cross-task decision read-only while the consumer owns its Workspace", async () => {
-    const { root, task, taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage,prepareMakeDecisionWorkspace }=await import("../core/stage-context.mjs");
+    const { root, task, taskPath, worktree, oid }=fixture(); const { acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage,prepareMakeDecisionWorkspace }=await import("../core/stage-context.mjs");
     const sourceContext=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}); const decision=await runStage("make-decision",sourceContext,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}})); acceptStageAttempt("make-decision",sourceContext,{attemptRef:decision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(sourceContext.kernel,"make-decision",decision)});
     const consumerPath=join(root,"Projects","Demo","tasks","ZHI-138"); createTask({storageRoot:root,taskPath:consumerPath,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"ZHI-138",created_at:new Date().toISOString(),target_repo_root:task.manifest.target_repo_root,issue_ids:["ZHI-138"],inputs:{decision:join(task.taskPath,"results","make-decision","accepted.json")}}});
-    expect(()=>bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"})).toThrow(/current task.*accepted make-decision/i);
+    expect(()=>bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"})).toThrow(/current task.*accepted make-decision|ENOENT/i);
     const consumerDecisionContext=prepareMakeDecisionWorkspace(bootstrapStage("make-decision",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"}));
     const consumerDecision=await runStage("make-decision",consumerDecisionContext,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("chain-task");return{facts:{worktree_root:ctx.candidateWorkspace.worktreeRoot,baseline_commit:ctx.candidateWorkspace.baselineCommit}};});
     expect(consumerDecision.attempt.upstream_refs[0].task_id).toBe("chain-task");
@@ -58,18 +158,18 @@ describe("stage-runner capability unit", () => {
     expect(()=>execFileSync("git",["status","--porcelain"],{cwd:worktree,encoding:"utf8"})).not.toThrow();
   });
   it("acceptance cannot override checkpoint data", async () => {
-    const { taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage }=await import("../core/stage-context.mjs");
+    const { taskPath, worktree, oid }=fixture(); const { acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage }=await import("../core/stage-context.mjs");
     const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}); const attempt=await runStage("make-decision",context,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
     expect(()=>acceptStageAttempt("make-decision",context,{attemptRef:attempt.attempt_ref,humanConfirmationRef:"human:yes",checkpoint:{forged:true}})).toThrow(/checkpoint override|forbidden/i);
   });
   it("rejects handler output that fails the canonical runtime result schema", async () => {
-    const { taskPath, worktree, oid } = fixture(); const { runStage } = await import("../core/stage-runner.mjs"); const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const { taskPath, worktree, oid } = fixture(); const { bootstrapStage } = await import("../core/stage-context.mjs");
     const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
     await expect(runStage("make-decision",context,async()=>({schema_version:"forged.v0",facts:{worktree_root:worktree,baseline_commit:oid}}))).rejects.toThrow(/schema_version|stage-result|runtime schema/i);
   });
   it("bootstraps, reads accepted upstream, invokes handlers, publishes and accepts a real v2 chain", async () => {
     const { task, taskPath, worktree, oid } = fixture();
-    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { acceptStageAttempt } = await import("../core/stage-runner.mjs");
     const { bootstrapStage } = await import("../core/stage-context.mjs");
     const seen = [];
     const tree=execFileSync("git",["rev-parse","HEAD^{tree}"],{cwd:worktree,encoding:"utf8"}).trim(), hash="a".repeat(64);
@@ -109,7 +209,7 @@ describe("stage-runner capability unit", () => {
 
   it("reopens build-code only from authenticated verify failure evidence and preserves both accepted records", async () => {
     const { task, taskPath, worktree, oid } = fixture();
-    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { acceptStageAttempt } = await import("../core/stage-runner.mjs");
     const { bootstrapStage } = await import("../core/stage-context.mjs");
     const hash = "a".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
     const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
@@ -170,7 +270,7 @@ describe("stage-runner capability unit", () => {
 
   it("ignores legacy build-code fact shape while publishing a repaired attempt", async () => {
     const { task, taskPath, worktree, oid } = fixture();
-    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { acceptStageAttempt } = await import("../core/stage-runner.mjs");
     const { bootstrapStage } = await import("../core/stage-context.mjs");
     const hash = "b".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
     const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "c".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
@@ -217,7 +317,7 @@ describe("stage-runner capability unit", () => {
   it("preserves canonical bytes in a collision-safe archive without rewriting a legacy archive", async () => {
     const setup = async () => {
       const { task, taskPath, worktree, oid } = fixture();
-      const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+      const { acceptStageAttempt } = await import("../core/stage-runner.mjs");
       const { bootstrapStage } = await import("../core/stage-context.mjs");
       const hash = "a".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
       const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
@@ -268,15 +368,15 @@ describe("stage-runner capability unit", () => {
   });
 
   it("can publish without accepting when the caller omits human confirmation", async () => {
-    const { task, taskPath, worktree, oid } = fixture(); const { runStage } = await import("../core/stage-runner.mjs"); const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const { task, taskPath, worktree, oid } = fixture(); const { bootstrapStage } = await import("../core/stage-context.mjs");
     const result = await runStage("make-decision", bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}), async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
     expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain("task-attempt.v2");
     expect(() => task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT|no such/i);
   });
 
-  it("recovers an automatic build-spec attempt with the explicit accept command after publish interruption", async () => {
+  it("recovers an automatic build-spec attempt with the explicit accept API after publish interruption", async () => {
     const { root, repo, task, taskPath, worktree, oid } = fixture();
-    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { acceptStageAttempt } = await import("../core/stage-runner.mjs");
     const { bootstrapStage } = await import("../core/stage-context.mjs");
     const decisionContext = bootstrapStage("make-decision", { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
     const decision = await runStage("make-decision", decisionContext, async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
@@ -288,10 +388,7 @@ describe("stage-runner capability unit", () => {
     });
 
     expect(() => task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT|no such/i);
-    const runtime = new URL("../scripts/stage-runtime.mjs", import.meta.url).pathname;
-    const accepted = JSON.parse(execFileSync(process.execPath, [runtime,
-      "accept", "--stage=build-spec", "--project=Demo", "--task=chain-task", `--attempt=${published.attempt_ref}`,
-    ], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" }));
+    const accepted = acceptStageAttempt("build-spec", specContext, { attemptRef: published.attempt_ref });
 
     expect(accepted).toMatchObject({ stage: "build-spec", attempt_ref: published.attempt_ref, acceptance_mode: "automatic" });
     expect(JSON.parse(task.readRecord("results/build-spec/accepted.json"))).toMatchObject({ attempt_ref: published.attempt_ref });

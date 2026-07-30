@@ -41,7 +41,7 @@ describe("P0 foundation contracts", () => {
     const inventory = await text("docs/stage-atomic-step-inventory.md");
     const documented = new Set(
       [...inventory.matchAll(/^\| (make-decision|build-spec|build-plan|build-code|verify-code) \| (\d+) \| ([a-z0-9-]+) \|/gm)]
-        .map(([, stage, order, step]) => `${stage}:${order}:${order}`),
+        .map(([, stage, order, step]) => `${stage}:${order}:${step}`),
     );
     const actual = new Set();
 
@@ -49,11 +49,11 @@ describe("P0 foundation contracts", () => {
       const manifest = JSON.parse(await text(`workflows/${stage}/steps.json`));
       expect(manifest.stage_slug).toBe(stage);
       expect(validateStepManifest(manifest)).toEqual({ ok: true, errors: [] });
-      manifest.steps.forEach(({ order, step_id }) => actual.add(`${stage}:${order}:${step_id}`));
+      manifest.steps.forEach(({ order, step_slug }) => actual.add(`${stage}:${order}:${step_slug}`));
     }
 
-    expect(documented.size).toBe(42);
-    expect(actual.size).toBe(42);
+    expect(documented.size).toBe(44);
+    expect(actual.size).toBe(44);
     expect([...documented].sort()).toEqual([...actual].sort());
   });
 });

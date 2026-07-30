@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -62,15 +63,20 @@ async function createM14bFixture() {
     created_at: "2026-07-18T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {},
   } });
   const candidate = prepareTaskWorkspace(task);
-  const decisionRef = `specs/${task.identity.taskId}/decision.md`;
+  const decisionArtifactRef = `specs/${task.identity.taskId}/decision-log.md`;
   await mkdir(join(candidate.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
-  await writeFile(join(candidate.worktreeRoot, decisionRef), "# Decision\n");
+  const decisionRaw = "# Decision\n";
+  await writeFile(join(candidate.worktreeRoot, decisionArtifactRef), decisionRaw);
   const kernel = createTaskKernel(task);
+  const decisionHash = createHash("sha256").update(decisionRaw).digest("hex");
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, decisionRaw);
   const decisionSnapshot = candidate.captureSnapshot();
   const published = kernel.publishAttempt("make-decision", { facts: {
     worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
-    snapshot_tree: decisionSnapshot.tree, decision_ref: decisionRef, decision_hash: "d".repeat(64),
-  } });
+    snapshot_tree: decisionSnapshot.tree, decision_ref: decisionRef,
+    decision_hash: decisionHash,
+  }, missing_items: ["support:audit"] });
   const confirmation = kernel.confirmAttempt("make-decision", published.attempt_ref, "accepted").ref;
   kernel.acceptAttempt("make-decision", published.attempt_ref, confirmation);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
@@ -79,7 +85,10 @@ async function createM14bFixture() {
   });
   const execute = async (stage, handler) => {
     const context = contextFor(stage);
-    const attempt = await runStage(stage, context, handler);
+    const attempt = await runStage(stage, context, async (...args) => {
+      const result = await handler(...args);
+      return { ...result, missing_items: [...new Set([...(result.missing_items ?? []), "support:audit"])] };
+    });
     const request = { attemptRef: attempt.attempt_ref };
     if (stage === "build-plan") request.humanConfirmationRef = writeHumanConfirmation(context.kernel, stage, attempt);
     acceptStageAttempt(stage, context, request);
@@ -104,7 +113,7 @@ async function createM14bFixture() {
     await writeFile(path, value);
     return path;
   };
-  return { root, task, kernel, repo, workspace, baseline, catalog: join(workspace.worktreeRoot, "skills", "catalog.yaml"), clock: () => "2026-07-18T00:00:00.000Z", sentinel };
+  return { root, task, kernel, repo, workspace, baseline, decisionRef, catalog: join(workspace.worktreeRoot, "skills", "catalog.yaml"), clock: () => "2026-07-18T00:00:00.000Z", sentinel };
 }
 
 function collectionContext(fixture) {
@@ -466,7 +475,7 @@ describe("M14b fact collection acceptance", () => {
     expect(records(fixture.task, "indexes/runtime-facts-v2.jsonl")).toHaveLength(10);
     expect(records(fixture.task, "indexes/runtime-facts-v2.jsonl").every((fact) => fact.status === "missing" && fact.reason === "no_registered_source" && fact.value === null)).toBe(true);
     expect(records(fixture.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ record_kind: "artifact", id: `specs/${fixture.task.identity.taskId}/decision.md`, status: "present" }),
+      expect.objectContaining({ record_kind: "artifact", id: fixture.decisionRef, status: "present" }),
     ]));
   });
 
@@ -539,17 +548,17 @@ describe("M14b fact collection acceptance", () => {
   it("AC-008 projects only explicit artifact references and records a declared missing target", async () => {
     const present = await createM14bFixture();
     collectTaskFacts(collectionContext(present), { transcriptRegistry: registry(), now: () => new Date(present.clock()) });
-    const ref = `specs/${present.task.identity.taskId}/decision.md`;
+    const ref = present.decisionRef;
     expect(records(present.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
       expect.objectContaining({ record_kind: "artifact", id: ref, ref, required: true, status: "present" }),
     ]));
 
     const absent = await createM14bFixture();
-    await rm(join(absent.workspace.worktreeRoot, `specs/${absent.task.identity.taskId}/decision.md`));
+    await rm(join(absent.task.taskPath, absent.decisionRef));
     const result = collectTaskFacts(collectionContext(absent), { transcriptRegistry: registry(), now: () => new Date(absent.clock()) });
     expect(result.status).toBe("success");
     expect(records(absent.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ record_kind: "artifact", id: `specs/${absent.task.identity.taskId}/decision.md`, status: "missing", reason: "not_found", required: true }),
+      expect.objectContaining({ record_kind: "artifact", id: absent.decisionRef, status: "missing", reason: "not_found", required: true }),
     ]));
   }, 30_000);
 

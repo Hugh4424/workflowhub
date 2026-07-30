@@ -80,10 +80,26 @@ export function checkSkillClosure(packageRoot) {
       if (!stagePlan) pushError(errors, `${stage}: missing wh-review stage plan`);
       const variants = stagePlan?.tracks ? Object.values(stagePlan.tracks) : [stagePlan];
       for (const variant of variants.filter(Boolean)) {
+        if (variant.review_mode !== "lens-only" || !["file_only", "always_embed"].includes(variant.delivery_mode)) {
+          pushError(errors, `${stage}: wh-review stage plan must declare lens-only delivery`);
+          continue;
+        }
         const lensNames = [...(variant.required_skills || []), ...(variant.optional_skills || []).map(item => typeof item === "string" ? item : item.name)];
-        for (const name of lensNames) {
-          reviewPlanNames.add(name);
-          if (!manifestNames.has(name)) pushError(errors, `${stage}: wh-review lens missing from manifest: ${name}`);
+        for (const name of lensNames) reviewPlanNames.add(name);
+      }
+      for (const name of reviewPlanNames) {
+        declared.add(name);
+        const catalogEntry = byName.get(name);
+        if (!catalogEntry) {
+          pushError(errors, `${stage}: wh-review lens missing from catalog: ${name}`);
+          continue;
+        }
+        try {
+          validateSkillBundle(root, `skills/${name}/skill-bundle.json`, catalogEntry.path);
+          const reviewPath = `skills/${name}/review-bundle.json`;
+          if (fs.existsSync(path.join(root, reviewPath))) validateReviewBundleProjection(root, reviewPath, catalogEntry.path);
+        } catch (error) {
+          pushError(errors, `${stage}: invalid wh-review lens ${name}: ${error.message}`);
         }
       }
     }

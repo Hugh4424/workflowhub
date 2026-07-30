@@ -85,6 +85,7 @@
 ## 5. Technical Decisions
 
 ### DEC-001 — 单一写边界预检
+
 - **Problem**：official owner 可能绕过结构认证。
 - **Options**：复制校验 / 共享一次结果 / 新 gate 平台。
 - **Selected**：extend — 共享一次 preflight result。
@@ -93,6 +94,7 @@
 - **Fallback**：保留 RED，撤回未闭合接入。
 
 ### DEC-002 — 复用 recovery registry
+
 - **Problem**：第三种恢复可能只改一层白名单。
 - **Options**：ad-hoc 分支 / 扩展 v1 registry / 新 v2 状态机。
 - **Selected**：extend — 扩展现有 v1 registry 和全部权威面。
@@ -101,6 +103,7 @@
 - **Fallback**：撤回第三种 kind，不触碰 worktree。
 
 ### DEC-003 — tasks.md 唯一完成权威
+
 - **Problem**：历史记录或 runtime 推断会把未执行任务自动标完成。
 - **Options**：runtime 自动完成 / 多份状态 / 执行者填写一份清单。
 - **Selected**：extend — 在唯一 Task 卡内增加任务级完成填写区。
@@ -119,12 +122,14 @@ runtime 只能读取并认证 Task 卡的完成勾选与填写区是否和实际
 ### Module responsibilities
 
 #### Task materials
+
 - **Responsibility**：定义唯一 Phase、Task、DAG、边界和完成填写区。
 - **Consumes**：accepted spec、plan、当前执行事实。
 - **Produces**：唯一 `tasks.md` 执行清单。
 - **Must not decide**：不得从历史记录推断完成。
 
 #### Runtime and kernel
+
 - **Responsibility**：认证身份、结构、hash、状态声明与实际事实一致。
 - **Consumes**：当前四材料和正式 producer 事实。
 - **Produces**：append-only attempt/accepted/evidence。
@@ -146,11 +151,13 @@ N/A — 不新增外部 HTTP API。现有 CLI 和 TaskKernel 接口按各 Task �
 ## 9. File Boundary
 
 ### NEW
+
 - `core/write-boundary-preflight.mjs`
 - `docs/adr/0011-authenticated-review-flow-generations.md`
 - `apply/evidence/current-diff-ac-coverage.json`
 
 ### MODIFY
+
 - `core/invocation-identity.mjs`
 - `core/stage-context.mjs`
 - `core/task-handle.mjs`
@@ -224,6 +231,7 @@ N/A — 不新增外部 HTTP API。现有 CLI 和 TaskKernel 接口按各 Task �
 - `specs/review-flow-reset/tasks.md`
 
 ### DO NOT TOUCH
+
 - `config/review-providers.json`
 - 历史 task records/accepted/receipt/review bytes
 - `.git/`
@@ -242,6 +250,7 @@ spec → plan Phase → tasks 唯一 Task 卡 → 执行者填写完成事实 �
 ## 11. Code Anchors and Reuse
 
 ### Versioned identity and context projection
+
 - **Spec binding**：`{"artifact_kind":"spec","ref":"specs/review-flow-reset/spec.md","hash":"b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1","id":"REVIEW-FLOW-RESET"}`
 - **read_now**：TaskKernel publication、stage handlers、v3 templates。
 - **must_read_before_task**：各 Task 的精确文件和 gate。
@@ -303,22 +312,37 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 ## Phase 1：统一身份、结构预检与路径交接
 
 ### Goal
+
 三个 official owner 共享一次真实写边界认证，路径卡只作可验证交接。
+
 ### Files
+
 - **NEW**：`core/write-boundary-preflight.mjs`
 - **MODIFY**：`core/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/__tests__/invocation-identity.test.mjs`、`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`
 - **DO NOT TOUCH**：`CONSTITUTION.md`、`constitution-checklist.md`、`.git/`
+
 ### Tasks
+
 - T001 RED；T002 GREEN。详细合同只见 `tasks.md`。
+
 ### Verify
+
 - T001/T002 同一 gate；AC-01–04；证据见 `apply/evidence/write-boundary-*`。
+
 ### Knowledge
+
 - official owner 清单来自当前 runtime/recovery/close 入口。
+
 ### STOP
+
 - 预检阻断四材料进入、需要每条 journal 重跑或触碰用户文件。
+
 ### Done
+
 - 三个 owner 无绕过且共享一次结果。
+
 ### Risks and rollback
+
 - **Risk**：入口遗漏。
 - **Prevention**：owner 清单对照测试。
 - **Rollback / recovery**：撤回 owner 接入，保留 RED。
@@ -326,22 +350,37 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 ## Phase 2：统一正式写边界与 recovery operation
 
 ### Goal
+
 三类 recovery operation 共享 registry、锁、CAS、rollback 和 replay。
+
 ### Files
+
 - **NEW**：N/A — 复用 recovery core。
 - **MODIFY**：`core/task-recovery.mjs`、`core/schemas/workflowhub-recovery-credential.v1.json`、`core/schemas/workflowhub-recovery-generation.v1.json`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`core/task-kernel-implementation.mjs`、`core/canonical-receipt-writer.mjs`、`core/workspace.mjs`、`core/task-close.mjs`、`scripts/task-recovery.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-recovery.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/workspace-manager.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`、`tests/terminal-runtime-blockers.test.mjs`
 - **DO NOT TOUCH**：历史 recovery bytes、`.git/`
+
 ### Tasks
+
 - T003 RED；T004 GREEN。
+
 ### Verify
+
 - AC-08–10；schema/validator/path/CLI parity、竞态、rollback、replay。
+
 ### Knowledge
+
 - 旧 credential/generation v1 保持原字节语义。
+
 ### STOP
+
 - 需要 v2 影子格式、Git cleanup/reset 或覆盖第三方 pointer。
+
 ### Done
+
 - 三类 kind 由同一解释器消费。
+
 ### Risks and rollback
+
 - **Risk**：白名单漂移。
 - **Prevention**：逐层 parity 测试。
 - **Rollback / recovery**：撤回第三种 kind 元数据。
@@ -349,22 +388,37 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 ## Phase 3：技能、材料与快照同源
 
 ### Goal
+
 provider 前本地材料 fail-loud，五类记录同字节同快照。
+
 ### Files
+
 - **NEW**：N/A — 扩展现有测试。
 - **MODIFY**：`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`core/receipt-writer.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/stage-handlers.mjs`、`scripts/stage-runtime.mjs`、`core/__tests__/local-skill-resolver.test.mjs`、`core/__tests__/capability-doctor.test.mjs`、`core/__tests__/stage-skill-runtime.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`
+
 ### Tasks
+
 - T005 RED；T006 GREEN。
+
 ### Verify
+
 - AC-05–07；provider_calls=0 仅限本地材料/anchor 错误。
+
 ### Knowledge
+
 - receipt-writer 是 step 原子写入口。
+
 ### STOP
+
 - 需要 fallback、doctor gate 或 provider route 改动。
+
 ### Done
+
 - artifact/receipt/review/attempt/checkpoint 同源。
+
 ### Risks and rollback
+
 - **Risk**：零调用边界被扩大。
 - **Prevention**：窄 fixture。
 - **Rollback / recovery**：撤回新增调用，保留本地审计。
@@ -372,22 +426,37 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 ## Phase 4：单核心、attempt-N 与 review-flow reset
 
 ### Goal
+
 support 不制造第二核心；step 重试和 review generation 保持单一 authority。
+
 ### Files
+
 - **NEW**：`docs/adr/0011-authenticated-review-flow-generations.md`
 - **MODIFY**：`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`、历史 generation bytes。
+
 ### Tasks
+
 - T007 RED；T008 GREEN。
+
 ### Verify
+
 - AC-11–16；同一聚焦组，不调用真实 provider。
+
 ### Knowledge
+
 - reset 扩展现有 TaskKernel/review authority。
+
 ### STOP
+
 - accepted reset、旧链改写、caller provider 或新状态机。
+
 ### Done
+
 - 核心错误真失败、target attempt-N、复用/reset 合法。
+
 ### Risks and rollback
+
 - **Risk**：reset 成为循环重审入口。
 - **Prevention**：每代最多一次 full、旧代拒写。
 - **Rollback / recovery**：保留旧 flow bytes 和 RED。
@@ -395,23 +464,38 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 ## Phase 5：五阶段流程完成与人类交接
 
 ### Goal
+
 clarify、review、摘要、任务状态和来源覆盖均来自当前真实材料。
+
 ### Files
+
 - **NEW**：N/A — 扩展现有材料和测试。
 - **MODIFY**：`core/stage-context.mjs`、`core/workspace.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`contracts/facts-subschema.json`、`schemas/task-attempt.v2.schema.json`、`core/schemas/ambiguity-ledger.v2.json`、`core/schemas/stage-completion-facts.v1.json`、`core/stage-content-evidence.mjs`、`core/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`core/__tests__/stage-context.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/facts-subschema.test.mjs`、`specs/review-flow-reset/spec.md`、`specs/review-flow-reset/plan.md`、`specs/review-flow-reset/tasks.md`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`
 - **DO NOT TOUCH**：`config/review-providers.json`、历史正式记录。
+
 ### Tasks
+
 - T009 RED；T010 GREEN。
+
 ### Verify
+
 - AC-17–21；真实 material validator；30 source 双向差集为空；build-code 最终 integration 与 verify-code 分别认证同一 `tasks.md` 的完成填写及其代码、测试、AC、review 证据。
+
 ### Knowledge
+
 - tasks.md 是唯一 Task 状态，runtime 只读认证。
 - Phase review 绑定 implementation/test tree；review 后的 tasks-only completion 只允许改对应填写区，由下一 Phase/最终 integration 认证，不重复审查。
+
 ### STOP
+
 - 新增正常确认、摘要补造执行事实或历史记录自动勾选。
+
 ### Done
+
 - 五阶段组件闭合，build-plan 摘要和 Task 状态真实；tasks-only completion seam 不扩大业务 diff、不触发重复 Phase review。
+
 ### Risks and rollback
+
 - **Risk**：validator 自己成为推进 gate。
 - **Prevention**：只约束 completed 声明，不阻止继续修复。
 - **Rollback / recovery**：保持任务 in_progress。
@@ -419,22 +503,37 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 ## Phase 6：本轮质量坍塌修复与 build-code 重做
 
 ### Goal
+
 对最终候选逐项补齐 21 AC，并真实完成 build-code。
+
 ### Files
+
 - **NEW**：`apply/evidence/current-diff-ac-coverage.json`
 - **MODIFY**：`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`；生产文件候选白名单固定为 `core/write-boundary-preflight.mjs`、`core/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/schemas/workflowhub-recovery-credential.v1.json`、`core/schemas/workflowhub-recovery-generation.v1.json`、`core/schemas/ambiguity-ledger.v2.json`、`core/schemas/stage-completion-facts.v1.json`、`contracts/facts-subschema.json`、`schemas/task-attempt.v2.schema.json`、`core/task-kernel-implementation.mjs`、`core/workspace.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`core/receipt-writer.mjs`、`core/audit-aggregator.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`core/stage-content-evidence.mjs`、`core/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`；T012 只能启用其中被差距图标为 missing 或 contradicted 的文件。
 - **DO NOT TOUCH**：provider config、历史 task records、`.git/`。
+
 ### Tasks
+
 - T011 RED/差距图；T012 GREEN/收口。
+
 ### Verify
+
 - 聚焦 quality-completion 组；最终一次 integration review 或真实 unavailable。
+
 ### Knowledge
+
 - 旧 live attempt 和局部 GREEN 只是线索。
+
 ### STOP
+
 - 只能靠全量、重复 provider 或改历史 bytes 得到结论。
+
 ### Done
+
 - 21 AC 有当前证据；build-code 最终 integration 已认证 T001–T012 填写区，verify-code 随后对同一 `tasks.md` 独立复核。
+
 ### Risks and rollback
+
 - **Risk**：旧证据 stale。
 - **Prevention**：代码、命令、snapshot 变化即刷新受影响组。
 - **Rollback / recovery**：保持未完成项和真实状态。

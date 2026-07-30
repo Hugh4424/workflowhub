@@ -193,18 +193,23 @@ For details, read `references/auth.md`.
 
 ## Output Contract
 
-Report only:
+For UI scope, publish `browser-qa-evidence.v1` with:
 
-- what was tested
-- tool used
-- selected engine
-- derived session
-- whether login state was reused
-- whether an engine switch happened; this should be `no`
-- evidence collected
-- pass/fail result
-- cleanup completion
-- whether the app service was left running
+- route, page, and scenario tested
+- tool, selected engine, and derived session
+- auth mode `reused`, `fresh`, or `none`, consistent with whether login state was reused
+- performance status: `measured` with metrics, or `not_measured` / `not_applicable` with a reason
+- screenshot references and SHA-256 hashes
+- test command, test file, output reference and SHA-256 hash, and exit code
+- cleanup status `completed` and whether the app service was left running
+- `engine_switch: no`
+
+The canonical stage-content envelope supplies the task, run, and Workspace
+snapshot binding. Cookie, token, password, authorization, API-key, secret, and
+profile content must never be included in evidence.
+
+For non-UI scope, publish only `applicability: not_applicable` and a reason.
+This disclosure is not a global browser Gate.
 
 ## Machine-Readable JSON Output Contract
 

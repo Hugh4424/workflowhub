@@ -5,6 +5,8 @@ import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, overlayCheckpointArtifacts, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
+import { ArtifactDir, assertArtifactDir } from "./artifact-dir.mjs";
+import { validateTaskMaterialRevision } from "./stage-content-contracts.mjs";
 import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
@@ -33,6 +35,7 @@ import {
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
 } from "./stage-review-disposition.mjs";
+import { assertRuntimeStageSkillInvocation, serializeStageSkillInvocation, stageSkillInvocationRef } from "./stage-skill-invocation.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
@@ -70,7 +73,7 @@ const ALLOWED_FACTS = Object.freeze({
   "build-spec": new Set(["spec_ref", "checkpoint", "review", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
   "build-plan": new Set(["plan_ref", "tasks_ref", "checkpoint", "review", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
   "build-code": new Set(["changed", "tests", "review", "phase_completion", "acceptance_coverage", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
-  "verify-code": new Set(["tests", "review", "evidence_refs", "quality_note", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
+  "verify-code": new Set(["tests", "review", "evidence_refs", "browser_qa", "verification_items", "quality_note", "audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"]),
 });
 const AUDIT_FACT_KEYS = ["audit_contract_version", "audit_summary_ref", "audit_summary_hash", "audit_verdict", "content_evidence_refs"];
 
@@ -306,7 +309,7 @@ export function validateStageFacts(stage, facts, {
     if (facts.audit_contract_version !== "v1") throw new Error(`${name} audit carrier version must be v1`);
     if (!new RegExp(`^evidence/audits/${name}/[a-f0-9]{64}\\.json$`).test(facts.audit_summary_ref ?? "")) throw new Error(`${name} audit summary ref is invalid`);
     if (!HASH.test(facts.audit_summary_hash ?? "")) throw new Error(`${name} audit summary hash must be sha256`);
-    if (facts.audit_verdict !== "pass") throw new Error(`${name} audit verdict must be pass`);
+    if (!new Set(["pass", "fail"]).has(facts.audit_verdict)) throw new Error(`${name} audit verdict must be pass or fail`);
     if (!Array.isArray(facts.content_evidence_refs)) throw new Error(`${name} content evidence refs must be an array`);
   }
   if (name === "make-decision") {
@@ -350,8 +353,72 @@ export function validateStageFacts(stage, facts, {
     validateTests(facts.tests, "verify-code facts.tests");
     validateReview(facts.review, "verify-code facts.review");
     validateEvidenceRefs(facts.evidence_refs, "verify-code facts.evidence_refs");
+    if (facts.browser_qa !== undefined) validateBrowserQaFacts(facts.browser_qa);
+    if (facts.verification_items !== undefined) validateVerificationItems(facts.verification_items);
   }
   return facts;
+}
+
+const REQUIRED_VERIFY_ITEM_IDS = Object.freeze([
+  "current_materials",
+  "diff_scope",
+  "risk_tests",
+  "acceptance_criteria",
+  "tasks_completion",
+  "browser_qa",
+  "independent_review_resolution",
+  "core_gaps",
+  "human_handoff",
+]);
+
+function validateVerificationItems(value) {
+  if (!Array.isArray(value)) throw new TypeError("verify-code facts.verification_items must be an array");
+  const seen = new Set();
+  for (const [index, item] of value.entries()) {
+    plain(item, `verify-code facts.verification_items[${index}]`);
+    rejectUnknown(item, new Set(["id", "status", "evidence_refs", "reason"]), `verify-code facts.verification_items[${index}]`);
+    nonemptyString(item.id, `verify-code facts.verification_items[${index}].id`);
+    if (!REQUIRED_VERIFY_ITEM_IDS.includes(item.id)) throw new TypeError(`unknown verify item: ${item.id}`);
+    if (seen.has(item.id)) throw new TypeError(`duplicate verify item: ${item.id}`);
+    seen.add(item.id);
+    if (!new Set(["pass", "fail", "unknown", "not_applicable"]).has(item.status)) {
+      throw new TypeError(`verify item ${item.id} status must be pass, fail, unknown, or not_applicable`);
+    }
+    validateEvidenceRefs(item.evidence_refs, `verify item ${item.id} evidence_refs`);
+    nonemptyString(item.reason, `verify item ${item.id} reason`);
+  }
+  for (const id of REQUIRED_VERIFY_ITEM_IDS) {
+    if (!seen.has(id)) throw new Error(`missing verify item: ${id}`);
+  }
+  return value;
+}
+
+function validateBrowserQaFacts(value) {
+  plain(value, "verify-code facts.browser_qa");
+  rejectUnknown(value, new Set(["ref", "hash"]), "verify-code facts.browser_qa");
+  artifactRef(value.ref, "verify-code facts.browser_qa.ref");
+  if (!HASH.test(value.hash ?? "")) throw new TypeError("verify-code facts.browser_qa.hash must be sha256");
+  return value;
+}
+
+function verifyBrowserQaStageContentBinding(task, workspace, binding) {
+  validateBrowserQaFacts(binding);
+  const raw = task.readRecord(binding.ref);
+  const hash = createHash("sha256").update(raw).digest("hex");
+  if (hash !== binding.hash) throw new Error("verify-code browser QA stage content integrity hash mismatch");
+  let value;
+  try { value = JSON.parse(raw); }
+  catch { throw new Error("verify-code browser QA stage content is not valid JSON"); }
+  const snapshot = captureGitWorktreeSnapshot(assertWorkspace(workspace).worktreeRoot);
+  if (value?.schema_version !== "stage-content-evidence.v1"
+      || value.kind !== "browser-qa-evidence.v1"
+      || value.task_id !== task.identity.taskId
+      || value.stage !== "verify-code"
+      || value.snapshot_tree !== snapshot.tree
+      || value.content_hash !== createHash("sha256").update(JSON.stringify(value.payload)).digest("hex")) {
+    throw new Error("verify-code browser QA evidence task, kind, payload, or snapshot binding mismatch");
+  }
+  return value;
 }
 
 function nonemptyString(value, label) {
@@ -587,7 +654,7 @@ export function validateAccepted(accepted, expected = {}) {
       || !/^evidence\/audits\/make-decision\/[a-f0-9]{64}\.json$/.test(accepted.full_audit_ref)
       || !HASH.test(accepted.full_audit_hash ?? "")
       || !HASH.test(accepted.full_audit_summary_hash ?? "")
-      || accepted.full_audit_verdict !== "pass"))) {
+      || !new Set(["pass", "fail"]).has(accepted.full_audit_verdict)))) {
     throw new Error("accepted make-decision full audit binding invalid");
   }
   validateRefs(accepted.upstream_refs, "accepted upstream_refs");
@@ -612,12 +679,17 @@ export function buildTaskKernel(taskHandle, {
   acceptedReplacementTestHooks,
   buildSpecRecoveryTestHooks,
 } = {}, authority) {
-  const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor, replaceStageContentPointerFor } = authority;
+  const {
+    assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor,
+    replaceStageContentPointerFor, replaceTaskCurrentPointerFor,
+  } = authority;
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
   const replaceKernelAccepted = typeof replaceKernelAcceptedFor === "function" ? replaceKernelAcceptedFor(task) : undefined;
   const replaceStageContentPointer = typeof replaceStageContentPointerFor === "function"
     ? replaceStageContentPointerFor(task) : undefined;
+  const replaceTaskCurrentPointer = typeof replaceTaskCurrentPointerFor === "function"
+    ? replaceTaskCurrentPointerFor(task) : undefined;
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const verifyCandidateSnapshot = (facts) => {
     if (!candidate) return;
@@ -661,7 +733,7 @@ export function buildTaskKernel(taskHandle, {
       allowLegacyAuditRead,
     });
     if (name === "make-decision" && attempt.facts.audit_through_step_id === 10) {
-      if (accepted.full_audit_verdict !== "pass") throw new Error("accepted make-decision requires a passing full audit");
+      if (!new Set(["pass", "fail"]).has(accepted.full_audit_verdict)) throw new Error("accepted make-decision full audit verdict is invalid");
       const confirmationRaw = task.readRecord(accepted.human_confirmation_ref);
       const confirmation = parseJson(confirmationRaw, "accepted make-decision human confirmation");
       if (Object.keys(confirmation).some((key) => !new Set([
@@ -679,11 +751,11 @@ export function buildTaskKernel(taskHandle, {
       const audit = parseJson(auditRaw, "accepted make-decision full audit");
       if (preAudit.summary_hash !== attempt.facts.audit_summary_hash
           || hashAuditSummary(preAudit) !== preAudit.summary_hash
-          || preAudit.verdict !== "pass"
+          || preAudit.verdict !== attempt.facts.audit_verdict
           || hash(auditRaw) !== accepted.full_audit_hash
           || audit.summary_hash !== accepted.full_audit_summary_hash
           || hashAuditSummary(audit) !== audit.summary_hash
-          || audit.verdict !== "pass" || audit.through_step_id !== 12 || audit.audit_scope !== "full"
+          || audit.verdict !== accepted.full_audit_verdict || audit.through_step_id !== 12 || audit.audit_scope !== "full"
           || audit.task_id !== task.identity.taskId || audit.stage_slug !== name
           || preAudit.through_step_id !== 10 || preAudit.audit_scope !== "pre_confirmation"
           || audit.workflow_run_id !== preAudit.workflow_run_id
@@ -1083,7 +1155,8 @@ export function buildTaskKernel(taskHandle, {
         || hashAuditSummary(unsigned) !== audit.summary_hash
         || audit.task_id !== task.identity.taskId
         || audit.stage_slug !== stage
-        || audit.verdict !== "pass") {
+        || audit.verdict !== attempt.facts.audit_verdict
+        || !new Set(["pass", "fail"]).has(audit.verdict)) {
       throw new Error(`${label} binding mismatch`);
     }
     return audit;
@@ -1220,14 +1293,110 @@ export function buildTaskKernel(taskHandle, {
     const result = createRequirementLedger({ source_manifest: input.source_manifest, mappings: input.mappings });
     if (!result.ok) throw new Error(result.errors?.join("; ") ?? "invalid requirements ledger");
     const coverage = createRequirementsCoverage(result.ledger);
-    const ledgerRef = "requirements/ledger.json";
-    const coverageRef = "requirements/coverage.json";
     const ledgerRaw = `${canonicalJson(result.ledger)}\n`;
     const coverageRaw = `${canonicalJson(coverage)}\n`;
-    for (const [ref, raw] of [[ledgerRef, ledgerRaw], [coverageRef, coverageRaw]]) {
+    const baseLedgerRef = "requirements/ledger.json";
+    const baseCoverageRef = "requirements/coverage.json";
+    const pointerRef = "requirements/current.json";
+    let pointerRaw = readOptionalRecord(task, pointerRef);
+    let pointer = null;
+    if (pointerRaw !== undefined) {
+      pointer = parseJson(pointerRaw, "requirements current pointer");
+      if (pointer.schema_version !== "requirements-current.v1"
+          || pointer.task_id !== task.identity.taskId
+          || !Number.isInteger(pointer.generation) || pointer.generation < 1
+          || typeof pointer.ledger_ref !== "string" || !HASH.test(pointer.ledger_hash ?? "")
+          || !HASH.test(pointer.content_hash ?? "")
+          || hash(task.readRecord(pointer.ledger_ref)) !== pointer.ledger_hash) {
+        throw new Error("requirements current pointer is invalid or misbound");
+      }
+    } else {
+      const baseRaw = readOptionalRecord(task, baseLedgerRef);
+      if (baseRaw !== undefined) {
+        pointer = {
+          schema_version: "requirements-current.v1", task_id: task.identity.taskId,
+          generation: 1, ledger_ref: baseLedgerRef, ledger_hash: hash(baseRaw),
+          content_hash: hash(baseRaw),
+          coverage_ref: baseCoverageRef, coverage_hash: hash(task.readRecord(baseCoverageRef)),
+          parent_ref: null,
+        };
+        pointerRaw = `${JSON.stringify(pointer, null, 2)}\n`;
+        try { createKernelRecord(pointerRef, pointerRaw); }
+        catch (error) {
+          if (error?.code !== "EEXIST") throw error;
+          pointerRaw = task.readRecord(pointerRef);
+          pointer = parseJson(pointerRaw, "requirements current pointer");
+        }
+      }
+    }
+    const parentRef = pointer?.ledger_ref ?? null;
+    if (pointer?.content_hash === hash(ledgerRaw)) {
+      return deepFreeze({
+        ledger_ref: pointer.ledger_ref, ledger_hash: pointer.ledger_hash,
+        coverage_ref: pointer.coverage_ref, coverage_hash: pointer.coverage_hash,
+        workflow_run_id: active.run.workflow_run_id,
+        parent_ref: pointer.parent_ref ?? null,
+        supersedes: pointer.parent_ref === null ? [] : [pointer.parent_ref],
+        current: true, idempotent: true,
+      });
+    }
+    const storedLedgerRaw = pointer === null
+      ? ledgerRaw
+      : `${canonicalJson({
+        schema_version: "requirements-ledger-revision.v1",
+        task_id: task.identity.taskId,
+        parent_ref: parentRef,
+        supersedes: [parentRef],
+        ledger: result.ledger,
+      })}\n`;
+    const storedCoverageRaw = pointer === null
+      ? coverageRaw
+      : `${canonicalJson({
+        schema_version: "requirements-coverage-revision.v1",
+        task_id: task.identity.taskId,
+        parent_ledger_ref: parentRef,
+        coverage,
+      })}\n`;
+    const ledgerRef = pointer === null ? baseLedgerRef : `requirements/revisions/${hash(storedLedgerRaw)}.json`;
+    const coverageRef = pointer === null ? baseCoverageRef : `requirements/revisions/${hash(storedCoverageRaw)}.coverage.json`;
+    for (const [ref, raw] of [[ledgerRef, storedLedgerRaw], [coverageRef, storedCoverageRaw]]) {
       try { task.createRecordAtomic(ref, raw); }
       catch (error) {
         if (error?.code !== "EEXIST" || task.readRecord(ref) !== raw) throw error;
+      }
+    }
+    const nextPointer = {
+      schema_version: "requirements-current.v1", task_id: task.identity.taskId,
+      generation: (pointer?.generation ?? 0) + 1,
+      ledger_ref: ledgerRef, ledger_hash: hash(storedLedgerRaw),
+      content_hash: hash(ledgerRaw),
+      coverage_ref: coverageRef, coverage_hash: hash(storedCoverageRaw),
+      parent_ref: parentRef,
+    };
+    const nextPointerRaw = `${JSON.stringify(nextPointer, null, 2)}\n`;
+    if (pointerRaw === undefined) {
+      try { createKernelRecord(pointerRef, nextPointerRaw); }
+      catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        if (task.readRecord(pointerRef) !== nextPointerRaw) {
+          const conflict = new Error("REQUIREMENTS_REVISION_CONFLICT: current pointer changed; retry from the authenticated head");
+          conflict.code = "REQUIREMENTS_REVISION_CONFLICT";
+          throw conflict;
+        }
+      }
+    } else {
+      try {
+        replaceTaskCurrentPointer(pointerRef, nextPointerRaw, {
+          expectedPriorRaw: pointerRaw,
+          validator: () => {},
+        });
+      } catch (error) {
+        const currentRaw = task.readRecord(pointerRef);
+        if (currentRaw !== nextPointerRaw) {
+          const conflict = new Error("REQUIREMENTS_REVISION_CONFLICT: current pointer changed; retry from the authenticated head");
+          conflict.code = "REQUIREMENTS_REVISION_CONFLICT";
+          throw conflict;
+        }
       }
     }
     if (name === "make-decision") {
@@ -1239,9 +1408,125 @@ export function buildTaskKernel(taskHandle, {
       });
     }
     return deepFreeze({
-      ledger_ref: ledgerRef, ledger_hash: hash(ledgerRaw),
-      coverage_ref: coverageRef, coverage_hash: hash(coverageRaw),
+      ledger_ref: ledgerRef, ledger_hash: hash(storedLedgerRaw),
+      coverage_ref: coverageRef, coverage_hash: hash(storedCoverageRaw),
       workflow_run_id: active.run.workflow_run_id,
+      parent_ref: parentRef,
+      supersedes: parentRef === null ? [] : [parentRef],
+      current: true,
+    });
+  };
+  const publishMaterialRevision = (input = {}) => {
+    plain(input, "material revision input");
+    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref"]), "material revision input");
+    const summary = nonemptyString(input.change_summary, "material revision change_summary");
+    if (!Array.isArray(input.source_refs) || input.source_refs.length === 0
+        || input.source_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
+      throw new TypeError("material revision source_refs must be canonical task record refs");
+    }
+    const sourceRefs = [...new Set(input.source_refs)].map((ref) => {
+      const raw = task.readRecord(ref);
+      return { ref, hash: hash(raw) };
+    });
+    const artifactDir = artifacts === undefined
+      ? ArtifactDir.open((candidate ?? workspace).worktreeRoot, task)
+      : assertArtifactDir(artifacts);
+    const materialFiles = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+    const hashes = Object.fromEntries(materialFiles.map((file) => [file, hash(artifactDir.read(file))]));
+    const pointerRef = "materials/current.json";
+    const priorPointerRaw = readOptionalRecord(task, pointerRef);
+    let priorPointer = null;
+    let priorRevision = null;
+    if (priorPointerRaw !== undefined) {
+      priorPointer = parseJson(priorPointerRaw, "material current pointer");
+      if (priorPointer.schema_version !== "task-material-current.v1"
+          || priorPointer.task_id !== task.identity.taskId
+          || !Number.isInteger(priorPointer.generation) || priorPointer.generation < 1
+          || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(priorPointer.revision_ref ?? "")
+          || !HASH.test(priorPointer.revision_hash ?? "")
+          || hash(task.readRecord(priorPointer.revision_ref)) !== priorPointer.revision_hash) {
+        throw new Error("material current pointer is invalid or misbound");
+      }
+      priorRevision = parseJson(task.readRecord(priorPointer.revision_ref), "material revision");
+      const validation = validateTaskMaterialRevision(priorRevision);
+      if (!validation.ok || priorRevision.revision_id !== priorPointer.revision_id) {
+        throw new Error(`material current revision is invalid: ${validation.errors.join("; ")}`);
+      }
+    }
+    if (input.expected_current_ref !== undefined
+        && input.expected_current_ref !== (priorPointer?.revision_ref ?? null)) {
+      const conflict = new Error("MATERIAL_REVISION_CONFLICT: expected current revision is stale");
+      conflict.code = "MATERIAL_REVISION_CONFLICT";
+      throw conflict;
+    }
+    const changedFiles = priorRevision === null
+      ? materialFiles
+      : materialFiles.filter((file) => priorRevision.hashes[file] !== hashes[file]);
+    if (changedFiles.length === 0) {
+      return deepFreeze({
+        revision_ref: priorPointer.revision_ref, revision_hash: priorPointer.revision_hash,
+        revision_id: priorPointer.revision_id, current: true, idempotent: true,
+      });
+    }
+    const identity = {
+      task_id: task.identity.taskId,
+      parent_revision: priorRevision?.revision_id ?? null,
+      previous_ref: priorPointer?.revision_ref ?? null,
+      previous_hash: priorPointer?.revision_hash ?? null,
+      changed_files: changedFiles,
+      change_summary: summary,
+      source_refs: sourceRefs,
+      hashes,
+    };
+    const revisionDigest = hash(canonicalJson(identity));
+    const revision = {
+      schema_version: "task-material-revision.v1",
+      task_id: identity.task_id,
+      revision_id: `revision-${revisionDigest}`,
+      parent_revision: identity.parent_revision,
+      previous_ref: identity.previous_ref,
+      previous_hash: identity.previous_hash,
+      changed_files: identity.changed_files,
+      change_summary: identity.change_summary,
+      source_refs: identity.source_refs,
+      hashes: identity.hashes,
+    };
+    const validation = validateTaskMaterialRevision(revision);
+    if (!validation.ok) throw new Error(`material revision is invalid: ${validation.errors.join("; ")}`);
+    const revisionRef = `materials/revisions/${revisionDigest}.json`;
+    const revisionRaw = `${JSON.stringify(revision, null, 2)}\n`;
+    try { createKernelRecord(revisionRef, revisionRaw); }
+    catch (error) {
+      if (error?.code !== "EEXIST" || task.readRecord(revisionRef) !== revisionRaw) throw error;
+    }
+    const pointer = {
+      schema_version: "task-material-current.v1",
+      task_id: task.identity.taskId,
+      generation: (priorPointer?.generation ?? 0) + 1,
+      revision_id: revision.revision_id,
+      revision_ref: revisionRef,
+      revision_hash: hash(revisionRaw),
+      previous_ref: priorPointer?.revision_ref ?? null,
+    };
+    const pointerRaw = `${JSON.stringify(pointer, null, 2)}\n`;
+    try {
+      if (priorPointerRaw === undefined) createKernelRecord(pointerRef, pointerRaw);
+      else replaceTaskCurrentPointer(pointerRef, pointerRaw, {
+        expectedPriorRaw: priorPointerRaw,
+        validator: () => {},
+      });
+    } catch (error) {
+      const currentRaw = task.readRecord(pointerRef);
+      if (currentRaw !== pointerRaw) {
+        const conflict = new Error("MATERIAL_REVISION_CONFLICT: current pointer changed; retry from the authenticated head");
+        conflict.code = "MATERIAL_REVISION_CONFLICT";
+        throw conflict;
+      }
+    }
+    return deepFreeze({
+      revision_ref: revisionRef, revision_hash: hash(revisionRaw),
+      revision_id: revision.revision_id, parent_ref: revision.previous_ref,
+      changed_files: revision.changed_files, current: true, idempotent: false,
     });
   };
   const makeDecisionJournalAuthority = Symbol("make-decision-runtime-journal-authority");
@@ -1526,6 +1811,22 @@ export function buildTaskKernel(taskHandle, {
     }
     const stepId = interactionStepId(value.payload);
     if (stepId === null) return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
+    const skillName = value.payload.interaction_type === "talk" ? "talk-with-zhipeng" : "grill-with-docs";
+    const invocationKey = value.payload.interaction_type === "talk"
+      ? `talk-${value.payload.rounds[0].round_number}`
+      : "grill";
+    const invocation = kernel.readStageSkillInvocation("make-decision", skillName, invocationKey);
+    if (invocation?.fact?.status !== "executed"
+        || invocation.fact.outcome_ref !== evidenceRef
+        || invocation.fact.outcome_hash !== evidenceHash
+        || invocation.fact.snapshot_tree !== value.snapshot_tree) {
+      return deepFreeze({
+        workflow_run_id: active.run.workflow_run_id,
+        step_id: stepId,
+        completed: false,
+        missing_invocation: `${skillName}/${invocationKey}`,
+      });
+    }
     assertMakeDecisionProducerPredecessor(stepId);
     const activeWorkspace = candidate ?? workspace;
     if (!activeWorkspace) throw new Error("make-decision interaction completion requires CandidateWorkspace");
@@ -1653,7 +1954,9 @@ export function buildTaskKernel(taskHandle, {
       ? activeWorkspace.captureSnapshot()
       : captureGitWorktreeSnapshot(activeWorkspace.worktreeRoot);
     if (summary.snapshot_tree !== snapshot.tree) throw new Error(`${stage} audit snapshot tree binding mismatch`);
-    if (summary.verdict !== "pass" || facts.audit_verdict !== summary.verdict) throw new Error(`${stage} audit verdict is not pass`);
+    if (!new Set(["pass", "fail"]).has(summary.verdict) || facts.audit_verdict !== summary.verdict) {
+      throw new Error(`${stage} audit verdict binding mismatch`);
+    }
     if (stage === "make-decision" && facts.audit_through_step_id !== undefined
         && facts.audit_through_step_id !== summary.through_step_id) {
       throw new Error("make-decision audit step boundary mismatch");
@@ -2936,6 +3239,43 @@ export function buildTaskKernel(taskHandle, {
   };
   const kernel = {
     task,
+    publishStageSkillInvocation(fact) {
+      assertRuntimeStageSkillInvocation(fact);
+      if (fact?.task_id !== task.identity.taskId) throw new Error("stage skill invocation task identity mismatch");
+      const active = activeStageRun(fact.stage);
+      if (fact.workflow_run_id !== active.run.workflow_run_id) throw new Error("stage skill invocation run identity mismatch");
+      const ref = stageSkillInvocationRef(fact);
+      const raw = serializeStageSkillInvocation(fact);
+      try {
+        createKernelRecord(ref, raw);
+        return deepFreeze({ ref, hash: hash(raw), fact });
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        const existingRaw = task.readRecord(ref);
+        const existing = parseJson(existingRaw, "stage skill invocation");
+        const semantic = ({ created_at, ...value }) => value;
+        if (JSON.stringify(semantic(existing)) !== JSON.stringify(semantic(fact))) {
+          throw new Error("stage skill invocation identity already binds a different fact");
+        }
+        return deepFreeze({ ref, hash: hash(existingRaw), fact: existing, idempotent: true });
+      }
+    },
+    readStageSkillInvocation(stage, name, invocationKey = "default") {
+      const active = activeStageRun(stage);
+      const ref = stageSkillInvocationRef({
+        task_id: task.identity.taskId,
+        workflow_run_id: active.run.workflow_run_id,
+        stage,
+        name,
+        invocation_key: invocationKey,
+      });
+      try {
+        return deepFreeze({ ref, fact: parseJson(task.readRecord(ref), "stage skill invocation") });
+      } catch (error) {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      }
+    },
     publishCanonicalRecord(relativePath, data) {
       if (typeof relativePath !== "string" || !/^(?:receipts|reviews|evidence)\//.test(relativePath) || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
       if (relativePath === BUILD_SPEC_RECOVERY_REFS.marker || relativePath.startsWith("receipts/revisions/spec/")) {
@@ -3112,6 +3452,7 @@ export function buildTaskKernel(taskHandle, {
     createStageContinuation,
     activeStageRun,
     publishRequirementsLedger,
+    publishMaterialRevision,
     writeStageStepEntry,
     writeStageStepExit,
     prepareMakeDecisionInteractionPublication,
@@ -3546,6 +3887,9 @@ export function buildTaskKernel(taskHandle, {
           throw new Error(`${name} missing audit support cannot publish unauthenticated audit facts`);
         }
         validateStageFacts(name, data.facts, { allowMissingAuditSupport: auditSupportMissing });
+        if (name === "verify-code" && data.facts.browser_qa !== undefined) {
+          verifyBrowserQaStageContentBinding(task, workspace, data.facts.browser_qa);
+        }
         if (name === "make-decision" && candidate && (resolve(data.facts.worktree_root) !== candidate.worktreeRoot || data.facts.baseline_commit !== candidate.baselineCommit)) {
           throw new Error("make-decision facts do not match CandidateWorkspace");
         }
@@ -3705,6 +4049,7 @@ export function buildTaskKernel(taskHandle, {
         const attemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
         const attempt = validateAttempt(parseJson(attemptRaw, `${name} attempt`), { taskId: task.identity.taskId, stage: name });
         let fullAudit;
+        let fullAuditVerdict;
         if (name === "verify-code" && attempt.verification_failure === true) {
           throw new Error("cannot accept a failed verify-code attempt");
         }
@@ -3843,12 +4188,13 @@ export function buildTaskKernel(taskHandle, {
           const auditRaw = task.readRecord(fullAudit.ref);
           const audit = parseJson(auditRaw, "make-decision full audit");
           if (hash(auditRaw) !== fullAudit.hash || audit.summary_hash !== fullAudit.summary_hash
-              || audit.verdict !== "pass" || audit.stage_slug !== name
+              || !new Set(["pass", "fail"]).has(audit.verdict) || audit.stage_slug !== name
               || audit.task_id !== task.identity.taskId || audit.through_step_id !== 12
               || audit.audit_scope !== "full"
               || audit.snapshot_tree !== attempt.facts.snapshot_tree) {
-            throw new Error("make-decision acceptance requires a canonical passing full audit through step 12");
+            throw new Error("make-decision acceptance requires a canonical bound full audit through step 12");
           }
+          fullAuditVerdict = audit.verdict;
         } else if (options.full_audit_writer !== undefined) {
           throw new Error("full audit writer is only valid for a bounded make-decision attempt");
         }
@@ -3899,7 +4245,7 @@ export function buildTaskKernel(taskHandle, {
             full_audit_ref: fullAudit.ref,
             full_audit_hash: fullAudit.hash,
             full_audit_summary_hash: fullAudit.summary_hash,
-            full_audit_verdict: "pass",
+            full_audit_verdict: fullAuditVerdict,
           } : {}),
           accepted_at: now(),
           upstream_refs: structuredClone(attempt.upstream_refs),
@@ -4049,4 +4395,11 @@ function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
+}
+function readOptionalRecord(task, ref) {
+  try { return task.readRecord(ref); }
+  catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
 }

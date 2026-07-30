@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,21 @@ export async function smokeLocalSkillDispatch(packageRoot) {
       const prepared = preflightStageSkills({ packageRoot: root, stage, ...doctorOptions });
       if (!prepared.capabilityResults.some(result => result.status === "available")) throw new Error(`${stage}: capability doctor was not exercised`);
       let dispatchCount = 0;
+      let authenticatedOutcomeCount = 0;
+      const outcomes = new Map();
+      const published = [];
+      const snapshotTree = "a".repeat(40);
+      const kernel = {
+        task: {
+          identity: { taskId: "local-skill-dispatch-smoke" },
+          readRecord(ref) {
+            if (!outcomes.has(ref)) throw Object.assign(new Error(`missing smoke outcome: ${ref}`), { code: "ENOENT" });
+            return outcomes.get(ref);
+          },
+        },
+        deriveStageWorkflowRunId: value => `smoke:${value}`,
+        publishStageSkillInvocation: fact => { published.push(fact); },
+      };
       for (const dependency of prepared.manifest.skills) {
         const fake = path.join(fakeRoot, dependency.name, "SKILL.md");
         fs.mkdirSync(path.dirname(fake), { recursive: true });
@@ -34,18 +50,24 @@ export async function smokeLocalSkillDispatch(packageRoot) {
           const skipped = await dispatchStageSkill({ packageRoot: root, stage, name: dependency.name, triggered: false, hostInvoke: () => { throw new Error("conditional host invoked while skipped"); }, ...doctorOptions });
           if (skipped.status !== "not_invoked") throw new Error(`${stage}/${dependency.name}: missing not_invoked product`);
         }
-        const payload = await dispatchStageSkill({ packageRoot: root, stage, name: dependency.name, hostInvoke: value => {
+        const invocation = await dispatchStageSkill({ packageRoot: root, stage, name: dependency.name, kernel, hostInvoke: value => {
           const definition = fs.readFileSync(value.resolved_skill_path, "utf8");
           if (!definition.trim()) throw new Error(`${stage}/${dependency.name}: empty SKILL.md`);
-          return value;
+          if (!value.resolved_skill_path.startsWith(path.join(root, "skills") + path.sep)) throw new Error(`${stage}: dispatch escaped artifact skills root`);
+          if (!value.resolved_bundle_paths.every(item => item.startsWith(path.join(root, "skills") + path.sep)) || !/^[a-f0-9]{64}$/.test(value.bundle_hash)) {
+            throw new Error(`${stage}: invalid dispatch closure payload`);
+          }
+          const outcomeRef = `evidence/smoke/${stage}/${dependency.name}.json`;
+          const raw = `${JSON.stringify({ schema_version: "smoke-skill-outcome.v1", stage, name: dependency.name, bundle_hash: value.bundle_hash, snapshot_tree: snapshotTree })}\n`;
+          outcomes.set(outcomeRef, raw);
+          return { outcome_ref: outcomeRef, outcome_hash: crypto.createHash("sha256").update(raw).digest("hex"), snapshot_tree: snapshotTree };
         }, ...doctorOptions });
-        if (!payload.resolved_skill_path.startsWith(path.join(root, "skills") + path.sep)) throw new Error(`${stage}: dispatch escaped artifact skills root`);
-        if (!payload.resolved_bundle_paths.every(item => item.startsWith(path.join(root, "skills") + path.sep)) || !/^[a-f0-9]{64}$/.test(payload.bundle_hash)) {
-          throw new Error(`${stage}: invalid dispatch closure payload`);
-        }
+        if (invocation.status !== "executed" || invocation.snapshot_tree !== snapshotTree
+            || published.at(-1) !== invocation) throw new Error(`${stage}/${dependency.name}: unauthenticated smoke outcome`);
         dispatchCount += 1;
+        authenticatedOutcomeCount += 1;
       }
-      dispatched.push({ stage, dispatch_count: dispatchCount });
+      dispatched.push({ stage, dispatch_count: dispatchCount, authenticated_outcome_count: authenticatedOutcomeCount });
     }
     const buildSpecNames = [...preflightStageSkills({ packageRoot: root, stage: "build-spec", ...doctorOptions }).dependencies.keys()];
     if (buildSpecNames.some(name => ["diagnosing-bugs", "test-routing-advisor", "review-response"].includes(name))) {

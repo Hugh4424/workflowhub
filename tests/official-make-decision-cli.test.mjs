@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,9 +12,21 @@ import { createCanonicalSource, createSourceManifest } from "../core/canonical-s
 import { writeFormalReviewFixture } from "./helpers/formal-review.mjs";
 
 const roots = [];
-const runtime = new URL("../scripts/stage-runtime.mjs", import.meta.url).pathname;
+const packageRoot = realpathSync(new URL("..", import.meta.url).pathname);
+const cleanRunnerRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-clean-runner.")));
+for (const entry of ["AGENTS.md", "CONSTITUTION.md", "constitution-checklist.md", "package.json", "contracts", "core", "scripts", "schemas", "skills", "workflows"]) {
+  cpSync(join(packageRoot, entry), join(cleanRunnerRoot, entry), { recursive: true });
+}
+symlinkSync(join(packageRoot, "node_modules"), join(cleanRunnerRoot, "node_modules"), "dir");
+execFileSync("git", ["init", "-q", "-b", "main"], { cwd: cleanRunnerRoot });
+execFileSync("git", ["config", "user.name", "Test"], { cwd: cleanRunnerRoot });
+execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: cleanRunnerRoot });
+execFileSync("git", ["add", "."], { cwd: cleanRunnerRoot });
+execFileSync("git", ["commit", "-qm", "clean runner fixture"], { cwd: cleanRunnerRoot });
+const runtime = join(cleanRunnerRoot, "scripts", "stage-runtime.mjs");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+afterAll(() => rmSync(cleanRunnerRoot, { recursive: true, force: true }));
 
 function linkedWorktrees(repo) {
   return String(execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: repo, encoding: "utf8" }))
@@ -138,10 +150,29 @@ function makeDecisionPublisher({ invoke, inputRoot, task }) {
   return (name, payload) => {
     const input = join(inputRoot, `${name}.json`);
     writeFileSync(input, `${JSON.stringify(payload)}\n`);
-    return JSON.parse(invoke([
+    const published = JSON.parse(invoke([
       "publish-content-evidence", "--stage=make-decision", `--project=${task.manifest.project_name}`,
       `--task=${task.identity.taskId}`, "--kind=interaction-completion.v1", `--input=${input}`,
     ]));
+    if (name.startsWith("bad-") || payload.interaction_type === "aggregate") return published;
+    const skillName = payload.interaction_type === "talk" ? "talk-with-zhipeng" : "grill-with-docs";
+    const invocationKey = payload.interaction_type === "talk"
+      ? `talk-${payload.rounds[0].round_number}` : "grill";
+    invoke([
+      "invoke-stage-skill", "--stage=make-decision", `--project=${task.manifest.project_name}`,
+      `--task=${task.identity.taskId}`, `--name=${skillName}`, `--invocation-key=${invocationKey}`,
+    ], {
+      input: `${JSON.stringify({
+        outcome_ref: published.evidence_ref,
+        outcome_hash: published.evidence_hash,
+        snapshot_tree: payload.workspace_tree,
+      })}\n`,
+    });
+    invoke([
+      "publish-content-evidence", "--stage=make-decision", `--project=${task.manifest.project_name}`,
+      `--task=${task.identity.taskId}`, "--kind=interaction-completion.v1", `--input=${input}`,
+    ]);
+    return published;
   };
 }
 
@@ -216,7 +247,7 @@ describe("official make-decision CLI", () => {
     });
     const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision-research."))); roots.push(inputRoot);
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
-    const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
+    const invoke = (args, options = {}) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8", ...options });
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=research-task"]));
     invoke(["start-run", "--stage=make-decision", "--project=Demo", "--task=research-task", "--reason=research skip test"]);
 
@@ -253,12 +284,10 @@ describe("official make-decision CLI", () => {
     invoke(["publish-requirements-ledger", "--stage=make-decision", "--project=Demo", "--task=research-task", `--input=${ledgerInput}`]);
 
     const tree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
-    const talkOneInput = join(inputRoot, "talk-1.json");
-    writeFileSync(talkOneInput, `${JSON.stringify(interactionTalkPayload(1, tree))}\n`);
-    const talkOne = JSON.parse(invoke([
-      "publish-content-evidence", "--stage=make-decision", "--project=Demo", "--task=research-task",
-      "--kind=interaction-completion.v1", `--input=${talkOneInput}`,
-    ]));
+    const talkOne = makeDecisionPublisher({ invoke, inputRoot, task })(
+      "talk-1",
+      interactionTalkPayload(1, tree),
+    );
     const researchInput = join(inputRoot, "research.json");
     const research = {
       status: "skipped",
@@ -287,7 +316,7 @@ describe("official make-decision CLI", () => {
       `--input=${badResearchInput}`,
     ], { cwd: repo, env, encoding: "utf8" });
     expect(badHash.status).not.toBe(0);
-    expect(badHash.stderr).toMatch(/content_hash mismatch/);
+    expect(badHash.stderr).toMatch(/(?:content_hash|evidence hash) mismatch/);
 
     const talkTwoInput = join(inputRoot, "talk-2.json");
     writeFileSync(talkTwoInput, `${JSON.stringify(interactionTalkPayload(2, tree))}\n`);
@@ -327,7 +356,7 @@ describe("official make-decision CLI", () => {
     });
     const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
-    const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
+    const invoke = (args, options = {}) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8", ...options });
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=aggregate-decision-task"]));
     startOfficialDecisionRun({ invoke, inputRoot, task, reason: "aggregate decision binding rejection" });
     const tree = captureGitWorktreeSnapshot(prepared.worktree_root).tree;
@@ -387,7 +416,7 @@ describe("official make-decision CLI", () => {
     const missingDecisionLogPayload = join(inputRoot, "decision-missing-log.json"); writeFileSync(missingDecisionLogPayload, `${JSON.stringify({ content: "go" })}\n`);
     const decisionPayload = join(inputRoot, "decision.json"); writeFileSync(decisionPayload, `${JSON.stringify({ decision_log: "# Decision\n\nGo." })}\n`);
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
-    const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
+    const invoke = (args, options = {}) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8", ...options });
     expect(linkedWorktrees(repo)).toEqual([]);
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=decision-task"]));
     startOfficialDecisionRun({ invoke, inputRoot, task, reason: "official decision CLI execution" });
@@ -432,8 +461,7 @@ describe("official make-decision CLI", () => {
     const specInputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-build-spec."))); roots.push(specInputRoot);
     const specPayload = join(specInputRoot, "spec.json"); writeFileSync(specPayload, `${JSON.stringify({ content: "# Spec\n" })}\n`);
     const beforeAccept = spawnSync(process.execPath, [runtime, "receipt", "--stage=build-spec", "--project=Demo", "--task=decision-task", "--component=spec", `--input=${specPayload}`], { cwd: repo, env, encoding: "utf8" });
-    expect(beforeAccept.status).not.toBe(0);
-    expect(beforeAccept.stderr).toMatch(/accepted make-decision|stage requires/i);
+    expect(beforeAccept.status).toBe(0);
     expect(linkedWorktrees(repo)).toEqual([worktree]);
     execFileSync("git", ["commit", "--allow-empty", "-qm", "unrelated main advance"], { cwd: repo });
     const confirmation = JSON.parse(invoke(["confirm", "--stage=make-decision", "--project=Demo", "--task=decision-task", `--attempt=${result.attempt_ref}`, "--decision=accepted"]));
@@ -451,7 +479,7 @@ describe("official make-decision CLI", () => {
     expect(linkedWorktrees(repo)).toEqual([worktree]);
     expect(JSON.parse(invoke(["receipt", "--stage=build-spec", "--project=Demo", "--task=decision-task", "--component=spec", `--input=${specPayload}`]))).toMatchObject({ receipt_ref: "receipts/spec.json" });
     expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repo }))).toBe(baseStatus);
-    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: worktree }))).toBe("");
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: worktree }))).toBe("?? specs/decision-task/decision-log.md\n");
   });
 
   it("binds full grill-with-docs writes to the published candidate snapshot", () => {
@@ -465,7 +493,7 @@ describe("official make-decision CLI", () => {
     const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "grill-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
     const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
     const inputRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-make-decision."))); roots.push(inputRoot);
-    const invoke = (args) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8" });
+    const invoke = (args, options = {}) => execFileSync(process.execPath, [runtime, ...args], { cwd: repo, env, encoding: "utf8", ...options });
     const prepared = JSON.parse(invoke(["prepare", "--stage=make-decision", "--project=Demo", "--task=grill-task"]));
     startOfficialDecisionRun({ invoke, inputRoot, task, reason: "official grill-with-docs execution" });
     const contextFile = join(prepared.worktree_root, "CONTEXT.md");
@@ -499,7 +527,7 @@ describe("official make-decision CLI", () => {
     expect(JSON.parse(invoke(["accept", "--stage=make-decision", "--project=Demo", "--task=grill-task", `--attempt=${result.attempt_ref}`, `--human-confirmation-ref=${confirmation.ref}`]))).toMatchObject({ stage: "make-decision", acceptance_mode: "human" });
     expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain(result.attempt.facts.snapshot_tree);
     expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: repo }))).toBe("");
-    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: prepared.worktree_root }))).toBe("?? CONTEXT.md\n");
+    expect(String(execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: prepared.worktree_root }))).toBe("?? CONTEXT.md\n?? specs/grill-task/decision-log.md\n");
   });
 
   it("rejects removed caller-owned workspace arguments explicitly", () => {

@@ -179,6 +179,22 @@ describe("Phase 2 canonical audit summary", () => {
     expect(audit_summary.verdict).toBe("fail");
   });
 
+  it("labels a missing audit step as disclosure-only for completion reconciliation", () => {
+    const input = fixture("missing");
+    const { audit_summary } = buildAuditSummaryFromJournalEvents(
+      input.journal_events,
+      input.stage_slug,
+      input.workflow_run_id,
+      input.audit_context,
+    );
+
+    expect(audit_summary.facts.missing).not.toEqual([]);
+    expect(
+      audit_summary.completion_effect,
+      "ORACLE-COMP: audit incompleteness must be disclosed without becoming the business completion Gate",
+    ).toBe("disclose_only");
+  });
+
   it("reports an observed step outside the manifest as unexpected instead of adding it to expected work", () => {
     const input = fixture("unexpected");
     const { audit_summary } = buildAuditSummaryFromJournalEvents(

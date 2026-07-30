@@ -114,9 +114,17 @@ describe("wh-review production CLI", () => {
       task: oldPhaseTask, kernel: { readReviewFlow: () => null }, identity: phaseA,
       previousResultRef: ref,
     })).toThrow(/CAS failed/);
-    expect(() => resolveReviewFlowHead({
-      task, kernel, identity, previousResultRef: "reviews/results/stale.json",
-    })).toThrow(/CAS|stale|head/i);
+    let staleReplay;
+    try {
+      resolveReviewFlowHead({
+        task, kernel, identity, previousResultRef: "reviews/results/stale.json",
+      });
+    } catch (error) {
+      staleReplay = error;
+    }
+    expect(staleReplay).toBeInstanceOf(Error);
+    expect(staleReplay?.code, "ORACLE-REVIEW: stale replay refs need an explicit failure classification").toBe("REPLAY_MISMATCH");
+    expect(staleReplay?.message).toMatch(/CAS|stale|head/i);
   });
 
   it("reconciles an already-recorded make-decision review action into its runtime step without another provider call", async () => {
@@ -370,7 +378,7 @@ describe("wh-review production CLI", () => {
       route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] },
       previousResult: prior, ledger, currentSnapshotTree: ledger.current_snapshot_tree,
       flow: { structural_full_reviews: 0 },
-    })).toEqual({ round: "full", reason: "structural_rework" });
+    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
   });
 
   it("treats a prior Phase quality fact as lineage for a new snapshot, not as the new flow head", async () => {

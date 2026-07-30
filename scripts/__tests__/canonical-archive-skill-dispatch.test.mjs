@@ -26,5 +26,6 @@ it("dispatches the canonical git archive under a clean HOME", async () => {
   const result = await smokeLocalSkillDispatch(artifact);
   expect(result).toHaveLength(5);
   expect(result.every(item => item.dispatch_count > 0)).toBe(true);
+  expect(result.every(item => item.authenticated_outcome_count === item.dispatch_count)).toBe(true);
   expect(fs.existsSync(path.join(artifact, ".git"))).toBe(false);
 }, 15_000);

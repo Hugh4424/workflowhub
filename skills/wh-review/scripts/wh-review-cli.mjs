@@ -63,17 +63,22 @@ export function reviewFlowIdentity({ kernel, assertedWorkflowRunId, stage, revie
 }
 
 export function resolveReviewFlowHead({ task, kernel, identity, previousResultRef } = {}) {
+  const replayMismatch = (message) => {
+    const error = new Error(`REPLAY_MISMATCH: ${message}`);
+    error.code = "REPLAY_MISMATCH";
+    return error;
+  };
   const flow = kernel.readReviewFlow(identity);
   const headRef = flow?.head_result_ref ?? null;
   if (flow === null && previousResultRef !== undefined && identity.snapshot_tree !== undefined) {
     const prior = previousResult(task, previousResultRef, identity.stage, identity.review_track);
     if (!sameReviewSubject(prior, identity) || prior.snapshot_tree === identity.snapshot_tree) {
-      throw new Error("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
+      throw replayMismatch("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
     }
     return { flow: null, prior };
   }
   if (previousResultRef !== undefined && previousResultRef !== headRef) {
-    throw new Error("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
+    throw replayMismatch("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
   }
   if (headRef !== null && reviewBindingInvalidated(task, headRef)) return { flow, prior: null };
   return {
@@ -364,6 +369,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     }
     const resolution = buildNonGateReviewResponseRecord({
       taskId: trusted.taskId, stage, reviewTrack, previousResult: prior,
+      previousAttempt: JSON.parse(trusted.task.readRecord(prior.attempt_ref)),
       previousResultSha256: prior.result_sha256, ledger: controllerLedger,
       currentSnapshotTree,
     });

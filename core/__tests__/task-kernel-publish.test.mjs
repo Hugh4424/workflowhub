@@ -17,6 +17,7 @@ import { hashAuditSummary } from "../audit-summary-carrier.mjs";
 import { assertAuthenticatedReviewHead } from "../review-flow-authority.mjs";
 import { captureGitWorktreeSnapshot } from "../git-worktree-snapshot.mjs";
 import { createCanonicalSource, createSourceManifest } from "../canonical-source.mjs";
+import { createStageSkillInvocation } from "../stage-skill-invocation.mjs";
 import {
   buildClassificationManifest,
   buildNonGateReviewResponseRecord,
@@ -296,6 +297,22 @@ function completeMakeDecisionTalk(kernel, candidate, started, roundNumber) {
     .digest("hex");
   const ref = `evidence/stage-content/${root}/interaction-completion.talk-${String(roundNumber).padStart(4, "0")}.json`;
   kernel.publishCanonicalRecord(ref, raw);
+  kernel.publishStageSkillInvocation(createStageSkillInvocation({
+    taskId: kernel.task.identity.taskId,
+    workflowRunId: started.run.workflow_run_id,
+    stage: "make-decision",
+    name: "talk-with-zhipeng",
+    invocationKey: `talk-${roundNumber}`,
+    declaredTrigger: "required",
+    bundleHash: "a".repeat(64),
+    status: "executed",
+    result: {
+      outcome: "done",
+      outcome_ref: ref,
+      outcome_hash: createHash("sha256").update(raw).digest("hex"),
+      snapshot_tree: snapshot.tree,
+    },
+  }));
   kernel.completeMakeDecisionInteractionPublication({
     evidence_ref: ref,
     evidence_hash: createHash("sha256").update(raw).digest("hex"),
@@ -900,7 +917,8 @@ describe("TaskKernel append-only publication", () => {
     const root = kernel.advanceReviewFlow(identity, { expected_head_ref: null, result_ref: rootRef });
     const resolution = {
       version: "wh-review-resolution.v1", task_id: "task-one", stage: "build-spec", review_track: null,
-      outcome: "recorded_non_gate_response", previous_result_ref: rootRef,
+      outcome: "recorded_non_gate_response", previous_verdict: "pass", provider_calls: 0,
+      previous_result_ref: rootRef,
       previous_result_sha256: root.result_sha256, previous_snapshot_tree: "a".repeat(40),
       snapshot_tree: "a".repeat(40), evidence_state: "verified",
       response_ledger: {}, response_ledger_sha256: "b".repeat(64), unverified_reason: null,
@@ -910,7 +928,7 @@ describe("TaskKernel append-only publication", () => {
       expected_head_ref: rootRef,
       expected_event_ref: root.event_ref,
       resolution: { ...resolution, snapshot_tree: "b".repeat(40) },
-    })).toThrow(/classification|manifest|machine/i);
+    })).toThrow(/classification|manifest|machine|previous_verdict/i);
     const recorded = kernel.recordReviewResolution(identity, {
       expected_head_ref: rootRef,
       expected_event_ref: root.event_ref,
@@ -950,6 +968,7 @@ describe("TaskKernel append-only publication", () => {
     const resolution = {
       version: "wh-review-resolution.v1", task_id: "task-one", stage: "make-decision",
       review_track: "direction", outcome: "recorded_non_gate_response",
+      previous_verdict: "pass", provider_calls: 0,
       previous_result_ref: resultRef, previous_result_sha256: semantic.result_sha256,
       previous_snapshot_tree: "5".repeat(40), snapshot_tree: "5".repeat(40),
       evidence_state: "verified", response_ledger: {},

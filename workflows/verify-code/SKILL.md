@@ -209,8 +209,19 @@ idempotent. Other attempts against a closed stage remain rejected.
    requires UI, high-risk, or multi-layer test routing. Ordinary backend work
    uses the accepted ACs, the fresh captured tests, and the per-AC evidence
    directly. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
-   frozen acceptance material. It must report tool, login-state reuse, and
-   cleanup completion.
+   frozen acceptance material. Publish its schema-validated
+   `browser-qa-evidence.v1` through the stage-content writer. The record binds
+   route/page/scenario, tool/engine/derived session, auth mode and login-state
+   reuse, performance, screenshot refs, test command/file/output, cleanup,
+   `engine_switch: no`, and the writer-owned Workspace snapshot. It must never
+   contain cookie, token, password, authorization, API-key, secret, or profile
+   content. For non-UI scope, an explicit `not_applicable` plus reason is enough;
+   browser QA is not a global Gate.
+   `facts.browser_qa` contains only the returned canonical `{ref, hash}`. The
+   consumer must resolve it with `verifyBrowserQaEvidenceBinding` (which uses
+   `verifyStageContentEvidence`) against the current verify run and Workspace
+   snapshot; copied browser payloads and stale or hash-mismatched refs are
+   rejected.
 6. Record the current build-code final `worktree + integration` review result
    or authenticated unavailable attempt when present. A missing, stale,
    wrong-task, or snapshot-mismatched review is an audit gap and is reported
@@ -390,3 +401,23 @@ affected scope, and mutually exclusive “repair first” (recommended) and
 adapter failures do not open this override. Accepted risk preserves the review
 verdict and does not replace verify-code's normal final confirmation, test
 evidence, acceptance evidence, or close authorization.
+
+## 完整验证记录
+
+正式验证固定记录九项：`current_materials`、`diff_scope`、`risk_tests`、
+`acceptance_criteria`、`tasks_completion`、`browser_qa`、
+`independent_review_resolution`、`core_gaps`、`human_handoff`。每项必须写
+`pass|fail|unknown|not_applicable`、证据引用和原因；适用浏览器 QA 时只接受
+`isolated-browser-qa` 的规范证据。
+
+代码、测试、每条 AC 或任务完成性为 `fail|unknown` 时阻断完成。独立审查不可用、
+修复记录或其他审计材料缺失只如实披露，不改变已经由代码、测试和 AC 得出的业务
+结果，也不自动触发完整二审。原审查保留；修复后追加聚焦验证。
+
+## 当前材料 revision
+
+验证读取当前四材料及最新 append-only `task-material-revision.v1`，但 revision
+是否齐全不决定代码、测试或 AC 是否完成。writer 注入身份并记录 parent、changed
+files、summary、source refs、content hashes；identity/revision ID/hashes 均由
+task-global writer 从认证 ArtifactDir 生成，caller 不得自报。旧 revision/accepted 只读，不触发
+reopen/reset/rebind/checkpoint 或自动 review。

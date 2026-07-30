@@ -135,8 +135,7 @@ fail-loud entry error.
 
 Declared runtime components: three ordered invocations of `talk-with-zhipeng`,
 one full `grill-with-docs` invocation, `decision-log`, `wh-review`, conditional
-`anysearch`, conditional `debate`, and the review lenses declared by the
-manifest. `intake-decision-review` is a blind direction lens owned and invoked
+`anysearch`, and conditional `debate`. `intake-decision-review` is a blind direction lens owned and invoked
 only through `wh-review`; it is not a second review runner.
 
 ## Inputs and outputs
@@ -377,3 +376,20 @@ choice. Wait for the real host reply, then use the official
 invalid-anchor/evidence, unavailable, timeout, or adapter failures never open
 this override. A risk acceptance does not change the review verdict, excuse a
 structural/audit failure, or replace make-decision's normal final confirmation.
+
+## 当前材料 revision
+
+`decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 可在同一任务更新。更新时追加
+`task-material-revision.v1`，记录 parent、changed files、summary、source refs 和
+content hashes；task identity、revision ID、changed files 与全部 content/source hashes
+均由 task-global writer 读取当前 ArtifactDir 后生成，caller 只提交 summary 和 source refs。
+旧 revision 与 accepted 字节只读。
+revision 缺失只披露，不触发 reopen、reset、rebind、checkpoint、自动审查或开发阻断。
+
+## 同任务透明恢复
+
+恢复时先用 `recover-run` 建立 append-only 新 run；它只返回
+`waiting_for_host_response`，不能伪报完成或接受。用 `invoke-stage-skill` 先生成
+host 请求，收到真实 host response 后才写 invocation。用 `verify-recovery`
+只读核对旧 run 的 ref/hash、当前 invocation 结果、完成状态、journal offset、
+确认和 accepted 归属；该命令不得补写确认或接受记录。

@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "58ef60f89943aee5221f854829675df6a881e18124c8e11a370d91072d987c57"
+      "sha256": "629889eacf6dfb8d9535332a1e82473139430803b3f8409dd6b8bb8031501ff9"
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "5ac6fbbab1c45fb619c9744d01b7cd9553aa5ff6124116d7436800fadec8e434"
+      "sha256": "5e37f6a63524273a25ce31268932e73648507da6b94cc2ef4c31bd16e0fdfabe"
     },
     {
       "path": "references/agent-browser.md",
@@ -52,7 +52,7 @@
       "kind": "user-provided-local-source",
       "path": "isolated-browser-qa",
       "license": "user-owned",
-      "snapshot_sha256": "ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef",
+      "snapshot_sha256": "aad3c1115050207ab42641391a155b7354914c05e093d4b6de1e381ab026bbe3",
       "authorization_basis": "user explicitly supplied local source and authorized migration into workflowhub",
       "reviewed_at": "2026-07-14",
       "review_outcome": "accepted"

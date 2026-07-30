@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "browser-qa-evidence.v1",
+  "oneOf": [
+    { "$ref": "#/$defs/notApplicable" },
+    { "$ref": "#/$defs/uiRun" }
+  ],
+  "$defs": {
+    "nonEmpty": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "notApplicable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicability", "reason"],
+      "properties": {
+        "applicability": { "const": "not_applicable" },
+        "reason": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "uiRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "result",
+        "route",
+        "page",
+        "scenario",
+        "tool",
+        "engine",
+        "session",
+        "auth",
+        "performance",
+        "screenshots",
+        "test",
+        "cleanup",
+        "engine_switch"
+      ],
+      "properties": {
+        "applicability": { "const": "ui" },
+        "result": { "enum": ["pass", "fail", "blocked", "unknown"] },
+        "route": { "$ref": "#/$defs/nonEmpty" },
+        "page": { "$ref": "#/$defs/nonEmpty" },
+        "scenario": { "$ref": "#/$defs/nonEmpty" },
+        "tool": { "$ref": "#/$defs/nonEmpty" },
+        "engine": { "$ref": "#/$defs/nonEmpty" },
+        "session": { "$ref": "#/$defs/nonEmpty" },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "login_state_reused"],
+          "properties": {
+            "mode": { "enum": ["reused", "fresh", "none"] },
+            "login_state_reused": { "type": "boolean" }
+          }
+        },
+        "performance": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "metrics"],
+              "properties": {
+                "status": { "const": "measured" },
+                "metrics": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "type": ["number", "string"]
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": { "const": "not_measured" },
+                "reason": { "$ref": "#/$defs/nonEmpty" }
+              }
+            }
+            ,
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": { "const": "not_applicable" },
+                "reason": { "$ref": "#/$defs/nonEmpty" }
+              }
+            }
+          ]
+        },
+        "screenshots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ref", "hash"],
+            "properties": {
+              "ref": { "$ref": "#/$defs/nonEmpty" },
+              "hash": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "test": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["command", "file", "output_ref", "output_hash", "exit_code"],
+          "properties": {
+            "command": { "$ref": "#/$defs/nonEmpty" },
+            "file": { "$ref": "#/$defs/nonEmpty" },
+            "output_ref": { "$ref": "#/$defs/nonEmpty" },
+            "output_hash": { "$ref": "#/$defs/sha256" },
+            "exit_code": { "type": "integer" }
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "app_service_running"],
+          "properties": {
+            "status": { "const": "completed" },
+            "app_service_running": { "const": true }
+          }
+        },
+        "engine_switch": { "const": "no" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "result": { "const": "pass" } }, "required": ["result"] },
+          "then": { "properties": { "test": { "properties": { "exit_code": { "const": 0 } } } } }
+        },
+        {
+          "if": { "properties": { "result": { "const": "fail" } }, "required": ["result"] },
+          "then": { "properties": { "test": { "properties": { "exit_code": { "not": { "const": 0 } } } } } }
+        },
+        {
+          "if": { "properties": { "result": { "enum": ["blocked", "unknown"] } }, "required": ["result"] },
+          "then": { "properties": { "test": { "properties": { "exit_code": { "not": { "const": 0 } } } } } }
+        },
+        {
+          "if": { "properties": { "auth": { "properties": { "mode": { "const": "reused" } }, "required": ["mode"] } }, "required": ["auth"] },
+          "then": { "properties": { "auth": { "properties": { "login_state_reused": { "const": true } } } } }
+        },
+        {
+          "if": { "properties": { "auth": { "properties": { "mode": { "enum": ["fresh", "none"] } }, "required": ["mode"] } }, "required": ["auth"] },
+          "then": { "properties": { "auth": { "properties": { "login_state_reused": { "const": false } } } } }
+        }
+      ]
+    }
+  }
+}

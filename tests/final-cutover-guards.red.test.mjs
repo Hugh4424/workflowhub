@@ -177,6 +177,10 @@ ${task("T002", "contract GREEN", 0, "T001")}
       stage,
       workflowRunId,
       identity: { taskId: "task" },
+      readCompletionInvocationFacts: () => ({
+        declaredComponents: [],
+        invocationFacts: [],
+      }),
       readReceipt: (ref) => ({
         value: values[ref],
         sha256: stage === "build-spec" && ref === "receipts/spec.json" ? canonicalHash(values[ref]) : sha,
@@ -185,7 +189,6 @@ ${task("T002", "contract GREEN", 0, "T001")}
         value: values[ref],
         sha256: stage === "build-spec" && ref === "receipts/spec.json" ? canonicalHash(values[ref]) : sha,
       }),
-      readEvidence: (ref) => ({ bytes: values[ref] ?? "# Decision fixture\n", sha256: values[ref]?.decision_hash ?? sha }),
       readEvidence: (ref) => ({ value: values[ref], sha256: values[`${ref}:sha256`] ?? sha }),
       readAuthenticatedReviewFlow: (subject) => {
         const entry = Object.entries(values).find(([ref, value]) => ref.startsWith("reviews/results/")
@@ -684,8 +687,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
     expect(result).toMatchObject({
       facts: { review: { status: "unavailable" } },
-      missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable/i)]),
     });
+    expect(result.missing_items.join("\n")).not.toMatch(/review unavailable/i);
     expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=pass/i);
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
     expect(result.reason).toMatch(/snapshot/i);
@@ -832,7 +835,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       "reviews/results/review.json": reviewReceipt(stage),
     };
     const worker = workerFor(stage, values);
-    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef } })).rejects.toThrow(/same.*snapshot|snapshot.*tree/i);
+    await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef } })).rejects.toThrow(/same.*snapshot|snapshot.*tree|final current snapshot/i);
   });
 
   it("rejects a Phase review as the final build-code review", async () => {
@@ -912,7 +915,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         expect.stringMatching(/snapshot/i),
       ]),
     });
-    expect(result.missing_items).toHaveLength(4);
+    expect(result.missing_items).toHaveLength(5);
   });
 
   it("rejects acceptance evidence without stable criterion identity and schema", async () => {
