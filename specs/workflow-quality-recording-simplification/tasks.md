@@ -1031,14 +1031,14 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — not reviewed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：未修改业务代码；按正式 build-code integration 入口提交当前 snapshot、fresh focused tests 与现有 Phase 历史。
+- **executed_commands**：`wh-review-cli.mjs run` → exit 0；provider dispatch 前返回 canonical `unavailable`，未重试、未跑全量测试。
+- **evidence_refs**：`reviews/attempts/5909ee66-5ae3-4ac2-b386-77a12f29136e/attempt.json`；`reviews/reports/5909ee66-5ae3-4ac2-b386-77a12f29136e.md`；fresh tests `receipts/build-tests.json`、`evidence/build-tests.output`。
+- **covered_ac**：AC-05、AC-06、AC-13、AC-14、AC-16。
+- **review_fact**：正式结果为 `unavailable`：历史实施发生在 canonical Phase trace 上线前，缺少至少一个 Phase map trace；0 provider dispatch。该审计缺口如实披露，不改写为 pass，也不作为代码、测试或 AC 完成 Gate。
+- **completed_at**：2026-07-30。
 
 ### Verify
 
