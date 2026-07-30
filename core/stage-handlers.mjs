@@ -583,7 +583,10 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   if (attempt.terminal_status !== "unavailable" || !attempt.error) throw new Error("review attempt ref must describe an unavailable review");
   if (!SHA256.test(item.evidence.sha256)) throw new Error("review unavailable attempt hash must be sha256");
   if (expectedTrack !== undefined && attempt.review_track !== expectedTrack) throw new Error(`review must use wh-review ${expectedTrack} track`);
-  if (attempt.provider_attempts.length === 0) throw new Error("review unavailable attempt must contain provider attempts");
+  if (attempt.provider_attempts.length === 0
+      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(attempt.error.code)) {
+    throw new Error("review unavailable attempt must contain provider attempts");
+  }
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
     let output = null;

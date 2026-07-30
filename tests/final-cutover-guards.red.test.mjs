@@ -912,6 +912,63 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ facts: { review: { subject_kind: "worktree", phase_id: null, review_scope: "integration" } } });
   });
 
+  it("consumes a canonical pre-dispatch unavailable integration review without inventing provider attempts", async () => {
+    const stage = "build-code";
+    const attemptRef = "reviews/attempts/material-incomplete/attempt.json";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "material-incomplete", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
+      },
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: createHash("sha256").update(values[ref]).digest("hex") })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: attemptRef, audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).resolves.toMatchObject({
+      facts: { review: { status: "unavailable", error: { code: "MATERIAL_INCOMPLETE" } } },
+      missing_items: [expect.stringMatching(/review unavailable: MATERIAL_INCOMPLETE/i)],
+    });
+  });
+
+  it("rejects an empty-provider unavailable attempt that is not a material preflight fact", async () => {
+    const stage = "build-code", attemptRef = "reviews/attempts/false-predispatch/attempt.json";
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "false-predispatch", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "PROVIDER_UNAVAILABLE", message: "claimed provider failure without an attempt" },
+      },
+    };
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: attemptRef, audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [] },
+    })).rejects.toThrow(/must contain provider attempts/i);
+  });
+
   it("rejects verify-code when the accepted build has legacy review facts without scope", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),

@@ -22,7 +22,7 @@
 - **Target environment**：macOS 本地 WorkflowHub，可由不同宿主提供 `hostInvoke`。
 - **Project type**：可搬运的 AI 开发工作流编排工具。
 - **Performance goals**：同一 review subject 最多一次 initial provider dispatch；普通修复 provider 调用数为 0。
-- **Scale / scope**：五阶段、21 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
+- **Scale / scope**：五阶段、23 个 Task、3 个窄新 schema 和 1 个窄 invocation writer。
 - **Relevant ADR / context**：`CONSTITUTION.md`、`CONTEXT.md`、处理组 3 问题 9/15。
 - **Current unresolved fact**：make-decision 与 build-spec 已正式接受；原 `revise_required` review 及其 resolution 均保留。build-spec runtime、completion audit、可恢复 attempt 与 current-revision checkpoint 已完成聚焦验证。当前只剩 build-plan 正式审查/确认、build-code 的 T013 唯一 integration review，以及 verify-code；不得为 provider warning 重跑 review 或改全局配置。
 
@@ -395,7 +395,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ## 14. Implementation Order
 
-`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T016 → T017 → T018 → T019 → T020 → T021 → T015 → T013`。
+`T001 → T002 → T003 → T004 → {T005→T006, T007→T008, T009→T010}; {T004,T008,T010} → T011; {T006,T008,T010,T011} → T012 → T014 → T016 → T017 → T018 → T019 → T020 → T021 → T015 → T022 → T023 → T013`。
 
 ## Phase 1：真实 invocation
 
@@ -752,5 +752,5 @@ fail-loud，并保留所有既有事实。
 | 4 Materials | T007,T008 | Phase 2,3 | ORACLE-MAT GREEN | T013 |
 | 5 Browser | T009,T010 | Phase 2 | ORACLE-BQA GREEN | T013 |
 | 6 Verify | T011,T012 | Phase 3,4,5 | ORACLE-VERIFY GREEN | T013 |
-| 7 Closure | T014,T016,T017,T015,T013 | Phase 6,8 | facts→recovery RED/GREEN→formal recovery→review | T013 only |
+| 7 Closure | T014,T016,T017,T015,T022,T023,T013 | Phase 6,8 | facts→recovery→pre-dispatch unavailable RED/GREEN→review | T013 only |
 | 8 Resolution replacement | T018,T019,T020,T021 | Phase 7 recovery fix | two RED/GREEN pairs before T015 | focused verification only |

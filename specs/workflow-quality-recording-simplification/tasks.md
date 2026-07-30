@@ -38,7 +38,7 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 - **Phase**：Phase 1：真实 invocation
 - **goal**：复现未 hostInvoke 仍被标记 executed/complete。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-001"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-001"}]`
 - **输入**：五阶段声明与现有 runtime。
 - **依赖**：N/A — first task
 - **并行**：否 — RED/GREEN 串行
@@ -76,7 +76,7 @@ T013 做唯一 integration review；T014 保存全量与聚焦事实；T016/T017
 - **Phase**：Phase 1：真实 invocation
 - **goal**：真实 dispatch 产生 runtime-owned fact，caller 不能伪造。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-001"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-INV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-001"}]`
 - **输入**：T001 RED。
 - **依赖**：T001
 - **并行**：否 — 消费 T001
@@ -147,7 +147,7 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 - **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
 - **goal**：复现内容齐全但调用缺失仍假绿，以及 audit missing 被阻断。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-002"}]`
 - **输入**：T002 invocation facts。
 - **依赖**：T002
 - **并行**：否 — RED/GREEN 串行
@@ -185,7 +185,7 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 - **Phase**：Phase 2：completion reconcile 与 audit 非 Gate
 - **goal**：统一核对 invocation/business/audit 并输出真实 completion。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-COMP-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-002"}]`
 - **输入**：T003 RED。
 - **依赖**：T003
 - **并行**：否 — 消费 T003
@@ -256,7 +256,7 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 - **Phase**：Phase 3：review 生命周期与处理组 3
 - **goal**：复现重复 provider、强制二审、材料不全仍调用和 replay 误聚合。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-003"}]`
 - **输入**：现有 review controller/runner。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -294,7 +294,7 @@ invocation 或 audit 缺失被用作开发进入 Gate。
 - **Phase**：Phase 3：review 生命周期与处理组 3
 - **goal**：同 subject 单 initial，修复追加 resolution，replay 精确验证。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-003"}]`
 - **输入**：T005 RED。
 - **依赖**：T005
 - **并行**：否 — 消费 T005
@@ -366,7 +366,7 @@ A-004；处理组 3 问题 9/15。
 - **Phase**：Phase 4：四材料 current revision
 - **goal**：复现四材料更新被旧 accepted/hash/checkpoint 阻断。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-004"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-004"}]`
 - **输入**：当前材料和 continuation 行为。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -404,7 +404,7 @@ A-004；处理组 3 问题 9/15。
 - **Phase**：Phase 4：四材料 current revision
 - **goal**：四材料和 requirements ledger 支持 append-only revision。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-004"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-004"}]`
 - **输入**：T007 RED、T006 review lifecycle。
 - **依赖**：T007、T006
 - **并行**：否 — 消费 T007
@@ -476,7 +476,7 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 - **Phase**：Phase 5：浏览器 QA 证据
 - **goal**：复现缺页面、auth、性能、截图、命令或 cleanup 仍通过。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-005"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-005"}]`
 - **输入**：现有 isolated-browser-qa 合同。
 - **依赖**：T004
 - **并行**：否 — RED/GREEN 串行
@@ -514,7 +514,7 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 - **Phase**：Phase 5：浏览器 QA 证据
 - **goal**：UI AC 产出可定位、无凭据泄露的证据。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-005"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-BQA-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-005"}]`
 - **输入**：T009 RED。
 - **依赖**：T009
 - **并行**：否 — 消费 T009
@@ -585,7 +585,7 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 - **Phase**：Phase 6：verify-code 深化与五阶段接线
 - **goal**：复现缺 diff、测试、AC、tasks、UI 或调用仍假绿。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-002"}]`
 - **输入**：Phase 1–5 facts。
 - **依赖**：T004、T008、T010
 - **并行**：否 — RED/GREEN 串行
@@ -623,7 +623,7 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 - **Phase**：Phase 6：verify-code 深化与五阶段接线
 - **goal**：五阶段真实对账；verify 每项给状态、证据和原因。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-002"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-VER-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-002"}]`
 - **输入**：T011 RED、T006/T008/T010 GREEN。
 - **依赖**：T011、T006、T008、T010
 - **并行**：否 — 消费 T011
@@ -702,7 +702,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：保存所有已执行全仓检查的真实结果，以代码、风险相关聚焦测试和逐 AC 事实判断完成；全量或审计缺失只披露、不作 Gate。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"AC-16"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T014"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"AC-16"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T014"}]`
 - **输入**：T001–T012 与全部 resolution。
 - **依赖**：T006、T008、T010、T012
 - **并行**：否 — 唯一全量
@@ -741,7 +741,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：用可证伪测试固定 recover-run 专用 recovery workspace 合同，同时证明普通 prepare 仍严格。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T016"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T016"}]`
 - **输入**：T014 保存的真实 blocker 与旧 run recovery source。
 - **依赖**：T014
 - **并行**：否 — T017 的严格 RED
@@ -779,7 +779,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：实现 recover-run 专用、kernel 派生且 fail-closed 的 recovery workspace，解除正式恢复 blocker。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T017"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T017"}]`
 - **输入**：T016 RED 与现有 TaskHandle/Workspace/kernel 身份。
 - **依赖**：T016
 - **并行**：否 — 同命令最小 GREEN
@@ -817,7 +817,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：旧 run 保持 incomplete，新 run 真实执行声明组件。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T015"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REC-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T015"}]`
 - **输入**：run-0005 Step 1–10、T021 GREEN 与旧 run recovery source；完成后等待真实用户确认。
 - **依赖**：T021
 - **并行**：否 — 单一正式 run
@@ -855,7 +855,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：先证明 post-Grill 材料整改会被旧 receipt/Grill 树错误阻断。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-006"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T018"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-006"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T018"}]`
 - **输入**：run-0005 Step 10、原 Grill、current material revision、detail finding resolution。
 - **依赖**：T017
 - **并行**：否 — 单一 active make-decision run
@@ -893,7 +893,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：让 post-Grill 材料整改继续同一 run，不伪造旧 Grill，也不重跑 Talk/full review。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-006"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T019"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-006"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T019"}]`
 - **输入**：T018 RED、run-0005 Step 10、原 Grill、current material revision、detail finding resolution。
 - **依赖**：T018
 - **并行**：否 — 单一 active make-decision run
@@ -931,7 +931,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 8：resolution 完成边界与一次性 revalidation replacement
 - **goal**：证明 make-decision structural resolution 已写入后错误调用 unsupported reset，并证明当前合同拒绝代码修复后的唯一 replacement。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-007"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T020"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-007"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T020"}]`
 - **输入**：T019、真实 detail resolution post-write error、`grill-revalidation-0001`。
 - **依赖**：T019
 - **并行**：否 — 同一 runtime 边界
@@ -969,7 +969,7 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **Phase**：Phase 8：resolution 完成边界与一次性 revalidation replacement
 - **goal**：make-decision resolution 干净完成；修复 tree 只允许一个可信 `0002`，不开放循环。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-007"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"T021"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-MAT-007"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T021"}]`
 - **输入**：T020 RED。
 - **依赖**：T020
 - **并行**：否 — 同一最小 GREEN
@@ -1001,15 +1001,91 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 - **review_fact**：独立 Phase review 原 verdict=`revise_required` 保留；两项 finding 为自动 reset 仍触发重复审查、缺少 `0002` invocation/stale aggregate 负例。修复后分别由 TaskKernel 5/5 和 revalidation 6/6 聚焦测试验证；未覆盖旧 verdict，未强制二审。
 - **completed_at**：2026-07-30。
 
+#### T022: RED：pre-dispatch unavailable 被误当成 provider failure
+
+- **ID**：T022
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：证明合法 `MATERIAL_INCOMPLETE` 在 provider dispatch 前产生 0 provider attempts 时被 build-code 错误拒绝。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-003"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T022"}]`
+- **输入**：T015 accepted lineage、T013 首次 pre-dispatch unavailable attempt。
+- **依赖**：T015
+- **并行**：否 — T023 的严格 RED
+- **FR**：FR-COMP-002、FR-REV-003、FR-REV-005
+- **AC**：AC-04、AC-14
+- **动作**：构造 canonical integration unavailable attempt，`provider_attempts=[]` 且 error=`MATERIAL_INCOMPLETE`，证明 official handler 误报 `must contain provider attempts`。
+- **精确文件**：`tests/final-cutover-guards.red.test.mjs`
+- **boundary**：files: `tests/final-cutover-guards.red.test.mjs`; symbols/regions: pre-dispatch unavailable regression only.
+- **输出**：可证伪 RED。
+- **Knowledge**：Q1/Q2；审计缺失不得授权，也不得阻断。
+- **verification_role**：RED
+- **paired_task**：T023
+- **gate_cmd**：`npx vitest run tests/final-cutover-guards.red.test.mjs -t "consumes a canonical pre-dispatch unavailable integration review|rejects an empty-provider unavailable attempt"`
+- **expected_exit**：修复前目标用例失败；非 preflight 空 attempt 始终拒绝。
+- **oracle**：ORACLE-UNAVAILABLE-PREFLIGHT — 合法材料预检 unavailable 可消费，伪造 provider failure 仍失败。
+- **evidence_path**：`apply/evidence/T022-unavailable-preflight-red.stdout`
+- **STOP**：伪造 provider attempt、pass 或放宽 schema/ref/hash/scope/tree/flow 认证。
+- **recovery**：只修改 unavailable 真实性分类。
+- **task risk**：错误码白名单过宽。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：在 `tests/final-cutover-guards.red.test.mjs` 新增合法 pre-dispatch unavailable 和伪造 provider failure 两个反例。
+- **executed_commands**：同 T023 聚焦命令；修复前合法用例命中 `review unavailable attempt must contain provider attempts`。
+- **evidence_refs**：T013 canonical attempt `reviews/attempts/5909ee66-5ae3-4ac2-b386-77a12f29136e/attempt.json`；聚焦测试输出由 T023 记录。
+- **covered_ac**：AC-04、AC-14。
+- **review_fact**：T023 独立聚焦审查 `PASS`，确认 RED 命中真实合同冲突。
+- **completed_at**：2026-07-30。
+
+#### T023: GREEN：只放行真实材料预检 unavailable
+
+- **ID**：T023
+- **Phase**：Phase 7：一次审查、一次全量、透明恢复
+- **goal**：合法 pre-dispatch unavailable 如实进入完成记录，其他空 provider attempts 仍 fail-loud。
+- **design_state**：ready
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-003"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"T023"}]`
+- **输入**：T022 RED。
+- **依赖**：T022
+- **并行**：否 — 消费 T022
+- **FR**：FR-COMP-002、FR-REV-003、FR-REV-005
+- **AC**：AC-04、AC-14
+- **动作**：`verifyUnavailableReview` 仅允许 wh-review 材料预检错误码在 0 provider attempts 时继续；保留所有 canonical 结构、flow、scope、tree、hash 和非 preflight provider 认证。
+- **精确文件**：`core/stage-handlers.mjs`、`tests/final-cutover-guards.red.test.mjs`
+- **boundary**：files: `core/stage-handlers.mjs`, `tests/final-cutover-guards.red.test.mjs`; symbols/regions: `verifyUnavailableReview` and focused regression only.
+- **输出**：合法 unavailable 可消费；伪造 provider failure 明确拒绝。
+- **Knowledge**：F3/F4/F9、Q1/Q2/Q3。
+- **verification_role**：GREEN
+- **paired_task**：T022
+- **gate_cmd**：`npx vitest run tests/final-cutover-guards.red.test.mjs -t "consumes a canonical pre-dispatch unavailable integration review|rejects an empty-provider unavailable attempt"`
+- **expected_exit**：0，2 passed。
+- **oracle**：ORACLE-UNAVAILABLE-PREFLIGHT。
+- **evidence_path**：`apply/evidence/T023-unavailable-preflight-green.stdout`
+- **STOP**：把 unavailable 改成 pass、绕过认证或扩到 provider/runtime 重构。
+- **recovery**：保留原 attempt 和原错误事实。
+- **task risk**：错误分类与 provider 执行失败混淆。
+
+##### 执行状态填写区（唯一完成权威）
+
+- [x] **任务完成**
+- **status**：`complete`
+- **actual_changes**：`core/stage-handlers.mjs` 仅允许 `MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN` 的 canonical pre-dispatch unavailable 使用空 provider attempts；`tests/final-cutover-guards.red.test.mjs` 增加正反例。
+- **executed_commands**：`npx vitest run tests/final-cutover-guards.red.test.mjs -t "consumes a canonical pre-dispatch unavailable integration review|rejects an empty-provider unavailable attempt"` → exit 0，2 passed、56 skipped；`git diff --check` → exit 0。
+- **evidence_refs**：T013 canonical attempt `reviews/attempts/5909ee66-5ae3-4ac2-b386-77a12f29136e/attempt.json`；聚焦测试控制台输出；当前 Git diff。
+- **covered_ac**：AC-04、AC-14。
+- **review_fact**：独立审查 `PASS`，无阻断 finding；schema、task/stage、flow head、ref/hash、scope、tree 认证均保留，非 preflight 空 provider attempts 仍失败。
+- **completed_at**：2026-07-30。
+
 #### T013: 唯一独立 integration review
 
 - **ID**：T013
 - **Phase**：Phase 7：一次审查、一次全量、透明恢复
 - **goal**：异源审查完整候选且不为 pass 重试。
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"de83174d5668c9bac8c4bffb168adc88facceca5baaf9d0114d6465b8ce23184","id":"DEC-003"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"FR-REV-001"},{"artifact_kind":"plan","ref":"specs/workflow-quality-recording-simplification/plan.md","hash":"6654a32221a8065910bbd0f9cff1cf0e2ac90048b79a1c293a384d4f66258137","id":"DEC-003"}]`
 - **输入**：T015 恢复后的 accepted lineage、正式 build-spec/build-plan/build-code Phase facts、fresh tests、当前 diff 和四材料。
-- **依赖**：T015，以及恢复后正式 accepted build-plan/build-code lineage
+- **依赖**：T023，以及恢复后正式 accepted build-plan/build-code lineage
 - **并行**：否 — 唯一 review
 - **FR**：FR-REV-001、FR-REV-002、FR-REV-003、FR-VER-003
 - **AC**：AC-05、AC-06、AC-13、AC-14、AC-16
