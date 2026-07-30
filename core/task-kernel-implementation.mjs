@@ -1397,11 +1397,16 @@ export function buildTaskKernel(taskHandle, {
     let pointer = null;
     if (pointerRaw !== undefined) {
       pointer = parseJson(pointerRaw, "requirements current pointer");
+      const boundCoverageRaw = typeof pointer.coverage_ref === "string"
+        ? readOptionalRecord(task, pointer.coverage_ref)
+        : undefined;
       if (pointer.schema_version !== "requirements-current.v1"
           || pointer.task_id !== task.identity.taskId
           || !Number.isInteger(pointer.generation) || pointer.generation < 1
           || typeof pointer.ledger_ref !== "string" || !HASH.test(pointer.ledger_hash ?? "")
           || !HASH.test(pointer.content_hash ?? "")
+          || typeof pointer.coverage_ref !== "string" || !HASH.test(pointer.coverage_hash ?? "")
+          || boundCoverageRaw === undefined || hash(boundCoverageRaw) !== pointer.coverage_hash
           || hash(task.readRecord(pointer.ledger_ref)) !== pointer.ledger_hash) {
         throw new Error("requirements current pointer is invalid or misbound");
       }
@@ -1426,6 +1431,18 @@ export function buildTaskKernel(taskHandle, {
     }
     const parentRef = pointer?.ledger_ref ?? null;
     if (pointer?.content_hash === hash(ledgerRaw)) {
+      if (name === "make-decision") {
+        const evidence = {
+          kind: "requirements_ledger",
+          uri_or_path: pointer.ledger_ref,
+          content_hash: pointer.ledger_hash,
+        };
+        completeMakeDecisionStageStep({
+          step_id: 2,
+          entry_evidence: evidence,
+          completion_evidence: evidence,
+        });
+      }
       return deepFreeze({
         ledger_ref: pointer.ledger_ref, ledger_hash: pointer.ledger_hash,
         coverage_ref: pointer.coverage_ref, coverage_hash: pointer.coverage_hash,

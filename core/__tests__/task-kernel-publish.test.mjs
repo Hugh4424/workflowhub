@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -2091,6 +2091,105 @@ describe("TaskKernel append-only publication", () => {
         content_hash: "b".repeat(64),
       },
     })).toThrow(/requires completed step 3/i);
+  });
+
+  it("completes make-decision step 2 when a new run idempotently reuses the current requirements ledger", () => {
+    const { task, candidate, kernel } = fixture();
+    startMakeDecisionThrough(kernel, candidate, 2);
+    const pointerRef = "requirements/current.json";
+    const pointer = JSON.parse(task.readRecord(pointerRef));
+    const pointerBytes = task.readRecord(pointerRef);
+    const ledgerBytes = task.readRecord(pointer.ledger_ref);
+    const coverageBytes = task.readRecord(pointer.coverage_ref);
+    const revisionsRoot = join(task.taskPath, "requirements", "revisions");
+    const revisionsBefore = existsSync(revisionsRoot) ? readdirSync(revisionsRoot).sort() : [];
+    const sourceManifest = createSourceManifest({
+      canonical_source: createCanonicalSource({
+        source_type: "offline_fixture",
+        source_id: "task-kernel-review-flow",
+        revision: "r1",
+        requirements: ["R1"],
+      }),
+      atoms: [{
+        requirement_id: "R1",
+        text: "Review dispatch must follow the exact make-decision predecessor.",
+        owner: "product",
+        authority: "test",
+        derived_from: [],
+        supersedes: [],
+        status: "accepted",
+        stale: false,
+      }],
+    }).manifest;
+    const secondRun = kernel.startStageRun("make-decision", { reason: "retry with unchanged requirements" });
+
+    const reused = kernel.publishRequirementsLedger("make-decision", {
+      source_manifest: sourceManifest,
+      mappings: {
+        R1: {
+          decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+          artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+          acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+        },
+      },
+    });
+
+    expect(reused).toMatchObject({ idempotent: true, ledger_ref: pointer.ledger_ref });
+    expect(task.readRecord(pointerRef)).toBe(pointerBytes);
+    expect(task.readRecord(pointer.ledger_ref)).toBe(ledgerBytes);
+    expect(task.readRecord(pointer.coverage_ref)).toBe(coverageBytes);
+    expect(existsSync(revisionsRoot) ? readdirSync(revisionsRoot).sort() : []).toEqual(revisionsBefore);
+    expect(() => completeMakeDecisionTalk(kernel, candidate, secondRun, 1)).not.toThrow();
+  });
+
+  it("rejects idempotent requirements reuse when the current pointer coverage binding is missing", () => {
+    const { task, candidate, kernel } = fixture();
+    startMakeDecisionThrough(kernel, candidate, 2);
+    const pointer = JSON.parse(task.readRecord("requirements/current.json"));
+    rmSync(task.recordPath(pointer.coverage_ref));
+    const secondRun = kernel.startStageRun("make-decision", { reason: "retry with missing coverage binding" });
+    const sourceManifest = createSourceManifest({
+      canonical_source: createCanonicalSource({
+        source_type: "offline_fixture",
+        source_id: "task-kernel-review-flow",
+        revision: "r1",
+        requirements: ["R1"],
+      }),
+      atoms: [{
+        requirement_id: "R1",
+        text: "Review dispatch must follow the exact make-decision predecessor.",
+        owner: "product",
+        authority: "test",
+        derived_from: [],
+        supersedes: [],
+        status: "accepted",
+        stale: false,
+      }],
+    }).manifest;
+    let failure;
+    try {
+      kernel.publishRequirementsLedger("make-decision", {
+        source_manifest: sourceManifest,
+        mappings: {
+          R1: {
+            decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+            artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+            acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+          },
+        },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    const secondRunStep2Events = task.readRecord("journal.jsonl")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter((event) => event.workflow_run_id === secondRun.run.workflow_run_id && event.step_id === 2);
+
+    expect.soft(secondRunStep2Events).toEqual([]);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toMatch(/requirements current pointer.*invalid|misbound/i);
   });
 
   it("records a legacy review binding invalidation without changing the result", () => {
