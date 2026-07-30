@@ -323,6 +323,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const prepared = preflightStageSkills({ packageRoot: RUNNER_ROOT, stage: values.stage });
     const dependency = prepared.manifest.skills.find((item) => item.name === values.name);
     if (!dependency) throw new Error(`${values.stage}: undeclared skill ${values.name}`);
+    const invocationWorkspace = context.candidateWorkspace ?? context.workspace;
     const request = {
       schema_version: "host-invocation-request.v1",
       task_id: context.task.identity.taskId,
@@ -332,7 +333,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       invocation_key: values["invocation-key"],
       bundle_hash: prepared.payloads.get(values.name).bundle_hash,
       declared_trigger: dependency.trigger,
-      snapshot_tree: captureGitWorktreeSnapshot(context.candidateWorkspace.worktreeRoot).tree,
+      snapshot_tree: captureGitWorktreeSnapshot(invocationWorkspace.worktreeRoot).tree,
     };
     process.stdout.write(`${JSON.stringify(request)}\n`);
     const responseRaw = await new Promise((resolve, reject) => {

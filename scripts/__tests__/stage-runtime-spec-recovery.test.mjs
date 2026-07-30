@@ -412,6 +412,55 @@ afterAll(() => {
 });
 
 describe("build-spec prepublish receipt recovery", () => {
+  it("invokes a declared build-spec skill against the authenticated stage Workspace", () => {
+    const state = acceptedDecisionFixture();
+    const started = cli(state, [
+      "start-run",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      "--reason=build-spec-host-bridge",
+    ]);
+    expect(started.status, started.stderr).toBe(0);
+    const snapshotTree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const outcomeRaw = `${JSON.stringify({ snapshot_tree: snapshotTree, result: "specify completed" })}\n`;
+    state.kernel.publishCanonicalRecord("evidence/spec-specify-outcome.json", outcomeRaw);
+    const response = {
+      outcome_ref: "evidence/spec-specify-outcome.json",
+      outcome_hash: createHash("sha256").update(outcomeRaw).digest("hex"),
+      snapshot_tree: snapshotTree,
+    };
+
+    const invoked = spawnSync(process.execPath, [
+      runtime(),
+      "invoke-stage-skill",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      "--name=spec-specify",
+      "--invocation-key=default",
+    ], {
+      cwd: state.repo,
+      env: state.env,
+      input: `${JSON.stringify(response)}\n`,
+      encoding: "utf8",
+    });
+
+    expect(invoked.status, invoked.stderr).toBe(0);
+    const request = JSON.parse(invoked.stdout.split("\n")[0]);
+    expect(request).toMatchObject({
+      schema_version: "host-invocation-request.v1",
+      task_id: "spec-recovery",
+      stage: "build-spec",
+      workflow_run_id: started.json.run.workflow_run_id,
+      name: "spec-specify",
+      invocation_key: "default",
+      snapshot_tree: snapshotTree,
+    });
+    expect(state.kernel.readStageSkillInvocation("build-spec", "spec-specify", "default").fact)
+      .toMatchObject({ status: "executed", ...response });
+  });
+
   it("continues from the current spec revision while the accepted base remains immutable history", () => {
     const state = openRecoveryFixture();
     const baseRaw = state.task.readRecord("receipts/spec.json");
