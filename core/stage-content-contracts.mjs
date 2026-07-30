@@ -1288,6 +1288,99 @@ export function validatePlanTaskContract({ spec, plan, tasks, completionEvidence
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }
 
+export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
+  const errors = [];
+  const concreteFile = (value) => {
+    const path = String(value).trim();
+    return path !== ""
+      && !/^(?:N\/A|none|无|待定|TBD|TODO)$/i.test(path)
+      && !path.startsWith("/")
+      && !path.endsWith("/")
+      && !/[*?[\]{}]/.test(path)
+      && path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
+      && /[^/]/.test(path);
+  };
+  const presentCommand = (value) => {
+    const command = String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1").trim();
+    return command !== "" && !/^(?:N\/A|none|无|待定|TBD|TODO)$/i.test(command);
+  };
+  for (const [name, value] of Object.entries({ spec, plan, tasks })) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
+  }
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors) });
+
+  const parsedTasks = taskBlocks(tasks);
+  if (parsedTasks.length === 0) errors.push("tasks document has no task blocks");
+  const rows = parsedTasks.map((task, index) => {
+    const id = task.heading_id;
+    const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
+    const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+    const acs = identifiers(task.fields.AC ?? "", /\bAC-?\d+\b/g);
+    const files = new Set([
+      ...inlinePaths(task.fields["精确文件"]),
+      ...boundaryPaths(task.fields.boundary),
+    ].filter(concreteFile));
+    const plainFile = String(task.fields["精确文件"] ?? "").trim().replace(/^`|`$/g, "");
+    if (concreteFile(plainFile)) files.add(plainFile);
+    if (files.size === 0) errors.push(`${id ?? `task ${index + 1}`} must declare at least one exact file boundary`);
+    if (!presentCommand(task.fields.gate_cmd)) errors.push(`${id ?? `task ${index + 1}`} gate_cmd is missing`);
+    return {
+      id,
+      order: index,
+      heading: task.heading,
+      fields: task.fields,
+      dependencies,
+      frs,
+      acs,
+    };
+  });
+  const known = new Set(rows.map(({ id }) => id));
+  for (const row of rows) {
+    for (const dependency of row.dependencies) {
+      if (!known.has(dependency)) errors.push(`${row.id} has unknown dependency ${dependency}`);
+    }
+  }
+  if (cycleIn(rows)) errors.push("task dependency graph contains a cycle");
+
+  const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
+  const acceptedAcs = identifiers(spec, /\bAC-?\d+\b/g);
+  const referencedFrs = [...new Set(rows.flatMap(({ frs }) => frs))];
+  const referencedAcs = [...new Set(rows.flatMap(({ acs }) => acs))];
+  if (acceptedFrs.length === 0) errors.push("spec has no accepted FR");
+  if (acceptedAcs.length === 0) errors.push("spec has no accepted AC");
+  for (const id of acceptedFrs) if (!referencedFrs.includes(id)) errors.push(`accepted FR has no task coverage: ${id}`);
+  for (const id of referencedFrs) if (!acceptedFrs.includes(id)) errors.push(`task references unknown FR: ${id}`);
+  for (const id of acceptedAcs) if (!referencedAcs.includes(id)) errors.push(`accepted AC has no task coverage: ${id}`);
+  for (const id of referencedAcs) if (!acceptedAcs.includes(id)) errors.push(`task references unknown AC: ${id}`);
+
+  const roles = rows.map((row) => ({
+    ...row,
+    role: ["RED", "GREEN"].includes(row.fields.verification_role)
+      ? row.fields.verification_role
+      : nAWithReason(row.fields.verification_role, "(?:non-behavior|非行为变更)") ? "N/A"
+        : /\bRED\b/i.test(row.heading ?? "") ? "RED"
+          : /\bGREEN\b/i.test(row.heading ?? "") ? "GREEN" : null,
+  }));
+  for (const row of roles) {
+    if (row.role === null || row.role === "N/A") continue;
+    const pair = row.fields.paired_task
+      ? roles.find(({ id }) => id === row.fields.paired_task)
+      : roles.find((candidate) => candidate.role !== row.role
+        && (row.role === "RED"
+          ? candidate.dependencies.includes(row.id)
+          : row.dependencies.includes(candidate.id)));
+    const expected = row.role === "RED" ? "GREEN" : "RED";
+    const reciprocal = !row.fields.paired_task || pair?.fields.paired_task === row.id;
+    if (!pair || pair.role !== expected || !reciprocal) {
+      errors.push(`${row.id} behavior change must have a reciprocal ${expected} paired_task`);
+    } else if (row.role === "GREEN" && !row.dependencies.includes(pair.id)) {
+      errors.push(`${row.id} GREEN must depend on ${pair.id} RED`);
+    }
+  }
+
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+}
+
 export function buildPlanTaskContract({
   spec,
   plan,

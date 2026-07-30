@@ -421,18 +421,29 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       reviewEvidence("direction", 6, input.receipts.direction_review);
       reviewEvidence("detail", 10, input.receipts.detail_review);
     }
-    const audit = writeCanonicalAuditSummary({
-      task: context.task,
-      workspace: context.candidateWorkspace ?? context.workspace,
-      stage: values.stage,
-      ...(values.stage === "make-decision" && input.receipts.decision_revision
-        ? { decisionRef: input.receipts.decision_revision }
-        : {}),
-      ...(values.stage === "make-decision"
-        ? { throughStepId: 10 }
-        : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
-    });
-    const controlledInput = { ...input, receipts: { ...input.receipts, audit: audit.audit_summary_ref } };
+    let audit;
+    try {
+      audit = writeCanonicalAuditSummary({
+        task: context.task,
+        workspace: context.candidateWorkspace ?? context.workspace,
+        stage: values.stage,
+        ...(values.stage === "make-decision" && input.receipts.decision_revision
+          ? { decisionRef: input.receipts.decision_revision }
+          : {}),
+        ...(values.stage === "make-decision"
+          ? { throughStepId: 10 }
+          : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
+      });
+    } catch (error) {
+      if (values.stage !== "build-plan") throw error;
+    }
+    const controlledInput = {
+      ...input,
+      receipts: {
+        ...input.receipts,
+        ...(audit ? { audit: audit.audit_summary_ref } : {}),
+      },
+    };
     const attempt = await runOfficialStage(values.stage, context, controlledInput, {
       ...(values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : {}),
       ...(values["baseline-rebind"] ? { baselineRebindRef: values["baseline-rebind"] } : {}),

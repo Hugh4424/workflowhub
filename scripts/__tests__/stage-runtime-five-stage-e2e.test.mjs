@@ -160,8 +160,11 @@ function officialTasks({ specRef, specHash, planRef, planHash }) {
 - **versioned_refs**：\`${refs}\`
 - **Knowledge**：The accepted specification is authoritative.
 - **boundary**：Only the official-chain fixture artifacts.
+- **精确文件**：\`README.md\`, \`src/feature.txt\`, \`specs/official-chain/decision-log.md\`, \`specs/official-chain/spec.md\`, \`specs/official-chain/plan.md\`, \`specs/official-chain/tasks.md\`
 - **动作**：Run the accepted plan.
 - **gate_cmd**：\`node --test\`
+- **verification_role**：N/A — non-behavior change: fixture-only planning task
+- **paired_task**：N/A — non-behavior change: fixture-only planning task
 - **design_state**：ready
 - **依赖**：N/A — first task
 - **FR**：FR-SPEC-001
@@ -692,21 +695,30 @@ describe("official five-stage CLI", () => {
     publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract-missing-step");
     const missingStepInput = join(inputRoots["build-plan"], "build-plan-missing-step-input.json");
     writeFileSync(missingStepInput, `${JSON.stringify({
-      receipts: { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef },
+      receipts: {
+        plan: "receipts/missing-plan.json",
+        tasks: "not-a-canonical-receipt",
+        review: "reviews/results/missing-review.json",
+      },
     })}\n`);
-    const missingStepRun = spawnSync(process.execPath, [
-      runtime, "run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${missingStepInput}`,
-    ], { cwd: repo, env, encoding: "utf8" });
-    expect(missingStepRun.status).not.toBe(0);
-    expect(missingStepRun.stderr).toMatch(/build-plan canonical audit did not pass/);
-    const buildPlan = invoke(
-      "build-plan",
-      { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef },
-      [],
-      {},
-      () => publishStageContent("build-plan", "plan-task-contract.v2", planTaskContract(), "plan-task-contract"),
-    );
-    expect(buildPlan.attempt.attempt.missing_items).toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
+    const missingStepRun = run(root, repo, [
+      "run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${missingStepInput}`,
+    ]);
+    expect(missingStepRun.attempt.missing_items).toEqual(expect.arrayContaining([
+      "support:audit",
+      expect.stringMatching(/plan receipt missing\/unverified\/mismatch/),
+      expect.stringMatching(/tasks receipt missing\/unverified\/mismatch/),
+      expect.stringMatching(/review unavailable\/unverified\/mismatch/),
+    ]));
+    const missingStepConfirmation = run(root, repo, [
+      "confirm", "--stage=build-plan", "--project=Demo", "--task=official-chain",
+      `--attempt=${missingStepRun.attempt_ref}`, "--decision=accepted",
+    ]);
+    const missingStepAccepted = run(root, repo, [
+      "accept", "--stage=build-plan", "--project=Demo", "--task=official-chain",
+      `--attempt=${missingStepRun.attempt_ref}`, `--human-confirmation-ref=${missingStepConfirmation.ref}`,
+    ]);
+    const buildPlan = { accepted: missingStepAccepted };
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",

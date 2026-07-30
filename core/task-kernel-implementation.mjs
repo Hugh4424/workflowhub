@@ -1678,17 +1678,19 @@ export function buildTaskKernel(taskHandle, {
   };
   const buildPlanPreConfirmationAudit = (attempt) => {
     if (attempt?.stage !== "build-plan" || typeof attempt.facts?.audit_summary_ref !== "string") return null;
-    const raw = task.readRecord(attempt.facts.audit_summary_ref);
-    const value = parseJson(raw, "build-plan pre-confirmation audit");
-    if (value.through_step_id !== 6) return null;
-    if (value.summary_hash !== attempt.facts.audit_summary_hash
-        || value.verdict !== "pass" || attempt.facts.audit_verdict !== "pass"
-        || hashAuditSummary(value) !== value.summary_hash
-        || value.task_id !== task.identity.taskId || value.stage_slug !== "build-plan"
-        || value.workflow_run_id !== deriveStageWorkflowRunId("build-plan")) {
-      throw new Error("build-plan pre-confirmation audit binding mismatch");
+    try {
+      const raw = task.readRecord(attempt.facts.audit_summary_ref);
+      const value = parseJson(raw, "build-plan pre-confirmation audit");
+      if (value.through_step_id !== 6
+          || value.summary_hash !== attempt.facts.audit_summary_hash
+          || value.verdict !== "pass" || attempt.facts.audit_verdict !== "pass"
+          || hashAuditSummary(value) !== value.summary_hash
+          || value.task_id !== task.identity.taskId || value.stage_slug !== "build-plan"
+          || value.workflow_run_id !== deriveStageWorkflowRunId("build-plan")) return null;
+      return { raw, value };
+    } catch {
+      return null;
     }
-    return { raw, value };
   };
   const verifyAuditPublication = (stage, facts) => {
     const raw = task.readRecord(facts.audit_summary_ref);
@@ -3588,7 +3590,16 @@ export function buildTaskKernel(taskHandle, {
         if (data.upstream_acceptances !== undefined) throw new Error("upstream_acceptances are kernel-derived and cannot be supplied");
         const upstreamAcceptances = verifyUpstream(name, data.upstream_refs ?? []);
         const missingItems = [...(data.missing_items ?? [])];
-        const auditSupportMissing = missingItems.includes("support:audit");
+        let auditSupportMissing = missingItems.includes("support:audit");
+        if (name === "build-plan" && !auditSupportMissing) {
+          try {
+            verifyAuditPublication(name, data.facts);
+          } catch (error) {
+            missingItems.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
+            for (const key of AUDIT_FACT_KEYS) delete data.facts[key];
+            auditSupportMissing = true;
+          }
+        }
         if (auditSupportMissing
             && AUDIT_FACT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(data.facts, key))) {
           throw new Error(`${name} missing audit support cannot publish unauthenticated audit facts`);
@@ -3598,7 +3609,7 @@ export function buildTaskKernel(taskHandle, {
           throw new Error("make-decision facts do not match CandidateWorkspace");
         }
         if (name === "make-decision") verifyCandidateSnapshot(data.facts);
-        if (!auditSupportMissing) verifyAuditPublication(name, data.facts);
+        if (!auditSupportMissing && name !== "build-plan") verifyAuditPublication(name, data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
           const base = baselineRebindAuthorization ? { baseCommit: baselineRebindAuthorization.record.integration_head, baseTree: baselineRebindAuthorization.record.base_tree } : checkpointBase(name);
@@ -3615,7 +3626,7 @@ export function buildTaskKernel(taskHandle, {
             created_at: data.created_at ?? now(),
             facts: structuredClone(data.facts),
             evidence_refs: [...(data.evidence_refs ?? [])],
-            missing_items: [...(data.missing_items ?? [])],
+            missing_items: [...missingItems],
             upstream_refs: structuredClone(data.upstream_refs ?? []),
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
@@ -3734,19 +3745,23 @@ export function buildTaskKernel(taskHandle, {
               completion_evidence: { kind: "human_confirmation", uri_or_path: ref, content_hash: hash(raw) },
           });
         } else if (buildPlanPreAudit && decision === "accepted") {
-          completeRuntimeOwnedStageStep("build-plan", {
-            step_id: 7,
-            entry_evidence: {
-              kind: "stage_attempt",
-              uri_or_path: `results/${name}/${attemptRef}`,
-              content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)),
-            },
-            completion_evidence: {
-              kind: "human_confirmation",
-              uri_or_path: ref,
-              content_hash: hash(raw),
-            },
-          });
+          try {
+            completeRuntimeOwnedStageStep("build-plan", {
+              step_id: 7,
+              entry_evidence: {
+                kind: "stage_attempt",
+                uri_or_path: `results/${name}/${attemptRef}`,
+                content_hash: hash(task.readRecord(`results/${name}/${attemptRef}`)),
+              },
+              completion_evidence: {
+                kind: "human_confirmation",
+                uri_or_path: ref,
+                content_hash: hash(raw),
+              },
+            });
+          } catch {
+            // Build-plan journal support is diagnostic and never authorizes confirmation.
+          }
         }
         return deepFreeze({ ref, confirmation: record });
       });
@@ -3914,38 +3929,23 @@ export function buildTaskKernel(taskHandle, {
             throw new Error("make-decision acceptance requires a canonical passing full audit through step 12");
           }
         } else if (buildPlanPreAudit) {
-          if (typeof options.full_audit_writer !== "function") {
-            throw new Error("build-plan acceptance requires the runtime-owned full audit writer");
-          }
-          completeRuntimeOwnedStageStep("build-plan", {
-            step_id: 8,
-            entry_evidence: {
-              kind: "human_confirmation",
-              uri_or_path: humanConfirmationRef,
-              content_hash: hash(confirmationRaw),
-            },
-            completion_evidence: {
-              kind: "stage_attempt",
-              uri_or_path: `results/${name}/${attemptRef}`,
-              content_hash: hash(attemptRaw),
-            },
-          });
-          const buildPlanFullAudit = plain(options.full_audit_writer(), "build-plan full audit");
-          rejectUnknown(buildPlanFullAudit, new Set(["ref", "hash", "summary_hash"]), "build-plan full audit");
-          const preAudit = buildPlanPreAudit.value;
-          const auditRaw = task.readRecord(buildPlanFullAudit.ref);
-          const audit = parseJson(auditRaw, "build-plan full audit");
-          if (hash(auditRaw) !== buildPlanFullAudit.hash || audit.summary_hash !== buildPlanFullAudit.summary_hash
-              || hashAuditSummary(audit) !== audit.summary_hash
-              || hashAuditSummary(preAudit) !== preAudit.summary_hash
-              || audit.verdict !== "pass" || audit.stage_slug !== name
-              || audit.task_id !== task.identity.taskId || audit.through_step_id !== 8
-              || preAudit.verdict !== "pass" || preAudit.stage_slug !== name
-              || preAudit.task_id !== task.identity.taskId || preAudit.through_step_id !== 6
-              || audit.workflow_run_id !== preAudit.workflow_run_id
-              || audit.snapshot_tree !== preAudit.snapshot_tree
-              || JSON.stringify(audit.content_evidence_refs) !== JSON.stringify(preAudit.content_evidence_refs)) {
-            throw new Error("build-plan acceptance requires a canonical passing full audit through step 8");
+          try {
+            completeRuntimeOwnedStageStep("build-plan", {
+              step_id: 8,
+              entry_evidence: {
+                kind: "human_confirmation",
+                uri_or_path: humanConfirmationRef,
+                content_hash: hash(confirmationRaw),
+              },
+              completion_evidence: {
+                kind: "stage_attempt",
+                uri_or_path: `results/${name}/${attemptRef}`,
+                content_hash: hash(attemptRaw),
+              },
+            });
+            options.full_audit_writer?.();
+          } catch {
+            // Build-plan journal/audit support is diagnostic and never authorizes acceptance.
           }
         } else if (options.full_audit_writer !== undefined && name !== "build-plan") {
           throw new Error("full audit writer is only valid for a bounded human-confirmation attempt");

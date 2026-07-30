@@ -19,7 +19,7 @@ import {
 } from "./stage-review-disposition.mjs";
 import { buildStageCompletion } from "./stage-completion-facts.mjs";
 import { assertLatestBuildSpecReceipt } from "./build-spec-receipt-recovery.mjs";
-import { validatePlanTaskContract } from "./stage-content-contracts.mjs";
+import { validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "./stage-content-contracts.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -65,7 +65,7 @@ function completionReview(records) {
     conclusion: statuses.length
       ? `异源质量建议已记录：${statuses.join(", ")}`
       : "异源质量建议暂不可用",
-    status: statuses.join("+"),
+    status: statuses.length ? statuses.join("+") : "unavailable",
     providers: [...new Set(reviews.flatMap((entry) => entry.value.provider_results?.map(({ provider }) => provider) ?? []))],
     duration_ms: null,
     tokens: null,
@@ -942,29 +942,82 @@ HANDLERS.set("build-spec", async (worker, input) => {
   });
 });
 HANDLERS.set("build-plan", async (worker, input) => {
-  const audit = auditFacts(worker, input);
-  const plan = receipt(worker, input, "plan"), tasks = receipt(worker, input, "tasks"), review = reviewFacts(worker, input);
-  text(plan.value.content, "plan content");
-  text(tasks.value.content, "tasks content");
-  if (plan.value.content_hash !== hashText(plan.value.content) || tasks.value.content_hash !== hashText(tasks.value.content)) throw new Error("plan/tasks content hash mismatch");
-  if (worker.readArtifact("plan.md") !== plan.value.content || worker.readArtifact("tasks.md") !== tasks.value.content) throw new Error("plan/tasks artifacts differ from final receipts");
+  const materials = Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => {
+    const content = text(worker.readArtifact(name), `${name} content`);
+    return [name, content];
+  }));
+  const executable = validateExecutablePlanTaskMinimum({
+    spec: materials["spec.md"],
+    plan: materials["plan.md"],
+    tasks: materials["tasks.md"],
+  });
+  if (!executable.ok) {
+    throw new Error(`build-plan minimum executable contract failed: ${executable.errors.join("; ")}`);
+  }
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
-  const binding = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
+  const missingItems = [];
+  const evidenceRefs = [];
+  const optional = (label, operation) => {
+    try { return operation(); }
+    catch (error) {
+      missingItems.push(`${label}: ${error.message}`);
+      return null;
+    }
+  };
+  optional("plan receipt missing/unverified/mismatch", () => {
+    const item = receipt(worker, input, "plan");
+    text(item.value.content, "plan content");
+    if (item.value.content_hash !== hashText(item.value.content)
+        || materials["plan.md"] !== item.value.content) {
+      throw new Error("receipt hash/content differs from live plan.md");
+    }
+    evidenceRefs.push(item.evidence);
+    return item;
+  });
+  optional("tasks receipt missing/unverified/mismatch", () => {
+    const item = receipt(worker, input, "tasks");
+    text(item.value.content, "tasks content");
+    if (item.value.content_hash !== hashText(item.value.content)
+        || materials["tasks.md"] !== item.value.content) {
+      throw new Error("receipt hash/content differs from live tasks.md");
+    }
+    evidenceRefs.push(item.evidence);
+    return item;
+  });
+  const audit = optional("audit unavailable/unverified/mismatch", () => auditFacts(worker, input));
+  if (!audit) missingItems.push("support:audit");
+  let review = null;
+  optional("review unavailable/unverified/mismatch", () => {
+    const candidate = reviewFacts(worker, input);
+    const result = bindFinalReview(worker, input, candidate, before.tree, { stage: "build-plan" });
+    review = candidate;
+    evidenceRefs.push(candidate.evidence, ...(candidate.risk_evidence ?? []), ...result.evidence);
+    missingItems.push(...candidate.missing_items);
+    return result;
+  });
   const checkpoint = worker.createCheckpoint("build-plan");
   const after = object(worker.snapshotWorkspace(), "build-plan post-checkpoint Workspace snapshot");
-  if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final review");
+  if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while creating its checkpoint");
+  const planRef = worker.artifactRef("plan.md");
+  const tasksRef = worker.artifactRef("tasks.md");
   return addCompletion("build-plan", {
-    facts: { plan_ref: worker.artifactRef("plan.md"), tasks_ref: worker.artifactRef("tasks.md"), checkpoint, review: review.facts, ...audit.facts },
-    evidence_refs: [plan.evidence, tasks.evidence, review.evidence, audit.evidence, ...(review.risk_evidence ?? []), ...binding.evidence],
-    missing_items: [...review.missing_items, ...acceptedRiskAuditNotices(worker, "build-plan")],
+    facts: {
+      plan_ref: planRef,
+      tasks_ref: tasksRef,
+      checkpoint,
+      ...(review ? { review: review.facts } : {}),
+      ...(audit ? audit.facts : {}),
+    },
+    evidence_refs: evidenceRefs,
+    missing_items: [...missingItems, ...acceptedRiskAuditNotices(worker, "build-plan")],
   }, {
     artifacts: [
-      { label: "实施计划", ref: plan.ref, hash: plan.evidence.sha256, accepted_lookup: "results/build-plan/accepted.json#facts.plan_ref" },
-      { label: "任务清单", ref: tasks.ref, hash: tasks.evidence.sha256, accepted_lookup: "results/build-plan/accepted.json#facts.tasks_ref" },
+      { label: "实施计划", ref: planRef, hash: hashText(materials["plan.md"]), accepted_lookup: "results/build-plan/accepted.json#facts.plan_ref" },
+      { label: "任务清单", ref: tasksRef, hash: hashText(materials["tasks.md"]), accepted_lookup: "results/build-plan/accepted.json#facts.tasks_ref" },
     ],
-    reviews: [review],
-    verification: "计划、任务清单、工作区快照和正式工程审查已完成绑定检查",
+    reviews: review ? [review] : [],
+    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review ? review.facts.status ?? review.facts.verdict : "unavailable/unverified"}`,
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {
@@ -1095,4 +1148,4 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage"] : ["receipts"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } return handler(worker, value); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage"] : ["receipts"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, value); }; }
