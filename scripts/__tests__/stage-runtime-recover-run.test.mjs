@@ -165,6 +165,36 @@ describe("official make-decision recover-run", () => {
     expect(result.stderr).toMatch(/previous|old|existing|recover/i);
   });
 
+  it("recovers from the latest historical run even when its valid invalidation makes activeStageRun empty", () => {
+    const f = fixture("invalidated-historical-source");
+    const kernel = createTaskKernel(f.task, { candidateWorkspace: f.candidate });
+    const invalidation = kernel.invalidateStageRun("make-decision", {
+      run_ref: f.old.ref,
+      run_hash: f.old.hash,
+      reason: "host interrupted the prior run",
+    });
+    expect(kernel.activeStageRun("make-decision", { required: false })).toBeNull();
+    const oldRunBytes = f.task.readRecord(f.old.ref);
+    const invalidationBytes = f.task.readRecord(invalidation.ref);
+
+    const result = recover(f);
+
+    expect(result.status, result.stderr).toBe(0);
+    const recovered = JSON.parse(result.stdout);
+    expect(recovered).toMatchObject({
+      previous_run_ref: f.old.ref,
+      previous_run_hash: f.old.hash,
+    });
+    expect(JSON.parse(f.task.readRecord(recovered.ref))).toMatchObject({
+      previous_run_ref: f.old.ref,
+      previous_run_hash: f.old.hash,
+      recovery_source_ref: f.old.ref,
+      recovery_source_hash: f.old.hash,
+    });
+    expect(f.task.readRecord(f.old.ref)).toBe(oldRunBytes);
+    expect(f.task.readRecord(invalidation.ref)).toBe(invalidationBytes);
+  });
+
   it("adds no run or journal records when a recovered workspace becomes dirty before runtime use", () => {
     const f = fixture("dirty-after-recovery");
     const recovered = recoverTaskWorkspace(f.task);

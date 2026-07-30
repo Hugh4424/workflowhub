@@ -804,9 +804,9 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [x] **任务完成**
 - **status**：`complete`
-- **actual_changes**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。普通 prepare、旧 run/历史与 schema 均未改。
-- **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，2 files、30/30 tests pass；`git diff --check` → exit 0。
-- **evidence_refs**：初始 GREEN `/tmp/T017-recovery-green.stdout`，sha256 `2de074943b759c5dc4aa0e925c79043bb9d490975f0949cffc6c3f533cdc68ed`；审查 finding 聚焦验证 `/tmp/T017-review-findings-green.stdout`，sha256 `4a94ed99f4fc4017907709a5001d0edb232a5c1a99933aba03d2f5469a2cbece`。
+- **actual_changes**：新增 `recoverTaskWorkspace(taskHandle)` 与 make-decision recovery binding；recover-run 从 exact deterministic registered clean worktree 的 full current HEAD 建立新 baseline。聚焦修复四项审查 finding：读取 exact branch reflog origin 并拒绝 orphan/force-rewind；capability 初始及每次使用均复核 clean；invalid args/stage 与已消费 recovery 在认证写前拒绝；kernel 锁内以 expected previous ref/hash CAS 创建标准新 run，并以成对 runtime-owned recovery source 绑定 previous lineage。另公开只读 `latestHistoricalStageRun(stage)`：返回已验证 lineage 的最新历史 run（含有效 invalidated run），仅供 recover-run 选源；`activeStageRun` 语义不变，不复活旧 run。普通 prepare、旧 run/历史与 schema 均未改。
+- **executed_commands**：`npx vitest run --maxWorkers=1 core/__tests__/workspace-manager.test.mjs scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，2 files、30/30 tests pass；`npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，1 file、8/8 tests pass；`git diff --check` → exit 0。
+- **evidence_refs**：初始 GREEN `/tmp/T017-recovery-green.stdout`，sha256 `2de074943b759c5dc4aa0e925c79043bb9d490975f0949cffc6c3f533cdc68ed`；审查 finding 聚焦验证 `/tmp/T017-review-findings-green.stdout`，sha256 `4a94ed99f4fc4017907709a5001d0edb232a5c1a99933aba03d2f5469a2cbece`；invalidated historical source 聚焦验证 `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`。
 - **covered_ac**：AC-01、AC-02、AC-03、AC-15、AC-16。
 - **review_fact**：独立审查原 verdict=`revise_required` 保留；branch origin、持续 clean、write-before-validation、previous-run CAS 四项 finding 已聚焦修复并由 30/30 验证；按规则未强制二审、未改写为 pass。
 - **completed_at**：2026-07-30。
@@ -842,11 +842,11 @@ blocker；之后正式恢复 lineage，真实用户确认后推进 build-spec/bu
 
 - [ ] **任务完成**
 - **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — not reviewed
+- **actual_changes**：正式 recovery run 尚未开始；其选源 blocker 已解除：recover-run 只读读取已验证 lineage 的 latest historical run，即使该 run 已有效 invalidated 且 `activeStageRun` 为空也可作为 recovery source；active 语义与 previous-run CAS 不变。
+- **executed_commands**：前置实现聚焦验证 `npx vitest run --maxWorkers=1 scripts/__tests__/stage-runtime-recover-run.test.mjs` → exit 0，1 file、8/8 tests pass；正式 `recover-run` 尚未执行。
+- **evidence_refs**：前置实现非 canonical 证据 `/tmp/T015-invalidated-source-green.stdout`，sha256 `13a09b492df2d0daf9ec69a1abf706c4e5988d861396e7409c2bb8d9d2c97640`；正式 recovery evidence 尚不存在。
+- **covered_ac**：前置实现覆盖 AC-01、AC-02、AC-03、AC-15、AC-16；T015 正式执行仍 pending。
+- **review_fact**：T017 独立审查原 verdict=`revise_required` 保留；本次仅聚焦修复 invalidated historical source blocker，未二审、未改写为 pass。
 - **completed_at**：N/A — not completed
 
 #### T013: 唯一独立 integration review

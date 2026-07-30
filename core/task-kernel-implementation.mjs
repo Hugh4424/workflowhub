@@ -1071,6 +1071,10 @@ export function buildTaskKernel(taskHandle, {
     if (required && run === null) throw new Error(`${stageName(stage)} requires start-run before producing evidence or publishing`);
     return run;
   };
+  const latestHistoricalStageRun = (stage) => {
+    const run = latestStageRun(stage);
+    return run === null ? null : deepFreeze(run);
+  };
   const allowsAcceptedMakeDecisionContinuation = (current) => {
     if (!current) return false;
     const active = trustedActiveStageRun("make-decision");
@@ -3556,6 +3560,7 @@ export function buildTaskKernel(taskHandle, {
     invalidateReviewBinding,
     createStageContinuation,
     activeStageRun,
+    latestHistoricalStageRun,
     publishRequirementsLedger,
     publishMaterialRevision,
     writeStageStepEntry,

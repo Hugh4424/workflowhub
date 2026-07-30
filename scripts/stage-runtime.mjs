@@ -267,7 +267,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   let recoveryPrevious;
   if (values.stage === "make-decision") {
     if (command === "recover-run") {
-      recoveryPrevious = context.kernel.activeStageRun("make-decision", { required: false });
+      recoveryPrevious = context.kernel.latestHistoricalStageRun("make-decision");
       if (recoveryPrevious === null) throw new Error("recover-run requires an existing previous make-decision run");
       if (recoveryPrevious.run.recovery_source_ref !== undefined
           || recoveryPrevious.run.recovery_source_hash !== undefined) {
