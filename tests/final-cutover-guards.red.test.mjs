@@ -248,6 +248,32 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .rejects.toThrow(/schema|producer|provenance/i);
   });
 
+  it("publishes build-spec business facts while disclosing unavailable audit support", async () => {
+    const content = "# Spec\n";
+    const values = {
+      "receipts/spec.json": canonical("build-spec", {
+        producer: { stage: "build-spec", component: "spec", version: "1" },
+        content,
+        content_hash: createHash("sha256").update(content).digest("hex"),
+      }),
+      "reviews/results/review.json": reviewReceipt("build-spec"),
+    };
+    const worker = {
+      ...workerFor("build-spec", values),
+      readArtifact: () => content,
+      artifactRef: () => "specs/task/spec.md",
+      createCheckpoint: () => ({ plan_hash: sha }),
+    };
+    const result = await officialStageHandler("build-spec")(worker, {
+      receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" },
+    });
+    expect(result.facts).not.toHaveProperty("audit_summary_ref");
+    expect(result.missing_items).toEqual(expect.arrayContaining([
+      "support:audit",
+      expect.stringMatching(/audit unavailable\/unverified\/mismatch/i),
+    ]));
+  });
+
   it.each([
     ["make-decision", { decision: "receipts/decision.json" }],
     ["build-spec", { spec: "receipts/spec.json" }],

@@ -77,7 +77,24 @@ describe("stage skill runtime", () => {
     let invoked = false;
     const result = await dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", triggered: false, hostInvoke: () => { invoked = true; } });
     expect(result.status).toBe("not_invoked");
+    expect(result.reason).toBe("trigger_false");
     expect(invoked).toBe(false);
+  });
+
+  it("preserves a concrete trigger-false reason in the runtime-owned fact", async () => {
+    const root = fixture();
+    const result = await dispatchStageSkill({
+      packageRoot: root,
+      stage: "stage",
+      name: "demo",
+      triggered: false,
+      notInvokedReason: "No material ambiguity after the six-dimension check.",
+      hostInvoke: () => { throw new Error("conditional host must not run"); },
+    });
+    expect(result).toMatchObject({
+      status: "not_invoked",
+      reason: "No material ambiguity after the six-dimension check.",
+    });
   });
 
   it("validates conditional bundle assets during stage preflight", () => {

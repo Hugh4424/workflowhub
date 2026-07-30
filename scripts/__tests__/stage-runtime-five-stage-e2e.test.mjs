@@ -491,7 +491,7 @@ describe("official five-stage CLI", () => {
         } },
       };
     })();
-    const prepareOfficialRun = (stage, reason = "official fixture execution", throughStep = stage === "build-plan" ? 6 : Infinity) => {
+    const prepareOfficialRun = (stage, reason = "official fixture execution", throughStep = stage === "build-plan" ? 6 : stage === "build-spec" ? 5 : Infinity) => {
       const kernel = createTaskKernel(task);
       const runRecord = kernel.startStageRun(stage, { reason });
       kernel.publishRequirementsLedger(stage, requirementsInput);
@@ -598,6 +598,30 @@ describe("official five-stage CLI", () => {
         const preAudit = JSON.parse(task.readRecord(attempt.attempt.facts.audit_summary_ref));
         expect(preAudit).toMatchObject({ verdict: "pass", through_step_id: 6 });
       }
+      if (stage === "build-spec") {
+        expect(attempt.completion_audit).toMatchObject({ status: "recorded" });
+        const preAudit = JSON.parse(task.readRecord(attempt.attempt.facts.audit_summary_ref));
+        expect(preAudit).toMatchObject({ through_step_id: 5 });
+        const attemptRaw = task.readRecord(`results/build-spec/${attempt.attempt_ref}`);
+        const events = task.readRecord("journal.jsonl").split("\n").filter(Boolean).map(JSON.parse);
+        expect(events).toContainEqual(expect.objectContaining({
+          workflow_run_id: preAudit.workflow_run_id,
+          stage_slug: "build-spec",
+          step_id: 6,
+          event_type: "step_exit",
+          terminal_status: "success",
+          completion_evidence: {
+            kind: "stage_result",
+            uri_or_path: `results/build-spec/${attempt.attempt_ref}`,
+            content_hash: sha256(attemptRaw),
+          },
+        }));
+        const finalAudit = writeCanonicalAuditSummary({ task, workspace, stage: "build-spec", throughStepId: 6 });
+        expect(JSON.parse(task.readRecord(finalAudit.audit_summary_ref))).toMatchObject({
+          verdict: "pass",
+          through_step_id: 6,
+        });
+      }
       if (["build-spec", "build-plan"].includes(stage)) expect(attempt.attempt.checkpoint).not.toHaveProperty("ref");
       const human = ["make-decision", "build-plan", "verify-code"].includes(stage);
       const confirmation = human ? run(root, repo, ["confirm", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--decision=accepted", ...extra]) : undefined;
@@ -625,6 +649,17 @@ describe("official five-stage CLI", () => {
       expect(accepted.acceptance_mode).toBe(human ? "human" : "automatic");
       if (!human) expect(accepted).not.toHaveProperty("human_confirmation_ref");
       if (["build-spec", "build-plan"].includes(stage)) expect(accepted.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\//);
+      if (stage === "build-spec") {
+        const completionAudit = createTaskKernel(task).readBuildSpecCompletionAudit(
+          accepted.attempt_ref,
+          String(accepted.integrity_hash).replace(/^sha256:/, ""),
+        );
+        expect(completionAudit.record).toMatchObject({
+          attempt_ref: accepted.attempt_ref,
+          attempt_hash: String(accepted.integrity_hash).replace(/^sha256:/, ""),
+          audit: { status: "recorded" },
+        });
+      }
       if (stage === "build-plan") {
         const fullAudit = writeCanonicalAuditSummary({
           task,

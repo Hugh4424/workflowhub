@@ -21,6 +21,7 @@ import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
 import { authenticateWriteBoundary } from "../../core/write-boundary-preflight.mjs";
 import { writeFormalReviewFixture } from "../../tests/helpers/formal-review.mjs";
 import { buildNonGateReviewResponseRecord } from "../../skills/wh-review/scripts/review-controller.mjs";
+import { resumableBuildSpecAttempt } from "../stage-runtime.mjs";
 
 const temporary = [];
 const runnerTemporary = [];
@@ -40,6 +41,7 @@ function cleanRunnerRoot() {
     "core/task-kernel-implementation.mjs",
     "core/stage-content-contracts.mjs",
     "core/schemas/task-material-revision.v1.json",
+    "core/stage-skill-runtime.mjs",
     "core/stage-skill-invocation.mjs",
     "core/stage-handlers.mjs",
     "core/stage-runner.mjs",
@@ -54,6 +56,7 @@ function cleanRunnerRoot() {
     "core/task-kernel-implementation.mjs",
     "core/stage-content-contracts.mjs",
     "core/schemas/task-material-revision.v1.json",
+    "core/stage-skill-runtime.mjs",
     "core/stage-skill-invocation.mjs",
     "core/stage-handlers.mjs",
     "core/stage-runner.mjs",
@@ -412,6 +415,190 @@ afterAll(() => {
 });
 
 describe("build-spec prepublish receipt recovery", () => {
+  it("resumes only the exact unpublished attempt bound to the active workflow run", () => {
+    const activeRaw = `${JSON.stringify({
+      workflow_run_id: "build-spec:active",
+      evidence_refs: [{ ref: "receipts/spec.json" }, { ref: "reviews/results/current.json" }],
+    })}\n`;
+    const historyRaw = `${JSON.stringify({
+      workflow_run_id: "build-spec:history",
+      evidence_refs: [{ ref: "receipts/spec.json" }, { ref: "reviews/results/current.json" }],
+    })}\n`;
+    const records = new Map([
+      ["results/build-spec/attempt-0001.json", historyRaw],
+      ["results/build-spec/attempt-0002.json", activeRaw],
+    ]);
+    const missing = new Error("missing");
+    missing.code = "ENOENT";
+    const resumed = resumableBuildSpecAttempt({
+      task: {
+        listStageAttemptRefs: () => [...records.keys()],
+        readRecord(ref) {
+          if (ref === "results/build-spec/accepted.json") throw missing;
+          return records.get(ref);
+        },
+      },
+      kernel: { activeStageRun: () => ({ run: { workflow_run_id: "build-spec:active" } }) },
+    }, { receipts: { spec: "receipts/spec.json", review: "reviews/results/current.json" } });
+    expect(resumed).toMatchObject({
+      attempt_ref: "attempt-0002.json",
+      integrity_hash: createHash("sha256").update(activeRaw).digest("hex"),
+      resumed: true,
+    });
+  });
+
+  it("durably discloses unavailable completion audit by accepted attempt identity", () => {
+    const state = acceptedDecisionFixture();
+    const artifacts = ArtifactDir.open(state.workspace.worktreeRoot, state.task);
+    artifacts.writeAtomic("spec.md", "# Spec\n");
+    const kernel = createTaskKernel(state.task, { workspace: state.workspace, artifacts });
+    const run = kernel.startStageRun("build-spec", { reason: "audit unavailable acceptance fixture" });
+    const tree = captureGitWorktreeSnapshot(state.workspace.worktreeRoot).tree;
+    const attempt = kernel.publishAttempt("build-spec", {
+      facts: {
+        spec_ref: "specs/spec-recovery/spec.md",
+        checkpoint: kernel.createCheckpoint("build-spec"),
+        review: {
+          verdict: "pass",
+          result_ref: "reviews/results/fixture.json",
+          result_hash: "a".repeat(64),
+          snapshot_tree: tree,
+        },
+      },
+      evidence_refs: [],
+      missing_items: ["audit unavailable/unverified/mismatch: fixture", "support:audit"],
+      upstream_refs: [{
+        task_id: "spec-recovery",
+        stage: "make-decision",
+        accepted_ref: "results/make-decision/accepted.json",
+      }],
+    });
+    expect(attempt.attempt.workflow_run_id).toBe(run.run.workflow_run_id);
+    const attemptRaw = state.task.readRecord(`results/build-spec/${attempt.attempt_ref}`);
+    const attemptHash = createHash("sha256").update(attemptRaw).digest("hex");
+    kernel.completeBuildSpecResultPublication({
+      attempt_ref: attempt.attempt_ref,
+      attempt_hash: attemptHash,
+    });
+    const published = kernel.publishBuildSpecCompletionAudit({
+      attempt_ref: attempt.attempt_ref,
+      attempt_hash: attemptHash,
+      audit: { status: "unavailable", reason: "canonical audit summary could not be produced" },
+    });
+    const accepted = kernel.acceptAttempt("build-spec", attempt.attempt_ref);
+    const read = kernel.readBuildSpecCompletionAudit(
+      accepted.attempt_ref,
+      accepted.integrity_hash.replace(/^sha256:/, ""),
+    );
+    expect(read.ref).toBe(`evidence/build-spec-completions/${attemptHash}.json`);
+    expect(read.record.audit).toEqual({
+      status: "unavailable",
+      reason: "canonical audit summary could not be produced",
+    });
+    expect(published.ref).toBe(read.ref);
+  });
+
+  it("durably binds a recorded completion audit ref and raw-byte hash", () => {
+    const state = acceptedDecisionFixture();
+    const attemptRaw = "{}\n";
+    const attemptHash = createHash("sha256").update(attemptRaw).digest("hex");
+    const auditRaw = "{\"verdict\":\"fail\",\"completion_effect\":\"disclose_only\"}\n";
+    const auditHash = createHash("sha256").update(auditRaw).digest("hex");
+    const auditRef = `evidence/audits/build-spec/${"f".repeat(64)}.json`;
+    mkdirSync(join(state.task.taskPath, "results", "build-spec"), { recursive: true });
+    writeFileSync(join(state.task.taskPath, "results", "build-spec", "attempt-0001.json"), attemptRaw);
+    state.kernel.publishCanonicalRecord(auditRef, auditRaw);
+    state.kernel.publishBuildSpecCompletionAudit({
+      attempt_ref: "attempt-0001.json",
+      attempt_hash: attemptHash,
+      audit: { status: "recorded", ref: auditRef, hash: auditHash },
+    });
+    expect(state.kernel.readBuildSpecCompletionAudit("attempt-0001.json", attemptHash).record.audit)
+      .toEqual({ status: "recorded", ref: auditRef, hash: auditHash });
+  });
+
+  it("records a conditional trigger=false fact without opening the host bridge", () => {
+    const state = acceptedDecisionFixture();
+    const started = cli(state, [
+      "start-run",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      "--reason=build-spec-conditional-skip",
+    ]);
+    expect(started.status, started.stderr).toBe(0);
+
+    const skipped = cli(state, [
+      "invoke-stage-skill",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      "--name=spec-clarify",
+      "--invocation-key=default",
+      "--triggered=false",
+      "--reason=No material ambiguity after the six-dimension check.",
+    ]);
+
+    expect(skipped.status, skipped.stderr).toBe(0);
+    expect(skipped.stdout).not.toContain("host-invocation-request.v1");
+    expect(skipped.json).toMatchObject({
+      status: "trigger=false",
+      invocation: {
+        name: "spec-clarify",
+        invocation_key: "default",
+        status: "not_invoked",
+        reason: "No material ambiguity after the six-dimension check.",
+      },
+    });
+    expect(state.kernel.readStageSkillInvocation("build-spec", "spec-clarify", "default").fact)
+      .toMatchObject({
+        status: "not_invoked",
+        reason: "No material ambiguity after the six-dimension check.",
+      });
+  });
+
+  it.each([
+    {
+      label: "missing trigger-false reason",
+      name: "spec-clarify",
+      extra: ["--triggered=false"],
+      error: /reason/i,
+    },
+    {
+      label: "reason supplied for a real invocation",
+      name: "spec-clarify",
+      extra: ["--triggered=true", "--reason=not allowed"],
+      error: /reason.*triggered=true/i,
+    },
+    {
+      label: "always component marked trigger-false",
+      name: "spec-specify",
+      extra: ["--triggered=false", "--reason=not applicable"],
+      error: /always skill cannot be not_invoked/i,
+    },
+  ])("rejects $label", ({ name, extra, error }) => {
+    const state = acceptedDecisionFixture();
+    expect(cli(state, [
+      "start-run",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      "--reason=build-spec-invalid-conditional-skip",
+    ]).status).toBe(0);
+    const rejected = cli(state, [
+      "invoke-stage-skill",
+      "--stage=build-spec",
+      "--project=Demo",
+      "--task=spec-recovery",
+      `--name=${name}`,
+      "--invocation-key=default",
+      ...extra,
+    ]);
+    expect(rejected.status).not.toBe(0);
+    expect(rejected.stdout).toBe("");
+    expect(rejected.stderr).toMatch(error);
+  });
+
   it("invokes a declared build-spec skill against the authenticated stage Workspace", () => {
     const state = acceptedDecisionFixture();
     const started = cli(state, [

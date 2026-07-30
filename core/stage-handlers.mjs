@@ -927,7 +927,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
   });
 });
 HANDLERS.set("build-spec", async (worker, input) => {
-  const audit = auditFacts(worker, input);
+  let audit;
+  let auditUnavailableReason;
+  try {
+    audit = auditFacts(worker, input);
+  } catch (error) {
+    audit = null;
+    auditUnavailableReason = error.message;
+  }
   const item = receipt(worker, input, "spec"), review = reviewFacts(worker, input);
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
@@ -955,9 +962,12 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const after = object(worker.snapshotWorkspace(), "build-spec post-checkpoint Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   return addCompletion("build-spec", {
-    facts: { spec_ref: worker.artifactRef("spec.md"), checkpoint, review: review.facts, ...audit.facts },
-    evidence_refs: [item.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...bindingEvidence],
-    missing_items: review.missing_items,
+    facts: { spec_ref: worker.artifactRef("spec.md"), checkpoint, review: review.facts, ...(audit?.facts ?? {}) },
+    evidence_refs: [item.evidence, review.evidence, ...(audit ? [audit.evidence] : []), ...review.risk_evidence, ...bindingEvidence],
+    missing_items: [
+      ...review.missing_items,
+      ...(audit ? [] : [`audit unavailable/unverified/mismatch: ${auditUnavailableReason}`, "support:audit"]),
+    ],
   }, {
     worker,
     artifacts: [{ label: "需求规格", ref: item.ref, hash: item.evidence.sha256, accepted_lookup: "results/build-spec/accepted.json#facts.spec_ref" }],

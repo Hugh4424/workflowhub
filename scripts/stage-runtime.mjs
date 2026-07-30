@@ -62,23 +62,49 @@ function publishAcceptedDecisionLog(context, accepted) {
   }
 }
 
-function completedStep(task, workflowRunId, stepId) {
+function completedStep(task, stage, workflowRunId, stepId) {
   let raw;
   try { raw = task.readRecord("journal.jsonl"); } catch (error) {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
   return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)).some((event) =>
-    event.workflow_run_id === workflowRunId && event.stage_slug === "make-decision"
+    event.workflow_run_id === workflowRunId && event.stage_slug === stage
     && event.step_id === stepId && event.attempt_id === "attempt-1"
     && event.event_type === "step_exit" && event.terminal_status === "success");
 }
 
 function requireCompletedMakeDecisionStep(context, stepId) {
   const runId = context.kernel.activeStageRun("make-decision").run.workflow_run_id;
-  if (!completedStep(context.task, runId, stepId)) {
+  if (!completedStep(context.task, "make-decision", runId, stepId)) {
     throw new Error(`make-decision canonical producer did not complete step ${stepId}`);
   }
+}
+
+export function resumableBuildSpecAttempt(context, input) {
+  const workflowRunId = context.kernel.activeStageRun("build-spec").run.workflow_run_id;
+  let acceptedAttemptRef = null;
+  try {
+    acceptedAttemptRef = JSON.parse(context.task.readRecord("results/build-spec/accepted.json")).attempt_ref;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const candidates = context.task.listStageAttemptRefs("build-spec").map((ref) => {
+    const attemptRef = ref.replace(/^results\/build-spec\//, "");
+    const raw = context.task.readRecord(`results/build-spec/${attemptRef}`);
+    return { attemptRef, raw, attempt: JSON.parse(raw) };
+  }).filter(({ attemptRef, attempt }) =>
+    attempt.workflow_run_id === workflowRunId && attemptRef !== acceptedAttemptRef);
+  if (candidates.length === 0) return null;
+  if (candidates.length !== 1) throw new Error("build-spec active run has multiple unpublished attempts; recovery is ambiguous");
+  const [{ attemptRef, raw, attempt }] = candidates;
+  const evidenceRefs = new Set((attempt.evidence_refs ?? []).map(({ ref }) => ref));
+  for (const [name, ref] of Object.entries(input.receipts)) {
+    if (!evidenceRefs.has(ref)) {
+      throw new Error(`build-spec recovery input ${name} differs from the published attempt`);
+    }
+  }
+  return { attempt_ref: attemptRef, integrity_hash: sha256(raw), attempt, resumed: true };
 }
 
 function parseArgs(argv) {
@@ -318,11 +344,35 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     };
   }
   if (command === "invoke-stage-skill") {
-    const allowed = new Set(["stage", "project", "task", "name", "invocation-key"]);
-    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("invoke-stage-skill accepts only identity, name, and invocation-key");
+    const allowed = new Set(["stage", "project", "task", "name", "invocation-key", "triggered", "reason"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) {
+      throw new TypeError("invoke-stage-skill accepts only identity, name, invocation-key, triggered, and reason");
+    }
     const prepared = preflightStageSkills({ packageRoot: RUNNER_ROOT, stage: values.stage });
     const dependency = prepared.manifest.skills.find((item) => item.name === values.name);
     if (!dependency) throw new Error(`${values.stage}: undeclared skill ${values.name}`);
+    if (values.triggered !== undefined && !new Set(["true", "false"]).has(values.triggered)) {
+      throw new TypeError("invoke-stage-skill --triggered must be true or false");
+    }
+    const triggered = values.triggered !== "false";
+    if (triggered && values.reason !== undefined) {
+      throw new TypeError("invoke-stage-skill reason is forbidden when triggered=true");
+    }
+    if (!triggered && (typeof values.reason !== "string" || values.reason.trim() === "")) {
+      throw new TypeError("invoke-stage-skill triggered=false requires a concrete reason");
+    }
+    if (!triggered) {
+      const fact = await dispatchStageSkill({
+        packageRoot: RUNNER_ROOT,
+        stage: values.stage,
+        name: values.name,
+        invocationKey: values["invocation-key"],
+        triggered: false,
+        notInvokedReason: values.reason,
+        kernel: context.kernel,
+      });
+      return { status: "trigger=false", invocation: fact };
+    }
     const invocationWorkspace = context.candidateWorkspace ?? context.workspace;
     const request = {
       schema_version: "host-invocation-request.v1",
@@ -615,10 +665,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
           : {}),
         ...(values.stage === "make-decision"
           ? { throughStepId: 10 }
-          : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
+          : values.stage === "build-spec" ? { throughStepId: 5 }
+            : values.stage === "build-plan" ? { throughStepId: 6 } : {}),
       });
     } catch (error) {
-      if (values.stage !== "build-plan") throw error;
+      if (!new Set(["build-spec", "build-plan"]).has(values.stage)) throw error;
     }
     const controlledInput = {
       ...input,
@@ -627,11 +678,49 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
         ...(audit ? { audit: audit.audit_summary_ref } : {}),
       },
     };
-    const attempt = await runOfficialStage(values.stage, context, controlledInput, {
-      ...(values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : {}),
-      ...(values["baseline-rebind"] ? { baselineRebindRef: values["baseline-rebind"] } : {}),
-    });
+    const attempt = values.stage === "build-spec"
+      ? resumableBuildSpecAttempt(context, input) ?? await runOfficialStage(values.stage, context, controlledInput)
+      : await runOfficialStage(values.stage, context, controlledInput, {
+        ...(values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : {}),
+        ...(values["baseline-rebind"] ? { baselineRebindRef: values["baseline-rebind"] } : {}),
+      });
     if (requiresHumanConfirmation(values.stage)) return attempt;
+    let buildSpecFullAudit;
+    if (values.stage === "build-spec") {
+      const attemptRaw = context.task.readRecord(`results/build-spec/${attempt.attempt_ref}`);
+      context.kernel.completeBuildSpecResultPublication({
+        attempt_ref: attempt.attempt_ref,
+        attempt_hash: sha256(attemptRaw),
+      });
+      try {
+        buildSpecFullAudit = context.kernel.readBuildSpecCompletionAudit(
+          attempt.attempt_ref,
+          sha256(attemptRaw),
+        );
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        try {
+          const finalAudit = writeCanonicalAuditSummary({
+            task: context.task,
+            workspace: context.workspace,
+            stage: "build-spec",
+            throughStepId: 6,
+          });
+          buildSpecFullAudit = {
+            status: "recorded",
+            ref: finalAudit.audit_summary_ref,
+            hash: finalAudit.audit_record_hash,
+          };
+        } catch (auditError) {
+          buildSpecFullAudit = { status: "unavailable", reason: auditError.message };
+        }
+        buildSpecFullAudit = context.kernel.publishBuildSpecCompletionAudit({
+          attempt_ref: attempt.attempt_ref,
+          attempt_hash: sha256(attemptRaw),
+          audit: buildSpecFullAudit,
+        });
+      }
+    }
     const accepted = acceptStageAttempt(values.stage, context, { attemptRef: attempt.attempt_ref });
     const acceptedSourceRef = `results/${values.stage}/accepted.json`;
     const acceptedSourceRaw = context.task.readRecord(acceptedSourceRef);
@@ -640,7 +729,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       boundary: writeBoundary,
       source: { ref: acceptedSourceRef, hash: createHash("sha256").update(acceptedSourceRaw).digest("hex") },
     });
-    return { ...attempt, accepted };
+    return {
+      ...attempt,
+      accepted,
+      ...(buildSpecFullAudit === undefined ? {} : { completion_audit: buildSpecFullAudit }),
+    };
   }
   if (command === "confirm") {
     return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });

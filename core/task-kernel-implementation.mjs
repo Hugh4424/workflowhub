@@ -591,6 +591,10 @@ export function validateAttempt(attempt, expected = {}) {
   const stage = stageName(attempt.stage);
   if (typeof attempt.task_id !== "string" || typeof attempt.attempt_id !== "string") throw new Error("attempt identity fields required");
   if (!Number.isFinite(Date.parse(attempt.created_at))) throw new Error("attempt created_at invalid");
+  if (attempt.workflow_run_id !== undefined
+      && (stage !== "build-spec" || typeof attempt.workflow_run_id !== "string" || attempt.workflow_run_id.trim() === "")) {
+    throw new Error("attempt workflow_run_id is only valid for build-spec runtime publication");
+  }
   if (!Array.isArray(attempt.missing_items)) throw new Error("attempt missing_items list required");
   validateStageFacts(stage, attempt.facts, {
     allowLegacyBuildCode: expected.allowLegacyBuildCode === true,
@@ -1781,13 +1785,16 @@ export function buildTaskKernel(taskHandle, {
     return deepFreeze({ workflow_run_id: event.workflow_run_id });
   };
   const completeRuntimeOwnedStageStep = (name, input = {}) => {
-    if (name !== "make-decision" && name !== "build-plan") {
+    if (!new Set(["make-decision", "build-spec", "build-plan"]).has(name)) {
       throw new TypeError(`unsupported runtime-owned stage: ${name}`);
     }
     plain(input, "runtime-owned stage step input");
     rejectUnknown(input, new Set(["step_id", "entry_evidence", "completion_evidence", "terminal_status", "skip_reason"]), "runtime-owned stage step input");
     if (name === "build-plan" && !new Set([7, 8]).has(input.step_id)) {
       throw new Error("runtime-owned build-plan completion is limited to steps 7 and 8");
+    }
+    if (name === "build-spec" && input.step_id !== 6) {
+      throw new Error("runtime-owned build-spec completion is limited to step 6");
     }
     const terminalStatus = input.terminal_status ?? "success";
     if (!new Set(["success", "skipped"]).has(terminalStatus)) {
@@ -1828,7 +1835,7 @@ export function buildTaskKernel(taskHandle, {
         }
         return deepFreeze({ workflow_run_id: active.run.workflow_run_id, idempotent: true });
       }
-      if (input.step_id > 1 && !activeEvents.some((event) => event.step_id === input.step_id - 1
+      if (name !== "build-spec" && input.step_id > 1 && !activeEvents.some((event) => event.step_id === input.step_id - 1
           && event.event_type === "step_exit"
           && eventCompletesDependency(event))) {
         throw new Error(`runtime-owned ${name} step ${input.step_id} requires completed step ${input.step_id - 1}`);
@@ -1859,6 +1866,88 @@ export function buildTaskKernel(taskHandle, {
   };
   const completeMakeDecisionStageStep = (input = {}) =>
     completeRuntimeOwnedStageStep("make-decision", input);
+  const completeBuildSpecResultPublication = (input = {}) => {
+    plain(input, "build-spec result publication input");
+    rejectUnknown(input, new Set(["attempt_ref", "attempt_hash"]), "build-spec result publication input");
+    const attemptRef = nonemptyString(input.attempt_ref, "build-spec result publication attempt_ref");
+    const attemptHash = nonemptyString(input.attempt_hash, "build-spec result publication attempt_hash");
+    if (!ATTEMPT_REF.test(attemptRef) || !HASH.test(attemptHash)) {
+      throw new Error("build-spec result publication requires a canonical attempt ref and hash");
+    }
+    const attemptRaw = task.readRecord(`results/build-spec/${attemptRef}`);
+    const attempt = validateAttempt(parseJson(attemptRaw, "build-spec result publication attempt"), {
+      taskId: task.identity.taskId,
+      stage: "build-spec",
+    });
+    const active = activeStageRun("build-spec");
+    if (hash(attemptRaw) !== attemptHash || attempt.workflow_run_id !== active.run.workflow_run_id) {
+      throw new Error("build-spec result publication attempt binding mismatch");
+    }
+    return completeRuntimeOwnedStageStep("build-spec", {
+      step_id: 6,
+      entry_evidence: {
+        kind: "stage_attempt",
+        uri_or_path: `results/build-spec/${attemptRef}`,
+        content_hash: attemptHash,
+      },
+      completion_evidence: {
+        kind: "stage_result",
+        uri_or_path: `results/build-spec/${attemptRef}`,
+        content_hash: attemptHash,
+      },
+    });
+  };
+  const publishBuildSpecCompletionAudit = (input = {}) => {
+    plain(input, "build-spec completion audit input");
+    rejectUnknown(input, new Set(["attempt_ref", "attempt_hash", "audit"]), "build-spec completion audit input");
+    const attemptRef = nonemptyString(input.attempt_ref, "build-spec completion audit attempt_ref");
+    const attemptHash = nonemptyString(input.attempt_hash, "build-spec completion audit attempt_hash");
+    if (!ATTEMPT_REF.test(attemptRef) || !HASH.test(attemptHash)) {
+      throw new Error("build-spec completion audit requires a canonical attempt ref and hash");
+    }
+    const attemptRaw = task.readRecord(`results/build-spec/${attemptRef}`);
+    if (hash(attemptRaw) !== attemptHash) throw new Error("build-spec completion audit attempt hash mismatch");
+    plain(input.audit, "build-spec completion audit status");
+    rejectUnknown(input.audit, new Set(["status", "ref", "hash", "reason"]), "build-spec completion audit status");
+    if (input.audit.status === "recorded") {
+      if (!/^evidence\/audits\/build-spec\/[a-f0-9]{64}\.json$/.test(input.audit.ref ?? "")
+          || !HASH.test(input.audit.hash ?? "") || hash(task.readRecord(input.audit.ref)) !== input.audit.hash) {
+        throw new Error("build-spec completion audit canonical audit binding mismatch");
+      }
+    } else if (input.audit.status !== "unavailable"
+        || typeof input.audit.reason !== "string" || input.audit.reason.trim() === "") {
+      throw new Error("build-spec completion audit must record a canonical audit or an unavailable reason");
+    }
+    const record = {
+      schema_version: "build-spec-completion-audit.v1",
+      task_id: task.identity.taskId,
+      stage: "build-spec",
+      attempt_ref: attemptRef,
+      attempt_hash: attemptHash,
+      audit: structuredClone(input.audit),
+    };
+    const raw = `${JSON.stringify(record, null, 2)}\n`;
+    const ref = `evidence/build-spec-completions/${attemptHash}.json`;
+    try {
+      createKernelRecord(ref, raw);
+    } catch (error) {
+      if (error?.code !== "EEXIST" || task.readRecord(ref) !== raw) throw error;
+    }
+    return deepFreeze({ status: input.audit.status, ref, record });
+  };
+  const readBuildSpecCompletionAudit = (attemptRef, attemptHash) => {
+    if (!ATTEMPT_REF.test(attemptRef ?? "") || !HASH.test(attemptHash ?? "")) {
+      throw new Error("build-spec completion audit lookup requires attempt ref and hash");
+    }
+    const ref = `evidence/build-spec-completions/${attemptHash}.json`;
+    const record = parseJson(task.readRecord(ref), "build-spec completion audit");
+    if (record.schema_version !== "build-spec-completion-audit.v1"
+        || record.task_id !== task.identity.taskId || record.stage !== "build-spec"
+        || record.attempt_ref !== attemptRef || record.attempt_hash !== attemptHash) {
+      throw new Error("build-spec completion audit lookup binding mismatch");
+    }
+    return deepFreeze({ ref, record });
+  };
   const completedMakeDecisionDependency = (workflowRunId, stepId) => {
     let events = [];
     try {
@@ -3602,6 +3691,9 @@ export function buildTaskKernel(taskHandle, {
     completeMakeDecisionInteractionPublication,
     completeMakeDecisionResearch,
     completeMakeDecisionReceipt,
+    completeBuildSpecResultPublication,
+    publishBuildSpecCompletionAudit,
+    readBuildSpecCompletionAudit,
     deriveStageWorkflowRunId,
     deriveReviewFlowIdentity,
     createReviewFlowReset,
@@ -4061,6 +4153,7 @@ export function buildTaskKernel(taskHandle, {
             stage: name,
             attempt_id: `${name}:${filename.slice(0, -5)}`,
             created_at: data.created_at ?? now(),
+            ...(name === "build-spec" ? { workflow_run_id: activeStageRun("build-spec").run.workflow_run_id } : {}),
             facts: structuredClone(data.facts),
             evidence_refs: [...(data.evidence_refs ?? [])],
             missing_items: [...missingItems],

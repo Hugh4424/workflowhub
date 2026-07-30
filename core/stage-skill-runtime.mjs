@@ -28,7 +28,7 @@ export function preflightStageSkills({ packageRoot, stage, activeConditions = []
   return { ...loaded, dependencies, payloads, capabilityResults };
 }
 
-export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, hostInvoke, independentContextAvailable = true, activeConditions = [], probes = {}, commands = {}, run, kernel, invocationKey = "default" }) {
+export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, notInvokedReason = "trigger_false", hostInvoke, independentContextAvailable = true, activeConditions = [], probes = {}, commands = {}, run, kernel, invocationKey = "default" }) {
   const prepared = preflightStageSkills({ packageRoot, stage, activeConditions, probes, commands, run });
   const dependency = prepared.manifest.skills.find(item => item.name === name);
   if (!dependency) throw new Error(`${stage}: undeclared skill ${name}`);
@@ -37,7 +37,7 @@ export async function dispatchStageSkill({ packageRoot, stage, name, triggered =
     const fact = createStageSkillInvocation({
       ...(kernel ? { taskId: kernel.task.identity.taskId, workflowRunId: kernel.deriveStageWorkflowRunId(stage) } : {}),
       stage, name, invocationKey, declaredTrigger: dependency.trigger, bundleHash: prepared.payloads.get(name).bundle_hash,
-      status: "not_invoked", reason: "trigger_false",
+      status: "not_invoked", reason: notInvokedReason,
     });
     if (kernel) kernel.publishStageSkillInvocation(fact);
     return fact;
