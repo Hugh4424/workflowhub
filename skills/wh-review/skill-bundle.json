@@ -68,7 +68,7 @@
     },
     {
       "path": "scripts/__tests__/review-runner.test.mjs",
-      "sha256": "d351df5dc28ddae456fb9637c4410f92109f12aab6c8df227ca96fe8a24527d0"
+      "sha256": "6614c6694a1859af6f7b86ed3c675a62a2399193141e15e53672c45110699d99"
     },
     {
       "path": "scripts/__tests__/review-controller.test.mjs",
@@ -144,7 +144,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "037a4f2d5ce8a0f4433e20bb0cf06080fe6ead802555466dcab877130a060418"
+      "sha256": "8a2c174b9bd5ad25e8e8c0efe7c1e0934b12711ad99eefdf0fad38e76333eedb"
     },
     {
       "path": "scripts/review-source.mjs",
