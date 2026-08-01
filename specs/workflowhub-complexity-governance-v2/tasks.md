@@ -2485,6 +2485,13 @@
 - **边界**：只允许该测试文件中与 Phase 4 immutable history/successor 绑定相关的断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
 - **验收**：后续 successor 必须同时绑定本修订后的 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
 
+##### T054 explicit predecessor successor API correction（append-only）
+
+- **追加原因**：Phase 4 需要从 canonical 49bd Phase trace 追加到当前 15be tree；successor 必须绑定显式历史 predecessor，不得把可变 live phase pointer 当作历史许可。
+- **追加文件**：`workflows/build-code/phase-evidence.mjs`、`core/task-handle.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`tests/build-code-phase-evidence.test.mjs`、`skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs`
+- **边界**：只允许显式 predecessor ref/hash 校验、TaskHandle successor 枚举、same-phase trace supersession 及对应 focused tests；旧 Phase trace、live pointer、receipt 和 review 事实保持只读不变。
+- **验收**：canonical predecessor→replacement selector 通过；非 canonical、hash mismatch、跨 task/phase、非 ancestor 或 live pointer 回退均 fail-closed；focused gate 不替代 T054 全量完成。
+
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**

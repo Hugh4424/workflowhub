@@ -178,6 +178,16 @@ describe("build-code composition contract", () => {
     expect(() => validatePhaseEvidenceInput({
       ...base, phase_successor_ref: "results/build-code/revisions/phase-successor-0001.json",
     })).toThrow(/provided together/i);
+    expect(validatePhaseEvidenceInput({
+      ...base,
+      phase_successor_reason: "replace stale historical phase",
+      predecessor_phase_trace_ref: `evidence/phases/phase-9/${"a".repeat(40)}/phase-map-trace-${"b".repeat(64)}.json`,
+      predecessor_phase_trace_hash: "b".repeat(64),
+    })).toMatchObject({ predecessor_phase_trace_hash: "b".repeat(64) });
+    expect(() => validatePhaseEvidenceInput({
+      ...base, predecessor_phase_trace_ref: "evidence/legacy/trace.json", predecessor_phase_trace_hash: "b".repeat(64),
+      phase_successor_reason: "replace",
+    })).toThrow(/predecessor_phase_trace_ref is invalid/);
   });
 
   it("reads the immutable predecessor archive after the live Phase pointer moves", () => {

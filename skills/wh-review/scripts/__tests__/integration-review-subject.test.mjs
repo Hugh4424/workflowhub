@@ -616,6 +616,84 @@ describe("integration selector verified descendant continuations", () => {
     expect(unchanged).toHaveLength(2);
   });
 
+  it("supersedes a canonical 49bd predecessor through an explicit 15be successor binding", () => {
+    const predecessorTree = "49bd33240febeea8b85a6afc3e8ebcc313f84a76";
+    const replacementTree = "15be4fdbbd5ace767a6ce7c80c2658fc3469755e";
+    const predecessorRef = `evidence/phases/phase-9/${predecessorTree}/phase-map-trace-${"a".repeat(64)}.json`;
+    const replacementRef = `evidence/phases/phase-9/${replacementTree}/phase-map-trace-${"b".repeat(64)}.json`;
+    const successorRef = "results/build-code/revisions/phase-successor-0004.json";
+    const predecessor = {
+      traceRef: predecessorRef, traceSha256: "a".repeat(64),
+      trace: {
+        phase_id: "phase-9", snapshot_tree: predecessorTree, baseline_commit: "1".repeat(40),
+        implementation_commit: "2".repeat(40), material_id: "material-49bd",
+        diff_scan: binding("evidence/phases/phase-9/old-diff.json", "c".repeat(64)),
+        canonical_phase_evidence: binding("evidence/phases/phase-9/old-evidence.json", "d".repeat(64)),
+      },
+    };
+    const replacement = {
+      traceRef: replacementRef, traceSha256: "b".repeat(64),
+      trace: {
+        phase_id: "phase-9", snapshot_tree: replacementTree, baseline_commit: "1".repeat(40),
+        implementation_commit: "3".repeat(40), material_id: "material-15be",
+        diff_scan: binding("evidence/phases/phase-9/new-diff.json", "e".repeat(64)),
+        canonical_phase_evidence: binding("evidence/phases/phase-9/new-evidence.json", "f".repeat(64)),
+      },
+    };
+    const successor = {
+      schema_version: "workflowhub-build-code-phase-successor.v2", task_id: "explicit-replacement", stage: "build-code", phase_id: "phase-9",
+      predecessor_phase_trace_ref: predecessorRef, predecessor_phase_trace_hash: predecessor.traceSha256,
+      previous_snapshot_tree: predecessorTree, current_snapshot_tree: replacementTree,
+      previous_baseline_commit: predecessor.trace.baseline_commit, previous_implementation_commit: predecessor.trace.implementation_commit,
+      previous_diff_scan_ref: predecessor.trace.diff_scan.ref, previous_diff_scan_hash: predecessor.trace.diff_scan.sha256,
+      previous_canonical_phase_evidence_ref: predecessor.trace.canonical_phase_evidence.ref,
+      previous_canonical_phase_evidence_hash: predecessor.trace.canonical_phase_evidence.sha256,
+    };
+    const successorRaw = `${JSON.stringify(successor)}\n`;
+    const task = {
+      identity: { projectName: "fixture", taskId: "explicit-replacement" },
+      listCanonicalPhaseMapTraceRefs: () => [predecessorRef, replacementRef],
+      listCanonicalPhaseSuccessorRefs: () => [successorRef],
+      readRecord: (ref) => {
+        if (ref === successorRef) return successorRaw;
+        throw new Error(`unexpected read ${ref}`);
+      },
+    };
+    const selected = selectCanonicalPhaseTraces({
+      task, sourceRoot: "fixture", corrections: new Map(),
+      readTrace: (_task, _root, ref) => ref === predecessorRef ? predecessor : replacement,
+    });
+    expect(selected).toEqual([replacement]);
+  });
+
+  it.each([
+    ["noncanonical predecessor ref", { predecessor_phase_trace_ref: "evidence/legacy/trace.json" }],
+    ["wrong predecessor hash", { predecessor_phase_trace_hash: "f".repeat(64) }],
+  ])("rejects an explicit successor with %s", (_label, override) => {
+    const predecessorRef = `evidence/phases/phase-9/${OLD_TREE}/phase-map-trace-${"1".repeat(64)}.json`;
+    const successorRef = "results/build-code/revisions/phase-successor-0004.json";
+    const successor = {
+      schema_version: "workflowhub-build-code-phase-successor.v2", task_id: "explicit-replacement", stage: "build-code", phase_id: "phase-9",
+      predecessor_phase_trace_ref: predecessorRef, predecessor_phase_trace_hash: "1".repeat(64),
+      previous_snapshot_tree: OLD_TREE, current_snapshot_tree: NEW_TREE,
+      previous_baseline_commit: "1".repeat(40), previous_implementation_commit: "2".repeat(40),
+      previous_diff_scan_ref: "evidence/old-diff.json", previous_diff_scan_hash: "3".repeat(64),
+      previous_canonical_phase_evidence_ref: "evidence/old.json", previous_canonical_phase_evidence_hash: "4".repeat(64),
+      ...override,
+    };
+    const raw = `${JSON.stringify(successor)}\n`;
+    const task = {
+      identity: { projectName: "fixture", taskId: "explicit-replacement" },
+      listCanonicalPhaseMapTraceRefs: () => [predecessorRef],
+      listCanonicalPhaseSuccessorRefs: () => [successorRef],
+      readRecord: (ref) => ref === successorRef ? raw : (() => { throw new Error("missing"); })(),
+    };
+    expect(() => selectCanonicalPhaseTraces({ task, sourceRoot: "fixture", corrections: new Map(), readTrace: (_task, _root, ref) => ({
+      traceRef: ref, traceSha256: "1".repeat(64),
+      trace: { phase_id: "phase-9", snapshot_tree: OLD_TREE, canonical_phase_evidence: binding("evidence/old.json", "4".repeat(64)) },
+    }) })).toThrow(/explicit Phase successor/);
+  });
+
   it("accepts a material-only Git descendant with receipts bound to its current tree", async () => {
     const f = descendantFixture();
     try {

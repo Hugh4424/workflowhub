@@ -410,6 +410,57 @@ export function selectCanonicalPhaseTraces({
     if (predecessor === undefined) continue;
     superseded.add(predecessor);
   }
+  // Explicit historical predecessors are recorded on the immutable successor
+  // itself.  This path intentionally does not consult phase-result.json: the
+  // live pointer may have moved since the predecessor was accepted.
+  const successorRefs = typeof task.listCanonicalPhaseSuccessorRefs === "function"
+    ? task.listCanonicalPhaseSuccessorRefs()
+    : [];
+  for (const successorRef of successorRefs) {
+    const successorRecord = readJson(task, successorRef, "Phase successor");
+    const successor = successorRecord.value;
+    const explicitRef = successor?.predecessor_phase_trace_ref;
+    const explicitHash = successor?.predecessor_phase_trace_hash;
+    if (explicitRef === undefined && explicitHash === undefined) continue;
+    if (typeof explicitRef !== "string" || !/^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(explicitRef)
+        || !HASH.test(explicitHash ?? "")
+        || successorRecord.value?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+        || successor.task_id !== task.identity.taskId
+        || successor.stage !== "build-code"
+        || !PHASE.test(successor.phase_id ?? "")
+        || !OID.test(successor.previous_snapshot_tree ?? "")
+        || !OID.test(successor.current_snapshot_tree ?? "")) {
+      incomplete(`explicit Phase successor binding is invalid: ${successorRef}`);
+    }
+    let predecessorTrace;
+    try {
+      predecessorTrace = readTrace(task, sourceRoot, explicitRef);
+    } catch (error) {
+      incomplete(`explicit Phase successor predecessor trace is invalid: ${explicitRef}: ${error.message}`);
+    }
+    if (predecessorTrace.traceSha256 !== explicitHash
+        || predecessorTrace.trace.phase_id !== successor.phase_id
+        || predecessorTrace.trace.snapshot_tree !== successor.previous_snapshot_tree
+        || predecessorTrace.trace.baseline_commit !== successor.previous_baseline_commit
+        || predecessorTrace.trace.implementation_commit !== successor.previous_implementation_commit
+        || !sameBinding(predecessorTrace.trace.diff_scan, { ref: successor.previous_diff_scan_ref, sha256: successor.previous_diff_scan_hash })
+        || !sameBinding(predecessorTrace.trace.canonical_phase_evidence, {
+          ref: successor.previous_canonical_phase_evidence_ref,
+          sha256: successor.previous_canonical_phase_evidence_hash,
+        })) {
+      incomplete(`explicit Phase successor predecessor does not bind its canonical trace: ${successorRef}`);
+    }
+    const predecessor = traces.find((candidate) => candidate.traceRef === explicitRef && candidate.traceSha256 === explicitHash);
+    if (predecessor === undefined) {
+      incomplete(`explicit Phase successor predecessor trace is not canonical in the selected evidence set: ${explicitRef}`);
+    }
+    const replacement = traces.find((candidate) => candidate.trace.phase_id === successor.phase_id
+      && candidate.trace.snapshot_tree === successor.current_snapshot_tree);
+    if (replacement === undefined || replacement === predecessor) {
+      incomplete(`explicit Phase successor replacement snapshot is not canonical: ${successorRef}`);
+    }
+    superseded.add(predecessor);
+  }
   return traces.filter((trace) => !superseded.has(trace));
 }
 
