@@ -440,6 +440,11 @@ function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, prede
   const previousSubject = predecessorPhaseTrace === undefined
     ? phaseSubject(task, workspace, current)
     : { scan: predecessorPhaseTrace.scan.value, subject: predecessorPhaseTrace.subject };
+  // When a completed Phase advances from an explicitly bound pending
+  // successor, preserve that successor's authenticated unavailable review
+  // binding.  No new review fact is invented by successor creation.
+  const effectivePredecessorReview = predecessorReview
+    ?? (predecessorPhaseTrace === undefined ? null : predecessorReviewFromTrace(predecessorPhaseTrace));
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", previousSubject.scan.baseline_commit, previousSubject.scan.implementation_commit], {
       cwd: workspace.worktreeRoot, stdio: "ignore",
@@ -472,7 +477,7 @@ function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, prede
       previousGreenTree: previousGreen.value.snapshot_tree,
       previousSnapshotTree: previousSubject.scan.snapshot_tree,
       predecessorCandidateTree: predecessorPhaseTrace?.trace?.schema_version === "phase-map-trace.pending.v1"
-        ? undefined : predecessorReview.attempt?.value?.candidate_tree,
+        ? undefined : effectivePredecessorReview?.attempt?.value?.candidate_tree,
       previousAllowedFiles: previousSubject.scan.allowed_files,
       allowedFiles,
       previousGuardedC2Paths: previousSubject.scan.guarded_c2_paths,
@@ -522,9 +527,9 @@ function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, prede
       predecessor_phase_trace_ref: predecessorPhaseTrace.traceRef,
       predecessor_phase_trace_hash: predecessorPhaseTrace.traceSha256,
     }),
-    ...(predecessorReview === null || predecessorReview === undefined ? {} : {
-      previous_phase_review_ref: predecessorReview.ref,
-      previous_phase_review_hash: predecessorReview.hash,
+    ...(effectivePredecessorReview === null || effectivePredecessorReview === undefined ? {} : {
+      previous_phase_review_ref: effectivePredecessorReview.ref,
+      previous_phase_review_hash: effectivePredecessorReview.hash,
     }),
     current_snapshot_tree: implementation.value.snapshot_tree,
     current_snapshot_commit: currentSnapshotCommit,
@@ -597,9 +602,10 @@ export function readPhaseSuccessor(task, ref, hash, { phaseId, current, predeces
     || value.predecessor_phase_trace_hash !== undefined;
   if (explicitPredecessor) {
     if (typeof value.predecessor_phase_trace_ref !== "string"
-        || !PHASE_TRACE.test(value.predecessor_phase_trace_ref)
+        || (!PHASE_TRACE.test(value.predecessor_phase_trace_ref)
+          && !PHASE_SUCCESSOR.test(value.predecessor_phase_trace_ref))
         || !HASH.test(value.predecessor_phase_trace_hash ?? "")) {
-      throw new Error("phase successor explicit predecessor Phase trace binding is invalid");
+      throw new Error("phase successor explicit predecessor Phase trace or successor binding is invalid");
     }
     const predecessorTrace = readExplicitPredecessorPhaseTrace({
       task, workspace, phaseId, ref: value.predecessor_phase_trace_ref,
@@ -715,127 +721,158 @@ function phaseSubject(task, workspace, phaseResult) {
  * different attempt; the trace itself is the authority for the historical
  * evidence, while the new implementation must remain a Git descendant.
  */
+function readPendingSuccessorTrace({
+  task, workspace, phaseId, ref, hash, currentImplementation, current, currentEvidence,
+} = {}) {
+  const successorRecord = readJson(task, ref, "pending predecessor Phase successor");
+  const successor = successorRecord.value;
+  if (successorRecord.hash !== hash
+      || successor?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+      || successor.task_id !== task.identity.taskId || successor.stage !== "build-code"
+      || successor.phase_id !== phaseId
+      || !OID.test(successor.current_snapshot_tree ?? "")
+      || !OID.test(successor.current_snapshot_commit ?? "")
+      || !HASH.test(successor.material_revision_hash ?? "")
+      || (!PHASE_TRACE.test(successor.predecessor_phase_trace_ref ?? "")
+        && !PHASE_SUCCESSOR.test(successor.predecessor_phase_trace_ref ?? ""))
+      || !HASH.test(successor.predecessor_phase_trace_hash ?? "")) {
+    throw new Error("explicit pending predecessor Phase successor binding is invalid");
+  }
+
+  const material = readCurrentTaskMaterialRevision({ task });
+  if (material === undefined || material.hash !== successor.material_revision_hash) {
+    throw new Error("explicit pending predecessor Phase successor material is stale");
+  }
+
+  const previousTrace = PHASE_SUCCESSOR.test(successor.predecessor_phase_trace_ref)
+    ? readPendingSuccessorTrace({
+      task, workspace, phaseId, ref: successor.predecessor_phase_trace_ref,
+      hash: successor.predecessor_phase_trace_hash, currentImplementation,
+      currentEvidence: {
+        diffRef: successor.previous_diff_scan_ref,
+        diffHash: successor.previous_diff_scan_hash,
+        canonicalRef: successor.previous_canonical_phase_evidence_ref,
+        canonicalHash: successor.previous_canonical_phase_evidence_hash,
+      },
+    })
+    : readPhaseMapTrace({
+      task, sourceRoot: workspace.worktreeRoot, traceRef: successor.predecessor_phase_trace_ref,
+    });
+  if (previousTrace.traceSha256 !== successor.predecessor_phase_trace_hash
+      || previousTrace.trace.phase_id !== phaseId
+      || previousTrace.trace.review_status !== "unavailable"
+      || successor.previous_phase_review_ref !== previousTrace.attempt?.ref
+      || successor.previous_phase_review_hash !== previousTrace.attempt?.sha256) {
+    throw new Error("explicit pending predecessor Phase successor old review is not unavailable and bound");
+  }
+
+  const evidenceRefs = currentEvidence ?? {
+    diffRef: current?.diff_scan?.path ?? current?.evidence?.diff,
+    canonicalRef: current?.evidence?.canonical_phase_evidence_ref,
+  };
+  if (typeof evidenceRefs.diffRef !== "string" || typeof evidenceRefs.canonicalRef !== "string") {
+    throw new Error("explicit pending predecessor Phase successor has no current Phase evidence");
+  }
+  const scan = readJson(task, evidenceRefs.diffRef, "current pending predecessor Phase diff scan");
+  const canonicalEvidence = readJson(task, evidenceRefs.canonicalRef, "current pending predecessor Phase evidence");
+  const scanValue = scan.value;
+  const canonicalValue = canonicalEvidence.value;
+  const implementation = readImplementation(task, successor.implementation_receipt_ref);
+  const green = readTestReceipt(task, successor.green_test_receipt_ref, { green: true });
+  const allowedFiles = successor.allowed_files ?? [];
+  const guardedC2Paths = successor.guarded_c2_paths ?? [];
+  if (canonicalValue?.phase_id !== phaseId
+      || canonicalValue?.status !== "awaiting_review"
+      || scanValue?.phase_id !== phaseId
+      || scanValue.snapshot_tree !== successor.current_snapshot_tree
+      || scanValue.safe !== true
+      || (scanValue.violations ?? []).length !== 0
+      || (scanValue.allowlist_violations ?? []).length !== 0
+      || JSON.stringify(scanValue.allowed_files ?? []) !== JSON.stringify(allowedFiles)
+      || JSON.stringify(scanValue.guarded_c2_paths ?? []) !== JSON.stringify(guardedC2Paths)
+      || implementation.value.snapshot_tree !== successor.current_snapshot_tree
+      || green.value.snapshot_tree !== successor.current_snapshot_tree
+      || gitTree(workspace.worktreeRoot, implementation.value.snapshot_commit) !== successor.current_snapshot_tree
+      || gitTree(workspace.worktreeRoot, green.value.snapshot_commit) !== successor.current_snapshot_tree
+      || gitTree(workspace.worktreeRoot, successor.current_snapshot_commit) !== successor.current_snapshot_tree) {
+    throw new Error("explicit pending predecessor Phase successor receipts or allowlist are stale");
+  }
+  if (currentImplementation?.value?.snapshot_commit !== undefined) {
+    try {
+      execFileSync("git", ["merge-base", "--is-ancestor", successor.current_snapshot_commit, currentImplementation.value.snapshot_commit], {
+        cwd: workspace.worktreeRoot, stdio: "ignore",
+      });
+    } catch {
+      throw new Error("explicit pending predecessor Phase successor Git ancestry is invalid");
+    }
+  }
+  const subject = validatePhaseReviewEvidence({
+    phaseResult: canonicalValue, scan: scanValue, sourceRoot: workspace.worktreeRoot, phaseId,
+  });
+  return Object.freeze({
+    traceRef: ref,
+    traceSha256: hash,
+    trace: Object.freeze({
+      schema_version: "phase-map-trace.pending.v1",
+      phase_id: phaseId,
+      baseline_commit: scanValue.baseline_commit,
+      implementation_commit: scanValue.implementation_commit,
+      base_tree: scanValue.base_tree,
+      snapshot_tree: successor.current_snapshot_tree,
+      allowed_files: [...allowedFiles],
+      guarded_c2_paths: [...guardedC2Paths],
+      changed_files: [...(scanValue.changed_files ?? [])],
+      canonical_phase_evidence: { ref: evidenceRefs.canonicalRef, sha256: canonicalEvidence.sha256 },
+      diff_scan: { ref: evidenceRefs.diffRef, sha256: scan.sha256 },
+      implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
+      green_test_receipt: { ref: green.ref, sha256: green.hash },
+      red_test_receipt: null,
+      review_status: "unavailable",
+      review_result: null,
+      review_attempt: { ref: previousTrace.attempt.ref, sha256: previousTrace.attempt.sha256 },
+      material_id: successor.material_revision_hash,
+      review_scope: "phase",
+      verdict: null,
+      risk_acceptances: [],
+    }),
+    phaseEvidence: canonicalEvidence,
+    scan,
+    implementation,
+    green,
+    red: null,
+    review: null,
+    attempt: previousTrace.attempt,
+    acceptanceTrace: null,
+    predecessorTrace: previousTrace.traceRef,
+    subject,
+  });
+}
+
 function readExplicitPredecessorPhaseTrace({ task, workspace, phaseId, ref, hash, currentImplementation } = {}) {
   safeRef(ref, new RegExp(`(?:${PHASE_TRACE.source})|(?:${PHASE_SUCCESSOR.source})`), "predecessor_phase_trace_ref");
   if (!HASH.test(hash ?? "")) throw new TypeError("predecessor_phase_trace_hash is invalid");
   if (PHASE_SUCCESSOR.test(ref)) {
     const successorRecord = readJson(task, ref, "pending predecessor Phase successor");
     const successor = successorRecord.value;
-    if (successorRecord.hash !== hash
-        || successor?.schema_version !== "workflowhub-build-code-phase-successor.v2"
-        || successor.task_id !== task.identity.taskId || successor.stage !== "build-code"
-        || successor.phase_id !== phaseId
-        || !OID.test(successor.current_snapshot_tree ?? "")
-        || !OID.test(successor.current_snapshot_commit ?? "")
-        || !HASH.test(successor.material_revision_hash ?? "")
-        || !PHASE_TRACE.test(successor.predecessor_phase_trace_ref ?? "")
-        || !HASH.test(successor.predecessor_phase_trace_hash ?? "")) {
-      throw new Error("explicit pending predecessor Phase successor binding is invalid");
-    }
     const current = currentPhaseResult(task);
-    if (current?.status !== "awaiting_review"
-        || current.phase_id !== phaseId
-        || current.phase_successor_ref !== ref
-        || current.phase_successor_hash !== hash) {
-      throw new Error("explicit pending predecessor Phase successor is not the current awaiting Phase");
+    if (!current || current.phase_id !== phaseId
+        || (current.status === "awaiting_review"
+          && (current.phase_successor_ref !== ref || current.phase_successor_hash !== hash))
+        || !["awaiting_review", "done"].includes(current.status)) {
+      throw new Error("explicit pending predecessor Phase successor is not the current Phase");
     }
-    const material = readCurrentTaskMaterialRevision({ task });
-    if (material === undefined || material.hash !== successor.material_revision_hash) {
-      throw new Error("explicit pending predecessor Phase successor material is stale");
-    }
-    const previousTrace = readPhaseMapTrace({
-      task, sourceRoot: workspace.worktreeRoot, traceRef: successor.predecessor_phase_trace_ref,
+    const pending = readPendingSuccessorTrace({
+      task, workspace, phaseId, ref, hash, currentImplementation,
+      currentEvidence: {
+        diffRef: current.diff_scan?.path ?? current.evidence?.diff,
+        canonicalRef: current.evidence?.canonical_phase_evidence_ref,
+      },
+      current,
     });
-    if (previousTrace.traceSha256 !== successor.predecessor_phase_trace_hash
-        || previousTrace.trace.phase_id !== phaseId
-        || previousTrace.trace.review_status !== "unavailable"
-        || successor.previous_phase_review_ref !== previousTrace.attempt?.ref
-        || successor.previous_phase_review_hash !== previousTrace.attempt?.sha256) {
-      throw new Error("explicit pending predecessor Phase successor old review is not unavailable and bound");
+    if (current.status === "done" && pending.trace.snapshot_tree !== current.review?.snapshot_tree) {
+      throw new Error("explicit pending predecessor Phase successor does not match the completed current Phase");
     }
-    const diffRef = current.diff_scan?.path ?? current.evidence?.diff;
-    const canonicalRef = current.evidence?.canonical_phase_evidence_ref;
-    const implementation = readImplementation(task, current.evidence?.implementation_receipt_ref);
-    const green = readTestReceipt(task, current.evidence?.green_test_receipt_ref, { green: true });
-    const scan = readJson(task, diffRef, "current pending predecessor Phase diff scan");
-    const canonicalEvidence = readJson(task, canonicalRef, "current pending predecessor Phase evidence");
-    const scanValue = scan.value;
-    const allowedFiles = current.declared_allowed_files ?? [];
-    const guardedC2Paths = current.declared_guarded_c2_paths ?? [];
-    if (canonicalEvidence.value?.phase_id !== phaseId
-        || canonicalEvidence.value?.status !== "awaiting_review"
-        || scanValue?.phase_id !== phaseId
-        || scanValue.snapshot_tree !== successor.current_snapshot_tree
-        || scanValue.safe !== true
-        || (scanValue.violations ?? []).length !== 0
-        || (scanValue.allowlist_violations ?? []).length !== 0
-        || JSON.stringify(scanValue.allowed_files ?? []) !== JSON.stringify(allowedFiles)
-        || JSON.stringify(scanValue.guarded_c2_paths ?? []) !== JSON.stringify(guardedC2Paths)
-        || implementation.value.snapshot_tree !== successor.current_snapshot_tree
-        || green.value.snapshot_tree !== successor.current_snapshot_tree
-        || gitTree(workspace.worktreeRoot, implementation.value.snapshot_commit) !== successor.current_snapshot_tree
-        || gitTree(workspace.worktreeRoot, green.value.snapshot_commit) !== successor.current_snapshot_tree
-        || gitTree(workspace.worktreeRoot, successor.current_snapshot_commit) !== successor.current_snapshot_tree) {
-      throw new Error("explicit pending predecessor Phase successor receipts or allowlist are stale");
-    }
-    let continuous = false;
-    try {
-      execFileSync("git", ["merge-base", "--is-ancestor", successor.previous_implementation_commit, successor.current_snapshot_commit], {
-        cwd: workspace.worktreeRoot, stdio: "ignore",
-      });
-      continuous = true;
-    } catch {
-      if (successor.baseline_continuity === "legacy-commit-current-head-continuity") {
-        const head = execFileSync("git", ["rev-parse", "HEAD"], {
-          cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-        }).trim();
-        try {
-          execFileSync("git", ["merge-base", "--is-ancestor", head, successor.current_snapshot_commit], {
-            cwd: workspace.worktreeRoot, stdio: "ignore",
-          });
-          continuous = true;
-        } catch { /* handled below */ }
-      }
-    }
-    if (!continuous) throw new Error("explicit pending predecessor Phase successor Git ancestry is invalid");
-    const live = phaseSubject(task, workspace, current);
-    return Object.freeze({
-      traceRef: ref,
-      traceSha256: hash,
-      trace: Object.freeze({
-        schema_version: "phase-map-trace.pending.v1",
-        phase_id: phaseId,
-        baseline_commit: scanValue.baseline_commit,
-        implementation_commit: scanValue.implementation_commit,
-        base_tree: scanValue.base_tree,
-        snapshot_tree: successor.current_snapshot_tree,
-        allowed_files: [...allowedFiles],
-        guarded_c2_paths: [...guardedC2Paths],
-        changed_files: [...(scanValue.changed_files ?? [])],
-        canonical_phase_evidence: { ref: canonicalRef, sha256: canonicalEvidence.sha256 },
-        diff_scan: { ref: diffRef, sha256: scan.sha256 },
-        implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
-        green_test_receipt: { ref: green.ref, sha256: green.hash },
-        red_test_receipt: null,
-        review_status: "unavailable",
-        review_result: null,
-        review_attempt: { ref: previousTrace.attempt.ref, sha256: previousTrace.attempt.sha256 },
-        material_id: successor.material_revision_hash,
-        review_scope: "phase",
-        verdict: null,
-        risk_acceptances: [],
-      }),
-      phaseEvidence: { value: canonicalEvidence.value },
-      scan,
-      implementation,
-      green,
-      red: null,
-      review: null,
-      attempt: previousTrace.attempt,
-      acceptanceTrace: null,
-      predecessorTrace: previousTrace.traceRef,
-      subject: live.subject,
-    });
+    return pending;
   }
   const predecessor = readPhaseMapTrace({ task, sourceRoot: workspace.worktreeRoot, traceRef: ref });
   if (predecessor.traceSha256 !== hash || predecessor.trace.phase_id !== phaseId) {

@@ -184,6 +184,12 @@ describe("build-code composition contract", () => {
       predecessor_phase_trace_ref: `evidence/phases/phase-9/${"a".repeat(40)}/phase-map-trace-${"b".repeat(64)}.json`,
       predecessor_phase_trace_hash: "b".repeat(64),
     })).toMatchObject({ predecessor_phase_trace_hash: "b".repeat(64) });
+    expect(validatePhaseEvidenceInput({
+      ...base,
+      phase_successor_reason: "advance pending successor",
+      predecessor_phase_trace_ref: "results/build-code/revisions/phase-successor-0006.json",
+      predecessor_phase_trace_hash: "c".repeat(64),
+    })).toMatchObject({ predecessor_phase_trace_ref: "results/build-code/revisions/phase-successor-0006.json" });
     expect(() => validatePhaseEvidenceInput({
       ...base, predecessor_phase_trace_ref: "evidence/legacy/trace.json", predecessor_phase_trace_hash: "b".repeat(64),
       phase_successor_reason: "replace",
