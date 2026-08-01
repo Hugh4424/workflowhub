@@ -2478,6 +2478,13 @@
 - **边界**：只允许该测试文件及其已有 T054 execution-snapshot 断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
 - **验收**：当前四材料 successor 必须同时绑定修订后的 T054 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
 
+##### T054 Phase 4 lineage-test allowlist correction（append-only）
+
+- **追加原因**：Phase 4 的 immutable phase-result archive 与 same-phase trace 选择修复同时更新了 `core/__tests__/task-handle.test.mjs`；该测试是修复的直接回归证明，旧 Phase 9 allowlist 未包含它。
+- **追加文件**：`core/__tests__/task-handle.test.mjs`
+- **边界**：只允许该测试文件中与 Phase 4 immutable history/successor 绑定相关的断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
+- **验收**：后续 successor 必须同时绑定本修订后的 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
+
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
