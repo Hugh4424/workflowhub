@@ -17,9 +17,11 @@ workflowhub 是一个面向 AI 开发工作流的编排工具项目，按一套�
 
 ## 目录约定
 
-- `skills/`：每个阶段一个独立技能。
-- `workflows/`：每个工作流一个文件夹。
-- `config/`：全局配置。
+- `runtime/`：生产运行时与稳定 schema，按职责分区；入口通过 `runtime/interface/` 暴露。
+- `tools/cli/`：命令行和检查工具。
+- `skills/`：每个阶段一个独立技能；`workflows/`：每个工作流一个文件夹；`config/`：全局配置。
+- `core/`、`scripts/`、顶层 `schemas/` 只保留 move-map 登记的历史兼容文件；不得把新运行时能力放回这些目录。
+- 目录变更先更新 `docs/architecture/move-map.json`，再更新 import 和治理文档；不做行为重写。
 
 新增阶段/工作流按目录约定添加，核心零改动。
 

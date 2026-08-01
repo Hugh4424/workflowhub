@@ -2,7 +2,7 @@
 
 **状态**: 设计草案，待人工确认后方可开始实施
 **日期**: 2026-07-03
-**背景**: main 已 revert 回 7ecd826（phase-3 全部退回），历史代码保留在 `d5a5ddc` 及其前序 commit。本文档基于 `d5a5ddc:core/receipt-writer.mjs`（453 行）分析后出具。
+**背景**: main 已 revert 回 7ecd826（phase-3 全部退回），历史代码保留在 `d5a5ddc` 及其前序 commit。本文档基于 `d5a5ddc:runtime/evidence/receipt-writer.mjs`（453 行）分析后出具。
 
 ---
 
@@ -41,7 +41,7 @@ core/
   receipt-writer.mjs          # 保留：薄门面，组合上述模块，暴露公开 API
 ```
 
-> **为什么保留 receipt-writer.mjs 作为门面**：现有调用方（facts-assembly.mjs、SKILL.md 引用的路径）均 import 自 `core/receipt-writer.mjs`。保留门面避免调用方大范围改动，同时将内部实现分离到各自模块，迁移可分阶段进行。
+> **为什么保留 receipt-writer.mjs 作为门面**：现有调用方（facts-assembly.mjs、SKILL.md 引用的路径）均 import 自 `runtime/evidence/receipt-writer.mjs`。保留门面避免调用方大范围改动，同时将内部实现分离到各自模块，迁移可分阶段进行。
 
 ---
 
@@ -285,7 +285,7 @@ export function latestByStepId(events) { ... }
 
 ---
 
-### 3.5 `core/receipt-writer.mjs`（重构后：薄门面）
+### 3.5 `runtime/evidence/receipt-writer.mjs`（重构后：薄门面）
 
 **职责**：组合上述 3 个新模块，暴露对外公开 API。不含任何业务逻辑。
 
@@ -362,7 +362,7 @@ receipt-writer.mjs 只保留 3 个公开 write 函数 + 2 个 re-export，删除
 | `workflows/verify-code/facts-assembly.mjs` | `buildAuditSummaryFromJournalEvents`, `journalPathForTaskDir` from `receipt-writer.mjs` | **不需要改**（门面继续 re-export） |
 | `core/__tests__/receipt-writer.test.mjs` | 全量 import from `receipt-writer.mjs` | 可选：补充针对子模块的直接单测（见第 5 节），原有测试继续通过 |
 | `tests/verify-code-facts.test.mjs` | 间接通过 facts-assembly | **不需要改** |
-| 其他 SKILL.md 引用 | 引用路径 `core/receipt-writer.mjs` | **不需要改**（路径不变） |
+| 其他 SKILL.md 引用 | 引用路径 `runtime/evidence/receipt-writer.mjs` | **不需要改**（路径不变） |
 
 ---
 

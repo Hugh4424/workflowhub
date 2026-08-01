@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const checker = resolve(repoRoot, "scripts/check-task-record-paths.mjs");
+const checker = resolve(repoRoot, "tools/cli/check-task-record-paths.mjs");
 const temporary = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 
@@ -20,10 +20,10 @@ function run(root = repoRoot) {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-task-context-check-"));
   temporary.push(root);
-  mkdirSync(join(root, "scripts"), { recursive: true });
-  cpSync(checker, join(root, "scripts", "check-task-record-paths.mjs"));
-  mkdirSync(join(root, "core"), { recursive: true });
-  writeFileSync(join(root, "core", "task-identity.mjs"), "export const taskPath = join(root, 'Projects', project, 'tasks', task);\n");
+  mkdirSync(join(root, "tools", "cli"), { recursive: true });
+  cpSync(checker, join(root, "tools", "cli", "check-task-record-paths.mjs"));
+  mkdirSync(join(root, "runtime", "task"), { recursive: true });
+  writeFileSync(join(root, "runtime", "task", "task-identity.mjs"), "export const taskPath = join(root, 'Projects', project, 'tasks', task);\n");
   for (const stage of stages) {
     const directory = join(root, "workflows", stage);
     mkdirSync(directory, { recursive: true });
@@ -79,7 +79,7 @@ describe("TaskContext static guard", () => {
     );
     const result = run(root);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("only legal in core/task-identity.mjs");
+    expect(result.stderr).toContain("only legal in runtime/task/task-identity.mjs");
   });
 
   it("scans transitive runtime imports outside the fixed component roots", () => {
@@ -93,7 +93,7 @@ describe("TaskContext static guard", () => {
     expect(result.stderr).toContain("cwd identity discovery");
   });
 
-  it.each(["core/source-manifest.mjs", "core/requirement-ledger.mjs", "core/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
+  it.each(["core/source-manifest.mjs", "runtime/evidence/requirement-ledger.mjs", "core/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
     const root = fixture();
     const full = join(root, relativeFile); mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, "export const guessed = process.cwd();\n");

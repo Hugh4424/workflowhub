@@ -4,7 +4,7 @@ import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readSync, r
 import { isAbsolute, relative, resolve } from "node:path";
 import { reviewSourceForWorkspace } from "../../../core/workspace.mjs";
 import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
-import { isRuntimeOnlyPath } from "../../../core/canonical-utils.mjs";
+import { isRuntimeOnlyPath } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const CHUNK_BYTES = 64 * 1024;
 

@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
-import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
-import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
-import { inspectRunnerIdentity } from "../../core/runner-identity.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { inspectRunnerIdentity } from "../../runtime/evidence/runner-identity.mjs";
 import { createTask, migrateTaskRunnerRoot, openTask } from "../../core/task-handle.mjs";
-import { createTaskKernel } from "../../core/task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import {
   canonical,
   sha256,

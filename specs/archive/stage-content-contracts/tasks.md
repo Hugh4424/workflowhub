@@ -92,7 +92,7 @@ tar/manifest 是唯一恢复权威；patch 只用于审计。
 
 - Modify：`CONSTITUTION.md`、`constitution-checklist.md`、`CONTEXT.md`。
 - Create：`docs/adr/0010-serious-review-disposition.md`。
-- Forbidden：`core/stage-review-disposition.mjs`、`core/schemas/risk-acceptance.v1.json`，直至 T013 通过。
+- Forbidden：`runtime/review/stage-review-disposition.mjs`、`runtime/schemas/risk-acceptance.v1.json`，直至 T013 通过。
 
 ### Tasks
 
@@ -201,7 +201,7 @@ serious pause 是证据充分时的异常处置，不是常规质量门。
 
 - **ID**：T021
 - **动作**：实现 allowlisted envelope、schema dispatch、身份注入、minimize→hash→write 顺序和认证 reader。
-- **精确文件**：`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/schemas/interaction-completion.v1.json`、`core/schemas/ambiguity-ledger.v1.json`、`core/schemas/decision-entry.v1.json`、`core/schemas/decision-coverage-audit.v1.json`、`core/schemas/decision-omission-acceptance.v1.json`、`core/schemas/decision-correction-appendix.v1.json`、`core/schemas/decision-log-contract.v1.json`、`core/schemas/plan-task-contract.v1.json`、`core/schemas/stage-completion-facts.v1.json`、`core/schemas/risk-acceptance.v1.json`。
+- **精确文件**：`core/stage-content-evidence.mjs`、`runtime/schemas/stage-content-evidence.v1.json`、`core/schemas/interaction-completion.v1.json`、`runtime/schemas/ambiguity-ledger.v1.json`、`runtime/schemas/decision-entry.v1.json`、`runtime/schemas/decision-coverage-audit.v1.json`、`runtime/schemas/decision-omission-acceptance.v1.json`、`runtime/schemas/decision-correction-appendix.v1.json`、`runtime/schemas/decision-log-contract.v1.json`、`runtime/schemas/plan-task-contract.v1.json`、`runtime/schemas/stage-completion-facts.v1.json`、`runtime/schemas/risk-acceptance.v1.json`。
 - **输入**：T020 fixtures。
 - **输出**：create-only `{ref, hash, value}` 和认证 reader。
 - **依赖**：T020。
@@ -351,7 +351,7 @@ caller 能写身份字段、任意 payload 被接受或 handler 自己决定过�
 
 - **ID**：T034
 - **动作**：让正文和 omission appendix 共用一个 schema；加入 source_type、approval_status/ref/hash、人类可读含义和全部承重字段。
-- **精确文件**：`core/stage-content-contracts.mjs`、`core/schemas/decision-entry.v1.json`、`skills/decision-log/SKILL.md`、`skills/decision-log/templates/decision-log-template.md`。
+- **精确文件**：`runtime/stage/stage-content-contracts.mjs`、`runtime/schemas/decision-entry.v1.json`、`skills/decision-log/SKILL.md`、`skills/decision-log/templates/decision-log-template.md`。
 - **输入**：T033 fixtures、accepted spec Section 6。
 - **输出**：唯一 decision validator 与 Markdown 模板。
 - **依赖**：T033。
@@ -383,7 +383,7 @@ caller 能写身份字段、任意 payload 被接受或 handler 自己决定过�
 
 - **ID**：T036
 - **动作**：逐条审计原始需求/回答/grill/review/承重决定；遗漏先展示后等待；接受时写专用 appendix；追加七条固定 correction。
-- **精确文件**：`core/stage-content-contracts.mjs`、`core/schemas/decision-coverage-audit.v1.json`、`core/schemas/decision-omission-acceptance.v1.json`、`core/schemas/decision-correction-appendix.v1.json`、`core/schemas/decision-log-contract.v1.json`、`workflows/make-decision/SKILL.md`、`tests/stage-decision-contract.test.mjs`。
+- **精确文件**：`runtime/stage/stage-content-contracts.mjs`、`runtime/schemas/decision-coverage-audit.v1.json`、`runtime/schemas/decision-omission-acceptance.v1.json`、`runtime/schemas/decision-correction-appendix.v1.json`、`runtime/schemas/decision-log-contract.v1.json`、`workflows/make-decision/SKILL.md`、`tests/stage-decision-contract.test.mjs`。
 - **输入**：T035 main ref/hash、interaction、source items、D1–D7 旧 ref/hash。
 - **输出**：coverage audit、零个或多个 omission appendix、一个 correction appendix、accepted decision set。
 - **依赖**：T035、T032。
@@ -452,7 +452,7 @@ receipt 是机器索引；`decision-log.md` 是人类主文件；两者通过 re
 
 - **ID**：T042
 - **动作**：实现 plan/tasks parser、Phase/task rows、命令/oracle 检查、DAG 和逐项 FR/AC 双向覆盖。
-- **精确文件**：`core/stage-content-contracts.mjs`、`core/schemas/plan-task-contract.v1.json`、`core/stage-handlers.mjs`、`workflows/build-plan/steps.json`、`workflows/build-plan/skill-deps.yaml`。
+- **精确文件**：`runtime/stage/stage-content-contracts.mjs`、`runtime/schemas/plan-task-contract.v1.json`、`core/stage-handlers.mjs`、`workflows/build-plan/steps.json`、`workflows/build-plan/skill-deps.yaml`。
 - **输入**：T040 matrix、T041 模板。
 - **输出**：`plan-task-contract.v1` facts。
 - **依赖**：T041。
@@ -537,7 +537,7 @@ T041–T044 为 0；本轮 draft-plan/tasks 可由 T042 validator 读取并得�
 
 - **ID**：T051
 - **动作**：只补五阶段覆盖、合法 revision isolation/lineage 和由 flow events 可复算的 cost facts。
-- **精确文件**：`core/task-kernel-implementation.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/schemas/resolution.schema.json`、`core/stage-handlers.mjs`。
+- **精确文件**：`core/task-kernel-implementation.mjs`、`runtime/review/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/schemas/resolution.schema.json`、`core/stage-handlers.mjs`。
 - **输入**：T050 gaps。
 - **输出**：统一 flow/head/CAS/budget/cost 行为。
 - **依赖**：T050。
@@ -569,7 +569,7 @@ T041–T044 为 0；本轮 draft-plan/tasks 可由 T042 validator 读取并得�
 
 - **ID**：T053
 - **动作**：只对 valid `actionable + major|blocking` 生成异常暂停卡；正常 build-spec/build-code 不增加确认。
-- **精确文件**：`core/stage-review-disposition.mjs`、`core/stage-handlers.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`。
+- **精确文件**：`runtime/review/stage-review-disposition.mjs`、`core/stage-handlers.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`。
 - **输入**：T052 findings、T012 宪法。
 - **输出**：五阶段统一 pause facts 和 host-visible 卡片合同。
 - **依赖**：T052。
@@ -585,7 +585,7 @@ T041–T044 为 0；本轮 draft-plan/tasks 可由 T042 validator 读取并得�
 
 - **ID**：T054
 - **动作**：TaskKernel 强绑 finding/review/evidence/snapshot/card/reply/选择/时间，create-only 写 risk record，保持原 verdict。
-- **精确文件**：`core/stage-review-disposition.mjs`、`core/schemas/risk-acceptance.v1.json`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`tests/stage-risk-acceptance.test.mjs`。
+- **精确文件**：`runtime/review/stage-review-disposition.mjs`、`runtime/schemas/risk-acceptance.v1.json`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`tests/stage-risk-acceptance.test.mjs`。
 - **输入**：T053 pause facts 和真实 host reply。
 - **输出**：`risk-acceptance.v1` ref/hash。
 - **依赖**：T053。
@@ -654,7 +654,7 @@ review transport、contract validity、semantic verdict 分开。
 
 - **ID**：T061
 - **动作**：实现共同 facts、用户 renderer、系统 renderer 和共同字段一致性检查。
-- **精确文件**：`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`tests/stage-completion-facts.test.mjs`。
+- **精确文件**：`core/stage-completion-facts.mjs`、`runtime/schemas/stage-completion-facts.v1.json`、`tests/stage-completion-facts.test.mjs`。
 - **输入**：T060 fixtures 和 official attempt facts。
 - **输出**：一份 canonical facts、两个派生视图。
 - **依赖**：T060。
@@ -763,7 +763,7 @@ renderer 只格式化，不读仓库、不查 task、不重算事实。
 - **并行**：否。
 - **FR**：FR-CMP-001。
 - **AC**：AC28、AC29、AC31、AC37。
-- **gate_cmd**：`mkdir -p apply/evidence && node scripts/validate-field-mapping.mjs specs/stage-content-contracts/spec.md specs/stage-content-contracts/plan.md specs/stage-content-contracts/tasks.md > apply/evidence/T072-coverage.stdout 2> apply/evidence/T072-coverage.stderr`
+- **gate_cmd**：`mkdir -p apply/evidence && node tools/cli/validate-field-mapping.mjs specs/stage-content-contracts/spec.md specs/stage-content-contracts/plan.md specs/stage-content-contracts/tasks.md > apply/evidence/T072-coverage.stdout 2> apply/evidence/T072-coverage.stderr`
 - **expected_exit**：0
 - **oracle**：无 orphan FR、AC、task；每项有真实 evidence ref；未知项明确为 unknown 而非 pass。
 - **evidence_path**：`apply/evidence/T072-coverage.stdout`、`apply/evidence/stage-content-coverage.json`
@@ -795,7 +795,7 @@ renderer 只格式化，不读仓库、不查 task、不重算事实。
 - **并行**：否。
 - **FR**：FR-CMP-003。
 - **AC**：AC29、AC31、AC32。
-- **gate_cmd**：`mkdir -p apply/evidence && node scripts/collect-task-facts.mjs --project=workflowhub --task=review-foundation-baseline > apply/evidence/T074-replay-facts.stdout 2> apply/evidence/T074-replay-facts.stderr`
+- **gate_cmd**：`mkdir -p apply/evidence && node tools/cli/collect-task-facts.mjs --project=workflowhub --task=review-foundation-baseline > apply/evidence/T074-replay-facts.stdout 2> apply/evidence/T074-replay-facts.stderr`
 - **expected_exit**：0
 - **oracle**：该命令只验证 WorkflowHub host 已生产一个新的 make-decision run，且该 run 明确绑定 T073 continuation ref；命令成功不证明完整 replay，也不执行或模拟任何 ask/reply。
 - **evidence_path**：`apply/evidence/T074-replay-facts.stdout`、T074 host-visible 会话 refs、原 task canonical refs

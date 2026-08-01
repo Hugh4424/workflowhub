@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateStageFacts } from "../core/task-kernel.mjs";
+import { validateStageFacts } from "../runtime/task/task-kernel.mjs";
 
 const checkpoint=(stage,path)=>({schema_version:"git-checkpoint-plan.v1",stage,parent_commit:"a".repeat(40),artifacts:[{path,blob_oid:"b".repeat(40),content_hash:"c".repeat(64)}],plan_hash:"d".repeat(64)});
 const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1".repeat(64), snapshot_head:"a".repeat(40),snapshot_tree: "a".repeat(40),snapshot_commit: "b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z", receipt_ref: `receipts/${prefix}-receipt.json`, receipt_hash: "2".repeat(64), output_ref: `evidence/${prefix}-output.txt`, output_hash: "3".repeat(64) });

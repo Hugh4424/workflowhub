@@ -164,7 +164,7 @@
 
 - **ID**: T012
 - **动作**: 让现有计划覆盖校验识别已接受规格的 `FR-001 / AC-001` 编号，并保持原有长编号兼容。
-- **精确文件**: `core/stage-content-contracts.mjs`, `core/schemas/plan-task-contract.v1.json`, `tests/stage-plan-task-contract.test.mjs`
+- **精确文件**: `runtime/stage/stage-content-contracts.mjs`, `runtime/schemas/plan-task-contract.v1.json`, `tests/stage-plan-task-contract.test.mjs`
 - **输入**: 当前 plan-task contract 的 0/0 误报
 - **输出**: FR 12/12、AC 11/11 的真实双向覆盖
 - **依赖**: 无

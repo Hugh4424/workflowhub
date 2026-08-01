@@ -10,7 +10,7 @@ import { closeSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync,
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { normalizeRuntimeOnlyPaths } from '../../core/canonical-utils.mjs';
+import { normalizeRuntimeOnlyPaths } from '../../runtime/evidence/canonical-utils.mjs';
 
 // Literal patterns matched against content lines (added/removed/context lines).
 // These represent operations that appear as code content — not file paths.
@@ -115,12 +115,13 @@ function basename(filePath) {
  * @param {string} diffText
  * @returns {{ violations: Array<{type: string, pattern: string, line: number}>, safe: boolean }}
  */
-function createDiffLineScanner(ignoredPaths = new Set()) {
+function createDiffLineScanner(ignoredPaths = new Set(), guardedC2Paths = new Set()) {
   const violations = [];
   const seen = new Set(); // deduplicate: one violation per (pattern, lineNum)
 
   let currentFilePath = null; // tracks which file the current hunk belongs to
   let currentFileIgnored = false;
+  let currentFileGuarded = false;
   const filePathViolationsSeen = new Set(); // one file-path violation per (pattern, filePath)
 
   function scanLine(line, lineNum) {
@@ -130,42 +131,45 @@ function createDiffLineScanner(ignoredPaths = new Set()) {
     if (parsedPath !== null) {
       currentFilePath = parsedPath;
       currentFileIgnored = ignoredPaths.has(currentFilePath);
+      currentFileGuarded = !currentFileIgnored && guardedC2Paths.has(currentFilePath);
       if (currentFileIgnored) return;
 
       // Check file-path rules against the changed file path (not content lines).
-      const base = basename(currentFilePath);
-      for (const rule of C2_FILE_PATH_RULES) {
-        let matches = false;
-        if (rule.matchBasename) {
-          // Exact basename match for manifest/env files.
-          // For `.env`: basename must be exactly `.env` or start with `.env.` to avoid
-          // matching `.env.production` as `.env` (both are in the list separately).
-          if (rule.pattern === '.env') {
-            // Match exactly `.env` or `.env` followed by nothing else — no `.env.production`
-            // double-match (that has its own rule). Match `.env` alone.
-            matches = base === '.env';
-          } else {
-            matches = base === rule.pattern;
+      if (!currentFileGuarded) {
+        const base = basename(currentFilePath);
+        for (const rule of C2_FILE_PATH_RULES) {
+          let matches = false;
+          if (rule.matchBasename) {
+            // Exact basename match for manifest/env files.
+            // For `.env`: basename must be exactly `.env` or start with `.env.` to avoid
+            // matching `.env.production` as `.env` (both are in the list separately).
+            if (rule.pattern === '.env') {
+              // Match exactly `.env` or `.env` followed by nothing else — no `.env.production`
+              // double-match (that has its own rule). Match `.env` alone.
+              matches = base === '.env';
+            } else {
+              matches = base === rule.pattern;
+            }
+          }
+          if (matches) {
+            const key = `${rule.pattern}:${currentFilePath}`;
+            if (!filePathViolationsSeen.has(key)) {
+              filePathViolationsSeen.add(key);
+              violations.push({ type: rule.type, pattern: rule.pattern, line: lineNum });
+              seen.add(`${rule.pattern}:${lineNum}`);
+            }
           }
         }
-        if (matches) {
-          const key = `${rule.pattern}:${currentFilePath}`;
-          if (!filePathViolationsSeen.has(key)) {
-            filePathViolationsSeen.add(key);
-            violations.push({ type: rule.type, pattern: rule.pattern, line: lineNum });
-            seen.add(`${rule.pattern}:${lineNum}`);
-          }
-        }
-      }
 
-      // Check file-path-based regex rules (testFilePath).
-      for (const rule of C2_REGEX_RULES) {
-        if (rule.testFilePath && rule.testFilePath(currentFilePath)) {
-          const key = `${rule.pattern}:${currentFilePath}`;
-          if (!filePathViolationsSeen.has(key)) {
-            filePathViolationsSeen.add(key);
-            violations.push({ type: rule.type, pattern: rule.pattern, line: lineNum });
-            seen.add(`${rule.pattern}:${lineNum}`);
+        // Check file-path-based regex rules (testFilePath).
+        for (const rule of C2_REGEX_RULES) {
+          if (rule.testFilePath && rule.testFilePath(currentFilePath)) {
+            const key = `${rule.pattern}:${currentFilePath}`;
+            if (!filePathViolationsSeen.has(key)) {
+              filePathViolationsSeen.add(key);
+              violations.push({ type: rule.type, pattern: rule.pattern, line: lineNum });
+              seen.add(`${rule.pattern}:${lineNum}`);
+            }
           }
         }
       }
@@ -257,9 +261,9 @@ function scanTextFileLines(filePath, onLine) {
  * Stream a complete frozen diff from a host-private file. This intentionally
  * has no byte limit: a late hunk must be checked just as rigorously as the first.
  */
-export function scanDiffFile(filePath, ignoredPaths = new Set()) {
+export function scanDiffFile(filePath, ignoredPaths = new Set(), guardedC2Paths = new Set()) {
   if (typeof filePath !== 'string' || !isAbsolute(filePath)) throw new TypeError('diff file path must be absolute');
-  const scanner = createDiffLineScanner(ignoredPaths);
+  const scanner = createDiffLineScanner(ignoredPaths, guardedC2Paths);
   scanTextFileLines(filePath, (line, lineNumber) => scanner.scanLine(line, lineNumber));
   return scanner.result();
 }
@@ -377,7 +381,7 @@ function runtimeControlledChange(root, baselineCommit, implementationCommit, pat
 }
 
 /** Build the canonical evidence consumed by phase review and phase-gate. */
-export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, implementationCommit, allowedFiles = [] } = {}) {
+export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, implementationCommit, allowedFiles = [], guardedC2Paths = [] } = {}) {
   if (typeof sourceRoot !== 'string' || !isAbsolute(sourceRoot)) throw new TypeError('sourceRoot must be absolute');
   if (typeof phaseId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(phaseId)) throw new TypeError('phaseId is invalid');
   for (const [label, value] of [['baselineCommit', baselineCommit], ['implementationCommit', implementationCommit]]) {
@@ -385,6 +389,9 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
   }
   if (!Array.isArray(allowedFiles) || !allowedFiles.every((value) => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.split('/').includes('..'))) {
     throw new TypeError('allowedFiles must contain repository-relative paths');
+  }
+  if (!Array.isArray(guardedC2Paths) || !guardedC2Paths.every((value) => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.split('/').includes('..'))) {
+    throw new TypeError('guardedC2Paths must contain repository-relative paths');
   }
 
   const root = realpathSync(sourceRoot);
@@ -408,14 +415,21 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
     const runtimeControlledPaths = new Set(runtime_controlled_changes.map(({ path }) => path));
     const diffPath = join(temporaryRoot, 'phase.diff');
     runGitToFiles(root, ['diff', '-M', '--binary', '--no-ext-diff', base, implementation], diffPath, join(temporaryRoot, 'phase.diff.stderr'));
-    const c2 = scanDiffFile(diffPath, runtimeControlledPaths);
+    const guarded = new Set(normalizeRuntimeOnlyPaths(guardedC2Paths));
+    const c2 = scanDiffFile(diffPath, runtimeControlledPaths, guarded);
     const allowed = new Set(normalizeRuntimeOnlyPaths(allowedFiles));
     const allowlist_violations = changed_files.filter((path) => !allowed.has(path) && !runtimeControlledPaths.has(path)).map((path) => ({ path }));
+    const guarded_changes = changed_files.filter((path) => guarded.has(path)).map((path) => ({
+      path,
+      reason: 'phase-local-c2-path-rule-exception',
+    }));
     const c2_violations = c2.violations;
     return {
       schema_version: 'phase-diff-scan.v1',
       phase_id: phaseId,
       allowed_files: [...allowed].sort(),
+      guarded_c2_paths: [...guarded].sort(),
+      guarded_changes,
       baseline_commit: base,
       implementation_commit: implementation,
       snapshot_tree: snapshotTree,
@@ -434,12 +448,14 @@ export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, imple
 function cliArguments(argv) {
   const values = new Map();
   const repeatedAllowed = [];
+  const repeatedGuarded = [];
   for (const argument of argv) {
     const separator = argument.indexOf('=');
     if (!argument.startsWith('--') || separator < 3) throw new Error(`unknown argument: ${argument}`);
     const key = argument.slice(2, separator);
     const value = argument.slice(separator + 1);
     if (key === 'allowed-file') repeatedAllowed.push(value);
+    else if (key === 'guarded-c2-path') repeatedGuarded.push(value);
     else if (values.has(key)) throw new Error(`duplicate argument: --${key}`);
     else values.set(key, value);
   }
@@ -452,6 +468,7 @@ function cliArguments(argv) {
     baselineCommit: values.get('baseline-commit'),
     implementationCommit: values.get('implementation-commit'),
     allowedFiles: [...fromFile, ...repeatedAllowed],
+    guardedC2Paths: repeatedGuarded,
   };
 }
 

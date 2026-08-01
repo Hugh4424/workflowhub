@@ -1,0 +1,566 @@
+{
+  "schema_version": "workflowhub-deletion-plan.v1",
+  "phase": "Phase 0",
+  "policy": "Missing proof or user confirmation always means KEEP. Phase 0 deletes nothing.",
+  "candidates": [
+    {
+      "id": "DEL-01",
+      "title": "Grill replacement machinery",
+      "candidatePaths": [
+        "skills/grill-with-docs",
+        "runtime/stage/stage-content-contracts.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T022"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: document conflict and exit-check oracle"
+      ],
+      "replacementPath": "pending: current material and decision quality facts",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-grill-replacement.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T023 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-01.json",
+          "sha256": "053d82590746266d0dbbbcc174cd3e4528e96d53ad7c933f9ce8bc32bab6ebb6",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-02",
+      "title": "Phase trace lineage and supersession",
+      "candidatePaths": [
+        "runtime/review/stage-review-disposition.mjs",
+        "runtime/review/review-flow-authority.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T024"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: independent review fact preservation"
+      ],
+      "replacementPath": "pending: current QualityFact",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-phase-trace.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T025 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-02.json",
+          "sha256": "e8aa2e478208190117c4743e2dc8df29c19e3cb5a58f9bd2e60fc0cc7ab2388c",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-03",
+      "title": "Dedicated invalidation commands",
+      "candidatePaths": [
+        "core/task-kernel-implementation.mjs",
+        "scripts/stage-runtime.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T026"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: stale facts cannot complete current publication"
+      ],
+      "replacementPath": "pending: derived freshness",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-invalidation.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T027 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-03.json",
+          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-04",
+      "title": "Continuation commands and records",
+      "candidatePaths": [
+        "core/task-kernel-implementation.mjs",
+        "scripts/stage-runtime.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T028"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: current four materials remain editable"
+      ],
+      "replacementPath": "pending: single MaterialRevision chain",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-continuation.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T029 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-04.json",
+          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-05",
+      "title": "Rebind commands and records",
+      "candidatePaths": [
+        "core/task-kernel-implementation.mjs",
+        "scripts/stage-runtime.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T030"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: task and workspace identity remain fail-loud"
+      ],
+      "replacementPath": "pending: current authenticated invocation identity",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-rebind.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T031 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-05.json",
+          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-06",
+      "title": "Build-code reopen commands and records",
+      "candidatePaths": [
+        "core/task-kernel-implementation.mjs",
+        "scripts/stage-runtime.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T032"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: verification failures remain immutable quality facts"
+      ],
+      "replacementPath": "pending: ordinary same-task material revision",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-reopen.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T033 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-06.json",
+          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-07",
+      "title": "Stage recovery and recover-spec commands",
+      "candidatePaths": [
+        "core/build-spec-receipt-recovery.mjs",
+        "core/task-recovery.mjs",
+        "scripts/task-recovery.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T034"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: interrupted atomic writes remain safely retryable"
+      ],
+      "replacementPath": "pending: idempotent canonical writer",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-stage-recovery.test.mjs",
+      "faultInjection": [
+        "pending: temp, fsync, rename, CAS, current-pointer"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T035 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-07.json",
+          "sha256": "44f43525055d416a67eb35fcf7dff43a97346e0a4e51ef36d527384783fd04ae",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-08",
+      "title": "Recovery and reset workspace CAS",
+      "candidatePaths": [
+        "core/task-recovery.mjs",
+        "core/workspace.mjs",
+        "scripts/runtime-cutover.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T036"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: workspace identity and CAS remain fail-loud"
+      ],
+      "replacementPath": "pending: single workspace writer",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-recovery-workspace.test.mjs",
+      "faultInjection": [
+        "pending: temp, fsync, rename, CAS, current-pointer"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T037 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-08.json",
+          "sha256": "e131df8808813a079a966135774ce86e46928713b495dd615f3bcd313a477e0a",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-09",
+      "title": "Duplicate invocation and completion projections",
+      "candidatePaths": [
+        "core/stage-skill-invocation.mjs",
+        "core/stage-completion-facts.mjs",
+        "core/stage-content-evidence.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T038"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: completion remains derived from current facts"
+      ],
+      "replacementPath": "pending: single Publication projection",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-duplicate-projection.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T039 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-09.json",
+          "sha256": "62cd9570729b6c4dc9e6a7b55e8b941c3e01eb58d01ae1fcfcafbd174ae07ecc",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-10",
+      "title": "Stage-transition journal authority",
+      "candidatePaths": [
+        "core/journal-appender.mjs",
+        "core/journal-schema.mjs",
+        "core/chain-topology.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T040"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: immutable audit facts remain readable"
+      ],
+      "replacementPath": "pending: QualityFact and Publication records",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-transition-journal.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T041 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-10.json",
+          "sha256": "b7852c48b5d6614f37e39154cb08b89cc2d01965618529c3c8aef01af50bbb1d",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-11",
+      "title": "Shadow current, head, and checkpoint authority",
+      "candidatePaths": [
+        "core/git-checkpoint.mjs",
+        "core/task-handle.mjs",
+        "core/stage-runner.mjs"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T042"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: task, tree, and hash mismatches remain fail-loud"
+      ],
+      "replacementPath": "pending: single current MaterialRevision and Publication",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-shadow-checkpoint.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T043 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-11.json",
+          "sha256": "5c00994a979837fdf26033cece7091bbf5f6e2bdb3190149858dbdc498af9fa6",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    },
+    {
+      "id": "DEL-12",
+      "title": "Obsolete dispatch, config, index, and spike paths",
+      "candidatePaths": [
+        "core/dispatch-component.mjs",
+        "core/resolve-component.mjs",
+        "core/task-index.mjs",
+        "workflows/_spike"
+      ],
+      "consumers": [
+        "pending: reverse-reference audit in T044"
+      ],
+      "consumerAudit": "pending: consumer audit evidence",
+      "retainedQualitySemantics": [
+        "pending: five public stages and extension closure remain intact"
+      ],
+      "replacementPath": "pending: runtime facade and static Skill closure",
+      "replacementAudit": "pending: replacement audit evidence",
+      "negativeOracle": "pending: tests/integration/deletion-obsolete-tools.test.mjs",
+      "faultInjection": [
+        "pending: owning-slice failure matrix"
+      ],
+      "multicaCompatibility": "pending: clean-install execution",
+      "legacyTaskImpact": "pending: read-only TaskHandle inventory",
+      "rollbackEvidence": "pending: isolated T045 diff",
+      "decision": "KEEP",
+      "missingProof": [
+        "consumers",
+        "consumerAudit",
+        "retainedQualitySemantics",
+        "replacementPath",
+        "replacementAudit",
+        "negativeOracle",
+        "faultInjection",
+        "multicaCompatibility",
+        "legacyTaskImpact",
+        "rollbackEvidence",
+        "userConfirmation"
+      ],
+      "agentDecision": {
+        "status": "recorded_keep",
+        "evidence": {
+          "ref": "evidence/phase-5/keep-decisions/DEL-12.json",
+          "sha256": "b5ece4cd6e762515e9f425dab7162644302b18262290e3b99db1563d0a22746b",
+          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+        }
+      }
+    }
+  ]
+}

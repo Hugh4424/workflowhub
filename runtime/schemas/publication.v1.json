@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "publication.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "stage", "material_revision", "quality_fact_refs", "completion", "snapshot_tree"],
+  "properties": {
+    "schema_version": { "const": "publication.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+    "quality_fact_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "sha256"],
+        "properties": {
+          "ref": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "completion": { "type": "object" },
+    "snapshot_tree": { "type": "string", "minLength": 1 }
+  }
+}

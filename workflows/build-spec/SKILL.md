@@ -11,6 +11,11 @@ A real review outcome is recorded as returned; `unavailable` never becomes
 
 ## Runtime contract
 
+The stable Runner interface is the seven-behavior facade in
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`confirm`, and `authorize`. Commands below are delegated compatibility locators,
+not additional public Runner behaviors.
+
 `core/stage-context.mjs` is the external runner implementation. Consume only
 `bootstrapStage("build-spec", ...)` output. Required capabilities:
 `ctx.task`, `ctx.kernel`, `ctx.workspace`, and `ctx.artifacts`.
@@ -21,7 +26,7 @@ metadata only. Runner branch, dirty state, and old runner migration history
 never decide the stage result. Never search for or copy runner files into the
 target repository.
 
-Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
+Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=build-spec
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-spec
 is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
@@ -29,7 +34,7 @@ its checkpoint, and accepts it without a human confirmation command.
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
 is never an entry.
-`stage-runtime.mjs` has no `--help` command. Build-spec must not call `prepare`,
+`stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help`. Build-spec must not call `prepare`,
 `confirm`, or a separate `accept`, and must never pass `--runner-root`.
 
 Create an OS temporary directory first:
@@ -45,11 +50,11 @@ the Stage contract and can leave the host waiting for an unrelated tool callback
 Use this complete public sequence without inventing flags or input shapes:
 
 1. Before each review, publish the exact draft under review:
-   `node scripts/stage-runtime.mjs artifact --stage=build-spec
+   `node scripts/stage-runtime.mjs run --action=draft --stage=build-spec
    --project=<project> --task=<task> --name=spec.md
    --input=$TMP_DIR/draft-spec.md`.
 2. For the exact current `spec.md`, publish its v2 ambiguity and identity ledger:
-   `node scripts/stage-runtime.mjs publish-content-evidence --stage=build-spec
+   `node scripts/stage-runtime.mjs run --action=content --stage=build-spec
    --project=<project> --task=<task> --kind=ambiguity-ledger.v2
    --input=$TMP_DIR/ambiguity-ledger-v2.json`.
    The returned canonical ref/hash is the only ambiguity-ledger evidence used
@@ -58,7 +63,7 @@ Use this complete public sequence without inventing flags or input shapes:
    content before continuing.
 3. After review is finished and without changing `spec.md`, create the official
    receipt once:
-   `node scripts/stage-runtime.mjs receipt --stage=build-spec
+   `node scripts/stage-runtime.mjs run --action=record --stage=build-spec
    --project=<project> --task=<task> --component=spec
    --input=$TMP_DIR/spec-receipt.json`.
    The input shape is exactly
@@ -78,7 +83,7 @@ Use this complete public sequence without inventing flags or input shapes:
    the runtime verifies that result's canonical parent ref/hash. A stale review
    without either binding fails before a stage attempt is published.
 5. Publish and automatically accept the stage:
-   `node scripts/stage-runtime.mjs run --stage=build-spec
+   `node scripts/stage-runtime.mjs run --action=execute --stage=build-spec
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
 6. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
@@ -113,7 +118,7 @@ accepted.
 
 The prior accepted record remains the readable current fact until the corrected
 attempt is accepted. Continuation is recovery from a proven Stage defect, not a
-general way to reopen build-spec or add new scope.
+general way to repair cycle build-spec or add new scope.
 
 A temporary file may be authoring input, but it is never the reviewed artifact
 by itself. Do not create the official spec receipt before review is finished.
@@ -366,5 +371,7 @@ accepted risk never changes the verdict or excuses missing structural evidence.
 四材料任一或同时更新都追加 task-global `task-material-revision.v1`；writer 从认证
 ArtifactDir 计算 revision ID、changed files、content/source hashes，caller 不得自报。
 记录保留 parent、summary 和 source refs。旧 revision/accepted
-只读可追溯。该记录不是 reopen、reset、rebind、checkpoint 或 review 许可证，
+只读可追溯。该记录不是 repair cycle、reset、rebind、checkpoint 或 review 许可证，
 缺记录如实披露但不阻断继续完善规格。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。

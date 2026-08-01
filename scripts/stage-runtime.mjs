@@ -10,9 +10,9 @@ import {
   prepareMakeDecisionWorkspace,
   recoverMakeDecisionWorkspace,
 } from "../core/stage-context.mjs";
-import { persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
+import { persistWriteBoundaryPathCard } from "../runtime/evidence/write-boundary-preflight.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
-import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
+import { requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import {
   validateAcceptanceEvidence,
   writeCanonicalAuditSummary,
@@ -28,8 +28,10 @@ import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evi
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
-import { dispatchStageSkill, loadStageSkillManifest, preflightStageSkills } from "../core/stage-skill-runtime.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { dispatchStageSkill, loadStageSkillManifest, preflightStageSkills } from "../runtime/stage/stage-skill-runtime.mjs";
+import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../runtime/interface/runtime-facade.mjs";
+import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../runtime/interface/runner-contract.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -474,6 +476,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     }
     return context.kernel.publishMaterialRevision(input);
   }
+  if (command === "publish-quality-fact") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-quality-fact accepts only --stage, --project, --task, and --input");
+    return context.kernel.publishVNextQualityFact(values.stage, input);
+  }
+  if (command === "publish-publication") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-publication accepts only --stage, --project, --task, and --input");
+    return context.kernel.publishVNextPublication(values.stage, input);
+  }
   if (command === "record-step-entry") {
     if (values.stage === "make-decision") throw new Error("make-decision journal entries are runtime-owned");
     const allowed = new Set(["stage", "project", "task", "input"]);
@@ -799,8 +811,73 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   return acceptedResult;
 }
 
+export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
+  delegate = stageRuntimeMain,
+  skillBundleContract = LOCAL_SKILL_BUNDLE_CONTRACT,
+  runnerContract = LOCAL_RUNNER_CONTRACT,
+} = {}) {
+  const [behavior, ...raw] = argv;
+  if (behavior === "--help" || behavior === "help") {
+    return {
+      behaviors: ["doctor", "status", "run", "review", "verify", "confirm", "authorize"],
+      actions: {
+        doctor: ["workspace"],
+        status: ["begin", "repair"],
+        run: ["execute", "scope", "research", "draft", "record", "content"],
+        review: ["invoke", "risk"],
+        verify: ["tests", "phase", "lineage", "criterion", "failure", "passing"],
+        confirm: ["decision"],
+        authorize: ["decision", "risk"],
+      },
+    };
+  }
+  if (!RUNTIME_BEHAVIORS.includes(behavior)) throw new Error("unknown public runtime behavior");
+  const actionArgument = raw.find((item) => item.startsWith("--action="));
+  if (!actionArgument) throw new TypeError("public runtime behavior requires --action=<high-level-action>");
+  const action = actionArgument.slice("--action=".length);
+  const publicRoute = `${behavior}:${action}`;
+  const internalOperation = ({
+    "doctor:workspace": "prepare",
+    "status:begin": "start-run",
+    "status:repair": "reopen",
+    "run:execute": "run",
+    "run:scope": "publish-requirements-ledger",
+    "run:research": "record-research",
+    "run:draft": "artifact",
+    "run:record": "receipt",
+    "run:content": "publish-content-evidence",
+    "review:invoke": "invoke-stage-skill",
+    "review:risk": "review-risk-pause",
+    "verify:tests": "capture-tests",
+    "verify:phase": "publish-phase-evidence",
+    "verify:lineage": "publish-phase-trace-lineage",
+    "verify:criterion": "publish-acceptance-evidence",
+    "verify:failure": "publish-verify-failure",
+    "verify:passing": "publish-verify-passing",
+    "confirm:decision": "confirm",
+    "authorize:decision": "accept",
+    "authorize:risk": "accept-review-risk",
+  })[publicRoute];
+  if (!internalOperation) throw new Error("unknown public runtime action");
+  const delegatedArgv = [
+    internalOperation,
+    ...raw
+      .filter((item) => item !== actionArgument)
+      .map((item) => item.startsWith("--reopen-ref=")
+        ? `--reopen=${item.slice("--reopen-ref=".length)}`
+        : item),
+  ];
+  return invokeRuntimeCommand(
+    behavior,
+    Object.freeze({ action, argv: delegatedArgv }),
+    ({ argv: internalArgv }) => delegate(internalArgv),
+    { skillBundleContract, runnerContract },
+    internalOperation,
+  );
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  stageRuntimeMain().then((result) => {
+  stageRuntimeCliMain().then((result) => {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   }).catch((error) => {
     process.stderr.write(`${error?.stack ?? error}\n`);

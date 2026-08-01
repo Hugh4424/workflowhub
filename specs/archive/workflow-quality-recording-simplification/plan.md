@@ -237,21 +237,21 @@ review controller 持有 canonical head。同 subject 不重复 initial；普通
 ### NEW
 
 - `core/stage-skill-invocation.mjs`
-- `core/schemas/stage-skill-invocation.v1.json`
-- `core/schemas/task-material-revision.v1.json`
-- `core/schemas/browser-qa-evidence.v1.json`
+- `runtime/schemas/stage-skill-invocation.v1.json`
+- `runtime/schemas/task-material-revision.v1.json`
+- `runtime/schemas/browser-qa-evidence.v1.json`
 
 ### MODIFY
 
-- `core/stage-skill-runtime.mjs`
+- `runtime/stage/stage-skill-runtime.mjs`
 - `core/stage-completion-facts.mjs`
-- `core/schemas/stage-completion-facts.v1.json`
-- `schemas/task-accepted.v2.schema.json`
+- `runtime/schemas/stage-completion-facts.v1.json`
+- `runtime/schemas/task-accepted.v2.schema.json`
 - `core/audit-aggregator.mjs`
 - `core/canonical-receipt-writer.mjs`
-- `core/stage-content-contracts.mjs`
+- `runtime/stage/stage-content-contracts.mjs`
 - `core/stage-content-evidence.mjs`
-- `core/schemas/stage-content-evidence.v1.json`
+- `runtime/schemas/stage-content-evidence.v1.json`
 - `core/stage-handlers.mjs`
 - `core/stage-runner.mjs`
 - `core/task-kernel-implementation.mjs`
@@ -321,7 +321,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 ### Versioned identity and context projection
 
 - **Spec binding**：`{"artifact_kind":"spec","ref":"specs/workflow-quality-recording-simplification/spec.md","hash":"34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a","id":"WORKFLOW-QUALITY-RECORDING-SIMPLIFICATION"}`
-- **read_now**：`core/stage-skill-runtime.mjs`、`core/stage-completion-facts.mjs`、review controller、v3 contract。
+- **read_now**：`runtime/stage/stage-skill-runtime.mjs`、`core/stage-completion-facts.mjs`、review controller、v3 contract。
 - **must_read_before_task**：每 Task 卡列出的 producer、schema、consumer 和测试锚点。
 - **Context mode**：Full — 跨五阶段；按 Phase 限制文件和测试。
 
@@ -329,7 +329,7 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 | Anchor | Path and symbol | Current responsibility | Intended use | Forbidden change |
 | --- | --- | --- | --- | --- |
-| A-001 | `core/stage-skill-runtime.mjs:dispatchStageSkill` | hostInvoke 边界 | extend | 不判业务 pass |
+| A-001 | `runtime/stage/stage-skill-runtime.mjs:dispatchStageSkill` | hostInvoke 边界 | extend | 不判业务 pass |
 | A-002 | `core/stage-completion-facts.mjs` | completion facts | extend | 不作进入 Gate |
 | A-003 | `core/stage-content-evidence.mjs` | typed facts writer | extend | caller 不写身份 |
 | A-004 | `skills/wh-review/scripts/review-controller.mjs` | round 选择 | extend | 不覆盖旧 verdict |
@@ -405,8 +405,8 @@ steps/deps → hostInvoke → invocation fact → component result → reconcile
 
 ### Files
 
-- **NEW**：`core/stage-skill-invocation.mjs`、`core/schemas/stage-skill-invocation.v1.json`
-- **MODIFY**：`core/stage-skill-runtime.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/skill-deps.yaml`、`core/__tests__/stage-skill-runtime.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-interaction-contract.test.mjs`
+- **NEW**：`core/stage-skill-invocation.mjs`、`runtime/schemas/stage-skill-invocation.v1.json`
+- **MODIFY**：`runtime/stage/stage-skill-runtime.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/skill-deps.yaml`、`core/__tests__/stage-skill-runtime.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-interaction-contract.test.mjs`
 - **DO NOT TOUCH**：talk/grill Skill 正文、历史 run。
 
 ### Tasks
@@ -441,7 +441,7 @@ A-001/A-003；reviewer-owned lens 由 wh-review owner 调用。
 
 ### Files
 
-- **MODIFY**：`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`schemas/task-accepted.v2.schema.json`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/audit-aggregator.test.mjs`、`tests/five-stage-audit-e2e.test.mjs`
+- **MODIFY**：`core/stage-completion-facts.mjs`、`runtime/schemas/stage-completion-facts.v1.json`、`runtime/schemas/task-accepted.v2.schema.json`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/audit-aggregator.test.mjs`、`tests/five-stage-audit-e2e.test.mjs`
 - **DO NOT TOUCH**：阶段进入条件、历史结果。
 
 ### Tasks
@@ -511,8 +511,8 @@ A-004；处理组 3 问题 9/15。
 
 ### Files
 
-- **NEW**：`core/schemas/task-material-revision.v1.json`
-- **MODIFY**：`core/stage-content-contracts.mjs`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`tests/stage-plan-task-contract-v3.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`tests/stage-content-continuation.test.mjs`
+- **NEW**：`runtime/schemas/task-material-revision.v1.json`
+- **MODIFY**：`runtime/stage/stage-content-contracts.mjs`、`core/stage-content-evidence.mjs`、`runtime/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`tests/stage-plan-task-contract-v3.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`tests/stage-content-continuation.test.mjs`
 - **DO NOT TOUCH**：旧 accepted/hash/checkpoint 字节。
 
 ### Tasks
@@ -547,8 +547,8 @@ UI 验收有通用、可定位且不泄露凭据的证据。
 
 ### Files
 
-- **NEW**：`core/schemas/browser-qa-evidence.v1.json`
-- **MODIFY**：`skills/isolated-browser-qa/SKILL.md`、`workflows/verify-code/isolated-browser-qa.md`、`core/stage-content-evidence.mjs`、`core/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`workflows/verify-code/SKILL.md`、`skills/isolated-browser-qa/__tests__/skill-contract.test.mjs`、`tests/stage-content-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`
+- **NEW**：`runtime/schemas/browser-qa-evidence.v1.json`
+- **MODIFY**：`skills/isolated-browser-qa/SKILL.md`、`workflows/verify-code/isolated-browser-qa.md`、`core/stage-content-evidence.mjs`、`runtime/schemas/stage-content-evidence.v1.json`、`core/task-kernel-implementation.mjs`、`workflows/verify-code/SKILL.md`、`skills/isolated-browser-qa/__tests__/skill-contract.test.mjs`、`tests/stage-content-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`
 - **DO NOT TOUCH**：browser profile/cookie/token。
 
 ### Tasks
@@ -583,7 +583,7 @@ verify-code 完整核对业务事实，五阶段声明调用全部 reconcile。
 
 ### Files
 
-- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/skill-deps.yaml`、`core/stage-completion-facts.mjs`、`core/schemas/stage-completion-facts.v1.json`、`core/stage-handlers.mjs`、`core/task-kernel-implementation.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/stage-completion-facts.test.mjs`
+- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/make-decision/skill-deps.yaml`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/skill-deps.yaml`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/skill-deps.yaml`、`core/stage-completion-facts.mjs`、`runtime/schemas/stage-completion-facts.v1.json`、`core/stage-handlers.mjs`、`core/task-kernel-implementation.mjs`、`core/canonical-receipt-writer.mjs`、`scripts/stage-runtime.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/stage-completion-facts.test.mjs`
 - **DO NOT TOUCH**：确认数量、close 授权、provider route。
 
 ### Tasks
@@ -622,7 +622,7 @@ Phase 1–5 的 facts 与宪法 Q1/Q2。
 
 ### Files
 
-- **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`scripts/stage-runtime.mjs`（仅作为 Phase 机器白名单）；T014 全量若只暴露既有基线，可机械修复既有 Markdown 白名单；authenticated smoke 仅修改 `scripts/smoke-local-skill-dispatch.mjs` 及其两个测试；lens-only closure/hash 仅修改 `core/check-skill-closure.mjs`、其测试、`skills/reuse-registry.md`、`skills/review-response/skill-bundle.json`、`skills/spec-tasks/skill-bundle.json`、`skills/isolated-browser-qa/skill-bundle.json`、`skills/catalog.yaml`。全量诊断确认的旧 fixture/断言可仅迁移到本任务已确认的新合同，白名单为 `tests/final-cutover-guards.red.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/m14b-fact-collection.test.mjs`、`tests/stage-orchestrator-v2.test.mjs`、`core/__tests__/task-target-repo-migration.test.mjs`、`core/__tests__/task-runner-root-migration.test.mjs`、`tests/stage-content-publication.test.mjs`、`tests/official-make-decision-cli.test.mjs`、`tests/p0-foundation-contracts.test.mjs`、`scripts/__tests__/runner-replacement-bridge.test.mjs`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`tests/design-stage-skill-order.red.test.mjs`、`tests/stage-review-cost-policy.test.mjs`、`skills/wh-review/scripts/__tests__/review-source-materials.test.mjs`、`tests/workflow-v2-contract.test.mjs`、`tests/stage-risk-acceptance.test.mjs`、`tests/build-code-capture.test.mjs`、`tests/build-code-preflight.red.test.mjs`、`tests/verify-code-capture.test.mjs`、`scripts/__tests__/ci-chain-check.test.mjs`、`tests/terminal-runtime-blockers.test.mjs`、`tests/spec-content-profile.test.mjs`、`tests/per-invocation-doc-contract.test.mjs`、`tests/template-content-quality-retention.test.mjs`；不得恢复旧 accepted/audit Gate、重复 stage lens dispatch 或弱化 runtime。
+- **MODIFY**：`skills/wh-review/scripts/review-controller.mjs`、`scripts/stage-runtime.mjs`（仅作为 Phase 机器白名单）；T014 全量若只暴露既有基线，可机械修复既有 Markdown 白名单；authenticated smoke 仅修改 `tools/cli/smoke-local-skill-dispatch.mjs` 及其两个测试；lens-only closure/hash 仅修改 `runtime/evidence/check-skill-closure.mjs`、其测试、`skills/reuse-registry.md`、`skills/review-response/skill-bundle.json`、`skills/spec-tasks/skill-bundle.json`、`skills/isolated-browser-qa/skill-bundle.json`、`skills/catalog.yaml`。全量诊断确认的旧 fixture/断言可仅迁移到本任务已确认的新合同，白名单为 `tests/final-cutover-guards.red.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/m14b-fact-collection.test.mjs`、`tests/stage-orchestrator-v2.test.mjs`、`core/__tests__/task-target-repo-migration.test.mjs`、`core/__tests__/task-runner-root-migration.test.mjs`、`tests/stage-content-publication.test.mjs`、`tests/official-make-decision-cli.test.mjs`、`tests/p0-foundation-contracts.test.mjs`、`scripts/__tests__/runner-replacement-bridge.test.mjs`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`tests/design-stage-skill-order.red.test.mjs`、`tests/stage-review-cost-policy.test.mjs`、`skills/wh-review/scripts/__tests__/review-source-materials.test.mjs`、`tests/workflow-v2-contract.test.mjs`、`tests/stage-risk-acceptance.test.mjs`、`tests/build-code-capture.test.mjs`、`tests/build-code-preflight.red.test.mjs`、`tests/verify-code-capture.test.mjs`、`scripts/__tests__/ci-chain-check.test.mjs`、`tests/terminal-runtime-blockers.test.mjs`、`tests/spec-content-profile.test.mjs`、`tests/per-invocation-doc-contract.test.mjs`、`tests/template-content-quality-retention.test.mjs`；不得恢复旧 accepted/audit Gate、重复 stage lens dispatch 或弱化 runtime。
 - **DISCLOSE-ONLY**：`check-task-record-paths` 报出的 14 条旧生产路径治理不属于本任务，不得借 T014 修改生产实现、禁用 checker 或放宽断言。
 - **STEP INVENTORY SYNC**：`docs/stage-atomic-step-inventory.md` 仅可同步当前五份 `steps.json` 的 numeric `step_id` + `step_slug` 双向覆盖，不改步骤合同或 runtime。
 - **RECOVERY WORKSPACE RED/GREEN**：T016/T017 仅修改 `core/workspace.mjs`、`core/stage-context.mjs`、`scripts/stage-runtime.mjs`、`core/task-kernel-implementation.mjs`、`core/__tests__/workspace-manager.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-recover-run.test.mjs`、`skills/wh-review/scripts/wh-review-cli.mjs`、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`skills/wh-review/skill-bundle.json` 与 `skills/catalog.yaml` 仅同步受影响 bundle hash。kernel implementation 仅用于 runtime-owned previous-run CAS，以及同一 current requirements pointer 在新 active make-decision run 内的 runtime-owned Step 2 完成；idempotent 命中必须先验证 ledger 与 coverage ref/hash 的实际内容绑定，不得创建冗余 ledger/revision。active make-decision recovery run 的方向/详情审查继承 recovery workspace；普通 run、accepted run 与显式 prepare 保持原严格语义。不得新增 schema、认证 Gate 或 caller 可选路径。

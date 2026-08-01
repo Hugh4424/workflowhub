@@ -118,7 +118,7 @@ tests.
 - Modify: `skills/wh-review/schemas/dispositions.schema.json`
 - Modify: `skills/wh-review/schemas/round-run-result.schema.json`
 - Modify: `core/task-record-paths.mjs`
-- Modify: `scripts/ci-chain-check.mjs`
+- Modify: `tools/cli/ci-chain-check.mjs`
 - Modify: `scripts/validate-stage-result.mjs`
 - Test: `skills/wh-review/scripts/__tests__/review-round-facade.test.mjs`
 - Test: `skills/wh-review/scripts/__tests__/finding-state.test.mjs`

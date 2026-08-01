@@ -6,11 +6,11 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../core/artifact-dir.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];
@@ -165,7 +165,8 @@ describe("build-code Phase execution, AC, and handoff contracts", () => {
     for (const part of [/When applicable/, /RED/, /minimal GREEN/, /focused\s+tests/, /necessary regression/, /scoped diff/])
       expect(skill).toMatch(part);
     expect(skill).toMatch(/return the exact command and raw output/i);
-    expect(skill).toMatch(/Publish implementation receipts[\s\S]*real test evidence/i);
+    expect(skill).toMatch(/fresh test receipt/i);
+    expect(skill).toMatch(/complete test command/i);
   });
 
   it("keeps Stage publication and delivery outside Phase execution", () => {

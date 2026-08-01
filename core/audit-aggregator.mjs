@@ -1,6 +1,6 @@
 /** Canonical expected-topology / observed-receipt reconciler. */
 import { createHash } from "node:crypto";
-import { calculateCoverage, validateRequirementLedger } from "./requirement-ledger.mjs";
+import { calculateCoverage, validateRequirementLedger } from "../runtime/evidence/requirement-ledger.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 
 const STAGE_SLUGS = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);

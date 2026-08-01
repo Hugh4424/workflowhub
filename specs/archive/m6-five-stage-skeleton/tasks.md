@@ -102,14 +102,14 @@ facts 子 schema key 与 spec 第 6 章不一致 → 停（范围漂移，回 sp
 
 ### Files
 
-- 修改 scripts/check-stage-quality.mjs（加"检漏接指标 skill"检测）
+- 修改 tools/cli/check-stage-quality.mjs（加"检漏接指标 skill"检测）
 - 新增 tests/metric-scan.test.mjs
 - 修改五段 SKILL.md（writing-great-skills 优化）
 
 ### Tasks
 
 - [x] T014 采集失败输出：写 tests/metric-scan.test.mjs（构造一份漏接指标的 skill fixture → 扫描器应退出码非 0 并指出该 skill；五段正确接 → 退出码 0）。跑应 RED（扫描器未扩展），存 apply/evidence/phase-3-RED.json。[FR-METRIC-002]
-- [x] T015 扩展 scripts/check-stage-quality.mjs：加"skill 是否接指标"检测（保留现有三类反模式检测，改前跑现有 tests 录基线，SIG-003）。跑 GREEN：`node --test tests/metric-scan.test.mjs` 应 0，存 apply/evidence/phase-3-GREEN.json。[FR-METRIC-002]
+- [x] T015 扩展 tools/cli/check-stage-quality.mjs：加"skill 是否接指标"检测（保留现有三类反模式检测，改前跑现有 tests 录基线，SIG-003）。跑 GREEN：`node --test tests/metric-scan.test.mjs` 应 0，存 apply/evidence/phase-3-GREEN.json。[FR-METRIC-002]
 - [x] T016 五份 SKILL.md 逐份用 writing-great-skills 优化（不改语义只提质量），优化后复跑 Phase1/2 测试确认无回归。**优化证据（写入 apply/phase-3.md）**：逐份列出五个 SKILL.md 文件名 + 各自 writing-great-skills 执行记录/输出摘要 + 优化前后差异要点（如精简了哪段、补了哪个结构），五份缺任一份证据即 AC3 不达。[FR-OPT-001]
 - [x] T017 人/AI 实跑端到端：big 路（五段全走）+ small 路（make-decision→build-code 跳步）。**端到端证据（写入 apply/phase-3.md）**：①big 路五段各产物的 stage-result 文件路径 + 各自 facts 约定 key 值快照；②small 路 build-code 实际从 make-decision facts.decision 取输入的证据；③metrics 文件里五段各一条记录的快照（AC5）；④大输出 skill 子代理回报样例证明只含摘要+路径无大段原文（AC9）；⑤任一段 error/无产物/传不到下段则记为失败。[FR-WIRING-002][FR-WIRING-003][FR-CONTRACT-003][FR-METRIC-001]
 - [x] T018 维护知识文件：写 apply/phase-3.md（扫描器扩展点 + 优化记录 + 两路实跑证据），跑 workflowhub 既有 npm run check + 测试全绿确认零回归，evidence 落盘，同步 ledger + state。[隐性必达 3]
@@ -120,7 +120,7 @@ facts 子 schema key 与 spec 第 6 章不一致 → 停（范围漂移，回 sp
 - **gate_cmd**：`node --test tests/metric-scan.test.mjs && cd /Users/Hugh/Hugh/Project/workflowhub && npm run check`
 - **expected_exit**：`0`（GREEN）/ `非0`（RED）
 - **evidence_path**：`$TASK_DIR/apply/evidence/phase-3-{RED,GREEN}.json`
-- **display_cmd**：`node scripts/check-stage-quality.mjs --self-test 2>&1 | tail`
+- **display_cmd**：`node tools/cli/check-stage-quality.mjs --self-test 2>&1 | tail`
 
 ### Knowledge
 

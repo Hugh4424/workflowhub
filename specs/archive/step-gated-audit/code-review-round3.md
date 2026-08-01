@@ -5,7 +5,7 @@
 **Branch**: refactor/receipt-writer-split
 **HEAD**: a031a7b
 **Commits reviewed**: aab03f0..a031a7b (commits 6797df1 + a031a7b)
-**Files reviewed**: core/journal-appender.mjs, core/receipt-writer.mjs, core/receipt-schema.mjs, core/chain-topology.mjs, core/audit-aggregator.mjs, core/__tests__/receipt-writer.test.mjs
+**Files reviewed**: core/journal-appender.mjs, runtime/evidence/receipt-writer.mjs, core/receipt-schema.mjs, core/chain-topology.mjs, core/audit-aggregator.mjs, core/__tests__/receipt-writer.test.mjs
 **Test result**: 955/955 passed (all pre-existing guard failures resolved)
 
 ---

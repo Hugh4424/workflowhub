@@ -18,7 +18,7 @@ beforeAll(async () => {
       validateDecisionLogContract,
       validateDecisionCorrectionAppendix,
       buildDecisionCorrectionAppendix,
-    } = await import("../core/stage-content-contracts.mjs"));
+    } = await import("../runtime/stage/stage-content-contracts.mjs"));
   } catch (error) {
     moduleLoadError = error;
   }
@@ -27,7 +27,7 @@ beforeAll(async () => {
 function requireApi() {
   expect(
     moduleLoadError,
-    "core/stage-content-contracts.mjs must provide the accepted decision validators",
+    "runtime/stage/stage-content-contracts.mjs must provide the accepted decision validators",
   ).toBeUndefined();
   expect(validateDecisionEntry).toBeTypeOf("function");
   expect(validateDecisionLogContract).toBeTypeOf("function");

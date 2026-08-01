@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { smokeLocalSkillDispatch } from "../smoke-local-skill-dispatch.mjs";
+import { smokeLocalSkillDispatch } from "../../tools/cli/smoke-local-skill-dispatch.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });

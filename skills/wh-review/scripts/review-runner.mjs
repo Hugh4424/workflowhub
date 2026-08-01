@@ -10,7 +10,7 @@ import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.m
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
 import { buildClassificationManifest, validateResponseLedger } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
-import { authenticateCanonicalReviewResult } from "../../../core/canonical-review-result.mjs";
+import { authenticateCanonicalReviewResult } from "../../../runtime/review/canonical-review-result.mjs";
 
 const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUABLE_SESSION"]);
 const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
@@ -463,7 +463,14 @@ function canonicalSubjectOutcome(task, identity) {
     let record;
     try { record = JSON.parse(task.readRecord(ref)); }
     catch (error) { throw invalidEvidence(`canonical review record cannot be read: ${ref}: ${error.message}`); }
-    if (!sameReviewSubject(record, identity)) continue;
+    const snapshotScopedPhase = identity.subject.subject_kind === "phase"
+      && identity.subject.review_scope === "phase";
+    // A Phase review is immutable evidence for one exact snapshot. A later
+    // snapshot is a new subject even when stage/phase labels match; never
+    // reuse an older semantic result across that boundary.
+    if (snapshotScopedPhase
+      ? !matchesReviewIdentity(record, identity)
+      : !sameReviewSubject(record, identity)) continue;
     const raw = task.readRecord(ref);
     const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
     try {

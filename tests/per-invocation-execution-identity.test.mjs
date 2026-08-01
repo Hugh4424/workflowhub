@@ -61,7 +61,7 @@ describe("per-invocation execution identity", () => {
   it("authenticates the explicitly supplied runner for this invocation without binding task.json", async () => {
     const f = fixture();
     const before = f.task.readRecord("task.json");
-    const { authenticateOfficialInvocation } = await import("../core/invocation-identity.mjs");
+    const { authenticateOfficialInvocation } = await import("../runtime/evidence/invocation-identity.mjs");
 
     const result = authenticateOfficialInvocation(f.task, {
       runnerRoot: f.runnerRoot,
@@ -82,7 +82,7 @@ describe("per-invocation execution identity", () => {
 
   it("accepts the next clean committed WorkflowHub version without a replacement generation", async () => {
     const f = fixture();
-    const { authenticateOfficialInvocation } = await import("../core/invocation-identity.mjs");
+    const { authenticateOfficialInvocation } = await import("../runtime/evidence/invocation-identity.mjs");
     const first = authenticateOfficialInvocation(f.task, {
       runnerRoot: f.runnerRoot, stage: "build-code", runId: "invocation-0001",
     });

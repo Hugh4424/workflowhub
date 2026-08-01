@@ -11,8 +11,8 @@
 - **测试框架**：Vitest 2.1.9，`passWithNoTests: false`（防假绿）；单元测试落 `core/__tests__/*.test.mjs`，集成测试落 `tests/*.test.mjs`。
 - **存储形态**：JSON Lines（jsonl）用于指标双写记录；JSON 用于 schema 契约文件（沿用 `contracts/` 的自定义契约结构，非 JSON Schema，无 AJV 依赖——与 M1-M3 的 `validate-contract.mjs` 手写校验风格一致）。
 - **配置**：`config/workflowhub.yaml` 的 `ALLOWED_KEYS` 白名单已含 `metrics_path` 占位槽，M4 直接填值启用，**不改 `load-config.mjs`**。
-- **CI**：单 job，`npm run check` → `scripts/run-checks.mjs` 聚合；M4 的结构校验 + 聚合冒烟挂入此聚合入口，不新增 job。
-- **校验脚本模板**：`scripts/check-contract.mjs`（读 JSON 逐条校验、exit 0/1）是 schema 校验脚本模板；`scripts/run-checks.mjs`（spawnSync 顺序调 checker + 汇总）是聚合冒烟模板。
+- **CI**：单 job，`npm run check` → `tools/cli/run-checks.mjs` 聚合；M4 的结构校验 + 聚合冒烟挂入此聚合入口，不新增 job。
+- **校验脚本模板**：`tools/cli/check-contract.mjs`（读 JSON 逐条校验、exit 0/1）是 schema 校验脚本模板；`tools/cli/run-checks.mjs`（spawnSync 顺序调 checker + 汇总）是聚合冒烟模板。
 
 ## Constitution Check（含 CLAUDE.md 工程硬规则逐条）
 
@@ -69,7 +69,7 @@ tests/
 └── metrics-smoke.test.mjs         # 聚合冒烟 (临时目录注入全局路径, FR-CI-002)
 
 config/workflowhub.yaml            # [仅填值] metrics_path 占位槽填值启用,不改 load-config
-scripts/run-checks.mjs             # [仅追加一行] 追加调用 check-metrics-schema.mjs
+tools/cli/run-checks.mjs             # [仅追加一行] 追加调用 check-metrics-schema.mjs
 .github/workflows/ci.yml           # [无需改] 已跑 npm run check, 自动覆盖新校验
 ```
 

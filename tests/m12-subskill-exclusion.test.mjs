@@ -34,7 +34,7 @@ afterEach(() => {
 
 describe("sub-skill marker exclusion — marker present (skipped)", () => {
   it("scanSkillMetrics returns found:false for SKILL.md with kind:sub-skill marker but NO metrics wiring", async () => {
-    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const { scanSkillMetrics } = await import("../tools/cli/check-stage-quality.mjs");
     const skillDir = join(workDir, "workflows", "helper-skill");
     mkdirSync(skillDir, { recursive: true });
     const skillPath = join(skillDir, "SKILL.md");
@@ -65,7 +65,7 @@ No recordSkeleton, no updateOwnResult, no collector.mjs — by design.
 
 describe("sub-skill marker exclusion — marker absent (still flagged)", () => {
   it("scanSkillMetrics returns found:true for SKILL.md WITHOUT kind:sub-skill marker and NO metrics wiring", async () => {
-    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const { scanSkillMetrics } = await import("../tools/cli/check-stage-quality.mjs");
     const skillDir = join(workDir, "workflows", "plain-skill");
     mkdirSync(skillDir, { recursive: true });
     const skillPath = join(skillDir, "SKILL.md");

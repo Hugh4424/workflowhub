@@ -7,7 +7,7 @@ import {
   deriveSeriousReviewPause,
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
-} from "../core/stage-review-disposition.mjs";
+} from "../runtime/review/stage-review-disposition.mjs";
 import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -66,8 +66,8 @@ describe("CONSTITUTION 1.5.0 quality and serious-review boundaries", () => {
     expect(constitution).toMatch(/Stage 内容契约[\s\S]*accepted decision/i);
     expect(constitution).toMatch(/spec-clarify\s+Q1=A[\s\S]*Q2=A/i);
     expect(constitution).toMatch(/两份独立宪法审计/);
-    expect(existsSync(resolve(root, "core/stage-review-disposition.mjs"))).toBe(true);
-    expect(existsSync(resolve(root, "core/schemas/risk-acceptance.v1.json"))).toBe(true);
+    expect(existsSync(resolve(root, "runtime/review/stage-review-disposition.mjs"))).toBe(true);
+    expect(existsSync(resolve(root, "runtime/schemas/risk-acceptance.v1.json"))).toBe(true);
   });
 
   it("keeps the checklist synchronized at exactly 21 entries", () => {
@@ -191,7 +191,7 @@ describe("risk acceptance binding", () => {
     const { state, value } = accepted();
     expect(validateRiskAcceptance({ acceptance: value, pause: state })).toEqual(value);
     expect(serious.verdict).toBe("revise_required");
-    const schema = JSON.parse(read("core/schemas/risk-acceptance.v1.json"));
+    const schema = JSON.parse(read("runtime/schemas/risk-acceptance.v1.json"));
     const validate = new Ajv2020({ strict: false }).compile(schema);
     expect(validate(value), JSON.stringify(validate.errors)).toBe(true);
   });
@@ -240,9 +240,9 @@ describe("risk acceptance binding", () => {
   it("keeps review risk and decision omission schemas mutually exclusive", () => {
     const { value } = accepted();
     const ajv = new Ajv2020({ strict: false });
-    const risk = ajv.compile(JSON.parse(read("core/schemas/risk-acceptance.v1.json")));
-    ajv.addSchema(JSON.parse(read("core/schemas/decision-entry.v1.json")), "decision-entry.v1");
-    const omission = ajv.compile(JSON.parse(read("core/schemas/decision-omission-acceptance.v1.json")));
+    const risk = ajv.compile(JSON.parse(read("runtime/schemas/risk-acceptance.v1.json")));
+    ajv.addSchema(JSON.parse(read("runtime/schemas/decision-entry.v1.json")), "decision-entry.v1");
+    const omission = ajv.compile(JSON.parse(read("runtime/schemas/decision-omission-acceptance.v1.json")));
     expect(risk(value)).toBe(true);
     expect(omission(value)).toBe(false);
     const omissionValue = {
@@ -330,7 +330,7 @@ describe("official serious-risk wiring", () => {
     const handlers = read("core/stage-handlers.mjs");
     expect(handlers).toMatch(/quality_review[\s\S]*quality_review_resolution[\s\S]*quality_risk_acceptance/);
     expect(handlers).toMatch(/reviewFacts\(worker,\s*input,\s*"quality_review",\s*undefined,\s*"verify-code"\)/);
-    expect(handlers).toMatch(/verify-code quality review does not bind the current verification snapshot/);
+    expect(handlers).toMatch(/bindFinalReview\(worker,\s*input,\s*qualityReview,\s*current\.tree[\s\S]*resolutionName:\s*"quality_review_resolution"/);
   });
 
   it("documents the same narrow exception in all five Stage Skills without adding normal confirmations", () => {

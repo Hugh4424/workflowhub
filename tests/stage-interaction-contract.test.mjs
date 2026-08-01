@@ -14,7 +14,7 @@ let interactionContractLoadError;
 
 beforeAll(async () => {
   try {
-    ({ validateInteractionQuestionProgress } = await import("../core/stage-content-contracts.mjs"));
+    ({ validateInteractionQuestionProgress } = await import("../runtime/stage/stage-content-contracts.mjs"));
   } catch (error) {
     interactionContractLoadError = error;
   }
@@ -24,7 +24,7 @@ function requireQuestionProgressValidator() {
   expect(interactionContractLoadError).toBeUndefined();
   expect(
     validateInteractionQuestionProgress,
-    "core/stage-content-contracts.mjs must expose the deterministic question-progress validator",
+    "runtime/stage/stage-content-contracts.mjs must expose the deterministic question-progress validator",
   ).toBeTypeOf("function");
 }
 

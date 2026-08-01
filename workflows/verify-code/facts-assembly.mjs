@@ -1,4 +1,4 @@
-import { validateTaskId } from '../../core/task-identity.mjs';
+import { validateTaskId } from '../../runtime/task/task-identity.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',

@@ -1,0 +1,1085 @@
+path	disposition	reason	sha256
+.github/workflows/ci.yml	keep	no approved deletion or move proof in Phase 0	0a8acc7b1b0cc76ea874d24ebd11a8fb3ffbc52d8179a15b820179fe954194ac
+.gitignore	keep	no approved deletion or move proof in Phase 0	de45ee98247d1d54392ed4a577eef484b2ea363c01ea5f3c6277497a8ba11f60
+.markdownlint-cli2.jsonc	keep	no approved deletion or move proof in Phase 0	b4e13459fad38052ad671a8524f2d3bea9459cdb83274fe69b509e52fccb0e57
+.mcp.json	keep	no approved deletion or move proof in Phase 0	d3aa9347d8912f997e3e28ad2959f581ffec9c9501d33410b431f2fcbb710982
+AGENTS.md	keep	no approved deletion or move proof in Phase 0	a6a55820d113dff050f7a342e128d2ed8cf823dcb8bbfba7b196b0fcc380fd88
+CLAUDE.md	keep	no approved deletion or move proof in Phase 0	a3293059aa29a1fdb5909bfd5d24625990590f116a3a95dae505b1391e2ac685
+CONSTITUTION.md	keep	no approved deletion or move proof in Phase 0	a4c63f0c3865fdc2ea83b1f2aea0a824608f65512a27a21e05a58e2d80e16001
+CONTEXT.md	keep	no approved deletion or move proof in Phase 0	1c140706cc31157db631452cf3968270cc987c9e17613ba54a9757dcae0d0f88
+LICENSE	keep	no approved deletion or move proof in Phase 0	9c6d0b3140f86155c5f37dff4f97ca046e4420d742dfc1fea5c6b988843eed32
+README.md	keep	no approved deletion or move proof in Phase 0	bf06a03560cf75559548f4e093db8675747ad33bba919e61707ee52769639cb4
+THIRD_PARTY_NOTICES.md	keep	no approved deletion or move proof in Phase 0	bc2fbf5ba01622bd4777af7ed5bf419dbeaa569696412fad1b539c9d4468afe9
+apply/evidence/current-diff-ac-coverage.json	keep	no approved deletion or move proof in Phase 0	a3a06cadd1ac1e5d4e7ea291bff826bb440b6b259577434968a3a5f298744f39
+config/.gitkeep	keep	no approved deletion or move proof in Phase 0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+config/runtime-fact-sources.mjs	keep	no approved deletion or move proof in Phase 0	b813c8aa82e543f54f97fbadaa1d74d4d2885d07d66f9c9743ef9b7f0b07a661
+config/runtime-fact-v2-sources.mjs	keep	no approved deletion or move proof in Phase 0	8f11ffead7c9fb57da79421828c8f29e895529247d1b72a55eb7a215a3f0b761
+config/transcript-sources.mjs	keep	no approved deletion or move proof in Phase 0	91b81269e5e47b2d8c96d4ae57b2a0f4d00c45128f4b5dae52b85b92734544ef
+config/workflowhub.yaml	keep	no approved deletion or move proof in Phase 0	ac3a2135faf89490e469fd7b095b829b9263f25c268888d758d160f55640f364
+constitution-checklist.md	keep	no approved deletion or move proof in Phase 0	e7d883616d40a624a7e403248b432934bdc7fc03211389a5f3a8a9790837de7e
+contracts/component-output.contract.json	keep	no approved deletion or move proof in Phase 0	e7fb9aef9af9c37f4ebfcbd44e84862e815c8f343bf47d2f6553adacc574a56d
+contracts/execution-record.contract.json	keep	no approved deletion or move proof in Phase 0	59e91de5182818c552e240d1f7f2c3e3eabe3b1192a681689a1382481bc47cf8
+contracts/facts-subschema.json	keep	no approved deletion or move proof in Phase 0	a979f7c97cff0756c3052a3899ec1dbd94fc0bdcb22b1236a9583cf4a421c533
+contracts/field-mapping.schema.json	keep	no approved deletion or move proof in Phase 0	61d25b93ed7672762ad52aeefa97541c335e644b980fb4795f23eb1cb50d6276
+contracts/knowledge-card.contract.json	keep	no approved deletion or move proof in Phase 0	3778bf5635a8cd80f06faaf61fa0c4b62563bee23fe8542a2171f8b7e3aba962
+contracts/stage-result.contract.json	keep	no approved deletion or move proof in Phase 0	5fe3d69204d2edae03349c54f969aa82974cd04a715e672ba665a7a83d771c01
+core/.gitkeep	keep	no approved deletion or move proof in Phase 0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+core/__tests__/artifact-dir.test.mjs	keep	no approved deletion or move proof in Phase 0	9e50f35a6cd45dd6290b7ea28c7266f10ba13fc5ff2fb115b1bb96c82fe1755b
+core/__tests__/canonical-review-result.test.mjs	keep	no approved deletion or move proof in Phase 0	ce3978834743f595cdba5468cfe38196dc83384b6e21949ca04ed4e7e69c2efb
+core/__tests__/capability-doctor.test.mjs	keep	no approved deletion or move proof in Phase 0	d79be9b2185603b0e5aff11a62a67970c403a6ee6d61430f7b7b737ec8ad4d86
+core/__tests__/check-anti-host.test.mjs	keep	no approved deletion or move proof in Phase 0	c44452a2c30148db2f37d8e72b496f62c5cb1daf96d3f1a778997e1e9e19639a
+core/__tests__/check-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	ce3ee0b2fba5816b25e9eebacc11d9668d515198c1aa72ddb9e0f0e3c375b959
+core/__tests__/check-extensibility.test.mjs	keep	no approved deletion or move proof in Phase 0	9cd60d532c3083eeae11b40594117bfe5a774c405126256d566509987ef451cd
+core/__tests__/check-skill-closure.test.mjs	keep	no approved deletion or move proof in Phase 0	e5523f3567003b01146daec2b96764c00e71bc4e661219ed1c1956b41ea00df9
+core/__tests__/invocation-identity.test.mjs	keep	no approved deletion or move proof in Phase 0	f81ffcbabce55b8fa849e62bec95e3e45ee5e176078f4a924b1166a87f84eb6c
+core/__tests__/kernel.test.mjs	keep	no approved deletion or move proof in Phase 0	c4bf790a3ff10e68ab589f420d704afc97e2272372a9f1fb58d78d1be14a65e9
+core/__tests__/load-config.test.mjs	keep	no approved deletion or move proof in Phase 0	06dea5705c64dbbdef558f9d98e08b3501e9a249ed80de140741aa005cb7dde8
+core/__tests__/local-skill-resolver.test.mjs	keep	no approved deletion or move proof in Phase 0	70bb22e635835edd9f6adb13b1c6a4c4f110b042258168ee4d5cb6c54512de89
+core/__tests__/parse-framework-config.test.mjs	keep	no approved deletion or move proof in Phase 0	1d04bc3ed285127504b6f0e3d50f45f2de23dd957493b8bed0c543af063b4a34
+core/__tests__/protected-paths.test.mjs	keep	no approved deletion or move proof in Phase 0	ce6af218949ce30d50eeb844093d3fcaeaa56f69916c74448d5d56dff0f713cc
+core/__tests__/receipt-writer.test.mjs	keep	no approved deletion or move proof in Phase 0	4e3e9d17c98e4d70bae2ebb3700a98a0e899527278d316dbcb87c797db7ea2fa
+core/__tests__/resolve-path.test.mjs	keep	no approved deletion or move proof in Phase 0	fd493cb57a026c8cbd56dab5cd1c86f09281aed7724e6d0d2888fe0c1f403cef
+core/__tests__/run-checks.test.mjs	keep	no approved deletion or move proof in Phase 0	011d015e75c2bb809beb51a5f96f69c1f19dde2e80006aadf60cebe584061a34
+core/__tests__/runtime-mode.test.mjs	keep	no approved deletion or move proof in Phase 0	e436c2d7458c696e5612467d1de51447e985463826c522f63e3826fb3b69bcc9
+core/__tests__/skill-static-deps.test.mjs	keep	no approved deletion or move proof in Phase 0	3f27936698c9c0e96817c59395d8ea7043177e16dad0e88f734e1198f1ef9809
+core/__tests__/stage-acceptance-policy.test.mjs	keep	no approved deletion or move proof in Phase 0	9dcf194ca2996f11fe4f3273e1504fd9eb044cd474108ad233fa0acac7937272
+core/__tests__/stage-context.test.mjs	keep	no approved deletion or move proof in Phase 0	351980b4ff8c6cd7b1ab375979beb7bca0f6c73b735ddabd52419dbfdbe81621
+core/__tests__/stage-skill-runtime.test.mjs	keep	no approved deletion or move proof in Phase 0	4ef1f4683e691542672cc94ee7d655810c8b394853314b3c63d48204f3de22c1
+core/__tests__/storage-root.test.mjs	keep	no approved deletion or move proof in Phase 0	af2e14f377610989f08d83ffce36e14eb659f5094c996382dd02c113f6a5f24f
+core/__tests__/task-handle.test.mjs	keep	no approved deletion or move proof in Phase 0	179f3846914940eaf86e4d06563fcb501a0d5128e898e7e79d791872a0d95b39
+core/__tests__/task-identity.test.mjs	keep	no approved deletion or move proof in Phase 0	597668f6d40d7f45616d45792f14458b5a39f3941fcf230fbf405c1fe0ff504f
+core/__tests__/task-index.test.mjs	keep	no approved deletion or move proof in Phase 0	7923f713fd1d3c7fd0da1d8c5a2f013b920fd644ff67a883b6652a127f1aa432
+core/__tests__/task-kernel-publish.test.mjs	keep	no approved deletion or move proof in Phase 0	c4b4a2b170a918e10e4c53cae1d81d61af67673d71ad57a1e89bbc06c2ae4711
+core/__tests__/task-kernel-security.test.mjs	keep	no approved deletion or move proof in Phase 0	8b61854142c8f2c96c8359910b7a9eb41bddf580cd3dd400d970bb0246f9395b
+core/__tests__/task-recovery.test.mjs	keep	no approved deletion or move proof in Phase 0	0ceee58738b08d115fc94d3d7e1c4c344e356271f6f147a415c26d49086ccbf8
+core/__tests__/task-runner-root-migration.test.mjs	keep	no approved deletion or move proof in Phase 0	170d6890632de0cc8fd5044fef42b964c57087ad21f8f56a31f60b8a749e28fb
+core/__tests__/task-target-repo-migration.test.mjs	keep	no approved deletion or move proof in Phase 0	67b77e58637f06be47c8435b9f5d01e58bf0edecf7a33d30cc143d254a866127
+core/__tests__/validate-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	3321b85e576140d1131b2aadacb23212973486f65d8c38b3274bec6bba1fcd8d
+core/__tests__/workspace-manager.test.mjs	keep	no approved deletion or move proof in Phase 0	9259c665339d7f4fe54c3e0b1ead91ff123320299d4b6040c586aa55578337c4
+core/__tests__/workspace-runner.test.mjs	keep	no approved deletion or move proof in Phase 0	23703fdc09f8eb70b02f87e6dc003b75c2ea1faba10d1f9ba0cdfc906ab07d1b
+core/artifact-dir.mjs	keep	no approved deletion or move proof in Phase 0	1cbcabda6de2825284c2db115b0b9057a4499017972dab3c912b961ed63673c4
+core/audit-aggregator.mjs	keep	no approved deletion or move proof in Phase 0	e34f4dd12f725e028a5688282e1ba4086e61f7bfd8bcc4283a15c3daedd25299
+core/build-spec-receipt-recovery.mjs	keep	no approved deletion or move proof in Phase 0	4f2937a87b36afd4fc36dc8921fd7e82bb35908a41509916c47e0d5fb8fd9591
+core/canonical-evidence-validators.mjs	keep	no approved deletion or move proof in Phase 0	e575877381339442179a07fd5e509ba21dd8997bdf377035c3323c1aa3c29a73
+core/canonical-receipt-writer.mjs	keep	no approved deletion or move proof in Phase 0	32e973f2727949ab959c908441dbdefeadcc30995a4aadd8dfd6c1f930357dc4
+core/chain-topology.mjs	keep	no approved deletion or move proof in Phase 0	64f431f939bd51fadcecc735f32e1668dc681f68126247f1698a3f38bf07943b
+core/dispatch-component.mjs	keep	no approved deletion or move proof in Phase 0	e8b6e67403678c57381e87476dad038a4a44ea904e485fe2c3f840658b83f1a9
+core/fact-indexes.mjs	keep	no approved deletion or move proof in Phase 0	fa87acad548fdd0b9d6b1873c18cd7a24525f3098135a02f8284e6863dc604e4
+core/git-checkpoint.mjs	keep	no approved deletion or move proof in Phase 0	33792bac05143d1c8c506e1831e458a9abe81bc198f95e5c72282081768e0a03
+core/journal-appender.mjs	keep	no approved deletion or move proof in Phase 0	29df34f3ba6fb92f1d2f7d2fbb2793442254c51c7816b261452b67e70335138c
+core/journal-schema.mjs	keep	no approved deletion or move proof in Phase 0	740afaf88d49a1bc4cb069138c550c8ee035ba4607ec17db16bf78474e7a350e
+core/load-config.mjs	keep	no approved deletion or move proof in Phase 0	fe508b944cd338525ab5416d5bde6aeb1404e960f8a3b1300a8c5668d0e90ccc
+core/parse-framework-config.mjs	keep	no approved deletion or move proof in Phase 0	bc801b2d5e666dfeba061c2d1ef02a376d8f2ad90e8a6470d8e5cf6ccd46a6f8
+core/receipt-schema.mjs	keep	no approved deletion or move proof in Phase 0	91ccee76180622c949497fa76d4ea0d9bdd8a43137833a112131790ffb9046d6
+core/resolve-component.mjs	keep	no approved deletion or move proof in Phase 0	e84c365162efb69e7d276bc28acb07e7ef81330a9269467cd5451aae37b6575e
+core/runtime-mode.mjs	keep	no approved deletion or move proof in Phase 0	79f06a2cff11d6a7ee35e7bfbe188403d29ea145b7a4890a371302a37970a578
+core/schemas/interaction-completion.v1.json	keep	no approved deletion or move proof in Phase 0	337d8c3daec0748a138a593ab66d9be6154ce428cd6d40c89f33b79bee1d4f91
+core/schemas/workflowhub-recovery-credential.v1.json	keep	no approved deletion or move proof in Phase 0	8af660e643e9e7f068c207c3ddc28f2fbad23fef73e92d64ba3d474255259405
+core/schemas/workflowhub-recovery-generation.v1.json	keep	no approved deletion or move proof in Phase 0	15579173b3b45134c88311242b857764e4fef06f5cc4ee8b4166f04f69c71617
+core/stage-completion-facts.mjs	keep	no approved deletion or move proof in Phase 0	6e58902e01e0f7198db67e52351e8702b4215940886056ba0f243e7bbb9c6d0c
+core/stage-content-evidence.mjs	keep	no approved deletion or move proof in Phase 0	68104e75ce5617dec38babe449b58fa6a1472a73b8ebae0a4b33fbaa8a7afeec
+core/stage-context.mjs	keep	no approved deletion or move proof in Phase 0	67c9ee5217dad6372a11efb054c821fd6b6ed1a2d6be8aa17880a41c02e92ed9
+core/stage-handlers.mjs	keep	no approved deletion or move proof in Phase 0	57b8a650a04234e4cc2c47cc3619f0c99f8af7a291d3303b250c27b04689112a
+core/stage-runner.mjs	keep	no approved deletion or move proof in Phase 0	b74aef1e8ad9bff49a27a45174f9e4711988860cfe3e43a28212c95daa672073
+core/stage-skill-invocation.mjs	keep	no approved deletion or move proof in Phase 0	484b254a6595314e4ceb02d150508c706a605b6f1d014a5740055ff84b9923ef
+core/task-close.mjs	keep	no approved deletion or move proof in Phase 0	164f7b5a71adbf9a2390a264ee68be3dc60ece549e9a734e310de883e30480a5
+core/task-handle.mjs	keep	no approved deletion or move proof in Phase 0	39fa8b143d5194dc9e9e65afe6515b5b004e20e5fcf529c0abe742c1b97ab617
+core/task-index.mjs	keep	no approved deletion or move proof in Phase 0	906e6b4299ad8ee22db0e166975f6e10e21608e2e4a65d9e137cda27f16a2016
+core/task-kernel-implementation.mjs	keep	no approved deletion or move proof in Phase 0	3d634bfd5cd085f157d7a847e65446bee1f3c9eb736a2ce4cc85e2a51856074b
+core/task-recovery.mjs	keep	no approved deletion or move proof in Phase 0	410009618cb9a80db875ac6a7ad3e37264ad48510e2f8bcf882ded48d317f902
+core/workspace.mjs	keep	no approved deletion or move proof in Phase 0	54f504ed82164816c9a931b1b4e204ac8f79bd09d210b4b1fad70c95ae908699
+docs/3rd-review-error-and-recovery.md	keep	no approved deletion or move proof in Phase 0	a006d3c2a178f67da5d5372cee0234a24ce245d2b9a41e64e1ff623f0bf85d0c
+docs/3rd-review-provider-contract.md	keep	no approved deletion or move proof in Phase 0	325702f1609bfb05cfda71e5de4858e2e1ed17207f762282f37dab7b95bef1a8
+docs/3rd-review-redesign-draft.md	keep	no approved deletion or move proof in Phase 0	936b89565e91d2c4afa78fb4776ca206abf4575c200ab261f91489cd729e2446
+docs/3rd-review-redesign-v2.md	keep	no approved deletion or move proof in Phase 0	a6f2e8b8063f4435c75e37015d75c59a9aa50ada4e8c59e02c1e7170d2fce201
+docs/adr/0001-two-layer-review-architecture.md	keep	no approved deletion or move proof in Phase 0	f47dc97ade692ae54515e7da46d5add5f85f134b03c2c1335c0f5b38a85cf38c
+docs/adr/0002-requirement-lineage-and-step-audit.md	keep	no approved deletion or move proof in Phase 0	2d7645db77828c8dcbe8d73f689ac3b243e73d2a9be44ae64e95bb23cac9f4f8
+docs/adr/0002-v4-review-exception-state-matrix.md	keep	no approved deletion or move proof in Phase 0	0a5f146f138eb1059e0fdfc77f544aba5c55be02261a28aedaf8996e9bd96108
+docs/adr/0003-explicit-task-root-and-upstream-lineage.md	keep	no approved deletion or move proof in Phase 0	263ac28fb47af6cde2c9cd625054bc60e451c7d3e8c1385e196c1bbc23b9f9b6
+docs/adr/0004-minimal-run-model.md	keep	no approved deletion or move proof in Phase 0	1d232ccda0bd0cb65d807e89824f7e22c9191ac379e3a5d02b458f691cf9df7a
+docs/adr/0005-deterministic-task-directory.md	keep	no approved deletion or move proof in Phase 0	4bb88920aa2f9891d0e7729480aa36eb839977defa8854e2c71dea103ce06990
+docs/adr/0006-single-build-code-contract-with-composable-roles.md	keep	no approved deletion or move proof in Phase 0	e662ea726b285a3adf897c1973a9fd11a87ea25834f967c946b409cad944d4c1
+docs/adr/0007-phase-and-integration-review-material-architecture.md	keep	no approved deletion or move proof in Phase 0	af6da548a0423a68fdf41fc6bc260f5ab98ddc3afc040108bbbe042e165d125f
+docs/adr/0008-same-task-recovery-is-append-only.md	keep	no approved deletion or move proof in Phase 0	ede95542533afbf70745dfc8211ea965b9c23abfda794ed9cf3e36a0f2792ccf
+docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md	keep	no approved deletion or move proof in Phase 0	5c06e8954e8209678ef49de7132e6bf423b325577c5ee218cf24f49de92b5e7d
+docs/adr/0009-stage-content-authority.md	keep	no approved deletion or move proof in Phase 0	0cbec1e5307e407d701b819a679db3c57739a658a10f2e16e265e5f51c7457ee
+docs/adr/0010-serious-review-disposition.md	keep	no approved deletion or move proof in Phase 0	b734500c0f9184b8e3b53c04089ef0610eabf275eb4109e8d4bec678c5f7b8d2
+docs/adr/0011-authenticated-review-flow-generations.md	keep	no approved deletion or move proof in Phase 0	b85dd7f1e6c1eed9194d8e300047da06e86ecb5ed37eba76b5b135cbd97a453d
+docs/architecture/complexity-baseline.json	keep	no approved deletion or move proof in Phase 0	ded45a03fc6b1b3eabf2c70c7738c966f478cfafd89347c0f82aa371db50fb1f
+docs/architecture/deletion-plan.json	keep	no approved deletion or move proof in Phase 0	6fe62453c40dc838deb8af99dc3956decfb4286ffc534360ca40b2853fc32c25
+docs/architecture/final-complexity-report.json	keep	no approved deletion or move proof in Phase 0	954d4a5ddcda040d832b489145f60978e1faa775a5e1e52134993ac1a403ead5
+docs/architecture/final-coverage-audit.md	keep	no approved deletion or move proof in Phase 0	7f4f857c0e02c6a6c234279c3f1395987e1311a8a4207ebac382a8b73a7b4276
+docs/architecture/legacy-import-proof.json	keep	no approved deletion or move proof in Phase 0	b7dd7aa44571becae4eb1207269a3e28b9b3461abfc8c76a5dff39d48bfa447e
+docs/architecture/legacy-task-inventory.json	keep	no approved deletion or move proof in Phase 0	c54c5d0a45b07aa7f4cfea29597306a459eaafe3262919cd1f7d5a0925834d23
+docs/architecture/move-map.json	keep	no approved deletion or move proof in Phase 0	29f4d0ecbf9d299872ccd86f2683227eabf3ab31e55ff1c4c6301f8406b88ae9
+docs/architecture/repository-inventory.tsv	keep	no approved deletion or move proof in Phase 0	SELF
+docs/architecture/test-disposition.tsv	keep	no approved deletion or move proof in Phase 0	83b18e51f291cf7c2ca655ca5750b85ada013e9abf7543338d90de941afc1d4b
+docs/audit-contracts.md	keep	no approved deletion or move proof in Phase 0	965998135690461700195f1653c2d326fc229723ed8e68a334477027cfc33f57
+docs/contracts/C2-scope-bounds.md	keep	no approved deletion or move proof in Phase 0	cc174e93eaa545f409d4f237106f24566f68e94720ff95e4e56420609f78092b
+docs/contracts/task-context.md	keep	no approved deletion or move proof in Phase 0	f3f6d35f9b231a8b369d362e77ee86a27fbe237a83bef0857cf20006505d45c7
+docs/freeze-and-retire.md	keep	no approved deletion or move proof in Phase 0	de5ab6994acf879c9036a7f9b68209ec459ccb06b0bd6a6e754ead5234f2b174
+docs/human-brief-template.md	keep	no approved deletion or move proof in Phase 0	0878f0a83a9661fbb07f7875892a2425e20d0f964f32633e563e472e17eae962
+docs/migration-and-fallback.md	keep	no approved deletion or move proof in Phase 0	3691a33e413764db6d492cd44ab7a614051e5caaad813691f75379e5754d50bf
+docs/multica-monitoring-sop.md	keep	no approved deletion or move proof in Phase 0	02093820808c0da7da428462b2809317f407093aae793686d7497a9632e773a8
+docs/plain-language-mechanism-design.md	keep	no approved deletion or move proof in Phase 0	c3741d613868f4e5e62fbd5970a9de23f224bcf0ee0a16c1244d9cf29916b6af
+docs/research/reviews/workflow-path-claude-code.json	keep	no approved deletion or move proof in Phase 0	103d2f2c189f781bd88ef262a98535f398ae974ecfef50a9b7e2fcdca3278cc3
+docs/research/reviews/workflow-path-kimi.json	keep	no approved deletion or move proof in Phase 0	486b591cb5dbffb839c3e9c0b6e0a7d65f5f7f428a5273002763596c2933d20c
+docs/research/reviews/workflow-path-opencode.json	keep	no approved deletion or move proof in Phase 0	4449d22e2e35523e65d4554d1486eafdb3b12a07ca4b7f4d496e0185382c6483
+docs/research/workflow-path-architecture-blind-review.md	keep	no approved deletion or move proof in Phase 0	2b52fa13b9e60c0fcfbbcff62a8fdb0be32ba27ce57a6772c3bcfde64f39671f
+docs/reuse-registry.md	keep	no approved deletion or move proof in Phase 0	bc0f16ad23b862438f5bbefc11c0b9458a2f07e19527ec2c71c079e4294c971b
+docs/skill-version-bump.md	keep	no approved deletion or move proof in Phase 0	0b8589a1c4cf23b3d17efad9dd78e04f9298972adaf3b2ea101c3a0fadb1184e
+docs/stage-atomic-step-inventory.md	keep	no approved deletion or move proof in Phase 0	a6089919d674bd41f7ea093de88f6271c9aeaa2cb581c69721166f16e8e0aa8b
+docs/superpowers/plans/2026-07-12-wh-review-v4-implementation.md	keep	no approved deletion or move proof in Phase 0	6fbd6dfd0f363d974e3a7161b56fa10c2ff8c37af49d680469c18078d8cc08de
+docs/superpowers/plans/2026-07-13-unstaged-review-snapshots.md	keep	no approved deletion or move proof in Phase 0	b3088a44921f80ea3285366946ee924a69d3bfa9df444c78fff7db56e0f3b4b9
+docs/superpowers/plans/2026-07-13-wh-review-v4-design-gap-closure.md	keep	no approved deletion or move proof in Phase 0	6e1637e2151535cb40bf79f6c0ce2bc285486f93ba2e152ee3faa811318fb398
+docs/superpowers/plans/2026-07-14-review-delivery-plan.md	keep	no approved deletion or move proof in Phase 0	38651eb7ba5156f4f093b47dfa633c3b441ea94c45f64a605bab53b645126122
+docs/superpowers/plans/2026-07-15-wh-review-quality-repair.md	keep	no approved deletion or move proof in Phase 0	723b17e52da833439ba284883a0f709fc1815d2ce52d6d7ace7a5d602f2f1853
+docs/superpowers/plans/2026-07-15-wh-review-sealed-contract-recovery.md	keep	no approved deletion or move proof in Phase 0	e8da1fdff8a05dbc67109d852cb60f044f12789f3bb034091ef37f2256d75d99
+docs/superpowers/plans/2026-07-15-wh-review-simple-reliable-plan.md	keep	no approved deletion or move proof in Phase 0	fd1376d3344f0a58f7db007c3f9054206e53d66a0381d88755074c375cb881c1
+docs/superpowers/specs/2026-07-12-wh-review-v4-redesign-design.md	keep	no approved deletion or move proof in Phase 0	3e27095743f6a8ad4c930c4da3055451e48371036250ba7c3cd6673e329eb8a6
+docs/superpowers/specs/2026-07-14-local-skill-closure-design.md	keep	no approved deletion or move proof in Phase 0	4cd41baae2a647492843440d87f47bb7c31a623dd53c83ec7d4fa97b9b59173c
+docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md	keep	no approved deletion or move proof in Phase 0	ff9426c78168e7af94d756523cd872bd31cf4a7db1c1fff3200489c3e022da95
+docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-review.md	keep	no approved deletion or move proof in Phase 0	f07d8a8f6503e71bc8b332468399efd1bcea9cef7247064518292d43145d122f
+docs/wh-review-e2e.md	keep	no approved deletion or move proof in Phase 0	892f07c8831de961e83fcff401421e12a86984263355717387afa1844cdc3385
+evidence/phase-5/deletion-consumer-audit.json	keep	no approved deletion or move proof in Phase 0	723f91423b4bf3717558072495ed5b4c226a4a79abe6d9f3e64f572450716fe3
+evidence/phase-5/keep-decisions/DEL-01.json	keep	no approved deletion or move proof in Phase 0	053d82590746266d0dbbbcc174cd3e4528e96d53ad7c933f9ce8bc32bab6ebb6
+evidence/phase-5/keep-decisions/DEL-02.json	keep	no approved deletion or move proof in Phase 0	e8aa2e478208190117c4743e2dc8df29c19e3cb5a58f9bd2e60fc0cc7ab2388c
+evidence/phase-5/keep-decisions/DEL-03.json	keep	no approved deletion or move proof in Phase 0	80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac
+evidence/phase-5/keep-decisions/DEL-04.json	keep	no approved deletion or move proof in Phase 0	80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac
+evidence/phase-5/keep-decisions/DEL-05.json	keep	no approved deletion or move proof in Phase 0	80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac
+evidence/phase-5/keep-decisions/DEL-06.json	keep	no approved deletion or move proof in Phase 0	80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac
+evidence/phase-5/keep-decisions/DEL-07.json	keep	no approved deletion or move proof in Phase 0	44f43525055d416a67eb35fcf7dff43a97346e0a4e51ef36d527384783fd04ae
+evidence/phase-5/keep-decisions/DEL-08.json	keep	no approved deletion or move proof in Phase 0	e131df8808813a079a966135774ce86e46928713b495dd615f3bcd313a477e0a
+evidence/phase-5/keep-decisions/DEL-09.json	keep	no approved deletion or move proof in Phase 0	62cd9570729b6c4dc9e6a7b55e8b941c3e01eb58d01ae1fcfcafbd174ae07ecc
+evidence/phase-5/keep-decisions/DEL-10.json	keep	no approved deletion or move proof in Phase 0	b7852c48b5d6614f37e39154cb08b89cc2d01965618529c3c8aef01af50bbb1d
+evidence/phase-5/keep-decisions/DEL-11.json	keep	no approved deletion or move proof in Phase 0	5c00994a979837fdf26033cece7091bbf5f6e2bdb3190149858dbdc498af9fa6
+evidence/phase-5/keep-decisions/DEL-12.json	keep	no approved deletion or move proof in Phase 0	b5ece4cd6e762515e9f425dab7162644302b18262290e3b99db1563d0a22746b
+evidence/phase-7/mutations-green.txt	keep	no approved deletion or move proof in Phase 0	3ba8a50c833ca202a3eda93a6085b690ed59b3e5ea82e63aefa83037f2a6f872
+evidence/phase-7/phase-result.json	keep	no approved deletion or move proof in Phase 0	96d8924da7c2e5e0ad3b490939568043fbfebe5c8f4e181ec95fe71ae7427781
+evidence/phase-7/test-disposition-focused-v2.txt	keep	no approved deletion or move proof in Phase 0	35188e9f430be62ac89dba8fc420b97852e2640e22362e5135ef42142ffc33be
+evidence/phase-7/test-disposition-focused.txt	keep	no approved deletion or move proof in Phase 0	35188e9f430be62ac89dba8fc420b97852e2640e22362e5135ef42142ffc33be
+evidence/phase-9/final-coverage.json	keep	no approved deletion or move proof in Phase 0	9fa7b15a9bd5f68e152cbe58e4cee349cb9fc919c006169515c6486f18b756e6
+evidence/phase-9/final-gates.json	keep	no approved deletion or move proof in Phase 0	c8fd4a253bd0eaa4dc22152cf049aa918675b68818ae61a88f9b98a7b3cb049a
+fixtures/anti-host-bad/claude-hook.mjs	keep	no approved deletion or move proof in Phase 0	b38c13bf176fed0c0dd65b88c8ffe8034f31fd3e0b8327c1e5d9b33f9ec31289
+fixtures/anti-host-bad/claude-path.mjs	keep	no approved deletion or move proof in Phase 0	57c5065b940288bb56b04114a231fe4106278d3dc028ac12a14d8cf45f34dfbb
+fixtures/anti-host-bad/hardcoded-path.mjs	keep	no approved deletion or move proof in Phase 0	ad6f1be191a3dfb92b1b604198f3b4b49c38cba5b37401629cceecb2f33cd11a
+fixtures/anti-host-bad/repo-root-climb.mjs	keep	no approved deletion or move proof in Phase 0	1bc1258c32ae78747cddcf4d58ae0488e79afa50342448b7fe0c544053b36b23
+fixtures/anti-host-bad/source-derived.mjs	keep	no approved deletion or move proof in Phase 0	13d0537a144e98a689396a44c8f8a9b2f28a8cd9f5b8c7ceec8c1d07bf0e8dcb
+fixtures/components/dummy-badjson.mjs	keep	no approved deletion or move proof in Phase 0	6098b6e3af18ed9379209c00de7b82ec7c89c3ce070b2c865d13a69ce03553d6
+fixtures/components/dummy-fail.mjs	keep	no approved deletion or move proof in Phase 0	447a0752fa4e97fd2c58717f963cc26d488935460090acbcc95273d02b98c6e5
+fixtures/components/dummy-missing-id.mjs	keep	no approved deletion or move proof in Phase 0	09e634633fd2e1180a05f52b79f63ee3152ccbea92016789aa207da3cbec1716
+fixtures/components/dummy-ok.mjs	keep	no approved deletion or move proof in Phase 0	3639fbabfa2f5367b02dddbde756209134923f44f3a64d385b40ce486d240624
+fixtures/components/dummy-other.mjs	keep	no approved deletion or move proof in Phase 0	caed4fa33bd40217d444532f0a458e26b02c684f7881bfbc65594f063f9ab284
+fixtures/components/dummy-wrong-id.mjs	keep	no approved deletion or move proof in Phase 0	51a40dbf89d955e2dfdeabac9501cae586c7776d2b5f487c3f4d77fdb7bc033d
+fixtures/config-bad/bad-shape-cli_map.yaml	keep	no approved deletion or move proof in Phase 0	98d1142fa4ca736c754dab2d45705b68fb6ad5ae09b3efe3175bc836f1cb440e
+fixtures/config-bad/bad-shape-external_deps.yaml	keep	no approved deletion or move proof in Phase 0	b23761d28515ae3a9ded0b37f46e3db6210f776166d9b5724d0ea9c4ae5dcbca
+fixtures/config-bad/missing-registry.yaml	keep	no approved deletion or move proof in Phase 0	80702b904b1848ae49fd6e80e8e06f9c6da830d6f158eeb5bd08a565cc8e1ed5
+fixtures/config-bad/runtime-state-field.yaml	keep	no approved deletion or move proof in Phase 0	ede674abb650e0597b7d8f41e13580d5df65081dba528e685845bc368541aac6
+fixtures/config-ok/full-static.yaml	keep	no approved deletion or move proof in Phase 0	7c624093e49f842dfb97181eb1d84b387b07c072c0b6aff39c8d1f8db5e3e0ba
+fixtures/config-ok/minimal.yaml	keep	no approved deletion or move proof in Phase 0	5aef22b7e9d316e56d514cab39a49e58b43f32dea2cf753b9f2b10a789887451
+metrics/adapters/host-adapter.mjs	keep	no approved deletion or move proof in Phase 0	2276c218a1603b63e9ac1012bb53272bf8c6e2d41a11e1823184f969043cc620
+metrics/baseline.mjs	keep	no approved deletion or move proof in Phase 0	043bd00044bda0d9b08f550bf045e1b24e1e5675cabc0df7252479e9c723a69f
+metrics/collector.mjs	keep	no approved deletion or move proof in Phase 0	31a82c1b988e5d7440229ef9d8024bec4edd0d9a38ee2f952e276cf0bc785b7f
+metrics/execution-record.mjs	keep	no approved deletion or move proof in Phase 0	f29fa4d137bc3bb8053119c185d93197385c3337a0ae6068e2b1413183c2c9ef
+metrics/knowledge-card.mjs	keep	no approved deletion or move proof in Phase 0	d09e5ca9a4cd56d0564e1986e5c17ca18e59e762302beb60959bcb55a8f94bb3
+metrics/record-schema.mjs	keep	no approved deletion or move proof in Phase 0	b564225bddb46ada5f1ab5a5519b4bdf27da5fbd3cacc08c19e77daf7a916e14
+package-lock.json	keep	no approved deletion or move proof in Phase 0	a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b
+package.json	keep	no approved deletion or move proof in Phase 0	dbc2c2c69dcc7bdc33b5c2026d41809fd08021d97f8a770afd1238e73c31723e
+runtime/adapters/local-skill-resolver.mjs	keep	no approved deletion or move proof in Phase 0	178dfc80288129ab6a9ec3c14bc5d7ba327e743b31ddad6c7bb28e85500070be
+runtime/adapters/resolve-path.mjs	keep	no approved deletion or move proof in Phase 0	68c7c2c81b7d4fb110792ebb0fce3cfd698f00bd0284cb15d2e8c35b663e89ae
+runtime/distribution/runner-release.mjs	keep	no approved deletion or move proof in Phase 0	3c101cbe438727314917d37079782eb4130c393bdf80844937d9a8038047327a
+runtime/distribution/skill-bundle-release.mjs	keep	no approved deletion or move proof in Phase 0	260053a23f69dd7eb2c9bcf9d690127ca8cf15e40973f37de0f88d251029678c
+runtime/evidence/.gitkeep	keep	no approved deletion or move proof in Phase 0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+runtime/evidence/audit-summary-carrier.mjs	keep	no approved deletion or move proof in Phase 0	f2a5a520e0108091bcb9707380f94d24d83b34a6e70227d59780039472f5c4f2
+runtime/evidence/boundary-confirm.mjs	keep	no approved deletion or move proof in Phase 0	5d3b05f29132398301e124e27a49465a5ed9b436d14f0aef542a632c909a27fe
+runtime/evidence/canonical-source.mjs	keep	no approved deletion or move proof in Phase 0	65e020fb89989e3b29fc2ef253fa0bb2f537b014af9362aa6efb4b43cfeb5519
+runtime/evidence/canonical-utils.mjs	keep	no approved deletion or move proof in Phase 0	811029fe642247ddf48028bf850d2720b33795236126f2ab1577940608be783b
+runtime/evidence/capability-doctor.mjs	keep	no approved deletion or move proof in Phase 0	10fd52d9a7ed96afbaf20b2ed8ceef682fd1ac9ac50af537082eb3ec2ef78ab3
+runtime/evidence/check-skill-closure.mjs	keep	no approved deletion or move proof in Phase 0	95f78418b1c5e473fc29ab53f70c945b7dd00d310625b35556e9480c7def8a55
+runtime/evidence/fact-collector.mjs	keep	no approved deletion or move proof in Phase 0	10b8424afaae355275f2c1e9abbec50d4ae1d0a94d00c3c5c353d14283d828a3
+runtime/evidence/freshness.mjs	keep	no approved deletion or move proof in Phase 0	9ec166f05443e5109723f7d7ee6ad4642d0c62e99d13c19ee69457c8afa7e180
+runtime/evidence/invocation-identity.mjs	keep	no approved deletion or move proof in Phase 0	d210e432d1ace67ef4eef6af46b35f93959cc8a4a69b9bd807814a108b54d942
+runtime/evidence/kernel.mjs	keep	no approved deletion or move proof in Phase 0	7bf00f2b86f7a6785d8b9117018f1bf9ac53051cefcb9f3a7f9ef9b818044d15
+runtime/evidence/protected-paths.mjs	keep	no approved deletion or move proof in Phase 0	206e216a8322cc8042fbc48a772b95e7403933e09c634f1e675fe62696920b8b
+runtime/evidence/quality-fact.mjs	keep	no approved deletion or move proof in Phase 0	9f84f18902597eb1f32216c0c1fc52b9828c91ece69e5f9e325e99568d68a344
+runtime/evidence/receipt-writer.mjs	keep	no approved deletion or move proof in Phase 0	850bf398e6bb08f5c6ffc6358671c8618892451a8732c6239cddb7d3d85d98ee
+runtime/evidence/requirement-ledger.mjs	keep	no approved deletion or move proof in Phase 0	01691829b039319dc786e6167e62a98fd733ccc296ed2a4c2f4cf8be3a4395f0
+runtime/evidence/runner-identity.mjs	keep	no approved deletion or move proof in Phase 0	edba6dbdf472193109183489a6b3da1c794fd830809030bd5ecf1cf5a79d27f6
+runtime/evidence/skill-static-deps.mjs	keep	no approved deletion or move proof in Phase 0	1df2768aac9942cdb1c01b7c6d2a40005ab8136f592858c9e165d82183418541
+runtime/evidence/storage-root.mjs	keep	no approved deletion or move proof in Phase 0	6019d5d8385b6d8f4c044a4b3d4f262bc2c8be242afee17d515f7ae20e85e089
+runtime/evidence/text-utils.mjs	keep	no approved deletion or move proof in Phase 0	a5eff021f596f4ee331df4499b6d6d7450955a57574c4cf3b9107d7aa8ecf736
+runtime/evidence/validate-contract.mjs	keep	no approved deletion or move proof in Phase 0	ea9c89c403ec61cfdb9ba11df00436a0666a2e49af2c2a72fd370c2935d24b38
+runtime/evidence/write-boundary-preflight.mjs	keep	no approved deletion or move proof in Phase 0	8acb1e7c7780ecaf981f39f0cee66650eea378f95aa2ccbd1ab5e27274df1da2
+runtime/interface/runner-contract.mjs	keep	no approved deletion or move proof in Phase 0	a37773cd9864de20a01613fe84afa133a431ae2698370f5de41e24e2ae62cc3d
+runtime/interface/runtime-facade.mjs	keep	no approved deletion or move proof in Phase 0	b7ad3cf0309fc0d437b22b79266b985d5828f8830f708d23b18f09606280622f
+runtime/review/canonical-review-result.mjs	keep	no approved deletion or move proof in Phase 0	e27f763ff561dee0df940d8c50cee999e9df06e9d14ff2efeb28843168d25f76
+runtime/review/review-flow-authority.mjs	keep	no approved deletion or move proof in Phase 0	5dbbc9e99193fe0e7b29bafc3d4ef32fc5a9f84cb324fc14590e9af19dcb60b0
+runtime/review/review-result-consumer.mjs	keep	no approved deletion or move proof in Phase 0	cc27d68beb9479e69f4cb3b9a107c8bf09e631f0ef1136b65da0c109d5a0f3ff
+runtime/review/stage-review-disposition.mjs	keep	no approved deletion or move proof in Phase 0	84bf9ea2b833e380b41caf23c5fecf741280f2627b531b908e2a6b89d5bdc6bd
+runtime/schemas/ambiguity-ledger.v1.json	keep	no approved deletion or move proof in Phase 0	d2fba01745bba801cc02f3e065bf232c63ebe381d36111caf756d81952c33478
+runtime/schemas/ambiguity-ledger.v2.json	keep	no approved deletion or move proof in Phase 0	d370af21d45fc828c15f9d7cc137a55c8256d8d7430edb7157178eb60d5eeceb
+runtime/schemas/audit-summary.schema.json	keep	no approved deletion or move proof in Phase 0	dae62178b9ea6c8c9923d1dde0c887ac0f3166cf99ded320ccb894da30c72ff3
+runtime/schemas/bootstrap-review.v1.json	keep	no approved deletion or move proof in Phase 0	e1eff8954d8f38bfa8c432cb546cc410b7509e4bab05dc2777ab3610305744b5
+runtime/schemas/browser-qa-evidence.v1.json	keep	no approved deletion or move proof in Phase 0	8ec260dc26b6c4013917ec055d391dd7536ba84f5951c57b4a65bb7364953ad6
+runtime/schemas/decision-correction-appendix.v1.json	keep	no approved deletion or move proof in Phase 0	6c550f019b47aec495316fa5fbe97bf2bdc6022ba16da8033424000a4eb73e26
+runtime/schemas/decision-coverage-audit.v1.json	keep	no approved deletion or move proof in Phase 0	b874dd729beec6944a5f29fdcf147d337a3683d58f1fe661fe5c11e474c27ccd
+runtime/schemas/decision-entry.v1.json	keep	no approved deletion or move proof in Phase 0	713c20e2584f6e41024d9902852c9f47b94f955ac50afe97f50162e9af9be23c
+runtime/schemas/decision-log-contract.v1.json	keep	no approved deletion or move proof in Phase 0	614b7bf9ed15fedff3d0e8a4761bafea18b5171d2a18be26e824a5b7f0e8bfb9
+runtime/schemas/decision-omission-acceptance.v1.json	keep	no approved deletion or move proof in Phase 0	a312ae5c2ae7776402272aca6570e6e9cf0e02c4ecb47fedfc8a16df848eab83
+runtime/schemas/human-confirmation.v1.schema.json	keep	no approved deletion or move proof in Phase 0	f853a6a8a27b61b236d19b94fce9d151edab9a0c9c40e0c5dae9cf2a28a9c703
+runtime/schemas/plan-task-contract.v1.json	keep	no approved deletion or move proof in Phase 0	582b69a605bd5ce563753979ad93adc6bf9fa808ddedae853c6d96db230a792b
+runtime/schemas/plan-task-contract.v2.json	keep	no approved deletion or move proof in Phase 0	c4c2adcc362cb99e48b86a8ce6cef333ba627ef3bd88948f95b56b3faeaba4ff
+runtime/schemas/publication.v1.json	keep	no approved deletion or move proof in Phase 0	211e4d311fd514a824500444443f267a1615e78fb2070da5cd420cb2c2611153
+runtime/schemas/quality-fact.v1.json	keep	no approved deletion or move proof in Phase 0	f054eae190cf1b3b59d371775795c539ecee5b2db248dba0037c3f63cea74bc0
+runtime/schemas/repository-structure.v1.json	keep	no approved deletion or move proof in Phase 0	f7c3190bf4053f6452e08bc35401982a90596bfcea115803efce300beb4e1ca2
+runtime/schemas/requirement-ledger.schema.json	keep	no approved deletion or move proof in Phase 0	73bab36a7a2c2df3c3a0e31bb0e4f0133f9d09c192066ca5e3f0a3b0fd291c54
+runtime/schemas/requirements-coverage.schema.json	keep	no approved deletion or move proof in Phase 0	c240a353c65c0e91546caa1b9c0a69ec6c51c56a283e1c3630829ea3b36c20d7
+runtime/schemas/review-bundle.schema.json	keep	no approved deletion or move proof in Phase 0	9ba1699bfd613c5c9d5bbc5b0909db8086b4e8fd51f6e608bf43d5bee96a8aa1
+runtime/schemas/risk-acceptance.v1.json	keep	no approved deletion or move proof in Phase 0	e5d63cef08ff91d89f4f04b360ec0ad7fb192225d0d9609b3e35f811466819a6
+runtime/schemas/runner-release.schema.json	keep	no approved deletion or move proof in Phase 0	b722702638e2912448fd6b05af0f60e612d72ba2542cfdc2d78385973687b212
+runtime/schemas/runner-replacement-bootstrap-provider-config.v1.json	keep	no approved deletion or move proof in Phase 0	94b0e23be51f256f980a19c58f8014f35b7a471bace6d581a1f5baa721d0e512
+runtime/schemas/runner-replacement-bootstrap-sealed-bundle.v1.json	keep	no approved deletion or move proof in Phase 0	dd9dda096d0f8b6de9f8e3d45ad3540d4deae2b6ea56922ad1dc534423a8406c
+runtime/schemas/runner-replacement-bootstrap-test-receipt.v1.json	keep	no approved deletion or move proof in Phase 0	1c481948de991f924d90d2e3671c716c7dae5b7a6b8a5e47928358b38cfd028e
+runtime/schemas/runner-replacement-path-coverage-map.v1.json	keep	no approved deletion or move proof in Phase 0	bbea885c80a2a8d3fddf9b49cd8825b06086ebaaccc97b927a3bcba77e5160df
+runtime/schemas/skill-bundle.schema.json	keep	no approved deletion or move proof in Phase 0	3b8df23fb9894dda64224b28a0a8196a40e8867b87dd40d0a34fdc27a8bdd381
+runtime/schemas/skill-catalog.schema.json	keep	no approved deletion or move proof in Phase 0	ee3308ec2016a01a91525f6a8994849e639c6b36d56d1d8e4803944b5ea560a8
+runtime/schemas/skills-inventory.schema.json	keep	no approved deletion or move proof in Phase 0	baf7355b1ec34c1aec0f258f093ea4ace045e575193e604a07b7f0f689090e48
+runtime/schemas/source-manifest.schema.json	keep	no approved deletion or move proof in Phase 0	2e5df95da9b5810ba5e995b5632ba392f2a9a7e7e8e3825b23d14ad713e3db32
+runtime/schemas/stage-completion-facts.v1.json	keep	no approved deletion or move proof in Phase 0	a766af7a4cb9a1e9ce37531de99dac2a49460a11ef53fcdd266f2aed6905330f
+runtime/schemas/stage-content-evidence.v1.json	keep	no approved deletion or move proof in Phase 0	ec7f352ef9c19cb2c2adc5c15f44f0c19b2ccc892100495685800ec4c7573042
+runtime/schemas/stage-skill-deps.schema.json	keep	no approved deletion or move proof in Phase 0	e6d703e757fdb0dafe25088fed93c764aa71f5cec79a28cd077811bcfe8af37d
+runtime/schemas/stage-skill-invocation.v1.json	keep	no approved deletion or move proof in Phase 0	c9914153afae3abf1ce83801213a1ac5cbcee60753352c08a9aaa2818d126a65
+runtime/schemas/steps.schema.json	keep	no approved deletion or move proof in Phase 0	73bdf434ebd853291dbb5784a867643132dbbf61acb67384508d051d434222db
+runtime/schemas/task-accepted.v2.schema.json	keep	no approved deletion or move proof in Phase 0	69337dda28b8200a359fa51b73b597774800f8857be98798ebf23a12a31abcb5
+runtime/schemas/task-attempt.v2.schema.json	keep	no approved deletion or move proof in Phase 0	7ddc4f75ace496bc47a185e91559b98c0768bdb47d2430e88fea3f23f00ca203
+runtime/schemas/task-material-revision.v1.json	keep	no approved deletion or move proof in Phase 0	b78c560462b7b7bbd9be333c395ec8fbf6dc9393309f557e4f7f2ccc2b863a7b
+runtime/stage/completion-predicates.mjs	keep	no approved deletion or move proof in Phase 0	7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af
+runtime/stage/publication.mjs	keep	no approved deletion or move proof in Phase 0	5b0e2474fc65a715c28d58deed2dc125f64964673a4549c40638fab0dd16fd45
+runtime/stage/stage-acceptance-policy.mjs	keep	no approved deletion or move proof in Phase 0	15a043660f08021ed35330ad93fb9ef871629f36d3e65c9cb7fd20728a865765
+runtime/stage/stage-content-contracts.mjs	keep	no approved deletion or move proof in Phase 0	c30638b352f85552c3139d181bfd84ad14319ebd0e7522879920b33171209563
+runtime/stage/stage-skill-runtime.mjs	keep	no approved deletion or move proof in Phase 0	918fc283943d1b967acfa726ca963eadb76aea72efde99050ab9ac8b7f867afc
+runtime/stage/step-manifest.mjs	keep	no approved deletion or move proof in Phase 0	299990932b06f15cf92c65d3df936a7e931930bc8625922582000806be04508a
+runtime/task/git-worktree-snapshot.mjs	keep	no approved deletion or move proof in Phase 0	a7583fe02c7985339776bdc85847451fb180c386f06113771605c602ad92665a
+runtime/task/material-revision.mjs	keep	no approved deletion or move proof in Phase 0	774af18bf2ca997f85da97a42f1cd7e9c7ec62706ff03f3fcf65b7da53fe2742
+runtime/task/task-identity.mjs	keep	no approved deletion or move proof in Phase 0	8e1124b56da0fdb5e3ebed66ae8de679cb00a177aabe6b1f6a6eafa6274ce3e5
+runtime/task/task-kernel.mjs	keep	no approved deletion or move proof in Phase 0	0e5298d8b0fdb0cd41e6a7d1e3db5f5a6759b0cab79889e8f54cb72e5d5a55b9
+runtime/task/workspace-runner.mjs	keep	no approved deletion or move proof in Phase 0	86b755458a018da9acd79a17d8704d34342af26c73bb0343e2f5f6791cb606a2
+scripts/__tests__/canonical-archive-skill-dispatch.test.mjs	keep	no approved deletion or move proof in Phase 0	f11e2d1d21ed2e4f113e0cfd7dd9b040b468df8812fc320f53e768a1ee896e0b
+scripts/__tests__/ci-chain-check.test.mjs	keep	no approved deletion or move proof in Phase 0	9372f791ba3de1b45476c3d33a18180a90552394387e09bfcd77cba246c58fee
+scripts/__tests__/migrate-task-v2.test.mjs	keep	no approved deletion or move proof in Phase 0	2da8d44fdaedb62fa91a234ab53732cc4320b47ba33ffd992ab9a2cafad0158c
+scripts/__tests__/run-wh-review-audit-e2e.test.mjs	keep	no approved deletion or move proof in Phase 0	e000adae56c69cdbe2683b9f71cba6e012d17faefd50495b0f98e83b040bab2d
+scripts/__tests__/run-wh-review-provider-smoke.test.mjs	keep	no approved deletion or move proof in Phase 0	1515e97fac5c074af5ee6024b195b601c05f489589aacecd24d0d7a70376eecb
+scripts/__tests__/runner-replacement-bridge.test.mjs	keep	no approved deletion or move proof in Phase 0	063aa86a91efb6afc49b57c51c287470c1e2920ed643751ab91e55d4a1a5ebc4
+scripts/__tests__/runner-unbinding-migration.test.mjs	keep	no approved deletion or move proof in Phase 0	169d2ed5ec4922f7054dac2d6a32434a506ded998a8d3291ea40df3f7951ea63
+scripts/__tests__/smoke-local-skill-dispatch.test.mjs	keep	no approved deletion or move proof in Phase 0	4762d80cb6e342f9b895c396c3f6fd2037f7b3941f3654c6f3ffa946b033bcf8
+scripts/__tests__/stage-runtime-acceptance-publication.test.mjs	keep	no approved deletion or move proof in Phase 0	616a2792078507bd9e1710576861eb6558ac15ae7b33b750493081c825ba2432
+scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs	keep	no approved deletion or move proof in Phase 0	e4d61827c4a0e7686f1df5dbbb5ac274861bcffbc722c79965706e9da6e74800
+scripts/__tests__/stage-runtime-recover-run.test.mjs	keep	no approved deletion or move proof in Phase 0	0b64096794553211985cb054136aa93a187dbd17fcde04e0ec4aff8c7a104e22
+scripts/__tests__/stage-runtime-spec-recovery.test.mjs	keep	no approved deletion or move proof in Phase 0	04522e93d84bda3c501245cfb3a2cb0148f337459e98c88a93066488e7415efa
+scripts/__tests__/task-bootstrap.test.mjs	keep	no approved deletion or move proof in Phase 0	a4e0488d5633a9ab81f208251660e5038fcfb523bf96b7d07a5e01fa1ce4dfac
+scripts/__tests__/task-recovery.test.mjs	keep	no approved deletion or move proof in Phase 0	f530603e2c26177edb70f8dd5ebfc2755df3e264455e08c1fac66ac150523063
+scripts/runtime-cutover.mjs	keep	no approved deletion or move proof in Phase 0	bc65e54c25d62fd636c70bf0546352d99f3ce430cd6d24a0be4050489f2597a3
+scripts/stage-runtime.mjs	keep	no approved deletion or move proof in Phase 0	621fcc8aae88f416042e6fd376eeb5967e7d7c087888dd26728d6a6413bd50b2
+scripts/task-close.mjs	keep	no approved deletion or move proof in Phase 0	1db55fa4884298094e11e0f58fc351f63a82b0a85f957b122972c7a8b0c75ad8
+scripts/task-recovery.mjs	keep	no approved deletion or move proof in Phase 0	9dc241b3e789597c423c858c7ce9604705e0b2588f1152decb32901e4b674eaf
+scripts/validate-stage-replay.mjs	keep	no approved deletion or move proof in Phase 0	3368756e7fd17bba1c6d9dc302d0a47a5c8aab83b4f1b77de2e73a42a50c8f1b
+skills/.gitkeep	keep	no approved deletion or move proof in Phase 0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+skills/anysearch/.env.example	keep	no approved deletion or move proof in Phase 0	2bf89be88d7ee2a73c9200ad71cbdb118b2cc2143fecfd4e42ff80943b4c6f3e
+skills/anysearch/.gitignore	keep	no approved deletion or move proof in Phase 0	a816226332e399d01278f355b62c61d287a0601d362aebd66bdc7c457630dcf5
+skills/anysearch/LICENSE	keep	no approved deletion or move proof in Phase 0	07a854e52ab475b19ac2bed1bb1e014da7be2e9613aa27a86808f07dba531d94
+skills/anysearch/NOTICE	keep	no approved deletion or move proof in Phase 0	5eab122dbb6c1198640222c32c15e57cee925c884619edfb133b3f210b24c9b2
+skills/anysearch/README.md	keep	no approved deletion or move proof in Phase 0	496d63e55ca4aefdec807b2e5bed98f37d13d48447cf692ceda76a3270625bae
+skills/anysearch/SECURITY.md	keep	no approved deletion or move proof in Phase 0	e75207f6404a66784a9d616f83cf080a995d1111bbd9eeff3e9726c68a2d09c5
+skills/anysearch/SKILL.md	keep	no approved deletion or move proof in Phase 0	aaf6abca5dfe5f5e7e050433a324a9accb68e0a5b0d1adecf59125eb700525c8
+skills/anysearch/TEST_PLAN.md	keep	no approved deletion or move proof in Phase 0	19f26ac680bdad7d7b4a1aab540ba06bac389927c29073770263f489a49febe2
+skills/anysearch/runtime.conf.example	keep	no approved deletion or move proof in Phase 0	92a0facdb2a257f8614cbf18631fba4a251a2d7134b5b54a251122fd9e2c66a4
+skills/anysearch/scripts/anysearch_cli.js	keep	no approved deletion or move proof in Phase 0	2f94ff9aa2091234ac225bfe8f16e02a148eba141b49921a8740c2d36ff4e980
+skills/anysearch/scripts/anysearch_cli.ps1	keep	no approved deletion or move proof in Phase 0	2dced7850c4e1bc40a081286bad683d909790cdc054c849b8c55846971545c75
+skills/anysearch/scripts/anysearch_cli.py	keep	no approved deletion or move proof in Phase 0	53f65a907c61b5a58765f2b9d18a8fef81451478aa56e72dfe82cc59c806b0f9
+skills/anysearch/scripts/anysearch_cli.sh	keep	no approved deletion or move proof in Phase 0	80cf41b03ce9902b12d0bd88c42647870de84f5a97e10851f93dbf3618429fbe
+skills/anysearch/scripts/generate.py	keep	no approved deletion or move proof in Phase 0	cdc7c3fe9b666fcd071a0523f0e21aa890925acd991a3780e3a641eb4f47c617
+skills/anysearch/scripts/shared/constants.json	keep	no approved deletion or move proof in Phase 0	9dafb0585cdb08fa176031e5403501329b77781abba2fb4f3d218ee64ca6e540
+skills/anysearch/scripts/shared/doc_spec.md	keep	no approved deletion or move proof in Phase 0	55b7af5bcda50d36794ccf8545bcf23cf241fa1c41736e360c9a9f3f156d632f
+skills/anysearch/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	f2e86bd385d81fc6f586b7f38c2448c4b23f4a65866334630cd9f94d4a35ce3c
+skills/audit-summary-carrier/SKILL.md	keep	no approved deletion or move proof in Phase 0	6833844ce4f3713977a4eef3d7845684dc1db066dac61b82f9f4e3558d341106
+skills/audit-summary-carrier/agents/openai.yaml	keep	no approved deletion or move proof in Phase 0	b67f5427df1ffd85c9f9e9a43e3d6e03d439f16628d530049587d51a2349e8bf
+skills/audit-summary-carrier/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4a5a29f88949268c2ae7e90792e70e616f1f69ac2ed72eda02fba25864c66b9b
+skills/catalog.yaml	keep	no approved deletion or move proof in Phase 0	d08f8f6964daca30dbfb001113ece69d72dcbe5d20f05b32469cce19d4aa4fd8
+skills/debate/LICENSE	keep	no approved deletion or move proof in Phase 0	a2d31d50352630fff4bb4fd61efe6e4764d8ea3833b6ba4bd041af79833e0ccc
+skills/debate/SKILL.md	keep	no approved deletion or move proof in Phase 0	989f8fcb087d2ffe99093647a20cbb80a8e525cd062d452e39756e76e48f8ee9
+skills/debate/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	7759fda198cdb3887a501c3ca532a4fa562f798bd7819e1634a724ab7617e56a
+skills/debate/examples/sample-input.md	keep	no approved deletion or move proof in Phase 0	8b2196f52eacc48d71e023ad8a186bf3bdc2f383308062300b90c259ba6e13ed
+skills/debate/examples/sample-verdict.md	keep	no approved deletion or move proof in Phase 0	388de02edb89385b646e350dbc1bcc94bb6abcded4b6cda4f0dd749f50ec7971
+skills/debate/pk-rules.test.ts	keep	no approved deletion or move proof in Phase 0	c1ba054e3115cd23575906bfb5bffcd94d051cc3fe807c5bb72c8d92d269464f
+skills/debate/pk-rules.ts	keep	no approved deletion or move proof in Phase 0	6eef29d3cb390659cfc85b01c24ab6d0dfb4a9efb01f404148db5ec59e7bc6bf
+skills/debate/references/anti-bias-guardrails.md	keep	no approved deletion or move proof in Phase 0	552bea7a7765500b84b1bfe6a64d3cb0e0a80caf772a88f47b73e4df66010c53
+skills/debate/references/arbitration-protocol.md	keep	no approved deletion or move proof in Phase 0	9006295ca2c7d1feea5463002dfd28b273dbe51a01de43508bafb9caa97ced55
+skills/debate/references/output-template.md	keep	no approved deletion or move proof in Phase 0	9c0bcbb91d4720c451ccfd817ecf1ad73b6b8f27d0a27148652777c205c49e45
+skills/debate/references/role-spawn-templates.md	keep	no approved deletion or move proof in Phase 0	2cc6f4dc1f090948028933d54db2613c7d392ff04d9c6d96f5fc30aa9f2255c2
+skills/debate/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	caad9600822d9bbfbb7c971065b5411bc2398e046e4ad52c8a507e81a430cb93
+skills/decision-log/SKILL.md	keep	no approved deletion or move proof in Phase 0	4ad7e843cf582b2235e43f41b36df2bd38b656c47121ae14364dbfd11f8bf3fa
+skills/decision-log/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4e605becf7bab037d131e4e49ab5491c2213162ee62c42ce7009f97c135f1c07
+skills/decision-log/templates/decision-log-template.md	keep	no approved deletion or move proof in Phase 0	93cc36abb5f67cd0b7e5cc3d864720c5d9990f4d35dcbf8da65554fa13292ef9
+skills/diagnosing-bugs/LICENSE	keep	no approved deletion or move proof in Phase 0	e301933145fa4c00f81f41167b08d6508729b447ead053db6929a0eeb5b3496b
+skills/diagnosing-bugs/SKILL.md	keep	no approved deletion or move proof in Phase 0	2da11831b509a49d301047beb0af0c04c90338d4bd8defaade0a1d056e22311f
+skills/diagnosing-bugs/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	7ee7a430da8570c4179e2deaaeb6c95c5ed721a66e9792e80d71136d218d5adb
+skills/diagnosing-bugs/hitl-loop.template.sh	keep	no approved deletion or move proof in Phase 0	b2932630950e5210075bcd6f850e5accf30c101c5367b29eac3a29b4dd8084c8
+skills/diagnosing-bugs/scripts/validate-diagnosis.mjs	keep	no approved deletion or move proof in Phase 0	5ea8414191daff44617fc3fee21d859003605c495c3d5d546b30e093d530d8da
+skills/diagnosing-bugs/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	a874d5eae7fb81ac9f817d809699b42dcab267fb12a7ccddca620b36794922ee
+skills/grill-with-docs/ADR-FORMAT.md	keep	no approved deletion or move proof in Phase 0	f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
+skills/grill-with-docs/CONTEXT-FORMAT.md	keep	no approved deletion or move proof in Phase 0	8f6baaa3b1c91644bd7c600196b1aee781d5f525c7c345db8cdfbfb368329a05
+skills/grill-with-docs/SKILL.md	keep	no approved deletion or move proof in Phase 0	d895e8bb11e3c3b6f14669ee44eceb457efa48c81067c7693d2a379b87c11000
+skills/grill-with-docs/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4143a1e8e547a73fb7c4a81ca865976a5613d3f4bf54efe3796c65338bff1583
+skills/intake-decision-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	fbe3fc0b8e097a036c7e7be72403b101587706efffb7db275477ad09bca7c72f
+skills/intake-decision-review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	52ace459f232f4832dd93910f4b8137fc818df0cd44d425a18accf4add94a899
+skills/isolated-browser-qa/SKILL.md	keep	no approved deletion or move proof in Phase 0	629889eacf6dfb8d9535332a1e82473139430803b3f8409dd6b8bb8031501ff9
+skills/isolated-browser-qa/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	5e37f6a63524273a25ce31268932e73648507da6b94cc2ef4c31bd16e0fdfabe
+skills/isolated-browser-qa/references/agent-browser.md	keep	no approved deletion or move proof in Phase 0	b2562a73475c9c98c3f4e69ec4ee928ed70efba09ff2d6210ead2b57d06c70aa
+skills/isolated-browser-qa/references/auth.md	keep	no approved deletion or move proof in Phase 0	f28e502d84645b42357bc08efd0848efed3e5b46f18eab270f1d788feefbe754
+skills/isolated-browser-qa/references/browser-use.md	keep	no approved deletion or move proof in Phase 0	9f43ceed28c6d4db91d95b9c47114692fb96b98191468ee060b365c381cb3b04
+skills/isolated-browser-qa/references/fallback.md	keep	no approved deletion or move proof in Phase 0	6e5bc78061879135888758a07e4a54b3d1bbe580d7e6f24ffc6741aa4be90f01
+skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh	keep	no approved deletion or move proof in Phase 0	aad133b1976d025ce57b6edb252dedd5c08a3fa3f3d8526f9c618f12e2565c5f
+skills/isolated-browser-qa/scripts/browser-qa-context.sh	keep	no approved deletion or move proof in Phase 0	0ea7fe3fdebb569eabdde91f02bfdafa7a713f5b293ac3da6892f009acfe0292
+skills/isolated-browser-qa/scripts/browser-qa-doctor.sh	keep	no approved deletion or move proof in Phase 0	aac073f372b319498e7a06a5f5f519ebd552e9d796be9b34398864637bbff32f
+skills/isolated-browser-qa/scripts/cleanup-browser-qa.sh	keep	no approved deletion or move proof in Phase 0	ec8f07a8237de8b268967b218265e52365b2f91f2254f376fb1e5a2081957862
+skills/isolated-browser-qa/scripts/cleanup-codex-qa.sh	keep	no approved deletion or move proof in Phase 0	408ad32a67e3ed784b02ceb7d99b801131cab22158e34702ef9171c687a9aacb
+skills/isolated-browser-qa/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	07468930c41977934889c33cb0b2d53748c900826f834ed5f6358fcbf1db2f6d
+skills/plan-ceo-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	9e487da8974cb3cd8c729f542c6d1b8ecb59efa4f6fca9bb5affdf89d11f011d
+skills/plan-ceo-review/review-bundle.json	keep	no approved deletion or move proof in Phase 0	6ff3db654d392b414eefef61b97050be932d10d845c0db5c1a27b420dc21b2ee
+skills/plan-ceo-review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	173210c5c6b63f17646912cb1366806e37c1c24ca6a99050b6cdff8101e2958d
+skills/plan-design-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	a48979018a75d82dd1163a7353e750644e720782b3fe463a785d1933add1368a
+skills/plan-design-review/review-bundle.json	keep	no approved deletion or move proof in Phase 0	c9b434df9db9dbd807f0d0d5109625e0a64a2ff3d9c278d26af311e009040d43
+skills/plan-design-review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	5c9565e27a72e162ac98acf72277be916c5b8d2ced797e077d4ee83bce353ac1
+skills/plan-eng-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	6c44f9042cf4f5319bbbb79a453ca7f86ee22b015ce45dcc635b875c21aac552
+skills/plan-eng-review/review-bundle.json	keep	no approved deletion or move proof in Phase 0	c9ba511c08194bd01ae7b645295a2ad361da1556c9048986dcf594013785348e
+skills/plan-eng-review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	df9606eedebe4c9e22c330edfd0c33cf282dde03d6c349ef68e05b2d129128de
+skills/qa-only/SKILL.md	keep	no approved deletion or move proof in Phase 0	e5d30737038b2b146846674b2c7299ca7eccfa95c8c2752b593d9c00346de8b4
+skills/qa-only/review-bundle.json	keep	no approved deletion or move proof in Phase 0	3a709e0a703f68d8d7255e4aea97a87a82ff3c380ad8f46eabb696a6f2b768cc
+skills/qa-only/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	560fc53ea3049883677a3d6b62e0187b7222309a47ae8516de574815a303c0f1
+skills/requirement-lineage/SKILL.md	keep	no approved deletion or move proof in Phase 0	8b9a75fe1a365213bf5b680ecf7d3ab28bcce7302785b61e749e34f7347f482b
+skills/requirement-lineage/agents/openai.yaml	keep	no approved deletion or move proof in Phase 0	cc11c1a58ec50674ac53e777c70fd1ee5fe3e9dfe1bd34b2f5661ad1cf961a40
+skills/requirement-lineage/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	5d748f47c817c89e951626056f709af491c33e7af65dd66534e70b77e01afa47
+skills/resolving-merge-conflicts/SKILL.md	keep	no approved deletion or move proof in Phase 0	cae6d381f7c966b97cbbc6547ae4d7c2542e15ab3d75d297112435c2a746c17f
+skills/resolving-merge-conflicts/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	1207eb6f243aca6625379085935762f0c03c477af24304f0313dc582324ca0ca
+skills/reuse-registry.md	keep	no approved deletion or move proof in Phase 0	a5857ec157c14637c488085cec91265b7ee90e62f8e183fbc6b33f3a1ee9f5ce
+skills/review-response/LICENSE	keep	no approved deletion or move proof in Phase 0	760a1b6a1be504193f2049b8062195a9e8d26b2152e9f3a7678c9eab206fb0a4
+skills/review-response/SKILL.md	keep	no approved deletion or move proof in Phase 0	f4bd9073dea0119ccb6c0db7b73a9fd6d938b39a3f5689c17e09594c8bed89aa
+skills/review-response/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	dc62f17f84ffd199987f75d488b0607fdf31e50ef6ba009324cb7cad4f3110a1
+skills/review-response/scripts/validate-response.mjs	keep	no approved deletion or move proof in Phase 0	fcb76f709c8e4923c6e83964042576e75251f4b783e14da1c8d94fa01f5e2ea8
+skills/review-response/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	c7b04a69c8625ed0aae59265da79b14acefc344ca1525cbb8507cf150fc6a1c2
+skills/review/SKILL.md	keep	no approved deletion or move proof in Phase 0	eac2b92c5b5c094153b1ac96e241961196ec67f5ab5811cfa46b85966b70bba5
+skills/review/review-bundle.json	keep	no approved deletion or move proof in Phase 0	c685b09a5fb6c31f33fdd322ecfd5f021d714a3011dc33aa04c5a61075799e73
+skills/review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	9e99b9ea247f7275971f9a7f4cf9b1efd36f9b81c4f8caafd2fce5539680a084
+skills/simplicity-guard/SKILL.md	keep	no approved deletion or move proof in Phase 0	640f4d8cbbe31cd035a61a47accecfa1449e49949c01bde2faf6c8d7590cd472
+skills/simplicity-guard/review-bundle.json	keep	no approved deletion or move proof in Phase 0	776411afcbe084a2bf48dd198ca5dd568e8d03ba8f5cca941a200cb95438e915
+skills/simplicity-guard/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	7686f90c1630ee54ae8e8ad82dd37219b1c83bacddf42cc20fe6d2c96494a43d
+skills/spec-analyze/SKILL.md	keep	no approved deletion or move proof in Phase 0	c22d0a2926d9d5d67147294017083288fd8cce2d79aae42044c023f415e8966e
+skills/spec-analyze/packet-lens.md	keep	no approved deletion or move proof in Phase 0	dbfe23839c98009a434ae6592ad677283cc6fe093bf500593dafdf46b95668c7
+skills/spec-analyze/review-bundle.json	keep	no approved deletion or move proof in Phase 0	edae849ac226df5b3ffcf71a39595ae6a6844944a6d0ea7b096d8060fd7cc255
+skills/spec-analyze/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4bf5adf807fc99c17ac3f3c1a2c97dab9fa2d8334037c8cd18802d1f9798088b
+skills/spec-clarify/SKILL.md	keep	no approved deletion or move proof in Phase 0	543a0149d8a79fd5ce6ed35d977f788481724f46ec4b6fab182b417e2166b539
+skills/spec-clarify/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	72b71af180fb8efd72502fef70b8ad8959df716e994bd8a5708b25e11ff20301
+skills/spec-plan/SKILL.md	keep	no approved deletion or move proof in Phase 0	00a7fdc82618853a019b96720081e9c615dea3d933abfdc9f34af657d85f9773
+skills/spec-plan/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	766426f9b952045231d6874fb39cfb295993c1c5d612f8877e37440cbe42c468
+skills/spec-plan/templates/plan-template.md	keep	no approved deletion or move proof in Phase 0	723c65308ba292baacf33f0eb267fbcf0eb6a45b2ba535626a6ae167091c8180
+skills/spec-research/SKILL.md	keep	no approved deletion or move proof in Phase 0	5f7601d891166b944477d9b25f6111bd1b7b50c06d16a0142270dbb0d34d7003
+skills/spec-research/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	ea09f17382c02e0a7d5c87fb7f823cdc61f18afdeafadfa6493860b6282f4439
+skills/spec-specify/SKILL.md	keep	no approved deletion or move proof in Phase 0	43cfc164442f65334c12ca07bd61634e94b2a3bf3d763f4ed63ed1fcaadf50c0
+skills/spec-specify/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4a286c6188d67ef97af4c8a3ce3dfb076ce37b97234ffeaa244f2445d4c0a9e9
+skills/spec-specify/templates/spec-template.md	keep	no approved deletion or move proof in Phase 0	fca575250fc6cad0476b0df4ea5bc032431fc8d71c0912ffb1d01d5425ea666d
+skills/spec-tasks/SKILL.md	keep	no approved deletion or move proof in Phase 0	99e0f624f2c7ddc7bccaf4b15a9035e4f4bf995da2d31b93f5f4c1630f423566
+skills/spec-tasks/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	26309b608239a6f946e1fe88214086e1752599324158e441b15bef839fa89a09
+skills/spec-tasks/templates/tasks-template.md	keep	no approved deletion or move proof in Phase 0	9d6d101082ac4974e5f8c58a9ae1ce5f047c8fdc94a463b73ffe14ceb516e761
+skills/stage-step-receipts/SKILL.md	keep	no approved deletion or move proof in Phase 0	37645548e5df89c9cc22ce4434b32611e62cf46abc95cdfe2ffa816238dfed92
+skills/stage-step-receipts/agents/openai.yaml	keep	no approved deletion or move proof in Phase 0	ac378eeaaa4c6a2581a4821bf0429414aa46dff610a2ed04c5b6eb0365d817a4
+skills/stage-step-receipts/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	147a6204189c6349f90fc26adb0322cc38070c8a9a31ae3db8e6ca25911689c3
+skills/talk-with-zhipeng/SKILL.md	keep	no approved deletion or move proof in Phase 0	67090e907b433138356cf3773c273870e287e44f081b166eb997ef651474729c
+skills/talk-with-zhipeng/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	da7df4aea43c8f02f57d3d3c3c5f9d034f32e676028f1adabc89628a293ee677
+skills/test-routing-advisor/SKILL.md	keep	no approved deletion or move proof in Phase 0	39c655fe4dc92df91e9e01b1172745415e9a7e5df8efab7b5d17ba015aa1206a
+skills/test-routing-advisor/__tests__/skill-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	040171e07a101414a8b5950a389816261ed3eb762ffa92be033a93ef81cc32ac
+skills/test-routing-advisor/scripts/route.mjs	keep	no approved deletion or move proof in Phase 0	96721bf5d38aea1edf0d7a9b607a23a52da25f19437f246a7c1529a361445523
+skills/test-routing-advisor/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	6b0aaa44439cbb48d9bd51005fa216f6ef92502ba98a0f3869814f3cfe8e3069
+skills/test-strategy/SKILL.md	keep	no approved deletion or move proof in Phase 0	514a4ac4f8064e7fac104d685fd17c7e85098e853362b46ae965f4f13325f554
+skills/test-strategy/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	b7f39220633d2501585a3ac4ebb7ef044d463c0ced9edad554eaab8b541f023f
+skills/verify-change/SKILL.md	keep	no approved deletion or move proof in Phase 0	b3c7f110636a1645a2300fe26e343e75e5ef65216c41fc01908a6f9bdafb8737
+skills/verify-change/review-bundle.json	keep	no approved deletion or move proof in Phase 0	dd5a15af7ab342fbe387a12dcb05ffcdca1f8a9e62a9d2b9b7e40ace32d33cbb
+skills/verify-change/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	0cd4e37f7d1b6dfb5cc198bd6e2d478ff3f5acd210c2bb6e9dd171e67d47d1a5
+skills/wh-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	3211f3993ebae15d61519dcae187d5c6d692d5bf282e96c873312e459ef29b34
+skills/wh-review/__tests__/human-brief-behavioral.test.mjs	keep	no approved deletion or move proof in Phase 0	5344d3ee10116ca6c1cea3ba1ea9df66b8bea0b4204028dfc23e4eb957a3d183
+skills/wh-review/contracts/build-code.md	keep	no approved deletion or move proof in Phase 0	c9070a0f6c3147885fc3954f69c48dda95804fe4dc51863d42d96b10b8db6418
+skills/wh-review/contracts/build-plan.md	keep	no approved deletion or move proof in Phase 0	b6f6d2e0e68296118e00f7534c8582a2da168a0e28f64f5b7a85b603a212be4e
+skills/wh-review/contracts/build-spec.md	keep	no approved deletion or move proof in Phase 0	ab47854a7d5e2ad2ee5d47b60967c61b0f1dd301209d19f62aaff2e78f109c4e
+skills/wh-review/contracts/make-decision.md	keep	no approved deletion or move proof in Phase 0	b55770b69aa57a5dcbc0115d3eaff53ab15b90c2b6838a12fe0d8e19b1aa7309
+skills/wh-review/contracts/provider-protocol.md	keep	no approved deletion or move proof in Phase 0	bf00a9db1f1ee6df1e6c5e9d950f4d8ae7e9b8b1d88d51a294c352eaebab0733
+skills/wh-review/contracts/verify-code.md	keep	no approved deletion or move proof in Phase 0	f09204e5364a45deb191b056d74f6d38fbd00adca7e9a9c21214ccbefe459881
+skills/wh-review/contracts/workflowhub-result.v1.json	keep	no approved deletion or move proof in Phase 0	6f079be969acaed5e25c054b03fade459364ce7cf08d6d3ebeec2b639282d312
+skills/wh-review/contracts/workflowhub-result.v2.json	keep	no approved deletion or move proof in Phase 0	e9ac467ef51418cfacf8546d515befc779b8fbb0a3cb34be4fdc013a91e0f6bc
+skills/wh-review/manifest.json	keep	no approved deletion or move proof in Phase 0	ada13bffa2ba3b603f9013aa347d64f16cd93f6776acc97bb597343668d64211
+skills/wh-review/schemas/ac-evidence-summary.schema.json	keep	no approved deletion or move proof in Phase 0	2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a
+skills/wh-review/schemas/attempt.schema.json	keep	no approved deletion or move proof in Phase 0	684d27f900c6c995e56193e6fb765b9db0be47374b2ef10d5504b1aaff7a6e23
+skills/wh-review/schemas/resolution.schema.json	keep	no approved deletion or move proof in Phase 0	f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182
+skills/wh-review/schemas/result.schema.json	keep	no approved deletion or move proof in Phase 0	9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da
+skills/wh-review/schemas/stage-materials.schema.json	keep	no approved deletion or move proof in Phase 0	fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837
+skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs	keep	no approved deletion or move proof in Phase 0	08f156a5c16e0fa853d7885556eaae00a04df1feaf0f76e8f1bff5240e1987be
+skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs	keep	no approved deletion or move proof in Phase 0	60b44c95b6dabe01c99d897ad393ce5fceed2d839acf30b537244081119eee97
+skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs	keep	no approved deletion or move proof in Phase 0	a3de0d02e7903c2c62398e48eea400698f63548fa89bdd099ca078316f6ea107
+skills/wh-review/scripts/__tests__/review-controller.test.mjs	keep	no approved deletion or move proof in Phase 0	fc3680da9e70e10b5cadf2c851a4a16f564f1b65f6bb86adb492818933e38a69
+skills/wh-review/scripts/__tests__/review-runner.test.mjs	keep	no approved deletion or move proof in Phase 0	ff6dd33d71a5220ae8e559f4b4f8477f8cd0f9e48c4d53a834b3e727a655f3bb
+skills/wh-review/scripts/__tests__/review-source-materials.test.mjs	keep	no approved deletion or move proof in Phase 0	dba98b7a7b03c764613275664eb5261685a599110f387c88eacf10a66d7dcaaf
+skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs	keep	no approved deletion or move proof in Phase 0	8e7954e7b109d8cee43fa33acd5b42682941aed43b17796cce352550f3392ce8
+skills/wh-review/scripts/__tests__/schema-validator.test.mjs	keep	no approved deletion or move proof in Phase 0	93f452766ed2eb09d169aa9b29886cd4b2e9141bbc354dcc4f37d5d548238d17
+skills/wh-review/scripts/__tests__/simple-contracts.test.mjs	keep	no approved deletion or move proof in Phase 0	917f12aa82b9fcbcc1441274162a7f0dc0fc111f1b8cb40b523358298757ed2e
+skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs	keep	no approved deletion or move proof in Phase 0	5f5c6be860dea598fd738f270fe39eefa7a3e5bb6f8b561381294d08e650718c
+skills/wh-review/scripts/__tests__/simple-reliability.red.test.mjs	keep	no approved deletion or move proof in Phase 0	d0d0c14aca4ae2834476fc68447f61be0cfa445be7461b7d355ec88f4545c226
+skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs	keep	no approved deletion or move proof in Phase 0	e9822755b4df15a9fc57bb4607d92ec322e4ebf7d3c0f1c44cc34d10a9f398d4
+skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs	keep	no approved deletion or move proof in Phase 0	1f976dbd35ccb4d1f9204de7b2b6c698c2fc530957e4b74850a08f7a4643b2ba
+skills/wh-review/scripts/ac-evidence-summary.mjs	keep	no approved deletion or move proof in Phase 0	862d320140fd940c6dd585bcbd6a17ccd00cc096706775e169b439733aa52305
+skills/wh-review/scripts/integration-review-subject.mjs	keep	no approved deletion or move proof in Phase 0	296b9b5151a90f942ddf2b55f4b5fafda127d20e71382480636501e42c244ff3
+skills/wh-review/scripts/lib/safe-id.mjs	keep	no approved deletion or move proof in Phase 0	38bdda4bf49378bc90790e694390bb64da537a8b47b3bd582ea838feaf25dcb0
+skills/wh-review/scripts/phase-review-subject.mjs	keep	no approved deletion or move proof in Phase 0	63e57699a7b7eb7da9d523cad1a01e0d0c6dc764daf4c16afa03f1270270f85e
+skills/wh-review/scripts/review-controller.mjs	keep	no approved deletion or move proof in Phase 0	77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79
+skills/wh-review/scripts/review-materials.mjs	keep	no approved deletion or move proof in Phase 0	7c2f7139528c8fdb8e1a876d594c6bbe809d700700715393ac207ae3ebba97e8
+skills/wh-review/scripts/review-output.mjs	keep	no approved deletion or move proof in Phase 0	6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744
+skills/wh-review/scripts/review-provider-client.mjs	keep	no approved deletion or move proof in Phase 0	bf532a44d9d63f0adaffe5e0d9293539b34f654b55b60089ef5d84ef8ac4a712
+skills/wh-review/scripts/review-result.mjs	keep	no approved deletion or move proof in Phase 0	9d22deb3adf477bcb89567dfa5395040ad55e2a08757f1e02c086521c2467524
+skills/wh-review/scripts/review-runner.mjs	keep	no approved deletion or move proof in Phase 0	5b4e96d71e976988f3d3c8ff0046b2ed5c39a5f057053847b91f4481071bde07
+skills/wh-review/scripts/review-source.mjs	keep	no approved deletion or move proof in Phase 0	724679e2dac4bf9bd0cd7aa7b7a3526305b07e6825d657067bc2b270888aef18
+skills/wh-review/scripts/schema-validator.mjs	keep	no approved deletion or move proof in Phase 0	381ea2c4dfefa66008ca0c96981d22cb40290c5cf114c0904c785475ba7f7fea
+skills/wh-review/scripts/third-review-host-config.mjs	keep	no approved deletion or move proof in Phase 0	da483bf6b3ed585019fe07bd1e2a6dc18b6d69a66038d250e90168bc41d6aaba
+skills/wh-review/scripts/wh-review-cli.mjs	keep	no approved deletion or move proof in Phase 0	126d161c69d4d9f7fba12f456c712a60d32e734a7a692d181d008509c4354082
+skills/wh-review/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	4c084c0e8c20e3af8fe0d573fffdec6198dade690a1491786f2f64652c17ad77
+skills/wh-review/stage-materials.json	keep	no approved deletion or move proof in Phase 0	fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b
+skills/wh-review/stage-skill-plan.json	keep	no approved deletion or move proof in Phase 0	2c55386409b978cccc18c156c856513196aaf49eef66231d210fe77e003b843f
+skills/workflowhub-host-protocol/SKILL.md	keep	no approved deletion or move proof in Phase 0	caa4266d184d31f81d510964cf5bc7614a1c873ed10e6af5dcbc596af8bdcac5
+skills/workflowhub-host-protocol/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	63099563b34789e462d3bb35166b7594f8ba505856f49effb977d5509ca8619c
+skills/workflowhub-multica-sync/SKILL.md	keep	no approved deletion or move proof in Phase 0	81d9e10c2b602e08f1834ad0156003c19b59961deeb997851dcd4e55a9b7868f
+skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs	keep	no approved deletion or move proof in Phase 0	b39a920e9e158073a61d12c2791fa641162cd3ce29d5169b91875feadee998e6
+skills/workflowhub-multica-sync/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	a5d0d0462c01b74eacf04b17f42c25dec9d842dcb9707e27f6d57ec54797ea06
+specs/archive/build-plan-baseline-rebind/plan.md	archive	historical accepted design material	86854fb71f597022b36fdf80b94679fb37697c2e56681d4692f13523f84cf2c9
+specs/archive/build-plan-baseline-rebind/spec.md	archive	historical accepted design material	d21c7460b499bb96c3689235f70caf7ba64ca65ae37fe909ebd9251c811c77d6
+specs/archive/build-plan-baseline-rebind/tasks.md	archive	historical accepted design material	f67df79d6cf644cc8ef6c9466b96b2d640d931d1b3cc6e2457e7bf0c2fbc0a4d
+specs/archive/delivery-close-execute/plan.md	archive	historical accepted design material	fd77000cefd1114441d14c9612be1f63ce319cda5229c2c3d5f6f531f9ec110d
+specs/archive/delivery-close-execute/spec.md	archive	historical accepted design material	19af3637efdde7b818eae4215b3beb0e4fe61adb68919c019819aa1ea03dd025
+specs/archive/delivery-close-execute/tasks.md	archive	historical accepted design material	3ce67f5212a8e6ef04128d87af9992b91c0cd3992fcdfc9960da6bd5da22ee90
+specs/archive/interaction-quality-amendment-v2/canary-r14.md	archive	historical accepted design material	c932ce8045489e51644033e99c6b5a95713752c8ce87404400b71ae7404ae813
+specs/archive/interaction-quality-amendment-v2/canary-r15.md	archive	historical accepted design material	c8dcdde5bfe58ee87310a2df4ffd4d5f5e7e3de02ab294b1857fd7deab37132e
+specs/archive/interaction-quality-amendment-v2/deployment-evidence.md	archive	historical accepted design material	8065be886f99e6245bbedd5fa834ae77513189cb8b2d856fed578e6fc8a2b835
+specs/archive/interaction-quality-amendment-v2/final-validation.md	archive	historical accepted design material	947b6254fb9a17c821c5a9ff30acae6d1eed3a35fa9cabfb007fe75322be6752
+specs/archive/interaction-quality-amendment-v2/plan.md	archive	historical accepted design material	4baa283ab5f9cb24526e0ed92fbb4613d0a02971ec0df3c32470bbdcb5de6f5d
+specs/archive/interaction-quality-amendment-v2/r14-gap-amendment.md	archive	historical accepted design material	84a4f213e525d8a25393f1aa3f9d315b2e652dcd5855a4a262bb0a6a2dd35860
+specs/archive/interaction-quality-amendment-v2/spec.md	archive	historical accepted design material	a519d2eb4be31881ebf14c81ccc014c2b1bf9feff9884a0cd1a357b76e80dc24
+specs/archive/interaction-quality-amendment-v2/tasks.md	archive	historical accepted design material	d37f17a2fe46af187cdbb1466d9a1e7d7eabb7ee557c80e72f915cc98e448f52
+specs/archive/m10-baseline-switch/baseline-report.md	archive	historical accepted design material	4de42883f3bba3e7b3ba0f4f8fc2734251bbbf03b335446fcab2e2e04dbad9f5
+specs/archive/m10-baseline-switch/checklists/requirements.md	archive	historical accepted design material	853c8b32a96c4eef5f3203f1a06dd0ab9d3ae452c227755a776a583c533fe3b7
+specs/archive/m10-baseline-switch/field-mapping.md	archive	historical accepted design material	1758d5a9b6269cf943c676ed4af2e17df9c93222844689de77265a71638c98bf
+specs/archive/m10-baseline-switch/plan.md	archive	historical accepted design material	b2c4b39928656a2038425e998b83f74ce30a0175bfd9844ef0c60c4bfbcbc265
+specs/archive/m10-baseline-switch/spec.md	archive	historical accepted design material	9651f8c4768be17022081677e4a53fb08a60d9459d51b3a5f9ea7ef5ec1e3245
+specs/archive/m10-baseline-switch/tasks.md	archive	historical accepted design material	8441bcabb574f66a56f47ca89b7f3c04a519e940f20bf5aee299934bfe920e66
+specs/archive/m11-build-spec-v1/baseline-report.md	archive	historical accepted design material	6fff951eb029bc6f0efef477fa9c20ff547c1b8a5bfcc92e3af6ca36f37fb0c3
+specs/archive/m11-build-spec-v1/constitution-check.md	archive	historical accepted design material	c060fe790143b21d5142545ec77313bd1117ebca615429f9e35fffee47d2b406
+specs/archive/m11-build-spec-v1/plan.md	archive	historical accepted design material	efbd4bfed8a5dfc1465dc379aeb4a90fc9cb785272006930b19f970825bfcce8
+specs/archive/m11-build-spec-v1/spec.md	archive	historical accepted design material	3504ef5995eb1a931f55e488d9cfbcff9ae6526c4d51802e0a6631d5e100a716
+specs/archive/m11-build-spec-v1/tasks.md	archive	historical accepted design material	643506f87da1dcc5f6543469e55c8ec3f2a1e1d113def73f8dcf6acce449ba99
+specs/archive/m12-build-plan-v1/baseline-report.md	archive	historical accepted design material	7329853fd5c9b1c2f50263d548c75bd68bb905efe1f01ece381b6fe31f34f5a3
+specs/archive/m12-build-plan-v1/checklists/requirements.md	archive	historical accepted design material	aa01d919dd063e48f0e13b57695aae81a73230dcd2153fcc656b487af505f196
+specs/archive/m12-build-plan-v1/constitution-check.md	archive	historical accepted design material	5a642174aa714874d1e7796a675bcbe950e0e921b88978b4bad41bd8f168d29e
+specs/archive/m12-build-plan-v1/cross-artifact-analysis.md	archive	historical accepted design material	3f631f4c1a663de39016cd1eab7c593f6d7bccaf84518e120220daecbd3a32cd
+specs/archive/m12-build-plan-v1/plan.md	archive	historical accepted design material	34799de9113706bd89d3a1f7b3cd177432e51f005b1fc9f9fd2efdd3e3879f2e
+specs/archive/m12-build-plan-v1/spec.md	archive	historical accepted design material	3b28cecdd02437cc7bdd357e40564bc8e6a7560b7da909899ebe26c7eb85ea1c
+specs/archive/m12-build-plan-v1/tasks.md	archive	historical accepted design material	27e14229c495d92ce677fa0901d02f94a0d92e540dcfa4ea800e3f9c42d8f225
+specs/archive/m13-make-decision-v1/baseline-report.md	archive	historical accepted design material	69e2096eade0091a1a42a11cb13b31a361422021c8c6a447c1f721ef3bd629d4
+specs/archive/m13-make-decision-v1/checklists/requirements.md	archive	historical accepted design material	ca776c2cae1a0a0aa08d9c9ebfbe6ed16707563d509e418cbcdac38c0cc8574d
+specs/archive/m13-make-decision-v1/constitution-check.md	archive	historical accepted design material	b8b19ba909198c631abc46defd73dacfe9a762abb16793fb6a86244ebcd7f5a5
+specs/archive/m13-make-decision-v1/cross-artifact-analysis.md	archive	historical accepted design material	33bdc1ffaac08f1e4a461671ab68fe1c2b7745c38ad0ac1e053f41c538f57a0d
+specs/archive/m13-make-decision-v1/plan.md	archive	historical accepted design material	b8f4360c82a8d5794891854d721059d86e4c64654e6bb3aa233891ef0fa3b6bf
+specs/archive/m13-make-decision-v1/spec.md	archive	historical accepted design material	ad82a694746b0c1414fdd3df0ff3f5ab7a4c2e4d42c34370144c6b951cd05c8b
+specs/archive/m13-make-decision-v1/tasks.md	archive	historical accepted design material	fb00532d5df2d86f8f07c2eff0dedbe147c7bef05b526239b4070f6425f5483c
+specs/archive/m13a-moat-skills/baseline-report.md	archive	historical accepted design material	b1369f00908c61fd3216e79549c9aea0a5f9e9945cd2afb5912d2193f7616eba
+specs/archive/m13a-moat-skills/checklists/requirements.md	archive	historical accepted design material	045185da381a05368f287c941d294322414b31cdc1e0ae5e9afe20f35ae05adc
+specs/archive/m13a-moat-skills/constitution-check.md	archive	historical accepted design material	ca31a5b9ad0ceb83ebc7ceb2ea3aa78a8f2df742cba23b230a59097ce6eec30a
+specs/archive/m13a-moat-skills/cross-artifact-analysis.md	archive	historical accepted design material	c193b01067b917c7b3bf201376a246a7f8f0bb02051301d2cf4e640d61db1be7
+specs/archive/m13a-moat-skills/plan.md	archive	historical accepted design material	7fbead22c0273d29cce8312bc9c799f622538e837e61b5fdbd8fd4572466c9d0
+specs/archive/m13a-moat-skills/spec.md	archive	historical accepted design material	3e0133dafe9e175b0ab0d127bea760e514a865b10230b2987b27ae1356db2eba
+specs/archive/m13a-moat-skills/tasks.md	archive	historical accepted design material	90429fc317c5f138951584e05e1e181d8196bcffb52c4a170e0487ed58714d91
+specs/archive/m13b-build-spec-deepening/baseline-report.md	archive	historical accepted design material	06fa25432cc6585f1a0a650ad9ede0db180d0860923799b7994b63a5b1eccc1b
+specs/archive/m13b-build-spec-deepening/checklists/requirements.md	archive	historical accepted design material	f9f3446b536e1ff1014d74f91367f69b360a121d903da3c322604dd908d42d83
+specs/archive/m13b-build-spec-deepening/constitution-check.md	archive	historical accepted design material	3d9d3a65654d425007ff7ba0f53c7f91178c5c5654c1d54642892c024483bb3c
+specs/archive/m13b-build-spec-deepening/cross-artifact-analysis.md	archive	historical accepted design material	a5269067dca5c9639d36cecd381561b45959635dcdd4c07b3e558f87fde32694
+specs/archive/m13b-build-spec-deepening/plan.md	archive	historical accepted design material	0614a304b3aa93597421a6bf241c078452e70ec3313d6ed6931fede10e9106bb
+specs/archive/m13b-build-spec-deepening/spec-acceptance-count.json	archive	historical accepted design material	95cdfd3ba54d578e22fcffa829456cbc488e6c6732c670c76ec125fb7e67655b
+specs/archive/m13b-build-spec-deepening/spec-clarify-scan.md	archive	historical accepted design material	0de3476d139dd06b798e7e3a09f31dcb702dc10ea1fa6085a1a9fae11a715b0a
+specs/archive/m13b-build-spec-deepening/spec.md	archive	historical accepted design material	8ab32d75e3078d0ad13921fd8ce75a608e39740132c0c8da18247948f0657b74
+specs/archive/m13b-build-spec-deepening/tasks.md	archive	historical accepted design material	fcc7452028dc675ff6cecb96f6f00b4f1215939937f63953a15876c21232f5f7
+specs/archive/m13c-build-plan-deepening/.review-prompt.md	archive	historical accepted design material	de89873079864179cf0b23f626b4aa51fccc607b95b86f6ecdd9e97b45ae52bf
+specs/archive/m13c-build-plan-deepening/baseline-report.md	archive	historical accepted design material	eb6365aae128582356ed13bbc219e7a06477110cfd30878930ff1ef62984e0f1
+specs/archive/m13c-build-plan-deepening/checklists/requirements.md	archive	historical accepted design material	2b15c893860306b8811facbc84a24e9459626ed2e69bc9348b8b7e6998f5f5e4
+specs/archive/m13c-build-plan-deepening/constitution-check.md	archive	historical accepted design material	97c2d671fd6e180234ea036e5eb774f1f0a128e8de45e8e9af52b0699b753547
+specs/archive/m13c-build-plan-deepening/cross-artifact-analysis.md	archive	historical accepted design material	c47818bcc624dd9f4f2d8ba2e06cc7704de45d13449af3487b6d8d1ce9cc7f1e
+specs/archive/m13c-build-plan-deepening/plan.md	archive	historical accepted design material	0fce940839d49836932c7038865a89da3c4cb65e2cc4c88778cc110eb9b4026c
+specs/archive/m13c-build-plan-deepening/spec.md	archive	historical accepted design material	eac90163e5a916fb6b832168d143758312e6142d4e6a5a16d9e8f01fbbaec9d8
+specs/archive/m13c-build-plan-deepening/tasks.md	archive	historical accepted design material	3cb03a8caa1b82ca8167364d3cc520aa4e6f6132b8ff2e70b6d3eeef65cb1975
+specs/archive/m13d-build-code-deepening/baseline-report.md	archive	historical accepted design material	38ce457d1da24a421ac084e59666888ad42c7f1fc8a475549e2e573fb53ffb6d
+specs/archive/m13d-build-code-deepening/checklists/requirements.md	archive	historical accepted design material	ee663aa6bd8a2b96c0458c20fae2c0895f8004b667a57b7ed8f253ef6f205cbb
+specs/archive/m13d-build-code-deepening/constitution-check.md	archive	historical accepted design material	90c5ab0df2828bf67ab52780676e3c469c724cd47027d1dbc9d11bfec35e1cba
+specs/archive/m13d-build-code-deepening/cross-artifact-analysis.md	archive	historical accepted design material	33fa35b2b00e1445a3e07ceddbbeaae9d63251542f884caa554d8e5ed5e20612
+specs/archive/m13d-build-code-deepening/data-contracts.md	archive	historical accepted design material	141e14aac6055b69eb90d868b91074eb4273beeeb2a3408db20872a3117df874
+specs/archive/m13d-build-code-deepening/evidence/3rd-review-verdict.md	archive	historical accepted design material	e55ac2174889e18a2cfe930729258a285ffbe90878d5455104a22b1997d9a098
+specs/archive/m13d-build-code-deepening/f10-findings.md	archive	historical accepted design material	c0fc78ea20727242739ad9afa835785fbeb9ad3447bcff2589aa2f510d2cb390
+specs/archive/m13d-build-code-deepening/plan-eng-review.md	archive	historical accepted design material	760250175f1f322a2c238066c7bb22457b7ade8a54c8ea137957cde01b7215b2
+specs/archive/m13d-build-code-deepening/plan.md	archive	historical accepted design material	b68ef1b39f6292787fc531a88b40bfd2db0e134900cb27e5ee39bad443a94948
+specs/archive/m13d-build-code-deepening/research.md	archive	historical accepted design material	f8bb8e635da774bbb384dfab718441eff54756227caefc6da3c178bad06bf835
+specs/archive/m13d-build-code-deepening/spec-acceptance-count.json	archive	historical accepted design material	eaa0534c11e9ac9bfb36bf4476e50e596b7d7d60593d323194f1735b8db6af34
+specs/archive/m13d-build-code-deepening/spec.md	archive	historical accepted design material	145f3dfb0b3ca57d9cafca1019ebc1e093279d8fce90ed63f9a6234fc1b24b62
+specs/archive/m13d-build-code-deepening/tasks.md	archive	historical accepted design material	f8c6b96493e0392a4899e6c822e7eb6194935894e5df10246146d160a696355c
+specs/archive/m13e-verify-code-deepening/baseline-report.md	archive	historical accepted design material	871cd035c97c22322fa001fc226969b107848e4205f97b71bd5754f786808f94
+specs/archive/m13e-verify-code-deepening/checklists/requirements.md	archive	historical accepted design material	40b49c4e14833b9a13333316bd35f700ff2e27b092683c033c448ac2f750627e
+specs/archive/m13e-verify-code-deepening/constitution-check.md	archive	historical accepted design material	0929bc3a1f47409d848d3f6fc34f7076b7690cb83140b13da855c3559de02737
+specs/archive/m13e-verify-code-deepening/cross-artifact-analysis.md	archive	historical accepted design material	37188e2d316560a83abe2106b89c8b87b4941a0bfefa61ff0a6a43733bdc8fa1
+specs/archive/m13e-verify-code-deepening/data-contracts.md	archive	historical accepted design material	7be179fd785e2de7d6b7d338cb84a55dcb195193f4bfe3264f036c411edc8801
+specs/archive/m13e-verify-code-deepening/evidence/3rd-review-verdict-plan-v2.md	archive	historical accepted design material	cbc85e7c593f73f663146b597671b7d097a7ab0ea75338a187b357723993e599
+specs/archive/m13e-verify-code-deepening/evidence/3rd-review-verdict-plan.md	archive	historical accepted design material	4f67944ed69b014db3b876b5cac54782159f42db352dd052d6cd4709d7e5ccfa
+specs/archive/m13e-verify-code-deepening/evidence/3rd-review-verdict.md	archive	historical accepted design material	716efd64bf9a5829e0aab50717a88e40c52e3cd9fce2161431738ebe0c4ecb2c
+specs/archive/m13e-verify-code-deepening/plan-eng-review.md	archive	historical accepted design material	c42a101497e75ff161b1a702f717c3074fb2ad4b2ebd1c16cf9195d31bf3152c
+specs/archive/m13e-verify-code-deepening/plan.md	archive	historical accepted design material	110903db7b53215a66f9b2d22122a1fa57fd5e01979661466d637db20e3d88b0
+specs/archive/m13e-verify-code-deepening/research.md	archive	historical accepted design material	6da414fd7583390ff948797bf6c5b7bfe4c43d4d374c189cb1646e66cc68bad4
+specs/archive/m13e-verify-code-deepening/spec.md	archive	historical accepted design material	ad3b7d5dcf89f143ccdc8e35eb071c1b2cf04a728dee284cd6f32e7bc46e49c5
+specs/archive/m13e-verify-code-deepening/tasks.md	archive	historical accepted design material	bb9733eb4a0514e95b85ffff6d061c40d58cba8952b8555e0d3e6315acc92112
+specs/archive/m14a-audit-contract-layer/checklists/requirements.md	archive	historical accepted design material	2c435490be91e789a9ca6e69f96b3abee3c116b38fb279042622ba10125f3ce6
+specs/archive/m14a-audit-contract-layer/cross-artifact-analysis.md	archive	historical accepted design material	8163caf3883a996a753cc74932554fe27372fac62bb006a2dfa3acb65c429360
+specs/archive/m14a-audit-contract-layer/data-contracts.md	archive	historical accepted design material	267517a26b8eb262d745ca4e7ce1a1a5fe4b8f28cc84af7e06e22d185b4af4ec
+specs/archive/m14a-audit-contract-layer/execution-trace.schema.json	archive	historical accepted design material	0c30b93ee095a80d8b1bea6d81b3aea165f3b3169c7f4816b6e732f5a4856fa7
+specs/archive/m14a-audit-contract-layer/harness-surface.md	archive	historical accepted design material	437df61da85e85dd43252b106d02c5c4ebc19549539723cd8ebb5dfd7ce2d41f
+specs/archive/m14a-audit-contract-layer/plan.md	archive	historical accepted design material	24a62213bf449c6a50e58807d24b314ddd9736f12e05bfb4aec5141741a65bf7
+specs/archive/m14a-audit-contract-layer/quality-failure-taxonomy.md	archive	historical accepted design material	862fdcf6750fc2d297c090e03791d2074df941dc5979913431528f55c36f12a2
+specs/archive/m14a-audit-contract-layer/research.md	archive	historical accepted design material	7d194cf41eed6ab59a2bfadbacf8bb2e870195175660d1c80a71deaced0433c1
+specs/archive/m14a-audit-contract-layer/skills-inventory.schema.json	archive	historical accepted design material	baf7355b1ec34c1aec0f258f093ea4ace045e575193e604a07b7f0f689090e48
+specs/archive/m14a-audit-contract-layer/spec-acceptance-count.json	archive	historical accepted design material	94d4450cf89dfdf4f4407bec0852a20cf2add3f9699465e28af277a82a88b846
+specs/archive/m14a-audit-contract-layer/spec.md	archive	historical accepted design material	0c192b4f8cac48c2538b7467d45a68320e456c47e49f6e97436a23851d4c4398
+specs/archive/m14a-audit-contract-layer/tasks.md	archive	historical accepted design material	54fbfa19e7163147433e73c1f534213b302ca967218a9287e13f4b1a865a1ce0
+specs/archive/m14b-fact-collection-g2/plan.md	archive	historical accepted design material	40aa652e724275b5f0632fa950a87be54f72d2d622469b6565351191e901ca05
+specs/archive/m14b-fact-collection-g2/spec.md	archive	historical accepted design material	768bce62332adb1fe97542cd43809e64eca49681f3612e4eade76771ca5e13dd
+specs/archive/m14b-fact-collection-g2/tasks.md	archive	historical accepted design material	7b848fb340d25bbfcbca7cdce863ea9026da48c36e1e51d964a2867f1ea47234
+specs/archive/m14b-fact-collection/legacy-worktree-unmerged-delta.md	archive	historical accepted design material	5734e8b93da675b9f9bcad0bbf4736c74466ce375658d0785ae70473e6841734
+specs/archive/m2-microkernel/archive.json	archive	historical accepted design material	10a08fdc712cbe19bc80386a2d7f38e3223ca98ffc930d766154f1a9f9c3359a
+specs/archive/m2-microkernel/checklists/requirements.md	archive	historical accepted design material	e10cc19ad8fa4baba304ec3ffce37680e8915fbef764966e8d233ea5b6505206
+specs/archive/m2-microkernel/plan.md	archive	historical accepted design material	b10420baa1745310ea707e6601065de74e311e35f7e9dfc280cc92746ad32101
+specs/archive/m2-microkernel/spec.md	archive	historical accepted design material	e47d02498506b67585c5e0ac49e3aed2e61fc2afa100bf05f4372f07e7eb8367
+specs/archive/m2-microkernel/tasks.md	archive	historical accepted design material	01bcabec3bb0b3adb569447394d578170235af5249959ea49095a7fa7c655931
+specs/archive/m4-metrics-foundation/checklists/requirements.md	archive	historical accepted design material	879a67f5923489da9e982dc4c8acdae52dc454b6c9d9c0d7ede7790bbc25dc65
+specs/archive/m4-metrics-foundation/plan.md	archive	historical accepted design material	c45f74416175a095cc7479403331827b8c3fbcd4afcd3a190b38f6f88ebb278e
+specs/archive/m4-metrics-foundation/spec.md	archive	historical accepted design material	b6acb2f6cd0029e197717444999397334e46c4f446da1311e92103a73dc834a6
+specs/archive/m4-metrics-foundation/tasks.md	archive	historical accepted design material	9fd598c39c42d0b53dc5f142bda141461a34373f837b4693720447ea8fc2b650
+specs/archive/m5-quality-mechanism/checklists/requirements.md	archive	historical accepted design material	b374b6c6b602c257d77832097036f50643d92cd4c40035eea799b28c5988da26
+specs/archive/m5-quality-mechanism/plan.md	archive	historical accepted design material	0a896376176752bb2211f903b624bca9d732a7feb11650422bb5b7e285883adf
+specs/archive/m5-quality-mechanism/spec.md	archive	historical accepted design material	9d0308890b801caed910a2d87e8d3a0cd0508dc4e673a7b55343cca1941caffa
+specs/archive/m5-quality-mechanism/tasks.md	archive	historical accepted design material	61a4fd321575efc52c6cc3a403cd16da9a1d44d583fa3c6e7c4741d760afd457
+specs/archive/m6-five-stage-skeleton/plan.md	archive	historical accepted design material	425235e006a6f5dd4b37c568a45ca26207e56757363f42e5239859c6fe5fde2e
+specs/archive/m6-five-stage-skeleton/spec.md	archive	historical accepted design material	7f446741876513ac3e42787a73fc6fff47e99fe8a2441af8ebc5191e2e4fac20
+specs/archive/m6-five-stage-skeleton/tasks.md	archive	historical accepted design material	d2940945a5b683908546b5bf09f5bdc47238bbc7c24609d27f8c2115cb2fc6f2
+specs/archive/m7-intake-v1/plan.md	archive	historical accepted design material	b4e32cbfd7cec07572f58d63fbde781aafaf9713a12632dc536ad983a4457352
+specs/archive/m7-intake-v1/spec.md	archive	historical accepted design material	2cf993e77d96fb761db9998cd6bdb7d354fcf338d7b122e16c5440bb2aeb1f9d
+specs/archive/m7-intake-v1/tasks.md	archive	historical accepted design material	e3b3f6929b07b72b8065bae5080fb2b69893a9c03eb7768e65bbb12305bdc7f1
+specs/archive/m8-build-code/checklists/requirements.md	archive	historical accepted design material	eee0354e0c04d73cf4518581064f363120ae9af08ab0af4d138dfb86cb2bfd79
+specs/archive/m8-build-code/plan.md	archive	historical accepted design material	e3160ba92f345471e781454b5bf3ff870cf0db1ec44018168fe95bbf55894630
+specs/archive/m8-build-code/spec.md	archive	historical accepted design material	a0602bf62364956ece6ee2142cdca10cb5427b801be03c32f1290004c8a76424
+specs/archive/m8-build-code/tasks.md	archive	historical accepted design material	b3e198254ee3c64fe65f2be0575d3cebe43d1bd1d878c0c3d3a43f6ec59a639a
+specs/archive/m9-verify-code/plan.md	archive	historical accepted design material	ea53c7348aa7fa3381a321f1d733772457afe7b8d2473bdac5283e3fdafb4d8d
+specs/archive/m9-verify-code/spec.md	archive	historical accepted design material	dc9e666922d43ab35dc723f5d67468355b782b737270853e4f38f591c09d73b3
+specs/archive/m9-verify-code/tasks.md	archive	historical accepted design material	5e5dbcc84938bf0ba9d45a667d3860371b1945fa586565c3636c52c1f275771c
+specs/archive/make-decision-audit/baseline-report.md	archive	historical accepted design material	c6d733d07b65d013a0b05f6cca0b9b4f88126bc85e870b1b9d55219a3cc3f3c0
+specs/archive/make-decision-audit/build-spec-requirements.md	archive	historical accepted design material	2b76f0f47ccefcce4c9e9490bf1300eb8c0274bfe35878ec3effec86260d7948
+specs/archive/make-decision-audit/constitution-check.md	archive	historical accepted design material	c731d909f0d976b8f1d3d16b0657bb5a36d2e34f47dc791e5c70902f9172afad
+specs/archive/make-decision-audit/data-contracts.md	archive	historical accepted design material	57ba81134b29dd458fa56c99019305d44c73a4321f8d7c223953985d1f6193a6
+specs/archive/make-decision-audit/p0-foundation-decision.md	archive	historical accepted design material	d098f3df0940c9026d6fd17a7aa2a38a01146075ff0d9a964644e6a419c07f23
+specs/archive/make-decision-audit/plan.md	archive	historical accepted design material	15be8b0c4ed7746d04733cd608a22bc5b91bb36e869dcd70a6b239fd33969304
+specs/archive/make-decision-audit/research.md	archive	historical accepted design material	6823e0a1a72ea702b308a8dce318c0f44182564fe1b81a75b285af736423b7e0
+specs/archive/make-decision-audit/spec-acceptance-count.json	archive	historical accepted design material	5a53f29bf6a645069e6f06db66dbd92105eb3947a6f638c3bad14e71edec47cf
+specs/archive/make-decision-audit/spec-clarify-scan.md	archive	historical accepted design material	bb4b5edb48465c8d07878290ad26edc1537c7a25ceb35ef527c2f4f3d83c846e
+specs/archive/make-decision-audit/spec.md	archive	historical accepted design material	29d13ea6f4eb23d01d04fd6a044782798a2beb5ea9a67a7dcc58584508dc0fb0
+specs/archive/make-decision-audit/tasks.md	archive	historical accepted design material	e3d71e57454ce3e43a2822a33886e3bc73eeb1533f0af4e51a79d66249f1a04a
+specs/archive/multica-ZHI-102/plan.md	archive	historical accepted design material	75025b71eeaa4727e237d9d86f70e3fc67d7cf9701404781080d5458c88d1118
+specs/archive/multica-ZHI-102/spec.md	archive	historical accepted design material	681792fe545e2254cf7a0144961ba0adfbb6a7ae5979e7739fdc3bd72a1e800c
+specs/archive/multica-ZHI-102/tasks.md	archive	historical accepted design material	38e3e3d78182e0d56d94200d5df35ae5bbe63b592428f090bb384b0b100ca411
+specs/archive/multica-ZHI-831-v2/plan.md	archive	historical accepted design material	693318ec1c3ba4cca26f448198ea9ef5ceccba75415ee8b52452a75644d85205
+specs/archive/multica-ZHI-831-v2/spec.md	archive	historical accepted design material	0a7cd8e9f55ff38c78aff1a2bb0cb9239110e6c1ca0d48f9051686e6e4faef62
+specs/archive/multica-ZHI-831-v2/tasks.md	archive	historical accepted design material	eede7ac4ac25860651dc09d3ad9a48d416bfb311edb6146e7776f8bac37b8468
+specs/archive/multica-ZHI-843/plan.md	archive	historical accepted design material	c082924263463e3654961e8f47d7508cf858218b1f36e458e351693ac43103c0
+specs/archive/multica-ZHI-843/spec.md	archive	historical accepted design material	c30c32699ddf19be1f5a37532f6dc293029596dfb958cda88c13f638ce911ce2
+specs/archive/multica-ZHI-843/tasks.md	archive	historical accepted design material	7dfcdc28515a4fb4c9d68e9d8a7621069c439277ae839c791c7306248e82404c
+specs/archive/multica-flow-reliability-final/plan.md	archive	historical accepted design material	1d8191aedef4b2aff8cad1e9689ae1ee300816f3d8b5b2e80861e1420fdbc7b1
+specs/archive/multica-flow-reliability-final/spec.md	archive	historical accepted design material	4a5cce14e649419664f73cc8b4e1f23b927e0eca049729ec7b4d72062c284ead
+specs/archive/multica-flow-reliability-final/tasks.md	archive	historical accepted design material	9bb47b503464de2cdc2df34edb3c96704002d73bdbfd71ccf9ddff5ae20e6899
+specs/archive/multica-minimal-recovery-v4/constitution-check.md	archive	historical accepted design material	3da825cb463d8b5edb11c6045d5886465916a8c596487a4d6ea9fe95a122a0f4
+specs/archive/multica-minimal-recovery-v4/multica-config/code-builder.md	archive	historical accepted design material	201fad740231d1b3411479992c9819bcedac66a110fd7b135bbcde4c557259e4
+specs/archive/multica-minimal-recovery-v4/multica-config/code-verifier.md	archive	historical accepted design material	d14f494a2c4f736c08cbba7d4c2fb7f17778c6289a574da84a2cb906903427d6
+specs/archive/multica-minimal-recovery-v4/multica-config/coder.md	archive	historical accepted design material	c7ba2fc825670620e1fceb28d6eb91656cd8d01fc9a5a3d23f1e35f8b76c9203
+specs/archive/multica-minimal-recovery-v4/multica-config/decision-maker.md	archive	historical accepted design material	857aaacdf3d87523890deb160571a2124d523dae04cf30c73d9973c69faa7811
+specs/archive/multica-minimal-recovery-v4/multica-config/foreman.md	archive	historical accepted design material	260e454c8a68d336d327f43106b7dbcbc0accd74d9372f3fb5734ed637c11413
+specs/archive/multica-minimal-recovery-v4/multica-config/plan-builder.md	archive	historical accepted design material	efcd1695804a7312885dcdfb61a11735b5021d2046277214176485422db7010c
+specs/archive/multica-minimal-recovery-v4/multica-config/spec-builder.md	archive	historical accepted design material	27fa0e9aacbfa51cca4616b0efdaa36cb1db304945fdcd18e522975ffee2acc6
+specs/archive/multica-minimal-recovery-v4/multica-config/squad.md	archive	historical accepted design material	4643c1064cad05f1b97831b2358a0606b9f89f03f8974f0dce6f69d7b8ba5982
+specs/archive/multica-minimal-recovery-v4/multica-prompts.md	archive	historical accepted design material	ea9ffd6f82e82cd201faacc7cf179e07c19bd145c44397222c18b0e50bdb4cce
+specs/archive/multica-minimal-recovery-v4/plan.md	archive	historical accepted design material	71cf76c4191941bdf8819f56fcdcc286c6f410343ef5f21ee279ad8656991c88
+specs/archive/multica-minimal-recovery-v4/reviews.md	archive	historical accepted design material	210f7b6c14662c673ad759f0ee437a6b8cd844e5de50516912a2376cff22d34f
+specs/archive/multica-minimal-recovery-v4/spec.md	archive	historical accepted design material	52967c724d3fe936d24ec1bffd3819192367eb930ff021b16f7ec57b55717aa8
+specs/archive/multica-minimal-recovery-v4/tasks.md	archive	historical accepted design material	0286bc2664eb9e075bfad0924f38669fe4dc798a48e47516a2ec6b0085233da8
+specs/archive/review-foundation-baseline-v3/plan.md	archive	historical accepted design material	e449985ca359b60bad01ff5dad8863a136dc66bff020e9ffe7446d47ff9099b0
+specs/archive/review-foundation-baseline-v3/spec.md	archive	historical accepted design material	bdf8e321266562060026d0e90014c446df100b6458ab3a96d69256e37396938d
+specs/archive/review-foundation-baseline-v3/tasks.md	archive	historical accepted design material	3bd9510256ff096c8ce51e6dfbd531dd70e4baa67651e18cc0dcc3e1e51050bb
+specs/archive/spec-plan-context-quality/plan.md	archive	historical accepted design material	82466adb08f853591d3a9d38c2e4e606fb7c1ba6b5660a6078390e66bac2ac1c
+specs/archive/spec-plan-context-quality/spec.md	archive	historical accepted design material	bb2d81a1301a7d57b7f06ca70ca9fd2c81258cfca68bea7220a2fa5c3024f8a6
+specs/archive/spec-plan-context-quality/tasks.md	archive	historical accepted design material	ffd369ea746580ce4d27b3ec7873e1aabcfaa6d2cbeee636214f14c9e03e3dfd
+specs/archive/stage-content-contracts/plan.md	archive	historical accepted design material	31f59156ef3e59d077b660d03e36bba0fc250d6c3ee10bb30dedc1bfb53149b9
+specs/archive/stage-content-contracts/spec.md	archive	historical accepted design material	ac9fcd03695da717828c26571bea58038a3c8d10bc8f5056b21761fbeca0bf03
+specs/archive/stage-content-contracts/tasks.md	archive	historical accepted design material	c7aa9a6f51ef4c5f3faf796f1ba03b1ae6f053dbc68817abe0ac286c45ea6bf3
+specs/archive/stage-interaction-handoff-completeness/plan.md	archive	historical accepted design material	0e01d7ec55a612daa138f5936a92e3a5597ae968fec7cbfe6629d229dfeff974
+specs/archive/stage-interaction-handoff-completeness/spec.md	archive	historical accepted design material	09029ca7ecc447ea3628c8c48c639fd2c8acbe8fec02d121594b2288bc9002e0
+specs/archive/stage-interaction-handoff-completeness/tasks.md	archive	historical accepted design material	faf53d141f9a39f1f7c209d343779d83b87045f5e7e1205802aa7085387b8328
+specs/archive/step-gated-audit/code-review-round3.md	archive	historical accepted design material	3d2e0bfe1b3f4b46ce9f9694851acad32c16ee4bf84a4f3c0e99a6b3cc312adb
+specs/archive/step-gated-audit/receipt-writer-redesign-codex-review-round2.md	archive	historical accepted design material	fdf5cc76c555a6f903d39b2f8c1a58acee23b21d200aa29a49eb667ead31e4d2
+specs/archive/step-gated-audit/receipt-writer-redesign-codex-review.md	archive	historical accepted design material	d10f3618700b66d1413556e0f2775ea3d16170ff975e2120704cbcb03f1994c0
+specs/archive/step-gated-audit/receipt-writer-redesign.md	archive	historical accepted design material	ecf8dd1db9e9b966b29c96b5522b737cb6b7c17deb7acecd4dc904b80ea1b177
+specs/archive/wh-quality-convergence/baseline-report.md	archive	historical accepted design material	ff76f65e180ee9706a50102d9411cbd2ba7a7f21fd703228a41e8ed3ab69767e
+specs/archive/wh-quality-convergence/checklists/requirements.md	archive	historical accepted design material	886774c4429232228b22810ed0f65525d70b0e91b5dc3757bdac5eac351df23b
+specs/archive/wh-quality-convergence/constitution-check.md	archive	historical accepted design material	5d388c9943b5ebc762b119f2d656ee1ffd5e898a8ed7fbbc3921ae65bb07af1b
+specs/archive/wh-quality-convergence/cross-artifact-analysis.md	archive	historical accepted design material	3e446728b5cc7e49da253592d5542932dba8eaed13bf25f210d0a0ea1806ab5e
+specs/archive/wh-quality-convergence/data-contracts.md	archive	historical accepted design material	37f4286ed14540b46096aa945261569c33280d06139ea5aea47636a5409d6d04
+specs/archive/wh-quality-convergence/plan.md	archive	historical accepted design material	2480d9d635b25f38949d78306d691a64131e3073819afef4c08147022642425e
+specs/archive/wh-quality-convergence/research.md	archive	historical accepted design material	cd69c2f06b50eb4491b8ab52a0ab6a3137ed8d1a2f4df681363be394b3dbb142
+specs/archive/wh-quality-convergence/spec.md	archive	historical accepted design material	4cdb5d31e629a6bc6e60cf270f1d673a73db86625a1cc409bc9156b4400a34f8
+specs/archive/wh-quality-convergence/stage-result-build-plan.json	archive	historical accepted design material	d59f48a51a56ac2077c82eca8fcf5b3af0e2f326fc0dc4af370e32d6b52f1a38
+specs/archive/wh-quality-convergence/stage-result-build-spec.json	archive	historical accepted design material	1de95ef6507bdcb8e1392013a18fa6ebcec857a49ee8743b932193b10f55f076
+specs/archive/wh-quality-convergence/tasks.md	archive	historical accepted design material	d203c7e8ec9ea6864cb3151e2ea0648049d37ee9bba97613cf4a2ac9ff16952c
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/report-round-1.md	archive	historical accepted design material	e6c60725d47efc52b75ac630ea44082be0b446aedd946b15e7f6ccb94ce2e249
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/report.md	archive	historical accepted design material	e6c60725d47efc52b75ac630ea44082be0b446aedd946b15e7f6ccb94ce2e249
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/route-decision.json	archive	historical accepted design material	0e16ab5760ffe97e3f4dc39783d4c12d7c10dbdab9097454cee23bf1747f1cd0
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/verdict-round-1.json	archive	historical accepted design material	4385dc54833d2108b00314f23e2e6829024836b725405a008bbca2ae732cffa6
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/verdict-round-1.raw.json	archive	historical accepted design material	007d52fee5961db80e8348e85f46b637638ea7fad2f82243400b4264820f6310
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/verdict.json	archive	historical accepted design material	4385dc54833d2108b00314f23e2e6829024836b725405a008bbca2ae732cffa6
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	4e479892afc30c5d1c66c1deda9c5b3ed3e719ba86b4ebe662bd5a597ce5fcc1
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080635Z-fefa30/run-manifest.json	archive	historical accepted design material	1ba1ef4ed4fb6dfe8876df47fc81309f3fca7520b298c5c232c34d57750c694d
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/report-round-1.md	archive	historical accepted design material	20e1929416a2e7ecf33bb9495adb11e02f7c3bcf1ad60bbed426972a83064ec5
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/report.md	archive	historical accepted design material	20e1929416a2e7ecf33bb9495adb11e02f7c3bcf1ad60bbed426972a83064ec5
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/route-decision.json	archive	historical accepted design material	7e1c24a8e4c4365d50ce0ef092ef7eb883c185ce60038ea88fb3eed2c8617a2e
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/verdict-round-1.json	archive	historical accepted design material	8cb58aad28e9f707c44589c96fa7cb4b6a4e48ae15c28119a9e8e84efd496ad5
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/verdict-round-1.raw.json	archive	historical accepted design material	db972af2e92f3687df9ac06ba33b915e2407a8533f3ae986596dd9b4f1f28116
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/verdict.json	archive	historical accepted design material	8cb58aad28e9f707c44589c96fa7cb4b6a4e48ae15c28119a9e8e84efd496ad5
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	f29370bdb3c9822d4f67db72fa7542fb1fff4adff8bfd16629cc8d5b93789fa3
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T080932Z-56b9c9/run-manifest.json	archive	historical accepted design material	e02b86423c6c6f05c475fa8f11617b61866a5c5ca9206a63344dec254ae93f32
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/report-round-1.md	archive	historical accepted design material	0802112fb6ecacd37bf86643275e7d01c4ac1331b56415ee3a042e6c06f5a855
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/report.md	archive	historical accepted design material	0802112fb6ecacd37bf86643275e7d01c4ac1331b56415ee3a042e6c06f5a855
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/route-decision.json	archive	historical accepted design material	7e1c24a8e4c4365d50ce0ef092ef7eb883c185ce60038ea88fb3eed2c8617a2e
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/verdict-round-1.json	archive	historical accepted design material	7fb30496b3b808c4c70d4c1de91bf628285f2132d22a7998fe7382ebda5fa131
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/verdict-round-1.raw.json	archive	historical accepted design material	d247288392f6f827b7d3634584519059bcc129d4251d02bea6996aed8fa8837f
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/verdict.json	archive	historical accepted design material	7fb30496b3b808c4c70d4c1de91bf628285f2132d22a7998fe7382ebda5fa131
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	5dbf92bcf6d066ebee1be1802fe9f4f2b02699d08176e16f7e4828f9bcf6a6b8
+specs/archive/wh-quality-convergence/tasks/build-spec-review-20260708T081252Z-37d326/run-manifest.json	archive	historical accepted design material	4a36a9fa64ac0064d6bc2333cd08f49be78d6a4d811ab5698f53328b88847139
+specs/archive/wh-review-materials-v3-abandoned/plan.md	archive	historical accepted design material	b919eb5470dbef4879e8fcc4d4a79ee1f0c2d07b8e185fe4decad2808a8b7f52
+specs/archive/wh-review-materials-v3-abandoned/spec.md	archive	historical accepted design material	300878db370a3bd3db1d8725c85009dca7a7b7208ba8b28d9ca80df787a4e089
+specs/archive/wh-review-materials-v3-abandoned/tasks.md	archive	historical accepted design material	df385f808303ebea6283b7ff86470c40be8b913720ea47d6bf9f3050a81c22ea
+specs/archive/wh-review-materials-v3-evidence-rebuild/plan.md	archive	historical accepted design material	71c6d304d0d8f7ab1067f25a569494e5cfe1fb1bf55d740b35f2351b8e95b99e
+specs/archive/wh-review-materials-v3-evidence-rebuild/spec.md	archive	historical accepted design material	300878db370a3bd3db1d8725c85009dca7a7b7208ba8b28d9ca80df787a4e089
+specs/archive/wh-review-materials-v3-evidence-rebuild/tasks.md	archive	historical accepted design material	3e1d256f153737401980bc98f74d8ea09807980d50ce030cafd66613451b5782
+specs/archive/wh-review-rebuild/data-contracts.md	archive	historical accepted design material	2a61359bad2f5ccfe7c1440f607215dfa377e2bba6e63828f9ce5cfb7c3d5aea
+specs/archive/wh-review-rebuild/plan.md	archive	historical accepted design material	73bc9ddfcb5a7023cc9238644250aa04d4495e3dbeb618c57b2186eb129e1aed
+specs/archive/wh-review-rebuild/research.md	archive	historical accepted design material	d0639fc201d40d3dea6e2e15159c30814eb625957bb8339a01e23be8511711e6
+specs/archive/wh-review-rebuild/spec.md	archive	historical accepted design material	72e03e59bbedb0ddf5ed4493f37e42df7836dce9f6f0f9c1f1a26cfd696e219a
+specs/archive/wh-review-rebuild/tasks.md	archive	historical accepted design material	13d1f0135b9adeaa76165867a1856768cc2cf3a330515b21a0f5fff8c2c815dd
+specs/archive/wh-review-rebuild/test-plan.md	archive	historical accepted design material	be8ab7e575ca19146eefd0be13c64ca1b078c455785415489317b64ef9cc5b42
+specs/archive/wh-review-v2/plan.md	archive	historical accepted design material	ee5e5c58ae98d85b0f0bf81364056de5977876fdb84e1ad0019c1166885c0fe0
+specs/archive/wh-review-v2/reports/code-review-closure-001.md	archive	historical accepted design material	66cd70b1dee485e4f77277928c56e9aee0940367935b6d31554259ee0f89cc5b
+specs/archive/wh-review-v2/reports/kimi-coding-materials-closure-001.md	archive	historical accepted design material	51a8518eba93bb8ff06175369e7794e1ae8dd4c842c71c2a0087a97f5f7ee043
+specs/archive/wh-review-v2/spec.md	archive	historical accepted design material	ad1e3784ece2511a7b4052620283ba680736b1fd1df517b4a9acdb2011f20afc
+specs/archive/wh-review-v2/tasks.md	archive	historical accepted design material	a9c2103026f54f428c4f8a289a7925b097b3d6b6ca9c19bc7c16bd6bf50b0f7f
+specs/archive/wh-review-v2/validation.md	archive	historical accepted design material	f36f0adf8d67fee3766dc7322628fc90d73f5e64336b8ca114cd691e26451fbf
+specs/archive/workflow-quality-recording-simplification/decision-log.md	archive	historical accepted design material	c660bf5394d0eb1e864ce0caccfa76f4f5d8220287594614052643412430e7ef
+specs/archive/workflow-quality-recording-simplification/plan.md	archive	historical accepted design material	5e918fbcb6ec72e4c898c1b877c1fef7898913a75f0a0207d30bb4c7aec5a592
+specs/archive/workflow-quality-recording-simplification/spec.md	archive	historical accepted design material	34a5eae18324875a80a986f4f2e56eb5ae1be74e3705f995f1c86c87079cac6a
+specs/archive/workflow-quality-recording-simplification/tasks.md	archive	historical accepted design material	35760d71b917a36efc7738d00e17dddc26676bfd37e6742cf346dde769c2b45c
+specs/archive/worktree-unification/baseline-report.md	archive	historical accepted design material	a630e79d80c730914a54751120228fa5e84c06d1a6b009bcafd73bf67756fae4
+specs/archive/worktree-unification/checklists/requirements.md	archive	historical accepted design material	9dd83a882f19afbc16c360b8a6266ea723362553c17a4fab795e93adc599d873
+specs/archive/worktree-unification/constitution-check.md	archive	historical accepted design material	16701e837a8e9397c02f2182dc2b382e4380159cdd9d7773cdce234a52a47828
+specs/archive/worktree-unification/cross-artifact-analysis.md	archive	historical accepted design material	602c1aa6be1bce022a185a13879713cd91534d308383c6861cb762c12a4ddba6
+specs/archive/worktree-unification/data-contracts.md	archive	historical accepted design material	05a8c111e203dd0e3654a81b4cfb5a151f5499ebf1e326fb0d0b9a4f97c0392a
+specs/archive/worktree-unification/evidence/ac-coverage.md	archive	historical accepted design material	6f2148d68a59e65cf6a356f64fe420870e12f303f418a1e1e047c8830d8ff123
+specs/archive/worktree-unification/evidence/fresh-capture.json	archive	historical accepted design material	4c32555c5849ef7910e52c7802be37daf43cb83eedca305036a59966798b1955
+specs/archive/worktree-unification/evidence/freshness-report.json	archive	historical accepted design material	2aa29083e5954308cb06d5f18f3fea41ea5036be7fa5ab15b80e0b96ca7f0a93
+specs/archive/worktree-unification/evidence/stage-summary.jsonl	archive	historical accepted design material	9e064cc9e116f3a8ba11cdfbcd2c2fc921719c5ee2c9f026724f6b54bbdb33e4
+specs/archive/worktree-unification/evidence/test-strategy.md	archive	historical accepted design material	d519959b064ec7fdf663f3e5ccfc98df90bfc2c129866c9747638e8b88e2a3eb
+specs/archive/worktree-unification/evidence/trace-check-report.json	archive	historical accepted design material	d9dda6e838365c465e72ff185cb1699111c3851e26ecf86455ad25b751fa9492
+specs/archive/worktree-unification/human-brief.md	archive	historical accepted design material	441c8fb7373b8cb9aba465cacd68d96d4e06696112bdd75dcc0e54a93f3af811
+specs/archive/worktree-unification/plan-eng-review.md	archive	historical accepted design material	65829a26e619f62a1a4dd544bad28c74e8ea7bb6f5f3bee52aef72a1f864025e
+specs/archive/worktree-unification/plan-summary-draft.md	archive	historical accepted design material	5cd5f87d1a0d22a14e6a85196c21dbbbc802f6fa39b789d7cb67fe4d72921c5f
+specs/archive/worktree-unification/plan.md	archive	historical accepted design material	ee8722f7518e659f0a6c5846a4f45b2067848a80630b0ffa2383b40eb748b981
+specs/archive/worktree-unification/research.md	archive	historical accepted design material	7ea04ad411d721058bc4dccdb6b582d536c21bfcc5c749ff251c2a0f4c55a091
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/report-round-1.md	archive	historical accepted design material	b449937ebe50e1d8d449121ef94328cfa9b3c249a90a03c4d282c5fc06668491
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/report-round-2.md	archive	historical accepted design material	8b13fc0bbed232cf3fe6e9d9dd7996d6e8d4dd0f0d98bc8d395f158cde3cd195
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/report.md	archive	historical accepted design material	8b13fc0bbed232cf3fe6e9d9dd7996d6e8d4dd0f0d98bc8d395f158cde3cd195
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/route-decision.json	archive	historical accepted design material	d2e74f83e10e6d8c14c86fdc8388286329aa891378ba86d1c6a084d2cfb38e38
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict-round-1.json	archive	historical accepted design material	24e0c7d3f88486524119b0833c091eaeb22c120424fca3f21ee0809a26e65821
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict-round-1.raw.json	archive	historical accepted design material	8d19b962cf141517710dc8e844a10eabf70d3b01452856ea98f94a34bde818cf
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict-round-2.json	archive	historical accepted design material	213f10198415673ad3f33c2ede8879167d02d9d389e0b1a6d4c59448f701cb27
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict-round-2.raw.json	archive	historical accepted design material	9324cabd61b185cac84ee272b048e7ca85c2ab27e607a56c5625e7d89ee4a653
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict.json	archive	historical accepted design material	213f10198415673ad3f33c2ede8879167d02d9d389e0b1a6d4c59448f701cb27
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	faa64040baf66c7830520c7b72a91c56518b270f24cbc9c2e8cc06a84b0bb59c
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160127Z-31a2fc/run-manifest.json	archive	historical accepted design material	84e0356ef4ee5f6de64a38b2c14decb1d7b01d12ab57663f4cbfdc28bbb8b58b
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/report-round-1.md	archive	historical accepted design material	4117fe2514742bbdf7fec531a4d7353425e743a95edf9e8921be0f240d0612a0
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/report-round-2.md	archive	historical accepted design material	2bbfb5c8bc94e9511a451a6b2bc5783c70d72f74a971c233d54582b0f779ab95
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/report.md	archive	historical accepted design material	2bbfb5c8bc94e9511a451a6b2bc5783c70d72f74a971c233d54582b0f779ab95
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/route-decision.json	archive	historical accepted design material	d2e74f83e10e6d8c14c86fdc8388286329aa891378ba86d1c6a084d2cfb38e38
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict-round-1.json	archive	historical accepted design material	1ccddb77e978b04e27f42e5c9445e79c97ea80dcb2d82a0e62c90a8c85961f9f
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict-round-1.raw.json	archive	historical accepted design material	ba8bb88a9509e9358b4e766eaee6f1791d750382f701888d5c673fd6e8c55b1e
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict-round-2.json	archive	historical accepted design material	b470175f9491aa7d5e5a1185e5d23b2a32eae31ec4b7be6bbc62763dd6a681dd
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict-round-2.raw.json	archive	historical accepted design material	efe907e52d826b089d1d0a63f7f221e8d8888edd2e4be54e0c57b4fb43a38b76
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict.json	archive	historical accepted design material	b470175f9491aa7d5e5a1185e5d23b2a32eae31ec4b7be6bbc62763dd6a681dd
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	5bc9b97281c4c115fd6227f897a1075d0805b704b3564f6c90d356120fb605a9
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/run-manifest.json	archive	historical accepted design material	2b06e92ea613b5e1c50065b94d106c1678208f72ddb16fb58ebbec78a96f25d0
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/report-round-1.md	archive	historical accepted design material	79ab7476177501db073188bcd7aab36703d1fa8034498d69e84dbe32c8e59b20
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/report.md	archive	historical accepted design material	79ab7476177501db073188bcd7aab36703d1fa8034498d69e84dbe32c8e59b20
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/route-decision.json	archive	historical accepted design material	0b40068f9aa549e29b0e49738058bb31eb3ed844f0f5027cb185bdc2795e4bd9
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/verdict-round-1.json	archive	historical accepted design material	120e162836d648d27ba04e8e80501d9fdc65caac161dfbd3f1a7a8473cf1e3f7
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/verdict-round-1.raw.json	archive	historical accepted design material	9c7ba74dfedc23f289d219991e82de079d0eda2dfa726d1854c56d253a324d3d
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/verdict.json	archive	historical accepted design material	120e162836d648d27ba04e8e80501d9fdc65caac161dfbd3f1a7a8473cf1e3f7
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	f89fa0cedd52bc61569254dfd94eefc5cb2fc6bc23885b74848272429b92bb23
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/run-manifest.json	archive	historical accepted design material	da49fe7fa597d344bec7eb6acdfafb265494931167fca3136455e15429bc04a9
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015650Z-ec3d9c/reviews/route-decision.json	archive	historical accepted design material	0ad44b09cc53ec214fc16327dc35dc8847370fd275e96855605a1c93ce780158
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015650Z-ec3d9c/run-manifest.json	archive	historical accepted design material	67a91c70af1ed09ed1d9db416f951b88ed606515632c21ea5b62a4782a68d8a3
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015717Z-036a51/reviews/route-decision.json	archive	historical accepted design material	0ad44b09cc53ec214fc16327dc35dc8847370fd275e96855605a1c93ce780158
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015717Z-036a51/run-manifest.json	archive	historical accepted design material	89e2b4ae10c2bb5a7c638bafcda5d4fceace561590a8e456a5d5a1f939bd8be7
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-1.md	archive	historical accepted design material	477386b1f4ae6edac2459710690809f3ea699818d8b9aee9eddd14911e57942d
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-2.md	archive	historical accepted design material	ef9456f0c5cb7e150e79bebef66e06192f13d1f56f4378fc56b1f4554bab35fb
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-3.md	archive	historical accepted design material	c517734a2c0af8d9c7fe8b7744471163cf70cf3477732b7199ca9a2aced397ca
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-4.md	archive	historical accepted design material	5cc863930cdcd6acfb50817a59e1e632fb9f5df457bc89c818fbe2dbfb66dbf1
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-5.md	archive	historical accepted design material	5c4584035e65c45e0ac01c7b5bc2cf42734d77c7e54a75b524b55133353c8c49
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-6.md	archive	historical accepted design material	9ad01a39087f9accc6249c0e048f48de50fbd700bfab2b459f1e82bd291bc124
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-7.md	archive	historical accepted design material	227aaa4e266f26cf02a1d3ef17de57172fba8f0a3c2937b98c8a066872c599c4
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report-round-8.md	archive	historical accepted design material	9f75a0f60d02b2dce6c597c9284bc68daee3caf40589649bc1e585ce2fb258fc
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/report.md	archive	historical accepted design material	9f75a0f60d02b2dce6c597c9284bc68daee3caf40589649bc1e585ce2fb258fc
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/route-decision.json	archive	historical accepted design material	0ad44b09cc53ec214fc16327dc35dc8847370fd275e96855605a1c93ce780158
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-1.json	archive	historical accepted design material	630fca8075dfc93d7755a1e8fb3fd1c1b5b377769b37541a4ac1eca334ea02e5
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-1.raw.json	archive	historical accepted design material	3fe522e8de90f595d0c3a6121f7244bb2c21a53b54942ff84dff4c82d73dbc9b
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-2.json	archive	historical accepted design material	c0f3ffb65070e26f5b7d47c8ad7bf62a39fe5d0416af5dcfbd2695b6e41f5cb4
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-2.raw.json	archive	historical accepted design material	8bdbd488dfbe7a3db2b941d28c3eaab94746a846da4edf46e37996a52b5113da
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-3.json	archive	historical accepted design material	4688badaee06818fb506ec003e45ad4bc23bc3135680378894b48d0188666c65
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-3.raw.json	archive	historical accepted design material	db61e7d9773ca6c4123ed7f1463d2f83f6d793d40bf2c4b4746f3aab332c30c2
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-4.json	archive	historical accepted design material	a382674ae470325e07c8a49feac59fcabe91c8034934a2e352ff161d4f1ec648
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-4.raw.json	archive	historical accepted design material	286ca742bc15334eb29d6c95a08d9710a02d857ed4b7a41df4e8c2888bac30fa
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-5.json	archive	historical accepted design material	caf28b52feb115b873625275a99fc5bc652ca4d415f19c46bd9760532837e404
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-5.raw.json	archive	historical accepted design material	acfc978d074f3eed35d888dd6e97720a0e519a85a72df217ec8a68cbe1876407
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-6.json	archive	historical accepted design material	4f9862ce05da8871a9f9e5fdb6a9b9573b8f4192c080fa32fa5f13870de12064
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-6.raw.json	archive	historical accepted design material	7ffba76351ec7ff3a0dada5c546de834aa5cbe96fe3d226f8aba3903ffc0df1d
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-7.json	archive	historical accepted design material	fe04f585432fe3f80fccf70c484708bb223f96aeb1cbcbab64b8d95c69b90380
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-7.raw.json	archive	historical accepted design material	3a00dfd7d9ab47ae14dc16065ee8b2ae77561f272a870d2e59e0018a50d394ef
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-8.json	archive	historical accepted design material	a30dfa336abdb578d8425b022ea7fc861d6167fd221013ac379256daf7f79ee8
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict-round-8.raw.json	archive	historical accepted design material	80f6f205dedafcb0d0699fc09d15686cdf5b67dd956ba26ceb91ec81c2516393
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/reviews/verdict.json	archive	historical accepted design material	a30dfa336abdb578d8425b022ea7fc861d6167fd221013ac379256daf7f79ee8
+specs/archive/worktree-unification/reviews/tasks/worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2/run-manifest.json	archive	historical accepted design material	965c46f3a0c7b575ba42a49c1cf8e1f7dc396e89338d5ba65d37fa5015c80bbf
+specs/archive/worktree-unification/reviews/verify-code.md	archive	historical accepted design material	b830d9f0e6d270f0a022424061188710d91beea601454c167aad883c3bd13ece
+specs/archive/worktree-unification/spec.md	archive	historical accepted design material	c829fbcde507c6203a91f2600bac6b9465992ed106192ce5798a21834ec1ff36
+specs/archive/worktree-unification/stage-result-build-code.json	archive	historical accepted design material	ef9545e3f0f861050a097cfb5488ff6c935fde45ac5bf982e170ea6b9070485d
+specs/archive/worktree-unification/stage-result-build-plan.json	archive	historical accepted design material	5e7bddd4de9332720be185aedde57fcd08be25528dbad45f87629b4a1a24022f
+specs/archive/worktree-unification/stage-result-verify-code.json	archive	historical accepted design material	ff8b879813c35da435edcab73739aa3197d3660f5e39b98df68c23f927403f0a
+specs/archive/worktree-unification/tasks.md	archive	historical accepted design material	b71ea21bb197e4087871f1ff3abb29147837cac7ef0a816166264523315367b4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/report-round-1.md	archive	historical accepted design material	92d2c6ab5ee56dda6086f928f67226c16558d3b9d0ec06d502737b8b1c9e49d7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/report-round-2.md	archive	historical accepted design material	56944a3f1e484685142d18f26cf2cb842018ebf5f05ff280f644ce3fced65b42
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/report-round-3.md	archive	historical accepted design material	3f41769c7aafab7d0387003e8610a6fe3e17c9aa1034b6b64cfaa61271f53c62
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/report-round-4.md	archive	historical accepted design material	5df9c0ad1838e70d72c2790197c5a41ac69a9e54b3e3c9e1d9a70acd01d172ba
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/report.md	archive	historical accepted design material	5df9c0ad1838e70d72c2790197c5a41ac69a9e54b3e3c9e1d9a70acd01d172ba
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/route-decision.json	archive	historical accepted design material	509785b7f032dfec140fb53b847ce9440c4825ae158f988d41dfb92c5a492c5e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-1.json	archive	historical accepted design material	ec6e2da9fdd9d5ea197caedfb055f768afecaa28069ce1cd2421bf4acbfa298e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-1.raw.json	archive	historical accepted design material	2423153a285160b1e26cbb32446e4f7fcba3f064d9d3b03617f59fdf42b93000
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-2.json	archive	historical accepted design material	76f40e69da712e983d4a46798c24437c664480715ec3d9f870e147fe72b30bfd
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-2.raw.json	archive	historical accepted design material	4862fafacbd0f16dbe47454ded4f867c7887cbf159b2b11b43cd5565970b268d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-3.json	archive	historical accepted design material	b9ba89a2c90d8e5fda0922fa716251d2f9ac5efaf23ab6cd389745609711dae9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-3.raw.json	archive	historical accepted design material	ef57441e0045f5d80e6d30fefcab52d0e7b8d55b3a858b9e01deb68df72d049b
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-4.json	archive	historical accepted design material	a8da11baa5783568048159d966151c3c3426d0a2e76ee0a7d4d4b92559d7d3a9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict-round-4.raw.json	archive	historical accepted design material	101477c1f6ea9469a1de0784a8baa290ea90f70d283e4b4df8de083c37d4b8f5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict.json	archive	historical accepted design material	a8da11baa5783568048159d966151c3c3426d0a2e76ee0a7d4d4b92559d7d3a9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	54904d5f1e221fb9af60f5220a1a2f565d953c65c27dc2a4316d024d6c97b0ef
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/run-manifest.json	archive	historical accepted design material	ce2fcf87f95578ab58f4a863d1c56ee0b5806a34ce21de6224e5e635835a57e0
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/report-round-1.md	archive	historical accepted design material	08aeb8aea777579d47cf8df1eb8481e0798596c9f42448892456760f49272ea5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/report-round-2.md	archive	historical accepted design material	9c1a5b977efec7bd58855d6ba5fd943fc45b3ba94c671c1eabe9240249eb6af4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/report-round-3.md	archive	historical accepted design material	684a3ee1af81ea2b2ebe757ffe9d4a0ae2b3810902927b209da7581d04a71ccc
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/report-round-4.md	archive	historical accepted design material	de4068ef68c3998ad5ea3d39c2ffc89a0616b134aae81e9717028ebea76354a7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/report.md	archive	historical accepted design material	de4068ef68c3998ad5ea3d39c2ffc89a0616b134aae81e9717028ebea76354a7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/route-decision.json	archive	historical accepted design material	63b4a13f652e3378d08b2cae4a89f912ee37467342297a5d48a9f78f9d375b48
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-1.json	archive	historical accepted design material	4fe43db273985ab7045fb7333884200184caa087bfbdf6389fffe9335e4d8df6
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-1.raw.json	archive	historical accepted design material	b4e8b70d4d60a021cfd013e56d6e55923a870af0ca31dc4c6e1e8190c9c30d78
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-2.json	archive	historical accepted design material	ea5437d0432fad626a57b6ab085478002363fdaaf1a44e2417d8b21c1104db58
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-2.raw.json	archive	historical accepted design material	31adcc932949f5c428febb11ea8460b3f3c579f820f322285e8581d41e275cb2
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-3.json	archive	historical accepted design material	2f4755b53b7953d6170a25b105cb667d4f1e5b3fcf75093070c37ff7c6fb80c4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-3.raw.json	archive	historical accepted design material	e245a1bdb81fd4d3034605183f09007ff86717d74da865bd83d259c1121123d7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-4.json	archive	historical accepted design material	775c483ca8181d0ca5089329df6fe25b412f1c41e298b7567c900d9260f8e5db
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict-round-4.raw.json	archive	historical accepted design material	8af7727a02d2042b5f19f18e8979cab2fc543039a960e78853a2f7e90afe387a
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict.json	archive	historical accepted design material	775c483ca8181d0ca5089329df6fe25b412f1c41e298b7567c900d9260f8e5db
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	06fab10f3f436804b5a4becfc79055127c883a9d34c1cc92ffa1efe002b7043f
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r10-20260705T045733Z-146fc8/run-manifest.json	archive	historical accepted design material	607c9b41ca278f487e850033fa2d5d03f18bb570f8c0207dcba34d8515d19614
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/report-round-1.md	archive	historical accepted design material	773a31f2ecb968d979229363ca8652bffe46155d363358d0989b8d08dfe5231f
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/report-round-2.md	archive	historical accepted design material	df62d7715172d15f81d7febec7d8750f4bd93c9dfece66f2997b01b5b1709501
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/report-round-3.md	archive	historical accepted design material	2ae5c893d5ead6d1f508917babd95d4094f5712942530feaf86d95448e485dca
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/report.md	archive	historical accepted design material	2ae5c893d5ead6d1f508917babd95d4094f5712942530feaf86d95448e485dca
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/route-decision.json	archive	historical accepted design material	86d4352b47555397e1e2551f962189da594ab659e2f3cb4eee840b74026afde7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-1.json	archive	historical accepted design material	862f8622086826698a425a2347294e8d759cec553d0a265d2c573c6cae0b070d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-1.raw.json	archive	historical accepted design material	ebfa74cfbbb03ee6f2b294e5b31647184d61a2911497aa71b9a92da0fa354346
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-2.json	archive	historical accepted design material	349f6e4f30daa7703af9d770e616b8bc9042d9f26552ce548cc3d82295476241
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-2.raw.json	archive	historical accepted design material	1f7cf47bfc45b2f7af276c714495a41d7cfad427217a1f46356b80250254ba51
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-3.json	archive	historical accepted design material	702534a0b74d184af2e2580cf31bc3577071344c8b8c8d4f72ee41c5bc9226b4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict-round-3.raw.json	archive	historical accepted design material	4c0d570d53c741bda8240dab2fac819d11cb5da44e9121d331c7784c2dde73d2
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict.json	archive	historical accepted design material	702534a0b74d184af2e2580cf31bc3577071344c8b8c8d4f72ee41c5bc9226b4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	4e2e0368fe9ce2a387b6ba7c4df96678c60e95e7816793d558f2f96ca0233662
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r11-20260705T052202Z-62624f/run-manifest.json	archive	historical accepted design material	f4987f01dfb89bdb1e1262a283a8bcc6c4a4da5dc5cce707048cd9e7270e649f
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/report-round-1.md	archive	historical accepted design material	9e04f2efc12e353353f1262cd86856582746a4311fddaa3ec0e61de682feb1af
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/report.md	archive	historical accepted design material	9e04f2efc12e353353f1262cd86856582746a4311fddaa3ec0e61de682feb1af
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/route-decision.json	archive	historical accepted design material	9f9087be630dbcb795c019ad296d3d54423df6b5432684960b445e1214a3d1b9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/verdict-round-1.json	archive	historical accepted design material	de3e2621270b5267850245ed2dd0a8552ae1c493aaed51db5faf5ddfc998b4f8
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/verdict-round-1.raw.json	archive	historical accepted design material	d597ada7a7f56b36430e78430629a6ff074922074ba75f1d558312ff487f620d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/verdict.json	archive	historical accepted design material	de3e2621270b5267850245ed2dd0a8552ae1c493aaed51db5faf5ddfc998b4f8
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	13facc93b8ad8b46f0b314267aaa7cb5ba3982c15fb0d67f666391adabbb908e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r12-20260705T055256Z-26aa25/run-manifest.json	archive	historical accepted design material	5f838f06dfc686e64bb8068e4d4227aebf8c7b1df13ce09180c31543e384be60
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/report-round-1.md	archive	historical accepted design material	049bc65c00ef06683cacf70597e2f05625163f380ed5365e63742324ceaec23d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/report-round-2.md	archive	historical accepted design material	542cf9f34f41aacdadc28855ae518ddb82690dbb6ad32efcddc7f16ca24cbc2c
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/report-round-3.md	archive	historical accepted design material	4874cadc04d1af2de1c0ca6ccf8598bd55c026cc738b880595550fc1d0857eb4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/report.md	archive	historical accepted design material	4874cadc04d1af2de1c0ca6ccf8598bd55c026cc738b880595550fc1d0857eb4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/route-decision.json	archive	historical accepted design material	0ce916f734d77cab3dd452dcf87788928bddd7555625782a83a6da739a120492
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-1.json	archive	historical accepted design material	6daa6aa623c768cd15358f64c1aaa406d5a7f96fba400746af156c3af3c99be3
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-1.raw.json	archive	historical accepted design material	815f3125e9b3b7e573ed9c40351a57ca679610fbfc0ec9752b9e65787e9f0c8c
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-2.json	archive	historical accepted design material	dbf03d25f7e9d937da65f9f2ec0f56afdac8f83657567239d21916732910c7da
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-2.raw.json	archive	historical accepted design material	c9803d7dde785064f0aa2cb64d729c0c24abcf16d7715359aa72f86ae48aef14
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-3.json	archive	historical accepted design material	89d8123c1f1320c5402f07bcbbba82ab50ee97e3ad6e2f19a95df29957cd1e2a
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict-round-3.raw.json	archive	historical accepted design material	41019d2f4b4b386ead90f51af5db1bfafe93e153a5bed1cffb1cd3a7805181f5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict.json	archive	historical accepted design material	89d8123c1f1320c5402f07bcbbba82ab50ee97e3ad6e2f19a95df29957cd1e2a
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	37af4402e1ad68e2ba5f1f60965413f3a0acfce9fb732eaf0261902aea5b999f
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/run-manifest.json	archive	historical accepted design material	b5a068ada1997ad1a2515fed356f4846db1d13295000a6e0c9923545c4c4fbc7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/report-round-1.md	archive	historical accepted design material	7ad9095fe7e95f10f28c5f93cad0b512ee7f2b509f0e8882348ba5961e278b4e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/report.md	archive	historical accepted design material	7ad9095fe7e95f10f28c5f93cad0b512ee7f2b509f0e8882348ba5961e278b4e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/route-decision.json	archive	historical accepted design material	a9077f7897212747f62efc685585aa9e94d5b50c62c646c8fda679d5fd7d4fb2
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/verdict-round-1.json	archive	historical accepted design material	1bb023fdf15892d2940d03151f69a7cf2fa883b5a6a22880ce67872faf5a1d93
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/verdict-round-1.raw.json	archive	historical accepted design material	71baec59b48156bbc8116b515df0a379fec3ef50d4b405aae216d69b54f1dde9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/verdict.json	archive	historical accepted design material	1bb023fdf15892d2940d03151f69a7cf2fa883b5a6a22880ce67872faf5a1d93
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	eab6418bbb570222954febc8bcfa3cd218a4742d462b8c59839ff70398161f69
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/run-manifest.json	archive	historical accepted design material	3aeb5b4357be19a282138e0240a62d480b6cc684b6020a9135b633457a139aee
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/report-round-1.md	archive	historical accepted design material	8d8fe3a3dea29a650035951efac9486077771fbded47880d3e0d0ad19a15a118
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/report-round-2.md	archive	historical accepted design material	f563f65eb7d8868ef588c6fde00570137a53c64fdc52f77d1c7a3f971f886c4f
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/report-round-3.md	archive	historical accepted design material	a8e4066742f7e76947af1ac753a9f0f07d91c86e74920d4a3cc681203f295a3e
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/report-round-4.md	archive	historical accepted design material	07145f44bdaea817041a195214c46f98349661a15b3fb23ad051b75914f5ceef
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/report.md	archive	historical accepted design material	07145f44bdaea817041a195214c46f98349661a15b3fb23ad051b75914f5ceef
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/route-decision.json	archive	historical accepted design material	16db560e19621a7d7bec8fa2f16097d81b1f1cc00f22a3576c452faf445caea4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-1.json	archive	historical accepted design material	d7e6e4abeb28f3c666259208cde622fb31ca7f5c5d918f1a58717642c8e69331
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-1.raw.json	archive	historical accepted design material	800f5520993cef5852a6b41a52cc0d8ae4868862d793b011eac51140b2ae1d0c
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-2.json	archive	historical accepted design material	601c577c846891ad4d5322f78f99bf0bf7a144ba0fd3c2652d5031862aa9915d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-2.raw.json	archive	historical accepted design material	fc7dd21f071f27e4f18fcd6d89e6363a2bd4fbb3f6f456a199eb513b839b9ed5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-3.json	archive	historical accepted design material	424f485fabcc98dd4f29a208dc344e51f1312bca283b546649565867bb7038cb
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-3.raw.json	archive	historical accepted design material	e716313918aa372eb95c971c04d44bd6e981cfc4adbfad04361d94b76ce009b8
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-4.json	archive	historical accepted design material	d338a3c0856fbd1cfc9e377da83d11ff3e85f7eeb04dc698d810fa64ef0fa12d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict-round-4.raw.json	archive	historical accepted design material	265e569f955fa92557631456706a66653c0c28e67a8de0641e7ecb4463ae977d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict.json	archive	historical accepted design material	d338a3c0856fbd1cfc9e377da83d11ff3e85f7eeb04dc698d810fa64ef0fa12d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	f23a3909a400a5d9d8f811d7abf7657165ecab291eae7c3de0ee04b0a5c65209
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r7-20260705T030033Z-cf9b01/run-manifest.json	archive	historical accepted design material	19b696f6983f6f60f67bfbc19b4338e9cc11d656c7127e35b968b38e98f95a94
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-1.md	archive	historical accepted design material	5bcc9ca5fbdcb890c512cad086aacea0a53ab4e423cc5e4e32d900135ce42e32
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-2.md	archive	historical accepted design material	5097c972fc80513219464c9fb2f0dfcad77c4cd69d1d72ba22a697c5817aee30
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-3.md	archive	historical accepted design material	171e3ef5f1d392f51bd4f969db9bc0cbc85b5844087854bab4ea48bd3096edd7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-4.md	archive	historical accepted design material	23096039377a0d3067b81137381a23122ee66cd4ba1128c96160478eaf85643d
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-5.md	archive	historical accepted design material	d9c55ae2aa6fd7fe6913bf22b25ea9f63697add2aa0a4856c9786a6cefce7d74
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-6.md	archive	historical accepted design material	5846baaf31cbc87ae7a2a8981f2e3f35e4ca089da2463cff059d3df3f6215740
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report-round-7.md	archive	historical accepted design material	fcee107e7947fb59a8adb625bf593af3808a6240ed9a97181f1b887a17db02df
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/report.md	archive	historical accepted design material	fcee107e7947fb59a8adb625bf593af3808a6240ed9a97181f1b887a17db02df
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/route-decision.json	archive	historical accepted design material	9be5ae3146a79636cd3221815417c47c2f7de0442cfa596b4bd5657eaba18ef5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-1.json	archive	historical accepted design material	06afe002327dc6fc5e1e42db26c1fedcf3cf0dbaa8cf630204f0fffc06a534a7
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-1.raw.json	archive	historical accepted design material	c04694f2004d07588fa74c4c65dc7f4ed9669dfea3c1049b0c84dd78b98ef1f4
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-2.json	archive	historical accepted design material	171a2f7dfd6165c14982f0d70d99627b4fe8ef5294a3aeb21246dfc6c7e64bcf
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-2.raw.json	archive	historical accepted design material	c5f49e08c67f797a9ef097e6f898bcc7b7d7f562ceb734152749352ba2cd8fa5
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-3.json	archive	historical accepted design material	0862d73d3a1032cd3ecd5ce28e7b7206d8dd64306aa98129e6d79784d4fe4d18
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-3.raw.json	archive	historical accepted design material	5e74ddc6eb41ffdff2724f17b9b24ccc33ee02c705b9e6cc7aa61436cde3b298
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-4.json	archive	historical accepted design material	d412af02fad043d0147ac6e60a886577be293d05c09df5bf9b985f39b5413ad9
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-4.raw.json	archive	historical accepted design material	9fe5791def85477641dd28ceae203bb3ebedb483c5c7b60c0a272553b2f868fa
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-5.json	archive	historical accepted design material	a3434fcd29a29a30bc66d042d4db152fab95eb318b27745b70e2dfa4a270ecfc
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-5.raw.json	archive	historical accepted design material	4042feaf95c7e80f3d4594742fe36823438e0521818f222cfa4772a14f12ee4b
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-6.json	archive	historical accepted design material	303faef9c52b025e4acb33d056512323224cd93e1e45aa90b12046c597ee2308
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-6.raw.json	archive	historical accepted design material	7dc79735e75842a1cdcc2f932c7bf99ebe3ae9010b14cd66f97179b8d7e28222
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-7.json	archive	historical accepted design material	c1a94196559f1de95d02c81637e5a0668cb19f19e693e44e65cdea0b558df56a
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict-round-7.raw.json	archive	historical accepted design material	8447c4e302633d3ab60c22f289d837bff25f3a10bc86902004c4dfeb43f5f3f2
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict.json	archive	historical accepted design material	c1a94196559f1de95d02c81637e5a0668cb19f19e693e44e65cdea0b558df56a
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/reviews/verdict.json.snapshot-manifest	archive	historical accepted design material	e2a3c13980b2759ecb1e49876d617c006f43f9f1d3713eff48f2af8c595a08ef
+specs/archive/worktree-unification/tasks/worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e/run-manifest.json	archive	historical accepted design material	5ef0adc05ef93318c45ad16e48baec771b1dec6538bdf16997e5f3a388cba38c
+specs/archive/worktree-unification/test/final-test-report.md	archive	historical accepted design material	3e29f0d7bb70849bb063ef2fbcffaa111e3c11f645c9af2e27dc531ac07f5322
+specs/multica-ZHI-850/plan.md	keep	no approved deletion or move proof in Phase 0	8e677febd6db36970dbcbbce4dea60553fc44b34996a2a6e10a322697e149cb5
+specs/multica-ZHI-850/spec.md	keep	no approved deletion or move proof in Phase 0	2f14000b6a9197bf1985cbbd9c7230563dac7b111ecdf024822e50a28ce384e5
+specs/multica-ZHI-850/tasks.md	keep	no approved deletion or move proof in Phase 0	5667613d8301e2718847256ca2d142d2a57121ea3deac95216086e87f725f36e
+specs/review-flow-reset/decision-log.md	keep	no approved deletion or move proof in Phase 0	2eea2270625be40d5a17e864578eddb5e31350eee6fe0e09e934d170e8946257
+specs/review-flow-reset/plan.md	keep	no approved deletion or move proof in Phase 0	8cb9f6b9b076879750e5cc9f4512f4396ec669f7f30618b1e33db672c58e35f0
+specs/review-flow-reset/spec.md	keep	no approved deletion or move proof in Phase 0	b3b3b50f908e4a77d748bf5c83d9235cb8aa02f162b089bf332e97329a43b4a1
+specs/review-flow-reset/tasks.md	keep	no approved deletion or move proof in Phase 0	7c9c26fdf3f8fc083e867c36fd6386ea2a4428db03acb667fd70178e9beb2d7a
+specs/workflowhub-complexity-governance-v2/decision-log.md	keep	no approved deletion or move proof in Phase 0	18759aed7c71b83fa2ef1a88d3156d0f97c73f3f5886b933946f0543ea9c1a88
+specs/workflowhub-complexity-governance-v2/plan.md	keep	no approved deletion or move proof in Phase 0	0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f
+specs/workflowhub-complexity-governance-v2/spec.md	keep	no approved deletion or move proof in Phase 0	45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04
+specs/workflowhub-complexity-governance-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	0156f30b94209fafc40fa040539a61445a3eef797b84162fb1f8eb42dd550b10
+tests/audit-aggregator.test.mjs	keep	no approved deletion or move proof in Phase 0	703b2ef13e0fd5a8bc23c82e2dbab530407396f6de503effbf473733e67b43ee
+tests/audit-p2.test.mjs	keep	no approved deletion or move proof in Phase 0	8520b2812eca12c7e087af4a22c4eaf153cca7b6049468d337c78b503154315e
+tests/baseline.test.mjs	keep	no approved deletion or move proof in Phase 0	99c63b5247db98a26898aaac6cb299706147a125238208ef9649f62c65913056
+tests/boundary-confirm.test.mjs	keep	no approved deletion or move proof in Phase 0	60ad245aa2b6e8544b3ef56bdc20739cc622a2b9dea0f105a913eb09bf474016
+tests/build-code-capture.test.mjs	keep	no approved deletion or move proof in Phase 0	1c3dd66d1333a834537818f25aa7859067bd842fd41159c2cf2e2a277785c60b
+tests/build-code-diff-only.test.mjs	keep	no approved deletion or move proof in Phase 0	0d44b065b4fc198de23626cd425d6b29e39827ff3dd4c5998cb602612e4c1c49
+tests/build-code-phase-evidence.test.mjs	keep	no approved deletion or move proof in Phase 0	0066b2de8c20c7ad20bc807fd83f2d19fd0d27ad0370f043e6437dd7e032425f
+tests/build-code-preflight.red.test.mjs	keep	no approved deletion or move proof in Phase 0	2e0695b0e0589efccb161c90c7764869807795842803103d1662035fad827b72
+tests/build-code-target.test.mjs	keep	no approved deletion or move proof in Phase 0	3c0a29ea6bdcbb32df3523d888a7d73e27bc25a0e50a721f32be308873d13488
+tests/canonical-source.test.mjs	keep	no approved deletion or move proof in Phase 0	b51c5dea04ac4d3027377ad9a38dc9441d7da9a5746fde2767bf57d58986e3fd
+tests/contract-freeze.test.mjs	keep	no approved deletion or move proof in Phase 0	d68229f9438f29b6b32d656621db8bdeff08199545bdf46476e41b499805e271
+tests/contract/deletion-proof.test.mjs	keep	no approved deletion or move proof in Phase 0	2c4d6d084afdab3490c5956e35d3880923642ffc701779fe20e6190afbad230f
+tests/contract/final-coverage.test.mjs	keep	no approved deletion or move proof in Phase 0	d0cfc9e340a8112e5ef1eb0acb7b9cd47c1dd7ca8f6b1fab434bad6a25d8497c
+tests/contract/legacy-zero.test.mjs	keep	no approved deletion or move proof in Phase 0	93f27d537374abe166620e8d6b4423bd00d7873a4692d60a7c56c0c4ef513a2e
+tests/contract/repository-governance.test.mjs	keep	no approved deletion or move proof in Phase 0	5d038e1c603412cd862536cea978cfd9176d0cb71982703e91aa8f8ef41c2f84
+tests/contract/repository-inventory.test.mjs	keep	no approved deletion or move proof in Phase 0	97e47320ce566632277f971a32ea685f3d104caf02b81109b9c4dbad9af49aef
+tests/contract/runner-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	70dacaea50b3df56ce92632355f350708adc560763e773ded193ebe461597316
+tests/contract/runtime-facade.test.mjs	keep	no approved deletion or move proof in Phase 0	df1e19ca6d2afb6e17471f1cd80af1962cd25922dfacb22a74b5b64776a318e5
+tests/contract/stage-completion.test.mjs	keep	no approved deletion or move proof in Phase 0	52292772ee8c11ea72464b7d3ec122cf568ad47acb0082d04f85a7d3ba54a01b
+tests/contract/test-disposition.test.mjs	keep	no approved deletion or move proof in Phase 0	f974ca8f3f262f33788c0f80bba4a281bc56a69e0b52d900afd10295cd69fcc6
+tests/design-stage-skill-order.red.test.mjs	keep	no approved deletion or move proof in Phase 0	6b942e05bec3bade3dbc49282822a1380343b4c298c383b34a17592e948d75e6
+tests/e2e/five-stage-idempotent-resume.test.mjs	keep	no approved deletion or move proof in Phase 0	fb5b7762442f1ec4615ecf10db5873b1b40c99c47ad6db93026d6ca67ea54fc2
+tests/e2e/five-stage-material-revision.test.mjs	keep	no approved deletion or move proof in Phase 0	4ae80bc2fa12c0f1b428510ea39e964b1ad6c4f959a3bbf65a88d2a6fbbb9077
+tests/e2e/five-stage-normal.test.mjs	keep	no approved deletion or move proof in Phase 0	e661f151d0458ec488e95e6678c5b72dbcd14e15c43537c43b13cfad95f1e674
+tests/e2e/release-acceptance.test.mjs	keep	no approved deletion or move proof in Phase 0	e1dfcebfbb7c9bab604f2ee7732c6fa57f66786bda76c8c3de8f1b0c652f05b8
+tests/execution-record.test.mjs	keep	no approved deletion or move proof in Phase 0	feda92003afec75b647185c7302cad25c0481278594cca729366c80b88ef4777
+tests/facts-subschema.test.mjs	keep	no approved deletion or move proof in Phase 0	855e22a38011aaf1efc74bdcc60a62373c84bfb1eed99fcf964aff1bb6436123
+tests/final-cutover-guards.red.test.mjs	keep	no approved deletion or move proof in Phase 0	a221f1608ab18cc5cc19197d246bf1b6d113d23a6be877b87e8d5e3f9d0275d6
+tests/five-stage-audit-e2e.test.mjs	keep	no approved deletion or move proof in Phase 0	b3fe630d83cb9b1e672170f8b59dd773cad4a6bd3264f27c2c374dcbaa2b76e2
+tests/five-stage-facts-v2.test.mjs	keep	no approved deletion or move proof in Phase 0	36e41d45a19a4186e056254457af5c390047941323aff036fb4dccfa06bb3938
+tests/fixtures/derived-review-provider.mjs	keep	no approved deletion or move proof in Phase 0	07972ada193ee4fa9fc02911079b5c2a3c4a685f4141112e6b28317a04d12767
+tests/fixtures/interaction-quality/r9-spec-clarify.json	keep	no approved deletion or move proof in Phase 0	8a6fd6e4b6d9044fe8fdd33e5ed7adf553e9cd6db2cd44fd7f6e48fcf5c4cc41
+tests/fixtures/mutations/bundle-pollution.json	keep	no approved deletion or move proof in Phase 0	6abe58fc742664bf020cdf1c9caf5829a757457645c544ade9930265fdf7adc6
+tests/fixtures/mutations/confirmation-authorization.json	keep	no approved deletion or move proof in Phase 0	c8be7c5cdddba1419805bc0803a82ce0f95741f30d547748e9c46c0df2020495
+tests/fixtures/mutations/identity-tree-hash.json	keep	no approved deletion or move proof in Phase 0	b5b6f059f714ad55bf7f312d9f7967bb1a391bd8bed02f2c96b7c04a013d3163
+tests/fixtures/mutations/missing-completion.json	keep	no approved deletion or move proof in Phase 0	6651562658cc0bcde08cdd331a7bf9367125dfc21ea09445a2c72d05bc0f98dc
+tests/fixtures/mutations/review-major.json	keep	no approved deletion or move proof in Phase 0	84fe2dbbb7cef38b987f0c256cc223b14650910931ce19852ee34772b5054956
+tests/fixtures/step-audit/duplicate.json	keep	no approved deletion or move proof in Phase 0	6a322e8af075fbc685d5bf18897e526796c5c4692af681d460057c87f9fd4d81
+tests/fixtures/step-audit/missing.json	keep	no approved deletion or move proof in Phase 0	51cea38a437baa242c334aad5cc28b8868f676cfd19bbe12ced3f1f5310bb9f6
+tests/fixtures/step-audit/normal.json	keep	no approved deletion or move proof in Phase 0	74067e30036d0718a2e3e487e61789555cc380978a5d8983fe471c4f31596e94
+tests/fixtures/step-audit/out-of-order.json	keep	no approved deletion or move proof in Phase 0	d89679b7c032071667217e3487e056642aebff08bda7eff95d3add049e6aa926
+tests/fixtures/step-audit/stale.json	keep	no approved deletion or move proof in Phase 0	5b7ec89f5badea4841164c845109457ec615bda95358da9e45f5602baaf8d311
+tests/fixtures/step-audit/tampered-hash.json	keep	no approved deletion or move proof in Phase 0	83a5e6183a68f21b019788802f55b433dd33c67ce475a744aebc0e54f9ed9654
+tests/fixtures/step-audit/unexpected.json	keep	no approved deletion or move proof in Phase 0	b57f5bea495300334541693d317c8a1f1f53b3458cfa33fa31592aa0632c1e2f
+tests/fixtures/step-audit/unknown.json	keep	no approved deletion or move proof in Phase 0	e1cb612322d481742643171da5c1d52c7571921c1ab7ca75891651bccde2bee1
+tests/fixtures/template-content-quality/retention-map.json	keep	no approved deletion or move proof in Phase 0	241ab01a97304a3f8b81a5677d783d60d6ca9480fecc170bfc9acb49419d648e
+tests/helpers/formal-review.mjs	keep	no approved deletion or move proof in Phase 0	58f8f29fc978476bca25ae92bb00c786912e5deede44decfb011ea795a428e8c
+tests/helpers/human-confirmation.mjs	keep	no approved deletion or move proof in Phase 0	b688f6aeafb3b66886afac65260948f1fb56106dda4777fa3899e26d30066650
+tests/helpers/read-only-runner-fixture.mjs	keep	no approved deletion or move proof in Phase 0	218d8348711d160128c92c731805bcc269492850c718e33dd71d6ec7aee31ed9
+tests/host-independence.test.mjs	keep	no approved deletion or move proof in Phase 0	0368e6c8b2d8b7941ef0a48778f0d2d01f681d50a264a078493d96a761dcf1dc
+tests/integration/atomic-write-faults.test.mjs	keep	no approved deletion or move proof in Phase 0	b43316ff7c4130fa7aaf8fef3524a823f46b675d2db87fe8e90bd6a158f2af0b
+tests/integration/deletion-slices-summary.test.mjs	keep	no approved deletion or move proof in Phase 0	1474b70d3668630581270c51aa21461fa310c30bc66bec48cad9acaa0fdc3c81
+tests/integration/derived-publication.test.mjs	keep	no approved deletion or move proof in Phase 0	521c2a3c64eec0a50bdf2931fea9968ac70aabeea72f1b71216cd09c266c9482
+tests/integration/distribution-closure.test.mjs	keep	no approved deletion or move proof in Phase 0	5c8140a3d2130bcb117d9fb6892ef9afa4e6d60d07ba0a4e6a93cb0fa224a139
+tests/integration/material-revision.test.mjs	keep	no approved deletion or move proof in Phase 0	8e58593c0a649361f28f118f222181f3d4b2e8f1f12e6d040cf7cb798d1307d3
+tests/integration/mutation-guards.test.mjs	keep	no approved deletion or move proof in Phase 0	66e3692a632ad6f56ab4fd8e622b392e1e88987db78686538ef24a54a2a54e11
+tests/integration/phase-material-baseline.test.mjs	keep	no approved deletion or move proof in Phase 0	1f6bf38c1ee4be88fbb4f653fda23c11508056d4485acd28a8f541273bfb6a20
+tests/integration/progression-without-permits.test.mjs	keep	no approved deletion or move proof in Phase 0	416886e2e4270c1354b9c9dc9ae9389ec1572767dcb7e2aa6013345f638f3d1a
+tests/integration/runner-clean-install.test.mjs	keep	no approved deletion or move proof in Phase 0	2ac8cacb87f2ac5ae9e8aa81336da14ac522bc09ef73c1128f92b28cc3ac4f4f
+tests/interaction-quality-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	2ed7d97f312012aa235d711d240b60636a33997dab314257d277cd83ea36a588
+tests/knowledge-card.test.mjs	keep	no approved deletion or move proof in Phase 0	5555be2c38b70aa6d4c251868468d26f353747c1d884224166bc5e9b92cb0f20
+tests/m12-reuse-registry.test.mjs	keep	no approved deletion or move proof in Phase 0	115bd2201f376479f36440b6eba8326f950a7e79f3389980e11a0d20f3bc27b1
+tests/m12-subskill-exclusion.test.mjs	keep	no approved deletion or move proof in Phase 0	b730e601f02cee527147dc918497a445dcfbf92b3c4474ce41accf9ff9bef711
+tests/m12-templates.test.mjs	keep	no approved deletion or move proof in Phase 0	9e7f0919de142543b7f8b4fdbb6d639dcbfae7f9c1c2e486411250cb92d186b9
+tests/m14a-audit-contract-layer.test.mjs	keep	no approved deletion or move proof in Phase 0	e7c9a35a038e33f3beb83d9d69ff6e48430f32a4f3a9b374cd9eb32499e009d3
+tests/m14b-fact-collection.test.mjs	keep	no approved deletion or move proof in Phase 0	08419e57822ab4e6858b08a8d6c7b9bc538ee2cfcbc764d8ab34d9d7d141c883
+tests/metrics-smoke.test.mjs	keep	no approved deletion or move proof in Phase 0	60f9ba73bb1a07f0edf22a7ec46f94d4ab246ae283a3632ec99f561398870efa
+tests/metrics-taskhandle-v2.test.mjs	keep	no approved deletion or move proof in Phase 0	ac670f715d3ccbd106d65839e982a1278a5f622c0fdbbb05793406bb2951d7d5
+tests/moat-skills-phase1.test.mjs	keep	no approved deletion or move proof in Phase 0	4ef83bcef650f1bc7d22bf1534794f270d30ef2e1b838d2099069b4fec66ec47
+tests/moat-skills-phase2.test.mjs	keep	no approved deletion or move proof in Phase 0	6b1f29c78e2b2b3c687d4f38c0d047a4fd3cc726901f234189c04e460a6f226a
+tests/official-component-receipts.test.mjs	keep	no approved deletion or move proof in Phase 0	8e4cdd3088f4df0315b83c1cdd7804bb09d3e31adbdc8ac8bcc34e33b32575d0
+tests/official-make-decision-cli.test.mjs	keep	no approved deletion or move proof in Phase 0	3f8eb0fc40b724bafd80be41b0dca138b3556e77a8711afa48eec88232806870
+tests/p0-foundation-contracts.test.mjs	keep	no approved deletion or move proof in Phase 0	8c0549e8844c958297e492d78ecb3fcc3fa6511c16e3e702d2f350949daf6cd6
+tests/per-invocation-doc-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	014519269ace85b0842584d68af0de9a8438a4b3453f2c0e37017d6c7f0908ac
+tests/per-invocation-execution-identity.test.mjs	keep	no approved deletion or move proof in Phase 0	bd58acbce7cc6597b38b8c7819abbd6946ff12c8cfe068b4c66feed223172e2f
+tests/phase-adjudication-correction-scope.test.mjs	keep	no approved deletion or move proof in Phase 0	7cebde137be4fe0a7931e574e46b7c5641a36814dbe0cbc14e0149d021f4321b
+tests/phase-gate.test.mjs	keep	no approved deletion or move proof in Phase 0	80ad9b580981772d78c59dfa801891a193b3d8b89269533f0b70b752732a8d7e
+tests/requirement-lineage.test.mjs	keep	no approved deletion or move proof in Phase 0	bfaa672885655158d6c743083ec01a22e7c76a5daf4ab259f961cab1e741f9d7
+tests/reuse-registry.test.mjs	keep	no approved deletion or move proof in Phase 0	28afbf57261736cca5ecee5ba0e27b796cf05dc324d5829f74c194a7b2ef4343
+tests/skill-provenance-strict.test.mjs	keep	no approved deletion or move proof in Phase 0	5d488ae64e808b00ff68943c3abf308a0d2a1aa0c1e6c22d3811c4b0df07621c
+tests/smoke.test.mjs	keep	no approved deletion or move proof in Phase 0	e2e6970a1b75e7e4818a9489d880d4a2ba7cefec607490ce5ee3ccdb550ab827
+tests/spec-content-profile.test.mjs	keep	no approved deletion or move proof in Phase 0	36c846a392907aa66d3cfb30b6f8c74049e29a23d1b1e3c396a20eb724d79818
+tests/spec-specify-template.test.mjs	keep	no approved deletion or move proof in Phase 0	626f5194f83d3c321b6a2df51e4cefc78b26dce8a3e32ae43cf62d8f82486051
+tests/spike-intake-design.test.mjs	keep	no approved deletion or move proof in Phase 0	f0b1e8a7fc9bb782e49774594ff745fe976872432a150734d4e39aef5bc0a395
+tests/stage-completion-facts.test.mjs	keep	no approved deletion or move proof in Phase 0	51b421d04cad014338e971f789368bd67ff12cb6f2d22e7db87f57cc387ebe5a
+tests/stage-content-continuation.test.mjs	keep	no approved deletion or move proof in Phase 0	37842f8e7e135ee64793ee9d3f8976ff8adb5dabd24eefd5086c9b77c22582b7
+tests/stage-content-evidence.test.mjs	keep	no approved deletion or move proof in Phase 0	038d04c838ecbe92152389ec0f4c53ada5e6de4c240fd9ca500fc488e709c230
+tests/stage-content-host-independence.test.mjs	keep	no approved deletion or move proof in Phase 0	3f2e117b8f6e240f734e1f4feabaa86a1dc7dda236f8d7457b558a7f965035d3
+tests/stage-content-publication.test.mjs	keep	no approved deletion or move proof in Phase 0	155d7abd63f186ff760c550fe5d3eee866b13df4985e097db57d435128ed1838
+tests/stage-decision-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	2b0b2cd33d551ad7103e27dac177efc73e0ca607705e182687464a5e8e35ccc9
+tests/stage-interaction-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	7b9f6d4622b089b89bdacb2c60d671523bcdfc8f0462ddff16252e989411a188
+tests/stage-orchestrator-v2.test.mjs	keep	no approved deletion or move proof in Phase 0	fc55948ff441a03fb5c4b935e95396b163050c734c3da471f332bff22e2a3615
+tests/stage-plan-task-contract-v3.test.mjs	keep	no approved deletion or move proof in Phase 0	6aee905cad5973f6e8867da6f9020a2e21106a7b00a82fe6c808baef63db886c
+tests/stage-plan-task-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	c05328e6b98a9fe43c4d6c1e6f63c7634df65f332b15aedd8c4df4ad3f331d80
+tests/stage-quality.test.mjs	keep	no approved deletion or move proof in Phase 0	8a665fa5c68cf6ab365e414ea156ab0cba00f769105decbd708a83cf40db8e64
+tests/stage-review-cost-policy.test.mjs	keep	no approved deletion or move proof in Phase 0	117a4e4fd966e8974da92d5d03d1dddeb392310618277f2bc1a58fe433c3457b
+tests/stage-risk-acceptance.test.mjs	keep	no approved deletion or move proof in Phase 0	e8167771330c39fcf4aa97e1f19613d0ebc061a31dffc7a23b650e40198533bd
+tests/step-manifest.test.mjs	keep	no approved deletion or move proof in Phase 0	d6b98cc3246eb1b3efd2a3aaf039b13b0e416923592c70411f3c643164579c1c
+tests/task-accepted-schema.test.mjs	keep	no approved deletion or move proof in Phase 0	959a12ed1c236ffc951b0c76bdd0f02d38498777a1f15bdfdd5ab23638208f5c
+tests/task-close-delivery.test.mjs	keep	no approved deletion or move proof in Phase 0	413b52d3d3673a6749165558e59afad83c859f173c2b98497b090083ecf11618
+tests/task-record-paths-check.test.mjs	keep	no approved deletion or move proof in Phase 0	82ab3b8a1dd2fb2f5961dbc8817110a3e8671a212a5a276981e2472c12323890
+tests/template-content-quality-retention.test.mjs	keep	no approved deletion or move proof in Phase 0	03a3a05f1f696e2096b39b999421c92d50c8a578de67660bc572d9bf63050a38
+tests/terminal-runtime-blockers.test.mjs	keep	no approved deletion or move proof in Phase 0	f9f15aa85fee0ddb151a3551cfb6979423b8928cb688109164e6e508828ba4c0
+tests/verify-code-capture.test.mjs	keep	no approved deletion or move proof in Phase 0	2daaec15ce361f313cf239bb6908cea5e92433212d9e28e8a196b34069c8627e
+tests/verify-code-design-alignment.test.mjs	keep	no approved deletion or move proof in Phase 0	16cf138874290f626066c85c7c3b4cb39a61c17d709e5fdfc89261d7a94fd75b
+tests/verify-code-facts.test.mjs	keep	no approved deletion or move proof in Phase 0	9f338eb0881733655955ea36c7634e8320f66057c54a9284b1c6b1546519e242
+tests/verify-code-freshness.test.mjs	keep	no approved deletion or move proof in Phase 0	dd270c80b00fadaa221a10ce4f1a3f1f26b748a62e0df04444e8534950e831b1
+tests/vitest-resource-policy.test.mjs	keep	no approved deletion or move proof in Phase 0	f57537c586345c4a97e840fc621bd87cf79f58b1da91b74d732864c839d4425c
+tests/workflow-v2-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	b388583251d9f3c0defa866dbd3aa8f723f5bb6b6f1d2b13f610092ff815c1c0
+tools/architecture/clean-install.mjs	keep	no approved deletion or move proof in Phase 0	108e77c62ddf6f3e5a3e41b702c859211f230942013469c99eda399ebdbef38e
+tools/architecture/complexity-report.mjs	keep	no approved deletion or move proof in Phase 0	c87866000636d9056f57eab0d53577f249c5cc06478571e81e6e4197f42d4273
+tools/architecture/deletion-proof.mjs	keep	no approved deletion or move proof in Phase 0	e6cb07cd37e55052087d872fae2a76f83d6ebd9fb96d37190c74828d7b7f8231
+tools/architecture/inventory.mjs	keep	no approved deletion or move proof in Phase 0	2496d26523bb8bfee725d0ca8d121f09900f25f66a92d9f8333f86b88f03ff2c
+tools/architecture/test-disposition.mjs	keep	no approved deletion or move proof in Phase 0	a5294fce387354561a6c098d66017e78ddf455fbf5386ca101259840950de90d
+tools/architecture/verify-final-coverage.mjs	keep	no approved deletion or move proof in Phase 0	be0776e31b308c7fe084e247471ef80587098dbcf45ee74b7668048a43eee995
+tools/architecture/verify-migration-proof.mjs	keep	no approved deletion or move proof in Phase 0	e518ec64fefa497e8a9015b3fa808af6951945d847b74f0910564ab24235ce64
+tools/cli/audit-aggregate.mjs	keep	no approved deletion or move proof in Phase 0	33757eadf6755f133dcdf1ceba19229b6865f4e298ab3393e23962adf579cb85
+tools/cli/check-anti-host.mjs	keep	no approved deletion or move proof in Phase 0	047cb0276debdb8ff5c0f991169770ac926917744d93d05e6d975c1372380cf7
+tools/cli/check-contract.mjs	keep	no approved deletion or move proof in Phase 0	1227bcb9ef496530dd48733d4eeb3bdbe10aa7a1df6a760e84f672fc3a8d9ec0
+tools/cli/check-extensibility.mjs	keep	no approved deletion or move proof in Phase 0	9709ace83612c58b2076248051775d58f08fb4ffe14ab790dd1ce5ef3aa64b04
+tools/cli/check-metrics-schema.mjs	keep	no approved deletion or move proof in Phase 0	385fe90d23d494daad12e8da4fcfe94b43bb07bd3904eeebe533149793854906
+tools/cli/check-stage-quality.mjs	keep	no approved deletion or move proof in Phase 0	54e01cd0f67d0f53bf2202057a7b6e8e95405adeb12b9f7bb7abd6cf0d3968f7
+tools/cli/check-task-record-paths.mjs	keep	no approved deletion or move proof in Phase 0	514d17f476c45cbec23550372d3a21b6084c96173f9a12589d273c019c26d480
+tools/cli/ci-chain-check.mjs	keep	no approved deletion or move proof in Phase 0	10ccc4b6ab970c1de995dedf3ffbd3970b0f12c011274298bf8d49e60cda8074
+tools/cli/collect-task-facts.mjs	keep	no approved deletion or move proof in Phase 0	889fb10c1e8ddb00485daa5aa8f2263253d01f7c6e0cee2f7ebc5360f394a5d7
+tools/cli/migrate-task-v2.mjs	keep	no approved deletion or move proof in Phase 0	afef0b7ed638ab7cfb6db5f9265cc9d9a3b87505bea178de76e1db9a273f5ea0
+tools/cli/noop.mjs	keep	no approved deletion or move proof in Phase 0	d19f74f3acfaa61fbde924ffd2973dc9d32729be3c256e32198b35077a31cb2a
+tools/cli/phase-gate.mjs	keep	no approved deletion or move proof in Phase 0	69497a0f8fded971d65a82a536c28bc6ebe7430f7626c19698806611d3618462
+tools/cli/requirements-ledger.mjs	keep	no approved deletion or move proof in Phase 0	ef5119477bd86e677d2dec3eeac11f3096258a1997f2dfc0f3d49d42e81cf520
+tools/cli/run-checks.mjs	keep	no approved deletion or move proof in Phase 0	c7e8d57c1f304e7176b4eba1b7bb65652fc77b746d5cf8737a98da635a2c43c1
+tools/cli/run-wh-review-audit-e2e.mjs	keep	no approved deletion or move proof in Phase 0	150f5353890826dfef960af5fbf1fcc42ee652c4b488d685da13ff2af6dc50c5
+tools/cli/run-wh-review-provider-smoke.mjs	keep	no approved deletion or move proof in Phase 0	a46f7e74970cd715b22114d119d012790fce886ce4599eadedce66988ff4b5a9
+tools/cli/scan-core-files.mjs	keep	no approved deletion or move proof in Phase 0	8f338e1e7249d57142a629a0107188ade97177bdbede5bb1976b200765577434
+tools/cli/smoke-local-skill-dispatch.mjs	keep	no approved deletion or move proof in Phase 0	7994e3441974ba79922e07e1f41b0640d0a8d21c221fb541b727ad66872d45ff
+tools/cli/source-manifest.mjs	keep	no approved deletion or move proof in Phase 0	2b168a7dd5139239c80a02c5018b9d02049ed299fdcd067b94eaaf628d39d36f
+tools/cli/task-bootstrap.mjs	keep	no approved deletion or move proof in Phase 0	bd2215ad448e0bbf307de609546e252f2db1190ab95edb6c665dcd007c7b5847
+tools/cli/task-migrate-runner-root.mjs	keep	no approved deletion or move proof in Phase 0	07da145007d904d67068997a4467b49d6fc4fac41a2e9fd9dcae144652834a0e
+tools/cli/task-migrate-target-repo.mjs	keep	no approved deletion or move proof in Phase 0	8f6d9448cae85f0912caa9f6ea8e94b63f3142c395c94726a207d5ad98072336
+tools/cli/validate-field-mapping.mjs	keep	no approved deletion or move proof in Phase 0	302aa2a93660cb63de2032a53b173fd1fcf107cb541a2d7998fdec0485b295c8
+tools/cli/verify-structure.mjs	keep	no approved deletion or move proof in Phase 0	d1b027bd8b99de91c2e821ddc9e167dc54a1f6eade91928c0df39ae13145ce37
+vitest.config.mjs	keep	no approved deletion or move proof in Phase 0	a82f3e2175a3d72303b0eb001b103f6f5a345df8dc95bd07e6d42481435ebf97
+workflows/.gitkeep	keep	no approved deletion or move proof in Phase 0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+workflows/_spike/design-variant.mjs	keep	no approved deletion or move proof in Phase 0	dd48393ac3187f8fba646d2e9ff4764c94d00da7be292f6e44b18977fbc4175d
+workflows/_spike/design.mjs	keep	no approved deletion or move proof in Phase 0	6ac0b5929136b678682fabbbafcd9f44a6e57b7c843ea516c0546962792a2d16
+workflows/_spike/intake.mjs	keep	no approved deletion or move proof in Phase 0	c61eaa65082b6921f411db6400d1bc368cd6deb21c69082ba99dbcc93dfc3e74
+workflows/build-code/SKILL.md	keep	no approved deletion or move proof in Phase 0	b8a736cfba3e962e9c0c416862650cbb48419d93bef5f00d84fbe19c12db2546
+workflows/build-code/capture.mjs	keep	no approved deletion or move proof in Phase 0	7773e4a2f319c066b864c8116736b7bf085c969ff98709e6ebd52f22f216e8c4
+workflows/build-code/diff-scanner.mjs	keep	no approved deletion or move proof in Phase 0	41281064d74ed6990f0ab1e963de85de25ff5580764199b4266d27a3f8726c33
+workflows/build-code/phase-evidence.mjs	keep	no approved deletion or move proof in Phase 0	373b4670bb5316655df857ce7295ff81a87ae8037f2be20306b8f4a183896c45
+workflows/build-code/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	b8bfddbd8c516f03a90443be9140704a41f97121d781ed031db62fb87e9e392e
+workflows/build-code/steps.json	keep	no approved deletion or move proof in Phase 0	12d789326e53e1f2b8630ef63c0f93da9e533769c407b664f6d499f1d4222652
+workflows/build-plan/SKILL.md	keep	no approved deletion or move proof in Phase 0	302232098eb70d5b9ce754baaa4a0491cc9bd55ac3c91873afcbe0f535bc27a0
+workflows/build-plan/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	f629fcd06d929d3e568cde23fccc2648232e2d382397c0326384971f564f9fd1
+workflows/build-plan/steps.json	keep	no approved deletion or move proof in Phase 0	96def3fd792926ec1a32e929f7f461d41db1e8654af6e8c816a71faca1f8a550
+workflows/build-spec/SKILL.md	keep	no approved deletion or move proof in Phase 0	353315d9df8e85fa88d51bc58b59265116222b215a61b8954c07e08a98a086c0
+workflows/build-spec/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	4ba9ac6e8274d19500ce87ccc3433d125ffbb6c34d7a4baf0abccb3cf98211c6
+workflows/build-spec/steps.json	keep	no approved deletion or move proof in Phase 0	d789450146909f1a7bbc09a0e77e9c8494a6516e8c4602d085f33510924ab8fa
+workflows/make-decision/SKILL.md	keep	no approved deletion or move proof in Phase 0	5dbcb3f80ca36843e608bf1e85afad7c7fee6dc241443f3e75676163242551fb
+workflows/make-decision/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	700993fbec9574189ac1f0a29cfaf2e9c2c216123091acfffa53c64b9d413044
+workflows/make-decision/steps.json	keep	no approved deletion or move proof in Phase 0	4c2f5404fb6730792867a5d33627635f4de644455cb5be919ec17efc0753ab9e
+workflows/verify-code/SKILL.md	keep	no approved deletion or move proof in Phase 0	33a9b3154f85fb5e670daa74687e586e7d380fbc1245a836f03818efb1b64936
+workflows/verify-code/capture.mjs	keep	no approved deletion or move proof in Phase 0	c8ca61d4eb60d9997368704aae4d912d54aeaa026def48fe6c07a80d437fc36e
+workflows/verify-code/design-alignment.mjs	keep	no approved deletion or move proof in Phase 0	d9adc28cfbe6191f54d2924b6903945782519c7804e091bc8c69e2c946690ac9
+workflows/verify-code/facts-assembly.mjs	keep	no approved deletion or move proof in Phase 0	a1e27a63315869b0563ecad5b69f6467b20150283ce634319ef5b8cbc922d1b7
+workflows/verify-code/freshness.mjs	keep	no approved deletion or move proof in Phase 0	9afd45c3120da107ad22db68f83779c3491145ee5399c6d9717320ade0639310
+workflows/verify-code/isolated-browser-qa.md	keep	no approved deletion or move proof in Phase 0	45d9ea4b8f5ef292123050b0bfeacd32ac52d1691ef6a07fc608c4189eb10bad
+workflows/verify-code/metrics-writer.mjs	keep	no approved deletion or move proof in Phase 0	3def4eac50c7eb0dc6dda5fc29125e60ab650ed131c2359044fc8885800c295f
+workflows/verify-code/phase-1-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	5ea13e791bae70bc21a7f0f523f74d29285e0a96775db9047d87425af5aad8be
+workflows/verify-code/skill-deps.yaml	keep	no approved deletion or move proof in Phase 0	5d562b0209e0043225b2248bf04bed3785423fb41b8cea002b298f787973979b
+workflows/verify-code/steps.json	keep	no approved deletion or move proof in Phase 0	b0a509cf712a9e363b57f830e1eb808b59c819c94d9fe06b63b87001e10d6163

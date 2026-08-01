@@ -7,13 +7,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { createCanonicalReviewWriter } from "../../core/canonical-receipt-writer.mjs";
-import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { createPhaseDiffScan } from "../../workflows/build-code/diff-scanner.mjs";
-import { inspectRunnerIdentity } from "../../core/runner-identity.mjs";
+import { inspectRunnerIdentity } from "../../runtime/evidence/runner-identity.mjs";
 import { createTask, migrateTaskRunnerRoot, openTask } from "../../core/task-handle.mjs";
-import { createTaskKernel } from "../../core/task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../core/workspace.mjs";
 import { canonical, normalizedRecoveryRecordHash, sha256, writeRecoveryCredentialForTest } from "../../core/task-recovery.mjs";
 import { readPhaseMapTrace } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
@@ -41,6 +41,15 @@ function publishCoreDecision(kernel, decisionLog = "# Recovery decision\n\nProce
 }
 
 function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunId, data }) {
+  // Recovery fixtures intentionally exercise the readable legacy record model:
+  // no task manifest record_model means legacy.  Legacy build-spec publication
+  // still has to declare its execution boundary explicitly.
+  if (stage === "build-spec" && kernel.activeStageRun(stage, { required: false }) === null) {
+    kernel.startStageRun(stage, { reason: "legacy recovery fixture publication" });
+  }
+  const effectiveWorkflowRunId = stage === "build-spec"
+    ? kernel.activeStageRun(stage).run.workflow_run_id
+    : workflowRunId;
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
   const kind = `${stage}-recovery-fixture`;
   const content = {
@@ -48,7 +57,7 @@ function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunI
     kind,
     task_id: task.identity.taskId,
     stage,
-    workflow_run_id: workflowRunId,
+    workflow_run_id: effectiveWorkflowRunId,
     snapshot_tree: snapshot.tree,
   };
   const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
@@ -60,7 +69,7 @@ function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunI
     schema_version: "stage-audit-summary.v1",
     task_id: task.identity.taskId,
     stage_slug: stage,
-    workflow_run_id: workflowRunId,
+    workflow_run_id: effectiveWorkflowRunId,
     snapshot_tree: snapshot.tree,
     verdict: "pass",
     content_evidence_refs: contentEvidenceRefs,

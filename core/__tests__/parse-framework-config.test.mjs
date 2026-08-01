@@ -30,7 +30,7 @@ function ensureModule() {
 
 // ── Scenario 1: task_dir present → runs through resolvePath ───────────────────
 //
-// Approach: we spy on the *real* resolvePath from core/resolve-path.mjs.
+// Approach: we spy on the *real* resolvePath from runtime/adapters/resolve-path.mjs.
 // Since parse-framework-config must import and call resolvePath (not inline
 // its own resolution), we can verify the call via vi.spyOn on the module
 // namespace — but ESM live bindings make this tricky without mocking at module
@@ -118,9 +118,9 @@ describe("parseFrameworkConfig — task_dir absent is not an error", () => {
 // If parse-framework-config bypasses resolvePath and uses path.resolve directly,
 // the spy will not record a call.
 //
-// Note: vi.mock hoisting requires a static string — mocking '../resolve-path.mjs'
+// Note: vi.mock hoisting requires a static string — mocking '../../runtime/adapters/resolve-path.mjs'
 // which is the path parse-framework-config imports from.
-vi.mock("../resolve-path.mjs", () => {
+vi.mock("../../runtime/adapters/resolve-path.mjs", () => {
   return {
     resolvePath: vi.fn((p) => {
       if (!p) throw new Error("resolvePath: explicit path required");
@@ -142,7 +142,7 @@ describe("parseFrameworkConfig — task_dir routes through resolvePath (spy)", (
     ensureModule();
     // Re-import after mock is set up to get the mocked version.
     // (In ESM with vi.mock hoisting, the mock is already active.)
-    const { resolvePath: spied } = await import("../resolve-path.mjs");
+    const { resolvePath: spied } = await import("../../runtime/adapters/resolve-path.mjs");
     const taskDir = "/tmp/tasks";
     const config = { task_dir: taskDir };
     parseFrameworkConfig(config);
@@ -152,7 +152,7 @@ describe("parseFrameworkConfig — task_dir routes through resolvePath (spy)", (
 
   it("does not call resolvePath when task_dir is absent", async () => {
     ensureModule();
-    const { resolvePath: spied } = await import("../resolve-path.mjs");
+    const { resolvePath: spied } = await import("../../runtime/adapters/resolve-path.mjs");
     const config = { registry: [] };
     parseFrameworkConfig(config);
     expect(spied).not.toHaveBeenCalled();

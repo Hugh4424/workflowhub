@@ -8,8 +8,8 @@ import {
   authenticateAuditRetryEvidence,
   buildAuditSummaryFromJournalEvents,
 } from "../audit-aggregator.mjs";
-import { computeLedgerHash, computeRequirementContentHash } from "../requirement-ledger.mjs";
-import { writeEntryReceipt, writeExitReceipt, writeStepAutoRollback } from "../receipt-writer.mjs";
+import { computeLedgerHash, computeRequirementContentHash } from "../../runtime/evidence/requirement-ledger.mjs";
+import { writeEntryReceipt, writeExitReceipt, writeStepAutoRollback } from "../../runtime/evidence/receipt-writer.mjs";
 
 const temporary = [];
 const RUN_ID = "run-123";

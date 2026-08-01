@@ -8,7 +8,7 @@
 ## 1. 技术上下文
 
 - 交付仓：workflowhub（Node.js 项目，ESM .mjs，AJV 校验，node --test 测试）。
-- 已有基建：CONSTITUTION.md（21 条，含 F4/F10）、contracts/stage-result.contract.json（facts 开放 object）、config/workflowhub.yaml（registry + metrics_path）、scripts/check-stage-quality.mjs（指标质量扫描器，344 行）、core/protected-paths.mjs（运行时非阻断提醒）。
+- 已有基建：CONSTITUTION.md（21 条，含 F4/F10）、contracts/stage-result.contract.json（facts 开放 object）、config/workflowhub.yaml（registry + metrics_path）、tools/cli/check-stage-quality.mjs（指标质量扫描器，344 行）、runtime/evidence/protected-paths.mjs（运行时非阻断提醒）。
 - 五段 skill 落 workflows/{make-decision,build-spec,build-plan,build-code,verify-code}/SKILL.md。
 - NEEDS CLARIFICATION：无（design 阶段已消歧，facts 子 schema 在 spec 第 6 章锚定）。
 
@@ -38,7 +38,7 @@
 | schema（journal event / checkpoint / *.schema.json） | 改 | 新增 contracts/facts-subschema.json（五段 facts 子 schema） | T010 |
 | runtime config（.claude/settings.json / 引擎配置） | 改 | config/workflowhub.yaml registry 加五条 | T007 |
 | knowledge/doc（docs / constitution.md / Knowledge 规则） | 不改 | F10 已在册（commit 7453d4b），本期不改宪法；无新增 doc 需求 | — |
-| automation gates / CI / hooks（.github/workflows / pre-commit / gate scripts） | 改 | 扩展 scripts/check-stage-quality.mjs（检漏接指标的质量扫描器） | T015 |
+| automation gates / CI / hooks（.github/workflows / pre-commit / gate scripts） | 改 | 扩展 tools/cli/check-stage-quality.mjs（检漏接指标的质量扫描器） | T015 |
 
 ## 3. 技术选型决策
 
@@ -107,7 +107,7 @@ workflowhub 是独立仓，不跟 multica upstream。本期全新增 + 一处扩
 |---|---|---|
 | SIG-001 | contracts/stage-result.contract.json | 顶层 required: status/error_code/retryable/facts/missing_items/user_decision/reason；facts 开放 object |
 | SIG-002 | config/workflowhub.yaml registry | 数组，每条 {component_id, workflow, path} |
-| SIG-003 | scripts/check-stage-quality.mjs | CLI 扫 metrics/+scripts/，退出码 0/1/2，支持 --self-test |
+| SIG-003 | tools/cli/check-stage-quality.mjs | CLI 扫 metrics/+scripts/，退出码 0/1/2，支持 --self-test |
 | SIG-004 | metrics_path | config 项 = ~/.workflowhub/metrics/global-metrics.jsonl（追加 jsonl） |
 
 复用优先：facts 校验复用 stage-result + AJV；指标检查扩展 check-stage-quality.mjs；不新造扫描器。

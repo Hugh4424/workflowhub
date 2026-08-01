@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createTask, migrateTaskTargetRepoRoot, openTask } from "../task-handle.mjs";
-import { createTaskKernel } from "../task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { bootstrapStage } from "../stage-context.mjs";
 import { acceptStageAttempt, runStage } from "../stage-runner.mjs";
 import { createTaskWorktreeRemoval, openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
-import { requiresHumanConfirmation } from "../stage-acceptance-policy.mjs";
+import { requiresHumanConfirmation } from "../../runtime/stage/stage-acceptance-policy.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 import { runCapture as captureBuild } from "../../workflows/build-code/capture.mjs";
 import { runCapture as captureVerify } from "../../workflows/verify-code/capture.mjs";
@@ -111,6 +111,12 @@ describe("target repository migration", () => {
     const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
     const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
     const publishAndAccept = async (stage, handler) => {
+      if (stage === "build-spec") {
+        const runKernel = createTaskKernel(migrated.task);
+        if (runKernel.activeStageRun(stage, { required: false }) === null) {
+          runKernel.startStageRun(stage, { reason: "legacy target migration fixture publication" });
+        }
+      }
       const stageContext = context(stage);
       const result = await runStage(stage, stageContext, async (...args) => {
         const value = await handler(...args);

@@ -3,11 +3,11 @@ import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, overlayCheckpointArtifacts, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
-import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
+import { acceptanceModeFor, requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "./artifact-dir.mjs";
-import { validateTaskMaterialRevision } from "./stage-content-contracts.mjs";
-import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
+import { validateTaskMaterialRevision, validateTaskMaterialRevisionVersionAware } from "../runtime/stage/stage-content-contracts.mjs";
+import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "../runtime/task/git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { deriveChangeClassification } from "../skills/wh-review/scripts/review-controller.mjs";
@@ -15,11 +15,12 @@ import {
   authenticateCanonicalReviewResult,
   conservativelyAssessUnattestedAnchors,
   parseCanonicalReviewerOutput,
-} from "./canonical-review-result.mjs";
-import { hashAuditSummary } from "./audit-summary-carrier.mjs";
-import { createRequirementLedger, createRequirementsCoverage } from "./requirement-ledger.mjs";
+} from "../runtime/review/canonical-review-result.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
+import { createRequirementLedger, createRequirementsCoverage } from "../runtime/evidence/requirement-ledger.mjs";
 import { validateEntryPayload, validateExitPayload } from "./receipt-schema.mjs";
-import { validateBuildCodeAdjudicationCorrection, validateReviewFlowReset } from "./review-flow-authority.mjs";
+import { validateBuildCodeAdjudicationCorrection, validateReviewFlowReset } from "../runtime/review/review-flow-authority.mjs";
+import { validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import {
   BUILD_SPEC_RECOVERY_REFS,
   buildSpecReviewAction,
@@ -34,8 +35,15 @@ import {
   deriveSeriousReviewPause,
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
-} from "./stage-review-disposition.mjs";
+} from "../runtime/review/stage-review-disposition.mjs";
 import { assertRuntimeStageSkillInvocation, serializeStageSkillInvocation, stageSkillInvocationRef } from "./stage-skill-invocation.mjs";
+import { createMaterialRevision as createUnifiedMaterialRevision } from "../runtime/task/material-revision.mjs";
+import { createQualityFact as createUnifiedQualityFact, publishQualityFact as publishUnifiedQualityFact } from "../runtime/evidence/quality-fact.mjs";
+import { createPublication as createUnifiedPublication, publishPublication as publishUnifiedPublication } from "../runtime/stage/publication.mjs";
+import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
+export { createMaterialRevision } from "../runtime/task/material-revision.mjs";
+export { createQualityFact } from "../runtime/evidence/quality-fact.mjs";
+export { deriveStageCompletion } from "../runtime/stage/completion-predicates.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
@@ -684,6 +692,7 @@ export function buildTaskKernel(taskHandle, {
   attemptPublicationTestHooks,
   acceptedReplacementTestHooks,
   buildSpecRecoveryTestHooks,
+  materialRevisionTestHooks,
 } = {}, authority) {
   const {
     assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor,
@@ -1536,7 +1545,7 @@ export function buildTaskKernel(taskHandle, {
   };
   const publishMaterialRevision = (input = {}) => {
     plain(input, "material revision input");
-    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref"]), "material revision input");
+    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref", "requirements"]), "material revision input");
     const summary = nonemptyString(input.change_summary, "material revision change_summary");
     if (!Array.isArray(input.source_refs) || input.source_refs.length === 0
         || input.source_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
@@ -1550,7 +1559,42 @@ export function buildTaskKernel(taskHandle, {
       ? ArtifactDir.open((candidate ?? workspace).worktreeRoot, task)
       : assertArtifactDir(artifacts);
     const materialFiles = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
-    const hashes = Object.fromEntries(materialFiles.map((file) => [file, hash(artifactDir.read(file))]));
+    const materials = Object.fromEntries(materialFiles.map((file) => [file, artifactDir.read(file)]));
+    let requirementsBinding;
+    if (input.requirements !== undefined) {
+      plain(input.requirements, "material revision requirements");
+      rejectUnknown(input.requirements, new Set(["ledger_ref", "coverage_ref"]), "material revision requirements");
+      const ledgerRaw = task.readRecord(input.requirements.ledger_ref);
+      const coverageRaw = task.readRecord(input.requirements.coverage_ref);
+      requirementsBinding = {
+        ledger: { ref: input.requirements.ledger_ref, hash: hash(ledgerRaw) },
+        coverage: { ref: input.requirements.coverage_ref, hash: hash(coverageRaw) },
+      };
+    } else {
+      if (task.manifest.record_model === "vnext-single-write") {
+        throw new Error("vNext material revision requires direct requirements ledger and coverage");
+      }
+      const requirementsPointerRaw = readOptionalRecord(task, "requirements/current.json");
+      if (requirementsPointerRaw === undefined) throw new Error("material revision requires direct requirements ledger and coverage");
+      const requirementsPointer = parseJson(requirementsPointerRaw, "requirements current pointer");
+      const ledgerRaw = task.readRecord(requirementsPointer.ledger_ref);
+      const coverageRaw = task.readRecord(requirementsPointer.coverage_ref);
+      if (requirementsPointer.schema_version !== "requirements-current.v1"
+          || requirementsPointer.task_id !== task.identity.taskId
+          || hash(ledgerRaw) !== requirementsPointer.ledger_hash
+          || hash(coverageRaw) !== requirementsPointer.coverage_hash) {
+        throw new Error("material revision requirements binding is invalid");
+      }
+      requirementsBinding = {
+        ledger: { ref: requirementsPointer.ledger_ref, hash: requirementsPointer.ledger_hash },
+        coverage: { ref: requirementsPointer.coverage_ref, hash: requirementsPointer.coverage_hash },
+      };
+    }
+    // Serialize the authenticated-head read, stale-input decision, immutable
+    // revision write, and current-pointer CAS. Without one cross-process
+    // lock, two writers can both validate the same old head and publish
+    // different revisions successfully.
+    return task.withRecordLock("locks/materials.publication.lock", () => {
     const pointerRef = "materials/current.json";
     const priorPointerRaw = readOptionalRecord(task, pointerRef);
     let priorPointer = null;
@@ -1571,49 +1615,53 @@ export function buildTaskKernel(taskHandle, {
         throw new Error(`material current revision is invalid: ${validation.errors.join("; ")}`);
       }
     }
-    if (input.expected_current_ref !== undefined
-        && input.expected_current_ref !== (priorPointer?.revision_ref ?? null)) {
-      const conflict = new Error("MATERIAL_REVISION_CONFLICT: expected current revision is stale");
-      conflict.code = "MATERIAL_REVISION_CONFLICT";
-      throw conflict;
+    const created = createUnifiedMaterialRevision({
+      taskId: task.identity.taskId,
+      materials,
+      requirements: requirementsBinding,
+      previous: priorRevision === null ? null : {
+        ...priorRevision,
+        revision_ref: priorPointer.revision_ref,
+        revision_hash: priorPointer.revision_hash,
+      },
+      changeSummary: summary,
+      sourceRefs,
+    });
+    const currentRef = priorPointer?.revision_ref ?? null;
+    if (input.expected_current_ref !== undefined && input.expected_current_ref !== currentRef) {
+      // The builder above is pure, so no record can be orphaned by this
+      // check. A retry may legitimately observe a newer idempotent revision
+      // published from the requested head; arbitrary stale refs still fail.
+      let ancestor = priorRevision;
+      let expectedIsAncestor = false;
+      while (ancestor?.previous_ref) {
+        if (ancestor.previous_ref === input.expected_current_ref) {
+          expectedIsAncestor = true;
+          break;
+        }
+        ancestor = parseJson(task.readRecord(ancestor.previous_ref), "material revision");
+      }
+      const sameInput = created.idempotent
+        && priorRevision?.change_summary === summary
+        && JSON.stringify(priorRevision.source_refs ?? []) === JSON.stringify(sourceRefs);
+      if (!sameInput || !expectedIsAncestor) {
+        const conflict = new Error("MATERIAL_REVISION_CONFLICT: expected current revision is stale");
+        conflict.code = "MATERIAL_REVISION_CONFLICT";
+        throw conflict;
+      }
     }
-    const changedFiles = priorRevision === null
-      ? materialFiles
-      : materialFiles.filter((file) => priorRevision.hashes[file] !== hashes[file]);
-    if (changedFiles.length === 0) {
+    if (created.idempotent) {
       return deepFreeze({
         revision_ref: priorPointer.revision_ref, revision_hash: priorPointer.revision_hash,
         revision_id: priorPointer.revision_id, current: true, idempotent: true,
       });
     }
-    const identity = {
-      task_id: task.identity.taskId,
-      parent_revision: priorRevision?.revision_id ?? null,
-      previous_ref: priorPointer?.revision_ref ?? null,
-      previous_hash: priorPointer?.revision_hash ?? null,
-      changed_files: changedFiles,
-      change_summary: summary,
-      source_refs: sourceRefs,
-      hashes,
-    };
-    const revisionDigest = hash(canonicalJson(identity));
-    const revision = {
-      schema_version: "task-material-revision.v1",
-      task_id: identity.task_id,
-      revision_id: `revision-${revisionDigest}`,
-      parent_revision: identity.parent_revision,
-      previous_ref: identity.previous_ref,
-      previous_hash: identity.previous_hash,
-      changed_files: identity.changed_files,
-      change_summary: identity.change_summary,
-      source_refs: identity.source_refs,
-      hashes: identity.hashes,
-    };
+    const revision = created.revision;
     const validation = validateTaskMaterialRevision(revision);
     if (!validation.ok) throw new Error(`material revision is invalid: ${validation.errors.join("; ")}`);
-    const revisionRef = `materials/revisions/${revisionDigest}.json`;
-    const revisionRaw = `${JSON.stringify(revision, null, 2)}\n`;
-    try { createKernelRecord(revisionRef, revisionRaw); }
+    const revisionRef = created.revision_ref;
+    const revisionRaw = created.raw;
+    try { createKernelRecord(revisionRef, revisionRaw, { testHooks: materialRevisionTestHooks?.revision }); }
     catch (error) {
       if (error?.code !== "EEXIST" || task.readRecord(revisionRef) !== revisionRaw) throw error;
     }
@@ -1628,12 +1676,16 @@ export function buildTaskKernel(taskHandle, {
     };
     const pointerRaw = `${JSON.stringify(pointer, null, 2)}\n`;
     try {
-      if (priorPointerRaw === undefined) createKernelRecord(pointerRef, pointerRaw);
+      if (priorPointerRaw === undefined) createKernelRecord(pointerRef, pointerRaw, { testHooks: materialRevisionTestHooks?.current });
       else replaceTaskCurrentPointer(pointerRef, pointerRaw, {
         expectedPriorRaw: priorPointerRaw,
         validator: () => {},
+        testHooks: materialRevisionTestHooks?.current,
       });
     } catch (error) {
+      const concurrentPointerChange = error?.code === "EEXIST"
+        || /compare-and-swap source changed|MATERIAL_REVISION_CONFLICT/.test(error?.message ?? "");
+      if (!concurrentPointerChange) throw error;
       const currentRaw = task.readRecord(pointerRef);
       if (currentRaw !== pointerRaw) {
         const conflict = new Error("MATERIAL_REVISION_CONFLICT: current pointer changed; retry from the authenticated head");
@@ -1646,6 +1698,190 @@ export function buildTaskKernel(taskHandle, {
       revision_id: revision.revision_id, parent_ref: revision.previous_ref,
       changed_files: revision.changed_files, current: true, idempotent: false,
     });
+    });
+  };
+  const readMaterialRevisionForRepair = (artifactDir) => {
+    const pointerRaw = readOptionalRecord(task, "materials/current.json");
+    if (pointerRaw === undefined) return null;
+    const pointer = parseJson(pointerRaw, "material current pointer");
+    if (pointer.schema_version !== "task-material-current.v1"
+        || pointer.task_id !== task.identity.taskId
+        || !Number.isInteger(pointer.generation) || pointer.generation < 1
+        || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+        || !HASH.test(pointer.revision_hash ?? "")
+        || hash(task.readRecord(pointer.revision_ref)) !== pointer.revision_hash) {
+      throw new Error("material current pointer is invalid or misbound");
+    }
+    const revisionRaw = task.readRecord(pointer.revision_ref);
+    const revision = parseJson(revisionRaw, "current material revision");
+    const validation = validateTaskMaterialRevisionVersionAware(revision);
+    if (!validation.ok || revision.task_id !== task.identity.taskId
+        || revision.revision_id !== pointer.revision_id
+        || revision.previous_ref !== (pointer.previous_ref ?? null)) {
+      throw new Error(`current material revision is invalid or misbound: ${validation.errors.join("; ")}`);
+    }
+    const seen = new Set([pointer.revision_ref]);
+    let ancestor = revision;
+    while (ancestor.previous_ref !== null) {
+      if (seen.has(ancestor.previous_ref)) throw new Error("material revision parent chain contains a cycle");
+      seen.add(ancestor.previous_ref);
+      const priorRaw = task.readRecord(ancestor.previous_ref);
+      const prior = parseJson(priorRaw, "previous material revision");
+      const priorValidation = validateTaskMaterialRevisionVersionAware(prior);
+      if (hash(priorRaw) !== ancestor.previous_hash
+          || !priorValidation.ok
+          || prior.task_id !== task.identity.taskId
+          || prior.revision_id !== ancestor.parent_revision) {
+        throw new Error("material revision parent does not match previous_ref");
+      }
+      ancestor = prior;
+    }
+    return Object.freeze({
+      pointerRaw, pointer, revisionRaw, revision,
+      validation,
+      ref: pointer.revision_ref,
+      hash: pointer.revision_hash,
+    });
+  };
+  const repairMaterialRevision = (input = {}) => {
+    plain(input, "material revision repair input");
+    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref"]), "material revision repair input");
+    const summary = nonemptyString(input.change_summary, "material revision repair change_summary");
+    if (!Array.isArray(input.source_refs) || input.source_refs.length === 0
+        || input.source_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
+      throw new TypeError("material revision repair source_refs must be canonical task record refs");
+    }
+    const artifactDir = artifacts === undefined
+      ? ArtifactDir.open((candidate ?? workspace).worktreeRoot, task)
+      : assertArtifactDir(artifacts);
+    return task.withRecordLock("locks/materials.publication.lock", () => {
+      const head = readMaterialRevisionForRepair(artifactDir);
+      if (head === null) throw new Error("MATERIAL_REPAIR_NOT_NEEDED: current material revision is missing");
+      if (!head.validation.legacy) {
+        return deepFreeze({
+          repaired: false,
+          idempotent: true,
+          revision_ref: head.ref,
+          revision_hash: head.hash,
+          revision_id: head.pointer.revision_id,
+          current: true,
+        });
+      }
+      if (input.expected_current_ref !== undefined && input.expected_current_ref !== head.ref) {
+        const conflict = new Error("MATERIAL_REPAIR_CONFLICT: expected current revision is stale");
+        conflict.code = "MATERIAL_REPAIR_CONFLICT";
+        throw conflict;
+      }
+      if (!head.revision.requirements) throw new Error("material revision repair requires legacy requirements binding");
+      const sourceRefs = [...new Set(input.source_refs)].map((ref) => ({ ref, hash: hash(task.readRecord(ref)) }));
+      const materials = Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"]
+        .map((file) => [file, artifactDir.read(file)]));
+      const created = createUnifiedMaterialRevision({
+        taskId: task.identity.taskId,
+        materials,
+        requirements: head.revision.requirements,
+        previous: { ...head.revision, revision_ref: head.ref, revision_hash: head.hash },
+        changeSummary: summary,
+        sourceRefs,
+        includeRequirements: false,
+        preserveChangedFiles: head.revision.changed_files,
+      });
+      if (created.idempotent) throw new Error("material revision repair did not produce a canonical successor");
+      const canonicalValidation = validateTaskMaterialRevisionVersionAware(created.revision);
+      if (!canonicalValidation.ok || canonicalValidation.legacy) {
+        throw new Error(`canonical material revision is invalid: ${canonicalValidation.errors.join("; ")}`);
+      }
+      const revisionRaw = created.raw;
+      try { createKernelRecord(created.revision_ref, revisionRaw, { testHooks: materialRevisionTestHooks?.revision }); }
+      catch (error) {
+        if (error?.code !== "EEXIST" || task.readRecord(created.revision_ref) !== revisionRaw) throw error;
+      }
+      const pointer = {
+        schema_version: "task-material-current.v1",
+        task_id: task.identity.taskId,
+        generation: head.pointer.generation + 1,
+        revision_id: created.revision.revision_id,
+        revision_ref: created.revision_ref,
+        revision_hash: hash(revisionRaw),
+        previous_ref: head.ref,
+      };
+      const pointerRaw = `${JSON.stringify(pointer, null, 2)}\n`;
+      try {
+        replaceTaskCurrentPointer("materials/current.json", pointerRaw, {
+          expectedPriorRaw: head.pointerRaw,
+          validator: () => {},
+          testHooks: materialRevisionTestHooks?.current,
+        });
+      } catch (error) {
+        if (!/compare-and-swap source changed|MATERIAL_REVISION_CONFLICT/.test(error?.message ?? "")) throw error;
+        const currentRaw = task.readRecord("materials/current.json");
+        if (currentRaw !== pointerRaw) {
+          const conflict = new Error("MATERIAL_REPAIR_CONFLICT: current pointer changed; retry from the authenticated head");
+          conflict.code = "MATERIAL_REPAIR_CONFLICT";
+          throw conflict;
+        }
+      }
+      return deepFreeze({
+        repaired: true,
+        idempotent: false,
+        legacy_ref: head.ref,
+        legacy_hash: head.hash,
+        revision_ref: created.revision_ref,
+        revision_hash: hash(revisionRaw),
+        revision_id: created.revision.revision_id,
+        parent_ref: head.ref,
+        current: true,
+      });
+    });
+  };
+  const currentVNextContext = () => {
+    if (task.manifest.record_model !== "vnext-single-write") throw new Error("vNext writer requires a vnext-single-write task");
+    const pointer = parseJson(task.readRecord("materials/current.json"), "material current pointer");
+    const revision = parseJson(task.readRecord(pointer.revision_ref), "material revision");
+    if (pointer.task_id !== task.identity.taskId || revision.revision_id !== pointer.revision_id) {
+      throw new Error("vNext material revision is misbound");
+    }
+    const activeWorkspace = candidate ?? workspace;
+    const snapshot = captureGitWorktreeSnapshot(activeWorkspace?.worktreeRoot ?? task.manifest.target_repo_root);
+    return { pointer, revision, snapshot };
+  };
+  const publishVNextQualityFact = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "vNext quality fact input");
+    rejectUnknown(input, new Set(["kind", "status", "subject", "evidence"]), "vNext quality fact input");
+    const { revision, snapshot } = currentVNextContext();
+    const fact = createUnifiedQualityFact({
+      taskId: task.identity.taskId, stage: name, materialRevision: revision.revision_id,
+      snapshotTree: snapshot.tree, kind: input.kind, status: input.status,
+      subject: input.subject, evidence: input.evidence, recordedAt: now(),
+    });
+    return deepFreeze(publishUnifiedQualityFact({
+      fact, read: task.readRecord, create: (ref, raw) => createKernelRecord(ref, raw),
+    }));
+  };
+  const publishVNextPublication = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "vNext publication input");
+    rejectUnknown(input, new Set(["quality_fact_refs"]), "vNext publication input");
+    if (!Array.isArray(input.quality_fact_refs) || input.quality_fact_refs.length === 0) {
+      throw new TypeError("vNext publication requires quality_fact_refs");
+    }
+    const { revision, snapshot } = currentVNextContext();
+    const facts = input.quality_fact_refs.map((ref) => {
+      const raw = task.readRecord(ref);
+      const value = parseJson(raw, "vNext quality fact");
+      return { ...value, value, ref, sha256: hash(raw) };
+    });
+    const freshness = facts.map((fact) => evaluateFactFreshness(fact, {
+      material_revision: revision.revision_id, snapshot_tree: snapshot.tree,
+    }, { read: task.readRecord }));
+    const publication = createUnifiedPublication({
+      taskId: task.identity.taskId, stage: name, materialRevision: revision,
+      qualityFacts: facts, freshness, snapshotTree: snapshot.tree, read: task.readRecord,
+    });
+    return deepFreeze(publishUnifiedPublication({
+      publication, read: task.readRecord, create: (ref, raw) => createKernelRecord(ref, raw),
+    }));
   };
   const makeDecisionJournalAuthority = Symbol("make-decision-runtime-journal-authority");
   const writeStageStepEntry = (stage, input = {}, journalAuthority) => {
@@ -3598,6 +3834,13 @@ export function buildTaskKernel(taskHandle, {
       const active = activeStageRun(fact.stage);
       if (fact.workflow_run_id !== active.run.workflow_run_id) throw new Error("stage skill invocation run identity mismatch");
       const ref = stageSkillInvocationRef(fact);
+      // A host failure is a truthful, immutable observation, but it must not
+      // permanently consume the logical invocation identity.  A later retry
+      // with the same input may succeed after the provider recovers.  Keep the
+      // original unavailable fact and publish the successful retry at a
+      // deterministic sibling ref; readers resolve the sibling as the current
+      // state without rewriting history.
+      const recoveryRef = `${ref}.recovery.json`;
       const raw = serializeStageSkillInvocation(fact);
       try {
         createKernelRecord(ref, raw);
@@ -3608,6 +3851,20 @@ export function buildTaskKernel(taskHandle, {
         const existing = parseJson(existingRaw, "stage skill invocation");
         const semantic = ({ created_at, ...value }) => value;
         if (JSON.stringify(semantic(existing)) !== JSON.stringify(semantic(fact))) {
+          if (existing.status === "unavailable" && fact.status === "executed") {
+            try {
+              createKernelRecord(recoveryRef, raw);
+              return deepFreeze({ ref: recoveryRef, hash: hash(raw), fact, recovered: true, previous_ref: ref });
+            } catch (recoveryError) {
+              if (recoveryError?.code !== "EEXIST") throw recoveryError;
+              const recoveryRaw = task.readRecord(recoveryRef);
+              const recovered = parseJson(recoveryRaw, "stage skill invocation recovery");
+              if (JSON.stringify(semantic(recovered)) !== JSON.stringify(semantic(fact))) {
+                throw new Error("stage skill invocation recovery identity already binds a different fact");
+              }
+              return deepFreeze({ ref: recoveryRef, hash: hash(recoveryRaw), fact: recovered, recovered: true, idempotent: true, previous_ref: ref });
+            }
+          }
           throw new Error("stage skill invocation identity already binds a different fact");
         }
         return deepFreeze({ ref, hash: hash(existingRaw), fact: existing, idempotent: true });
@@ -3623,14 +3880,25 @@ export function buildTaskKernel(taskHandle, {
         invocation_key: invocationKey,
       });
       try {
-        return deepFreeze({ ref, fact: parseJson(task.readRecord(ref), "stage skill invocation") });
+        const base = parseJson(task.readRecord(ref), "stage skill invocation");
+        if (base.status === "unavailable") {
+          try {
+            const recoveryRaw = task.readRecord(`${ref}.recovery.json`);
+            return deepFreeze({ ref: `${ref}.recovery.json`, fact: parseJson(recoveryRaw, "stage skill invocation recovery"), previous_ref: ref });
+          } catch (recoveryError) {
+            if (recoveryError?.code !== "ENOENT") throw recoveryError;
+          }
+        }
+        return deepFreeze({ ref, fact: base });
       } catch (error) {
         if (error?.code === "ENOENT") return null;
         throw error;
       }
     },
     publishCanonicalRecord(relativePath, data) {
-      if (typeof relativePath !== "string" || !/^(?:receipts|reviews|evidence)\//.test(relativePath) || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
+      if (typeof relativePath !== "string"
+          || !/^(?:(?:receipts|reviews|evidence)\/|results\/build-code\/revisions\/phase-successor-[0-9]{4}\.json$)/.test(relativePath)
+          || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
       if (relativePath === BUILD_SPEC_RECOVERY_REFS.marker || relativePath.startsWith("receipts/revisions/spec/")) {
         throw new Error("trusted prepublish recovery is required; build-spec recovery authority owns this namespace");
       }
@@ -3808,6 +4076,7 @@ export function buildTaskKernel(taskHandle, {
     latestHistoricalStageRun,
     publishRequirementsLedger,
     publishMaterialRevision,
+    repairMaterialRevision,
     writeStageStepEntry,
     writeStageStepExit,
     prepareMakeDecisionInteractionPublication,
@@ -4175,6 +4444,9 @@ export function buildTaskKernel(taskHandle, {
       });
     },
     publishAttempt(stage, data = {}) {
+      if (task.manifest.record_model === "vnext-single-write") {
+        throw new Error("legacy attempt writer is unavailable for vNext tasks");
+      }
       const name = stageName(stage);
       if (data.verify_failure_publication !== undefined && !controlledVerifyFailurePublications.has(data)) {
         throw new Error("verify-code controlled failure publication requires the official kernel entrypoint");
@@ -4303,6 +4575,8 @@ export function buildTaskKernel(taskHandle, {
         throw new Error(`${name} attempt sequence exhausted`);
       });
     },
+    publishVNextQualityFact,
+    publishVNextPublication,
     publishVerifyFailureFromAccepted({ failureEvidenceRef } = {}) {
       const previousVerify = readAcceptedLocal("verify-code");
       const activeBuild = readAcceptedLocal("build-code");
@@ -4445,9 +4719,10 @@ export function buildTaskKernel(taskHandle, {
           const raw = task.readRecord(humanConfirmationRef);
           if (expectedRaw !== undefined && raw !== expectedRaw) throw new Error("human confirmation changed during acceptance");
           const value = parseJson(raw, "human confirmation");
-          rejectUnknown(value, new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at", "checkpoint_plan_hash"]), "human confirmation");
           if (value.decision === "rejected") throw new Error("rejected confirmation leaves checkpoint ref unpublished");
-          if (value.schema_version !== "human-confirmation.v1" || value.task_id !== task.identity.taskId || value.stage !== name || value.attempt_ref !== attemptRef || value.decision !== "accepted" || !Number.isFinite(Date.parse(value.confirmed_at))) throw new Error("human confirmation does not bind this task/stage/attempt");
+          validateHumanConfirmation(value, {
+            taskId: task.identity.taskId, stage: name, subject: attemptRef, requireAccepted: true,
+          });
           return { raw, value };
         };
         let current;
@@ -4757,7 +5032,12 @@ export function buildTaskKernel(taskHandle, {
       if (options?.liveCheckpoint !== undefined) {
         throw new Error("liveCheckpoint is an internal build-spec continuation capability");
       }
-      return readAcceptedLocal(stage, options);
+      // Public accepted reads expose historical facts only.  A caller may
+      // continue ordinary work after revising live materials; freshness and
+      // formal publication decide whether that work is complete.  Live
+      // checkpoint comparison remains an explicit private capability for
+      // acceptance/continuation writers.
+      return readAcceptedLocal(stage, { ...options, liveCheckpoint: false });
     },
     readAcceptedAudit(stage, options = {}) {
       if (Object.prototype.hasOwnProperty.call(options, "liveCheckpoint")) {

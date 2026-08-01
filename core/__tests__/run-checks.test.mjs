@@ -1,7 +1,7 @@
 /**
  * run-checks.test.mjs  (FR-CI-001 / FR-CI-002 / FR-CI-003)
  *
- * Integration tests for scripts/run-checks.mjs — written RED-first.
+ * Integration tests for tools/cli/run-checks.mjs — written RED-first.
  * All tests use spawnSync; no file writes to the real working tree.
  */
 
@@ -12,7 +12,7 @@ import { describe, test, expect } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const runChecks = resolve(repoRoot, "scripts", "run-checks.mjs");
+const runChecks = resolve(repoRoot, "tools", "cli", "run-checks.mjs");
 
 /** Helper: run a node script synchronously, collect stdout+stderr combined. */
 function run(args = [], opts = {}) {

@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { assertArtifactDir } from "./artifact-dir.mjs";
-import { canonical } from "./canonical-utils.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { canonical } from "../runtime/evidence/canonical-utils.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { assertWorkspace } from "./workspace.mjs";
-import { validateTaskMaterialRevision } from "./stage-content-contracts.mjs";
+import { validateTaskMaterialRevision } from "../runtime/stage/stage-content-contracts.mjs";
 
 const BASE_REF = "receipts/spec.json";
 const MARKER_REF = "receipts/recoveries/spec.json";

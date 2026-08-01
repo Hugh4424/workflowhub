@@ -6,7 +6,7 @@ import {
   validateTasksOnlyCompletionSeam,
   validatePlanTaskContract,
   validatePlanTaskContractV2,
-} from "../core/stage-content-contracts.mjs";
+} from "../runtime/stage/stage-content-contracts.mjs";
 import { certifyCurrentTaskCompletion } from "../core/stage-handlers.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -430,6 +430,36 @@ describe("plan-task.v3 structural contract", () => {
       ok: false,
       errors: [expect.stringMatching(/does not bind receipts\/phase-tests\.json/i)],
     });
+  });
+
+  it("permits live plan hash refreshes in derived versioned_refs", () => {
+    const evidenceRaw = "phase completion evidence\n";
+    const evidenceRef = "apply/evidence/T001-derived.txt";
+    const after = tasks
+      .replace(`"hash":"${planHash}"`, `"hash":"${"b".repeat(64)}"`)
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：core/demo.mjs")
+      .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npx vitest run tests/demo.test.mjs; exit 0")
+      .replace("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replace("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-31T12:00:00.000Z");
+    const completionEvidence = ({ ref }) => ref === evidenceRef ? evidenceRaw : undefined;
+    expect(validateTasksOnlyCompletionSeam({ before: tasks, after, taskId: "T001", completionEvidence })).toMatchObject({
+      ok: true,
+      changed_task_ids: ["T001"],
+    });
+    const nonTargetStart = after.indexOf("#### T002");
+    const tamperedNonTarget = after.slice(0, nonTargetStart)
+      + after.slice(nonTargetStart).replace(`"hash":"${planHash}"`, `"hash":"${"c".repeat(64)}"`);
+    expect(tamperedNonTarget).not.toBe(after);
+    expect(validateTasksOnlyCompletionSeam({
+      before: tasks,
+      after: tamperedNonTarget,
+      taskId: "T001",
+      completionEvidence,
+    })).toMatchObject({ ok: false });
   });
 
   it("keeps the current 30-source map closed in spec, plan, and tasks", () => {

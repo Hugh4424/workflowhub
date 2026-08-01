@@ -35,7 +35,7 @@ workflowhub 仓目前 `workflows/` 下只有实验性 spike 代码，没有任�
 
 ### 背景
 
-agenthub 的 vibecoding workflow 有成熟的五段提示词（intake/design/plan/apply/test-acceptance），但与运行时 gate 深度耦合。workflowhub 已立宪法 F4（质量靠异源审查+人，非阻断质量门）和 F10（自动化按真实收益，不为"机器可校验"本身堆基建），并已删除 check-path-guard CI 护栏、把 findViolation 解耦进 core/protected-paths.mjs 作运行时非阻断提醒（commit 7453d4b，已在 main）。M3 已定窄契约 stage-result，M4 已有指标系统与 check-stage-quality.mjs 扫描器。本期在这些基础上建五段骨架。
+agenthub 的 vibecoding workflow 有成熟的五段提示词（intake/design/plan/apply/test-acceptance），但与运行时 gate 深度耦合。workflowhub 已立宪法 F4（质量靠异源审查+人，非阻断质量门）和 F10（自动化按真实收益，不为"机器可校验"本身堆基建），并已删除 check-path-guard CI 护栏、把 findViolation 解耦进 runtime/evidence/protected-paths.mjs 作运行时非阻断提醒（commit 7453d4b，已在 main）。M3 已定窄契约 stage-result，M4 已有指标系统与 check-stage-quality.mjs 扫描器。本期在这些基础上建五段骨架。
 
 ### 目标
 
@@ -253,7 +253,7 @@ agenthub 的 vibecoding workflow 有成熟的五段提示词（intake/design/pla
 - **隐性必达 1**：不改 agenthub 现有实现，所有改动落 workflowhub 仓。
 - **隐性必达 2**：不引入运行时阻断式 gate（宪法 F4/F10），F10 约束只以提示词文字存在。
 - **隐性必达 3**：项目检查命令与测试套件全绿（含 F10 / 删护栏的既有改动，本期不得回退）。
-- **隐性必达 4**：宪法保持 21 条、F10 在册、check-path-guard 已删且 core/protected-paths.mjs 运行时非阻断提醒在位（既有状态，本期不得破坏）。
+- **隐性必达 4**：宪法保持 21 条、F10 在册、check-path-guard 已删且 runtime/evidence/protected-paths.mjs 运行时非阻断提醒在位（既有状态，本期不得破坏）。
 - **隐性必达 5**：可证伪、不假绿（宪法 F9）——契约校验、指标扫描器、端到端实跑的每条验收都要能在"为假时"被检出。
 
 ## 10. 验收清单及未决问题

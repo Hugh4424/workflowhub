@@ -6,10 +6,10 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { canonical } from "../core/task-recovery.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
 import { runRecovery } from "../scripts/task-recovery.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
@@ -268,9 +268,10 @@ function committedTaskCloseRuntime(f) {
   execFileSync("git", ["clone", "-q", "--no-local", projectRoot, runner]);
   execFileSync("git", ["checkout", "-qb", "codex/task-close-test"], { cwd: runner });
   cpSync(join(projectRoot, "core"), join(runner, "core"), { recursive: true, force: true });
+  cpSync(join(projectRoot, "runtime"), join(runner, "runtime"), { recursive: true, force: true });
   cpSync(join(projectRoot, "scripts", "task-close.mjs"), join(runner, "scripts", "task-close.mjs"), { force: true });
   symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
-  execFileSync("git", ["add", "core", "scripts/task-close.mjs", "node_modules"], { cwd: runner });
+  execFileSync("git", ["add", "core", "runtime", "scripts/task-close.mjs", "node_modules"], { cwd: runner });
   execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "--allow-empty", "-qm", "task close runtime"], { cwd: runner });
   return join(runner, "scripts", "task-close.mjs");
 }
@@ -322,6 +323,15 @@ describe("delivery close verifier", () => {
 
     expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) }))
       .toThrow(/accepted verify-code snapshot/i);
+  });
+
+  it("refuses close when accepted verify facts are stale after material revision", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    writeFileSync(join(f.worktree, "specs", "close-task", "spec.md"), "revised after verify\n");
+
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) }))
+      .toThrow(/fresh verify-code facts|stale/i);
   });
 
   it("migrates an authenticated task target from its worktree to the checked-out main repository before close preparation", async () => {

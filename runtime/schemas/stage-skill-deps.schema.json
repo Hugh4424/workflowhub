@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/runtime/schemas/stage-skill-deps.schema.json",
+  "type": "object",
+  "required": ["stage", "skills", "runtime_capabilities", "external_capabilities"],
+  "properties": {
+    "stage": { "type": "string", "minLength": 1 },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "execution", "invocation", "trigger", "bundle"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "pattern": "^skills/[^/]+/SKILL\\.md$" },
+          "execution": { "enum": ["inline", "independent"] },
+          "invocation": { "enum": ["always", "conditional"] },
+          "trigger": { "type": "string", "minLength": 1 },
+          "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "runtime_capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "external_capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": ["id", "kind", "required_when", "absence_semantics"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": { "enum": ["cli", "host", "review", "mcp", "command"] },
+        "version_policy": { "type": "string", "minLength": 1 },
+        "required_when": { "type": "string", "minLength": 1 },
+        "doctor": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "doctor_any": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        },
+        "absence_semantics": { "enum": ["blocked", "diagnostic", "human_required"] }
+      },
+      "additionalProperties": false,
+      "allOf": [{ "anyOf": [{ "required": ["doctor"] }, { "required": ["doctor_any"] }] }]
+    }
+  }
+}

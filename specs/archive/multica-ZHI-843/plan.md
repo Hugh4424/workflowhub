@@ -15,7 +15,7 @@
 
 | 事实 | 计划取舍 |
 |---|---|
-| `core/task-handle.mjs` 有 migration lock、immutable record、last manifest atomic replace/rollback；`core/runner-identity.mjs` 有 real root/branch/HEAD/AGENTS/Skill checks。 | replacement 复用已有 write shape；initial migration 不变。 |
+| `core/task-handle.mjs` 有 migration lock、immutable record、last manifest atomic replace/rollback；`runtime/evidence/runner-identity.mjs` 有 real root/branch/HEAD/AGENTS/Skill checks。 | replacement 复用已有 write shape；initial migration 不变。 |
 | `phase-evidence.mjs` 有 phase lock、receipt/tree/diff/formal review、same-Phase repair/current pointer。 | recovery ref 必须早于 `publishLocked` closed/needs_revision guards 和 `deriveBaseline`。 |
 | Existing fixtures 覆盖 collision/drift/atomic failure/PASS-repair-continuation。 | 扩展 credential、specific-lock、gate isolation、old-byte 和 fault tests；不加第二 publish/state/barrier。 |
 
@@ -49,7 +49,7 @@ archive 可 create-only prewrite 但无引用不可消费。generation/gate summ
 
 ### Phase 2：runner replacement（先合并 shared writer 变更）
 
-**文件**：新增 `scripts/task-recovery.mjs`、`scripts/__tests__/task-recovery.test.mjs`；修改 `core/runner-identity.mjs`、`core/task-recovery.mjs`、`core/task-handle.mjs`、runner migration/bootstrap tests。
+**文件**：新增 `scripts/task-recovery.mjs`、`scripts/__tests__/task-recovery.test.mjs`；修改 `runtime/evidence/runner-identity.mjs`、`core/task-recovery.mjs`、`core/task-handle.mjs`、runner migration/bootstrap tests。
 
 1. validate clean non-symlink Git top-level, exact branch/HEAD/AGENTS/Skill, old OID ancestor, manifest/new runner, accepted snapshot.
 2. implement dedicated runner replacement branch over Phase 1 base: archive old manifest, `task-runner-root-replacement.v1`, runner generation/gate, final manifest flip inside exact runner lock. Reconstruct prior migration hash by excluding/normalizing only new replacement lineage fields; never modify old migration record.

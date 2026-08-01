@@ -4,22 +4,22 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { validateAcceptanceEvidence } from "./canonical-receipt-writer.mjs";
-import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
+import { normalizeRuntimeOnlyPaths } from "../runtime/evidence/canonical-utils.mjs";
 import { minimumReviewersFor } from "../skills/wh-review/scripts/review-materials.mjs";
 import { parseReviewerOutput } from "../skills/wh-review/scripts/review-output.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
-import { equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
-import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "./review-flow-authority.mjs";
-import { authenticateCanonicalReviewResult } from "./canonical-review-result.mjs";
+import { equivalentWorkspaceTrees } from "../runtime/task/git-worktree-snapshot.mjs";
+import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../runtime/review/review-flow-authority.mjs";
+import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
 import {
   deriveSeriousReviewPause,
   validateRiskAcceptanceSet,
-} from "./stage-review-disposition.mjs";
+} from "../runtime/review/stage-review-disposition.mjs";
 import { buildStageCompletion } from "./stage-completion-facts.mjs";
 import { assertLatestBuildSpecReceipt } from "./build-spec-receipt-recovery.mjs";
-import { validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "./stage-content-contracts.mjs";
+import { validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../runtime/stage/stage-content-contracts.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");

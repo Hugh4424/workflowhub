@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
+
+function observations(stage) {
+  return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
+    fact: {
+      ref: `quality/${subject}.json`,
+      value: { task_id: "task", stage, material_revision: "revision", snapshot_tree: "tree", kind, subject, status: "passed", fact_id: `fact-${index}` },
+    },
+    freshness: { status: "current" },
+    authenticated: true,
+  }));
+}
+
+describe("five-stage completion predicates derive only from quality facts", () => {
+  for (const stage of Object.keys(STAGE_PREDICATES)) {
+    it(`${stage} completes from the exact authenticated fresh fact set`, () => {
+      expect(deriveStageCompletion(stage, observations(stage))).toMatchObject({ stage, status: "completed", missing: [] });
+    });
+    for (const subject of Object.keys(STAGE_PREDICATES[stage])) {
+      it(`${stage} remains incomplete without ${subject}`, () => {
+        const facts = observations(stage).filter((entry) => entry.fact.value.subject !== subject);
+        expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "in_progress", missing: [subject] });
+      });
+    }
+  }
+
+  it.each([
+    ["build-code", "phase_reviews"],
+    ["build-code", "acceptance_criteria"],
+    ["verify-code", "human_confirmation"],
+  ])("%s cannot complete without required %s", (stage, subject) => {
+    const facts = observations(stage).filter((entry) => entry.fact.value.subject !== subject);
+    expect(() => assertStageCompleted(stage, facts)).toThrow(new RegExp(subject));
+  });
+
+  it("rejects a caller-provided passed dictionary and a single fact", () => {
+    expect(() => deriveStageCompletion("build-code", { tasks_complete: "passed" })).toThrow(/array/);
+    expect(deriveStageCompletion("build-code", observations("build-code").slice(0, 1)).status).toBe("in_progress");
+  });
+
+  it.each(["stale", "missing"])("does not consume %s facts", (status) => {
+    const facts = observations("build-spec");
+    facts[0] = { ...facts[0], freshness: { status } };
+    expect(deriveStageCompletion("build-spec", facts).status).toBe("in_progress");
+  });
+
+  it("does not consume unauthenticated or wrong-kind facts", () => {
+    const facts = observations("build-plan");
+    facts[0] = { ...facts[0], authenticated: false };
+    expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
+    facts[0] = { ...observations("build-plan")[0], fact: { ...facts[0].fact, value: { ...facts[0].fact.value, kind: "test" } } };
+    expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
+  });
+});

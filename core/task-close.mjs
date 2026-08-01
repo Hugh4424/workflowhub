@@ -4,8 +4,8 @@ import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
-import { assertTaskKernel } from "./task-kernel.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
 import { createTaskWorktreeRemoval, openAcceptedWorkspace } from "./workspace.mjs";
 
@@ -76,6 +76,27 @@ function createOrVerify(task, path, record, label) {
     if (task.readRecord(path) !== raw) throw new Error(`${label} conflicts with immutable record: ${path}`);
   }
   return record;
+}
+
+function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
+  if (!existsSync(worktreeRoot)) return Object.freeze({ current: true, reason: "worktree-already-removed" });
+  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const expectedTrees = [
+    acceptedVerify?.facts?.tests?.snapshot_tree,
+    acceptedVerify?.facts?.review?.snapshot_tree,
+  ].filter((value) => typeof value === "string" && value !== "");
+  if (expectedTrees.length === 0) {
+    return Object.freeze({ current: false, reason: "accepted verify-code facts have no snapshot binding", snapshot_tree: snapshot.tree });
+  }
+  if (expectedTrees.some((tree) => tree !== snapshot.tree)) {
+    return Object.freeze({
+      current: false,
+      reason: "accepted verify-code facts are stale relative to the current Workspace",
+      snapshot_tree: snapshot.tree,
+      expected_trees: [...new Set(expectedTrees)],
+    });
+  }
+  return Object.freeze({ current: true, snapshot_tree: snapshot.tree });
 }
 
 /** Persist one immutable, plan-bound close decision. */
@@ -313,6 +334,8 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const workspace = openAcceptedWorkspace(task, accepted);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree);
+  if (!verifyFreshness.current) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
@@ -378,6 +401,8 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   const root = delivery.target_repo_root;
+  const acceptedVerify = kernel.readAccepted("verify-code");
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root);
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
@@ -403,7 +428,9 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     worktree_cleanup: worktreeCleanup,
     branch_cleanup: branchCleanup,
   };
-  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup]].filter(([, done]) => !done).map(([name]) => name);
+  facts.verify_facts_fresh = verifyFreshness.current;
+  if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
+  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup], ["verify_facts_fresh", verifyFreshness.current]].filter(([, done]) => !done).map(([name]) => name);
   return Object.freeze({ schema_version: "task-close-delivery-state.v1", status: missing.length === 0 ? "ready" : "incomplete", missing: Object.freeze(missing), facts: Object.freeze(facts) });
 }
 

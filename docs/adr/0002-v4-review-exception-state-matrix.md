@@ -39,7 +39,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 
 ## 真实 provider 验收
 
-`scripts/run-wh-review-provider-smoke.mjs` 是唯一显式 opt-in 的真实 provider smoke：普通 `npm test` 不调用 provider。它用当前 host config 和 V4 入口执行：
+`tools/cli/run-wh-review-provider-smoke.mjs` 是唯一显式 opt-in 的真实 provider smoke：普通 `npm test` 不调用 provider。它用当前 host config 和 V4 入口执行：
 
 - Kimi：`wh-review-cli.mjs run`，验证 V4 aggregate 只含有效 outcome；
 - OpenCode：`3rd-review.mjs run`，验证 `always_embed` 的实际 stdin/附件路径；

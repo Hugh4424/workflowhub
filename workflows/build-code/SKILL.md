@@ -29,12 +29,17 @@ the same implementation, test, and review facts.
 
 ## Runtime contract
 
+The stable Runner interface is the seven-behavior facade in
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`confirm`, and `authorize`. Commands below are delegated compatibility locators,
+not additional public Runner behaviors.
+
 `core/stage-context.mjs` is the external runner implementation. Consume only the
 branded StageContext from
 `bootstrapStage("build-code", ...)`. All commands run with explicit
 `ctx.workspace.worktreeRoot`. This execution cwd is not an identity source.
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
-Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
+Repository-owned subprocesses use `runtime/task/workspace-runner.mjs`, which accepts
 only a branded Workspace plus argv and fixes cwd to the verified worktree.
 Never derive task identity or paths from cwd, a repository, or an external
 tracker identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
@@ -43,14 +48,14 @@ metadata only. Runner branch, dirty state, and old runner migration history
 never decide the stage result. Never search for or copy runner files into the
 target repository.
 
-Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
+Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=build-code
 --project=<project> --task=<task> --input=<component-receipts.json>`. Build-code
 is an automatic stage: the trusted runtime publishes and accepts its attempt
 without a human confirmation command.
 
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
-is never an entry. `stage-runtime.mjs` has no `--help` command. Build-code must
+is never an entry. `stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help`. Build-code must
 not call `prepare`, `confirm`, or a separate `accept`, and must never pass
 `--runner-root`.
 
@@ -64,15 +69,15 @@ Workspace; canonical receipts and evidence remain owned by TaskKernel.
 ## Controlled revision after verification failure
 
 An accepted build-code stage is closed unless the trusted runtime issued a
-reopen authorization from an authenticated failed verify-code attempt. Do not
+repair cycle authorization from an authenticated failed verify-code attempt. Do not
 edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
 
 1. Keep the failed verify attempt unaccepted. Its `facts.evidence_refs` must
    include an `acceptance-evidence.v1` record with `result: "fail"`.
 2. Create the authorization:
-   `node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
+   `node scripts/stage-runtime.mjs status --action=repair --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
 3. Re-run only the original task's build-code with the returned immutable ref:
-   `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
+   `node scripts/stage-runtime.mjs run --action=execute --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen-ref=<results/build-code/revisions/reopen-0001.json>`.
    If a canonical component receipt already exists from the accepted build,
    this controlled re-run uses the existing `receipt --revision=true
    --recover=<previous-receipt-ref>` path.
@@ -80,12 +85,12 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
 The new attempt carries the prior accepted record and verify failure hashes.
 The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`
 and atomically updates canonical `accepted.json` to the revised attempt.
-Consumers always read only `accepted.json`; archives and reopen records are
+Consumers always read only `accepted.json`; archives and repair cycle records are
 lineage evidence, never input side channels. Reusing an authorization, a source
 from a different task, a non-failure, or a non-build-code stage fails loudly.
 
 Create implementation provenance with
-`node scripts/stage-runtime.mjs receipt --stage=build-code
+`node scripts/stage-runtime.mjs run --action=record --stage=build-code
 --project=<project> --task=<task> --component=implementation
 --input=$TMP_DIR/implementation.json`; HEAD/tree/diff evidence is derived by the writer.
 Before build-code is accepted, a same-Phase repair after a failed structural
@@ -96,7 +101,7 @@ the next review and stage run. A Phase or final integration
 `revise_required` verdict remains the original quality fact; it does not by
 itself become a stage-pass gate or get rewritten to `pass`. This is append-only
 repair of the current open stage; it
-does not require or create a verify-code reopen authorization. After build-code
+does not require or create a verify-code repair cycle authorization. After build-code
 is accepted, only the controlled verification-failure path above may create
 another build-code attempt.
 For every implementation receipt, use the only valid payload: `{}`.
@@ -105,13 +110,13 @@ For every implementation receipt, use the only valid payload: `{}`.
 facts. Callers must never supply it.
 
 Create the canonical build test receipt only through:
-`node scripts/stage-runtime.mjs capture-tests --stage=build-code
+`node scripts/stage-runtime.mjs verify --action=tests --stage=build-code
 --project=<project> --task=<task> --input=$TMP_DIR/test-capture.json`.
 The input contains only `command`, `receipt_ref`, and optional `output_ref`, for
 example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output_ref":"evidence/build-tests.output"}`.
 Use fresh task-relative refs for a controlled rework attempt. Do not pass
 `component=tests`, call internal receipt writers, or guess another component
-name; `capture-tests` is the single public producer for build-code test facts.
+name; `verify --action=tests` is the single public producer for build-code test facts.
 For one task, only one formal capture may run at a time. A second identical
 capture waits for and reuses the same-snapshot receipt when the first has
 completed. Never start the complete test command directly beside a formal
@@ -150,7 +155,7 @@ After review, create `$TMP_DIR/run.json` with exactly:
 For the normal path, the default final refs are `receipts/implementation.json` and `receipts/build-tests.json`.
 For a pre-accept revision, use the latest implementation revision receipt ref and newest fresh test receipt ref produced for that repaired snapshot; never fall back to the initial refs.
 Publish and automatically accept the stage with
-`node scripts/stage-runtime.mjs run --stage=build-code
+`node scripts/stage-runtime.mjs run --action=execute --stage=build-code
 --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
 After `run` consumes the final input, let the host reclaim `$TMP_DIR` through
 its normal OS temporary lifecycle. Never treat the temporary path as a stage
@@ -238,14 +243,14 @@ order, evidence, or authority boundaries.
    partial, or snapshot-mismatched coverage cannot be accepted or handed off.
    A Phase result is gate evidence and cannot replace the final `worktree + integration` result.
 7. If verify-code later publishes an authenticated failure, use only the
-   controlled `reopen` flow above. Preserve the prior accepted attempt and
+   controlled repair flow above. Preserve the prior accepted attempt and
    rerun only the current, last affected completed Phase before repeating the final
    integration review. Pass the immutable `reopen_ref` in every
-   `publish-phase-evidence` input for that repair. The runtime authenticates it
+   `verify --action=phase` input for that repair. The runtime authenticates it
    against the active accepted build and records only the ref in the new Phase
-   evidence. While that reopen remains bound to the active accepted build, each
+   evidence. While that repair cycle remains bound to the active accepted build, each
    changed identity may be reviewed once; accepting the revised build makes the
-   reopen stale and unusable. This does not create a Phase registry or Phase
+   repair cycle stale and unusable. This does not create a Phase registry or Phase
    history.
 
 ### Phase execution
@@ -257,8 +262,8 @@ order, evidence, or authority boundaries.
    tests, run the necessary regression, and inspect the scoped diff. Use
    conditional `test-routing-advisor`, `diagnosing-bugs`, or `review-response`
    only when its declared trigger is present.
-3. Publish implementation receipts through `receipt` and real test evidence
-   through `capture-tests`; return the exact command and raw output. Before
+3. Publish implementation facts through `run --action=record` and real test evidence
+   through `verify --action=tests`; return the exact command and raw output. Before
    review, use `| AC | status | refs | reason |`, giving every accepted AC
    exactly one row marked `covered`, `missing`, or `unknown`. `covered` requires
    authenticated canonical refs; an omitted AC is never covered.
@@ -267,7 +272,7 @@ order, evidence, or authority boundaries.
    `red_evidence_ref`, optional `previous_phase_review_ref`, and
    `allowed_files`. Only the controlled post-accept repair above also includes
    its authenticated `reopen_ref`. Run:
-   `node scripts/stage-runtime.mjs publish-phase-evidence --stage=build-code
+   `node scripts/stage-runtime.mjs verify --action=phase --stage=build-code
    --project=<project> --task=<task> --input=<phase-evidence.json>`.
    The runtime derives the baseline and Workspace identity. Do not supply a
    path, commit, range, review implementation detail, or output destination.
@@ -276,7 +281,7 @@ order, evidence, or authority boundaries.
    If the final full-worktree review finds a problem before build-code is
    accepted, include its formal `revise_required` result as
    `repair_review_result_ref`. The runtime binds that result to the current
-   completed Phase and allows that append-only repair without a verify-code reopen.
+   completed Phase and allows that append-only repair without a verify-code repair cycle.
    This reference is invalid after build-code acceptance and cannot be mixed
    with the post-verify `reopen_ref`.
    Complete `AGENTS.md` blocks explicitly marked as auto-managed runtime
@@ -288,7 +293,7 @@ order, evidence, or authority boundaries.
 5. Run one independent `wh-review` for the current `phase_id`. After every
    Phase review, update that Phase's completion area in `tasks.md`; the following
    tasks-only seam authenticates the update without repeating the Phase review. Then call
-   `publish-phase-evidence` again with the same facts plus
+   `verify --action=phase` again with the same facts plus
    `review_result_ref`; this finalizes the current pointer without invoking a
    review itself.
    `simplicity-guard` is visible only inside `wh-review`; Stage coordination
@@ -310,13 +315,14 @@ order, evidence, or authority boundaries.
 
 Publishing Phase evidence does not authorize a controlled revision after an
 accepted build. That authority is validated later by the existing final
-`run --reopen=<immutable-ref>` path.
+`run --reopen-ref=<immutable-ref>` path. `reopen_ref` is the stable input field
+used by repair evidence and must not be renamed by the public facade.
 
 ## Append-only historical Phase lineage
 
 When final integration reports that an existing formally reviewed Phase branch is
 untraced, bind only an already-published canonical trace through:
-`node scripts/stage-runtime.mjs publish-phase-trace-lineage --stage=build-code
+`node scripts/stage-runtime.mjs verify --action=lineage --stage=build-code
 --project=<project> --task=<task> --input=$TMP_DIR/phase-trace-lineage.json`.
 The input contains exactly
 `{"trace_ref":"evidence/phases/<phase>/<tree>/phase-map-trace-<sha256>.json","trace_hash":"<sha256>"}`.
@@ -441,4 +447,6 @@ uncovered ACs.
 `task-material-revision.v1`，旧 revision/accepted 保持只读。revision 只记录
 parent、changed files、summary、source refs、content hashes；task-global writer 从
 认证 ArtifactDir 注入 identity/revision ID 并复算 hashes，caller 不得自报；
-不得据此创建 reopen/reset/rebind/checkpoint gate 或自动 review。
+不得据此创建 repair cycle/reset/rebind/checkpoint gate 或自动 review。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。

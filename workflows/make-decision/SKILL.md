@@ -11,6 +11,11 @@ A real review outcome is recorded as returned; `unavailable` never becomes
 
 ## Runtime contract
 
+The stable Runner interface is the seven-behavior facade in
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`confirm`, and `authorize`. Commands below are delegated compatibility locators,
+not additional public Runner behaviors.
+
 `core/stage-context.mjs` is the external runner implementation. The launcher calls
 `bootstrapStage("make-decision", ...)` before Step 1 and supplies one branded
 `StageContext`. This stage uses `ctx.task`, `ctx.kernel`, `ctx.identity`, and
@@ -24,7 +29,7 @@ audit metadata only. Runner branch, dirty state, and old runner migration
 history never decide the business result. Never search for or copy runner files
 into the target repository.
 
-Executable entry: `node scripts/stage-runtime.mjs run --stage=make-decision
+Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=make-decision
 --project=<project> --task=<task> --input=<component-receipts.json>`. The official
 runtime deterministically creates or validates the task worktree from the
 TaskHandle; callers must not supply a worktree path or baseline. Acceptance is
@@ -35,7 +40,7 @@ returned ref to `accept`; execution never accepts its own result.
 
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
-is never an entry. `stage-runtime.mjs` has no `--help` command and must never
+is never an entry. `stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help` and must never
 receive `--runner-root`.
 
 Create an OS temporary directory before producing any caller-owned draft,
@@ -52,18 +57,22 @@ the Stage contract and can leave the host waiting for an unrelated tool callback
 Use this complete public sequence without inventing flags or input shapes:
 
 1. Before code inspection or `grill-with-docs` writes, run
-   `node scripts/stage-runtime.mjs prepare --stage=make-decision
+   `node scripts/stage-runtime.mjs doctor --action=workspace --stage=make-decision
    --project=<project> --task=<task>`. This is the only stage that uses
    `prepare`; it creates or reopens the deterministic CandidateWorkspace.
 2. Start the canonical Stage run:
-   `node scripts/stage-runtime.mjs start-run --stage=make-decision
+   `node scripts/stage-runtime.mjs status --action=begin --stage=make-decision
    --project=<project> --task=<task> --reason=<reason>`. This creates the run
    identity and completes Step 1.
-3. Publish the canonical requirements ledger with
-   `publish-requirements-ledger`; the successful publication completes Step 2.
+3. Record the canonical requirements ledger with
+   `node scripts/stage-runtime.mjs run --action=scope --stage=make-decision
+   --project=<project> --task=<task> --input=$TMP_DIR/requirements-ledger.json`;
+   the successful publication completes Step 2.
 4. Run talk Round 1 and publish its `interaction-completion.v1` record with
-   `publish-content-evidence`; the successful publication completes Step 3.
-5. Record the performed research or explicit skip with `record-research`. Its
+   `run --action=content`; the successful publication completes Step 3.
+5. Record the performed research or explicit skip with
+   `node scripts/stage-runtime.mjs run --action=research --stage=make-decision
+   --project=<project> --task=<task> --input=$TMP_DIR/research.json`. Its
    input contains only `status` (`performed|skipped`), a non-empty `reason`, and
    an existing canonical `evidence` object with `kind`, `uri_or_path`, and
    `content_hash`; the successful record completes Step 4 without a new research
@@ -79,7 +88,7 @@ Use this complete public sequence without inventing flags or input shapes:
    `interaction-completion.v1`; this completes Step 8.
 10. Put the decision receipt payload under `$TMP_DIR`. Its exact shape is
    `{"decision_log":"<readable decision log>"}`. Publish it with
-   `node scripts/stage-runtime.mjs receipt --stage=make-decision
+   `node scripts/stage-runtime.mjs run --action=record --stage=make-decision
    --project=<project> --task=<task> --component=decision
    --input=$TMP_DIR/decision-receipt.json`; this completes Step 9.
 11. Run the `wh-review` detail track. Its authenticated semantic result or
@@ -113,7 +122,7 @@ Use this complete public sequence without inventing flags or input shapes:
    Never use the untracked `review_resolution` field for make-decision and
    never use one track's resolution for the other track.
 14. Publish the attempt with
-   `node scripts/stage-runtime.mjs run --stage=make-decision
+   `node scripts/stage-runtime.mjs run --action=execute --stage=make-decision
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
    `run` derives and binds the canonical pre-confirmation audit through Steps
    1–10. It rejects a stale decision receipt, stale review-flow head, missing
@@ -123,13 +132,13 @@ Use this complete public sequence without inventing flags or input shapes:
     `$TMP_DIR` through its normal OS temporary lifecycle. Never treat the
     temporary path as a stage artifact, evidence ref, or handoff item.
 16. Record the single final human decision using the returned attempt ref:
-   `node scripts/stage-runtime.mjs confirm --stage=make-decision
+   `node scripts/stage-runtime.mjs confirm --action=decision --stage=make-decision
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --decision=accepted|rejected`.
    An accepted confirmation records Step 11. A rejected confirmation never
    authorizes acceptance.
 17. Only for an accepted decision, pass the returned confirmation ref:
-   `node scripts/stage-runtime.mjs accept --stage=make-decision
+   `node scripts/stage-runtime.mjs authorize --action=decision --stage=make-decision
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --human-confirmation-ref=<confirmation-ref>`.
    `accept` revalidates the CandidateWorkspace, records Step 12, publishes the
@@ -400,7 +409,9 @@ structural/audit failure, or replace make-decision's normal final confirmation.
 content hashes；task identity、revision ID、changed files 与全部 content/source hashes
 均由 task-global writer 读取当前 ArtifactDir 后生成，caller 只提交 summary 和 source refs。
 旧 revision 与 accepted 字节只读。
-revision 缺失只披露，不触发 reopen、reset、rebind、checkpoint、自动审查或开发阻断。
+revision 缺失只披露，不触发 repair cycle、reset、rebind、checkpoint、自动审查或开发阻断。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。
 
 ## 同任务透明恢复
 

@@ -79,11 +79,11 @@
 | Anchor | 来源、路径与符号 | 当前职责 | 本次策略 |
 | --- | --- | --- | --- |
 | A-001 | `core/audit-aggregator.mjs:buildAuditSummaryFromJournalEvents` | 唯一过程 verdict | extend：读取 allowlisted content refs |
-| A-002 | `core/audit-summary-carrier.mjs:loadAuditSummary` | 认证 audit carrier | reuse |
+| A-002 | `runtime/evidence/audit-summary-carrier.mjs:loadAuditSummary` | 认证 audit carrier | reuse |
 | A-003 | `core/canonical-receipt-writer.mjs:writeOfficialComponentReceipt` | 官方 receipt | extend：decision Markdown 与 typed evidence refs |
 | A-004 | `core/task-kernel-implementation.mjs:buildTaskKernel` | task 权威、发布、review flow | extend：typed evidence、risk、continuation |
 | A-005 | `core/stage-handlers.mjs:officialStageHandler` | 五阶段发布入口 | extend：只消费认证 carrier/refs |
-| A-006 | bootstrap bundle 中的 `core/review-flow-authority.mjs` | review flow/root/head/CAS | reuse：Phase 1 原样回放 |
+| A-006 | bootstrap bundle 中的 `runtime/review/review-flow-authority.mjs` | review flow/root/head/CAS | reuse：Phase 1 原样回放 |
 | A-007 | `skills/wh-review/scripts/review-controller.mjs:deriveChangeClassification` | 结构变化分类 | reuse + 补五阶段矩阵 |
 | A-008 | `skills/wh-review/schemas/resolution.schema.json` | 零 provider resolution | reuse |
 | A-009 | `skills/talk-with-zhipeng/SKILL.md` | 单轴决策卡和逐题交互 | extend：typed completion 输出 |
@@ -115,7 +115,7 @@
 - caller 只能给 `kind + payload`；身份、snapshot、producer、ref/hash 由 writer 注入。
 - `verifyStageContentEvidence({task, ref, hash, expectedStage, expectedRunId, expectedTree})` 只返回认证值，不产出 verdict。
 
-### 6.2 `core/stage-content-contracts.mjs`（new）
+### 6.2 `runtime/stage/stage-content-contracts.mjs`（new）
 
 - `validateInteractionCompletion(value)`
 - `validateAmbiguityLedger(value)`
@@ -124,7 +124,7 @@
 - `validatePlanTaskContract({spec, plan, tasks})`
 - 返回 `{ok, errors, facts}`；`ok` 是内容结构事实，由 audit-aggregator 决定过程 verdict。
 
-### 6.3 `core/stage-review-disposition.mjs`（new）
+### 6.3 `runtime/review/stage-review-disposition.mjs`（new）
 
 - `seriousActionableFindings(reviewResult)` 只选择 `actionable + major|blocking + valid evidence`。
 - `buildRiskAcceptancePayload({finding, review, snapshot, card, reply})` 生成最小业务 payload。
@@ -238,20 +238,20 @@ decision omission
 
 ```text
 core/stage-content-evidence.mjs
-core/stage-content-contracts.mjs
-core/stage-review-disposition.mjs
+runtime/stage/stage-content-contracts.mjs
+runtime/review/stage-review-disposition.mjs
 core/stage-completion-facts.mjs
-core/schemas/stage-content-evidence.v1.json
+runtime/schemas/stage-content-evidence.v1.json
 core/schemas/interaction-completion.v1.json
-core/schemas/ambiguity-ledger.v1.json
-core/schemas/decision-entry.v1.json
-core/schemas/decision-coverage-audit.v1.json
-core/schemas/decision-omission-acceptance.v1.json
-core/schemas/decision-correction-appendix.v1.json
-core/schemas/decision-log-contract.v1.json
-core/schemas/plan-task-contract.v1.json
-core/schemas/stage-completion-facts.v1.json
-core/schemas/risk-acceptance.v1.json
+runtime/schemas/ambiguity-ledger.v1.json
+runtime/schemas/decision-entry.v1.json
+runtime/schemas/decision-coverage-audit.v1.json
+runtime/schemas/decision-omission-acceptance.v1.json
+runtime/schemas/decision-correction-appendix.v1.json
+runtime/schemas/decision-log-contract.v1.json
+runtime/schemas/plan-task-contract.v1.json
+runtime/schemas/stage-completion-facts.v1.json
+runtime/schemas/risk-acceptance.v1.json
 skills/decision-log/templates/decision-log-template.md
 docs/adr/0010-serious-review-disposition.md
 tests/stage-content-evidence.test.mjs

@@ -1,5 +1,5 @@
 /**
- * RED tests for core/resolve-path.mjs (FR-PATHG-004, decision 7/13).
+ * RED tests for runtime/adapters/resolve-path.mjs (FR-PATHG-004, decision 7/13).
  * Module does NOT exist yet — all tests must fail with import error or assertion error.
  */
 import { describe, it, expect, afterEach } from "vitest";
@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 // We'll use a lazy import pattern: import inside each test.
 let resolvePath;
 try {
-  const mod = await import("../resolve-path.mjs");
+  const mod = await import("../../runtime/adapters/resolve-path.mjs");
   resolvePath = mod.resolvePath;
 } catch {
   // Module doesn't exist — resolvePath stays undefined; tests that call it will throw.
@@ -21,7 +21,7 @@ try {
 // Helper: ensures the module exists (fail with clear message if import failed).
 function ensureModule() {
   if (typeof resolvePath !== "function") {
-    throw new Error("core/resolve-path.mjs does not export resolvePath — module missing (expected RED)");
+    throw new Error("runtime/adapters/resolve-path.mjs does not export resolvePath — module missing (expected RED)");
   }
 }
 

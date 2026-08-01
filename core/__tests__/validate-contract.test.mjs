@@ -1,5 +1,5 @@
 /**
- * RED tests for core/validate-contract.mjs (FR-NC-004, FR-NC-005).
+ * RED tests for runtime/evidence/validate-contract.mjs (FR-NC-004, FR-NC-005).
  * Module does NOT exist yet — all tests must fail with import error.
  */
 import { describe, it, expect } from "vitest";
@@ -12,7 +12,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 // Dynamic import so describe blocks register even when module is absent.
 let validateContract;
 try {
-  const mod = await import("../validate-contract.mjs");
+  const mod = await import("../../runtime/evidence/validate-contract.mjs");
   validateContract = mod.validateContract;
 } catch {
   validateContract = undefined;
@@ -22,7 +22,7 @@ try {
 function ensureModule() {
   if (typeof validateContract !== "function") {
     throw new Error(
-      "core/validate-contract.mjs does not export validateContract — module missing (expected RED)"
+      "runtime/evidence/validate-contract.mjs does not export validateContract — module missing (expected RED)"
     );
   }
 }

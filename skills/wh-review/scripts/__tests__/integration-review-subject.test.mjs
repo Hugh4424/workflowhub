@@ -1,8 +1,17 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, realpathSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { ArtifactDir } from "../../../../core/artifact-dir.mjs";
+import { createTask } from "../../../../core/task-handle.mjs";
 
 import {
   assertNoUntracedFormalPhase,
+  isVerifiedDescendantContinuation,
+  isInitialTasksCompletionSeam,
   prevalidatePhaseReviewCorrections,
   selectCanonicalPhaseTraces,
   verifiedHistoricalLineage,
@@ -25,6 +34,126 @@ const REPLACEMENT_TRACE_REF = `evidence/phases/phase-history/${NEW_TREE}/phase-m
 
 function sha(raw) { return createHash("sha256").update(raw).digest("hex"); }
 function binding(ref, value = HASH) { return { ref, sha256: value }; }
+
+function git(root, ...args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+}
+
+function descendantFixture({ nonMaterialBaseline = false } = {}) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-descendant-continuation-")));
+  git(root, "init", "-q");
+  git(root, "config", "user.name", "fixture");
+  git(root, "config", "user.email", "fixture@example.test");
+  const taskId = "descendant-task";
+  const materialDirectory = ["spec", "s"].join("");
+  const materialRoot = [materialDirectory, taskId].join("/");
+  const task = createTask({
+    ["storage" + "Root"]: root,
+    manifest: {
+      schema_version: "1.0.0", project_name: "fixture", task_id: taskId,
+      created_at: new Date().toISOString(), target_repo_root: root, issue_ids: [], inputs: {},
+    },
+  });
+  const artifacts = ArtifactDir.open(root, task);
+  artifacts.writeAtomic("decision-log.md", "# decision\n");
+  artifacts.writeAtomic("spec.md", "# spec\n");
+  artifacts.writeAtomic("plan.md", "# plan\n");
+  artifacts.writeAtomic("tasks.md", "# tasks\n");
+  artifacts.writeAtomic("implementation.txt", "previous\n");
+  git(root, "add", materialDirectory);
+  git(root, "commit", "-qm", "previous implementation");
+  const previousCommit = git(root, "rev-parse", "HEAD");
+  const previousTree = git(root, "rev-parse", "HEAD^{tree}");
+
+  if (nonMaterialBaseline) artifacts.writeAtomic("forged-code.txt", "must reject\n");
+  artifacts.writeAtomic("tasks.md", "# tasks revised\n");
+  git(root, "add", materialDirectory);
+  git(root, "commit", "-qm", "material revision");
+  const baselineCommit = git(root, "rev-parse", "HEAD");
+  const baseTree = git(root, "rev-parse", "HEAD^{tree}");
+
+  artifacts.writeAtomic("implementation.txt", "successor implementation\n");
+  git(root, "add", materialDirectory);
+  git(root, "commit", "-qm", "successor implementation");
+  const implementationCommit = git(root, "rev-parse", "HEAD");
+  const snapshotTree = git(root, "rev-parse", "HEAD^{tree}");
+  const implementationRef = "receipts/revisions/implementation/descendant.json";
+  const greenRef = "receipts/build-tests-descendant.json";
+  const implementationHash = "1".repeat(64);
+  const greenHash = "2".repeat(64);
+  const allowedFiles = [`${materialRoot}/implementation.txt`];
+  const candidate = {
+    trace: {
+      phase_id: "phase-9", baseline_commit: baselineCommit, implementation_commit: implementationCommit,
+      base_tree: baseTree, snapshot_tree: snapshotTree, material_id: "3".repeat(64),
+      review_status: "semantic", verdict: "pass",
+      implementation_receipt: binding(implementationRef, implementationHash),
+      green_test_receipt: binding(greenRef, greenHash), allowed_files: allowedFiles, changed_files: allowedFiles,
+    },
+    review: { value: { verdict: "pass" } },
+    implementation: {
+      ref: implementationRef, hash: implementationHash,
+      value: { task_id: "descendant-task", snapshot_tree: snapshotTree, snapshot_commit: implementationCommit, changed: allowedFiles },
+    },
+    green: {
+      ref: greenRef, hash: greenHash,
+      value: { task_id: "descendant-task", snapshot_tree: snapshotTree, snapshot_commit: implementationCommit },
+    },
+    scan: {
+      value: {
+        baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: snapshotTree,
+        allowed_files: allowedFiles, changed_files: allowedFiles, safe: true, violations: [], allowlist_violations: [],
+      },
+    },
+  };
+  const previous = { trace: { phase_id: "phase-8", implementation_commit: previousCommit, snapshot_tree: previousTree } };
+  return { root, task, previousTrace: previous, candidateTrace: candidate };
+}
+
+function cleanup(root) {
+  return rm(root, { recursive: true, force: true });
+}
+
+function markUnavailable(traceRecord, { mismatch = null } = {}) {
+  const trace = traceRecord.trace;
+  const attemptRef = `reviews/attempts/${trace.phase_id}-unavailable/attempt.json`;
+  const attemptHash = "4".repeat(64);
+  trace.baseline_commit ??= trace.implementation_commit;
+  trace.base_tree ??= trace.snapshot_tree;
+  trace.material_id ??= "5".repeat(64);
+  trace.review_status = "unavailable";
+  trace.review_result = null;
+  trace.verdict = null;
+  trace.review_attempt = binding(attemptRef, attemptHash);
+  traceRecord.review = null;
+  traceRecord.attempt = {
+    ref: attemptRef,
+    sha256: attemptHash,
+    value: {
+      version: "wh-review-attempt.v1",
+      attempt_id: `${trace.phase_id}-unavailable`,
+      task_id: "descendant-task",
+      stage: "build-code",
+      review_track: null,
+      subject_kind: "phase",
+      phase_id: trace.phase_id,
+      review_scope: "phase",
+      base_tree: trace.base_tree,
+      candidate_tree: trace.snapshot_tree,
+      snapshot_tree: trace.snapshot_tree,
+      material_id: trace.material_id,
+      provider_attempts: [{
+        provider: "fixture", status: "failed", session_id: null, runtime_id: null,
+        output_ref: null, error: { code: "PROVIDER_UNAVAILABLE", message: "fixture provider unavailable" },
+      }],
+      terminal_status: "unavailable",
+      error: { code: "PROVIDER_UNAVAILABLE", message: "fixture provider unavailable" },
+    },
+  };
+  if (mismatch === "material_id") traceRecord.attempt.value.material_id = "f".repeat(64);
+  if (mismatch === "attempt_ref") traceRecord.attempt.ref = "reviews/attempts/other/attempt.json";
+  return traceRecord;
+}
 
 function reviewResult(verdict = "pass") {
   const providerFinding = {
@@ -373,5 +502,244 @@ describe("integration selector legacy Phase review corrections", () => {
       corrections,
       readTrace: () => { throw original; },
     })).toThrow(original);
+  });
+
+  it("uses the historical-tolerant namespace only for trace selection", () => {
+    let received;
+    const task = {
+      listCanonicalPhaseMapTraceRefs: (options) => {
+        received = options;
+        return [];
+      },
+    };
+
+    expect(selectCanonicalPhaseTraces({
+      task,
+      sourceRoot: "fixture",
+      corrections: new Map(),
+    })).toEqual([]);
+    expect(received).toEqual({ tolerateHistoricalInvalidRecords: true });
+  });
+});
+
+describe("integration selector verified descendant continuations", () => {
+  it("accepts the initial Phase material-only seam from the build-plan checkpoint", async () => {
+    const f = descendantFixture();
+    try {
+      const acceptedCommit = git(f.root, "rev-parse", "HEAD~2");
+      const acceptedTree = git(f.root, "rev-parse", `${acceptedCommit}^{tree}`);
+      expect(isInitialTasksCompletionSeam({
+        task: f.task,
+        sourceRoot: f.root,
+        acceptedCommit,
+        acceptedTree,
+        candidateTrace: { trace: { baseline_commit: git(f.root, "rev-parse", "HEAD~1"), base_tree: git(f.root, "rev-parse", "HEAD~1^{tree}") } },
+      })).toBe(true);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects an initial seam that contains a code change", async () => {
+    const f = descendantFixture();
+    try {
+      const acceptedCommit = git(f.root, "rev-parse", "HEAD~2");
+      const acceptedTree = git(f.root, "rev-parse", `${acceptedCommit}^{tree}`);
+      const baselineCommit = git(f.root, "rev-parse", "HEAD~1");
+      const baselineTree = git(f.root, "rev-parse", `${baselineCommit}^{tree}`);
+      // The fixture's first commit is the accepted checkpoint. Add a code
+      // file to the same baseline commit's tree through a follow-up commit;
+      // the seam must remain material-only and therefore reject it.
+      const artifacts = ArtifactDir.open(f.root, f.task);
+      artifacts.writeAtomic("code-drift.mjs", "drift\n");
+      git(f.root, "add", ".");
+      git(f.root, "commit", "-qm", "unrelated code drift");
+      const driftCommit = git(f.root, "rev-parse", "HEAD");
+      expect(isInitialTasksCompletionSeam({
+        task: f.task,
+        sourceRoot: f.root,
+        acceptedCommit,
+        acceptedTree,
+        candidateTrace: { trace: { baseline_commit: driftCommit, base_tree: git(f.root, "rev-parse", `${driftCommit}^{tree}`) } },
+      })).toBe(false);
+      expect(baselineCommit).not.toBe(driftCommit);
+      expect(baselineTree).not.toBe(git(f.root, "rev-parse", `${driftCommit}^{tree}`));
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("selects a same-phase successor and leaves an unbound duplicate ambiguous", () => {
+    const oldTraceRef = "evidence/phases/phase-9/" + OLD_TREE + "/phase-map-trace-" + "1".repeat(64) + ".json";
+    const newTraceRef = "evidence/phases/phase-9/" + NEW_TREE + "/phase-map-trace-" + "2".repeat(64) + ".json";
+    const successorRef = "results/build-code/revisions/phase-successor-0003.json";
+    const successor = {
+      schema_version: "workflowhub-build-code-phase-successor.v2",
+      task_id: "replacement",
+      stage: "build-code",
+      phase_id: "phase-9",
+      previous_canonical_phase_evidence_ref: "evidence/phases/phase-9/old-evidence.json",
+      previous_canonical_phase_evidence_hash: "3".repeat(64),
+      previous_snapshot_tree: OLD_TREE,
+      current_snapshot_tree: NEW_TREE,
+    };
+    const successorHash = sha(`${JSON.stringify(successor)}\n`);
+    const old = {
+      traceRef: oldTraceRef,
+      traceSha256: "1".repeat(64),
+      trace: {
+        phase_id: "phase-9", snapshot_tree: OLD_TREE,
+        canonical_phase_evidence: binding(successor.previous_canonical_phase_evidence_ref, successor.previous_canonical_phase_evidence_hash),
+      },
+    };
+    const replacement = {
+      traceRef: newTraceRef,
+      traceSha256: "2".repeat(64),
+      trace: {
+        phase_id: "phase-9", snapshot_tree: NEW_TREE,
+        canonical_phase_evidence: binding("evidence/phases/phase-9/new-evidence.json", "4".repeat(64)),
+      },
+      phaseEvidence: { value: { phase_successor_ref: successorRef, phase_successor_hash: successorHash } },
+    };
+    const task = {
+      identity: { projectName: "fixture", taskId: "replacement" },
+      listCanonicalPhaseMapTraceRefs: () => [oldTraceRef, newTraceRef],
+      readRecord: (ref) => {
+        if (ref === successorRef) return `${JSON.stringify(successor)}\n`;
+        throw new Error(`unexpected read ${ref}`);
+      },
+    };
+    const selected = selectCanonicalPhaseTraces({ task, sourceRoot: "fixture", corrections: new Map(), readTrace: (_task, _root, ref) => ref === oldTraceRef ? old : replacement });
+    expect(selected).toEqual([replacement]);
+    successor.previous_canonical_phase_evidence_hash = "f".repeat(64);
+    const unchanged = selectCanonicalPhaseTraces({ task, sourceRoot: "fixture", corrections: new Map(), readTrace: (_task, _root, ref) => ref === oldTraceRef ? old : replacement });
+    expect(unchanged).toHaveLength(2);
+  });
+
+  it("accepts a material-only Git descendant with receipts bound to its current tree", async () => {
+    const f = descendantFixture();
+    try {
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(true);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects a baseline ancestry path that contains a non-material commit", async () => {
+    const f = descendantFixture({ nonMaterialBaseline: true });
+    try {
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects unknown or non-ancestor baselines", async () => {
+    const f = descendantFixture();
+    try {
+      f.candidateTrace.trace.baseline_commit = "f".repeat(40);
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects receipt/tree and allowlist drift", async () => {
+    const f = descendantFixture();
+    try {
+      f.candidateTrace.implementation.value.snapshot_tree = "f".repeat(40);
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(false);
+      const clean = descendantFixture();
+      try {
+        clean.candidateTrace.trace.changed_files = ["outside.txt"];
+        clean.candidateTrace.scan.value.changed_files = ["outside.txt"];
+        expect(isVerifiedDescendantContinuation({
+          task: clean.task, sourceRoot: clean.root, previousTrace: clean.previousTrace, candidateTrace: clean.candidateTrace,
+        })).toBe(false);
+      } finally {
+        await cleanup(clean.root);
+      }
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("accepts a formally bound unavailable current Phase review", async () => {
+    const f = descendantFixture();
+    try {
+      markUnavailable(f.candidateTrace);
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(true);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("accepts a formally bound unavailable predecessor Phase review", async () => {
+    const f = descendantFixture();
+    try {
+      markUnavailable(f.previousTrace);
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(true);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects unavailable review records with a missing attempt binding", async () => {
+    const f = descendantFixture();
+    try {
+      markUnavailable(f.candidateTrace);
+      delete f.candidateTrace.trace.review_attempt;
+      expect(isVerifiedDescendantContinuation({
+        task: f.task, sourceRoot: f.root, previousTrace: f.previousTrace, candidateTrace: f.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(f.root);
+    }
+  });
+
+  it("rejects unavailable review records with a missing or mismatched contract field", async () => {
+    const missingAttempt = descendantFixture();
+    try {
+      markUnavailable(missingAttempt.candidateTrace);
+      delete missingAttempt.candidateTrace.attempt;
+      expect(isVerifiedDescendantContinuation({
+        task: missingAttempt.task, sourceRoot: missingAttempt.root,
+        previousTrace: missingAttempt.previousTrace, candidateTrace: missingAttempt.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(missingAttempt.root);
+    }
+    const mismatch = descendantFixture();
+    try {
+      markUnavailable(mismatch.candidateTrace, { mismatch: "material_id" });
+      expect(isVerifiedDescendantContinuation({
+        task: mismatch.task, sourceRoot: mismatch.root,
+        previousTrace: mismatch.previousTrace, candidateTrace: mismatch.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(mismatch.root);
+    }
+    const badRef = descendantFixture();
+    try {
+      markUnavailable(badRef.candidateTrace, { mismatch: "attempt_ref" });
+      expect(isVerifiedDescendantContinuation({
+        task: badRef.task, sourceRoot: badRef.root,
+        previousTrace: badRef.previousTrace, candidateTrace: badRef.candidateTrace,
+      })).toBe(false);
+    } finally {
+      await cleanup(badRef.root);
+    }
   });
 });

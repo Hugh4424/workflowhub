@@ -117,7 +117,7 @@ WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态�
 
 **当前材料版本（current material revision）**：
 同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
-变更来源。旧版本、hash 和 checkpoint 保留为历史；它们不阻止当前材料继续开发或验证。
+变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **当前 requirements 指针（current requirements pointer）**：
 指向同一任务最新 requirements ledger 与 coverage 的受控选择记录。requirement ID、每代

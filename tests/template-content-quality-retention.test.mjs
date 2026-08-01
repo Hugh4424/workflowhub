@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   validatePlanTaskContract,
   validateSpecContentProfile,
-} from "../core/stage-content-contracts.mjs";
+} from "../runtime/stage/stage-content-contracts.mjs";
 
 const fixture = JSON.parse(readFileSync(
   new URL("./fixtures/template-content-quality/retention-map.json", import.meta.url),

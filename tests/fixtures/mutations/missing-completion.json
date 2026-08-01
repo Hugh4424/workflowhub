@@ -1,0 +1,5 @@
+{
+  "mutation": "missing-completion",
+  "seam": "stage completion predicate",
+  "expected": "reject"
+}

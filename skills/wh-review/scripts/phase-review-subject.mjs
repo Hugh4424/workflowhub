@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../runtime/review/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
-import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../core/canonical-utils.mjs";
+import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -55,6 +55,18 @@ function boundRecord(task, binding, label) {
 function sameArray(left, right) {
   return Array.isArray(left) && Array.isArray(right)
     && JSON.stringify(normalizeRuntimeOnlyPaths(left)) === JSON.stringify(normalizeRuntimeOnlyPaths(right));
+}
+
+/**
+ * Keep the published Phase trace's diff-scan bindings tied to the canonical
+ * scan.  The guarded C2 fields are part of the official phase-evidence
+ * schema, not reviewer metadata, so a trace must preserve them exactly.
+ */
+export function phaseTraceMatchesCanonicalScan(trace, scan) {
+  return sameArray(trace?.allowed_files, scan?.allowed_files)
+    && sameArray(trace?.changed_files, scan?.changed_files)
+    && sameArray(trace?.guarded_c2_paths ?? [], scan?.guarded_c2_paths ?? [])
+    && JSON.stringify(trace?.guarded_changes ?? []) === JSON.stringify(scan?.guarded_changes ?? []);
 }
 
 function expectedPhaseCommitRef(task, trace) {
@@ -246,7 +258,7 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
   const allowed = new Set([
     "schema_version", "phase_id", "baseline_commit", "implementation_commit", "base_tree", "snapshot_tree",
     "implementation_commit_ref",
-    "allowed_files", "changed_files", "canonical_phase_evidence", "diff_scan", "implementation_receipt",
+    "allowed_files", "changed_files", "guarded_c2_paths", "guarded_changes", "canonical_phase_evidence", "diff_scan", "implementation_receipt",
     "green_test_receipt", "red_test_receipt", "review_status", "review_result", "review_attempt",
     "material_id", "review_scope", "verdict", "risk_acceptances", "acceptance_trace",
   ]);
@@ -280,7 +292,7 @@ export function readPhaseMapTrace({ task, sourceRoot, traceRef } = {}) {
   verifyPinnedPhaseCommit({ task: safeTask, sourceRoot, trace });
   if (trace.base_tree !== subject.baseTree || trace.implementation_commit !== subject.implementationCommit ||
       trace.baseline_commit !== subject.baselineCommit || trace.snapshot_tree !== subject.candidateTree ||
-      !sameArray(trace.allowed_files, scan.allowed_files) || !sameArray(trace.changed_files, scan.changed_files) ||
+      !phaseTraceMatchesCanonicalScan(trace, scan) ||
       phaseResult.evidence?.diff !== scanRecord.ref || phaseResult.evidence?.implementation_receipt_ref !== implementation.ref ||
       phaseResult.evidence?.green_test_receipt_ref !== green.ref || (phaseResult.evidence?.red_evidence_ref ?? null) !== (red?.ref ?? null)) {
     invalid("phase map trace does not match canonical Phase evidence");

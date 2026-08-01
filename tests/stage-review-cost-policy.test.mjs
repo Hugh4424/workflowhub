@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { selectReviewRound } from "../skills/wh-review/scripts/review-controller.mjs";
-import * as reviewAuthority from "../core/review-flow-authority.mjs";
+import * as reviewAuthority from "../runtime/review/review-flow-authority.mjs";
 
 const route = { mode: "full_on_structural_rework", initial: ["external/reviewer"] };
 const previous = {

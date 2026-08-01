@@ -233,7 +233,7 @@ skills:
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 65ebe8bf1e0b45b4e07b5bf2875e5ad83c8c186a02782a13efcd96c7a506a937
+    local_bundle_hash: e75f8c383a118a7d6190b96ef496f43ccc4c26db6cceebec3ec252d36fe994ad
     last_reviewed_at: "2026-07-14"
     status: native
     standalone: true
@@ -247,7 +247,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 451cfbbdb22a9605afa7a1f290b7b90728b61981656e6a5ca9dada3b8e27d0be
+    local_bundle_hash: 914c4ef4026b31d877b2feb9f7402da2773700c6b6d7002f5e4d4e8fd79ae686
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -550,7 +550,7 @@ capability_decisions:
     purpose: 把 AgentHub 或宿主技能软链进 .claude/skills
     design_idea: 依赖宿主自动发现全局技能
     used_by_stages: []
-    local_path: core/local-skill-resolver.mjs
+    local_path: runtime/adapters/local-skill-resolver.mjs
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/contract.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/contract.md" }]
     local_changes: 由 repo-relative manifest、bundle 和 resolved path payload 取代
     dependency_closure: []

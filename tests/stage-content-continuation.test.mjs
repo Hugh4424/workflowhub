@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask, createTaskKernel } from "../core/task-handle.mjs";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { readCurrentTaskMaterialRevision } from "../core/stage-content-evidence.mjs";
 import { validateReplayRecordSet } from "../scripts/validate-stage-replay.mjs";
@@ -124,6 +124,21 @@ describe("legacy accepted content compatibility", () => {
 describe("append-only stage continuation", () => {
   it("publishes one task-global current material chain from authenticated artifact bytes", () => {
     const { repo, task, artifacts, kernel } = fixture();
+    const ledgerRaw = "fixture requirements ledger\n";
+    const coverageRaw = "fixture requirements coverage\n";
+    task.createRecordAtomic("requirements/ledger.json", ledgerRaw);
+    task.createRecordAtomic("requirements/coverage.json", coverageRaw);
+    task.createRecordAtomic("requirements/current.json", `${JSON.stringify({
+      schema_version: "requirements-current.v1",
+      task_id: "legacy-task",
+      generation: 1,
+      ledger_ref: "requirements/ledger.json",
+      ledger_hash: sha256(ledgerRaw),
+      content_hash: sha256(ledgerRaw),
+      coverage_ref: "requirements/coverage.json",
+      coverage_hash: sha256(coverageRaw),
+      parent_ref: null,
+    }, null, 2)}\n`);
     const first = kernel.publishMaterialRevision({
       change_summary: "capture initial current materials",
       source_refs: ["task.json"],

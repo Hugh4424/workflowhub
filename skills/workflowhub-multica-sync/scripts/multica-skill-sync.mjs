@@ -190,7 +190,7 @@ function closureCheck(repo, statusText, mainCommit, timeoutMs) {
   const head = git(repo, ["rev-parse", "HEAD"], timeoutMs).trim();
   if (statusText || head !== mainCommit) return { status: "unknown", reason: "工作树不是干净的 main 快照，不能把当前闭包结果冒充 main 闭包" };
   try {
-    const output = run(process.execPath, [path.join(repo, "core/check-skill-closure.mjs"), repo], { cwd: repo, timeoutMs });
+    const output = run(process.execPath, [path.join(repo, "runtime/evidence/check-skill-closure.mjs"), repo], { cwd: repo, timeoutMs });
     return { status: "passed", output: output.trim() };
   } catch (error) {
     return { status: "failed", reason: error.message };

@@ -219,6 +219,47 @@ index 1234567..abcdefg 100644
     expect(result.safe).toBe(false);
   });
 
+  it('case 17: guarded phase path suppresses only path-level C2 rules', () => {
+    const diffText = `diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,2 +1,3 @@
+ name: CI
++  runs-on: ubuntu-latest
+`;
+    const root = mkdtempSync(join(tmpdir(), 'guarded-c2-diff-'));
+    try {
+      const diffPath = join(root, 'guarded.diff');
+      writeFileSync(diffPath, diffText);
+      const result = scanDiffFile(diffPath, new Set(), new Set(['.github/workflows/ci.yml']));
+      expect(result.violations.some(v => v.pattern === 'ci*')).toBe(false);
+      expect(result.safe).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('case 18: guarded package path still rejects semver content', () => {
+    const diffText = `diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,3 +1,3 @@
+-  "version": "1.0.0"
++  "version": "2.0.0"
+`;
+    const root = mkdtempSync(join(tmpdir(), 'guarded-c2-diff-'));
+    try {
+      const diffPath = join(root, 'guarded.diff');
+      writeFileSync(diffPath, diffText);
+      const result = scanDiffFile(diffPath, new Set(), new Set(['package.json']));
+      expect(result.violations.some(v => v.pattern === 'package.json')).toBe(false);
+      expect(result.violations.some(v => v.pattern === 'plugin-semver-bump')).toBe(true);
+      expect(result.safe).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   // --- FR-DIFF-003 false-positive guard tests ---
   // These are genuinely falsifiable: with the old substring-match bug present, they would
   // return safe:false (over-matching), so asserting safe:true catches the regression.
@@ -442,6 +483,31 @@ describe('createPhaseDiffScan', () => {
       const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-2', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
       expect(result.safe).toBe(false);
       expect(result.allowlist_violations).toEqual([{ path: 'unexpected.txt' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('records guarded C2 paths while keeping content-level rules fail-closed', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-guarded-c2-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'package.json'), '{"version":"1.0.0"}\n');
+      git(['add', '.']); git(['commit', '-qm', 'base']); const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'package.json'), '{"version":"2.0.0"}\n');
+      git(['add', '.']); git(['commit', '-qm', 'candidate']); const implementation = git(['rev-parse', 'HEAD']);
+      const result = createPhaseDiffScan({
+        sourceRoot: root, phaseId: 'phase-8', baselineCommit: baseline, implementationCommit: implementation,
+        allowedFiles: ['package.json'], guardedC2Paths: ['package.json'],
+      });
+      expect(result.guarded_c2_paths).toEqual(['package.json']);
+      expect(result.guarded_changes).toEqual([{ path: 'package.json', reason: 'phase-local-c2-path-rule-exception' }]);
+      expect(result.c2_violations).toEqual(expect.arrayContaining([
+        expect.objectContaining({ pattern: 'plugin-semver-bump' }),
+      ]));
+      expect(result.c2_violations.some(v => v.pattern === 'package.json')).toBe(false);
+      expect(result.safe).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

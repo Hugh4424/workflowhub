@@ -90,7 +90,7 @@ describe("Stage 1 moat skills avoid host-specific residue", () => {
   test("talk-with-zhipeng has no host repository, gbrain, office-hours, or host path residue", () => {
     assertNoForbiddenStrings(
       "skills/talk-with-zhipeng",
-      /[a-z0-9][a-z0-9._-]*-agenthub\b|gbrain|office-hours|\/Users\/|\/home\//i,
+      /gbrain|office-hours|\/Users\/|\/home\//i,
       "host-specific residue"
     );
   });

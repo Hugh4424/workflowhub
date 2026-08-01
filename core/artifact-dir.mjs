@@ -16,7 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
-import { validateTaskId } from "./task-identity.mjs";
+import { validateTaskId } from "../runtime/task/task-identity.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 
 function assertInside(basePath, candidatePath) {

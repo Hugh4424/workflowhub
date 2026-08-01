@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runProviderSmoke } from "../run-wh-review-provider-smoke.mjs";
+import { runProviderSmoke } from "../../tools/cli/run-wh-review-provider-smoke.mjs";
 describe("real provider smoke safety", () => {
   it("requires every repository and evidence path explicitly", async () => {
     await expect(runProviderSmoke({})).rejects.toThrow(/explicit source_root/);
