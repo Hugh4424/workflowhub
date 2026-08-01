@@ -253,55 +253,31 @@ function integrationEntries(value, key) {
   return value.entries;
 }
 
-function validateIntegrationMaterials({ source, materials }) {
+function validateIntegrationMaterials({ task, source, materials }) {
   const coverage = materials.phase_coverage;
-  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage) || coverage.schema_version !== "phase-review-coverage.v1" ||
-      coverage.snapshot_tree !== source.snapshotTree || !coverage.checkpoint || typeof coverage.checkpoint !== "object" ||
-      !Array.isArray(coverage.phases) || coverage.phases.length === 0) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires non-empty final-snapshot phase-review-coverage.v1");
+  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage)
+      || coverage.schema_version !== "current-worktree-coverage.v1"
+      || coverage.snapshot_tree !== source.snapshotTree
+      || !Array.isArray(coverage.completed_tasks) || coverage.completed_tasks.length === 0
+      || !coverage.implementation_receipt || !coverage.green_test_receipt) {
+    throw new Error("MATERIAL_INCOMPLETE: integration requires current-worktree-coverage.v1 for the frozen final snapshot");
   }
-  const phaseIds = new Set();
-  const phases = new Map();
-  for (const phase of coverage.phases) {
-    const semanticReview = phase?.review_status === "semantic";
-    const unavailableReview = phase?.review_status === "unavailable";
-    if (!phase || typeof phase !== "object" || Array.isArray(phase) || typeof phase.phase_id !== "string" || phase.phase_id === "" || phaseIds.has(phase.phase_id) ||
-        typeof phase.base_tree !== "string" || typeof phase.snapshot_tree !== "string" || typeof phase.trace_ref !== "string" ||
-        !/^evidence\/phases\/[A-Za-z0-9._/-]+\/phase-map-trace-[a-f0-9]{64}\.json$/.test(phase.trace_ref) ||
-        typeof phase.review_action?.ref !== "string" || typeof phase.review_attempt?.ref !== "string" ||
-        !(semanticReview || unavailableReview) ||
-        (semanticReview && (typeof phase.review_result?.ref !== "string" || !["pass", "revise_required"].includes(phase.review_verdict))) ||
-        (unavailableReview && (phase.review_result !== null || phase.review_verdict !== null)) ||
-        typeof phase.green_test_receipt?.ref !== "string") {
-      throw new Error("MATERIAL_INCOMPLETE: integration coverage phase identity is invalid");
+  for (const [label, value] of [["implementation", coverage.implementation_receipt], ["GREEN", coverage.green_test_receipt]]) {
+    if (typeof value?.ref !== "string" || hashValue(value?.sha256, `integration ${label} receipt hash`) === "") {
+      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt binding is invalid`);
     }
-    hashValue(phase.trace_sha256, `phase_coverage.${phase.phase_id}.trace_sha256`);
-    hashValue(phase.review_action.sha256, `phase_coverage.${phase.phase_id}.review_action.sha256`);
-    hashValue(phase.review_attempt.sha256, `phase_coverage.${phase.phase_id}.review_attempt.sha256`);
-    if (semanticReview) hashValue(phase.review_result.sha256, `phase_coverage.${phase.phase_id}.review_result.sha256`);
-    hashValue(phase.green_test_receipt.sha256, `phase_coverage.${phase.phase_id}.green_test_receipt.sha256`);
-    phaseIds.add(phase.phase_id); phases.set(phase.phase_id, phase);
-  }
-  const finalPhase = coverage.phases.at(-1);
-  if ((finalPhase.completion_tree ?? finalPhase.snapshot_tree) !== source.snapshotTree) {
-    throw new Error("MATERIAL_INCOMPLETE: integration coverage does not end at the frozen final snapshot");
+    const raw = assertTaskHandle(task).readRecord(value.ref);
+    if (sha256(raw) !== value.sha256.replace(/^sha256:/, "")) throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt hash mismatch`);
+    let receipt;
+    try { receipt = JSON.parse(raw); } catch { throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt must be JSON`); }
+    if (receipt.snapshot_tree !== source.snapshotTree || (label === "GREEN" && receipt.exit_code !== 0)) {
+      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt is not a passing final-snapshot fact`);
+    }
   }
 
   const seams = materials.seam_index;
-  if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "cross-phase-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires a final-snapshot cross-phase-seam-index.v1");
-  }
-  const seamIds = new Set();
-  for (const seam of integrationEntries(seams, "seam_index")) {
-    if (!seam || typeof seam !== "object" || Array.isArray(seam) || typeof seam.seam_id !== "string" || seam.seam_id === "" || seamIds.has(seam.seam_id) ||
-        !phaseIds.has(seam.producer_phase_id) || !phaseIds.has(seam.consumer_phase_id) || !["complete", "not_applicable", "unknown"].includes(seam.disposition)) {
-      throw new Error("MATERIAL_INCOMPLETE: seam_index entry identity is invalid");
-    }
-    seamIds.add(seam.seam_id);
-    if (seam.disposition === "complete") validateAnchors("seam_index", seam.seam_id, seam.anchors);
-    else if (seam.anchors !== undefined || typeof seam.reason_code !== "string" || seam.reason_code === "" || typeof seam.reason !== "string" || seam.reason === "") {
-      throw new Error(`MATERIAL_INCOMPLETE: seam_index.${seam.seam_id} must have anchors or an explicit audited disposition`);
-    }
+  if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "current-worktree-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)) {
+    throw new Error("MATERIAL_INCOMPLETE: integration requires a current-worktree seam index");
   }
 
   const trace = materials.ac_trace;
@@ -320,22 +296,18 @@ function validateIntegrationMaterials({ source, materials }) {
     traced.add(entry.acceptance_criterion_id);
     validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
     for (const change of entry.change) {
-      const phase = phases.get(change?.phase_id);
-      if (!phase || typeof change.path !== "string" || !Array.isArray(phase.changed_files) || !phase.changed_files.includes(change.path)) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is not in covered Phase evidence`);
+      if (typeof change?.task_id !== "string" || !coverage.completed_tasks.some((task) => task?.task_id === change.task_id) || typeof change.summary !== "string" || change.summary === "") {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is not current completed-task evidence`);
       }
     }
     for (const test of entry.test) {
-      const phase = phases.get(test?.phase_id);
-      if (!phase || test.receipt_ref !== phase.green_test_receipt.ref || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== phase.green_test_receipt.sha256.replace(/^sha256:/, "")) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not the covered GREEN receipt`);
+      if (test?.receipt_ref !== coverage.green_test_receipt.ref || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== coverage.green_test_receipt.sha256.replace(/^sha256:/, "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not current GREEN evidence`);
       }
     }
     for (const evidence of entry.evidence) {
-      const phase = phases.get(evidence?.phase_id);
-      const allowed = [phase?.canonical_phase_evidence, phase?.implementation_receipt, phase?.review_result].filter(Boolean);
-      if (!phase || !allowed.some((binding) => evidence.ref === binding.ref && hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) === binding.sha256.replace(/^sha256:/, ""))) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not canonical covered evidence`);
+      if (evidence?.ref !== coverage.implementation_receipt.ref || hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) !== coverage.implementation_receipt.sha256.replace(/^sha256:/, "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not current implementation evidence`);
       }
     }
   }
@@ -1050,7 +1022,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   rejectDirectRawEvidence(materials);
   if (stage === "build-code" && effectiveScope === "integration") {
     validateIntegrationFreshTests({ task, source, materials });
-    validateIntegrationMaterials({ source, materials });
+    validateIntegrationMaterials({ task, source, materials });
   }
   if (stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
   const acEvidenceSummary = stage === "verify-code"

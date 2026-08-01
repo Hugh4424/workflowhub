@@ -630,29 +630,21 @@ describe("review materials", () => {
     const receipt = Buffer.from(`${JSON.stringify({ command: "npm run test:targeted", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`);
     const task = evidenceTask(f, receipt, output);
     const testEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
-    const changedPath = source.changedFiles[0].path;
-    const traceHash = "a".repeat(64), evidenceHash = "b".repeat(64), implementationHash = "c".repeat(64);
+    const implementation = Buffer.from(`${JSON.stringify({ snapshot_tree: source.snapshotTree })}\n`);
+    const implementationHash = createHash("sha256").update(implementation).digest("hex");
+    createTaskKernel(task).publishCanonicalRecord("receipts/revisions/implementation/current.json", implementation);
     const materials = {
       approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: testEvidence,
       phase_coverage: {
-        schema_version: "phase-review-coverage.v1", checkpoint: { commit: source.baseCommit, tree: source.baseTree }, snapshot_tree: source.snapshotTree,
-        phases: [{
-          phase_id: "T01", base_tree: source.baseTree, snapshot_tree: source.snapshotTree,
-          trace_ref: `evidence/phases/T01/${source.snapshotTree}/phase-map-trace-${traceHash}.json`, trace_sha256: traceHash,
-          changed_files: [changedPath], green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
-          canonical_phase_evidence: { ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash },
-          implementation_receipt: { ref: "receipts/implementation.json", sha256: implementationHash },
-          review_status: "semantic",
-          review_action: { ref: "reviews/flows/phase/event-0001.json", sha256: "e".repeat(64) },
-          review_attempt: { ref: "reviews/attempts/phase/attempt.json", sha256: "f".repeat(64) },
-          review_result: { ref: "reviews/results/phase.json", sha256: "d".repeat(64) },
-          review_verdict: "pass",
-        }],
+        schema_version: "current-worktree-coverage.v1", snapshot_tree: source.snapshotTree,
+        implementation_receipt: { ref: "receipts/revisions/implementation/current.json", sha256: implementationHash },
+        green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
+        completed_tasks: [{ task_id: "T01", acceptance_ids: ["AC-1"], summary: "current implementation" }],
       },
-      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+      seam_index: { schema_version: "current-worktree-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
       ac_trace: {
         schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"],
-        entries: [{ acceptance_criterion_id: "AC-1", change: [{ phase_id: "T01", path: changedPath }], test: [{ phase_id: "T01", receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ phase_id: "T01", ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],
+        entries: [{ acceptance_criterion_id: "AC-1", change: [{ task_id: "T01", summary: "current implementation" }], test: [{ receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ ref: "receipts/revisions/implementation/current.json", sha256: implementationHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],
       },
       review_instructions: reviewInstructionsFor("build-code", null, false, "initial", "integration"),
     };

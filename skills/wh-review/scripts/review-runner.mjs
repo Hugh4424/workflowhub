@@ -1184,7 +1184,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
-  if (buildIntegrationSubject !== undefined && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) throw new TypeError("integration subject is derived from canonical Phase evidence");
+  if (buildIntegrationSubject !== undefined && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) throw new TypeError("integration subject is derived from current task evidence");
   if (new Set(providers).size !== providers.length) throw new TypeError("providers must be unique");
   // Candidate groups intentionally retain same-adapter profiles. The broker
   // is the single authority that excludes them and emits SAME_SOURCE facts.
@@ -1213,8 +1213,9 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   try {
     const isIntegration = stage === "build-code" && phaseId === null;
     // A production final build-code review is an integration review, not a
-    // diff-free alias for a caller-defined worktree packet. Coverage and seams
-    // are reconstructed from canonical Phase traces before material assembly.
+    // diff-free alias for a caller-defined worktree packet. Coverage comes
+    // from current completed task evidence and same-snapshot receipts; phase
+    // history is optional audit data and cannot control progress.
     // The explicit fixture seam lets isolated tests provide synthetic canonical
     // facts without weakening the production entrypoint.
     integrationSubject = isIntegration && (fixtureSourceToken !== FIXTURE_SOURCE_TOKEN || typeof buildIntegrationSubject === "function")
