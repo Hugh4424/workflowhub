@@ -419,7 +419,7 @@ function materialAuthorizesAllowlistAdditions({ task, workspace, additions } = {
   if (start < 0) return false;
   const section = tasks.slice(start, end < 0 ? tasks.length : end);
   const authorized = new Set();
-  for (const match of section.matchAll(/追加(?:文件|精确文件)\s*[:：]\s*([^\n]+)/g)) {
+  for (const match of section.matchAll(/追加(?:文件|精确文件)\*{0,2}\s*[:：]\s*([^\n]+)/g)) {
     for (const path of match[1].matchAll(/`([^`]+)`/g)) authorized.add(path[1]);
   }
   return additions.every((path) => authorized.has(path));
