@@ -429,6 +429,13 @@ function awaitingSuccessorCandidate({ task, sourceRoot, successorRef, successor,
   if (!ancestor && successor.baseline_continuity === "legacy-commit-current-head-continuity") {
     ancestor = gitAncestor(sourceRoot, git(sourceRoot, ["rev-parse", "HEAD"], "current Git head"), currentCommit);
   }
+  if (!ancestor && PHASE_SUCCESSOR_REF.test(successor.predecessor_phase_trace_ref ?? "")) {
+    // The predecessor successor has already been recursively authenticated
+    // above. Its historical synthetic snapshot commit may not be an ancestor
+    // of the fresh current snapshot, so require continuity from this run's
+    // HEAD rather than rejecting the active successor chain.
+    ancestor = gitAncestor(sourceRoot, git(sourceRoot, ["rev-parse", "HEAD"], "current Git head"), currentCommit);
+  }
   if (!ancestor) incomplete(`awaiting Phase successor Git ancestry is invalid: ${successorRef}`);
   return Object.freeze({
     traceRef: successorRef,
@@ -472,7 +479,7 @@ function awaitingSuccessorCandidate({ task, sourceRoot, successorRef, successor,
 /** Validate a pending successor when it is itself used as the immutable
  * predecessor of another successor. This carries forward the old unavailable
  * review fact instead of manufacturing a review result. */
-function validatePendingSuccessorPredecessor({ task, sourceRoot, predecessorRef, predecessorHash, successor }) {
+function validatePendingSuccessorPredecessor({ task, sourceRoot, predecessorRef, predecessorHash, successor, skipHistoricalAncestry = false }) {
   if (!PHASE_SUCCESSOR_REF.test(predecessorRef ?? "") || !HASH.test(predecessorHash ?? "")) {
     incomplete(`pending Phase successor predecessor binding is invalid: ${predecessorRef}`);
   }
@@ -509,10 +516,18 @@ function validatePendingSuccessorPredecessor({ task, sourceRoot, predecessorRef,
   }
   const oldTraceRef = value.predecessor_phase_trace_ref;
   const oldTraceHash = value.predecessor_phase_trace_hash;
-  if (!/^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(oldTraceRef ?? "")
+  if ((!/^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(oldTraceRef ?? "")
+        && !PHASE_SUCCESSOR_REF.test(oldTraceRef ?? ""))
       || !HASH.test(oldTraceHash ?? "")) incomplete(`pending Phase successor old predecessor trace is invalid: ${predecessorRef}`);
-  const oldTrace = phaseTrace(task, sourceRoot, oldTraceRef);
-  if (oldTrace.traceSha256 !== oldTraceHash
+  const predecessorIdentity = PHASE_SUCCESSOR_REF.test(oldTraceRef)
+    ? validatePendingSuccessorPredecessor({
+      task, sourceRoot, predecessorRef: oldTraceRef, predecessorHash: oldTraceHash,
+      successor: value, skipHistoricalAncestry: true,
+    })
+    : phaseTrace(task, sourceRoot, oldTraceRef);
+  const oldTrace = predecessorIdentity.oldTrace ?? predecessorIdentity;
+  const predecessorHashActual = predecessorIdentity.traceSha256 ?? predecessorIdentity.sha256;
+  if (predecessorHashActual !== oldTraceHash
       || oldTrace.trace.phase_id !== value.phase_id
       || oldTrace.trace.review_status !== "unavailable"
       || value.previous_phase_review_ref !== oldTrace.attempt?.ref
@@ -522,6 +537,11 @@ function validatePendingSuccessorPredecessor({ task, sourceRoot, predecessorRef,
   if (git(sourceRoot, ["rev-parse", `${value.current_snapshot_commit}^{tree}`], "pending Phase successor") !== value.current_snapshot_tree) {
     incomplete(`pending Phase successor snapshot tree is invalid: ${predecessorRef}`);
   }
+  // A successor that is itself superseded remains immutable audit history. Its
+  // old Git ancestry may point at an ephemeral runner tree; the active child
+  // has already authenticated the successor's identity, receipts, and old
+  // trace above. Do not let that stale ancestry block the active chain.
+  if (skipHistoricalAncestry) return Object.freeze({ ref: predecessorRef, sha256: predecessorHash, value, oldTrace });
   let ancestor = false;
   try {
     git(sourceRoot, ["merge-base", "--is-ancestor", value.previous_implementation_commit, value.current_snapshot_commit], "pending Phase successor Git ancestry");
@@ -612,6 +632,26 @@ export function selectCanonicalPhaseTraces({
       supersedingSuccessorRefs.add(value.predecessor_phase_trace_ref);
     }
   }
+  const markSuccessorHistory = (successorRef, visited = new Set()) => {
+    if (visited.has(successorRef)) return;
+    visited.add(successorRef);
+    let value;
+    try { value = readJson(task, successorRef, "historical Phase successor").value; }
+    catch { return; }
+    for (const trace of traces) {
+      if (trace.trace.phase_id === value?.phase_id && trace.trace.snapshot_tree === value?.current_snapshot_tree) {
+        superseded.add(trace);
+      }
+    }
+    const predecessorRef = value?.predecessor_phase_trace_ref;
+    if (PHASE_SUCCESSOR_REF.test(predecessorRef ?? "")) {
+      markSuccessorHistory(predecessorRef, visited);
+    } else if (typeof predecessorRef === "string") {
+      const predecessor = traces.find((trace) => trace.traceRef === predecessorRef);
+      if (predecessor !== undefined) superseded.add(predecessor);
+    }
+  };
+  for (const ref of supersedingSuccessorRefs) markSuccessorHistory(ref);
   const awaitingSuccessors = [];
   for (const successorRef of successorRefs) {
     const successorRecord = readJson(task, successorRef, "Phase successor");
@@ -631,9 +671,17 @@ export function selectCanonicalPhaseTraces({
         || !OID.test(successor.current_snapshot_tree ?? "")) {
       incomplete(`explicit Phase successor binding is invalid: ${successorRef}`);
     }
+    const isSupersededSuccessor = supersedingSuccessorRefs.has(successorRef);
+    if (isSupersededSuccessor) {
+      // This record is retained for audit only. The child successor has
+      // already authenticated its direct binding; do not re-enter this
+      // historical node as an active path candidate.
+      continue;
+    }
     if (explicitSuccessorRef) {
       validatePendingSuccessorPredecessor({
         task, sourceRoot, predecessorRef: explicitRef, predecessorHash: explicitHash, successor,
+        skipHistoricalAncestry: supersedingSuccessorRefs.has(explicitRef),
       });
     }
     let predecessorTrace;
