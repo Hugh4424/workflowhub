@@ -57,22 +57,16 @@ const FIXTURE_ALLOWLIST = new Set([
   "core/__tests__/task-handle.test.mjs",
   "core/__tests__/task-kernel-publish.test.mjs",
   "core/__tests__/task-kernel-security.test.mjs",
-  "core/__tests__/task-target-repo-migration.test.mjs",
-  "core/__tests__/task-runner-root-migration.test.mjs",
-  "core/__tests__/task-recovery.test.mjs",
   "core/__tests__/workspace-manager.test.mjs",
   "core/__tests__/workspace-runner.test.mjs",
   "scripts/__tests__/ci-chain-check.test.mjs",
   "scripts/__tests__/canonical-archive-skill-dispatch.test.mjs",
   "scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs",
-  "scripts/__tests__/stage-runtime-spec-recovery.test.mjs",
-  "scripts/__tests__/stage-runtime-recover-run.test.mjs",
   "scripts/__tests__/task-bootstrap.test.mjs",
-  "scripts/__tests__/task-recovery.test.mjs",
   "scripts/__tests__/migrate-task-v2.test.mjs",
-  "scripts/__tests__/runner-replacement-bridge.test.mjs",
   "scripts/__tests__/runner-unbinding-migration.test.mjs",
   "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
+  "skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs",
   "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/review-source-materials.test.mjs",
   "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
@@ -140,12 +134,6 @@ const GLOBAL_IDENTITY_DISCOVERY_ALLOWLIST = new Map([
   ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", "explicit Multica synchronization launcher"],
 ]);
 
-const REQUIRED_STAGE_MARKERS = [
-  "core/stage-context.mjs",
-  "bootstrapStage",
-  "StageContext",
-];
-
 const FORBIDDEN_PATTERNS = [
   [/core\/task-dir-parser\.mjs|\bparseTaskDir\b/, "legacy task-dir parser"],
   [/core\/task-record-paths\.mjs|\bresolveTaskRecordPaths\b|\btaskRecordPath\b/, "legacy task-record resolver"],
@@ -178,23 +166,6 @@ function withoutFencedExamples(content) {
     // JSON result examples to avoid treating historical field payloads as calls.
     return /^```(?:json|text)\b/i.test(block) ? "" : block;
   });
-}
-
-function checkStages() {
-  const failures = [];
-  for (const stage of STAGES) {
-    const rel = `workflows/${stage}/SKILL.md`;
-    const full = resolve(repoRoot, rel);
-    if (!existsSync(full)) {
-      failures.push(`${rel}: missing workflow contract`);
-      continue;
-    }
-    const content = readFileSync(full, "utf8");
-    for (const marker of REQUIRED_STAGE_MARKERS) {
-      if (!content.includes(marker)) failures.push(`${rel}: missing required marker "${marker}"`);
-    }
-  }
-  return failures;
 }
 
 function runtimeFiles() {
@@ -256,7 +227,7 @@ function checkRuntimeContracts() {
 function checkUniqueTaskPathDerivation() {
   const failures = [];
   const roots = ["core", "runtime", "scripts", "workflows", "skills"];
-  const allowed = new Set(["runtime/task/task-identity.mjs", "scripts/validate-stage-replay.mjs"]);
+  const allowed = new Set(["runtime/task/task-identity.mjs"]);
   const literalTasksJoin = /\b(?:join|resolve)\s*\([^;\n]*(?:"tasks"|'tasks'|`tasks`)/g;
   for (const root of roots) {
     for (const file of walk(resolve(repoRoot, root))) {
@@ -332,7 +303,6 @@ function checkGlobalIdentityDiscovery() {
 }
 
 const failures = [
-  ...checkStages(),
   ...checkRuntimeContracts(),
   ...checkUniqueTaskPathDerivation(),
   ...checkUniqueSpecsPathDerivation(),

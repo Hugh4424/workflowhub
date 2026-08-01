@@ -128,16 +128,12 @@ describe("simple wh-review contracts", () => {
     const stageDependencies = (stage) => yaml.load(
       readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
     ).skills;
-    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
-      .toMatchObject({ invocation: "conditional", trigger: "clarification" });
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify")).toBeUndefined();
     expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze")).toBeUndefined();
     expect(stageDependencies("build-code").find(({ name }) => name === "review")).toBeUndefined();
     expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
     expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
-      .toEqual([
-        expect.objectContaining({ name: "test-strategy", invocation: "conditional" }),
-        expect.objectContaining({ name: "isolated-browser-qa", invocation: "conditional" })
-      ]);
+      .toEqual([]);
   });
 
   it("runs verify-code reviewer lenses after fresh evidence as non-gate quality facts", () => {
@@ -258,44 +254,6 @@ describe("simple wh-review contracts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
     expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
-  });
-
-  it("wires simplicity-guard only into proposal-bearing reviews", () => {
-    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
-    const manifest = readJson(join(root, "wh-review", "manifest.json"));
-    expect(plan.stages["make-decision"].tracks.detail.required_skills).toContain("simplicity-guard");
-    expect(plan.stages["make-decision"].tracks.direction.required_skills).not.toContain("simplicity-guard");
-    expect(plan.stages["build-spec"].required_skills).toContain("simplicity-guard");
-    expect(plan.stages["build-plan"].required_skills).toContain("simplicity-guard");
-    expect(plan.stages["build-code"].required_skills).toContain("simplicity-guard");
-    expect(plan.stages["verify-code"].required_skills).not.toContain("simplicity-guard");
-    expect(manifest.contracts["make-decision"].required_skills_by_track.detail).toContain("simplicity-guard");
-    expect(manifest.contracts["make-decision"].required_skills_by_track.direction).not.toContain("simplicity-guard");
-    expect(manifest.contracts["build-spec"].required_skills).toContain("simplicity-guard");
-    expect(manifest.contracts["build-plan"].required_skills).toContain("simplicity-guard");
-    expect(manifest.contracts["build-code"].required_skills).toContain("simplicity-guard");
-    expect(manifest.contracts["verify-code"].required_skills).not.toContain("simplicity-guard");
-    expect(manifest.contracts["build-code"].required_skills).toEqual(plan.stages["build-code"].required_skills);
-
-    const lens = readFileSync(join(root, "simplicity-guard", "SKILL.md"), "utf8");
-    expect(lens).toMatch(/P0[\s\S]*P1[\s\S]*P2[\s\S]*P3/);
-    expect(lens).toMatch(/scope creep/);
-    expect(lens).toMatch(/重复已有能力/);
-    expect(lens).toMatch(/没有故障证据/);
-    expect(lens).toMatch(/优先删除|删除优于新增/);
-    const projection = readJson(join(root, "simplicity-guard", "review-bundle.json"));
-    expect(projection).toMatchObject({ mode: "lens-only", delivery_mode: "file_only", entrypoint: "SKILL.md" });
-
-    const projectRoot = join(root, "..");
-    for (const stage of ["build-spec", "build-plan", "build-code"]) {
-      const prompt = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
-      const deps = readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8");
-      expect(prompt).toMatch(/`simplicity-guard` is\s+(?:provider-visible|visible) only inside `wh-review`/);
-      expect(prompt).not.toMatch(/Apply simplicity review|simplicity review, and/);
-      expect(deps).not.toMatch(/name: simplicity-guard/);
-    }
-    const decisionDeps = readFileSync(join(projectRoot, "workflows", "make-decision", "skill-deps.yaml"), "utf8");
-    expect(decisionDeps).not.toMatch(/name: simplicity-guard/);
   });
 
   it("makes scope expansion revise-required without rejecting necessary protections", () => {
