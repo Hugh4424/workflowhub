@@ -855,21 +855,40 @@ function readExplicitPredecessorPhaseTrace({ task, workspace, phaseId, ref, hash
     const successorRecord = readJson(task, ref, "pending predecessor Phase successor");
     const successor = successorRecord.value;
     const current = currentPhaseResult(task);
-    if (!current || current.phase_id !== phaseId
-        || (current.status === "awaiting_review"
-          && (current.phase_successor_ref !== ref || current.phase_successor_hash !== hash))
-        || !["awaiting_review", "done"].includes(current.status)) {
+    if (!current || current.phase_id !== phaseId || !["awaiting_review", "done"].includes(current.status)) {
       throw new Error("explicit pending predecessor Phase successor is not the current Phase");
     }
-    const pending = readPendingSuccessorTrace({
-      task, workspace, phaseId, ref, hash, currentImplementation,
-      currentEvidence: {
+    const isCurrentSuccessor = current.phase_successor_ref === ref && current.phase_successor_hash === hash;
+    let linkedSuccessor = null;
+    if (!isCurrentSuccessor && PHASE_SUCCESSOR.test(current.phase_successor_ref ?? "")) {
+      const linkedRecord = readJson(task, current.phase_successor_ref, "current Phase successor");
+      if (linkedRecord.hash !== current.phase_successor_hash) {
+        throw new Error("current Phase successor hash binding is invalid");
+      }
+      linkedSuccessor = linkedRecord.value;
+      if (linkedSuccessor?.predecessor_phase_trace_ref !== ref
+          || linkedSuccessor?.predecessor_phase_trace_hash !== hash) {
+        throw new Error("explicit pending predecessor Phase successor is not linked from the current successor");
+      }
+    }
+    if (!isCurrentSuccessor && linkedSuccessor === null) {
+      throw new Error("explicit pending predecessor Phase successor is not the current Phase");
+    }
+    const currentEvidence = isCurrentSuccessor
+      ? {
         diffRef: current.diff_scan?.path ?? current.evidence?.diff,
         canonicalRef: current.evidence?.canonical_phase_evidence_ref,
-      },
+      }
+      : {
+        diffRef: linkedSuccessor.previous_diff_scan_ref,
+        canonicalRef: linkedSuccessor.previous_canonical_phase_evidence_ref,
+      };
+    const pending = readPendingSuccessorTrace({
+      task, workspace, phaseId, ref, hash, currentImplementation,
+      currentEvidence,
       current,
     });
-    if (current.status === "done" && pending.trace.snapshot_tree !== current.review?.snapshot_tree) {
+    if (isCurrentSuccessor && current.status === "done" && pending.trace.snapshot_tree !== current.review?.snapshot_tree) {
       throw new Error("explicit pending predecessor Phase successor does not match the completed current Phase");
     }
     return pending;
