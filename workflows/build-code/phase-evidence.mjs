@@ -359,6 +359,8 @@ function assertSuccessorGitContinuity(workspace, previousBaseline, currentCommit
 }
 
 export function validateAwaitingReviewSuccessorPreconditions({
+  task,
+  workspace,
   current,
   predecessorReview,
   previousImplementationTree,
@@ -391,14 +393,36 @@ export function validateAwaitingReviewSuccessorPreconditions({
   const currentSet = new Set(currentAllowed);
   const additions = currentAllowed.filter((path) => !previousSet.has(path));
   const removals = previousAllowed.filter((path) => !currentSet.has(path));
-  const allowlistedCorrection = additions.length === 1
+  const allowlistedCorrection = additions.length > 0
     && removals.length === 0
-    && additions[0] === "tests/integration/execution-snapshot-isolation.test.mjs";
+    && materialAuthorizesAllowlistAdditions({ task, workspace, additions });
   if ((!allowlistedCorrection && JSON.stringify(previousAllowed) !== JSON.stringify(currentAllowed))
       || JSON.stringify(normalizeRuntimeOnlyPaths(previousGuardedC2Paths ?? [])) !== JSON.stringify(normalizeRuntimeOnlyPaths(guardedC2Paths ?? []))) {
     throw new Error("awaiting-review Phase successor allowlist does not bind the current Phase");
   }
   return true;
+}
+
+function materialAuthorizesAllowlistAdditions({ task, workspace, additions } = {}) {
+  if (!task || !workspace || !Array.isArray(additions) || additions.length === 0) return false;
+  let material;
+  try { material = readCurrentTaskMaterialRevision({ task }); }
+  catch { return false; }
+  if (material === undefined || !material.value?.changed_files?.includes("tasks.md")) return false;
+  const taskId = task.identity?.taskId;
+  if (typeof taskId !== "string" || taskId.includes("..") || taskId.includes("/")) return false;
+  let tasks;
+  try { tasks = readFileSync(resolve(workspace.worktreeRoot, "specs", taskId, "tasks.md"), "utf8"); }
+  catch { return false; }
+  const start = tasks.indexOf("#### T054");
+  const end = tasks.indexOf("#### T055", start < 0 ? 0 : start);
+  if (start < 0) return false;
+  const section = tasks.slice(start, end < 0 ? tasks.length : end);
+  const authorized = new Set();
+  for (const match of section.matchAll(/追加(?:文件|精确文件)\s*[:：]\s*([^\n]+)/g)) {
+    for (const path of match[1].matchAll(/`([^`]+)`/g)) authorized.add(path[1]);
+  }
+  return additions.every((path) => authorized.has(path));
 }
 
 function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, predecessorReview, implementation, green, allowedFiles, guardedC2Paths, reason, expectedRef }) {
@@ -430,6 +454,8 @@ function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, prede
       }
     }
     validateAwaitingReviewSuccessorPreconditions({
+      task,
+      workspace,
       current,
       predecessorReview,
       previousImplementationTree: previousImplementation.value.snapshot_tree,
@@ -1138,6 +1164,8 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       const previous = phaseSubject(task, workspace, current);
       predecessorReview = readFormalPhaseReview(task, kernel, input.review_result_ref, previous.subject);
       validateAwaitingReviewSuccessorPreconditions({
+        task,
+        workspace,
         current,
         predecessorReview,
         previousSnapshotTree: previous.scan.snapshot_tree,
