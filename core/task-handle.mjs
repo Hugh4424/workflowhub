@@ -986,6 +986,37 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate append-only Phase successor records used for explicit historical predecessor bindings. */
+    listCanonicalPhaseSuccessorRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const resultsRoot = resolve(realTaskPath, "results");
+      const buildCodeRoot = resolve(resultsRoot, "build-code");
+      const revisionsRoot = resolve(buildCodeRoot, "revisions");
+      assertInside(realTaskPath, resultsRoot, "results directory");
+      assertInside(realTaskPath, buildCodeRoot, "build-code results directory");
+      assertInside(realTaskPath, revisionsRoot, "build-code revisions directory");
+      if (!existsSync(revisionsRoot)) return Object.freeze([]);
+      const identities = [
+        directorySnapshot(realTaskPath, resultsRoot),
+        directorySnapshot(realTaskPath, buildCodeRoot),
+        directorySnapshot(realTaskPath, revisionsRoot),
+      ];
+      const refs = readdirSync(revisionsRoot, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(revisionsRoot, entry.name);
+        const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) {
+          throw new Error(`Phase successor must be a regular non-symlink JSON file: ${entry.name}`);
+        }
+        if (/^phase-successor-[0-9]{4}\.json$/.test(entry.name)) {
+          return `results/build-code/revisions/${entry.name}`;
+        }
+        return null;
+      }).filter((ref) => ref !== null).sort((left, right) => left.localeCompare(right));
+      for (const identity of identities) verifyDirectorySnapshot(identity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate only append-only, content-addressed Phase trace lineage records. */
     listCanonicalPhaseTraceLineageRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");

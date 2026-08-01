@@ -11,6 +11,7 @@ const HASH = /^[a-f0-9]{64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
 const PHASE_REVIEW_RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const PHASE_REVIEW_ATTEMPT_REF = /^reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/;
+const PHASE_SUCCESSOR_REF = /^results\/build-code\/revisions\/phase-successor-[0-9]{4}\.json$/;
 const LINEAGE_KEYS = new Set([
   "schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace",
   "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt",
@@ -66,6 +67,11 @@ function binding(value, label, { nullable = false } = {}) {
 
 function sameBinding(actual, expected) {
   return actual?.ref === expected?.ref && actual?.sha256 === expected?.sha256;
+}
+
+function sameOrderedArray(left, right) {
+  return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function verifiedRiskAcceptances(task, lineage, trace, label) {
@@ -348,6 +354,189 @@ export function verifiedPhaseReviewCorrections({
   return new Map([...corrections].map(([ref, value]) => [ref, value.sha256]));
 }
 
+/**
+ * An awaiting-review successor is not a Phase map trace yet.  It is still a
+ * real, immutable execution candidate that integration selection must be able
+ * to see without treating the old trace as current.  Build a deliberately
+ * marked pending node from phase-result plus the successor's bound receipts;
+ * no review fact is invented and buildIntegrationReviewSubject will keep the
+ * subject unavailable until the successor receives its own Phase review.
+ */
+function awaitingSuccessorCandidate({ task, sourceRoot, successorRef, successor, predecessor, successorRecord }) {
+  const phaseResult = readJson(task, "phase-result.json", "current Phase result").value;
+  if (phaseResult?.status !== "awaiting_review"
+    || phaseResult.phase_id !== successor.phase_id
+    || phaseResult.phase_successor_ref !== successorRef
+    || phaseResult.phase_successor_hash !== successorRecord.sha256) {
+    incomplete(`awaiting Phase successor is not the current Phase pointer: ${successorRef}`);
+  }
+  const currentMaterial = readJson(task, "materials/current.json", "current material revision").value;
+  if (currentMaterial?.task_id !== task.identity.taskId
+    || currentMaterial.revision_hash !== successor.material_revision_hash
+    || typeof currentMaterial.revision_ref !== "string") {
+    incomplete(`awaiting Phase successor material binding is stale: ${successorRef}`);
+  }
+  const evidence = phaseResult.evidence;
+  const scanRef = phaseResult.diff_scan?.path;
+  const implementationRef = evidence?.implementation_receipt_ref;
+  const greenRef = evidence?.green_test_receipt_ref;
+  const canonicalEvidenceRef = evidence?.canonical_phase_evidence_ref;
+  if (![scanRef, implementationRef, greenRef, canonicalEvidenceRef].every((ref) => typeof ref === "string" && ref.length > 0)) {
+    incomplete(`awaiting Phase successor is missing current evidence bindings: ${successorRef}`);
+  }
+  if (implementationRef !== successor.implementation_receipt_ref || greenRef !== successor.green_test_receipt_ref) {
+    incomplete(`awaiting Phase successor receipt bindings do not match the current Phase: ${successorRef}`);
+  }
+  const scan = readJson(task, scanRef, "awaiting Phase diff scan");
+  const implementation = readJson(task, implementationRef, "awaiting Phase implementation receipt");
+  const green = readJson(task, greenRef, "awaiting Phase GREEN receipt");
+  const canonicalEvidence = readJson(task, canonicalEvidenceRef, "awaiting Phase evidence");
+  if (implementation.sha256 !== successor.implementation_receipt_hash
+    || green.sha256 !== successor.green_test_receipt_hash
+    || canonicalEvidence.value?.phase_id !== successor.phase_id
+    || canonicalEvidence.value?.status !== "awaiting_review") {
+    incomplete(`awaiting Phase successor receipt or evidence hash mismatch: ${successorRef}`);
+  }
+  const scanValue = scan.value;
+  const allowedFiles = phaseResult.declared_allowed_files;
+  const guardedC2Paths = phaseResult.declared_guarded_c2_paths ?? [];
+  if (!scanValue || scanValue.phase_id !== successor.phase_id
+    || scanValue.snapshot_tree !== successor.current_snapshot_tree
+    || scanValue.safe !== true
+    || (scanValue.violations ?? []).length !== 0
+    || (scanValue.allowlist_violations ?? []).length !== 0
+    || !sameOrderedArray(scanValue.allowed_files, allowedFiles)
+    || !sameOrderedArray(scanValue.guarded_c2_paths ?? [], guardedC2Paths)
+    || scanValue.changed_files.some((path) => !allowedFiles.includes(path))) {
+    incomplete(`awaiting Phase successor allowlist or diff binding is invalid: ${successorRef}`);
+  }
+  const snapshotTree = successor.current_snapshot_tree;
+  const implementationValue = implementation.value;
+  const greenValue = green.value;
+  if (implementationValue?.task_id !== task.identity.taskId
+    || greenValue?.task_id !== task.identity.taskId
+    || implementationValue.snapshot_tree !== snapshotTree
+    || greenValue.snapshot_tree !== snapshotTree
+    || !OID.test(implementationValue.snapshot_commit ?? "")
+    || !OID.test(greenValue.snapshot_commit ?? "")
+    || gitTree(sourceRoot, implementationValue.snapshot_commit) !== snapshotTree
+    || gitTree(sourceRoot, scanValue.implementation_commit) !== snapshotTree) {
+    incomplete(`awaiting Phase successor receipts do not bind current snapshot tree: ${successorRef}`);
+  }
+  const predecessorCommit = successor.previous_implementation_commit;
+  const currentCommit = implementationValue.snapshot_commit;
+  let ancestor = gitAncestor(sourceRoot, predecessorCommit, currentCommit);
+  if (!ancestor && successor.baseline_continuity === "legacy-commit-current-head-continuity") {
+    ancestor = gitAncestor(sourceRoot, git(sourceRoot, ["rev-parse", "HEAD"], "current Git head"), currentCommit);
+  }
+  if (!ancestor) incomplete(`awaiting Phase successor Git ancestry is invalid: ${successorRef}`);
+  return Object.freeze({
+    traceRef: successorRef,
+    traceSha256: successorRecord.sha256,
+    pendingSuccessor: Object.freeze({ ref: successorRef, sha256: successorRecord.sha256 }),
+    trace: Object.freeze({
+      schema_version: "phase-map-trace.pending.v1",
+      phase_id: successor.phase_id,
+      baseline_commit: scanValue.baseline_commit,
+      implementation_commit: scanValue.implementation_commit,
+      base_tree: scanValue.base_tree,
+      snapshot_tree: snapshotTree,
+      allowed_files: [...allowedFiles],
+      guarded_c2_paths: [...guardedC2Paths],
+      changed_files: [...scanValue.changed_files],
+      canonical_phase_evidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidence.sha256 },
+      diff_scan: { ref: scanRef, sha256: scan.sha256 },
+      implementation_receipt: { ref: implementationRef, sha256: implementation.sha256 },
+      green_test_receipt: { ref: greenRef, sha256: green.sha256 },
+      red_test_receipt: null,
+      review_status: "awaiting_review",
+      review_result: null,
+      review_attempt: null,
+      material_id: successor.material_revision_hash,
+      review_scope: "phase",
+      verdict: null,
+      risk_acceptances: [],
+    }),
+    phaseEvidence: { value: canonicalEvidence.value },
+    scan,
+    implementation,
+    green,
+    red: null,
+    review: null,
+    attempt: null,
+    acceptanceTrace: null,
+    predecessorTrace: predecessor.traceRef,
+  });
+}
+
+/** Validate a pending successor when it is itself used as the immutable
+ * predecessor of another successor. This carries forward the old unavailable
+ * review fact instead of manufacturing a review result. */
+function validatePendingSuccessorPredecessor({ task, sourceRoot, predecessorRef, predecessorHash, successor }) {
+  if (!PHASE_SUCCESSOR_REF.test(predecessorRef ?? "") || !HASH.test(predecessorHash ?? "")) {
+    incomplete(`pending Phase successor predecessor binding is invalid: ${predecessorRef}`);
+  }
+  const record = readJson(task, predecessorRef, "pending Phase successor predecessor");
+  const value = record.value;
+  if (record.sha256 !== predecessorHash
+      || value?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+      || value.task_id !== task.identity.taskId
+      || value.stage !== "build-code"
+      || value.phase_id !== successor.phase_id
+      || value.current_snapshot_tree !== successor.previous_snapshot_tree
+      || !OID.test(value.current_snapshot_commit ?? "")
+      || !HASH.test(value.material_revision_hash ?? "")
+      || JSON.stringify(value.allowed_files ?? []) !== JSON.stringify(successor.allowed_files ?? [])
+      || JSON.stringify(value.guarded_c2_paths ?? []) !== JSON.stringify(successor.guarded_c2_paths ?? [])) {
+    incomplete(`pending Phase successor predecessor does not bind the next successor: ${predecessorRef}`);
+  }
+  const material = readJson(task, "materials/current.json", "current material revision").value;
+  if (material?.task_id !== task.identity.taskId || material.revision_hash !== value.material_revision_hash
+      || material.revision_hash !== successor.material_revision_hash) {
+    incomplete(`pending Phase successor predecessor material is stale: ${predecessorRef}`);
+  }
+  for (const [label, ref, hash] of [
+    ["implementation", value.implementation_receipt_ref, value.implementation_receipt_hash],
+    ["GREEN", value.green_test_receipt_ref, value.green_test_receipt_hash],
+  ]) {
+    if (typeof ref !== "string" || !HASH.test(hash ?? "")) incomplete(`pending Phase successor ${label} binding is invalid: ${predecessorRef}`);
+    const receipt = readJson(task, ref, `pending Phase successor ${label}`);
+    if (receipt.sha256 !== hash || receipt.value?.task_id !== task.identity.taskId
+        || receipt.value?.snapshot_tree !== value.current_snapshot_tree
+        || git(sourceRoot, ["rev-parse", `${receipt.value.snapshot_commit}^{tree}`], `pending Phase successor ${label}`) !== value.current_snapshot_tree) {
+      incomplete(`pending Phase successor ${label} does not bind its snapshot tree: ${predecessorRef}`);
+    }
+  }
+  const oldTraceRef = value.predecessor_phase_trace_ref;
+  const oldTraceHash = value.predecessor_phase_trace_hash;
+  if (!/^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(oldTraceRef ?? "")
+      || !HASH.test(oldTraceHash ?? "")) incomplete(`pending Phase successor old predecessor trace is invalid: ${predecessorRef}`);
+  const oldTrace = phaseTrace(task, sourceRoot, oldTraceRef);
+  if (oldTrace.traceSha256 !== oldTraceHash
+      || oldTrace.trace.phase_id !== value.phase_id
+      || oldTrace.trace.review_status !== "unavailable"
+      || value.previous_phase_review_ref !== oldTrace.attempt?.ref
+      || value.previous_phase_review_hash !== oldTrace.attempt?.sha256) {
+    incomplete(`pending Phase successor old review is not unavailable and bound: ${predecessorRef}`);
+  }
+  if (git(sourceRoot, ["rev-parse", `${value.current_snapshot_commit}^{tree}`], "pending Phase successor") !== value.current_snapshot_tree) {
+    incomplete(`pending Phase successor snapshot tree is invalid: ${predecessorRef}`);
+  }
+  let ancestor = false;
+  try {
+    git(sourceRoot, ["merge-base", "--is-ancestor", value.previous_implementation_commit, value.current_snapshot_commit], "pending Phase successor Git ancestry");
+    ancestor = true;
+  } catch {
+    if (value.baseline_continuity === "legacy-commit-current-head-continuity") {
+      const head = git(sourceRoot, ["rev-parse", "HEAD"], "pending Phase successor Git head");
+      try { git(sourceRoot, ["merge-base", "--is-ancestor", head, value.current_snapshot_commit], "pending Phase successor legacy continuity"); ancestor = true; }
+      catch { /* handled below */ }
+    }
+  }
+  if (!ancestor) incomplete(`pending Phase successor Git ancestry is invalid: ${predecessorRef}`);
+  return Object.freeze({ ref: predecessorRef, sha256: predecessorHash, value, oldTrace });
+}
+
 /** Select canonical traces; only an exact prevalidated legacy binding may skip an invalid historical trace. */
 export function selectCanonicalPhaseTraces({
   task, sourceRoot, corrections, readTrace = phaseTrace,
@@ -410,7 +599,94 @@ export function selectCanonicalPhaseTraces({
     if (predecessor === undefined) continue;
     superseded.add(predecessor);
   }
-  return traces.filter((trace) => !superseded.has(trace));
+  // Explicit historical predecessors are recorded on the immutable successor
+  // itself.  This path intentionally does not consult phase-result.json: the
+  // live pointer may have moved since the predecessor was accepted.
+  const successorRefs = typeof task.listCanonicalPhaseSuccessorRefs === "function"
+    ? task.listCanonicalPhaseSuccessorRefs()
+    : [];
+  const supersedingSuccessorRefs = new Set();
+  for (const ref of successorRefs) {
+    const value = readJson(task, ref, "Phase successor").value;
+    if (PHASE_SUCCESSOR_REF.test(value?.predecessor_phase_trace_ref ?? "")) {
+      supersedingSuccessorRefs.add(value.predecessor_phase_trace_ref);
+    }
+  }
+  const awaitingSuccessors = [];
+  for (const successorRef of successorRefs) {
+    const successorRecord = readJson(task, successorRef, "Phase successor");
+    const successor = successorRecord.value;
+    const explicitRef = successor?.predecessor_phase_trace_ref;
+    const explicitHash = successor?.predecessor_phase_trace_hash;
+    if (explicitRef === undefined && explicitHash === undefined) continue;
+    const explicitTraceRef = typeof explicitRef === "string" && /^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(explicitRef);
+    const explicitSuccessorRef = typeof explicitRef === "string" && PHASE_SUCCESSOR_REF.test(explicitRef);
+    if (typeof explicitRef !== "string" || (!explicitTraceRef && !explicitSuccessorRef)
+        || !HASH.test(explicitHash ?? "")
+        || successorRecord.value?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+        || successor.task_id !== task.identity.taskId
+        || successor.stage !== "build-code"
+        || !PHASE.test(successor.phase_id ?? "")
+        || !OID.test(successor.previous_snapshot_tree ?? "")
+        || !OID.test(successor.current_snapshot_tree ?? "")) {
+      incomplete(`explicit Phase successor binding is invalid: ${successorRef}`);
+    }
+    if (explicitSuccessorRef) {
+      validatePendingSuccessorPredecessor({
+        task, sourceRoot, predecessorRef: explicitRef, predecessorHash: explicitHash, successor,
+      });
+    }
+    let predecessorTrace;
+    if (explicitTraceRef) {
+      try {
+        predecessorTrace = readTrace(task, sourceRoot, explicitRef);
+      } catch (error) {
+        incomplete(`explicit Phase successor predecessor trace is invalid: ${explicitRef}: ${error.message}`);
+      }
+    }
+    if (explicitTraceRef && (predecessorTrace.traceSha256 !== explicitHash
+        || predecessorTrace.trace.phase_id !== successor.phase_id
+        || predecessorTrace.trace.snapshot_tree !== successor.previous_snapshot_tree
+        || predecessorTrace.trace.baseline_commit !== successor.previous_baseline_commit
+        || predecessorTrace.trace.implementation_commit !== successor.previous_implementation_commit
+        || !sameBinding(predecessorTrace.trace.diff_scan, { ref: successor.previous_diff_scan_ref, sha256: successor.previous_diff_scan_hash })
+        || !sameBinding(predecessorTrace.trace.canonical_phase_evidence, {
+          ref: successor.previous_canonical_phase_evidence_ref,
+          sha256: successor.previous_canonical_phase_evidence_hash,
+        }))) {
+      incomplete(`explicit Phase successor predecessor does not bind its canonical trace: ${successorRef}`);
+    }
+    const predecessor = explicitTraceRef
+      ? traces.find((candidate) => candidate.traceRef === explicitRef && candidate.traceSha256 === explicitHash)
+      : undefined;
+    if (explicitTraceRef && predecessor === undefined) {
+      incomplete(`explicit Phase successor predecessor trace is not canonical in the selected evidence set: ${explicitRef}`);
+    }
+    if (explicitTraceRef && supersedingSuccessorRefs.has(successorRef)) {
+      // This immutable successor is itself superseded by a newer successor.
+      // Do not try to expose its old awaiting pointer as current.
+      superseded.add(predecessor);
+      continue;
+    }
+    const replacement = traces.find((candidate) => candidate.trace.phase_id === successor.phase_id
+      && candidate.trace.snapshot_tree === successor.current_snapshot_tree);
+    if (replacement === undefined) {
+      // A successor may be published before its own Phase review.  Keep the
+      // historical predecessor out of the candidate path, but expose a
+      // fully-bound pending node so callers can report the real awaiting state
+      // instead of treating the old snapshot as current.
+      awaitingSuccessors.push(awaitingSuccessorCandidate({
+        task, sourceRoot, successorRef, successor,
+        predecessor: predecessor ?? { traceRef: explicitRef }, successorRecord,
+      }));
+      if (predecessor !== undefined) superseded.add(predecessor);
+    } else if (replacement === predecessor) {
+      incomplete(`explicit Phase successor replacement snapshot is not canonical: ${successorRef}`);
+    } else {
+      superseded.add(predecessor);
+    }
+  }
+  return [...traces.filter((trace) => !superseded.has(trace)), ...awaitingSuccessors];
 }
 
 function traceCoverage(trace) {
@@ -599,11 +875,6 @@ function gitTree(root, commit) {
   return execFileSync("git", ["rev-parse", `${commit}^{tree}`], {
     cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
   }).trim();
-}
-
-function sameOrderedArray(left, right) {
-  return Array.isArray(left) && Array.isArray(right)
-    && left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function safeRepositoryPath(path) {
