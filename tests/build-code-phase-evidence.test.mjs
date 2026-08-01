@@ -12,6 +12,7 @@ import {
   assertLiveWorkspaceMatchesImplementation,
   readHistoricalPhaseResult,
   readPhaseSuccessor,
+  validatePendingSuccessorReviewBinding,
   validateAwaitingReviewSuccessorPreconditions,
   validatePhaseEvidenceInput,
 } from "../workflows/build-code/phase-evidence.mjs";
@@ -178,6 +179,22 @@ describe("build-code composition contract", () => {
     expect(() => validatePhaseEvidenceInput({
       ...base, phase_successor_ref: "results/build-code/revisions/phase-successor-0001.json",
     })).toThrow(/provided together/i);
+    expect(validatePhaseEvidenceInput({
+      ...base,
+      phase_successor_reason: "replace stale historical phase",
+      predecessor_phase_trace_ref: `evidence/phases/phase-9/${"a".repeat(40)}/phase-map-trace-${"b".repeat(64)}.json`,
+      predecessor_phase_trace_hash: "b".repeat(64),
+    })).toMatchObject({ predecessor_phase_trace_hash: "b".repeat(64) });
+    expect(validatePhaseEvidenceInput({
+      ...base,
+      phase_successor_reason: "advance pending successor",
+      predecessor_phase_trace_ref: "results/build-code/revisions/phase-successor-0006.json",
+      predecessor_phase_trace_hash: "c".repeat(64),
+    })).toMatchObject({ predecessor_phase_trace_ref: "results/build-code/revisions/phase-successor-0006.json" });
+    expect(() => validatePhaseEvidenceInput({
+      ...base, predecessor_phase_trace_ref: "evidence/legacy/trace.json", predecessor_phase_trace_hash: "b".repeat(64),
+      phase_successor_reason: "replace",
+    })).toThrow(/predecessor_phase_trace_ref is invalid/);
   });
 
   it("reads the immutable predecessor archive after the live Phase pointer moves", () => {
@@ -230,6 +247,72 @@ describe("build-code composition contract", () => {
       previousAllowedFiles: ["README.md"], allowedFiles: ["README.md"],
       previousGuardedC2Paths: [], guardedC2Paths: [],
     })).toBe(true);
+  });
+
+  it("accepts a pending successor with distinct predecessor and current review bindings", () => {
+    const snapshotTree = "b".repeat(40);
+    expect(validatePendingSuccessorReviewBinding({
+      predecessorReview: {
+        ref: "reviews/attempts/old-review/attempt.json",
+        hash: "a".repeat(64),
+        status: "unavailable",
+        verdict: null,
+      },
+      currentReview: {
+        ref: "reviews/attempts/current-review/attempt.json",
+        status: "unavailable",
+        attempt: {
+          value: {
+            task_id: "demo",
+            stage: "build-code",
+            subject_kind: "phase",
+            phase_id: "phase-9",
+            review_scope: "phase",
+            snapshot_tree: snapshotTree,
+          },
+        },
+      },
+      currentReviewRef: "reviews/attempts/current-review/attempt.json",
+      taskId: "demo",
+      phaseId: "phase-9",
+      snapshotTree,
+    })).toBe(true);
+  });
+
+  it("rejects a pending successor when the current review reuses the predecessor review", () => {
+    expect(() => validatePendingSuccessorReviewBinding({
+      predecessorReview: {
+        ref: "reviews/attempts/old-review/attempt.json",
+        hash: "a".repeat(64),
+        status: "unavailable",
+        verdict: null,
+      },
+      currentReview: {
+        ref: "reviews/attempts/old-review/attempt.json",
+        status: "unavailable",
+        attempt: { value: { task_id: "demo", stage: "build-code", subject_kind: "phase", phase_id: "phase-9", review_scope: "phase", snapshot_tree: "b".repeat(40) } },
+      },
+      currentReviewRef: "reviews/attempts/old-review/attempt.json",
+      taskId: "demo",
+      phaseId: "phase-9",
+      snapshotTree: "b".repeat(40),
+    })).toThrow(/must differ/);
+  });
+
+  it("rejects a pending successor when no current review is supplied", () => {
+    expect(() => validatePendingSuccessorReviewBinding({
+      predecessorReview: {
+        ref: "reviews/attempts/old-review/attempt.json",
+        hash: "a".repeat(64),
+        status: "unavailable",
+        verdict: null,
+      },
+      currentReview: null,
+      currentReviewRef: undefined,
+      taskId: "demo",
+      phaseId: "phase-9",
+      snapshotTree: "b".repeat(40),
+    })).toThrow(/current review result ref/);
   });
 
   it.each([

@@ -630,6 +630,16 @@ function scopeFacts(scope) {
   };
 }
 function requireFinalIntegrationReview(review, label) {
+  // A formally authenticated unavailable review is still an independent
+  // quality fact.  The build-code contract records that fact and lets the
+  // stage continue with formal_record_status=unavailable; only verify-code
+  // requires a semantic (pass/revise_required) final review.  reviewFacts()
+  // has already fail-closed on attempt provenance, provider coverage, and
+  // serious unresolved findings before this scope check runs.
+  const reviewStatus = review?.facts?.status ?? "semantic";
+  if (!review || !review.facts || !review.scope || !["semantic", "unavailable"].includes(reviewStatus)) {
+    throw new Error(`MATERIAL_INCOMPLETE: ${label} is missing an authenticated review fact; return to build-code`);
+  }
   const scope = review.scope;
   if (scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
     throw new Error(`MATERIAL_INCOMPLETE: ${label} must be a full-worktree result and a same-snapshot formal integration review (subject_kind=worktree, review_scope=integration, phase_id=null); return to build-code`);
