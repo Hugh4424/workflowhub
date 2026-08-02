@@ -8,7 +8,7 @@ WorkflowHub 当前五个 stage 的步骤编号混用整数、小数与复合编�
 
 ## 相关技术 / 已有实现
 
-- `core/receipt-writer.mjs` 已提供 `writeEntryReceipt(taskId, payload)` 与 `writeExitReceipt(taskId, payload)`；测试覆盖 entry fail-closed、exit warn-only、payload 校验、review 与 retry/attempt 场景，可作为逐步审计写入的既有合同。
+- `runtime/evidence/receipt-writer.mjs` 已提供 `writeEntryReceipt(taskId, payload)` 与 `writeExitReceipt(taskId, payload)`；测试覆盖 entry fail-closed、exit warn-only、payload 校验、review 与 retry/attempt 场景，可作为逐步审计写入的既有合同。
 - `core/chain-topology.mjs` 已依赖与 matching `STEP_ENTRY` 绑定的 exit receipt，说明 receipt 配对与拓扑校验已有实现基础。
 - `metrics/collector.mjs` 已提供 `recordSkeleton(seed, cfg)`、`updateOwnResult(execution_id, patch, cfg)` 和 `configForCollector(...)`。`recordSkeleton` 必须显式传 `cfg`；配置应由 `loadConfig()` 与 task 级目录组合生成，不能省略第二参数。
 - `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md` 已含不同程度的 metrics 调用说明；`workflows/build-plan/SKILL.md` 目前仅在收尾描述 metrics，五阶段接入方式需统一。

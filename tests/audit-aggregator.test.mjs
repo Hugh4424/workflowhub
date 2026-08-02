@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildAuditSummaryFromJournalEvents } from "../core/audit-aggregator.mjs";
-import { computeLedgerHash, computeRequirementContentHash } from "../core/requirement-ledger.mjs";
+import { computeLedgerHash, computeRequirementContentHash } from "../runtime/evidence/requirement-ledger.mjs";
 
 function fixture(name) {
   const input = JSON.parse(readFileSync(resolve("tests/fixtures/step-audit", `${name}.json`), "utf8"));

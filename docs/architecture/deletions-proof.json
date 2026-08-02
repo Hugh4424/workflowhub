@@ -1,0 +1,35 @@
+{
+  "schema_version": "workflowhub-deletions-proof.v1",
+  "baseline": {
+    "commit": "b0bb020756ac6896deaef9973b23726fcae6224f",
+    "tree": "b71be032df12164a5e5decf73bf4a13472a3551f"
+  },
+  "user_confirmation": {
+    "ref": "docs/architecture/legacy-import-proof.json",
+    "meaning": "106 legacy tasks were individually confirmed before migration scaffolding removal"
+  },
+  "deletions": [
+    { "path": "core/__tests__/task-recovery.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "core/build-spec-receipt-recovery.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "core/schemas/workflowhub-recovery-credential.v1.json", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/contract/repository-inventory.test.mjs" },
+    { "path": "core/schemas/workflowhub-recovery-generation.v1.json", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/contract/repository-inventory.test.mjs" },
+    { "path": "core/task-recovery.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/__tests__/runner-replacement-bridge.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/__tests__/stage-runtime-recover-run.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/__tests__/stage-runtime-spec-recovery.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/__tests__/task-recovery.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/task-recovery.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "scripts/validate-stage-replay.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/integration/progression-without-permits.test.mjs" },
+    { "path": "tests/integration/deletion-slices-summary.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/contract/repository-inventory.test.mjs" },
+    { "path": "tests/integration/phase-material-baseline.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/e2e/five-stage-material-revision.test.mjs" },
+    { "path": "tests/m12-subskill-exclusion.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/interaction-quality-contract.test.mjs" },
+    { "path": "tests/phase-adjudication-correction-scope.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/interaction-quality-contract.test.mjs" },
+    { "path": "tests/stage-content-continuation.test.mjs", "absent": true, "consumer_zero_ref": "docs/architecture/complexity-baseline.json#/hard_gates/dedicated_recovery_state", "replacement_oracle": "tests/interaction-quality-contract.test.mjs" },
+    { "path": "tools/architecture/verify-migration-proof.mjs", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/legacy-zero.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" },
+    { "path": "tools/architecture/deletion-proof.mjs", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/repository-inventory.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" },
+    { "path": "tools/architecture/test-disposition.mjs", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/repository-inventory.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" },
+    { "path": "tests/contract/deletion-proof.test.mjs", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/repository-inventory.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" },
+    { "path": "tests/contract/test-disposition.test.mjs", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/repository-inventory.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" },
+    { "path": "docs/architecture/test-disposition.tsv", "absent": true, "consumer_zero_ref": "tools/architecture/inventory.mjs#task-only-governance", "reverse_reference_count": 0, "replacement_oracle": "tests/contract/repository-inventory.test.mjs", "authorization_ref": "specs/workflowhub-complexity-governance-v2/tasks.md#T054" }
+  ]
+}

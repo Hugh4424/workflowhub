@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateWords } from "../core/text-utils.mjs";
+import { truncateWords } from "../runtime/evidence/text-utils.mjs";
 
 describe("truncateWords", () => {
   it("truncates to maxWords and appends ellipsis", () => {

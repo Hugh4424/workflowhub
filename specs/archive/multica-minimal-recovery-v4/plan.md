@@ -62,7 +62,7 @@ Squad instructions 只保留：Squad 只路由 leader；工头创建/复用五�
 
 通过现有 Skill import 机制重新部署 make-decision 包，确保其直接依赖 `talk-with-zhipeng`、`grill-with-docs`、`decision-log`、`intake-decision-review`、`wh-review` 可解析。依赖放在 Skill 闭包，不把所有子 Skill 绑给 Decision Maker。
 
-上述五个源 Skill 已在本仓库 `skills/` 下确认存在，且当前 `workflows/make-decision/skill-deps.yaml` 已逐项声明；2026-07-17 `node core/check-skill-closure.mjs` 返回 `skill closure: ok`。部署前仍重跑，任一不可解析即非零失败。
+上述五个源 Skill 已在本仓库 `skills/` 下确认存在，且当前 `workflows/make-decision/skill-deps.yaml` 已逐项声明；2026-07-17 `node runtime/evidence/check-skill-closure.mjs` 返回 `skill closure: ok`。部署前仍重跑，任一不可解析即非零失败。
 
 ## 4. 第三组：Issue、mention、status、恢复
 

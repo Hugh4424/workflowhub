@@ -13,16 +13,16 @@ describe("per-invocation documentation contract", () => {
     expect((checklist.match(/^- \[ \] \*\*/gm) ?? [])).toHaveLength(21);
   });
 
-  it("makes runner replacement legacy-only while preserving Phase recovery", () => {
+  it("uses per-invocation identity while keeping old replacement records audit-only", () => {
     const adr = read("docs/adr/0008-same-task-recovery-is-append-only.md");
     const contract = read("docs/contracts/task-context.md");
-    for (const text of [adr, contract]) {
-      expect(text).toContain("legacy_pinned");
-      expect(text).toContain("per_invocation");
-      expect(text).toContain("phase-pointer");
-    }
-    expect(adr).toMatch(/runner replacement.*遗留|遗留.*runner replacement/s);
+    expect(adr).toMatch(/已废止.*历史背景/s);
+    expect(adr).toMatch(/只保留审计价值/i);
+    expect(contract).toContain("execution_mode=per_invocation");
     expect(contract).toContain("identity/executions/<run>.json");
-    expect(contract).toContain("identity/migrations/per-invocation/<previous-manifest-hash>.json");
+    expect(contract).toMatch(/旧任务只读保留为审计资料/i);
+    expect(contract.replace(/\s+/g, " ")).toMatch(/不验证、也不跟随其 historical runner、migration 或 replacement 链/i);
+    expect(contract).not.toContain("legacy_pinned");
+    expect(contract).not.toContain("phase-pointer");
   });
 });

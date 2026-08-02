@@ -84,7 +84,7 @@ describe("spike intake component (T007/T008)", () => {
     expect(output).not.toBeNull();
 
     // Contract validation — no AJV, uses hand-written validateContract.
-    const { validateContract } = await import("../core/validate-contract.mjs");
+    const { validateContract } = await import("../runtime/evidence/validate-contract.mjs");
     const { valid, errors } = validateContract(output, contract);
     expect(valid, `contract errors: ${errors.join(", ")}`).toBe(true);
   });
@@ -115,7 +115,7 @@ describe("spike design component (T007/T008)", () => {
     ensureModules();
     const output = await runDesign(intakeOutput);
 
-    const { validateContract } = await import("../core/validate-contract.mjs");
+    const { validateContract } = await import("../runtime/evidence/validate-contract.mjs");
     const { valid, errors } = validateContract(output, contract);
     expect(valid, `contract errors: ${errors.join(", ")}`).toBe(true);
   });
@@ -168,7 +168,7 @@ describe("contract invariance — swapping a DISTINCT equivalent component leave
     const variantOutput = await runDesignVariant(intakeOutput);
 
     // Variant output must itself satisfy the contract.
-    const { validateContract } = await import("../core/validate-contract.mjs");
+    const { validateContract } = await import("../runtime/evidence/validate-contract.mjs");
     const { valid, errors } = validateContract(variantOutput, contract);
     expect(valid, `variant contract errors: ${errors.join(", ")}`).toBe(true);
 

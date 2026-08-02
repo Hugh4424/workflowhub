@@ -1,0 +1,5 @@
+{
+  "mutation": "review-major",
+  "seam": "stage completion predicate",
+  "expected": "reject"
+}

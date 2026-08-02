@@ -369,5 +369,5 @@ workflowhub/
 | FR-METRICS-004 | verify-code-facts.test.mjs 10 字段结构性检查 |
 | FR-TEST-001 | verify-code-capture/freshness/facts 三个 .test.mjs 文件 |
 | FR-TEST-002 | M9 自举端到端（无需额外 E2E 框架，F10） |
-| FR-TEST-003 | .github/workflows/ci.yml 新增两步：① verify-code 冒烟（三脚本单测）；② 轻量三段闭环检查脚本（scripts/ci-chain-check.mjs：检查 make-decision 产物存在可读 → build-code stage-result-build-code.json 可读且 facts.tests.command 存在 → verify-code stage-result 落盘路径结构，覆盖完整三段 make-decision → build-code → verify-code 产物链，不引入重型 E2E 框架，满足验收标准 5 + D-M9-7/F10） |
+| FR-TEST-003 | .github/workflows/ci.yml 新增两步：① verify-code 冒烟（三脚本单测）；② 轻量三段闭环检查脚本（tools/cli/ci-chain-check.mjs：检查 make-decision 产物存在可读 → build-code stage-result-build-code.json 可读且 facts.tests.command 存在 → verify-code stage-result 落盘路径结构，覆盖完整三段 make-decision → build-code → verify-code 产物链，不引入重型 E2E 框架，满足验收标准 5 + D-M9-7/F10） |
 | FR-REG-001 | reuse-registry.md isolated-browser-qa 条目 |

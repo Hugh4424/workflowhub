@@ -5,7 +5,7 @@
 registry:
   - component_id: noop
     workflow: demo
-    path: scripts/noop.mjs
+    path: tools/cli/noop.mjs
   - component_id: make-decision
     workflow: vibecoding
     path: workflows/make-decision/SKILL.md

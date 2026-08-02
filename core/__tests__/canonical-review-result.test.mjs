@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateCanonicalProviderResults,
   authenticateCanonicalReviewResult,
-} from "../canonical-review-result.mjs";
+} from "../../runtime/review/canonical-review-result.mjs";
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;

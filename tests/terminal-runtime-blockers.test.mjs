@@ -5,9 +5,9 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 

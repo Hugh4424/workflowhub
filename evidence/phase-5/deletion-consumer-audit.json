@@ -1,0 +1,129 @@
+{
+  "schema_version": "workflowhub-deletion-consumer-audit.v1",
+  "snapshot_tree": "09c398fd3ea763a693c216eb92a477e703b9b0045bbcf25c71e1f6af33bdff3d",
+  "status": "complete",
+  "policy": "A candidate is DELETE only after complete replacement and negative-proof evidence. Active consumers, retained quality semantics, or any missing proof keep it.",
+  "candidates": [
+    {
+      "id": "DEL-01",
+      "decision": "KEEP",
+      "disposition": "KEEP",
+      "candidate_paths": ["skills/grill-with-docs", "runtime/stage/stage-content-contracts.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["skills/grill-with-docs", "runtime/stage/stage-content-contracts.mjs"],
+      "consumer_refs": ["skills/grill-with-docs/SKILL.md", "runtime/stage/stage-content-contracts.mjs", "core/stage-handlers.mjs", "tests/integration/material-revision.test.mjs"],
+      "reason": "The Grill skill and stage-content contract remain live quality boundaries for material revision and stage execution; no complete replacement or negative proof exists."
+    },
+    {
+      "id": "DEL-02",
+      "decision": "KEEP",
+      "disposition": "KEEP",
+      "candidate_paths": ["runtime/review/stage-review-disposition.mjs", "runtime/review/review-flow-authority.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["runtime/review/stage-review-disposition.mjs", "runtime/review/review-flow-authority.mjs"],
+      "consumer_refs": ["core/stage-handlers.mjs", "workflows/build-code/phase-evidence.mjs", "runtime/review/phase-review-subject.mjs", "tests/final-cutover-guards.red.test.mjs"],
+      "reason": "Review disposition and review-flow authority are imported by stage handlers, phase evidence, review subjects, and guards; deleting either would remove the current quality authority."
+    },
+    {
+      "id": "DEL-03",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "consumer_refs": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs", "tests/integration/progression-without-permits.test.mjs", "tests/final-cutover-guards.red.test.mjs"],
+      "reason": "The dedicated invalidation command/state was removed, but the shared kernel and stage runtime remain required for ordinary execution; focused guards prove retired invalidation paths are not reintroduced."
+    },
+    {
+      "id": "DEL-04",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "consumer_refs": ["runtime/stage/stage-content-contracts.mjs", "core/stage-context.mjs", "core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs", "tests/integration/material-revision.test.mjs", "workflows/build-spec/SKILL.md"],
+      "reason": "Same-task append-only material revision remains a supported path and is consumed by stage contracts, context, kernel, launcher, tests, and build-spec instructions."
+    },
+    {
+      "id": "DEL-05",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "consumer_refs": ["core/task-handle.mjs", "core/task-kernel-implementation.mjs", "core/workspace.mjs", "core/__tests__/task-handle.test.mjs", "core/__tests__/workspace-manager.test.mjs"],
+      "reason": "Task identity, workspace ownership, and lifecycle checks remain active consumers; removing the broad kernel/runtime files would break the identity safety boundary."
+    },
+    {
+      "id": "DEL-06",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs"],
+      "consumer_refs": ["core/stage-runner.mjs", "core/task-kernel-implementation.mjs", "scripts/stage-runtime.mjs", "workflows/build-code/SKILL.md", "tests/build-code-preflight.red.test.mjs", "tests/terminal-runtime-blockers.test.mjs"],
+      "reason": "The dedicated reopen command is not a deletion license for the shared runner and launcher; current build-code execution and fail-closed guards still consume them."
+    },
+    {
+      "id": "DEL-07",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/build-spec-receipt-recovery.mjs", "core/task-recovery.mjs", "scripts/task-recovery.mjs"],
+      "removed_paths": ["core/build-spec-receipt-recovery.mjs", "core/task-recovery.mjs", "scripts/task-recovery.mjs"],
+      "retained_paths": ["core/canonical-receipt-writer.mjs", "runtime/evidence/receipt-writer.mjs", "runtime/stage/publication.mjs", "tests/integration/progression-without-permits.test.mjs"],
+      "consumer_refs": ["core/canonical-receipt-writer.mjs", "runtime/evidence/receipt-writer.mjs", "runtime/stage/publication.mjs", "scripts/stage-runtime.mjs", "tests/official-component-receipts.test.mjs", "tests/integration/progression-without-permits.test.mjs"],
+      "reason": "Dedicated recovery modules are absent, but canonical receipt writing and ordinary publication remain live; the current tree therefore records a partial reduction, not a complete deletion slice."
+    },
+    {
+      "id": "DEL-08",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/task-recovery.mjs", "core/workspace.mjs", "scripts/runtime-cutover.mjs"],
+      "removed_paths": ["core/task-recovery.mjs"],
+      "retained_paths": ["core/workspace.mjs", "scripts/runtime-cutover.mjs"],
+      "consumer_refs": ["core/workspace.mjs", "runtime/task/workspace-runner.mjs", "scripts/runtime-cutover.mjs", "core/task-close.mjs", "core/__tests__/workspace-manager.test.mjs", "tests/task-close-delivery.test.mjs"],
+      "reason": "The dedicated recovery module is absent, while workspace CAS, runtime cutover, task close, and cleanup tests remain required for safe task ownership and delivery."
+    },
+    {
+      "id": "DEL-09",
+      "decision": "KEEP",
+      "disposition": "KEEP",
+      "candidate_paths": ["core/stage-skill-invocation.mjs", "core/stage-completion-facts.mjs", "core/stage-content-evidence.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/stage-skill-invocation.mjs", "core/stage-completion-facts.mjs", "core/stage-content-evidence.mjs"],
+      "consumer_refs": ["runtime/stage/stage-skill-runtime.mjs", "runtime/stage/completion-predicates.mjs", "core/stage-handlers.mjs", "tests/stage-completion-facts.test.mjs", "tests/stage-content-evidence.test.mjs"],
+      "reason": "Invocation, completion, and stage-content evidence are separate quality projections consumed by runtime and focused contract tests; no replacement proof permits removal."
+    },
+    {
+      "id": "DEL-10",
+      "decision": "KEEP",
+      "disposition": "KEEP",
+      "candidate_paths": ["core/journal-appender.mjs", "core/journal-schema.mjs", "core/chain-topology.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/journal-appender.mjs", "core/journal-schema.mjs", "core/chain-topology.mjs"],
+      "consumer_refs": ["runtime/evidence/receipt-writer.mjs", "core/journal-appender.mjs", "core/journal-schema.mjs", "core/fact-indexes.mjs", "tests/five-stage-audit-e2e.test.mjs"],
+      "reason": "Journal append, schema, topology, and fact indexing feed receipts and audit facts; removing them would weaken the current execution history authority."
+    },
+    {
+      "id": "DEL-11",
+      "decision": "KEEP",
+      "disposition": "PARTIAL_DELETE",
+      "candidate_paths": ["core/git-checkpoint.mjs", "core/task-handle.mjs", "core/stage-runner.mjs"],
+      "removed_paths": [],
+      "retained_paths": ["core/git-checkpoint.mjs", "core/task-handle.mjs", "core/stage-runner.mjs"],
+      "consumer_refs": ["core/git-checkpoint.mjs", "core/task-handle.mjs", "core/stage-runner.mjs", "runtime/task/git-worktree-snapshot.mjs", "core/task-kernel-implementation.mjs", "tests/final-cutover-guards.red.test.mjs"],
+      "reason": "Git refs, task identity, stage execution, and worktree snapshots remain lifecycle foundations; only live material comparison was removed, not historical ref integrity."
+    },
+    {
+      "id": "DEL-12",
+      "decision": "KEEP",
+      "disposition": "KEEP",
+      "candidate_paths": ["core/dispatch-component.mjs", "core/resolve-component.mjs", "core/task-index.mjs", "workflows/_spike"],
+      "removed_paths": [],
+      "retained_paths": ["core/dispatch-component.mjs", "core/resolve-component.mjs", "core/task-index.mjs", "workflows/_spike"],
+      "consumer_refs": ["runtime/evidence/kernel.mjs", "core/dispatch-component.mjs", "core/resolve-component.mjs", "core/task-index.mjs", "tools/cli/check-task-record-paths.mjs", "tests/spike-intake-design.test.mjs", "workflows/_spike"],
+      "reason": "Dispatch, resolution, indexing, and archived spike guards still have current runtime or contract consumers; no safe obsolete-path proof exists."
+    }
+  ],
+  "result": "No candidate passed the DELETE predicate; no source, test, schema, skill, or workflow file was removed by this audit."
+}

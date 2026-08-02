@@ -1,7 +1,7 @@
 /**
  * check-contract.test.mjs  (FR-NC-005)
  *
- * Tests for scripts/check-contract.mjs — written RED-first.
+ * Tests for tools/cli/check-contract.mjs — written RED-first.
  * Asserts: exits 0 on a valid contract; exits non-zero on structural violations
  * and on FR-NC-005 business-content field injection.
  */
@@ -15,7 +15,7 @@ import { describe, test, expect } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const checkerScript = resolve(repoRoot, "scripts", "check-contract.mjs");
+const checkerScript = resolve(repoRoot, "tools", "cli", "check-contract.mjs");
 const realContract = resolve(repoRoot, "contracts", "component-output.contract.json");
 
 /** Run check-contract.mjs with an optional --contract override path. */

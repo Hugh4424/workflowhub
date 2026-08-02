@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { validateStepManifest } from "../core/step-manifest.mjs";
+import { validateStepManifest } from "../runtime/stage/step-manifest.mjs";
 
 const repoRoot = new URL("..", import.meta.url).pathname;
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];

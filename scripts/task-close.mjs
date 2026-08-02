@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
-import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../runtime/evidence/write-boundary-preflight.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import {
   closePlanHash,

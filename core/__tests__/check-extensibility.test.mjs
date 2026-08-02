@@ -1,6 +1,6 @@
 /**
  * check-extensibility.test.mjs
- * RED tests for scripts/check-extensibility.mjs
+ * RED tests for tools/cli/check-extensibility.mjs
  * Covers FR-EXT-001 (swappability), FR-EXT-002 (extensibility), FR-EXT-003 (independence).
  */
 
@@ -13,10 +13,10 @@ import os from "node:os";
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
-// Import the checker module — will fail (RED) until scripts/check-extensibility.mjs exists.
+// Import the checker module — will fail (RED) until tools/cli/check-extensibility.mjs exists.
 let createCoreSnapshot, verifySwappability, verifyExtensibility;
 beforeAll(async () => {
-  const mod = await import(resolve(repo, "scripts/check-extensibility.mjs"));
+  const mod = await import(resolve(repo, "tools/cli/check-extensibility.mjs"));
   createCoreSnapshot = mod.createCoreSnapshot;
   verifySwappability = mod.verifySwappability;
   verifyExtensibility = mod.verifyExtensibility;
@@ -86,7 +86,7 @@ describe("FR-EXT-001 falsifiability: core file modified → verifySwappability f
   let configPath;
   let stubPath;
   // We'll temporarily mutate a core file to prove diff anchoring is real.
-  const kernelPath = resolve(repo, "core/kernel.mjs");
+  const kernelPath = resolve(repo, "runtime/evidence/kernel.mjs");
   let originalContent;
   let baselineCoreSnapshot;
 
@@ -109,7 +109,7 @@ describe("FR-EXT-001 falsifiability: core file modified → verifySwappability f
       "utf8",
     );
 
-    // Mutate core/kernel.mjs — append a comment to change its content
+    // Mutate runtime/evidence/kernel.mjs — append a comment to change its content
     writeFileSync(kernelPath, originalContent + "// falsify-marker\n", "utf8");
   });
 
@@ -191,7 +191,7 @@ describe("FR-EXT-002 falsifiability: core file modified → verifyExtensibility 
   let tmpDir;
   let configPath;
   let dummyPath;
-  const kernelPath = resolve(repo, "core/kernel.mjs");
+  const kernelPath = resolve(repo, "runtime/evidence/kernel.mjs");
   let originalContent;
   let baselineCoreSnapshot;
 
@@ -215,7 +215,7 @@ describe("FR-EXT-002 falsifiability: core file modified → verifyExtensibility 
       "utf8",
     );
 
-    // Mutate core/kernel.mjs
+    // Mutate runtime/evidence/kernel.mjs
     writeFileSync(kernelPath, originalContent + "// falsify-ext-marker\n", "utf8");
   });
 

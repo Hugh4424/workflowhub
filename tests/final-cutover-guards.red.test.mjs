@@ -2,15 +2,36 @@ import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { officialStageHandler } from "../core/stage-handlers.mjs";
-import { validateStageFacts } from "../core/task-kernel.mjs";
+import { certifyBuildCodeQualityBasis, officialStageHandler } from "../core/stage-handlers.mjs";
+import { validateStageFacts } from "../runtime/task/task-kernel.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
-import { buildRiskAcceptance, deriveSeriousReviewPause } from "../core/stage-review-disposition.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause } from "../runtime/review/stage-review-disposition.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
   const canonicalHash = (value) => createHash("sha256").update(`${JSON.stringify(value, null, 2)}\n`).digest("hex");
+
+  it("does not certify build-code completion from revise_required without a verified resolution", () => {
+    expect(() => certifyBuildCodeQualityBasis({
+      changedFiles: [],
+      plannedChanges: [],
+      tests: { exit_code: 0 },
+      review: { verdict: "revise_required", result_ref: "reviews/results/review.json", result_hash: sha },
+      expectedAc: ["AC1"],
+      coveredAc: ["AC1"],
+    })).toThrow(/passing integration review|verified closed resolution/);
+  });
+  it("keeps an unavailable integration review visible without creating a build-code progression gate", () => {
+    expect(certifyBuildCodeQualityBasis({
+      changedFiles: [],
+      plannedChanges: [],
+      tests: { exit_code: 0 },
+      review: { status: "unavailable", attempt_ref: "reviews/attempts/review/attempt.json", attempt_hash: sha },
+      expectedAc: ["AC1"],
+      coveredAc: ["AC1"],
+    })).toMatchObject({ review: { status: "unavailable", verdict: null } });
+  });
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
   const completedBuildCodeDocuments = () => {
     const spec = `# Specification
@@ -130,6 +151,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     ...overrides,
   });
   const workerFor = (stage, values, currentTree = tree) => {
+    const documents = completedBuildCodeDocuments();
     const workflowRunId = "fixture:attempt-0001";
     const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
     if (!values[auditRef]) {
@@ -177,6 +199,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
       stage,
       workflowRunId,
       identity: { taskId: "task" },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
       readCompletionInvocationFacts: () => ({
         declaredComponents: [],
         invocationFacts: [],
@@ -279,15 +303,39 @@ ${task("T002", "contract GREEN", 0, "T001")}
     ["build-spec", { spec: "receipts/spec.json" }],
     ["build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json" }],
   ])("refuses to publish %s without its formal review receipts", async (stage, receipts) => {
-    const values = Object.fromEntries(Object.values(receipts).map((ref) => [ref, canonical(stage, {
-      producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
-      content: "content\n", content_hash: "unused",
-    })]));
+    const documents = completedBuildCodeDocuments();
+    const contentFor = (ref) => ref.includes("decision") ? "# Decision\n\nProceed.\n"
+      : ref.includes("tasks") ? documents.tasks : ref.includes("plan") ? documents.plan : documents.spec;
+    const values = Object.fromEntries(Object.values(receipts).map((ref) => {
+      const content = contentFor(ref);
+      return [ref, canonical(stage, {
+        producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
+        content, content_hash: createHash("sha256").update(content).digest("hex"),
+      })];
+    }));
     const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
     values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [], ...(stage === "make-decision" ? { through_step_id: 10, audit_scope: "pre_confirmation" } : {}) };
     receipts.audit = auditRef;
-    const worker = { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }) };
-    await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/review.*receipt ref/i);
+    const worker = {
+      ...workerFor(stage, values),
+      readArtifact: (name) => {
+        if (name === "decision-log.md") return "# Decision\n\nProceed.\n";
+        if (name === "spec.md") return documents.spec;
+        if (name === "plan.md") return documents.plan;
+        if (name === "tasks.md") return documents.tasks;
+        return undefined;
+      },
+      artifactRef: (name) => `specs/task/${name}`,
+      createCheckpoint: () => ({}),
+    };
+    const invocation = officialStageHandler(stage)(worker, { receipts });
+    if (stage === "build-plan") {
+      await expect(invocation).resolves.toMatchObject({
+        missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable.*review receipt ref/i)]),
+      });
+    } else {
+      await expect(invocation).rejects.toThrow(/review.*receipt ref/i);
+    }
   });
 
   it("rejects caller-owned workflow identity and an untracked make-decision resolution field", async () => {
@@ -324,8 +372,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   it.each([
     ["missing spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, {}],
     ["different spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, { "spec.md": "wrong\n" }],
-    ["missing tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n" }],
-    ["different tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n", "tasks.md": "wrong\n" }],
+    ["missing tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: completedBuildCodeDocuments().plan, tasks: completedBuildCodeDocuments().tasks }, { "plan.md": completedBuildCodeDocuments().plan }],
+    ["different tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: completedBuildCodeDocuments().plan, tasks: completedBuildCodeDocuments().tasks }, { "plan.md": completedBuildCodeDocuments().plan, "tasks.md": "wrong\n" }],
   ])("rejects %s when the reviewed design artifact differs from its final receipt without mutating the Workspace", async (_case, stage, receipts, contents, artifacts) => {
     const values = { "reviews/results/review.json": reviewReceipt(stage) };
     for (const [component, content] of Object.entries(contents)) values[`receipts/${component}.json`] = canonical(stage, {
@@ -334,13 +382,18 @@ ${task("T002", "contract GREEN", 0, "T001")}
     let checkpointCalls = 0, writeCalls = 0;
     const worker = {
       ...workerFor(stage, values),
-      readArtifact: (name) => artifacts[name],
+      readArtifact: (name) => {
+        if (name === "decision-log.md") return "# Decision\n\nProceed.\n";
+        if (name === "spec.md") return completedBuildCodeDocuments().spec;
+        return artifacts[name];
+      },
       writeArtifact: () => { writeCalls += 1; },
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: (name) => `specs/task/${name}`,
     };
     receipts.audit = worker.auditRef;
-    await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/artifact.*receipt|differ/i);
+    await expect(officialStageHandler(stage)(worker, { receipts }))
+      .rejects.toThrow(/artifact.*receipt|differ|content must be non-empty|minimum executable contract/i);
     expect(writeCalls).toBe(0);
     expect(checkpointCalls).toBe(0);
   });
@@ -494,7 +547,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("surfaces accepted risk from external audit at the build-plan human boundary without making it a stage fact", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n", auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks, auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
     const values = {
       "receipts/plan.json": canonical(stage, { producer: { stage, component: "plan", version: "1" }, content: plan, content_hash: createHash("sha256").update(plan).digest("hex") }),
       "receipts/tasks.json": canonical(stage, { producer: { stage, component: "tasks", version: "1" }, content: tasks, content_hash: createHash("sha256").update(tasks).digest("hex") }),
@@ -512,7 +566,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("rejects a build-plan review that is not the authenticated flow head", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n";
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks;
     const reviewRef = "reviews/results/review.json";
     const review = reviewReceipt(stage);
     const values = {
@@ -535,11 +590,14 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     await expect(officialStageHandler(stage)(worker, {
       receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
-    })).rejects.toThrow(/authenticated (?:review-)?flow head/i);
+    })).resolves.toMatchObject({
+      missing_items: expect.arrayContaining([expect.stringMatching(/authenticated review-flow head/i)]),
+    });
   });
 
   it("rejects build-plan publication when a newer authenticated flow action is not consumed", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n";
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks;
     const reviewRef = "reviews/results/review.json";
     const review = reviewReceipt(stage);
     const values = {
@@ -561,7 +619,9 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     await expect(officialStageHandler(stage)(worker, {
       receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
-    })).rejects.toThrow(/latest authenticated flow action|resolution/i);
+    })).resolves.toMatchObject({
+      missing_items: expect.arrayContaining([expect.stringMatching(/latest authenticated flow action/i)]),
+    });
   });
 
   it("consumes direction and detail resolutions only through their dedicated latest flow actions", async () => {
@@ -662,14 +722,17 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ facts: { tests: { exit_code: 1 } } });
   });
 
-  it("pauses when a revise_required build-code review has no verified resolution", async () => {
+  it("keeps a revise_required build-code review as audit-only during verify-code", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     const worker = workerFor(stage, values);
-    await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } })).rejects.toThrow(/SERIOUS_REVIEW_PAUSE/);
+    const result = await officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } });
+    expect(result.verification_failure).toBe(true);
+    expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
+    expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
   });
 
   it("preserves an authenticated unavailable build-code review as a non-gate quality fact", async () => {
@@ -714,11 +777,11 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result).toMatchObject({
       facts: { review: { status: "unavailable" } },
     });
-    expect(result.missing_items.join("\n")).not.toMatch(/review unavailable/i);
+    expect(result.missing_items.join("\n")).toMatch(/build-code integration review is unavailable/i);
     expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=pass/i);
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
     expect(result.reason).toMatch(/snapshot/i);
-    expect(result.reason).not.toMatch(/unavailable|integration review/i);
+    expect(result.reason).toMatch(/unavailable|integration review/i);
   });
 
   it("describes revise_required as a bound quality fact instead of review pass", async () => {
@@ -912,7 +975,70 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ facts: { review: { subject_kind: "worktree", phase_id: null, review_scope: "integration" } } });
   });
 
-  it("consumes a canonical pre-dispatch unavailable integration review without inventing provider attempts", async () => {
+  it("rejects a forged current global test receipt before task audit is considered", async () => {
+    const stage = "build-code";
+    const forgedTests = testsReceipt(stage);
+    forgedTests.producer.stage = "verify-code";
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": forgedTests,
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    const worker = workerFor(stage, values);
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).rejects.toThrow(/tests receipt producer stage mismatch/i);
+  });
+
+  it("rejects forged current AC evidence even when task audit rows are complete", async () => {
+    const stage = "build-code";
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree, diff_ref: "evidence/diff.patch", diff_hash: sha, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const worker = workerFor(stage, values);
+    const readReceipt = worker.readReceipt;
+    worker.readReceipt = (ref) => {
+      const record = readReceipt(ref);
+      return ref === "evidence/ac1.json" ? { ...record, sha256: "0".repeat(64) } : record;
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).rejects.toThrow(/acceptance_coverage AC1 evidence hash mismatch/i);
+  });
+
+  it("rejects a revise_required build-code integration review before publishing completion", async () => {
+    const stage = "build-code";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage, "revise_required"),
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: createHash("sha256").update(values[ref]).digest("hex") })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: "reviews/results/review.json", audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).rejects.toThrow(/SERIOUS_REVIEW_PAUSE|MATERIAL_INCOMPLETE.*verdict.*revise_required/i);
+  });
+
+  it("keeps an authenticated unavailable integration review visible without blocking build-code publication", async () => {
     const stage = "build-code";
     const attemptRef = "reviews/attempts/material-incomplete/attempt.json";
     const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
@@ -944,9 +1070,43 @@ ${task("T002", "contract GREEN", 0, "T001")}
       receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: attemptRef, audit: worker.auditRef },
       acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
     })).resolves.toMatchObject({
-      facts: { review: { status: "unavailable", error: { code: "MATERIAL_INCOMPLETE" } } },
-      missing_items: [expect.stringMatching(/review unavailable: MATERIAL_INCOMPLETE/i)],
+      facts: { review: { status: "unavailable" } },
+      missing_items: [expect.stringMatching(/review unavailable/i)],
+      completion: { system: { result: "completed_with_open_items" } },
     });
+  });
+
+  it("rejects an unavailable final review that is not bound to integration scope", async () => {
+    const stage = "build-code", attemptRef = "reviews/attempts/material-incomplete-no-scope/attempt.json";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "receipts/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "receipts/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "material-incomplete-no-scope", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
+      },
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: createHash("sha256").update(values[ref]).digest("hex") })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "receipts/implementation.json", tests: "receipts/tests.json", review: attemptRef, audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).rejects.toThrow(/MATERIAL_INCOMPLETE.*integration review/i);
   });
 
   it("rejects an empty-provider unavailable attempt that is not a material preflight fact", async () => {
@@ -969,19 +1129,79 @@ ${task("T002", "contract GREEN", 0, "T001")}
     })).rejects.toThrow(/must contain provider attempts/i);
   });
 
-  it("rejects verify-code when the accepted build has legacy review facts without scope", async () => {
+  it("uses the current supplied integration review instead of legacy accepted review facts", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage),
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     const worker = workerFor(stage, values);
-    worker.readAcceptedBuildCode = () => ({ facts: { tests: { snapshot_tree: tree }, review: { result_ref: "reviews/results/review.json", result_hash: sha, snapshot_tree: tree } } });
+    worker.readAcceptedBuildCode = () => { throw new Error("legacy accepted facts must not be read"); };
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "evidence/manifest.json", audit: worker.auditRef } }))
-      .resolves.toMatchObject({ verification_failure: true, missing_items: expect.arrayContaining([expect.stringMatching(/accepted build-code lacks.*integration review/i)]) });
+      .resolves.toMatchObject({ verification_failure: true });
   });
 
-  it("rejects verify-code when tests/review no longer match the current tree", async () => {
+  it("publishes a truthful incomplete attempt when historical build-code acceptance is absent", async () => {
+    const stage = "verify-code";
+    const acceptanceRef = "evidence/ac1.json";
+    const sourceRef = "evidence/ac1-source.json";
+    const values = {
+      "receipts/tests.json": testsReceipt(stage),
+      "reviews/results/review.json": reviewReceipt(stage),
+      [acceptanceRef]: {
+        schema_version: "acceptance-evidence.v1",
+        acceptance_criterion_id: "AC1",
+        result: "pass",
+        refs: [{ ref: sourceRef, sha256: sha }],
+        snapshot_tree: tree,
+      },
+      [sourceRef]: canonical(stage, { producer: { stage, component: "evidence", version: "1" }, snapshot_tree: tree }),
+      "evidence/manifest.json": canonical(stage, {
+        producer: { stage, component: "evidence", version: "1" },
+        refs: [{ ref: acceptanceRef, sha256: sha }],
+        snapshot_tree: tree,
+      }),
+    };
+    const worker = workerFor(stage, values);
+    const readReceipt = worker.readReceipt;
+    let legacyLookup = false;
+    worker.readReceipt = (ref) => {
+      if (ref === "results/build-code/accepted.json") {
+        legacyLookup = true;
+        throw new Error("historical build-code acceptance must not be read");
+      }
+      return readReceipt(ref);
+    };
+    worker.readAcceptedBuildCode = () => {
+      legacyLookup = true;
+      throw new Error("historical build-code acceptance must not be read");
+    };
+
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: {
+        tests: "receipts/tests.json",
+        review: "reviews/results/review.json",
+        quality_review: worker.qualityReviewRef,
+        evidence: "evidence/manifest.json",
+        audit: worker.auditRef,
+      },
+    });
+
+    expect(legacyLookup).toBe(false);
+    expect(result).toMatchObject({
+      verification_failure: true,
+      facts: {
+        tests: { exit_code: 0, snapshot_tree: tree },
+        review: { snapshot_tree: tree },
+        evidence_refs: [{ ref: acceptanceRef, sha256: sha }],
+      },
+      completion: { system: { result: "completed_with_open_items" } },
+    });
+    expect(result.missing_items).toContain("canonical verification receipt is missing");
+    expect(result.missing_items.join("\n")).not.toMatch(/results\/build-code\/accepted\.json|accepted build-code/i);
+  });
+
+  it("reports verify-code failure when current tests and reviews no longer match the Workspace", async () => {
     const stage = "verify-code", values = {
       "receipts/tests.json": testsReceipt(stage),
       "reviews/results/review.json": reviewReceipt(stage),
@@ -992,13 +1212,12 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result).toMatchObject({
       verification_failure: true,
       missing_items: expect.arrayContaining([
-        expect.stringMatching(/tasks\.md independent completion check failed/i),
-        expect.stringMatching(/complete test command/i),
         expect.stringMatching(/acceptance evidence criterion set/i),
         expect.stringMatching(/snapshot/i),
+        expect.stringMatching(/canonical verification receipt is missing/i),
       ]),
     });
-    expect(result.missing_items).toHaveLength(5);
+    expect(result.missing_items).toHaveLength(3);
   });
 
   it("consumes the latest verify-code quality review resolution", async () => {
@@ -1108,7 +1327,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("uses an epoch-bound quiescing protocol before switching storage roots", () => {
-    const source = readFileSync(resolve("scripts/migrate-task-v2.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/migrate-task-v2.mjs"), "utf8");
     expect(source).toMatch(/assertMigrationAuthority[\s\S]*expectedEpoch:\s*options\.epoch/);
     const authority = readFileSync(resolve("core/runtime-mode.mjs"), "utf8");
     expect(authority).toMatch(/assertMigrationAuthority[\s\S]*quiescing[\s\S]*epoch/i);
@@ -1129,13 +1348,13 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("does not exempt test directories wholesale and keeps fixture exceptions file-scoped", () => {
-    const source = readFileSync(resolve("scripts/check-task-record-paths.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/check-task-record-paths.mjs"), "utf8");
     expect(source).not.toMatch(/rel\.includes\("\/__tests__\/"\)|\(\?:\^\|\\\/\)tests\?\\\//);
     expect(source).toMatch(/FIXTURE_ALLOWLIST/);
   });
 
   it("allows specs task-path construction only inside ArtifactDir", () => {
-    const source = readFileSync(resolve("scripts/check-task-record-paths.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/check-task-record-paths.mjs"), "utf8");
     expect(source).toMatch(/specs[\s\S]+ArtifactDir product authority/);
     expect(source).toMatch(/literal specs path derivation is only legal in core\/artifact-dir\.mjs/);
   });

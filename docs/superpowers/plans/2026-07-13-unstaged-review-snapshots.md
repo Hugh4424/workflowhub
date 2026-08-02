@@ -25,8 +25,8 @@
 - Modify: `skills/wh-review/scripts/review-round-facade.mjs` — host capture, R1/R2 tree source, flow ref, approved tree, final verification.
 - Modify: `skills/wh-review/scripts/wh-review-cli.mjs` and tests — material-only input and `verify-final`.
 - Modify: `skills/wh-review/schemas/review-packet.schema.json`, `review-packet-integrity.mjs`, `review-prompt.mjs` — tree source contract and tree delta wording.
-- Modify: `scripts/phase-gate.mjs`, `scripts/validate-stage-result.mjs`, `contracts/facts-subschema.json` and tests — remove per-phase commit/clean checks.
-- Modify: `workflows/build-code/SKILL.md`, `workflows/verify-code/SKILL.md`, `scripts/run-wh-review-provider-smoke.mjs` — one final commit and true unstaged smoke.
+- Modify: `tools/cli/phase-gate.mjs`, `scripts/validate-stage-result.mjs`, `contracts/facts-subschema.json` and tests — remove per-phase commit/clean checks.
+- Modify: `workflows/build-code/SKILL.md`, `workflows/verify-code/SKILL.md`, `tools/cli/run-wh-review-provider-smoke.mjs` — one final commit and true unstaged smoke.
 
 ### Task 1: Capture a temporary-index tree
 
@@ -224,7 +224,7 @@ git commit -m "feat(wh-review): continue uncommitted review flows"
 
 **Files:**
 
-- Modify: `scripts/phase-gate.mjs`
+- Modify: `tools/cli/phase-gate.mjs`
 - Modify: `scripts/validate-stage-result.mjs`
 - Modify: `contracts/facts-subschema.json`
 - Modify: `workflows/build-code/SKILL.md`
@@ -271,7 +271,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add scripts/phase-gate.mjs scripts/validate-stage-result.mjs contracts/facts-subschema.json workflows/build-code/SKILL.md workflows/verify-code/SKILL.md tests/phase-gate.test.mjs tests/facts-subschema.test.mjs tests/receipt-verification.test.mjs
+git add tools/cli/phase-gate.mjs scripts/validate-stage-result.mjs contracts/facts-subschema.json workflows/build-code/SKILL.md workflows/verify-code/SKILL.md tests/phase-gate.test.mjs tests/facts-subschema.test.mjs tests/receipt-verification.test.mjs
 git commit -m "fix(workflow): commit once after final review"
 ```
 
@@ -279,7 +279,7 @@ git commit -m "fix(workflow): commit once after final review"
 
 **Files:**
 
-- Modify: `scripts/run-wh-review-provider-smoke.mjs`
+- Modify: `tools/cli/run-wh-review-provider-smoke.mjs`
 - Modify: `scripts/__tests__/run-wh-review-provider-smoke.test.mjs`
 - Modify: `tests/wh-review-v4-workflow-wiring.test.mjs`
 - Modify: `docs/adr/0002-v4-review-exception-state-matrix.md`
@@ -314,7 +314,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Run real smoke and final 3rd-review**
 
-Run: `WH_REVIEW_PROVIDER_SMOKE=1 WH_REVIEW_NATIVE_AUTH_CONFIRMED=1 node scripts/run-wh-review-provider-smoke.mjs`
+Run: `WH_REVIEW_PROVIDER_SMOKE=1 WH_REVIEW_NATIVE_AUTH_CONFIRMED=1 node tools/cli/run-wh-review-provider-smoke.mjs`
 
 Expected: OpenCode and Kimi R1/R2 PASS from uncommitted work, each reusing its session; evidence JSON contains runtime/raw hash checks.
 
@@ -329,7 +329,7 @@ Expected: `APPROVED`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add scripts/run-wh-review-provider-smoke.mjs scripts/__tests__/run-wh-review-provider-smoke.test.mjs tests/wh-review-v4-workflow-wiring.test.mjs docs/adr/0002-v4-review-exception-state-matrix.md
+git add tools/cli/run-wh-review-provider-smoke.mjs scripts/__tests__/run-wh-review-provider-smoke.test.mjs tests/wh-review-v4-workflow-wiring.test.mjs docs/adr/0002-v4-review-exception-state-matrix.md
 git commit -m "test(wh-review): smoke uncommitted review flows"
 ```
 

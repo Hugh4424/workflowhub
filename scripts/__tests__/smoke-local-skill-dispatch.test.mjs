@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { smokeLocalSkillDispatch } from "../smoke-local-skill-dispatch.mjs";
+import { smokeLocalSkillDispatch } from "../../tools/cli/smoke-local-skill-dispatch.mjs";
 
 it("dispatches all five stages from a clean profile despite global same-name skills", async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

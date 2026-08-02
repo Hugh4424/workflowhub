@@ -82,13 +82,19 @@ DRY/KISS/YAGNI/SoC、复杂度或可读性 finding 必须指出当前 diff 中�
 
 ## 最终 Integration 审查材料
 
-Integration 在调用 provider 前从 accepted build-plan checkpoint 到最终快照重建唯一、
-连续的正式 Phase semantic-review trace chain。每一段必须有同一树身份的 phase
-evidence、正式 `pass|revise_required` result、最小 phase-map trace、绿测 receipt 和
-完整 AC `change/test/evidence` 追踪。零 Phase、缺段、分叉、重复、树或哈希不连续、
-历史正式审查没有 trace、或 legacy
-无 scope result 都是 `MATERIAL_INCOMPLETE`；它们不允许回退为全项目、累计 diff 或
-"空链"投递。
+Integration 在调用 provider 前从 accepted build-plan checkpoint 汇总每个已完成
+implementation Phase 的正式 semantic-review trace，并单独绑定最终快照的当前
+implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
+提交；因此连续性以 Git commit ancestry 和每段自身的 tree/hash 绑定为准，不要求
+相邻 Phase 的 tree 字节相等。Phase 缺段、分叉、重复、哈希不连续、历史正式审查
+没有 trace、或 legacy 无 scope result 都是 `MATERIAL_INCOMPLETE`；不能回退为累计
+diff、全项目包或“空链”。
+
+Phase coverage 只传最小身份、review result、phase-map trace 和 GREEN receipt；
+历史 Phase 的 raw evidence、review attempt、provider output_ref、逐 AC anchor 不
+进入 Integration packet。最终 AC 的 `change/test/evidence` 追踪只使用当前 tasks
+和当前快照收据。这样历史审查可审计、但不会把旧 provider 私有字段或过时的逐项
+映射重新变成当前工作的阻塞条件。
 
 Integration packet 只包含：批准 spec/AC、最终快照的 fresh test summary、
 `phase-review-coverage.v1`、`cross-phase-seam-index.v1`、AC trace、冻结 reviewer

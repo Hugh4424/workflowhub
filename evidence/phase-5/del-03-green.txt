@@ -1,0 +1,24 @@
+Phase 5 DEL-03 focused evidence (current candidate snapshot)
+
+Scope
+- Removed the dedicated stage-run invalidation public behavior, handler mappings,
+  kernel invalidation state, canonical invalidation record paths, and invalidation
+  receipt coupling.
+- Kept retry fail-closed: a retry is authorized only by the previous unique
+  non-success terminal journal exit for the same step; a successful prior attempt,
+  duplicate terminal exit, or forged attempt identity is rejected.
+
+Validation
+- ./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs core/__tests__/receipt-writer.test.mjs tests/contract/runtime-facade.test.mjs core/__tests__/task-handle.test.mjs --maxWorkers=1
+- Result: 4 files, 51 tests passed.
+- Retired identifier scan: no production references to invalidate-run,
+  invalidate-step-attempt, invalidate-stage-attempt, journal-invalidations,
+  stageRunInvalidation, or trustedActiveStageRun. Negative contract assertions
+  remain intentionally.
+- node tools/architecture/complexity-report.mjs --check-hard-gates
+- Result: reproducible; hard-zero gates explicit.
+
+Evidence boundary
+- A historical pre-delete RED was not replayed because this candidate already
+  lacks the pre-delete implementation snapshot. This record does not claim a
+  fabricated RED; it records current-source proof and the exact limitation.

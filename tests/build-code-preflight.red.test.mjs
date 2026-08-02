@@ -1,16 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../core/artifact-dir.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];
@@ -149,61 +149,5 @@ describe("build-code authenticated input preflight", () => {
     });
     expect(receipt.value).toMatchObject({ stage: "build-code" });
     expect(task.readRecord(receipt.ref)).toBeTruthy();
-  });
-});
-
-describe("build-code Phase execution, AC, and handoff contracts", () => {
-  const skill = readFileSync(resolve("workflows/build-code/SKILL.md"), "utf8");
-  const verifySkill = readFileSync(resolve("workflows/verify-code/SKILL.md"), "utf8");
-
-  it("gives Phase execution one factual Phase Card without copying process rules", () => {
-    expect(skill).toMatch(/Phase Card[\s\S]*(?:goal|目标)[\s\S]*AC IDs[\s\S]*Workspace[\s\S]*(?:allowed files|允许文件)[\s\S]*(?:non-goals|非目标)[\s\S]*(?:test commands|测试命令)[\s\S]*(?:upstream findings|上游 finding)/i);
-    expect(skill).toMatch(/card must not copy execution steps, review selection rules, or[\s\S]*task-storage paths/i);
-  });
-
-  it("requires applicable RED to minimal GREEN, focused tests, necessary regression, and scoped diff", () => {
-    for (const part of [/When applicable/, /RED/, /minimal GREEN/, /focused\s+tests/, /necessary regression/, /scoped diff/])
-      expect(skill).toMatch(part);
-    expect(skill).toMatch(/return the exact command and raw output/i);
-    expect(skill).toMatch(/Publish implementation receipts[\s\S]*real test evidence/i);
-  });
-
-  it("keeps Stage publication and delivery outside Phase execution", () => {
-    expect(skill).toMatch(/Do not split or start another Phase,[\s\S]*commit, merge, push, accept the Stage, or close/i);
-    expect(skill).toMatch(/### Stage coordination/i);
-    expect(skill).toMatch(/final full-worktree `wh-review`/i);
-    expect(skill).toMatch(/publish the\s+build-code attempt/i);
-  });
-
-  it("requires a complete AC table in existing test evidence and the inline human brief", () => {
-    expect(skill).toMatch(/every accepted AC|each accepted AC|每(?:一|项).*AC/i);
-    for (const status of ["covered", "missing", "unknown"]) expect(skill).toContain(status);
-    expect(skill).toMatch(/covered[\s\S]*authenticated canonical refs/i);
-    expect(skill).toMatch(/exactly one row|恰好一行/i);
-    expect(skill).toMatch(/covered[\s\S]{0,80}(?:requires|必须)[\s\S]{0,80}(?:refs|引用)/i);
-    expect(skill).toMatch(/omitted AC is never covered/i);
-    expect(verifySkill).toMatch(/accepted records are audit lineage,[\s\S]*not an entry licence/i);
-    expect(verifySkill).toMatch(/代码、测试、每条 AC 或任务完成性为 `fail\|unknown` 时阻断完成/);
-  });
-
-  it("maps an omitted accepted AC to unknown rather than covered in the contract fixture", () => {
-    const accepted = ["AC-101", "AC-102"];
-    const supplied = [{ ac: "AC-101", status: "covered", refs: ["evidence/ac-101.json"], reason: "test passed" }];
-    const rows = accepted.map((ac) => supplied.find((row) => row.ac === ac)
-      ?? { ac, status: "unknown", refs: "无", reason: "上游未报告" });
-    expect(rows).toEqual([
-      supplied[0],
-      { ac: "AC-102", status: "unknown", refs: "无", reason: "上游未报告" },
-    ]);
-    expect(rows.find((row) => row.ac === "AC-102")?.status).not.toBe("covered");
-  });
-
-  it("defines a concise downstream handoff without copying full artifacts or logs", () => {
-    const compact = skill.replace(/\s+/g, " ");
-    expect(compact).toMatch(/milestone card[\s\S]{0,220}current progress[\s\S]{0,220}next step[\s\S]{0,220}(?:whether user action is required|whether the user must act)/i);
-    expect(compact).toMatch(/recommendation[\s\S]{0,80}reason[\s\S]{0,120}each option's consequence\/risk/i);
-    expect(compact).toMatch(/formal artifacts and evidence[\s\S]*without copying their full contents/i);
-    expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
-    expect(verifySkill).toMatch(/修复记录或其他审计材料缺失只如实披露/);
   });
 });

@@ -1,0 +1,273 @@
+{
+  "schema_version": "workflowhub-third-review-raw.v1",
+  "scope": "T055 current candidate blind architecture review",
+  "delivery": "file_only",
+  "providers": [
+    "opencode/k3",
+    "claude-code/opus",
+    "cursor/grok"
+  ],
+  "started_at": "2026-08-02T02:55:43.806Z",
+  "finished_at": "2026-08-02T03:04:55.915Z",
+  "results": [
+    {
+      "provider": "opencode/k3",
+      "exit_code": 0,
+      "signal": null,
+      "stdout": "{\n  \"version\": 4,\n  \"outcome\": \"completed\",\n  \"runtime_id\": \"ca602177-a52e-4293-a9df-b48ec0989c4a\",\n  \"round\": 1,\n  \"host_provider\": \"codex\",\n  \"selected_tier\": 0,\n  \"providers\": [\n    {\n      \"provider\": \"opencode/k3\",\n      \"tier\": 0,\n      \"status\": \"completed\",\n      \"duration_ms\": 552027,\n      \"retry_count\": 0,\n      \"api_empty_response_count\": 0,\n      \"progress_events\": 97,\n      \"last_progress_at_ms\": 1785639895883,\n      \"raw_stdout_sha256\": \"695e4ccb1a870842df859412db8d889312b79cbcbab680713a66d7f00b562ea0\",\n      \"raw_stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n      \"delivery_used\": \"file_only\",\n      \"delivery\": {\n        \"delivery_mode\": \"file_only\",\n        \"sealed_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"provider_visible_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"material_total_bytes\": 2023815,\n        \"provider_visible_attachment_manifest\": [\n          {\n            \"destination\": \"review-instructions.md\",\n            \"sha256\": \"52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371\",\n            \"size\": 2044\n          },\n          {\n            \"destination\": \"acceptance-criteria.md\",\n            \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n            \"size\": 0\n          },\n          {\n            \"destination\": \"current-facts.json\",\n            \"sha256\": \"e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95\",\n            \"size\": 10479\n          },\n          {\n            \"destination\": \"changes.diff\",\n            \"sha256\": \"04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6\",\n            \"size\": 1994564\n          },\n          {\n            \"destination\": \"diff-summary.txt\",\n            \"sha256\": \"ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24\",\n            \"size\": 15184\n          },\n          {\n            \"destination\": \"review-packet.v1.json\",\n            \"sha256\": \"ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956\",\n            \"size\": 276\n          },\n          {\n            \"destination\": \"manifest.json\",\n            \"sha256\": \"600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737\",\n            \"size\": 1268\n          }\n        ],\n        \"byte_identity\": \"verified\"\n      },\n      \"session_id\": \"ses_03f99e48cffeijQKRumhFKtYxD\",\n      \"usage\": {\n        \"total\": 13280,\n        \"input\": 13121,\n        \"output\": 159,\n        \"reasoning\": 0,\n        \"cache\": {\n          \"write\": 0,\n          \"read\": 0\n        }\n      },\n      \"output\": \"{\\\"verdict\\\":\\\"pass\\\",\\\"summary\\\":\\\"The diff genuinely simplifies WorkflowHub (net -20,571 lines): historical-permit machinery (reopen, rebind, continuation, recovery, replay, invalidation, flow-reset, adjudication-correction, verify passing/failure publications) is removed, and review-flow identity is re-keyed to the current material revision plus live snapshot, so history is audit-only and cannot block ordinary continuation. Formal safety remains fail-closed: publish/accept still validate current facts and audit carriers, acceptance of a replacement attempt requires a fresh human confirmation, build-code completion now demands a semantic integration review (pass or verified closed resolution) instead of accepting an unavailable formal record, verify-code recomputes completion and AC coverage from current spec/plan/tasks artifacts and requires tests/review/quality-review snapshots to match the current tree, atomic writer contracts are preserved and made more honest, and the final-coverage/final-gates validators bind each AC to a fixed oracle plus a real Vitest execution report. Five stages, confirmation/authorization boundaries, independent review facts distinct from permissions, clean Runner/Skill release surfaces, and node_modules exclusion are all preserved. Findings are minor only.\\\",\\\"findings\\\":[{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"acceptance-criteria.md\\\",\\\"line\\\":null,\\\"issue\\\":\\\"The supplied acceptance-criteria.md is empty (0 bytes), so AC-01..AC-15 coverage can only be assessed structurally from current-facts.json and the 2-line spec.md diff, not against actual criterion text.\\\",\\\"root_cause\\\":\\\"The frozen packet ships a placeholder acceptance-criteria file while the real AC text lives in specs/workflowhub-complexity-governance-v2/spec.md, which is not included in the bundle.\\\",\\\"recommendation\\\":\\\"Populate acceptance-criteria.md with the current AC list (or include the full spec.md) so independent reviewers can verify the coverage mapping, not just its shape.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"current-facts.json\\\",\\\"line\\\":49,\\\"issue\\\":\\\"final_gates.summary.formal_status says 'current-tree facts bound; final coverage validator pending' while final_gates.status is 'passed', missing_required_commands is empty, and all 15 final_coverage items are 'covered' with bound executions — internally inconsistent supplied facts.\\\",\\\"root_cause\\\":\\\"Stale narrative string in the final-gates summary left over from an earlier, genuinely pending state.\\\",\\\"recommendation\\\":\\\"Regenerate or correct the summary text so the formal status wording matches the passed gate and covered coverage record.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":1212,\\\"issue\\\":\\\"verify-code computes the expected AC set as taskContract.facts?.ac_coverage?.accepted_ids ?? []; a missing ac_coverage silently degrades to an empty set, replacing the removed explicit failure ('accepted build-code lacks acceptance_coverage'). If both the contract AC set and the evidence criterion set were empty while the spec declares ACs, the mismatch check could not fire.\\\",\\\"root_cause\\\":\\\"The historical accepted-build cross-check was replaced by a current-contract read with a lenient default instead of an explicit absence check.\\\",\\\"recommendation\\\":\\\"Push an explicit mismatch when ac_coverage is absent or empty while the spec declares acceptance criteria, so the AC-set comparison stays fail-closed independent of contract internals.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":397,\\\"issue\\\":\\\"certifyBuildCodeQualityBasis now skips the exact claimed-vs-actual diff match whenever claimedChanges is empty (pathOnlyCompletionClaim filters prose actual_changes to []), and the executed_commands binding is waived when a fresh test receipt is bound; tasks.md prose claims are no longer cross-checked against the authenticated diff.\\\",\\\"root_cause\\\":\\\"Deliberate relaxation so current runtime-authenticated receipts are authoritative and historical task-row copies cannot create stale self-references.\\\",\\\"recommendation\\\":\\\"Keep the implementation receipt as sole authority (as implemented), but document in the build-code contract that prose actual_changes are descriptive-only, or retain an optional warning when declared planned-boundary paths diverge from the diff.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"tests/workflow-v2-contract.test.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"Many concrete falsifiable assertions on the five stage SKILL.md files (steps.json step sequence, verify six-action repair handoff, human-brief content, per-Phase review command bindings) were replaced by loose keyword regexes, reducing the falsifiability of the stage-skill documentation contract.\\\",\\\"root_cause\\\":\\\"The workflow SKILL.md files were rewritten much smaller, so the old wording-level contract no longer matched and was replaced by presence checks.\\\",\\\"recommendation\\\":\\\"Re-anchor a small set of structural assertions (e.g., required gate/confirmation sections per stage) on the rewritten SKILL.md files so the contract test can fail on meaningful regressions, not just missing keywords.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"docs/architecture/move-map.json\\\",\\\"line\\\":null,\\\"issue\\\":\\\"Several modules the diff now imports (runtime/review/review-policy.mjs, integration-review-subject.mjs, phase-review-subject.mjs, review-controller.mjs, review-output.mjs, schema-validator.mjs, core/task-capability.mjs, runtime/evidence/acceptance-evidence-validator.mjs) are recorded as moves but have no diff --git entries, so their current content is not reviewable from the frozen bundle.\\\",\\\"root_cause\\\":\\\"changes.diff was generated without rename/new-file detection for the moved review-layer files, and the packet does not embed their post-move contents.\\\",\\\"recommendation\\\":\\\"Include moved/created file contents (or rename-aware diff entries) in future review packets so the moved code, not just its call sites, is reviewable.\\\"}]}\"\n    }\n  ]\n}\n",
+      "stderr": "",
+      "broker_result": {
+        "version": 4,
+        "outcome": "completed",
+        "runtime_id": "ca602177-a52e-4293-a9df-b48ec0989c4a",
+        "round": 1,
+        "host_provider": "codex",
+        "selected_tier": 0,
+        "providers": [
+          {
+            "provider": "opencode/k3",
+            "tier": 0,
+            "status": "completed",
+            "duration_ms": 552027,
+            "retry_count": 0,
+            "api_empty_response_count": 0,
+            "progress_events": 97,
+            "last_progress_at_ms": 1785639895883,
+            "raw_stdout_sha256": "695e4ccb1a870842df859412db8d889312b79cbcbab680713a66d7f00b562ea0",
+            "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "delivery_used": "file_only",
+            "delivery": {
+              "delivery_mode": "file_only",
+              "sealed_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "provider_visible_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "material_total_bytes": 2023815,
+              "provider_visible_attachment_manifest": [
+                {
+                  "destination": "review-instructions.md",
+                  "sha256": "52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371",
+                  "size": 2044
+                },
+                {
+                  "destination": "acceptance-criteria.md",
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "size": 0
+                },
+                {
+                  "destination": "current-facts.json",
+                  "sha256": "e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95",
+                  "size": 10479
+                },
+                {
+                  "destination": "changes.diff",
+                  "sha256": "04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6",
+                  "size": 1994564
+                },
+                {
+                  "destination": "diff-summary.txt",
+                  "sha256": "ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24",
+                  "size": 15184
+                },
+                {
+                  "destination": "review-packet.v1.json",
+                  "sha256": "ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956",
+                  "size": 276
+                },
+                {
+                  "destination": "manifest.json",
+                  "sha256": "600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737",
+                  "size": 1268
+                }
+              ],
+              "byte_identity": "verified"
+            },
+            "session_id": "ses_03f99e48cffeijQKRumhFKtYxD",
+            "usage": {
+              "total": 13280,
+              "input": 13121,
+              "output": 159,
+              "reasoning": 0,
+              "cache": {
+                "write": 0,
+                "read": 0
+              }
+            },
+            "output": "{\"verdict\":\"pass\",\"summary\":\"The diff genuinely simplifies WorkflowHub (net -20,571 lines): historical-permit machinery (reopen, rebind, continuation, recovery, replay, invalidation, flow-reset, adjudication-correction, verify passing/failure publications) is removed, and review-flow identity is re-keyed to the current material revision plus live snapshot, so history is audit-only and cannot block ordinary continuation. Formal safety remains fail-closed: publish/accept still validate current facts and audit carriers, acceptance of a replacement attempt requires a fresh human confirmation, build-code completion now demands a semantic integration review (pass or verified closed resolution) instead of accepting an unavailable formal record, verify-code recomputes completion and AC coverage from current spec/plan/tasks artifacts and requires tests/review/quality-review snapshots to match the current tree, atomic writer contracts are preserved and made more honest, and the final-coverage/final-gates validators bind each AC to a fixed oracle plus a real Vitest execution report. Five stages, confirmation/authorization boundaries, independent review facts distinct from permissions, clean Runner/Skill release surfaces, and node_modules exclusion are all preserved. Findings are minor only.\",\"findings\":[{\"severity\":\"minor\",\"path\":\"acceptance-criteria.md\",\"line\":null,\"issue\":\"The supplied acceptance-criteria.md is empty (0 bytes), so AC-01..AC-15 coverage can only be assessed structurally from current-facts.json and the 2-line spec.md diff, not against actual criterion text.\",\"root_cause\":\"The frozen packet ships a placeholder acceptance-criteria file while the real AC text lives in specs/workflowhub-complexity-governance-v2/spec.md, which is not included in the bundle.\",\"recommendation\":\"Populate acceptance-criteria.md with the current AC list (or include the full spec.md) so independent reviewers can verify the coverage mapping, not just its shape.\"},{\"severity\":\"minor\",\"path\":\"current-facts.json\",\"line\":49,\"issue\":\"final_gates.summary.formal_status says 'current-tree facts bound; final coverage validator pending' while final_gates.status is 'passed', missing_required_commands is empty, and all 15 final_coverage items are 'covered' with bound executions — internally inconsistent supplied facts.\",\"root_cause\":\"Stale narrative string in the final-gates summary left over from an earlier, genuinely pending state.\",\"recommendation\":\"Regenerate or correct the summary text so the formal status wording matches the passed gate and covered coverage record.\"},{\"severity\":\"minor\",\"path\":\"core/stage-handlers.mjs\",\"line\":1212,\"issue\":\"verify-code computes the expected AC set as taskContract.facts?.ac_coverage?.accepted_ids ?? []; a missing ac_coverage silently degrades to an empty set, replacing the removed explicit failure ('accepted build-code lacks acceptance_coverage'). If both the contract AC set and the evidence criterion set were empty while the spec declares ACs, the mismatch check could not fire.\",\"root_cause\":\"The historical accepted-build cross-check was replaced by a current-contract read with a lenient default instead of an explicit absence check.\",\"recommendation\":\"Push an explicit mismatch when ac_coverage is absent or empty while the spec declares acceptance criteria, so the AC-set comparison stays fail-closed independent of contract internals.\"},{\"severity\":\"minor\",\"path\":\"core/stage-handlers.mjs\",\"line\":397,\"issue\":\"certifyBuildCodeQualityBasis now skips the exact claimed-vs-actual diff match whenever claimedChanges is empty (pathOnlyCompletionClaim filters prose actual_changes to []), and the executed_commands binding is waived when a fresh test receipt is bound; tasks.md prose claims are no longer cross-checked against the authenticated diff.\",\"root_cause\":\"Deliberate relaxation so current runtime-authenticated receipts are authoritative and historical task-row copies cannot create stale self-references.\",\"recommendation\":\"Keep the implementation receipt as sole authority (as implemented), but document in the build-code contract that prose actual_changes are descriptive-only, or retain an optional warning when declared planned-boundary paths diverge from the diff.\"},{\"severity\":\"minor\",\"path\":\"tests/workflow-v2-contract.test.mjs\",\"line\":null,\"issue\":\"Many concrete falsifiable assertions on the five stage SKILL.md files (steps.json step sequence, verify six-action repair handoff, human-brief content, per-Phase review command bindings) were replaced by loose keyword regexes, reducing the falsifiability of the stage-skill documentation contract.\",\"root_cause\":\"The workflow SKILL.md files were rewritten much smaller, so the old wording-level contract no longer matched and was replaced by presence checks.\",\"recommendation\":\"Re-anchor a small set of structural assertions (e.g., required gate/confirmation sections per stage) on the rewritten SKILL.md files so the contract test can fail on meaningful regressions, not just missing keywords.\"},{\"severity\":\"minor\",\"path\":\"docs/architecture/move-map.json\",\"line\":null,\"issue\":\"Several modules the diff now imports (runtime/review/review-policy.mjs, integration-review-subject.mjs, phase-review-subject.mjs, review-controller.mjs, review-output.mjs, schema-validator.mjs, core/task-capability.mjs, runtime/evidence/acceptance-evidence-validator.mjs) are recorded as moves but have no diff --git entries, so their current content is not reviewable from the frozen bundle.\",\"root_cause\":\"changes.diff was generated without rename/new-file detection for the moved review-layer files, and the packet does not embed their post-move contents.\",\"recommendation\":\"Include moved/created file contents (or rename-aware diff entries) in future review packets so the moved code, not just its call sites, is reviewable.\"}]}"
+          }
+        ]
+      }
+    },
+    {
+      "provider": "claude-code/opus",
+      "exit_code": 0,
+      "signal": null,
+      "stdout": "{\n  \"version\": 4,\n  \"outcome\": \"completed\",\n  \"runtime_id\": \"25da6ec6-f5a7-42e6-845c-8c6495434cce\",\n  \"round\": 1,\n  \"host_provider\": \"codex\",\n  \"selected_tier\": 2,\n  \"providers\": [\n    {\n      \"provider\": \"claude-code/opus\",\n      \"tier\": 2,\n      \"status\": \"completed\",\n      \"duration_ms\": 474397,\n      \"retry_count\": 0,\n      \"api_empty_response_count\": 0,\n      \"progress_events\": 12120,\n      \"last_progress_at_ms\": 1785639818225,\n      \"raw_stdout_sha256\": \"aa75c39780baadc581f31e56c851547d5852867ec7227351abfe27a2320ac17d\",\n      \"raw_stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n      \"delivery_used\": \"file_only\",\n      \"delivery\": {\n        \"delivery_mode\": \"file_only\",\n        \"sealed_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"provider_visible_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"material_total_bytes\": 2023815,\n        \"provider_visible_attachment_manifest\": [\n          {\n            \"destination\": \"review-instructions.md\",\n            \"sha256\": \"52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371\",\n            \"size\": 2044\n          },\n          {\n            \"destination\": \"acceptance-criteria.md\",\n            \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n            \"size\": 0\n          },\n          {\n            \"destination\": \"current-facts.json\",\n            \"sha256\": \"e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95\",\n            \"size\": 10479\n          },\n          {\n            \"destination\": \"changes.diff\",\n            \"sha256\": \"04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6\",\n            \"size\": 1994564\n          },\n          {\n            \"destination\": \"diff-summary.txt\",\n            \"sha256\": \"ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24\",\n            \"size\": 15184\n          },\n          {\n            \"destination\": \"review-packet.v1.json\",\n            \"sha256\": \"ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956\",\n            \"size\": 276\n          },\n          {\n            \"destination\": \"manifest.json\",\n            \"sha256\": \"600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737\",\n            \"size\": 1268\n          }\n        ],\n        \"byte_identity\": \"verified\"\n      },\n      \"session_id\": \"59a6650e-22cb-4c22-85d1-966d96c75051\",\n      \"usage\": {\n        \"input_tokens\": 86642,\n        \"cache_creation_input_tokens\": 293716,\n        \"cache_read_input_tokens\": 314977,\n        \"output_tokens\": 56654,\n        \"server_tool_use\": {\n          \"web_search_requests\": 0,\n          \"web_fetch_requests\": 0\n        },\n        \"service_tier\": \"standard\",\n        \"cache_creation\": {\n          \"ephemeral_1h_input_tokens\": 0,\n          \"ephemeral_5m_input_tokens\": 293716\n        },\n        \"inference_geo\": \"\",\n        \"iterations\": [],\n        \"speed\": \"standard\"\n      },\n      \"output\": \"{\\\"verdict\\\":\\\"revise_required\\\",\\\"summary\\\":\\\"The diff delivers a genuine deep simplification (~24,000 deletions vs ~3,400 insertions across 143 files): dedicated recovery/reopen/rebind/replay/invalidation machinery is removed (core/task-recovery.mjs, scripts/task-recovery.mjs, scripts/validate-stage-replay.mjs, build-spec-receipt-recovery.mjs, recovery credential/generation schemas, runner-replacement bootstrap schemas, task-migrate-runner-root.mjs), and historical-permit blockers are cut in the right places. Formal safety is largely strengthened rather than weakened: build-code completion now requires a pass verdict or verified closed resolution (requireFinalIntegrationReview), verify-code derives its AC set from the current spec instead of the accepted build-code record and requires tests, review, and quality-review snapshots to all equal the current tree, review-flow identity is keyed to the current snapshot so a material edit starts a fresh flow while still needing a fresh passing review at that tree, and retired invalidation record paths are explicitly rejected by writeRecordAtomic. Five stages, atomic writes, independent review facts (reviews/resolutions still enumerated separately from permissions), confirmation/authorization boundaries, inventory/clean-install/complexity/AC-coverage tooling, and current-tree verification are preserved; clean-install additionally gained a real no-provider released-stage dependency smoke over all five stages. However, several build-code completion guards were relaxed in ways that leave dead or self-satisfying code rather than deliberate, tested semantics: plannedChanges is computed, passed, and type-checked but never used; the claimed-changes/diff equality check is now skipped entirely for natural-language task rows; runtime-authenticated bindings are inserted into the evidence map immediately before the loop that validates that same map, making those iterations vacuous and silently masking a wrong hash cited by a task row; and the executed_commands binding error is now unreachable. These are quality-of-implementation regressions in the completion certifier, not history-permit removals, and they should be resolved or explicitly justified.\\\",\\\"findings\\\":[{\\\"severity\\\":\\\"major\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"certifyBuildCodeQualityBasis now only compares claimed changes against the authenticated diff when claimedChanges is non-empty (`if (claimedChanges.length > 0 && !sameStringSet(...))`), and certifyCurrentTaskCompletion feeds it an array filtered by the new pathOnlyCompletionClaim(). Any task row whose actual_changes is prose rather than a pure path list contributes nothing, so a completion where every row is descriptive silently skips the tasks.md-vs-diff equality guard altogether.\\\",\\\"root_cause\\\":\\\"The relaxation intended to stop descriptive task notes from blocking progress was implemented by emptying the claim set and then making the equality check conditional on that set being non-empty, which converts a fail-closed check into a check that disappears when no row happens to be path-only.\\\",\\\"recommendation\\\":\\\"Keep the guard unconditional over the claims that do exist and make the descriptive case explicit: either require at least one path-only claim per completion (or per changed file) and keep exact set equality, or verify that every path mentioned in a prose row is a subset of the authenticated diff. Add a test asserting that an all-prose completion whose rows disagree with the real diff still fails.\\\"},{\\\"severity\\\":\\\"major\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"certifyCurrentTaskCompletion inserts the runtime-authenticated bindings into `evidence` (tests.receipt_ref/hash, review result/attempt refs, and every requiredEvidence entry) and then iterates `for (const binding of [{ ref: tests.receipt_ref, sha256: tests.receipt_hash }, ...requiredEvidence])` over that same map. Every element checked was just written with the value being compared, so those iterations can no longer fail, and a task row that cited the same ref with a stale or wrong hash is overwritten instead of reported.\\\",\\\"root_cause\\\":\\\"The fix for stale self-references (tasks.md updated after the test capture) was applied by pre-populating the verification map rather than by narrowing which bindings task rows are required to cite, leaving the original verification loop in place as dead code.\\\",\\\"recommendation\\\":\\\"Drop the now-vacuous loop and state the binding explicitly, or keep the loop and detect conflicts before overwriting: if a task row already maps a ref to a different hash, fail with a clear stale-citation error rather than silently replacing it. Cover both cases with tests.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"`plannedChanges` is computed in certifyCurrentTaskCompletion from the 精确文件/boundary fields, passed to certifyBuildCodeQualityBasis, destructured with a default, and validated (`if (!Array.isArray(plannedChanges)) throw new TypeError(...)`), but it is never read afterwards. It is a dead parameter whose only effect is a type error on misuse.\\\",\\\"root_cause\\\":\\\"A planned-boundary cross-check appears to have been introduced as a signature and validation without the corresponding comparison logic, likely because per-row boundary enforcement already happens where paths are extracted.\\\",\\\"recommendation\\\":\\\"Either remove plannedChanges from both the computation and the signature, or use it: assert that the authenticated changed files fall within the union of planned boundaries when that union is non-empty, with a test for an out-of-boundary change.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"core/stage-handlers.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"The executed_commands binding now throws only when `executionMatches.length === 0 && !(tests?.receipt_ref && tests?.receipt_hash && tests.exit_code === 0)`. certifyBuildCodeQualityBasis already rejects any tests whose exit_code is not 0, and the receipt ref/hash are required by the surrounding evidence handling, so this error branch is effectively unreachable and the check reads as active when it is not.\\\",\\\"root_cause\\\":\\\"The requirement was disabled by adding a bypass condition that is always satisfied on the only path that reaches it, instead of removing the check and documenting that the authenticated test receipt is the execution fact.\\\",\\\"recommendation\\\":\\\"Delete the unreachable branch and rely on the authenticated receipt explicitly, or restore a meaningful obligation (for example requiring the command binding only when no authenticated receipt is present) so the code path can actually fire.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"core/task-handle.mjs\\\",\\\"line\\\":null,\\\"issue\\\":\\\"validateManifest now accepts execution_mode \\\\\\\"legacy_pinned\\\\\\\" while all validation of runner_root, runner_oid, and runner_root_migration is deleted. A manifest may carry a non-absolute runner_root, a malformed runner_oid, or one field without the other, and bootstrapStage no longer calls assertTaskRunnerIdentity for such tasks (the test was rewritten from \\\\\\\"rejects runner drift\\\\\\\" to \\\\\\\"ignores a legacy pinned runner\\\\\\\").\\\",\\\"root_cause\\\":\\\"Retiring runner pinning was implemented by removing the validation block and widening the allowed execution_mode enum, rather than by validating the historical shape on read while refusing to treat it as identity authority.\\\",\\\"recommendation\\\":\\\"Since these fields are now inert history, either keep a minimal shape check for legacy_pinned manifests (absolute runner_root, 40-hex runner_oid, fields present together) or reject writing them outright while tolerating them on read, and assert the chosen behavior in core/__tests__/task-handle.test.mjs.\\\"},{\\\"severity\\\":\\\"minor\\\",\\\"path\\\":\\\"bundle/current-facts.json\\\",\\\"line\\\":49,\\\"issue\\\":\\\"final_gates.status is \\\\\\\"passed\\\\\\\" while final_gates.summary.formal_status reads \\\\\\\"current-tree facts bound; final coverage validator pending\\\\\\\", and the supplied acceptance-criteria.md is empty (0 bytes, sha256 e3b0c442...), so the AC-01..AC-15 coverage claims in final_coverage cannot be checked against any criterion text within this bundle.\\\",\\\"root_cause\\\":\\\"The gate summary was captured before the final coverage validator completed, and the acceptance-criteria attachment was delivered empty, leaving the coverage question answerable only by oracle/execution refs and not by criterion content.\\\",\\\"recommendation\\\":\\\"Re-emit the facts with the coverage validator finished so status and formal_status agree, and include the non-empty acceptance-criteria text so each covered AC can be matched to the oracle that is claimed to exercise it.\\\"}]}\"\n    }\n  ]\n}\n",
+      "stderr": "",
+      "broker_result": {
+        "version": 4,
+        "outcome": "completed",
+        "runtime_id": "25da6ec6-f5a7-42e6-845c-8c6495434cce",
+        "round": 1,
+        "host_provider": "codex",
+        "selected_tier": 2,
+        "providers": [
+          {
+            "provider": "claude-code/opus",
+            "tier": 2,
+            "status": "completed",
+            "duration_ms": 474397,
+            "retry_count": 0,
+            "api_empty_response_count": 0,
+            "progress_events": 12120,
+            "last_progress_at_ms": 1785639818225,
+            "raw_stdout_sha256": "aa75c39780baadc581f31e56c851547d5852867ec7227351abfe27a2320ac17d",
+            "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "delivery_used": "file_only",
+            "delivery": {
+              "delivery_mode": "file_only",
+              "sealed_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "provider_visible_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "material_total_bytes": 2023815,
+              "provider_visible_attachment_manifest": [
+                {
+                  "destination": "review-instructions.md",
+                  "sha256": "52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371",
+                  "size": 2044
+                },
+                {
+                  "destination": "acceptance-criteria.md",
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "size": 0
+                },
+                {
+                  "destination": "current-facts.json",
+                  "sha256": "e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95",
+                  "size": 10479
+                },
+                {
+                  "destination": "changes.diff",
+                  "sha256": "04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6",
+                  "size": 1994564
+                },
+                {
+                  "destination": "diff-summary.txt",
+                  "sha256": "ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24",
+                  "size": 15184
+                },
+                {
+                  "destination": "review-packet.v1.json",
+                  "sha256": "ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956",
+                  "size": 276
+                },
+                {
+                  "destination": "manifest.json",
+                  "sha256": "600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737",
+                  "size": 1268
+                }
+              ],
+              "byte_identity": "verified"
+            },
+            "session_id": "59a6650e-22cb-4c22-85d1-966d96c75051",
+            "usage": {
+              "input_tokens": 86642,
+              "cache_creation_input_tokens": 293716,
+              "cache_read_input_tokens": 314977,
+              "output_tokens": 56654,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 293716
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard"
+            },
+            "output": "{\"verdict\":\"revise_required\",\"summary\":\"The diff delivers a genuine deep simplification (~24,000 deletions vs ~3,400 insertions across 143 files): dedicated recovery/reopen/rebind/replay/invalidation machinery is removed (core/task-recovery.mjs, scripts/task-recovery.mjs, scripts/validate-stage-replay.mjs, build-spec-receipt-recovery.mjs, recovery credential/generation schemas, runner-replacement bootstrap schemas, task-migrate-runner-root.mjs), and historical-permit blockers are cut in the right places. Formal safety is largely strengthened rather than weakened: build-code completion now requires a pass verdict or verified closed resolution (requireFinalIntegrationReview), verify-code derives its AC set from the current spec instead of the accepted build-code record and requires tests, review, and quality-review snapshots to all equal the current tree, review-flow identity is keyed to the current snapshot so a material edit starts a fresh flow while still needing a fresh passing review at that tree, and retired invalidation record paths are explicitly rejected by writeRecordAtomic. Five stages, atomic writes, independent review facts (reviews/resolutions still enumerated separately from permissions), confirmation/authorization boundaries, inventory/clean-install/complexity/AC-coverage tooling, and current-tree verification are preserved; clean-install additionally gained a real no-provider released-stage dependency smoke over all five stages. However, several build-code completion guards were relaxed in ways that leave dead or self-satisfying code rather than deliberate, tested semantics: plannedChanges is computed, passed, and type-checked but never used; the claimed-changes/diff equality check is now skipped entirely for natural-language task rows; runtime-authenticated bindings are inserted into the evidence map immediately before the loop that validates that same map, making those iterations vacuous and silently masking a wrong hash cited by a task row; and the executed_commands binding error is now unreachable. These are quality-of-implementation regressions in the completion certifier, not history-permit removals, and they should be resolved or explicitly justified.\",\"findings\":[{\"severity\":\"major\",\"path\":\"core/stage-handlers.mjs\",\"line\":null,\"issue\":\"certifyBuildCodeQualityBasis now only compares claimed changes against the authenticated diff when claimedChanges is non-empty (`if (claimedChanges.length > 0 && !sameStringSet(...))`), and certifyCurrentTaskCompletion feeds it an array filtered by the new pathOnlyCompletionClaim(). Any task row whose actual_changes is prose rather than a pure path list contributes nothing, so a completion where every row is descriptive silently skips the tasks.md-vs-diff equality guard altogether.\",\"root_cause\":\"The relaxation intended to stop descriptive task notes from blocking progress was implemented by emptying the claim set and then making the equality check conditional on that set being non-empty, which converts a fail-closed check into a check that disappears when no row happens to be path-only.\",\"recommendation\":\"Keep the guard unconditional over the claims that do exist and make the descriptive case explicit: either require at least one path-only claim per completion (or per changed file) and keep exact set equality, or verify that every path mentioned in a prose row is a subset of the authenticated diff. Add a test asserting that an all-prose completion whose rows disagree with the real diff still fails.\"},{\"severity\":\"major\",\"path\":\"core/stage-handlers.mjs\",\"line\":null,\"issue\":\"certifyCurrentTaskCompletion inserts the runtime-authenticated bindings into `evidence` (tests.receipt_ref/hash, review result/attempt refs, and every requiredEvidence entry) and then iterates `for (const binding of [{ ref: tests.receipt_ref, sha256: tests.receipt_hash }, ...requiredEvidence])` over that same map. Every element checked was just written with the value being compared, so those iterations can no longer fail, and a task row that cited the same ref with a stale or wrong hash is overwritten instead of reported.\",\"root_cause\":\"The fix for stale self-references (tasks.md updated after the test capture) was applied by pre-populating the verification map rather than by narrowing which bindings task rows are required to cite, leaving the original verification loop in place as dead code.\",\"recommendation\":\"Drop the now-vacuous loop and state the binding explicitly, or keep the loop and detect conflicts before overwriting: if a task row already maps a ref to a different hash, fail with a clear stale-citation error rather than silently replacing it. Cover both cases with tests.\"},{\"severity\":\"minor\",\"path\":\"core/stage-handlers.mjs\",\"line\":null,\"issue\":\"`plannedChanges` is computed in certifyCurrentTaskCompletion from the 精确文件/boundary fields, passed to certifyBuildCodeQualityBasis, destructured with a default, and validated (`if (!Array.isArray(plannedChanges)) throw new TypeError(...)`), but it is never read afterwards. It is a dead parameter whose only effect is a type error on misuse.\",\"root_cause\":\"A planned-boundary cross-check appears to have been introduced as a signature and validation without the corresponding comparison logic, likely because per-row boundary enforcement already happens where paths are extracted.\",\"recommendation\":\"Either remove plannedChanges from both the computation and the signature, or use it: assert that the authenticated changed files fall within the union of planned boundaries when that union is non-empty, with a test for an out-of-boundary change.\"},{\"severity\":\"minor\",\"path\":\"core/stage-handlers.mjs\",\"line\":null,\"issue\":\"The executed_commands binding now throws only when `executionMatches.length === 0 && !(tests?.receipt_ref && tests?.receipt_hash && tests.exit_code === 0)`. certifyBuildCodeQualityBasis already rejects any tests whose exit_code is not 0, and the receipt ref/hash are required by the surrounding evidence handling, so this error branch is effectively unreachable and the check reads as active when it is not.\",\"root_cause\":\"The requirement was disabled by adding a bypass condition that is always satisfied on the only path that reaches it, instead of removing the check and documenting that the authenticated test receipt is the execution fact.\",\"recommendation\":\"Delete the unreachable branch and rely on the authenticated receipt explicitly, or restore a meaningful obligation (for example requiring the command binding only when no authenticated receipt is present) so the code path can actually fire.\"},{\"severity\":\"minor\",\"path\":\"core/task-handle.mjs\",\"line\":null,\"issue\":\"validateManifest now accepts execution_mode \\\"legacy_pinned\\\" while all validation of runner_root, runner_oid, and runner_root_migration is deleted. A manifest may carry a non-absolute runner_root, a malformed runner_oid, or one field without the other, and bootstrapStage no longer calls assertTaskRunnerIdentity for such tasks (the test was rewritten from \\\"rejects runner drift\\\" to \\\"ignores a legacy pinned runner\\\").\",\"root_cause\":\"Retiring runner pinning was implemented by removing the validation block and widening the allowed execution_mode enum, rather than by validating the historical shape on read while refusing to treat it as identity authority.\",\"recommendation\":\"Since these fields are now inert history, either keep a minimal shape check for legacy_pinned manifests (absolute runner_root, 40-hex runner_oid, fields present together) or reject writing them outright while tolerating them on read, and assert the chosen behavior in core/__tests__/task-handle.test.mjs.\"},{\"severity\":\"minor\",\"path\":\"bundle/current-facts.json\",\"line\":49,\"issue\":\"final_gates.status is \\\"passed\\\" while final_gates.summary.formal_status reads \\\"current-tree facts bound; final coverage validator pending\\\", and the supplied acceptance-criteria.md is empty (0 bytes, sha256 e3b0c442...), so the AC-01..AC-15 coverage claims in final_coverage cannot be checked against any criterion text within this bundle.\",\"root_cause\":\"The gate summary was captured before the final coverage validator completed, and the acceptance-criteria attachment was delivered empty, leaving the coverage question answerable only by oracle/execution refs and not by criterion content.\",\"recommendation\":\"Re-emit the facts with the coverage validator finished so status and formal_status agree, and include the non-empty acceptance-criteria text so each covered AC can be matched to the oracle that is claimed to exercise it.\"}]}"
+          }
+        ]
+      }
+    },
+    {
+      "provider": "cursor/grok",
+      "exit_code": 3,
+      "signal": null,
+      "stdout": "{\n  \"version\": 4,\n  \"outcome\": \"invalid_output\",\n  \"runtime_id\": \"93bb3cbf-2f52-42f0-bf46-6ec51b4551af\",\n  \"round\": 1,\n  \"host_provider\": \"codex\",\n  \"selected_tier\": null,\n  \"providers\": [\n    {\n      \"provider\": \"cursor/grok\",\n      \"tier\": 0,\n      \"status\": \"failed\",\n      \"duration_ms\": 17221,\n      \"retry_count\": 0,\n      \"api_empty_response_count\": 0,\n      \"progress_events\": 57,\n      \"last_progress_at_ms\": 1785639361055,\n      \"raw_stdout_sha256\": \"5cb146f1fa62a2f3e5a4b139730f90c965e291f4da06e96aa9b9f3209b0397df\",\n      \"raw_stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n      \"delivery_used\": \"file_only\",\n      \"delivery\": {\n        \"delivery_mode\": \"file_only\",\n        \"sealed_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"provider_visible_manifest_hash\": \"af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421\",\n        \"material_total_bytes\": 2023815,\n        \"provider_visible_attachment_manifest\": [\n          {\n            \"destination\": \"review-instructions.md\",\n            \"sha256\": \"52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371\",\n            \"size\": 2044\n          },\n          {\n            \"destination\": \"acceptance-criteria.md\",\n            \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n            \"size\": 0\n          },\n          {\n            \"destination\": \"current-facts.json\",\n            \"sha256\": \"e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95\",\n            \"size\": 10479\n          },\n          {\n            \"destination\": \"changes.diff\",\n            \"sha256\": \"04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6\",\n            \"size\": 1994564\n          },\n          {\n            \"destination\": \"diff-summary.txt\",\n            \"sha256\": \"ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24\",\n            \"size\": 15184\n          },\n          {\n            \"destination\": \"review-packet.v1.json\",\n            \"sha256\": \"ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956\",\n            \"size\": 276\n          },\n          {\n            \"destination\": \"manifest.json\",\n            \"sha256\": \"600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737\",\n            \"size\": 1268\n          }\n        ],\n        \"byte_identity\": \"verified\"\n      },\n      \"error\": {\n        \"code\": \"PROVIDER_PERMISSION_DENIED\",\n        \"message\": \"Cursor Agent attempted a tool outside the scoped review bundle\"\n      },\n      \"diagnostic\": \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\",\\\"apiKeySource\\\":\\\"login\\\",\\\"cwd\\\":\\\"/private/tmp/3rd-review/93bb3cbf-2f52-42f0-bf46-6ec51b4551af/work/cursor%2Fgrok\\\",\\\"session_id\\\":\\\"f927b3c1-5713-4dc3-9fbf-54567d26628a\\\",\\\"model\\\":\\\"Cursor Grok 4.5 High\\\",\\\"permissionMode\\\":\\\"default\\\"}\\n{\\\"type\\\":\\\"user\\\",\\\"message\\\":{\\\"role\\\":\\\"user\\\",\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Review only the supplied instruction and the hash-verified frozen files under bundle/ when present. Stay read-only. For file_only material, use only the third-review-bund…\"\n    }\n  ]\n}\n",
+      "stderr": "",
+      "broker_result": {
+        "version": 4,
+        "outcome": "invalid_output",
+        "runtime_id": "93bb3cbf-2f52-42f0-bf46-6ec51b4551af",
+        "round": 1,
+        "host_provider": "codex",
+        "selected_tier": null,
+        "providers": [
+          {
+            "provider": "cursor/grok",
+            "tier": 0,
+            "status": "failed",
+            "duration_ms": 17221,
+            "retry_count": 0,
+            "api_empty_response_count": 0,
+            "progress_events": 57,
+            "last_progress_at_ms": 1785639361055,
+            "raw_stdout_sha256": "5cb146f1fa62a2f3e5a4b139730f90c965e291f4da06e96aa9b9f3209b0397df",
+            "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "delivery_used": "file_only",
+            "delivery": {
+              "delivery_mode": "file_only",
+              "sealed_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "provider_visible_manifest_hash": "af2c9a232ad8c1f855285001e68fc658f7800ce4c7c5a98d92ee9c1a13a42421",
+              "material_total_bytes": 2023815,
+              "provider_visible_attachment_manifest": [
+                {
+                  "destination": "review-instructions.md",
+                  "sha256": "52e292b0fb1501e08cd51d12f237a507db4b88fca9ac011b59a575b50bf95371",
+                  "size": 2044
+                },
+                {
+                  "destination": "acceptance-criteria.md",
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                  "size": 0
+                },
+                {
+                  "destination": "current-facts.json",
+                  "sha256": "e1cfb1539b7894dc7593c8e4408c4ac78f4d740f3e1267925d79d687d8db4c95",
+                  "size": 10479
+                },
+                {
+                  "destination": "changes.diff",
+                  "sha256": "04501320d0cbeb7bc111fbfd90c0f7689cf7edc5b3ccc71068dd5dcea3ac30c6",
+                  "size": 1994564
+                },
+                {
+                  "destination": "diff-summary.txt",
+                  "sha256": "ed6b3b23099faf8ee273b9506c565cbe8042c8eb27a5ea705bcfb95f79de7d24",
+                  "size": 15184
+                },
+                {
+                  "destination": "review-packet.v1.json",
+                  "sha256": "ae8e145c8a5648e04744429ab9cf854a838635826cc0f1f8f58880a7439b2956",
+                  "size": 276
+                },
+                {
+                  "destination": "manifest.json",
+                  "sha256": "600c9a181ef281c81ae53c442b4de2887bff72d9ff8b8d231b258008652c1737",
+                  "size": 1268
+                }
+              ],
+              "byte_identity": "verified"
+            },
+            "error": {
+              "code": "PROVIDER_PERMISSION_DENIED",
+              "message": "Cursor Agent attempted a tool outside the scoped review bundle"
+            },
+            "diagnostic": "{\"type\":\"system\",\"subtype\":\"init\",\"apiKeySource\":\"login\",\"cwd\":\"/private/tmp/3rd-review/93bb3cbf-2f52-42f0-bf46-6ec51b4551af/work/cursor%2Fgrok\",\"session_id\":\"f927b3c1-5713-4dc3-9fbf-54567d26628a\",\"model\":\"Cursor Grok 4.5 High\",\"permissionMode\":\"default\"}\n{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Review only the supplied instruction and the hash-verified frozen files under bundle/ when present. Stay read-only. For file_only material, use only the third-review-bund…"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+{
+  "schema_version": "workflowhub-complexity-report.v1",
+  "source": {
+    "git_head": "b0bb020756ac6896deaef9973b23726fcae6224f",
+    "tracked_tree_sha256": "1ff483cf5b765fc8d395aa93855d621086f7147185b4cc47676c24b383e234a2",
+    "tracked_files": 1064,
+    "delivery_files": 1029,
+    "source_files": 296
+  },
+  "measurements": {
+    "formal_test_files": {
+      "actual": 143,
+      "definition": "*.test.* and */__tests__/*"
+    },
+    "test_support_lines": {
+      "actual": 502,
+      "files": 15,
+      "definition": "non-test files under tests, fixtures, or helpers"
+    },
+    "persistent_object_families": {
+      "source": "core/task-handle.mjs",
+      "source_sha256": "e237055160096341ca899046fc73c40a16c12c929e1ff6f114edd36b122bac6a",
+      "names": [
+        "confirmations",
+        "evidence",
+        "journal",
+        "materials",
+        "receipts",
+        "requirements",
+        "results",
+        "reviews",
+        "runs",
+        "task"
+      ]
+    },
+    "bundle_content_audit": {
+      "manifests": 31,
+      "violations": []
+    }
+  },
+  "runtime_boundary": {
+    "node": {
+      "actual": "v24.14.0",
+      "requirement": ">=24.14.0 <25",
+      "compatible": true,
+      "source": "process.version"
+    },
+    "npm": {
+      "actual": "11.9.0",
+      "requirement": ">=11.9.0 <12",
+      "compatible": true,
+      "source": "npm --version"
+    }
+  },
+  "distribution_boundary": {
+    "node_modules_tracked_files": 0,
+    "node_modules_gitignored": true,
+    "package_lock_sha256": "a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b",
+    "clean_install_source": "package.json + package-lock.json"
+  },
+  "budgets": {
+    "formal_test_lines": {
+      "actual": 25581,
+      "target": 10000,
+      "limit": 12000,
+      "delta_from_target": 15581,
+      "within_limit": false
+    },
+    "production_lines": {
+      "actual": 30239,
+      "target": 12000,
+      "limit": 15000,
+      "delta_from_target": 18239,
+      "within_limit": false
+    },
+    "public_runner_behaviors": {
+      "actual": 7,
+      "target": 7,
+      "limit": 8,
+      "delta_from_target": 0,
+      "within_limit": true
+    },
+    "schemas": {
+      "actual": 36,
+      "target": 8,
+      "limit": 10,
+      "delta_from_target": 28,
+      "within_limit": false
+    },
+    "persistent_object_families": {
+      "actual": 10,
+      "target": 4,
+      "limit": 5,
+      "delta_from_target": 6,
+      "within_limit": false
+    },
+    "largest_core_file_lines": {
+      "actual": 2983,
+      "target": 800,
+      "limit": 1000,
+      "delta_from_target": 2183,
+      "within_limit": false
+    },
+    "focused_test_seconds": {
+      "actual": null,
+      "target": 10,
+      "limit": 15,
+      "delta_from_target": null,
+      "within_limit": null
+    },
+    "full_test_seconds": {
+      "actual": null,
+      "target": 90,
+      "limit": 120,
+      "delta_from_target": null,
+      "within_limit": null
+    }
+  },
+  "hard_gates": {
+    "dedicated_recovery_state": {
+      "actual": 0,
+      "required_final": 0,
+      "phase_0_status": "observed_zero",
+      "audited_roots": [
+        "core/",
+        "runtime/",
+        "scripts/",
+        "tools/",
+        "skills/",
+        "workflows/"
+      ],
+      "forbidden_paths": [
+        "core/build-spec-receipt-recovery.mjs",
+        "core/schemas/workflowhub-recovery-credential.v1.json",
+        "core/schemas/workflowhub-recovery-generation.v1.json",
+        "core/task-recovery.mjs",
+        "scripts/__tests__/runner-replacement-bridge.test.mjs",
+        "scripts/task-recovery.mjs",
+        "scripts/validate-stage-replay.mjs"
+      ],
+      "forbidden_symbols": [
+        "materialRevisionBaseline",
+        "baseline_rebind_ref",
+        "continuation_ref",
+        "runner-replacement-bridge",
+        "task-recovery",
+        "build-spec-receipt-recovery",
+        "validate-stage-replay",
+        "workflowhub-recovery-credential",
+        "workflowhub-recovery-generation"
+      ],
+      "paths": [],
+      "symbol_hits": []
+    },
+    "dual_write_markers": {
+      "actual": 0,
+      "required_final": 0,
+      "phase_0_status": "observed_zero",
+      "paths": []
+    },
+    "bundle_forbidden_content": {
+      "actual": 0,
+      "required_final": 0,
+      "phase_0_status": "observed_zero"
+    }
+  },
+  "hotspots": [
+    {
+      "path": "core/task-kernel-implementation.mjs",
+      "lines": 2983
+    },
+    {
+      "path": "tests/stage-content-evidence.test.mjs",
+      "lines": 1808
+    },
+    {
+      "path": "runtime/stage/stage-content-contracts.mjs",
+      "lines": 1623
+    },
+    {
+      "path": "skills/wh-review/scripts/review-runner.mjs",
+      "lines": 1441
+    },
+    {
+      "path": "tests/final-cutover-guards.red.test.mjs",
+      "lines": 1362
+    }
+  ],
+  "follow_up": [
+    "replace legacy recovery and progression mechanisms only after deletion proofs pass",
+    "measure focused and full test duration in the final clean-install environment",
+    "do not delete quality assertions to meet line-count targets"
+  ]
+}

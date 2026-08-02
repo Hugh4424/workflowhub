@@ -356,7 +356,7 @@ Phase 4 完成条件：三个 verify-code-*.test.mjs exit=0；isolated-browser-q
 ### Files
 
 - `/Users/Hugh/Hugh/Project/workflowhub/.github/workflows/ci.yml` — 修改，新增冒烟步骤 + 轻量三段闭环检查步骤
-- `/Users/Hugh/Hugh/Project/workflowhub/scripts/ci-chain-check.mjs` — 新建，轻量三段闭环检查脚本
+- `/Users/Hugh/Hugh/Project/workflowhub/tools/cli/ci-chain-check.mjs` — 新建，轻量三段闭环检查脚本
 
 ### Tasks
 
@@ -367,13 +367,13 @@ Phase 4 完成条件：三个 verify-code-*.test.mjs exit=0；isolated-browser-q
   ```
   node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
   ```
-- 出参 B：新建 `scripts/ci-chain-check.mjs`，实现轻量三段闭环结构检查，覆盖完整三段产物链：
+- 出参 B：新建 `tools/cli/ci-chain-check.mjs`，实现轻量三段闭环结构检查，覆盖完整三段产物链：
   1. **make-decision 段**：检查 make-decision 产物存在且可读（`specs/{task-id}/stage-result-make-decision.json` 或同等 make-decision 输出产物路径），验证其为合法 JSON 对象；
   2. **build-code 段**：读取 `specs/{task-id}/stage-result-build-code.json`，验证 `facts.tests.command` 字段存在且类型为 string；验证该文件能正常解析（即 build-code 接上了 make-decision 的产物）；
   3. **verify-code 段**：验证 `specs/{task-id}/stage-result-verify-code.json` 路径结构符合 D-M9-6。
   不执行实际测试命令，不模拟完整 UI 流程。`.github/workflows/ci.yml` 新增 step 调用该脚本（传入 task-id 参数）。
 - 约束：追加步骤，不删除/修改已有步骤；轻量检查不引入重型 E2E 框架（F10），只做产物路径/结构性验证；脚本不依赖网络或外部服务
-- 精确路径：`/Users/Hugh/Hugh/Project/workflowhub/.github/workflows/ci.yml`、`/Users/Hugh/Hugh/Project/workflowhub/scripts/ci-chain-check.mjs`
+- 精确路径：`/Users/Hugh/Hugh/Project/workflowhub/.github/workflows/ci.yml`、`/Users/Hugh/Hugh/Project/workflowhub/tools/cli/ci-chain-check.mjs`
 
 **Task 5.2 — 全量回归验证** [FR-FRESH-001, FR-FRESH-002, FR-FRESH-003, FR-FRESH-004, FR-CMD-001, FR-CMD-002, FR-CMD-003, FR-BROWSER-001, FR-BROWSER-002, FR-BROWSER-003, FR-CLOSE-001, FR-CLOSE-002, FR-CLOSE-003, FR-PATH-001, FR-PATH-002, FR-PATH-003, FR-METRICS-001, FR-METRICS-002, FR-METRICS-003, FR-METRICS-004, FR-TEST-001, FR-TEST-003, FR-REG-001]
 
@@ -423,7 +423,7 @@ node --input-type=module --eval "import { runCapture } from './workflows/verify-
 
 # 轻量三段闭环检查脚本可运行（结构检查，非完整链路）
 # 用 node --input-type=module 验证脚本可解析，exit code 真实反映结果（不掩盖失败）
-node --input-type=module --eval "import '/Users/Hugh/Hugh/Project/workflowhub/scripts/ci-chain-check.mjs'" 2>&1; echo "ci-chain-check import exit: $?"
+node --input-type=module --eval "import '/Users/Hugh/Hugh/Project/workflowhub/tools/cli/ci-chain-check.mjs'" 2>&1; echo "ci-chain-check import exit: $?"
 ```
 
 ### Knowledge
@@ -435,4 +435,4 @@ node --input-type=module --eval "import '/Users/Hugh/Hugh/Project/workflowhub/sc
 
 ### STOP
 
-Phase 5 完成条件：`.github/workflows/ci.yml` 含 verify-code 冒烟步骤 + 轻量三段闭环检查步骤；`scripts/ci-chain-check.mjs` 可运行；全量 vitest run exit=0，所有 verify-code-*.test.mjs 跑到；三脚本均可 import；FR-TEST-002 验收出口已记录（Task 5.4）。
+Phase 5 完成条件：`.github/workflows/ci.yml` 含 verify-code 冒烟步骤 + 轻量三段闭环检查步骤；`tools/cli/ci-chain-check.mjs` 可运行；全量 vitest run exit=0，所有 verify-code-*.test.mjs 跑到；三脚本均可 import；FR-TEST-002 验收出口已记录（Task 5.4）。

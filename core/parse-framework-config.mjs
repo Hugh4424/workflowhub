@@ -2,7 +2,7 @@
  * Parse and validate framework config object (FR-CFG-004, decision 13).
  * task_dir is resolved via the single entry point resolvePath; absent key skips resolution.
  */
-import { resolvePath } from "./resolve-path.mjs";
+import { resolvePath } from "../runtime/adapters/resolve-path.mjs";
 
 /**
  * @param {object} config

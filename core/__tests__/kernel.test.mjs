@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import os from "node:os";
-import { runKernel } from "../kernel.mjs"; // does not exist yet — RED
+import { runKernel } from "../../runtime/evidence/kernel.mjs"; // does not exist yet — RED
 import { loadConfig } from "../load-config.mjs";
 import { resolveComponent } from "../resolve-component.mjs";
 
@@ -120,7 +120,7 @@ describe("kernel scenario 6: output component_id mismatch → failure (FR-CORE-0
 });
 
 // Scenario 7: Shipped default config end-to-end contract (M2 / AC1 evidence).
-// config/workflowhub.yaml ships a noop registry entry with path: scripts/noop.mjs,
+// config/workflowhub.yaml ships a noop registry entry with path: tools/cli/noop.mjs,
 // proving both locate (component_id + workflow) and dispatch (runKernel succeeds).
 describe("kernel scenario 7: shipped config — locate PASS, dispatch PASS (M2 contract)", () => {
   const shippedConfigPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../config/workflowhub.yaml");

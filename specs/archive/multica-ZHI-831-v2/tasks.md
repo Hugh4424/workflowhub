@@ -19,7 +19,7 @@
 
 **依赖：** T1
 
-**修改：** `core/fact-collector.mjs`，必要时新增 v2 专属来源配置模块
+**修改：** `runtime/evidence/fact-collector.mjs`，必要时新增 v2 专属来源配置模块
 
 **工作：**
 
@@ -34,7 +34,7 @@
 
 **依赖：** T2
 
-**修改：** `core/fact-collector.mjs`、`scripts/collect-task-facts.mjs`，以及 T2 所需的 v2 配置模块
+**修改：** `runtime/evidence/fact-collector.mjs`、`tools/cli/collect-task-facts.mjs`，以及 T2 所需的 v2 配置模块
 
 **工作：**
 

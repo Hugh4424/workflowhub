@@ -17,6 +17,10 @@ npm run check
 
 `npm run check` 对仓库内的文档做一致性检查。完整安装与使用文档将在后续里程碑补充。
 
+## 代码结构
+
+生产运行时在 `runtime/`，命令行工具在 `tools/cli/`，技能和五阶段入口分别在 `skills/` 与 `workflows/`。`core/`、`scripts/` 和顶层 `schemas/` 只保留已登记的历史兼容文件；目录迁移清单见 [`docs/architecture/move-map.json`](docs/architecture/move-map.json)。
+
 > 说明：`check` 是对交付物结构的**一致性入口校验**（属宪法 Q2 的入口校验类），不是宪法 F4/Q1 所反对的阻断式质量判断门——它只校验客观结构事实（条目数、四段是否齐、锚点是否可达、术语是否合规），不替代独立审查与人的质量裁决。
 
 ## 五段流程速览

@@ -25,8 +25,8 @@ Every task card must have: task ID, Phase, goal, versioned_refs, Knowledge, boun
 
 ### Files
 
-- **NEW**：core/schemas/ambiguity-ledger.v2.json
-- **MODIFY**：core/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、tests/stage-content-evidence.test.mjs
+- **NEW**：runtime/schemas/ambiguity-ledger.v2.json
+- **MODIFY**：runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、tests/stage-content-evidence.test.mjs
 - **DO NOT TOUCH**：scripts/stage-runtime.mjs、core/task-kernel-implementation.mjs
 
 ### Tasks
@@ -69,7 +69,7 @@ Every task card must have: task ID, Phase, goal, versioned_refs, Knowledge, boun
 - **recovery**：停止并报告 A-003/A-008 不兼容；不降级为 schema-only。
 - **task risk**：v2 把工程方案复制进 spec。
 - **动作**：新增 ambiguity-ledger.v2 schema，扩展现有 validator/registry、REQUIRED_STAGE_CONTENT_KINDS.build-spec、REVISIONABLE_KINDS 和 spec/build-spec instructions；build-spec 必须发布该 v2 kind，使 PFACT/FR/AC identity、状态、完整 ReferenceBinding、逐字段 risk 与 version binding 可验证；spec schema 明确拒绝代码锚点和工程方案字段。
-- **精确文件**：core/schemas/ambiguity-ledger.v2.json、core/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、tests/stage-content-evidence.test.mjs
+- **精确文件**：runtime/schemas/ambiguity-ledger.v2.json、runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、tests/stage-content-evidence.test.mjs
 - **输入**：T001 RED oracle；A-001/A-002；PFACT-01、PFACT-02、PFACT-05、PFACT-06。
 - **输出**：v2 typed evidence；v1 compatibility read；明确 unknown/STOP。
 - **依赖**：T001
@@ -119,9 +119,9 @@ Every task card must have: task ID, Phase, goal, versioned_refs, Knowledge, boun
 
 ### Files
 
-- **NEW**：core/schemas/plan-task-contract.v2.json、tests/stage-plan-task-contract.test.mjs
-- **MODIFY**：core/schemas/plan-task-contract.v1.json
-- **MODIFY**：core/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md
+- **NEW**：runtime/schemas/plan-task-contract.v2.json、tests/stage-plan-task-contract.test.mjs
+- **MODIFY**：runtime/schemas/plan-task-contract.v1.json
+- **MODIFY**：runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md
 - **DO NOT TOUCH**：core/task-kernel-implementation.mjs、core/workspace.mjs、core/dispatch-component.mjs
 
 ### Tasks
@@ -164,7 +164,7 @@ Every task card must have: task ID, Phase, goal, versioned_refs, Knowledge, boun
 - **recovery**：保持 v1 read compatibility，缺映射报告 unknown。
 - **task risk**：字段膨胀或纯 reuse 被强造 DEC。
 - **动作**：先扩展既有 plan-task-contract.v1 的 current/legacy FR/AC 只读 grammar，并断言 accepted_count 非零和漏项失败；再新增 plan-task-contract.v2，扩展 validator/registry、REQUIRED_STAGE_CONTENT_KINDS.build-plan、REVISIONABLE_KINDS、plan/tasks templates 和 build-plan/plan-eng-review instructions。v2 task template/contract 的 authoritative fields 必含 task ID、Phase、goal、展开的 ReferenceBinding、Knowledge、boundary、action、test/acceptance command、design_state=ready|blocked-by-design、STOP、recovery、risk；任何缺失/stale/mismatched artifact_kind/ref/hash/id、复制 PFACT 或反向 spec 引用都失败。
-- **精确文件**：core/schemas/plan-task-contract.v1.json（MODIFY）、core/schemas/plan-task-contract.v2.json、core/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md、tests/stage-plan-task-contract.test.mjs、tests/stage-content-evidence.test.mjs
+- **精确文件**：runtime/schemas/plan-task-contract.v1.json（MODIFY）、runtime/schemas/plan-task-contract.v2.json、runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs、skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md、tests/stage-plan-task-contract.test.mjs、tests/stage-content-evidence.test.mjs
 - **输入**：T003 RED oracle；A-001/A-002/A-007；accepted spec FR-06 至 FR-11。
 - **输出**：可验证 v2 plan/tasks facts 与每张 authoritative task card；build-plan 缺 v2 kind、ReferenceBinding 或 risk/Knowledge/STOP/recovery/task risk 任一字段失败；v1 可读取 current/legacy FR/AC，其他非无损字段报告 unknown；按 DEC-05 记录 observation 或 explicit unknown。
 - **依赖**：T003

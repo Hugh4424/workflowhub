@@ -1,10 +1,10 @@
 /**
  * check-anti-host.test.mjs
- * TDD tests for scripts/check-anti-host.mjs and scripts/scan-core-files.mjs.
+ * TDD tests for tools/cli/check-anti-host.mjs and tools/cli/scan-core-files.mjs.
  *
  * FR-GUARD-001: each bad-fixture class triggers a non-zero exit
  * FR-GUARD-002: --self-test proves all four regex classes fire
- * FR-CI-001:    scanCoreFiles() is the single boundary anchor; it grows with core/
+ * FR-CI-001:    scanCoreFiles() is the single boundary anchor; it grows with runtime/
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -14,8 +14,8 @@ import { join, resolve } from "path";
 import { fileURLToPath } from "url";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
-const checkAntiHost = join(repoRoot, "scripts", "check-anti-host.mjs");
-const scanCoreFiles = join(repoRoot, "scripts", "scan-core-files.mjs");
+const checkAntiHost = join(repoRoot, "tools", "cli", "check-anti-host.mjs");
+const scanCoreFiles = join(repoRoot, "tools", "cli", "scan-core-files.mjs");
 const badFixtures = join(repoRoot, "fixtures", "anti-host-bad");
 
 /**
@@ -41,10 +41,10 @@ function run(scriptPath, args = []) {
 // FR-CI-001: scanCoreFiles() boundary anchor
 // ---------------------------------------------------------------------------
 describe("scanCoreFiles — boundary anchor (FR-CI-001)", () => {
-  it("lists existing core .mjs files", async () => {
+  it("lists existing runtime .mjs files", async () => {
     const { scanCoreFiles: scan } = await import(scanCoreFiles);
     const files = scan();
-    expect(files.length).toBeGreaterThanOrEqual(6); // 6 known core files
+    expect(files.length).toBeGreaterThanOrEqual(6); // production runtime files
     expect(files.every((f) => f.endsWith(".mjs"))).toBe(true);
   });
 
@@ -54,15 +54,15 @@ describe("scanCoreFiles — boundary anchor (FR-CI-001)", () => {
     expect(files.some((f) => f.includes("__tests__"))).toBe(false);
   });
 
-  it("excludes scripts/ directory (only scans core/)", async () => {
+  it("excludes compatibility core/ directory (only scans runtime/)", async () => {
     const { scanCoreFiles: scan } = await import(scanCoreFiles);
     const files = scan();
-    expect(files.some((f) => f.includes("/scripts/"))).toBe(false);
+    expect(files.every((f) => f.includes("/runtime/"))).toBe(true);
   });
 
-  it("grows when a new .mjs is added to core/ — falsifiable membership check", async () => {
+  it("grows when a new .mjs is added to runtime/ — falsifiable membership check", async () => {
     const { scanCoreFiles: scan } = await import(scanCoreFiles);
-    const tmpFile = join(repoRoot, "core", "__test_tmp_probe_file__.mjs");
+    const tmpFile = join(repoRoot, "runtime", "__test_tmp_probe_file__.mjs");
     try {
       // Before: file absent
       const before = scan();

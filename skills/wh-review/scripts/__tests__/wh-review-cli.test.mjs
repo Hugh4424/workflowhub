@@ -1,40 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { createTask, migrateTaskRunnerRoot } from "../../../../core/task-handle.mjs";
-import { createTaskKernel } from "../../../../core/task-kernel.mjs";
-import { prepareTaskWorkspace, recoverTaskWorkspace } from "../../../../core/workspace.mjs";
+import { createTask } from "../../../../core/task-handle.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
-
-async function runnerBoundFixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-runner-"))); roots.push(root);
-  const repo = join(root, "repo"), runner = join(root, "runner"); mkdirSync(repo);
-  execFileSync("git", ["init", "-q"], { cwd: repo });
-  execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-  execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-  execFileSync("git", ["clone", "-q", "--no-local", realpathSync(join(import.meta.dirname, "../../../..")), runner]);
-  execFileSync("git", ["checkout", "-qb", "task/Demo/task"], { cwd: runner });
-  cpSync(realpathSync(join(import.meta.dirname, "../../../..", "core")), join(runner, "core"), { recursive: true, force: true });
-  cpSync(realpathSync(join(import.meta.dirname, "../..")), join(runner, "skills", "wh-review"), { recursive: true, force: true });
-  symlinkSync(realpathSync(join(import.meta.dirname, "../../../..", "node_modules")), join(runner, "node_modules"));
-  execFileSync("git", ["add", "core", "skills/wh-review"], { cwd: runner });
-  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner"], { cwd: runner });
-  const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-  const task = createTask({ storageRoot: root, taskPath, manifest: {
-    schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z",
-    target_repo_root: repo, issue_ids: [], inputs: {},
-  } });
-  migrateTaskRunnerRoot({ taskPath: task.taskPath, projectName: "Demo", taskId: "task", runnerRoot: realpathSync(runner), stage: "make-decision" });
-  const module = await import(`${pathToFileURL(join(runner, "skills", "wh-review", "scripts", "wh-review-cli.mjs")).href}?fixture=${Date.now()}`);
-  return { taskPath, repo, runner: realpathSync(runner), module };
-}
 
 describe("wh-review production CLI", () => {
   it("exports the narrow legacy-root adoption operation with the normal review operations", async () => {
@@ -235,51 +208,7 @@ describe("wh-review production CLI", () => {
     expect(subject).not.toHaveProperty("targetRepoRoot");
   });
 
-  it("resolves make-decision review against the recovery CandidateWorkspace when the active run is a recovery", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-recovery-"))); roots.push(root);
-    const repo = join(root, "repo"); mkdirSync(repo);
-    execFileSync("git", ["init", "-q"], { cwd: repo });
-    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    const task = createTask({ storageRoot: root, taskPath, manifest: {
-      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-30T00:00:00.000Z",
-      target_repo_root: repo, issue_ids: [], inputs: {},
-    } });
-    const candidate = prepareTaskWorkspace(task);
-    const worktreeRoot = candidate.worktreeRoot;
-    const oldRun = createTaskKernel(task, { candidateWorkspace: candidate })
-      .startStageRun("make-decision", { reason: "interrupted run" });
-    writeFileSync(join(worktreeRoot, "task-only.txt"), "task-only recovery bytes\n");
-    execFileSync("git", ["add", "."], { cwd: worktreeRoot });
-    execFileSync("git", ["commit", "-qm", "task-only recovery head"], { cwd: worktreeRoot });
-    const recoveryCandidate = recoverTaskWorkspace(task);
-    createTaskKernel(task, { candidateWorkspace: recoveryCandidate }).startRecoveryStageRun("make-decision", {
-      reason: "transparent recovery",
-      expected_previous_run_ref: oldRun.ref,
-      expected_previous_run_hash: oldRun.hash,
-    });
-    expect(() => prepareTaskWorkspace(task)).toThrow(/not an ancestor|fallback|baseline rebinding/i);
-
-    const { resolveTrustedReviewSubject } = await import(cli.href);
-    const subject = resolveTrustedReviewSubject({
-      task_path: taskPath,
-      project_name: "Demo",
-      task_id: "task",
-      stage: "make-decision",
-    });
-
-    expect(subject.candidateWorkspace).toMatchObject({
-      worktreeRoot: realpathSync(worktreeRoot),
-      baselineCommit: execFileSync("git", ["rev-parse", "HEAD"], {
-        cwd: worktreeRoot,
-        encoding: "utf8",
-      }).trim(),
-    });
-  });
-
-  it("keeps ordinary make-decision review workspace behavior when no active recovery run exists", async () => {
+  it("resolves make-decision review from the deterministic workspace", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-no-recovery-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
@@ -300,21 +229,6 @@ describe("wh-review production CLI", () => {
     });
     expect(subject.candidateWorkspace.baselineCommit)
       .toBe(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim());
-  });
-
-  it("uses a runner-bound TaskHandle without exposing a public runner field", async () => {
-    const fixture = await runnerBoundFixture();
-    const { resolveTrustedReviewSubject } = fixture.module;
-    const subject = resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
-    expect(subject.candidateWorkspace.worktreeRoot).toBe(`${fixture.repo}-task`);
-    expect(() => resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision", runner_root: fixture.runner })).toThrow(/runner_root is forbidden/i);
-  });
-
-  it("fails loud when a manifest-bound runner HEAD drifts", async () => {
-    const fixture = await runnerBoundFixture();
-    execFileSync("git", ["commit", "--allow-empty", "-qm", "runner drift"], { cwd: fixture.runner });
-    const { resolveTrustedReviewSubject } = fixture.module;
-    expect(() => resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" })).toThrow(/runner identity mismatch/i);
   });
 
   it("accepts only phase_id as the phase scope selector", async () => {

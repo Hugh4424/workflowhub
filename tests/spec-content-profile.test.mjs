@@ -1,162 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-import {
-  validateAmbiguityLedgerV2,
-  validateSpecContentProfile,
-} from "../core/stage-content-contracts.mjs";
+import { validateSpecContentProfile } from "../runtime/stage/stage-content-contracts.mjs";
 
-const SPEC_HASH = "a".repeat(64);
-const binding = (id) => ({
-  artifact_kind: "spec",
-  ref: "artifacts/spec.md",
-  hash: SPEC_HASH,
-  id,
-});
-
-function legacyLedger(frId = "FR-ACCEPT") {
-  return {
-    spec_content_hash: SPEC_HASH,
-    subject_binding: binding("SPEC"),
-    pfacts: [{
-      id: "PFACT-01",
-      statement: "A legacy fact.",
-      status: "verified",
-      evidence: [{ ...binding("D1"), artifact_kind: "decision", ref: "decision.md" }],
-      affects_frs: [binding(frId)],
-      affects_acs: [binding("AC-01")],
-    }],
-    frs: [{
-      id: frId,
-      behavior: "A legacy behavior.",
-      scope_boundary: "No implementation choice.",
-      pfact_refs: [binding("PFACT-01")],
-      ac_refs: [binding("AC-01")],
-    }],
-    acs: [{
-      id: "AC-01",
-      behavior: "The behavior is observable.",
-      fr_refs: [binding(frId)],
-      verification_method: "Observe the product result.",
-      pass_condition: "The result appears.",
-      evidence_type: "manual",
-    }],
-    risks: [],
-    clarification: {
-      component: "spec-clarify",
-      status: "trigger=false",
-      reason: "No unresolved ambiguity requires a host-visible question.",
-    },
-  };
-}
-
-function currentLedger() {
-  const value = legacyLedger("FR-SPEC-001");
-  return {
-    content_profile: "spec-content.v3",
-    ...value,
-    scenarios: [{
-      id: "SCN-001",
-      role: "reader",
-      given: "an accepted specification",
-      when: "the reader follows the scenario",
-      then: "the result is observable",
-    }],
-    frs: [{
-      ...value.frs[0],
-      scenario_refs: [binding("SCN-001")],
-    }],
-    acs: [{
-      ...value.acs[0],
-      failure_condition: "The result is absent.",
-    }],
-    open_questions: [],
-  };
-}
-
-describe("spec-content.v3 typed ledger", () => {
-  it("is required by the current build-spec publication workflow while legacy stays read-only", () => {
+describe("current specification contract", () => {
+  it("requires a readable current spec, a revision note, and real independent review", () => {
     const workflow = readFileSync(new URL("../workflows/build-spec/SKILL.md", import.meta.url), "utf8");
     for (const term of [
-      'content_profile: "spec-content.v3"',
-      "scenario_refs",
-      "failure_condition",
-      "OPEN cards",
-      "read-only",
-      "Spec-Purity",
+      "current four materials",
+      "stable ID",
+      "current-material revision note",
+      "independent `wh-review`",
+      "never a pass",
     ]) expect(workflow).toContain(term);
-  });
-
-  it("keeps the complete legacy FR grammar readable without new fields", () => {
-    for (const id of ["FR-ACCEPT", "FR-ENV01", "FR-01", "FR-SPEC-001"]) {
-      expect(validateAmbiguityLedgerV2(legacyLedger(id))).toMatchObject({ ok: true, errors: [] });
-    }
-  });
-
-  it("accepts scenario/FR/AC closure and rejects unknown profiles", () => {
-    expect(validateAmbiguityLedgerV2(currentLedger())).toMatchObject({ ok: true, errors: [] });
-    expect(validateAmbiguityLedgerV2({
-      ...currentLedger(),
-      content_profile: "spec-content.unknown",
-    })).toMatchObject({ ok: false });
-  });
-
-  it("requires canonical new FR IDs, scenario refs, and AC failure conditions", () => {
-    const numeric = { ...currentLedger(), frs: [{ ...currentLedger().frs[0], id: "FR-01" }] };
-    expect(validateAmbiguityLedgerV2(numeric).errors.join("\n")).toMatch(/FR-\{DOMAIN\}-\{NNN\}/);
-
-    const noScenario = { ...currentLedger(), frs: [{ ...currentLedger().frs[0], scenario_refs: undefined }] };
-    expect(validateAmbiguityLedgerV2(noScenario)).toMatchObject({ ok: false });
-
-    const noFailure = { ...currentLedger(), acs: [{ ...currentLedger().acs[0], failure_condition: undefined }] };
-    expect(validateAmbiguityLedgerV2(noFailure)).toMatchObject({ ok: false });
-  });
-
-  it("makes PFACT status payloads exclusive", () => {
-    const invalid = currentLedger();
-    invalid.pfacts = [{
-      ...invalid.pfacts[0],
-      inference: { source: "guess", limitations: "not verified" },
-    }];
-    expect(validateAmbiguityLedgerV2(invalid)).toMatchObject({ ok: false });
-  });
-
-  it("publishes OPEN cards and binds unknown PFACTs to unresolved work", () => {
-    const value = currentLedger();
-    value.pfacts = [{
-      ...value.pfacts[0],
-      status: "unknown",
-      evidence: undefined,
-      unknown: { owner: "product owner", impact: "acceptance may change" },
-    }];
-    value.open_questions = [{
-      id: "OPEN-01",
-      affected_ids: ["PFACT-01", "FR-SPEC-001", "AC-01"],
-      owner: "product owner",
-      impact: "acceptance may change",
-      handling_stage: "build-spec",
-      close_condition_or_stop: "Stop until the product owner decides.",
-    }];
-    value.clarification = {
-      component: "spec-clarify",
-      status: "executed",
-      reason: "The unknown product fact requires one host-visible clarification.",
-      ask: { axis: "product-fact", sequence: 1, ref: "host-message://ask/open-01" },
-      wait: {
-        axis: "product-fact", sequence: 2, status: "waiting-for-user",
-        reply_ref: "host-message://reply/open-01",
-      },
-      resume: { axis: "product-fact", sequence: 3, ref: "host-message://resume/open-01" },
-    };
-    expect(validateAmbiguityLedgerV2(value)).toMatchObject({ ok: true, errors: [] });
-
-    value.open_questions = [];
-    value.clarification = {
-      component: "spec-clarify",
-      status: "trigger=false",
-      reason: "No unresolved ambiguity requires a host-visible question.",
-    };
-    expect(validateAmbiguityLedgerV2(value).errors.join("\n")).toMatch(/unknown PFACT.*RISK or OPEN/);
   });
 });
 

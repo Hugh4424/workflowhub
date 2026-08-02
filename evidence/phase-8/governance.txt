@@ -1,0 +1,60 @@
+Phase 8 T053 focused governance evidence
+Date: 2026-08-02
+Task: workflowhub-complexity-governance-v2 / T053
+Candidate HEAD: b0bb020756ac6896deaef9973b23726fcae6224f
+HEAD tree: b71be032df12164a5e5decf73bf4a13472a3551f
+Current governance tree is regenerated from the current tracked source before
+each focused gate; this historical Phase 8 evidence intentionally does not
+freeze a copied current-tree value.
+
+Scope
+-----
+Focused checks only. This evidence now includes the Phase 8 path-specific
+proof state: retired-path RED/GREEN plus legacy-pinned bootstrap proof for
+the six absent pairs, and shim-keep RED/GREEN plus review-layering proof for
+the five BOTH pairs. No full test suite, phase-result, build-code
+acceptance, move-map update, or WorkflowHub main-repository change. Before
+the final gate run, the two required derived reports were regenerated in
+dependency order:
+
+- `node tools/architecture/complexity-report.mjs`
+- `node tools/architecture/inventory.mjs`
+
+Inventory must be generated after complexity-baseline because the inventory
+hashes tracked derived files.
+
+Checks
+------
+1. `node tools/cli/verify-structure.mjs`
+   - exit 0
+   - Constitution/checklist anchors, README/document anchors, and CONTEXT
+     terminology checks passed.
+
+2. `./node_modules/.bin/vitest run tests/contract/repository-governance.test.mjs --maxWorkers=1`
+   - exit 0
+   - 1 file, 3 tests passed.
+
+3. `./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs --maxWorkers=1`
+   - exit 0
+   - 1 file, 3 tests passed.
+   - Legacy entry paths/tokens were absent from the audited delivery roots;
+     clean Runner/Bundle checks in this focused contract passed.
+
+4. `node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`
+   - exit 0
+   - 1033 delivery files, exactly one disposition each.
+
+5. `node tools/architecture/complexity-report.mjs --check-hard-gates`
+   - exit 0
+   - complexity report is reproducible; hard-zero gates remain explicit.
+
+Disposition
+----------
+The T053 focused governance gate is green. T052 is separately reconciled in
+`mechanical-move.txt`: its historical move-map is audit-only, and current
+semantic changes have focused coverage. This evidence does not produce a
+phase-result or authorize build-code acceptance; Phase 9 remains the only
+complete-suite and independent-review boundary.
+
+No source, move-map, or WorkflowHub main-repository file was modified by the
+checks. No full test suite was run.

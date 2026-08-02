@@ -24,10 +24,11 @@ state/session 文件。
   每个冻结 Phase 身份只产生一次正式质量事实。若严重可行动发现触发修复，修复后的新
   快照是新 Phase 身份并重新完整审查；原裁决不可改写。
 - `phase_id` 缺失时自动派生 `review_scope=integration`：只接受
-  `subject_kind=worktree`。在 provider 调用前，必须从 accepted build-plan checkpoint
-  到最终树重建唯一、连续的 canonical Phase review trace chain，并验证 fresh test 和 AC
-  `change/test/evidence` trace。缺 Phase、缺 trace、分叉、树不连续、零 Phase 或 legacy
-  无 scope record 一律为 `MATERIAL_INCOMPLETE`，不回退到全项目或累计 diff。
+  `subject_kind=worktree`。审查材料以当前四份材料、当前代码树、fresh test 和 AC
+  `change/test/evidence` 事实为准；已有 Phase review trace 可以作为可选审计增强，但不再
+  要求 accepted build-plan checkpoint、历史 trace chain 或旧 lineage 才能开始集成审查。
+  缺少历史 trace 时如实记录 `MATERIAL_INCOMPLETE` 质量事实，不回退到全项目或累计 diff，
+  也不阻止当前任务继续修订和重新采集事实。
 - Integration packet 禁止 `changes.diff`、历史 Phase diff、cumulative diff、raw log、
   完整项目与重复 `integration_map`；它仅有 coverage、seam、AC trace、fresh test summary
   及选中的最终快照片段。`packet-plan` 是材料选择/排除的遥测，不设 byte、token、时间、
@@ -64,7 +65,10 @@ actionable cluster 才产生 `revise_required`。该值保持为 provider 质量
 
 ## Consequences
 
-最终审查身份必须明确为 `review_scope=integration`，并且覆盖链、seam 索引、AC 追踪和材料地图都必须可证伪；材料不足或违规材料如实记录，不能伪装为通过或用字节、时间、token 上限替代判断。代价是历史 trace 或语义 seam 事实不足的任务会显式停在 `MATERIAL_INCOMPLETE`，而不是用更大的审查包掩盖证据缺口。
+最终审查身份必须明确为 `review_scope=integration`，并且 AC 追踪和材料地图都必须可证伪；
+材料不足或违规材料如实记录，不能伪装为通过或用字节、时间、token 上限替代判断。历史
+trace 或语义 seam 事实不足时，报告 `MATERIAL_INCOMPLETE` 质量事实；它只限制当前
+verify/close 的完成结论，不成为编辑、修复或进入下一阶段的许可门槛。
 
 ## Clarification — repair disposition without a pass loop (2026-07-30)
 

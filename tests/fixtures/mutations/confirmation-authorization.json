@@ -1,0 +1,5 @@
+{
+  "mutation": "confirmation-authorization",
+  "seam": "stage completion predicate",
+  "expected": "reject"
+}

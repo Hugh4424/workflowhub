@@ -13,8 +13,11 @@ describe("v2 human boundary summaries", () => {
     }
   });
 
-  it("irreversible close remains explicitly confirmed", () => {
-    expect(readStage("verify-code")).toMatch(/confirmation accepts verification facts only[\s\S]*separate close authorization[\s\S]*plan hash[\s\S]*Never reuse the verify-code confirmation ref/i);
+  it("keeps verification confirmation separate from irreversible close authorization", () => {
+    const verifyCode = readStage("verify-code");
+    expect(verifyCode).toMatch(/confirmation accepts only this verification conclusion/i);
+    expect(verifyCode).toMatch(/does\s+not\s+authorize[\s\S]*irreversible action/i);
+    expect(verifyCode).toMatch(/separate explicit authorization/i);
   });
 
   it("review briefs report real provider facts without inventing metrics", () => {

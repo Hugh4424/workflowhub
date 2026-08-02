@@ -41,7 +41,7 @@
 
 ### 3. 历史实现无稳健唯一 entry id（阻断级）
 
-历史 `d5a5ddc:core/receipt-writer.mjs` 的 `buildJournalEvent` 只生成 `schema_version`、`event_type`、`ts`，无唯一 ID 字段。文档提到 `ts + step_id` 作为候选，但同毫秒、多进程、手写迁移场景下均不稳健。
+历史 `d5a5ddc:runtime/evidence/receipt-writer.mjs` 的 `buildJournalEvent` 只生成 `schema_version`、`event_type`、`ts`，无唯一 ID 字段。文档提到 `ts + step_id` 作为候选，但同毫秒、多进程、手写迁移场景下均不稳健。
 
 **修正建议**：明确历史/缺字段 journal 的兼容策略：缺 `journal_entry_id` 的旧事件走降级路径（仅按 step_id 聚合，返回 warning），不进入新精确聚合路径；新写入必须生成稳定唯一 ID。
 

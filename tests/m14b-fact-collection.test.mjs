@@ -26,10 +26,10 @@ import {
   validateRuntimeFactV2,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, buildRuntimeFactV2Projection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createRuntimeFactV2Reader, createRuntimeFactV2Registry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, buildRuntimeFactV2Projection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createRuntimeFactV2Reader, createRuntimeFactV2Registry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../runtime/evidence/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { acceptStageAttempt, runStage } from "../core/stage-runner.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
@@ -59,6 +59,8 @@ async function createM14bFixture() {
   await exec("git", ["-C", repo, "-c", "user.name=fixture", "-c", "user.email=fixture@example.test", "commit", "--quiet", "-m", "fixture"]);
   const taskPath = join(root, "Projects", "Fixture", "tasks", "m14b-fixture");
   const task = createTask({ storageRoot: root, taskPath, manifest: {
+    // Deliberately omit record_model: this acceptance fixture reads and writes
+    // the legacy attempt family rather than exercising vNext publication.
     schema_version: "1.0.0", project_name: "Fixture", task_id: "m14b-fixture",
     created_at: "2026-07-18T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {},
   } });
@@ -84,6 +86,12 @@ async function createM14bFixture() {
     mode: "sidecar", projectName: task.identity.projectName, taskId: task.identity.taskId, taskPath: task.taskPath,
   });
   const execute = async (stage, handler) => {
+    if (stage === "build-spec") {
+      const kernel = createTaskKernel(task);
+      if (kernel.activeStageRun(stage, { required: false }) === null) {
+        kernel.startStageRun(stage, { reason: "legacy M14b fixture publication" });
+      }
+    }
     const context = contextFor(stage);
     const attempt = await runStage(stage, context, async (...args) => {
       const result = await handler(...args);
@@ -104,9 +112,13 @@ async function createM14bFixture() {
   });
   const baseline = workspace.baselineCommit;
   await mkdir(join(workspace.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
-  for (const relative of ["config", "schemas", "skills", "workflows"]) {
+  for (const relative of ["config", "skills", "workflows"]) {
     await cp(join(repositoryRoot, relative), join(workspace.worktreeRoot, relative), { recursive: true });
   }
+  // The clean task runner must carry the authoritative runtime schema bundle.
+  // The fixture carries only the authoritative runtime schema bundle.
+  await mkdir(join(workspace.worktreeRoot, "runtime"), { recursive: true });
+  await cp(join(repositoryRoot, "runtime", "schemas"), join(workspace.worktreeRoot, "runtime", "schemas"), { recursive: true });
   await cp(join(repositoryRoot, "THIRD_PARTY_NOTICES.md"), join(workspace.worktreeRoot, "THIRD_PARTY_NOTICES.md"));
   const sentinel = async (name, value = "sentinel") => {
     const path = join(task.taskPath, name);
@@ -570,7 +582,7 @@ describe("M14b fact collection acceptance", () => {
     });
     const skills = JSON.parse(file(fixture.task, "indexes/skills-inventory.json"));
     const health = records(fixture.task, "indexes/flow-health-facts.jsonl");
-    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "schemas/skills-inventory.schema.json"), "utf8"));
+    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "runtime/schemas/skills-inventory.schema.json"), "utf8"));
     const validate = new Ajv2020({ strict: false, formats: { "date-time": true } }).compile(schema);
     const before = file(fixture.task, "indexes/skills-inventory.json");
     const second = collectTaskFacts(collectionContext(fixture), {
@@ -633,7 +645,7 @@ describe("M14b fact collection acceptance", () => {
 
   it("AC-012 serializes two collector processes and makes health use the final merged transcript", async () => {
     const fixture = await createM14bFixture();
-    const collector = join(repositoryRoot, "core/fact-collector.mjs");
+    const collector = join(repositoryRoot, "runtime/evidence/fact-collector.mjs");
     const contextModule = join(repositoryRoot, "core/stage-context.mjs");
     const script = `
       import { bootstrapStage } from ${JSON.stringify(contextModule)};

@@ -27,7 +27,7 @@
 ```text
 workflowhub/                  # 交付仓（M1 已交付，下列为现状）
 ├── package.json              # scripts.check = markdownlint-cli2 + verify-structure.mjs；devDeps 仅 markdownlint
-├── scripts/verify-structure.mjs   # M1 结构校验（F9 可证伪范式，M2 checker 照此范式）
+├── tools/cli/verify-structure.mjs   # M1 结构校验（F9 可证伪范式，M2 checker 照此范式）
 ├── config/.gitkeep           # 空，M2 在此放 workflowhub.yaml
 ├── skills/.gitkeep           # 空骨架
 ├── workflows/.gitkeep        # 空骨架
@@ -71,7 +71,7 @@ workflowhub/                  # 交付仓（M1 已交付，下列为现状）
 
 ### 留定点 1 — core 边界 `core/**/*.mjs` 扫描器机制（FR-CI-001）
 
-- **实现**：`scripts/scan-core-files.mjs` 导出函数，用 glob 匹配 `core/**/*.mjs`（相对仓根），返回文件路径数组。
+- **实现**：`tools/cli/scan-core-files.mjs` 导出函数，用 glob 匹配 `core/**/*.mjs`（相对仓根），返回文件路径数组。
 - **唯一锚点共用**：反宿主检查、扩展性验收的核心 diff 锚定、漏扫自检三处都调此扫描器，不各写一份 glob（防三处漂移）。
 - **可证伪**：漏扫自检 = 在 `core/` 下放一个故意含 host 耦合的样本文件，断言扫描器把它列入清单（若 glob 写错漏掉它 → 自检红）。
 
@@ -138,7 +138,7 @@ workflowhub/core/__tests__/ 或 tests/
 
 ```text
 workflowhub/
-├── package.json              # 改：scripts.check 串接 node scripts/run-checks.mjs；
+├── package.json              # 改：scripts.check 串接 node tools/cli/run-checks.mjs；
 │                             #     devDeps 加 vitest + scripts.test=vitest run；deps 加 js-yaml
 └── .github/workflows/ci.yml  # 改：CI 增跑 npm test（vitest），保留 npm run check
 ```
@@ -152,8 +152,8 @@ workflowhub/
 ```text
 npm run check / CI
   → markdownlint-cli2（M1）
-  → node scripts/verify-structure.mjs（M1，回归保护）
-  → node scripts/run-checks.mjs（M2 新增聚合）
+  → node tools/cli/verify-structure.mjs（M1，回归保护）
+  → node tools/cli/run-checks.mjs（M2 新增聚合）
         ├→ scan-core-files.mjs   列 core/**/*.mjs
         ├→ check-anti-host.mjs   扫四类宿主耦合 → 命中 exit≠0
         ├→ check-path-guard.mjs  扫越界改动 → 命中 exit≠0
@@ -181,7 +181,7 @@ npm run check / CI
 
 | spec 第 11 章受影响项 | 怎么改 | 回归测 |
 |----------------------|--------|--------|
-| 统一检查入口 `npm run check` | package.json 串接 `node scripts/run-checks.mjs` | M1 markdownlint + verify-structure 仍在 check 内、仍绿 |
+| 统一检查入口 `npm run check` | package.json 串接 `node tools/cli/run-checks.mjs` | M1 markdownlint + verify-structure 仍在 check 内、仍绿 |
 | CI 工作流 | ci.yml 增 `npm test`，保留 `npm run check` | CI 仍跑 M1 检查 |
 | config 空目录 | 落 `workflowhub.yaml`（此前仅 .gitkeep） | verify-structure 不校验 config 内容，不受影响 |
 

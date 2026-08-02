@@ -1,0 +1,133 @@
+{
+  "version": 4,
+  "outcome": "completed",
+  "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+  "round": 1,
+  "host_provider": "codex",
+  "selected_tier": null,
+  "providers": [
+    {
+      "provider": "opencode/k3",
+      "adapter": "opencode",
+      "model": "liuyankimi/k3-256k",
+      "effort": "high",
+      "thinking": null,
+      "status": "completed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "bcf6c1a928b0b214174337e7fbe3470660a54e4c453f5dfbb42e702826568f48",
+      "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+      "session_id": "ses_03f7623f9ffedwC66quHaGd3Ue",
+      "session_file_path": null,
+      "continuable": true,
+      "timing": {
+        "started_at_ms": 1785641686983,
+        "completed_at_ms": 1785642174948,
+        "duration_ms": 487986
+      },
+      "usage": {
+        "total": 13313,
+        "input": 13139,
+        "output": 174,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "retry": {
+        "count": 0,
+        "progress_events": 96
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+        "provider": "opencode/k3",
+        "stdout_sha256": "01c49524824da8ee55c5bd5608ee835fe0a97ad51833694b4159af3148d50563",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": null,
+      "output": "{\"verdict\":\"revise_required\",\"summary\":\"删除恢复/迁移机械的主体方向与\"历史只读不授予推进\"建模基本一致（新模型用当前材料+当前质量事实 fail-closed，readAccepted 已固定为历史只读，continuation/rebind 字段被拒绝，final-coverage 校验器对 AC↔oracle↔执行记录做了真实 hash 绑定），但存在多处质量语义随机制/测试一起被削弱的情况：AC-06/AC-12 的 proof card 与 test 处置清单 oracle 被删除而 AC 谓词未变；legacy_pinned 清单完全免校验且 runner drift 拒收被改成静默忽略；Phase trace 命名空间对非规范项由 fail-loud 改为静默跳过；tasks.md 完成行的文件集/命令/证据自绑定可被散文绕过；严重 finding/风险接受的行为测试套件被文档计数检查替代。当前 22 suites/119 tests 矩阵本身全绿且不包含已删测试，T055 三方审查与 T056 用户确认如实标记 pending，但 T054 行已宣称 AC-01..AC-15 全覆盖，与上述空缺直接矛盾。\",\"findings\":[{\"severity\":\"major\",\"path\":\"acceptance-criteria.md AC-06/AC-12; current-changes.diff (deleted: tools/architecture/deletion-proof.mjs, test-disposition.mjs, tests/contract/deletion-proof.test.mjs, tests/contract/test-disposition.test.mjs, tests/integration/deletion-slices-summary.test.mjs, docs/architecture/test-disposition.tsv)\",\"root_cause\":\"AC-06 仍要求逐删除 proof card 完整字段、消费者归零、回滚可核验与用户逐项确认，AC-12 仍要求验证全部 tracked test 的处置清单；但执行这些谓词的 oracle 工具、契约测试与 TSV 在本 diff 中被删除，替代物（repository-inventory、final-coverage、mutation gates）均不校验 proof card 完整性或用户确认。T054 完成行却宣称 AC-01..AC-15 全覆盖（AC-06 仅靠 repository-inventory JSON），且 T056 最终删除清单用户确认仍为 in_progress。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 中 deleted file mode: tools/architecture/deletion-proof.mjs(27122)、test-disposition.mjs(27572)、tests/contract/deletion-proof.test.mjs(22328)、test-disposition.test.mjs(22957)、deletion-slices-summary.test.mjs(23263)、docs/architecture/test-disposition.tsv(11730); tasks.md T054 covered_ac 宣称 15 AC 全覆盖(22075) vs T056 status in_progress、'用户已授权按计划自动删除，但最终实际清单…尚未全部完成'(22113-22116); finding-dispositions.md 第5条。\",\"recommendation\":\"在删除这些 oracle 前，要么把 AC-06/AC-12 谓词改写为与保留 oracle（inventory 归零审计+final coverage）等价且可机检的形式并同步 spec，要么保留一个最小的删除证明/处置校验器直到 T056 用户逐项确认完成；T054 的 covered_ac 不得宣称 AC-06/AC-12 已闭环。\"},{\"severity\":\"major\",\"path\":\"current-changes.diff core/task-handle.mjs validateManifest; core/stage-context.mjs bootstrapStage; core/__tests__/stage-context.test.mjs; tests/task-close-delivery.test.mjs\",\"root_cause\":\"validateManifest 删除了 runner_root/runner_oid/runner_root_migration 联合校验与全部 migration 记录 hash 链校验，legacy_pinned 清单完全不验证其三字段形状，migration ref 指向的记录甚至不被读取；bootstrapStage 删除 assertTaskRunnerIdentity，旧行为对 runner drift 抛 'runner identity mismatch'，新行为静默忽略。测试被改写为构造伪造 legacy_pinned manifest（runner_root='/retired/...'、ref='identity/migrations/runner-root/historical.json' 不存在）并成功 openTask/bootstrap，把'历史可读'扩张为'不校验的身份字段可任意伪造'。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 5612-5660(validateManifest 校验整块删除)、4883-4885(assertTaskRunnerIdentity 删除)、125-141('rejects runner drift'→'ignores a legacy pinned runner')、26389-26417(伪造 legacy manifest 后 prepareDeliveryClosePlan 成功)。\",\"recommendation\":\"保留 per_invocation 默认下不读 runner 的新模型，但对 legacy_pinned 清单恢复最小形状校验（三字段同现、OID/ref 格式、migration 记录存在且 hash 匹配），或在 manifest 层明确拒绝未验证的 runner_* 字段并只允许从只读归档视图访问历史；补一个伪造/篡改 legacy_pinned 清单被拒绝的负向测试。\"},{\"severity\":\"major\",\"path\":\"current-changes.diff core/task-handle.mjs listCanonicalPhaseTraceRefs; core/__tests__/task-handle.test.mjs\",\"root_cause\":\"原 listCanonicalPhaseMapTraceRefs 对非法 phase 目录、非法 snapshot 目录、非 trace 文件 fail-loud（仅 integration resolver 可显式容忍）；新实现对这些全部 continue 静默跳过，且删除了'rejects noncanonical entries'负向测试，新测试主动向命名空间写入 'ignored.json' 并断言不报错。canonical evidence 命名空间出现意外/被篡改内容时不再 fail-loud，TaskHandle 安全谓词被削弱且测试同步放宽。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 6011-6012('invalid phase directory' throw→continue)、6029(non-hex tree dir→continue)、6051(non-trace file→continue); 测试 215-240 写入 ignored.json 并期望枚举成功；原'rejects noncanonical entries and symlinks'测试(242-253)删除。\",\"recommendation\":\"恢复对命名空间内非规范条目的 fail-loud（或仅在显式 tolerate 选项下跳过并记录），把 'ignored.json 被拒绝' 的负向测试加回；symlink 检查保留不变。\"},{\"severity\":\"major\",\"path\":\"current-changes.diff core/stage-handlers.mjs certifyBuildCodeQualityBasis/certifyCurrentTaskCompletion; specs/workflowhub-complexity-governance-v2/tasks.md\",\"root_cause\":\"claimedChanges 与认证 diff 的精确集合校验在 claimedChanges 为空时被跳过，而 pathOnlyCompletionClaim 使任何散文式 actual_changes 产生空 claimed 集；executed_commands 对当前测试命令的绑定在存在 exit_code=0 receipt 时可跳过；evidence map 由 runtime 直接注入 tests/review/requiredEvidence，task 行不再需要绑定当前 receipt。plannedChanges 计算后未被任何断言使用。净效果：tasks.md 完成行可含任意（甚至非法）声明而不触发机检——当前 tasks.md T055/T056 行的 evidence_refs 已使用 'historical-review-fact'/'historical-user-confirmation' 等非 sha256 占位值，AC-01'逐项验收绑定当前身份'的材料谓词失去 oracle。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 4964(claimedChanges.length>0 才校验)、5019(pathOnlyCompletionClaim 否则返 [])、5028(receipt 存在即跳过 executed_commands 绑定)、5041-5049(证据自动注入); tasks.md 22095、22116 占位 sha256。\",\"recommendation\":\"要么恢复对完成行的最小机检（actual_changes 必须为路径集合并匹配认证 diff、evidence_refs sha256 格式与 hash 校验），要么在 spec/AC-01 中显式声明 tasks.md 行仅为描述性、完成性仅由 runtime receipt 裁定，并补'散文声明不影响认证绑定'的正向 oracle 与'伪造 receipt 仍被拒'的变异样本。\"},{\"severity\":\"major\",\"path\":\"current-changes.diff tests/stage-risk-acceptance.test.mjs\",\"root_cause\":\"约 300 行严重 finding 行为测试（五阶段逐阶段 pause 矩阵、transport 状态不成语义 pass、validateRiskAcceptance 精确绑定/重复检测/schema 校验）被删除，替换为宪法条款计数与 checklist 计数检查；F3/F4/F7/Q1/Q2 条款语义内容断言也被删除。机制（stage-review-disposition.mjs）仍在运行路径，但其专用单元 oracle 消失，bundle 内可确认的残余覆盖只有 final-cutover-guards 中的 pause 路径，风险接受绑定的直接 oracle 无法从 bundle 证实——AC-05'严重 finding 有验证处置或明确风险授权'与 AC-15 一致性的谓词覆盖被实质削减，属于以处置名义削弱测试质量。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 25950-26152 整块删除（pause 矩阵、risk acceptance binding、schema 校验）替换为 25960-26005 的计数检查；repository-inventory.tsv 仍将该文件标记 keep(11640)。\",\"recommendation\":\"把 validateRiskAcceptance 精确绑定、重复/伪造拒绝、transport 状态不升级成语义结果的负向测试以精简形式恢复（可并入 final-cutover-guards.red.test.mjs），或在 disposition 中给出等效替代 oracle 的具体位置并在矩阵中可见。\"},{\"severity\":\"minor\",\"path\":\"current-changes.diff docs/architecture/final-complexity-report.json; finding-dispositions.md 第6条\",\"root_cause\":\"五项预算 within_limit=false（formal_test_lines 25090/12000、production_lines 30020/15000、schemas 36/10、persistent_object_families 10/5、largest_core_file 2975/1000），但报告没有把它们显式列为未完成复杂度债务，follow_up 只有三条通用条目，不满足处置第6条'必须如实列为未完成复杂度债务'与 AC-14 每项显示'计划'的要求。\",\"evidence_kind\":\"direct\",\"evidence\":\"diff 10728-10784(budgets within_limit:false)、10856-10860(仅通用 follow_up)。\",\"recommendation\":\"在报告中为每个超预算类别显式列出 debt 条目（actual/limit/delta/计划/目标 Phase），或在处置中说明为何这些是已接受的债务。\"},{\"severity\":\"minor\",\"path\":\"acceptance-criteria.md\",\"root_cause\":\"bundle 提供的验收标准在 AC-15 的'验证方法'行后截断，缺少通过条件、失败条件与证据类型，导致 AC-15 的 oracle 绑定是否覆盖其谓词无法从 bundle 评估。\",\"evidence_kind\":\"direct\",\"evidence\":\"acceptance-criteria.md 第 89 行为 AC-15 最后一行，文件共 89 行结束。\",\"recommendation\":\"补全 bundle 中 AC-15 的完整谓词字段，或在审查材料中注明以 spec.md 冻结版本为准并提供该节。\"}]}",
+      "error": null
+    },
+    {
+      "provider": "claude-code/opus",
+      "adapter": "claude-code",
+      "model": "claude-opus-5",
+      "effort": "high",
+      "thinking": null,
+      "status": "failed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "bcf6c1a928b0b214174337e7fbe3470660a54e4c453f5dfbb42e702826568f48",
+      "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+      "session_id": null,
+      "session_file_path": null,
+      "continuable": false,
+      "timing": {
+        "started_at_ms": 1785641687005,
+        "completed_at_ms": 1785641729409,
+        "duration_ms": 42429
+      },
+      "usage": null,
+      "retry": {
+        "count": 0,
+        "progress_events": 753
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+        "provider": "claude-code/opus",
+        "stdout_sha256": "e3a7883a3e4d8c178da83f771a3037aa0029dd95d3314fc0c5be1add4c004e78",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": {
+        "code": "PUBLIC_RESULT_INVALID",
+        "message": "provider output omitted because it contained a private absolute path"
+      },
+      "output": null,
+      "error": {
+        "code": "PUBLIC_RESULT_INVALID",
+        "message": "provider output omitted because it contained a private absolute path"
+      }
+    },
+    {
+      "provider": "cursor/grok",
+      "adapter": "cursor",
+      "model": "cursor-grok-4.5-high",
+      "effort": null,
+      "thinking": null,
+      "status": "failed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "bcf6c1a928b0b214174337e7fbe3470660a54e4c453f5dfbb42e702826568f48",
+      "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+      "session_id": null,
+      "session_file_path": null,
+      "continuable": false,
+      "timing": {
+        "started_at_ms": 1785641687024,
+        "completed_at_ms": 1785641704160,
+        "duration_ms": 17170
+      },
+      "usage": null,
+      "retry": {
+        "count": 0,
+        "progress_events": 69
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "f7520ee8-5bd7-425b-a3b5-0da9806e3374",
+        "provider": "cursor/grok",
+        "stdout_sha256": "1fc6ed3f00f9ab8d3cc4c199d8648f303269ca6486047d18f3353bff70a61fd0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": {
+        "code": "PROVIDER_PERMISSION_DENIED",
+        "message": "Cursor Agent attempted a tool outside the scoped review bundle"
+      },
+      "output": null,
+      "error": {
+        "code": "PROVIDER_PERMISSION_DENIED",
+        "message": "Cursor Agent attempted a tool outside the scoped review bundle"
+      }
+    }
+  ]
+}

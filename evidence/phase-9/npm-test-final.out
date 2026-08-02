@@ -1,0 +1,654 @@
+
+> workflowhub@0.0.0 test
+> npm run test:safe && npm run test:exclusive
+
+
+> workflowhub@0.0.0 test:safe
+> vitest run --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v2
+
+stderr | tests/final-cutover-guards.red.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+stderr | skills/wh-review/scripts/__tests__/review-runner.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/final-cutover-guards.red.test.mjs (60 tests) 40ms
+stderr | tests/stage-content-evidence.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ skills/wh-review/scripts/__tests__/review-runner.test.mjs (72 tests) 7346ms
+   ✓ aggregation and runner > requires branded CandidateWorkspace for make-decision direction review 797ms
+   ✓ aggregation and runner > uses only an authentic Workspace for full worktree capture 869ms
+   ✓ aggregation and runner > re-captures verify-final from the same Workspace baseline and rejects target drift 1390ms
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'task/Demo/full-review')
+Preparing worktree (new branch 'feature')
+fatal: Not a valid object name 0000000000000000000000000000000000000000^{commit}
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+Preparing worktree (new branch 'feature')
+ ✓ skills/wh-review/scripts/__tests__/review-source-materials.test.mjs (33 tests) 13892ms
+   ✓ review source capture > delivers a large Phase diff as indexed selected context while retaining the canonical full diff 719ms
+   ✓ review source capture > does not let a move-map suppress a provider-visible diff shard 487ms
+   ✓ review source capture > captures only the immutable phase commit range named by current phase evidence 447ms
+   ✓ review source capture > captures the whole dirty tree twice against the current target HEAD 667ms
+   ✓ review source capture > moves the base forward after main advances and the feature merges main 458ms
+   ✓ review source capture > uses the authenticated Workspace baseline after target main already contains task history 749ms
+   ✓ review source capture > captures final identity without creating an unused cumulative diff 357ms
+   ✓ review materials > authenticates the canonical receipt but sends only its compact test summary 601ms
+   ✓ review materials > reduces verify evidence to a per-AC summary without sending the evidence tree 686ms
+   ✓ review materials > rejects prose or incomplete verify evidence before provider delivery 563ms
+   ✓ review materials > writes an empty canonical evidence manifest when a stage has no evidence refs 305ms
+   ✓ review materials > validates selected evidence roots before delivery: missing raw output is excluded 659ms
+   ✓ review materials > validates selected evidence roots before delivery: receipt hash mismatch 560ms
+   ✓ review materials > keeps every manifest skill file present and exactly named in review instructions 612ms
+   ✓ review materials > keeps direction blind and gives code stages the complete snapshot 580ms
+   ✓ review materials > tracks packet bytes without a budget gate 304ms
+   ✓ review materials > seals the independent build-plan task draft as required material 357ms
+   ✓ review materials > requires explicit complete-or-unknown maps for wh_review.v2 routes 419ms
+   ✓ review materials > requires build-code acceptance maps to name and map every declared AC 701ms
+   ✓ review materials > uses a diff-free integration profile with only final seam and coverage facts 654ms
+   ✓ review materials > allows a declared changed-file context exception only outside complete diff hunks 470ms
+   ✓ review materials > makes an adaptive closure packet delta-only and gives the provider fixed closure instructions 580ms
+   ✓ review materials > rejects empty required stage material 307ms
+   ✓ review materials > enforces every stage material allowlist and keeps raw logs outside the packet 392ms
+   ✓ review materials > adds only the fixed UI lens when ui_scope is explicit 331ms
+stderr | tests/m14b-fact-collection.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/stage-content-evidence.test.mjs (96 tests) 97353ms
+   ✓ stage-content-evidence.v1 controlled writer > keeps one accepted lifecycle path covered separately from ordinary evidence publication 4838ms
+   ✓ stage-content-evidence.v1 controlled writer > publishes complete browser QA evidence bound to the runtime snapshot and identity 732ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts performance not_measured only when a reason is recorded 748ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts measured performance with its required evidence 935ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts not_applicable performance with its required evidence 742ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts auth mode fresh without claiming reused login state 757ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts auth mode none without claiming reused login state 754ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits route 514ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits page 495ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits scenario 480ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits tool 498ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits engine 492ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits session 485ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits auth 487ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits auth.mode 543ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits auth.login_state_reused 473ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits performance 505ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits performance.status 506ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits performance.reason 477ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits screenshots 482ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits screenshots.0.ref 514ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits screenshots.0.hash 471ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test 498ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test.command 492ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test.file 474ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test.output_ref 508ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test.output_hash 493ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits test.exit_code 551ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits cleanup 485ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits cleanup.status 532ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits cleanup.app_service_running 497ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects UI pass when browser evidence omits engine_switch 493ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: pass with non-zero test exit 491ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: fail with zero test exit 479ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: unknown with zero test exit 476ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: incomplete cleanup 479ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: inconsistent reused auth 467ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: unknown auth mode 484ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: unexplained unmeasured performance 497ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects inconsistent browser outcome: unexplained inapplicable performance 461ms
+   ✓ stage-content-evidence.v1 controlled writer > fails loud when canonical browser screenshot bytes are hash-mismatched 496ms
+   ✓ stage-content-evidence.v1 controlled writer > fails loud when canonical browser output bytes are hash-mismatched 507ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts explicit non-UI N/A without creating a global browser Gate 746ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects private browser field cookie 490ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects private browser field token 471ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects private browser field profile_content 512ms
+   ✓ stage-content-evidence.v1 controlled writer > requires an identity-closed ambiguity-ledger.v2 and keeps v1 records untouched 721ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts canonical domain FR IDs and keeps legacy numeric FR IDs readable 1834ms
+   ✓ stage-content-evidence.v1 controlled writer > fails closed on dirty or hash-drifted spec-content.v3 before publication 935ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects an unknown kind without creating an evidence namespace 475ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied constructor task identity 377ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied constructor root 419ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied constructor task path 396ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied constructor cwd 384ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field task_id before writing 460ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field stage before writing 505ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field workflow_run_id before writing 488ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field producer before writing 476ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field ref before writing 456ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field hash before writing 461ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field snapshot_tree before writing 486ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field root before writing 486ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field task_path before writing 483ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-supplied publish field cwd before writing 467ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field task_id hidden inside payload 531ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field stage hidden inside payload 530ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field workflow_run_id hidden inside payload 469ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field producer hidden inside payload 474ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field ref hidden inside payload 464ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field hash hidden inside payload 467ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field snapshot_tree hidden inside payload 485ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field root hidden inside payload 478ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field task_path hidden inside payload 536ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects identity or path field cwd hidden inside payload 468ms
+   ✓ stage-content-evidence.v1 controlled writer > allows the schema-declared decision_location.ref only for decision coverage 721ms
+   ✓ stage-content-evidence.v1 controlled writer > injects authenticated identity and rejects wrong hash, run, stage, or tree on read 818ms
+   ✓ stage-content-evidence.v1 controlled writer > keeps the first create-only record when the same run/kind is published with different content 970ms
+   ✓ stage-content-evidence.v1 controlled writer > publishes trusted post-interaction revisions with exact lineage and latest-pointer CAS 1168ms
+   ✓ stage-content-evidence.v1 controlled writer > never permits talk or grill revision and never discovers latest by scanning revisions 1069ms
+   ✓ stage-content-evidence.v1 controlled writer > injects the authenticated Workspace tree into interaction evidence 822ms
+   ✓ stage-content-evidence.v1 controlled writer > accepts canonical ref/hash bindings inside a revised decision coverage payload 965ms
+   ✓ stage-content-evidence.v1 controlled writer > publishes three talk rounds and the aggregate under separate writer-derived refs 3340ms
+   ✓ stage-content-evidence.v1 controlled writer > appends a controlled grill revalidation and reuses the three talks in a revised aggregate 4109ms
+   ✓ stage-content-evidence.v1 controlled writer > permits one append-only replacement grill revalidation and rejects a third 5120ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects caller-forged grill revalidation predecessor and material bindings 3048ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects a replacement when the initial grill revalidation lacks its authenticated invocation 3688ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects an uninvoked replacement and a stale initial revalidation after replacement 4796ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects an aggregate that cites a prewritten grill revalidation without its fresh invocation 3522ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects mixed pre-grill talk trees and caller-supplied workspace trees 2964ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects incomplete, wrong-type, and out-of-order interaction aggregates 3031ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects duplicate question ids across talk rounds 2666ms
+   ✓ stage-content-evidence.v1 controlled writer > rejects duplicate host-message refs across talk rounds 2724ms
+   ✓ stage-content-evidence.v1 controlled writer > requires real ask/reply/rerank bindings or explicit zero-question facts and complete grill exits 1683ms
+   ✓ stage-content-evidence.v1 controlled writer > binds an aggregate to the exact canonical decision-log bytes 2631ms
+   ✓ stage-content-evidence.v1 controlled writer > requires the final decision only on aggregate and rejects a fourth talk round 2564ms
+   ✓ stage-content-evidence.v1 controlled writer > minimizes secret-bearing fields before hashing and persistence 711ms
+HEAD is now at c196a5a base
+ ✓ tests/m14b-fact-collection.test.mjs (30 tests) 102978ms
+   ✓ M14b fact collection pure contracts > provides a disposable task, git repo, accepted workspace, catalog, bundle, clock, and sentinel for later phases 5461ms
+   ✓ M14b fact collection acceptance > AC-V2-001/004 collects both runtime index versions with deterministic no-source facts 6577ms
+   ✓ M14b fact collection acceptance > AC-V2-013/015 writes v2 beside v1 without changing v1 facts 6805ms
+   ✓ M14b fact collection acceptance > AC-003/004/005 records missing, read failure, malformed JSONL, and unsupported sources without blocking legal records 6703ms
+   ✓ M14b fact collection acceptance > AC-005 records an unsupported format while a registered JSONL source continues 6668ms
+   ✓ M14b fact collection acceptance > AC-008 projects only explicit artifact references and records a declared missing target 13038ms
+   ✓ M14b fact collection acceptance > AC-009/010/014 validates the original M14a schema, all nine health domains, and non-blocking facts 7457ms
+   ✓ M14b fact collection acceptance > AC-011 rejects a forged identity before reader invocation or index rewrite 6582ms
+   ✓ M14b fact collection acceptance > AC-007/013 makes a skills conflict and a single unsupported target fail without false success 8324ms
+   ✓ M14b fact collection acceptance > AC-012 serializes two collector processes and makes health use the final merged transcript 7200ms
+   ✓ M14b fact collection acceptance > AC-013 reports afterParentPrecheck failure without false success or a partial transcript 7029ms
+   ✓ M14b fact collection acceptance > AC-013 reports beforeFileFsync failure without false success or a partial transcript 7129ms
+   ✓ M14b fact collection acceptance > AC-013 reports afterOpenBeforeRename failure without false success or a partial transcript 6941ms
+   ✓ M14b fact collection acceptance > AC-013 reports beforeDirectoryFsync failure without false success or a partial transcript 7049ms
+ ✓ tests/build-code-diff-only.test.mjs (33 tests) 1251ms
+ ✓ core/__tests__/task-handle.test.mjs (31 tests) 1362ms
+   ✓ TaskHandle > honors an explicit bounded wait when another process owns a record lock 382ms
+stderr | tests/stage-plan-task-contract-v3.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/stage-plan-task-contract-v3.test.mjs (23 tests) 18ms
+stderr | core/__tests__/stage-context.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ core/__tests__/stage-context.test.mjs (22 tests) 25052ms
+   ✓ bootstrapStage > rejects a prepared candidate after its HEAD changes before acceptance 507ms
+   ✓ bootstrapStage > launcher mode resolves env once and derives taskPath from project/task 1145ms
+   ✓ bootstrapStage > sidecar mode uses absolute taskPath and never reads storage-root env 1197ms
+   ✓ bootstrapStage > sidecar mode never reads the global WorkflowHub config 1223ms
+   ✓ bootstrapStage > sidecar mode ignores a legacy pinned runner when opening the current stage 1377ms
+   ✓ bootstrapStage > fails a dirty official write before mutation and shares one authenticated boundary across child writes 1639ms
+   ✓ bootstrapStage > persists one per-invocation identity only at the final Workspace-bound write boundary 1487ms
+   ✓ bootstrapStage > leaves no per-invocation record when the final shared boundary fails 1350ms
+   ✓ bootstrapStage > binds make-decision write authentication to the prepared CandidateWorkspace 741ms
+   ✓ bootstrapStage > persists an append-only source-bound path card and rejects stale source reuse without mutation 1542ms
+   ✓ bootstrapStage > ignores a stale informational path card when resolving the current task and worktree 1339ms
+   ✓ bootstrapStage > rejects taskPath, expected identity, and manifest disagreement 1107ms
+   ✓ bootstrapStage > gives make-decision no Workspace or ArtifactDir 1123ms
+   ✓ bootstrapStage > prepares a deterministic CandidateWorkspace and binds make-decision acceptance to it 1442ms
+   ✓ bootstrapStage > prepares the current task workspace after an accepted decision without reading history as a permit 1330ms
+   ✓ bootstrapStage > builds build-spec Workspace and ArtifactDir from the current task worktree 1322ms
+   ✓ bootstrapStage > builds build-plan Workspace and ArtifactDir from the current task worktree 1350ms
+   ✓ bootstrapStage > builds verify-code Workspace and ArtifactDir from the current task worktree 1349ms
+   ✓ bootstrapStage > allows build-code without accepted design history when all four current materials are readable 403ms
+   ✓ bootstrapStage > names every missing current material before build-code starts 398ms
+   ✓ bootstrapStage > current documents: names every missing material before verify-code starts 421ms
+   ✓ bootstrapStage > invalidates Workspace automatically when its worktree path is replaced 1259ms
+stderr | skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs > wh-review production CLI > exports the narrow legacy-root adoption operation with the normal review operations
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs (15 tests) 696ms
+   ✓ wh-review production CLI > reconstructs an authenticated make-decision CandidateWorkspace from the TaskHandle 358ms
+ ✓ skills/wh-review/scripts/__tests__/review-controller.test.mjs (14 tests) 5ms
+ ✓ tests/integration/atomic-write-faults.test.mjs (24 tests) 1650ms
+ ✓ tests/stage-completion-facts.test.mjs (20 tests) 5ms
+stderr | tests/stage-content-publication.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/stage-content-publication.test.mjs (14 tests) 13115ms
+   ✓ typed content evidence enters the one canonical audit and publication boundary > publishes one carrier plus authenticated typed refs, without a second content verdict 1191ms
+   ✓ typed content evidence enters the one canonical audit and publication boundary > makes missing, duplicate, out-of-order, and non-success work structural audit failures 813ms
+   ✓ typed content evidence enters the one canonical audit and publication boundary > rejects cross-task/stage/run/tree and tampered typed evidence in the canonical audit 761ms
+   ✓ typed content evidence enters the one canonical audit and publication boundary > requires the carrier and typed refs before TaskKernel can create a successful attempt 878ms
+   ✓ typed content evidence enters the one canonical audit and publication boundary > rejects forged carrier/content facts and a second verdict without a successful attempt 1830ms
+   ✓ official Stage run, requirements ledger, and journal producers > creates a unique run identity each time and binds the second run to the first 864ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled task_id when a Stage run starts 820ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled stage when a Stage run starts 808ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled workflow_run_id when a Stage run starts 868ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled worktree_root when a Stage run starts 811ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled path when a Stage run starts 823ms
+   ✓ official Stage run, requirements ledger, and journal producers > rejects caller-controlled output_ref when a Stage run starts 871ms
+   ✓ official Stage run, requirements ledger, and journal producers > writes the canonical ledger while keeping make-decision journal mutation runtime-owned 905ms
+   ✓ official Stage run, requirements ledger, and journal producers > records only the runtime-owned bootstrap step when a run is started 871ms
+ ✓ skills/wh-review/scripts/__tests__/simple-contracts.test.mjs (10 tests) 81ms
+ ✓ skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs (16 tests) 21ms
+stderr | tests/integration/material-revision.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/integration/material-revision.test.mjs (13 tests) 565ms
+ ✓ tests/stage-plan-task-contract.test.mjs (46 tests) 100ms
+ ✓ tests/task-close-delivery.test.mjs (33 tests) 82620ms
+   ✓ delivery close verifier > prepares only from the current canonical verify-code accepted snapshot 1281ms
+   ✓ delivery close verifier > refuses close when accepted verify facts are stale after material revision 1204ms
+   ✓ delivery close verifier > prepares close from the current target despite legacy runner history 1684ms
+   ✓ delivery close verifier > reports every unfinished physical action and completes only after delivery, archive, merge, push, and cleanup 3039ms
+   ✓ delivery close verifier > freezes deterministic local and remote baselines and rejects an unsafe target checkout 2434ms
+   ✓ delivery close verifier > rejects a task branch that is not the accepted Workspace branch 1310ms
+   ✓ delivery close verifier > executes the six fixed delivery steps and reconciles a second run 4101ms
+   ✓ delivery close verifier > creates a missing archive parent before the exact directory rename and reconciles a second run 4039ms
+   ✓ delivery close verifier > rejects an archive parent symlink that escapes the task worktree 1885ms
+   ✓ delivery close verifier > reconciles when 1 physical steps finish before their records 3566ms
+   ✓ delivery close verifier > reconciles when 2 physical steps finish before their records 3519ms
+   ✓ delivery close verifier > reconciles when 3 physical steps finish before their records 3530ms
+   ✓ delivery close verifier > reconciles when 4 physical steps finish before their records 3254ms
+   ✓ delivery close verifier > reconciles when 5 physical steps finish before their records 3161ms
+   ✓ delivery close verifier > reconciles when 6 physical steps finish before their records 3244ms
+   ✓ delivery close verifier > recovers after update-ref but before worktree reset 3729ms
+   ✓ delivery close verifier > recovers after git mv but before the archive commit 3345ms
+   ✓ delivery close verifier > stops before the first write when the remote baseline advances after prepare 1841ms
+   ✓ delivery close verifier > preserves git ls-remote failure details before the first write 1791ms
+   ✓ delivery close verifier > stops after merge when the remote advances before push 3041ms
+   ✓ delivery close verifier > stops on merge conflict and leaves push and cleanup unfinished in status 2701ms
+   ✓ delivery close verifier > stops on a rejected push and leaves cleanup unfinished in status 3799ms
+   ✓ delivery close verifier > stops before archive when the target becomes dirty after prepare 1805ms
+   ✓ delivery close verifier > performs no Git writes after a rejected close decision 1506ms
+   ✓ delivery close verifier > performs no Git writes after a timeout close decision 1539ms
+   ✓ delivery close verifier > prepares from an uncommitted worktree only when it matches the verified snapshot commit 1716ms
+   ✓ delivery close verifier > publishes the plan-bound snapshot commit without changing verified worktree bytes 1595ms
+   ✓ delivery close verifier > does not complete after a rejected close authorization 1452ms
+   ✓ delivery close verifier > rejects an archive commit that changes the accepted spec blob 2035ms
+   ✓ delivery close verifier > rejects an archive commit that smuggles an unrelated file change 2004ms
+   ✓ delivery close verifier > provides the thin prepare, confirm, execute, and status CLI 5361ms
+   ✓ delivery close verifier > leaves task, target, worktree, and remote bytes unchanged when close write-boundary authentication fails 2106ms
+ ✓ tests/audit-aggregator.test.mjs (11 tests) 6ms
+stderr | tests/official-component-receipts.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/official-component-receipts.test.mjs (22 tests) 2996ms
+   ✓ official component receipt authority > publishes allowlisted content and derives implementation completion outside the caller payload 828ms
+ ✓ tests/m12-templates.test.mjs (23 tests) 3ms
+ ✓ tests/terminal-runtime-blockers.test.mjs (19 tests) 14232ms
+   ✓ verify close executor fail-stop > does not execute close steps after rejected confirmation 1062ms
+   ✓ verify close executor fail-stop > does not execute close steps after timeout confirmation 1024ms
+   ✓ verify close executor fail-stop > allows a later explicit close confirmation after an earlier rejection 1105ms
+   ✓ verify close executor fail-stop > stops after the first failed close step 1102ms
+   ✓ verify close executor fail-stop > rejects a close plan hash mismatch before any step side effect 1025ms
+   ✓ verify close executor fail-stop > persists step progress so restart reconciles without replay and writes completed last 1309ms
+   ✓ verify close executor fail-stop > rebuilds authority after a crash between physical remove and step recording 1207ms
+   ✓ verify close executor fail-stop > fails closed when the task worktree branch drifts before remove 1110ms
+   ✓ verify close executor fail-stop > rejects a caller-selected worktree removal path 1074ms
+   ✓ verify close executor fail-stop > rejects an arbitrary or verify-stage confirmation ref 1019ms
+   ✓ verify close executor fail-stop > fails closed before remove when accepted identity is tampered 1040ms
+   ✓ verify close executor fail-stop > fails closed before remove when attempt content is tampered 1047ms
+   ✓ verify close executor fail-stop > fails closed before remove when accepted integrity is tampered 1106ms
+stderr | tests/integration/progression-without-permits.test.mjs > progression without historical permits
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/integration/runner-clean-install.test.mjs (5 tests) 4065ms
+   ✓ runner release > resolves all five released workflow skill closures without a provider or source mutation 1258ms
+   ✓ runner release > runs doctor, status, and a minimal canonical write from a clean installed release 2633ms
+stderr | tests/build-code-capture.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/integration/progression-without-permits.test.mjs (4 tests) 5842ms
+   ✓ progression without historical permits > 材料修改后历史 accepted 仍只读可读，普通工作不被历史许可阻塞 466ms
+ ✓ tests/phase-gate.test.mjs (15 tests) 3114ms
+   ✓ phase-gate formal review result > still blocks on an unfinished phase or an out-of-scope diff 356ms
+[boundary-confirm warn] boundary decision write failed for exec-bound-writefail
+ ✓ tests/boundary-confirm.test.mjs (10 tests) 486ms
+ ✓ core/__tests__/receipt-writer.test.mjs (8 tests) 189ms
+ ✓ tests/stage-decision-contract.test.mjs (25 tests) 78ms
+stderr | tests/verify-code-capture.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/build-code-capture.test.mjs (10 tests) 14963ms
+   ✓ build-code capture v2 boundary > requires an explicit absolute Workspace cwd and parent-resolved output path 1006ms
+   ✓ build-code capture v2 boundary > records non-zero exits as facts without throwing 1466ms
+   ✓ build-code capture v2 boundary > runs the official test subprocess in the accepted Workspace 1485ms
+   ✓ build-code capture v2 boundary > preserves failing command, stdout, stderr, hash, and red-baseline anomaly 1448ms
+   ✓ build-code capture v2 boundary > writes complete stdout/stderr sidecars before the JSON fact 1549ms
+   ✓ build-code capture v2 boundary > keeps anomaly detection factual 1510ms
+   ✓ build-code capture v2 boundary > reuses the same current receipt instead of rerunning the complete test command 1621ms
+   ✓ build-code capture v2 boundary > rejects a conflicting capture request for an existing receipt 1486ms
+   ✓ build-code capture v2 boundary > does not start a second capture while this task lock is held 1888ms
+   ✓ build-code capture v2 boundary > rejects a reused receipt when its recorded output was tampered 1504ms
+ ✓ tests/baseline.test.mjs (19 tests) 3ms
+stderr | scripts/__tests__/ci-chain-check.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/verify-code-capture.test.mjs (18 tests) 26255ms
+   ✓ verify-code capture v2 > returns all canonical receipt keys 1595ms
+   ✓ verify-code capture v2 > records integer zero exit 1479ms
+   ✓ verify-code capture v2 > records nonzero exit 1538ms
+   ✓ verify-code capture v2 > persists JSON even on failure 1654ms
+   ✓ verify-code capture v2 > persists complete stdout and stderr output 1532ms
+   ✓ verify-code capture v2 > creates nested record directories 1547ms
+   ✓ verify-code capture v2 > hashes command, output, and receipt 1525ms
+   ✓ verify-code capture v2 > preserves Test Files stdout in authenticated output 1589ms
+   ✓ verify-code capture v2 > preserves failing Test Files stderr in authenticated output 1530ms
+   ✓ verify-code capture v2 > preserves successful stderr in authenticated output 1544ms
+   ✓ verify-code capture v2 > preserves output even without framework summary 1508ms
+   ✓ verify-code capture v2 > reads snapshot head from Workspace 1478ms
+   ✓ verify-code capture v2 > does not accept a caller snapshot override 1510ms
+   ✓ verify-code capture v2 > rejects unauthentic Workspace before git discovery 1029ms
+   ✓ verify-code capture v2 > emits ISO timestamps 1486ms
+   ✓ verify-code capture v2 > preserves exact command 1540ms
+   ✓ verify-code capture v2 > rejects a naked caller output path 1097ms
+   ✓ verify-code capture v2 > rejects an unauthentic TaskHandle 1071ms
+stderr | tests/build-code-preflight.red.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ scripts/__tests__/ci-chain-check.test.mjs (3 tests) 22390ms
+   ✓ ci-chain-check task-v1 > accepts one complete integrity-verified accepted chain 7551ms
+   ✓ ci-chain-check task-v1 > fails when an accepted attempt hash is stale 7332ms
+   ✓ ci-chain-check task-v1 > fails when accepted stage chronology goes backwards 7507ms
+ ✓ core/__tests__/stage-skill-runtime.test.mjs (11 tests) 21ms
+ ✓ core/__tests__/artifact-dir.test.mjs (14 tests) 234ms
+ ✓ tests/five-stage-facts-v2.test.mjs (30 tests) 3ms
+ ✓ tests/spike-intake-design.test.mjs (7 tests) 4ms
+ ✓ tests/contract/repository-inventory.test.mjs (6 tests) 1038ms
+   ✓ repository architecture inventory > publishes a readable final report containing the complete current build report and its tree hash 356ms
+ ✓ core/__tests__/check-contract.test.mjs (13 tests) 254ms
+ ✓ tests/m14a-audit-contract-layer.test.mjs (14 tests) 3ms
+ ✓ scripts/__tests__/migrate-task-v2.test.mjs (12 tests) 2596ms
+ ✓ tests/knowledge-card.test.mjs (19 tests) 2ms
+ ✓ tests/integration/derived-publication.test.mjs (3 tests) 5ms
+stderr | tests/build-code-phase-evidence.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/build-code-phase-evidence.test.mjs (5 tests) 405ms
+ ✓ tests/stage-quality.test.mjs (7 tests) 63ms
+ ✓ tests/build-code-preflight.red.test.mjs (2 tests) 13293ms
+   ✓ build-code authenticated input preflight > allows real build-code bootstrap from current readable materials 6193ms
+   ✓ build-code authenticated input preflight > does not use accepted material hashes as an implementation-receipt gate 7099ms
+ ✓ core/__tests__/check-skill-closure.test.mjs (5 tests) 154ms
+ ✓ core/__tests__/workspace-manager.test.mjs (8 tests) 3407ms
+   ✓ deterministic WorktreeManager > creates and safely reuses the exact task worktree 924ms
+   ✓ deterministic WorktreeManager > reuses the existing task worktree after main advances and becomes dirty 550ms
+   ✓ deterministic WorktreeManager > fails loud instead of rebinding baseline after a task-only commit 398ms
+   ✓ deterministic WorktreeManager > invalidates an accepted Workspace immediately after switching to another branch 457ms
+   ✓ deterministic WorktreeManager > invalidates an accepted Workspace immediately after switching to detached HEAD 434ms
+   ✓ deterministic WorktreeManager > rejects caller workspace arguments and mismatched attempt facts 385ms
+ ✓ tests/verify-code-design-alignment.test.mjs (8 tests) 2ms
+ ✓ core/__tests__/parse-framework-config.test.mjs (8 tests) 2ms
+ ✓ tests/contract/final-coverage.test.mjs (11 tests) 44ms
+ ✓ tests/moat-skills-phase1.test.mjs (9 tests) 2ms
+ ✓ tests/execution-record.test.mjs (14 tests) 2ms
+ ✓ core/__tests__/resolve-path.test.mjs (12 tests) 2ms
+ ✓ core/__tests__/task-kernel-security.test.mjs (10 tests) 113ms
+ ✓ tests/template-content-quality-retention.test.mjs (9 tests) 15ms
+ ✓ core/__tests__/kernel.test.mjs (9 tests) 167ms
+ ✓ core/__tests__/local-skill-resolver.test.mjs (8 tests) 15ms
+ ✓ skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs (3 tests) 455ms
+ ✓ core/__tests__/invocation-identity.test.mjs (3 tests) 667ms
+ ✓ tests/requirement-lineage.test.mjs (9 tests) 4ms
+stderr | tests/five-stage-audit-e2e.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/five-stage-audit-e2e.test.mjs (3 tests) 4ms
+ ✓ tests/integration/mutation-guards.test.mjs (5 tests) 72ms
+ ✓ core/__tests__/task-kernel-publish.test.mjs (5 tests) 2878ms
+   ✓ TaskKernel current-material publication boundary > keeps historical acceptance readable after current workspace material changes 993ms
+   ✓ TaskKernel current-material publication boundary > does not accept continuation or rebind fields when starting ordinary stage work 306ms
+   ✓ TaskKernel current-material publication boundary > rejects caller-supplied historical upstream acceptance claims 371ms
+   ✓ TaskKernel current-material publication boundary > requires an explicit human confirmation before accepting a human-bound decision 1207ms
+ ✓ skills/wh-review/scripts/__tests__/schema-validator.test.mjs (6 tests) 5ms
+[collectFacts warn] review_invoked not derivable for exec-1; defaulting to false.
+stderr | tests/stage-orchestrator-v2.test.mjs > stage-runner current-material boundary > fails closed when the task manifest changes between bootstrap and publish
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+[collectFacts warn] review_invoked not derivable for exec-success; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-structural-fail; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-serious-pause; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-risk-override; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-omission-accept; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-warn-only; defaulting to false.
+ ✓ tests/metrics-taskhandle-v2.test.mjs (9 tests) 526ms
+ ✓ tests/stage-orchestrator-v2.test.mjs (4 tests) 802ms
+stderr | tests/stage-content-host-independence.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ core/__tests__/run-checks.test.mjs (11 tests) 1619ms
+ ✓ tests/audit-p2.test.mjs (7 tests) 11ms
+ ✓ tests/step-manifest.test.mjs (11 tests) 2ms
+ ✓ tests/task-record-paths-check.test.mjs (16 tests) 454ms
+stderr | skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs (4 tests) 96ms
+ ✓ core/__tests__/storage-root.test.mjs (15 tests) 8ms
+ ✓ tests/host-independence.test.mjs (2 tests) 21ms
+ ✓ tests/spec-content-profile.test.mjs (19 tests) 4ms
+ ✓ tests/stage-content-host-independence.test.mjs (6 tests) 2755ms
+   ✓ stage content contracts on a neutral host > publishes make-decision, build-spec, and build-plan content outside any repository or host identity 1520ms
+ ✓ skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs (3 tests) 351ms
+ ✓ scripts/__tests__/task-bootstrap.test.mjs (3 tests) 537ms
+stderr | skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs (3 tests) 697ms
+   ✓ simple runner fake E2E and recovery > publishes one formal result for every stage/track 471ms
+ ✓ tests/workflow-v2-contract.test.mjs (11 tests) 2ms
+ ✓ tests/per-invocation-execution-identity.test.mjs (2 tests) 747ms
+   ✓ per-invocation execution identity > authenticates the explicitly supplied runner for this invocation without binding task.json 342ms
+   ✓ per-invocation execution identity > accepts the next clean committed WorkflowHub version without a replacement generation 405ms
+ ✓ core/__tests__/validate-contract.test.mjs (7 tests) 1ms
+ ✓ core/__tests__/runtime-mode.test.mjs (7 tests) 316ms
+stderr | tests/contract/runtime-facade.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ tests/contract/runtime-facade.test.mjs (5 tests) 3ms
+ ✓ core/__tests__/canonical-review-result.test.mjs (2 tests) 6ms
+ ✓ core/__tests__/load-config.test.mjs (8 tests) 3ms
+ ✓ tests/verify-code-freshness.test.mjs (10 tests) 2ms
+ ✓ core/__tests__/capability-doctor.test.mjs (4 tests) 2ms
+ ✓ tests/m12-reuse-registry.test.mjs (2 tests) 1ms
+ ✓ skills/review-response/__tests__/skill-contract.test.mjs (9 tests) 2ms
+ ✓ tests/contract/core-runtime-layering.test.mjs (2 tests) 7ms
+ ✓ tests/spec-specify-template.test.mjs (6 tests) 2ms
+ ✓ tests/skill-provenance-strict.test.mjs (5 tests) 3ms
+ ✓ tests/stage-interaction-contract.test.mjs (5 tests) 1ms
+ ✓ tests/reuse-registry.test.mjs (2 tests) 2ms
+ ✓ skills/isolated-browser-qa/__tests__/skill-contract.test.mjs (13 tests) 51ms
+ ✓ tests/contract/stage-completion.test.mjs (42 tests) 4ms
+ ✓ tests/task-accepted-schema.test.mjs (5 tests) 2ms
+ ✓ tests/p0-foundation-contracts.test.mjs (3 tests) 3ms
+ ✓ tests/contract-freeze.test.mjs (5 tests) 1ms
+stderr | tests/integration/distribution-closure.test.mjs > skill bundle release > contains the five workflows and their declared skill closure only
+unknown format "date" ignored in schema at path "#/properties/sources/items/oneOf/1/properties/reviewed_at"
+unknown format "date" ignored in schema at path "#/properties/sources/items/oneOf/1/properties/reviewed_at"
+
+ ✓ tests/integration/distribution-closure.test.mjs (1 test) 40ms
+ ✓ core/__tests__/skill-static-deps.test.mjs (5 tests) 6ms
+ ✓ tests/stage-risk-acceptance.test.mjs (3 tests) 2ms
+ ✓ tests/interaction-quality-contract.test.mjs (5 tests) 3ms
+ ✓ tests/stage-review-cost-policy.test.mjs (9 tests) 2ms
+ ✓ tests/verify-code-facts.test.mjs (4 tests) 2ms
+ ✓ core/__tests__/workspace-runner.test.mjs (3 tests) 1097ms
+   ✓ WorkspaceRunner > rejects unbranded workspaces and non-argv inputs before execution 372ms
+   ✓ WorkspaceRunner > runs make-decision components only in the branded CandidateWorkspace root 433ms
+[collectFacts warn] review_invoked not derivable for exec-1; defaulting to false.
+ ✓ tests/metrics-smoke.test.mjs (2 tests) 57ms
+ ✓ core/__tests__/task-index.test.mjs (6 tests) 52ms
+stderr | scripts/__tests__/stage-runtime-acceptance-publication.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ scripts/__tests__/stage-runtime-acceptance-publication.test.mjs (5 tests) 2ms
+ ✓ core/__tests__/protected-paths.test.mjs (7 tests) 1ms
+ ✓ tests/contract/runner-contract.test.mjs (5 tests) 16ms
+ ✓ scripts/__tests__/canonical-archive-skill-dispatch.test.mjs (1 test) 826ms
+   ✓ dispatches the canonical git archive under a clean HOME 825ms
+ ✓ tests/contract/review-layering.test.mjs (2 tests) 9ms
+ ✓ tests/official-make-decision-cli.test.mjs (13 tests) 1773ms
+ ✓ tests/contract/repository-governance.test.mjs (3 tests) 2ms
+ ✓ tests/integration/execution-snapshot-isolation.test.mjs (1 test) 354ms
+   ✓ execution snapshot evidence isolation > ignores evidence-only writes but remains strict for source changes 354ms
+ ✓ skills/wh-review/scripts/__tests__/simple-reliability.red.test.mjs (5 tests) 1ms
+ ✓ tests/canonical-source.test.mjs (5 tests) 1ms
+ ✓ skills/debate/__tests__/skill-contract.test.mjs (5 tests) 1ms
+ ✓ skills/wh-review/__tests__/human-brief-behavioral.test.mjs (3 tests) 2ms
+ ✓ tests/per-invocation-doc-contract.test.mjs (2 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs (3 tests) 1ms
+ ✓ core/__tests__/task-identity.test.mjs (14 tests) 2ms
+ ✓ tests/vitest-resource-policy.test.mjs (1 test) 1ms
+ ✓ skills/test-routing-advisor/__tests__/skill-contract.test.mjs (4 tests) 2ms
+ ✓ scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs (12 tests) 1651ms
+ ✓ tests/e2e/five-stage-normal.test.mjs (1 test) 10531ms
+   ✓ five-stage normal path > runs all five stages from a clean read-only runner without changing Hub source 10531ms
+ ✓ tests/facts-subschema.test.mjs (2 tests) 1ms
+ ✓ skills/diagnosing-bugs/__tests__/skill-contract.test.mjs (3 tests) 1ms
+ ✓ tests/e2e/five-stage-idempotent-resume.test.mjs (1 test) 10617ms
+   ✓ five-stage interrupted and resumed path > records provider unavailability once, resumes idempotently, and completes 10617ms
+ ✓ tests/e2e/release-acceptance.test.mjs (3 tests) 31898ms
+   ✓ final release acceptance > clean installed Runner completes normal without mutating Hub 10532ms
+   ✓ final release acceptance > clean installed Runner completes material-revision without mutating Hub 10654ms
+   ✓ final release acceptance > clean installed Runner completes idempotent-resume without mutating Hub 10712ms
+stderr | scripts/__tests__/run-wh-review-audit-e2e.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ scripts/__tests__/run-wh-review-audit-e2e.test.mjs (1 test) 387ms
+   ✓ simple audit E2E > writes evidence for five stages and both decision tracks 387ms
+ ✓ core/__tests__/stage-acceptance-policy.test.mjs (6 tests) 1ms
+ ✓ tests/e2e/five-stage-material-revision.test.mjs (1 test) 10738ms
+   ✓ five-stage material revision path > keeps accepted history readable while stale quality facts remain a verify concern 10738ms
+ ✓ tests/build-code-target.test.mjs (4 tests) 1ms
+stderr | scripts/__tests__/run-wh-review-provider-smoke.test.mjs
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/created_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+unknown format "date-time" ignored in schema at path "#/properties/accepted_at"
+
+ ✓ scripts/__tests__/run-wh-review-provider-smoke.test.mjs (2 tests) 1ms
+ ✓ scripts/__tests__/smoke-local-skill-dispatch.test.mjs (1 test) 456ms
+   ✓ dispatches all five stages from a clean profile despite global same-name skills 456ms
+ ✓ tests/smoke.test.mjs (1 test) 1ms
+
+ Test Files  140 passed (140)
+      Tests  1513 passed (1513)
+   Start at  00:32:15
+   Duration  283.23s (transform 414ms, setup 0ms, collect 7.55s, tests 548.29s, environment 8ms, prepare 2.36s)
+
+
+> workflowhub@0.0.0 test:exclusive
+> vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v2
+
+ ✓ core/__tests__/check-extensibility.test.mjs (13 tests) 274ms
+ ✓ core/__tests__/check-anti-host.test.mjs (18 tests) 269ms
+
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+   Start at  00:36:58
+   Duration  639ms (transform 15ms, setup 0ms, collect 13ms, tests 543ms, environment 0ms, prepare 20ms)
+

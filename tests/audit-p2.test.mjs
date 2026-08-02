@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
-import { createRequirementLedger, createRequirementsCoverage } from "../core/requirement-ledger.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
+import { createRequirementLedger, createRequirementsCoverage } from "../runtime/evidence/requirement-ledger.mjs";
 import { buildAuditSummaryFromJournalEvents } from "../core/audit-aggregator.mjs";
 
 const hash = (letter) => letter.repeat(64);

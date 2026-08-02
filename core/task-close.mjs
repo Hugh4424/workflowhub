@@ -4,9 +4,8 @@ import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
-import { assertTaskKernel } from "./task-kernel.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
-import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
+import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTaskWorktreeRemoval, openAcceptedWorkspace } from "./workspace.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -76,6 +75,27 @@ function createOrVerify(task, path, record, label) {
     if (task.readRecord(path) !== raw) throw new Error(`${label} conflicts with immutable record: ${path}`);
   }
   return record;
+}
+
+function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
+  if (!existsSync(worktreeRoot)) return Object.freeze({ current: true, reason: "worktree-already-removed" });
+  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const expectedTrees = [
+    acceptedVerify?.facts?.tests?.snapshot_tree,
+    acceptedVerify?.facts?.review?.snapshot_tree,
+  ].filter((value) => typeof value === "string" && value !== "");
+  if (expectedTrees.length === 0) {
+    return Object.freeze({ current: false, reason: "accepted verify-code facts have no snapshot binding", snapshot_tree: snapshot.tree });
+  }
+  if (expectedTrees.some((tree) => tree !== snapshot.tree)) {
+    return Object.freeze({
+      current: false,
+      reason: "accepted verify-code facts are stale relative to the current Workspace",
+      snapshot_tree: snapshot.tree,
+      expected_trees: [...new Set(expectedTrees)],
+    });
+  }
+  return Object.freeze({ current: true, snapshot_tree: snapshot.tree });
 }
 
 /** Persist one immutable, plan-bound close decision. */
@@ -244,11 +264,10 @@ function plannedMergePreflight(delivery) {
 
 function effectiveAcceptedWorkspaceBinding(task, kernel) {
   const accepted = kernel.readAccepted("make-decision");
-  const recovery = readAuthenticatedDirtyCleanupBinding(task);
   return Object.freeze({
     taskId: accepted.accepted.task_id,
     stage: accepted.accepted.stage,
-    worktreeRoot: recovery?.workspace.worktree_root ?? accepted.facts.worktree_root,
+    worktreeRoot: accepted.facts.worktree_root,
     baselineCommit: accepted.facts.baseline_commit,
   });
 }
@@ -313,6 +332,8 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const workspace = openAcceptedWorkspace(task, accepted);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree);
+  if (!verifyFreshness.current) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
@@ -378,6 +399,8 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   const root = delivery.target_repo_root;
+  const acceptedVerify = kernel.readAccepted("verify-code");
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root);
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
@@ -403,7 +426,9 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     worktree_cleanup: worktreeCleanup,
     branch_cleanup: branchCleanup,
   };
-  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup]].filter(([, done]) => !done).map(([name]) => name);
+  facts.verify_facts_fresh = verifyFreshness.current;
+  if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
+  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup], ["verify_facts_fresh", verifyFreshness.current]].filter(([, done]) => !done).map(([name]) => name);
   return Object.freeze({ schema_version: "task-close-delivery-state.v1", status: missing.length === 0 ? "ready" : "incomplete", missing: Object.freeze(missing), facts: Object.freeze(facts) });
 }
 
@@ -475,43 +500,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
   }
   const root = delivery.target_repo_root;
   const worktree = delivery.worktree_root;
-  const recovery = readAuthenticatedDirtyCleanupBinding(task);
   const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
-  const detachPreservedWorktrees = () => {
-    const rawRootCommon = git(root, ["rev-parse", "--git-common-dir"]);
-    const rootCommon = realpathSync(isAbsolute(rawRootCommon) ? rawRootCommon : resolve(root, rawRootCommon));
-    for (const identity of recovery?.preserved_workspaces ?? []) {
-      const preservedRoot = resolve(identity.worktree_root);
-      if (!existsSync(preservedRoot) || preservedRoot === resolve(worktree)) continue;
-      const top = realpathSync(git(preservedRoot, ["rev-parse", "--show-toplevel"]));
-      const rawCommon = git(preservedRoot, ["rev-parse", "--git-common-dir"]);
-      const common = realpathSync(isAbsolute(rawCommon) ? rawCommon : resolve(preservedRoot, rawCommon));
-      if (top !== realpathSync(preservedRoot)
-          || common !== identity.git_common_dir
-          || common !== rootCommon) {
-        throw new Error("preserved dirty workspace no longer matches the authenticated task repository");
-      }
-      const symbolic = gitResult(preservedRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-      if (!symbolic.ok) {
-        if (git(preservedRoot, ["rev-parse", "HEAD"]).toLowerCase() !== identity.head.toLowerCase()) {
-          throw new Error("preserved dirty workspace detached HEAD changed after recovery");
-        }
-        continue;
-      }
-      if (symbolic.stdout !== identity.branch || symbolic.stdout !== delivery.task_branch) {
-        throw new Error("preserved dirty workspace branch changed after recovery");
-      }
-      if (!gitResult(root, ["cat-file", "-e", `${identity.head}^{commit}`]).ok) {
-        throw new Error("preserved dirty workspace recorded HEAD no longer exists");
-      }
-      const beforeTree = captureGitWorktreeSnapshot(preservedRoot).tree;
-      git(preservedRoot, ["update-ref", "--no-deref", "HEAD", identity.head]);
-      const afterTree = captureGitWorktreeSnapshot(preservedRoot).tree;
-      if (beforeTree !== afterTree || gitResult(preservedRoot, ["symbolic-ref", "--quiet", "HEAD"]).ok) {
-        throw new Error("preserved dirty workspace could not be detached without changing its bytes");
-      }
-    }
-  };
   const findArchive = () => {
     const taskTip = branchOid(root, delivery.task_branch);
     const targetTip = branchOid(root, delivery.target_branch);
@@ -626,7 +615,6 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           const target = branchOid(root, delivery.target_branch);
           const tip = branchOid(root, delivery.task_branch);
           if (!tip || !contains(tip, target)) throw new Error("task branch is not merged into target");
-          detachPreservedWorktrees();
           git(root, ["branch", "-d", "--", delivery.task_branch]);
         },
         verify: async (value) => value.satisfied && value.task_branch === delivery.task_branch,

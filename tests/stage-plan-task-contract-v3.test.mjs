@@ -6,7 +6,7 @@ import {
   validateTasksOnlyCompletionSeam,
   validatePlanTaskContract,
   validatePlanTaskContractV2,
-} from "../core/stage-content-contracts.mjs";
+} from "../runtime/stage/stage-content-contracts.mjs";
 import { certifyCurrentTaskCompletion } from "../core/stage-handlers.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -347,7 +347,7 @@ describe("plan-task.v3 structural contract", () => {
     expect(result.facts.task_completion.completed_count).toBe(1);
   });
 
-  it("rejects a fully checked tasks.md whose claimed files do not equal the implementation diff", () => {
+  it("records a current product diff outside completed task boundaries without blocking", () => {
     const evidenceRaw = "authenticated but semantically false completion\n";
     const evidenceRef = "apply/evidence/fake-completion.txt";
     const fakeCompleted = tasks
@@ -370,15 +370,15 @@ describe("plan-task.v3 structural contract", () => {
       artifactRef: (name) => `specs/demo/${name}`,
     };
     const evidenceHash = sha256(evidenceRaw);
-    expect(() => certifyCurrentTaskCompletion(worker, {
-      changedFiles: ["core/demo.mjs"],
+    expect(certifyCurrentTaskCompletion(worker, {
+      changedFiles: ["core/outside.mjs"],
       tests: {
         command: "npx vitest run tests/demo.test.mjs",
         exit_code: 0,
         receipt_ref: evidenceRef,
         receipt_hash: evidenceHash,
       },
-      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
+      review: { verdict: "pass", result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
       acceptanceCoverage: {
         accepted_criterion_ids: ["AC1"],
         items: [{
@@ -387,7 +387,121 @@ describe("plan-task.v3 structural contract", () => {
           evidence_refs: [{ ref: evidenceRef, sha256: evidenceHash }],
         }],
       },
-    })).toThrow(/actual_changes differs.*tests\/demo\.test\.mjs.*core\/demo\.mjs/i);
+    })).toMatchObject({
+      status: "completed",
+      audit_gaps: ["current diff includes files outside historical task boundaries: core/outside.mjs"],
+    });
+  });
+
+  it("permits prose actual_changes and historical task audit references", () => {
+    const evidenceRaw = "authenticated completion\n";
+    const evidenceRef = "apply/evidence/prose-completion.txt";
+    const proseCompleted = tasks
+      .replaceAll("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replaceAll("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：Added the focused behavioral fixture.")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：Implemented the corresponding behavior.")
+      .replaceAll("- **executed_commands**：N/A — not started", "- **executed_commands**：`npx vitest run tests/demo.test.mjs`; exit 0")
+      .replaceAll("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replaceAll("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replaceAll("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replaceAll("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const worker = {
+      identity: { taskId: "demo" },
+      readArtifact: (name) => ({ "spec.md": spec, "plan.md": plan, "tasks.md": proseCompleted })[name],
+      readEvidence: () => { throw Object.assign(new Error("historical evidence unavailable"), { code: "ENOENT" }); },
+      artifactRef: (name) => `specs/demo/${name}`,
+    };
+    const evidenceHash = sha256(evidenceRaw);
+    expect(() => certifyCurrentTaskCompletion(worker, {
+      changedFiles: ["core/demo.mjs"],
+      tests: {
+        command: "npx vitest run tests/demo.test.mjs",
+        exit_code: 0,
+        receipt_ref: evidenceRef,
+        receipt_hash: evidenceHash,
+      },
+      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review"), verdict: "pass" },
+      acceptanceCoverage: {
+        accepted_criterion_ids: ["AC1"],
+        items: [{
+          acceptance_criterion_id: "AC1",
+          status: "covered",
+          evidence_refs: [{ ref: evidenceRef, sha256: evidenceHash }],
+        }],
+      },
+    })).not.toThrow();
+  });
+
+  it("does not block build-code on pending historical Task rows", () => {
+    const worker = {
+      identity: { taskId: "demo" },
+      readArtifact: (name) => ({ "spec.md": spec, "plan.md": plan, "tasks.md": tasks })[name],
+      readEvidence: () => { throw Object.assign(new Error("historical evidence unavailable"), { code: "ENOENT" }); },
+      artifactRef: (name) => `specs/demo/${name}`,
+    };
+    const result = certifyCurrentTaskCompletion(worker, {
+      changedFiles: ["core/demo.mjs"],
+      tests: {
+        command: "npx vitest run tests/demo.test.mjs",
+        exit_code: 0,
+        receipt_ref: "receipts/current-tests.json",
+        receipt_hash: sha256("current-tests"),
+      },
+      review: { result_ref: "reviews/results/current.json", result_hash: sha256("review"), verdict: "pass" },
+      acceptanceCoverage: {
+        accepted_criterion_ids: ["AC1"],
+        items: [{
+          acceptance_criterion_id: "AC1",
+          status: "covered",
+          evidence_refs: [{ ref: "receipts/current-tests.json", sha256: sha256("current-tests") }],
+        }],
+      },
+    });
+    expect(result.status).toBe("completed");
+    expect(result.formal_record_status.status).toBe("unavailable");
+    expect(result.audit_gaps[0]).toMatch(/tasks\.md completion history is incomplete/);
+  });
+
+  it("does not require task audit evidence to duplicate the current test receipt", () => {
+    const evidenceRaw = "authenticated completion\n";
+    const evidenceRef = "apply/evidence/current-completion.txt";
+    const receiptRef = "receipts/current-tests.json";
+    const receiptRaw = "current test receipt\n";
+    const completed = tasks
+      .replaceAll("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replaceAll("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：`tests/demo.test.mjs`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：`core/demo.mjs`")
+      .replaceAll("- **executed_commands**：N/A — not started", "- **executed_commands**：`npx vitest run tests/demo.test.mjs`; exit 0")
+      .replaceAll("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replaceAll("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replaceAll("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replaceAll("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-29T12:00:00.000Z");
+    const worker = {
+      identity: { taskId: "demo" },
+      readArtifact: (name) => ({ "spec.md": spec, "plan.md": plan, "tasks.md": completed })[name],
+      readEvidence: () => { throw Object.assign(new Error("historical evidence unavailable"), { code: "ENOENT" }); },
+      artifactRef: (name) => `specs/demo/${name}`,
+    };
+    expect(() => certifyCurrentTaskCompletion(worker, {
+      changedFiles: ["tests/demo.test.mjs", "core/demo.mjs"],
+      tests: {
+        command: "npx vitest run tests/demo.test.mjs",
+        exit_code: 0,
+        receipt_ref: receiptRef,
+        receipt_hash: sha256(receiptRaw),
+      },
+      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review"), verdict: "pass" },
+      acceptanceCoverage: {
+        accepted_criterion_ids: ["AC1"],
+        items: [{
+          acceptance_criterion_id: "AC1",
+          status: "covered",
+          evidence_refs: [{ ref: evidenceRef, sha256: sha256(evidenceRaw) }],
+        }],
+      },
+    })).not.toThrow();
   });
 
   it("permits a post-review tasks-only update only in the selected completion block", () => {
@@ -430,6 +544,36 @@ describe("plan-task.v3 structural contract", () => {
       ok: false,
       errors: [expect.stringMatching(/does not bind receipts\/phase-tests\.json/i)],
     });
+  });
+
+  it("permits live plan hash refreshes in derived versioned_refs", () => {
+    const evidenceRaw = "phase completion evidence\n";
+    const evidenceRef = "apply/evidence/T001-derived.txt";
+    const after = tasks
+      .replace(`"hash":"${planHash}"`, `"hash":"${"b".repeat(64)}"`)
+      .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+      .replace("- **status**：`pending`", "- **status**：`completed`")
+      .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：core/demo.mjs")
+      .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npx vitest run tests/demo.test.mjs; exit 0")
+      .replace("- **evidence_refs**：N/A — not started", `- **evidence_refs**：\`[{"ref":"${evidenceRef}","sha256":"${sha256(evidenceRaw)}"}]\``)
+      .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+      .replace("- **review_fact**：N/A — not reviewed", "- **review_fact**：reviews/results/phase-1.json")
+      .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-07-31T12:00:00.000Z");
+    const completionEvidence = ({ ref }) => ref === evidenceRef ? evidenceRaw : undefined;
+    expect(validateTasksOnlyCompletionSeam({ before: tasks, after, taskId: "T001", completionEvidence })).toMatchObject({
+      ok: true,
+      changed_task_ids: ["T001"],
+    });
+    const nonTargetStart = after.indexOf("#### T002");
+    const tamperedNonTarget = after.slice(0, nonTargetStart)
+      + after.slice(nonTargetStart).replace(`"hash":"${planHash}"`, `"hash":"${"c".repeat(64)}"`);
+    expect(tamperedNonTarget).not.toBe(after);
+    expect(validateTasksOnlyCompletionSeam({
+      before: tasks,
+      after: tamperedNonTarget,
+      taskId: "T001",
+      completionEvidence,
+    })).toMatchObject({ ok: false });
   });
 
   it("keeps the current 30-source map closed in spec, plan, and tasks", () => {

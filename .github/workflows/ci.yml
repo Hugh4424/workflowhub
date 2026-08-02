@@ -18,11 +18,11 @@ jobs:
       - run: npm run check
       
       # M10 field-mapping schema validation
-      - run: node scripts/validate-field-mapping.mjs
+      - run: node tools/cli/validate-field-mapping.mjs
       # M10 vitest
       - run: node_modules/.bin/vitest run tests/metrics-smoke.test.mjs --passWithNoTests=false
       # verify-code smoke (M9 Phase 5)
       - run: node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
       - run: npm test
       # lightweight 3-stage chain structural check (M9 Phase 5, F10: no heavy E2E)
-      - run: node scripts/ci-chain-check.mjs --task-id=m9-verify-code
+      - run: node tools/cli/ci-chain-check.mjs --task-id=m9-verify-code

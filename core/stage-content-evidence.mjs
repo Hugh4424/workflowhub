@@ -2,26 +2,29 @@ import { createHash } from "node:crypto";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
-import envelopeSchema from "./schemas/stage-content-evidence.v1.json" with { type: "json" };
+import envelopeSchema from "../runtime/schemas/stage-content-evidence.v1.json" with { type: "json" };
 import interactionSchema from "./schemas/interaction-completion.v1.json" with { type: "json" };
-import ambiguitySchema from "./schemas/ambiguity-ledger.v1.json" with { type: "json" };
-import ambiguityV2Schema from "./schemas/ambiguity-ledger.v2.json" with { type: "json" };
-import decisionEntrySchema from "./schemas/decision-entry.v1.json" with { type: "json" };
-import decisionCoverageSchema from "./schemas/decision-coverage-audit.v1.json" with { type: "json" };
-import omissionSchema from "./schemas/decision-omission-acceptance.v1.json" with { type: "json" };
-import correctionSchema from "./schemas/decision-correction-appendix.v1.json" with { type: "json" };
-import decisionLogSchema from "./schemas/decision-log-contract.v1.json" with { type: "json" };
-import planTaskSchema from "./schemas/plan-task-contract.v1.json" with { type: "json" };
-import planTaskV2Schema from "./schemas/plan-task-contract.v2.json" with { type: "json" };
-import completionSchema from "./schemas/stage-completion-facts.v1.json" with { type: "json" };
-import materialRevisionSchema from "./schemas/task-material-revision.v1.json" with { type: "json" };
-import browserQaSchema from "./schemas/browser-qa-evidence.v1.json" with { type: "json" };
+import ambiguitySchema from "../runtime/schemas/ambiguity-ledger.v1.json" with { type: "json" };
+import ambiguityV2Schema from "../runtime/schemas/ambiguity-ledger.v2.json" with { type: "json" };
+import decisionEntrySchema from "../runtime/schemas/decision-entry.v1.json" with { type: "json" };
+import decisionCoverageSchema from "../runtime/schemas/decision-coverage-audit.v1.json" with { type: "json" };
+import omissionSchema from "../runtime/schemas/decision-omission-acceptance.v1.json" with { type: "json" };
+import correctionSchema from "../runtime/schemas/decision-correction-appendix.v1.json" with { type: "json" };
+import decisionLogSchema from "../runtime/schemas/decision-log-contract.v1.json" with { type: "json" };
+import planTaskSchema from "../runtime/schemas/plan-task-contract.v1.json" with { type: "json" };
+import planTaskV2Schema from "../runtime/schemas/plan-task-contract.v2.json" with { type: "json" };
+import completionSchema from "../runtime/schemas/stage-completion-facts.v1.json" with { type: "json" };
+import browserQaSchema from "../runtime/schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { assertTaskHandle } from "./task-handle.mjs";
-import { createTaskKernel } from "./task-kernel.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir } from "./artifact-dir.mjs";
-import { validateAmbiguityLedgerV2, validateSpecContentProfile } from "./stage-content-contracts.mjs";
+import {
+  validateAmbiguityLedgerV2,
+  validateSpecContentProfile,
+  validateTaskMaterialRevisionVersionAware,
+} from "../runtime/stage/stage-content-contracts.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const HASH = /^[a-f0-9]{64}$/;
@@ -72,7 +75,6 @@ const REQUIRED_STAGE_CONTENT_KINDS = Object.freeze({
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validateEnvelope = ajv.compile(envelopeSchema);
 const payloadValidators = new Map([...payloadSchemas].map(([kind, schema]) => [kind, ajv.compile(schema)]));
-const validateMaterialRevision = ajv.compile(materialRevisionSchema);
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -97,7 +99,7 @@ function workspaceCapability(value) {
 function captureSnapshot(workspace) {
   return typeof workspace.captureSnapshot === "function"
     ? workspace.captureSnapshot()
-    : captureGitWorktreeSnapshot(workspace.worktreeRoot);
+    : captureExecutionSnapshot(workspace.worktreeRoot);
 }
 
 function readOptional(task, ref) {
@@ -840,10 +842,11 @@ export function readCurrentTaskMaterialRevision({ task } = {}) {
   if (sha256(raw) !== pointer.revision_hash) throw new Error("material current revision hash mismatch");
   let revision;
   try { revision = JSON.parse(raw); } catch { throw new Error("material current revision is invalid JSON"); }
-  if (!validateMaterialRevision(revision) || revision.task_id !== safeTask.identity.taskId
+  const validation = validateTaskMaterialRevisionVersionAware(revision);
+  if (!validation.ok || revision.task_id !== safeTask.identity.taskId
       || revision.revision_id !== pointer.revision_id
       || revision.previous_ref !== (pointer.previous_ref ?? null)) {
-    throw new Error(`material current revision is invalid: ${schemaErrors(validateMaterialRevision)}`);
+    throw new Error(`material current revision is invalid: ${validation.errors.join("; ")}`);
   }
   if (revision.previous_ref === null) {
     if (revision.parent_revision !== null || revision.previous_hash !== null) {
@@ -853,7 +856,7 @@ export function readCurrentTaskMaterialRevision({ task } = {}) {
     const priorRaw = safeTask.readRecord(revision.previous_ref);
     if (sha256(priorRaw) !== revision.previous_hash) throw new Error("material previous revision hash mismatch");
     const prior = JSON.parse(priorRaw);
-    if (!validateMaterialRevision(prior) || prior.revision_id !== revision.parent_revision) {
+    if (!validateTaskMaterialRevisionVersionAware(prior).ok || prior.revision_id !== revision.parent_revision) {
       throw new Error("material parent revision does not match previous_ref");
     }
   }
@@ -863,6 +866,8 @@ export function readCurrentTaskMaterialRevision({ task } = {}) {
     ref: pointer.revision_ref,
     hash: pointer.revision_hash,
     value: Object.freeze(revision),
+    format: validation.format,
+    legacy: validation.legacy,
   });
 }
 

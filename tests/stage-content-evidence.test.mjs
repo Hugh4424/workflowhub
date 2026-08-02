@@ -16,14 +16,14 @@ import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { writeCanonicalAuditSummary } from "../core/canonical-receipt-writer.mjs";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
-import { dispatchStageSkill } from "../core/stage-skill-runtime.mjs";
-import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
-import { loadStageManifest } from "../core/step-manifest.mjs";
-import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { dispatchStageSkill } from "../runtime/stage/stage-skill-runtime.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { loadStageManifest } from "../runtime/stage/step-manifest.mjs";
+import { openAcceptedWorkspace, openCurrentTaskWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -223,7 +223,7 @@ function ensureFixtureStep(task, workflowRunId, stepId) {
   }
 }
 
-async function fixture(taskId = "stage-content-evidence") {
+async function acceptedLifecycleFixture(taskId = "stage-content-evidence") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-content-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -362,8 +362,57 @@ async function fixture(taskId = "stage-content-evidence") {
   ensureFixtureStep(task, nextRun.run.workflow_run_id, 1);
   ensureFixtureStep(task, nextRun.run.workflow_run_id, 2);
   return {
-    root, task, workspace, workflowRunId: nextRun.run.workflow_run_id,
+    root, task, kernel, workspace, workflowRunId: nextRun.run.workflow_run_id,
     decisionRef: setupDecisionRef, decisionHash: setupDecisionHash,
+  };
+}
+
+/**
+ * Most writer/schema cases only need an authentic live TaskHandle worktree and
+ * the target stage's current run/requirements ledger.  They deliberately do
+ * not manufacture an accepted history: acceptance lifecycle coverage stays in
+ * one dedicated test below.
+ */
+async function fixture(taskId = "stage-content-evidence") {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-content-")));
+  roots.push(root);
+  const repo = join(root, "repo");
+  mkdirSync(repo);
+  git(repo, ["init", "-q"]);
+  git(repo, ["config", "user.name", "Test"]);
+  git(repo, ["config", "user.email", "test@example.com"]);
+  writeFileSync(join(repo, "README.md"), "base\n");
+  git(repo, ["add", "README.md"]);
+  git(repo, ["commit", "-qm", "base"]);
+
+  const task = createTask({
+    storageRoot: root,
+    manifest: {
+      schema_version: "1.0.0",
+      project_name: "Demo",
+      task_id: taskId,
+      created_at: "2026-07-26T00:00:00.000Z",
+      target_repo_root: repo,
+      issue_ids: [],
+      inputs: {},
+    },
+  });
+  prepareTaskWorkspace(task);
+  const workspace = openCurrentTaskWorkspace(task);
+  const kernel = createTaskKernel(task, { workspace });
+  const setup = prepareOfficialRun(kernel, taskId);
+  const decisionLog = "# Fixture decision\n";
+  const decisionHash = sha256(decisionLog);
+  const decisionRef = `receipts/decision-log/${decisionHash}.md`;
+  kernel.publishCanonicalRecord(decisionRef, decisionLog);
+  return {
+    root,
+    task,
+    kernel,
+    workspace,
+    workflowRunId: setup.workflowRunId,
+    decisionRef,
+    decisionHash,
   };
 }
 
@@ -729,6 +778,16 @@ async function invoke(operation) {
 }
 
 describe("stage-content-evidence.v1 controlled writer", () => {
+  it("keeps one accepted lifecycle path covered separately from ordinary evidence publication", async () => {
+    requireApi();
+    const state = await acceptedLifecycleFixture("stage-content-accepted-lifecycle");
+    const accepted = state.kernel.readAccepted("make-decision");
+
+    expect(accepted.facts.worktree_root).toBe(state.workspace.worktreeRoot);
+    expect(accepted.facts.baseline_commit).toBe(state.workspace.baselineCommit);
+    expect(state.workflowRunId).toMatch(/^make-decision:/);
+  });
+
   it("publishes complete browser QA evidence bound to the runtime snapshot and identity", async () => {
     requireApi();
     const state = await fixture("browser-qa-complete");

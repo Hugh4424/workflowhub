@@ -23,7 +23,7 @@
 
 ## 本地证据
 
-- `node core/check-skill-closure.mjs`：通过；
+- `node runtime/evidence/check-skill-closure.mjs`：通过；
 - wh-review 两个测试文件：26 tests 通过；
 - `git diff --check`：通过。
 

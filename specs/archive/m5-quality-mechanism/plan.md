@@ -12,12 +12,12 @@
 - **影响代码区**（全在 workflowhub 仓，精确路径）：
   - `metrics/execution-record.mjs`——facts 键写入（复用，无新文件）
   - `metrics/collector.mjs`——updateOwnResult 时机追加 facts 写入
-  - `scripts/check-stage-quality.mjs`——新增 CI 扫描 checker
-  - `scripts/run-checks.mjs`——追加第 6 个 checker 注册
+  - `tools/cli/check-stage-quality.mjs`——新增 CI 扫描 checker
+  - `tools/cli/run-checks.mjs`——追加第 6 个 checker 注册
   - `contracts/stage-result.contract.json`——新增 stage_result schema
   - `tests/stage-quality.test.mjs`——gate 扫描测试（新增）
   - `tests/fact-collector.test.mjs`——fact collector 适配层测试（新增）
-  - `core/boundary-confirm.mjs`——三态边界确认接口（新增）
+  - `runtime/evidence/boundary-confirm.mjs`——三态边界确认接口（新增）
   - `tests/boundary-confirm.test.mjs`——三态测试（新增）
 - **相关 ADR**：decision-log 决策 1-9（M5 全部）；依赖 M3 窄契约 + M4 execution-record/collector。
 - **待确认项**：
@@ -58,7 +58,7 @@
 | schema | contracts/stage-result.contract.json（新增） | 改 | T012-T014 |
 | runtime config | 无 | 不涉及 | — |
 | knowledge/doc | 无 | 不涉及 | — |
-| automation gates / CI / hooks | scripts/check-stage-quality.mjs（新增）+ scripts/run-checks.mjs（追加 checker）| 改 | T007-T011 |
+| automation gates / CI / hooks | tools/cli/check-stage-quality.mjs（新增）+ tools/cli/run-checks.mjs（追加 checker）| 改 | T007-T011 |
 
 ## 3. 技术选型决策
 
@@ -105,7 +105,7 @@
 新增的 JS 模块公开接口（精确签名）：
 
 ```js
-// core/boundary-confirm.mjs
+// runtime/evidence/boundary-confirm.mjs
 export function confirmBoundary(state, cfg)
 // state: "missing" | "failed" | "unknown"
 // cfg: { execution_id, taskMetricsPath, globalMetricsPath, project, taskId }
@@ -123,16 +123,16 @@ export function collectFacts(execution_id, factSeed, cfg)
 
 ```
 新增（workflowhub 仓）：
-  scripts/check-stage-quality.mjs   — CI gate 扫描，统计质量类 blocking 数量；可红
+  tools/cli/check-stage-quality.mjs   — CI gate 扫描，统计质量类 blocking 数量；可红
   contracts/stage-result.contract.json — 七字段 stage_result 最小 schema
-  core/boundary-confirm.mjs         — 三态边界确认接口，写进 boundary_decisions
+  runtime/evidence/boundary-confirm.mjs         — 三态边界确认接口，写进 boundary_decisions
   tests/fact-collector.test.mjs     — fact collector 适配层单测
   tests/boundary-confirm.test.mjs   — 三态边界确认单测
   tests/stage-quality.test.mjs      — CI gate 扫描单测（含故意注入反证）
 
 修改（workflowhub 仓）：
   metrics/collector.mjs             — updateOwnResult 后追加 collectFacts 调用；新增 collectFacts 导出
-  scripts/run-checks.mjs            — runAggregate() 追加第 6 个 checker（check-stage-quality）
+  tools/cli/run-checks.mjs            — runAggregate() 追加第 6 个 checker（check-stage-quality）
 ```
 
 ## 7. 数据流向
@@ -166,8 +166,8 @@ CI npm run check
   - `metrics/collector.mjs`——updateOwnResult（复用）/upsert（同模块直用；跨文件复用前加 export，见 A-002b）
   - `metrics/execution-record.mjs`——assembleExecutionRecord/SIX_KEYS/GAP（只读参考）
   - `scripts/check-path-guard.mjs`——findViolation（FR-BOUND-003 复用前加 export，见 A-005b）/PROTECTED_PATHS
-  - `core/validate-contract.mjs`——validateContract（CI checker 校验 stage_result.contract.json）
-  - `scripts/run-checks.mjs`——runChecker/runAggregate（追加第 6 个 checker）
+  - `runtime/evidence/validate-contract.mjs`——validateContract（CI checker 校验 stage_result.contract.json）
+  - `tools/cli/run-checks.mjs`——runChecker/runAggregate（追加第 6 个 checker）
 - **npm 包**：无新增（node: 子进程 / fs 内置全够）。
 - **API 端点**：无。
 
@@ -175,7 +175,7 @@ CI npm run check
 
 - **接线点**：
   - `metrics/collector.mjs` 的 `updateOwnResult` 末尾追加 `collectFacts` 调用（最小钩子）。
-  - `scripts/run-checks.mjs` 的 `runAggregate()` 第 6 条追加 `check-stage-quality` checker。
+  - `tools/cli/run-checks.mjs` 的 `runAggregate()` 第 6 条追加 `check-stage-quality` checker。
 - **是否使用了最小 hook**：是。updateOwnResult 是"skill 结束"的唯一稳定时机；runAggregate 是唯一 CI 聚合入口。改动量：各 ≤5 行。
 
 ## 10. 上游合并安全评估
@@ -200,8 +200,8 @@ CI npm run check
 | A-004 | `metrics/execution-record.mjs:SIX_KEYS / GAP`（L20/L35）| 六键顺序 + GAP 哨兵 | collectFacts 写入 facts 键时遵循相同顺序；GAP 用作 review_invoked 推导失败哨兵 | 不另定义同名常量 |
 | A-005 | `scripts/check-path-guard.mjs:findViolation`（L97，当前未导出的内部函数）| 判断路径是否落入 PROTECTED_PATHS | FR-BOUND-003 边界确认协同：confirmBoundary 调用 findViolation 判不可逆操作类型 | 不复制 PROTECTED_PATHS |
 | A-005b | `scripts/check-path-guard.mjs:findViolation`（L97，**Modify**）| 同上 | boundary-confirm.mjs 跨文件复用前置：`function findViolation` → `export function findViolation`，仅加关键字、零行为变更（不影响 check-path-guard CLI 行为），使独立文件可 import | 不改函数体、不改 CLI |
-| A-006 | `scripts/run-checks.mjs:runChecker / runAggregate`（L174）| 聚合运行 5 个 checker | 追加第 6 个 checker 调用（check-stage-quality）| 不改已有 checker 注册顺序 |
-| A-007 | `core/validate-contract.mjs:validateContract`（全文）| 手写 contract 校验（zero-AJV）| check-stage-quality.mjs 用此校验 stage-result.contract.json | 不引入 AJV |
+| A-006 | `tools/cli/run-checks.mjs:runChecker / runAggregate`（L174）| 聚合运行 5 个 checker | 追加第 6 个 checker 调用（check-stage-quality）| 不改已有 checker 注册顺序 |
+| A-007 | `runtime/evidence/validate-contract.mjs:validateContract`（全文）| 手写 contract 校验（zero-AJV）| check-stage-quality.mjs 用此校验 stage-result.contract.json | 不引入 AJV |
 | A-008 | `contracts/execution-record.contract.json`（格式参考）| version/validated_by_stage/required_fields[] 极简格式 | stage-result.contract.json 对齐此格式 | 不引入 $schema |
 
 **复用优先矩阵**：
@@ -214,14 +214,14 @@ CI npm run check
 | CI checker | 复用模式新增文件 | A-006 runChecker 模式 | 每个 checker 独立文件是既有约定 |
 | schema 格式校验 | 复用 | A-007 validateContract | zero-AJV 先例不破 |
 | stage_result contract | 新增 | contracts/stage-result.contract.json | 七字段无现有同形 contract；格式对齐已有 |
-| boundary-confirm 模块 | 新增 | core/boundary-confirm.mjs | 三态接口无现有同形模块；≤50 行 |
+| boundary-confirm 模块 | 新增 | runtime/evidence/boundary-confirm.mjs | 三态接口无现有同形模块；≤50 行 |
 
 ## 12. 实现风险点和 phase 级回滚
 
 | Phase | 风险 | 预防措施 | 回滚方式 |
 |---|---|---|---|
 | T001 fact collector | collectFacts throw 导致 updateOwnResult 后续被中断 | try/catch + stderr warn，保证 never-throw；测试故意让 git 命令失败验证告警路径 | 删 collectFacts 调用行（1 行 rollback）|
-| T002 boundary-confirm | confirmBoundary 写入 boundary_decisions 缺 source 字段违反 FR-EXECREC-004 | 写入时带 `{source:"boundary-confirm@m5"}` | 删 core/boundary-confirm.mjs + 测试 |
+| T002 boundary-confirm | confirmBoundary 写入 boundary_decisions 缺 source 字段违反 FR-EXECREC-004 | 写入时带 `{source:"boundary-confirm@m5"}` | 删 runtime/evidence/boundary-confirm.mjs + 测试 |
 | T003 stage_result schema | 七字段漏写或类型不对 | 对照 FR-RESULT-002 逐字段核 + CI 格式校验测试 | 改 contracts/stage-result.contract.json |
 | T004 CI gate | check-stage-quality 恒绿（假绿）| 故意注入质量 blocking 验 exit 1；run-checks.mjs self-test 覆盖 | 删 check-stage-quality 注册行 |
 | 全局 | "只记不挡"被歪做 blocking | V2/V6 防复发验收；check-stage-quality 专门扫此类违规 | spec 层 FR-GATE-001/002 是铁律，任何 blocking 即 CI 红 |
@@ -296,7 +296,7 @@ CI npm run check
 ```evidence-contract
 {
   "red": {
-    "command": "node scripts/check-stage-quality.mjs --self-test",
+    "command": "node tools/cli/check-stage-quality.mjs --self-test",
     "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
     "git_sha": "a3864c5",
     "exit_code": 1,
@@ -305,7 +305,7 @@ CI npm run check
     "mode": "RED"
   },
   "green": {
-    "command": "node scripts/check-stage-quality.mjs --self-test",
+    "command": "node tools/cli/check-stage-quality.mjs --self-test",
     "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
     "git_sha": "a3864c5",
     "exit_code": 0,
@@ -315,7 +315,7 @@ CI npm run check
   },
   "evidenceSink": "$TASK_DIR/apply/evidence/v2-gate-scan.txt",
   "affectedTests": [
-    "scripts/check-stage-quality.mjs",
+    "tools/cli/check-stage-quality.mjs",
     "core/__tests__/run-checks.test.mjs"
   ]
 }
@@ -388,7 +388,7 @@ CI npm run check
 - **验证目标**：CI 扫描质量类 blocking 数量=0；故意注入后变红。
 - **gate_cmd**：
   ```sh
-  set -o pipefail; cd /Users/Hugh/Hugh/Project/workflowhub && node scripts/run-checks.mjs 2>&1 | tee $TASK_DIR/apply/evidence/v2-gate-scan.txt; status=${PIPESTATUS[0]}; printf 'exit:%s\n' "$status" >> $TASK_DIR/apply/evidence/v2-gate-scan.txt; exit $status
+  set -o pipefail; cd /Users/Hugh/Hugh/Project/workflowhub && node tools/cli/run-checks.mjs 2>&1 | tee $TASK_DIR/apply/evidence/v2-gate-scan.txt; status=${PIPESTATUS[0]}; printf 'exit:%s\n' "$status" >> $TASK_DIR/apply/evidence/v2-gate-scan.txt; exit $status
   ```
 - **expected_exit**：`0`（正常）；注入后期望 `1`（反证）
 - **evidence_path**：`$TASK_DIR/apply/evidence/v2-gate-scan.txt`
@@ -432,7 +432,7 @@ CI npm run check
 - **验证目标**：三类违规注入后 CI 能检出（fact blocking / 运行时 schema gate / 不可测 gate）。
 - **gate_cmd**：
   ```sh
-  cd /Users/Hugh/Hugh/Project/workflowhub && node scripts/check-stage-quality.mjs --self-test > $TASK_DIR/apply/evidence/v6-antiregression.txt 2>&1; status=$?; printf 'exit:%s\n' "$status" >> $TASK_DIR/apply/evidence/v6-antiregression.txt; exit $status
+  cd /Users/Hugh/Hugh/Project/workflowhub && node tools/cli/check-stage-quality.mjs --self-test > $TASK_DIR/apply/evidence/v6-antiregression.txt 2>&1; status=$?; printf 'exit:%s\n' "$status" >> $TASK_DIR/apply/evidence/v6-antiregression.txt; exit $status
   ```
 - **expected_exit**：`0`（self-test 内含故意注入反证，期望全通过）
 - **evidence_path**：`$TASK_DIR/apply/evidence/v6-antiregression.txt`
@@ -445,8 +445,8 @@ CI npm run check
 | SIG-001 | `metrics/collector.mjs:updateOwnResult` | `(execution_id: string, patch: object, cfg: {taskMetricsPath, globalMetricsPath, tokenSourceReachable?}) → object\|null` |
 | SIG-002 | `metrics/collector.mjs:recordSkeleton` | `(seed: {execution_id, skill_or_stage, stage, skill_version, executed, tokens, duration_ms, rework_rounds, human_intervention, friction_ref, actions, stage_unit}, cfg) → object` |
 | SIG-003 | `scripts/check-path-guard.mjs:findViolation` | `(changedFile: string) → string\|null`（返回命中的 protected path 或 null） |
-| SIG-004 | `scripts/run-checks.mjs:runChecker` | `(name: string, args: string[]) → number`（返回 exit code）|
-| SIG-005 | `core/validate-contract.mjs:validateContract` | `(output: object, contract: object) → {valid: boolean, errors: string[]}` — 注意参数顺序：output 在前，contract 在后（L8 实测确认）|
+| SIG-004 | `tools/cli/run-checks.mjs:runChecker` | `(name: string, args: string[]) → number`（返回 exit code）|
+| SIG-005 | `runtime/evidence/validate-contract.mjs:validateContract` | `(output: object, contract: object) → {valid: boolean, errors: string[]}` — 注意参数顺序：output 在前，contract 在后（L8 实测确认）|
 | SIG-006 | `metrics/execution-record.mjs:assembleExecutionRecord` | `(seed: {execution_id, progress?, facts?, metrics?, feedback?, boundary_decisions?, trace_index?, consumers?, ext?}) → object` |
 | SIG-007 | `metrics/collector.mjs:upsert`（A-002b export 后）| `(path: string, execution_id: string, patch: object, cfg: object) → void`（按文件就地 upsert JSONL 行，L80 实测确认）|
 

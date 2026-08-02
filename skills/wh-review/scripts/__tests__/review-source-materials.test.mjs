@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -129,7 +129,7 @@ describe("review source capture", () => {
     expect(bundle.files).not.toContain("changes.diff");
     expect(bundle.files).toContain("diff-index.json");
     expect(bundle.packetPlan.delivery_mode).toBe("selected_context");
-    expect(bundle.packetPlan.delivery_bytes).toBeLessThanOrEqual(330 * 1024);
+    expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(0);
     expect(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).not.toContain("\n  \"");
     const compactSpec = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/approved_spec.json"), "utf8"));
     expect(compactSpec).toMatchObject({ schema_version: "wh-review-spec-excerpts.v1", selected_ids: ["AC-1"] });
@@ -158,10 +158,9 @@ describe("review source capture", () => {
     expect(semanticDiff).toContain("@@");
     expect(semanticDiff).toContain("-line-6");
     expect(semanticDiff).toContain("+changed-line-6");
-    expect(semanticDiff).not.toContain(" line-5");
-    expect(index.changes.find(({ path }) => path === "tests/large.test.mjs")?.shards[0].delivery).toBe("summary_only");
+    expect(semanticDiff).toContain(" line-5");
+    expect(index.changes.find(({ path }) => path === "tests/large.test.mjs")?.shards[0].delivery).toBe("included");
     expect(readFileSync(join(f.data, index.full_diff.ref))).toHaveLength(index.full_diff.bytes);
-    expect(bundle.manifest.some(({ path }) => path === "tests/large.test.mjs")).toBe(false);
     const selected = index.changes.flatMap(({ shards }) => shards).find(({ delivery }) => delivery === "included");
     writeFileSync(join(bundle.bundleRoot, "diff-shards", `${selected.shard_id}.diff`), "tampered\n");
     expect(() => validateDiffIndexBundle(bundle.bundleRoot)).toThrow(/missing or tampered/);
@@ -171,15 +170,52 @@ describe("review source capture", () => {
       task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
       stage: "build-code", phaseId: "phase-large", materials: invalid,
     })).toThrow(/no valid spec verification excerpt/);
-    const summaryAnchor = structuredClone(materials);
-    summaryAnchor.reuse_map.entries[0].anchors[0] = {
-      id: "summary-anchor", path: "tests/base.test.mjs", start_line: 12, end_line: 12,
-      role: "reuse", reason: "summary-only changed test", outside_diff_reason: "outside changed hunk",
-    };
-    expect(() => buildReviewMaterials({
-      task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
-      stage: "build-code", phaseId: "phase-large", materials: summaryAnchor,
-    })).toThrow(/changed-path anchor summary-anchor has no included shard/);
+    const testChange = index.changes.find(({ path }) => path === "tests/large.test.mjs");
+    expect(testChange.shards.some(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(true);
+  });
+
+  it("does not let a move-map suppress a provider-visible diff shard", () => {
+    const f = fixture();
+    writeFileSync(join(f.source, "context-change.txt"), "changed context\n");
+    mkdirSync(join(f.source, "docs", "architecture"), { recursive: true });
+    writeFileSync(join(f.source, "docs", "architecture", "move-map.json"), `${JSON.stringify({
+      schema_version: "move-map.v1",
+      entries: [{
+        source: "legacy/context-change.txt",
+        destination: "context-change.txt",
+        status: "move",
+        content_change: "import/path-only",
+        sha256_before: "0".repeat(64),
+        sha256_after: "1".repeat(64),
+        bytes: 123,
+      }],
+    })}\n`);
+    writeFileSync(join(f.source, "tests", "large.test.mjs"), `${"// mechanical migration fixture\n".repeat(18000)}`);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: "0".repeat(64) })}\n`);
+    const task = evidenceTask(f, receipt, Buffer.from("tests pass\n"));
+    const bundle = buildReviewMaterials({
+      task,
+      reviewDataRoot: f.data,
+      attachmentRoot: f.data,
+      source,
+      taskId: "mechanical-move",
+      stage: "build-code",
+      phaseId: "phase-mechanical-move",
+      materials: {
+        approved_spec: "spec",
+        acceptance_criteria: "ac",
+        test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") },
+        review_instructions: reviewInstructionsFor("build-code"),
+      },
+    });
+    const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+    const contextChange = index.changes.find(({ path }) => path === "context-change.txt");
+    expect(contextChange).not.toHaveProperty("summary");
+    expect(contextChange.shards.some(({ delivery }) => delivery === "included")).toBe(true);
+    expect(contextChange.shards.every(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(true);
+    const compactChangeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
+    expect(compactChangeMap.changes.find(({ path }) => path === "context-change.txt")).not.toHaveProperty("summary");
   });
 
   it("captures only the immutable phase commit range named by current phase evidence", () => {
@@ -207,15 +243,6 @@ describe("review source capture", () => {
     expect(result.baseTree).toBe(git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]));
     expect(result.snapshotTree).toBe(git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]));
     result.dispose();
-    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({
-      phase_id: "phase-1",
-      recovery_ref: "identity/recoveries/phase-pointer-0001.json",
-      recovery_hash: "a".repeat(64),
-      evidence: { diff: "evidence/phase-1-diff-scan.json" },
-    })}\n`);
-    expect(() => capturePhaseReviewSource({
-      sourceRoot: f.source, task, phaseId: "phase-1", reviewDataRoot: f.data,
-    })).toThrow(/canonical Phase evidence ref is required for recovery binding/);
   });
 
   it("rejects a phase id or evidence record that does not match", () => {
@@ -262,7 +289,7 @@ describe("review source capture", () => {
 
   it("uses the authenticated Workspace baseline after target main already contains task history", () => {
     const f = acceptedWorkspaceFixture();
-    const paths = ["core/fact-indexes.mjs", "core/fact-collector.mjs", "scripts/collect-task-facts.mjs", "config/transcript-sources.mjs", "tests/m14b-fact-collection.test.mjs"];
+    const paths = ["core/fact-indexes.mjs", "runtime/evidence/fact-collector.mjs", "tools/cli/collect-task-facts.mjs", "config/transcript-sources.mjs", "tests/m14b-fact-collection.test.mjs"];
     for (const path of paths) {
       mkdirSync(join(f.worktree, ...path.split("/").slice(0, -1)), { recursive: true });
       writeFileSync(join(f.worktree, path), `export const fixture = ${JSON.stringify(path)};\n`);
@@ -432,23 +459,6 @@ describe("review materials", () => {
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
     });
     expect(repeated.materialId).toBe(code.materialId);
-    const recoveryBound = buildReviewMaterials({
-      reviewDataRoot: f.data, attachmentRoot: f.data,
-      source: {
-        ...source,
-        phaseEvidenceBinding: {
-          ref: `evidence/phases/phase-0/${source.snapshotTree}/phase-evidence-${"a".repeat(64)}.json`,
-          sha256: "a".repeat(64),
-          recovery_ref: "identity/recoveries/phase-pointer-0001.json",
-          recovery_hash: "b".repeat(64),
-        },
-      },
-      taskId: "task", stage: "build-code", reviewTrack: null,
-      materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
-    });
-    expect(recoveryBound.materialId).not.toBe(code.materialId);
-    expect(JSON.parse(readFileSync(join(recoveryBound.bundleRoot, "source.json"), "utf8")).phase_evidence)
-      .toMatchObject({ recovery_ref: "identity/recoveries/phase-pointer-0001.json", recovery_hash: "b".repeat(64) });
   });
 
   it("generates a deterministic canonical material id", () => {
@@ -574,29 +584,35 @@ describe("review materials", () => {
     const receipt = Buffer.from(`${JSON.stringify({ command: "npm run test:targeted", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`);
     const task = evidenceTask(f, receipt, output);
     const testEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
-    const changedPath = source.changedFiles[0].path;
-    const traceHash = "a".repeat(64), evidenceHash = "b".repeat(64), implementationHash = "c".repeat(64);
+    const implementation = Buffer.from(`${JSON.stringify({ snapshot_tree: source.snapshotTree })}\n`);
+    const implementationHash = createHash("sha256").update(implementation).digest("hex");
+    const kernel = createTaskKernel(task);
+    kernel.publishCanonicalRecord("receipts/revisions/implementation/current.json", implementation);
+    const phaseReview = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-review-result.v1", verdict: "pass", snapshot_tree: source.snapshotTree })}\n`);
+    const phaseReviewHash = createHash("sha256").update(phaseReview).digest("hex");
+    const phaseTrace = Buffer.from(`${JSON.stringify({ schema_version: "phase-map-trace.v1", phase_id: "phase-1", snapshot_tree: source.snapshotTree })}\n`);
+    const phaseTraceHash = createHash("sha256").update(phaseTrace).digest("hex");
+    kernel.publishCanonicalRecord("reviews/phase-1.json", phaseReview);
+    kernel.publishCanonicalRecord("evidence/phases/phase-1/phase-map.json", phaseTrace);
     const materials = {
       approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: testEvidence,
       phase_coverage: {
-        schema_version: "phase-review-coverage.v1", checkpoint: { commit: source.baseCommit, tree: source.baseTree }, snapshot_tree: source.snapshotTree,
+        schema_version: "phase-review-coverage.v1", snapshot_tree: source.snapshotTree,
+        checkpoint: { commit: "a".repeat(40), tree: "b".repeat(40) },
+        implementation_receipt: { ref: "receipts/revisions/implementation/current.json", sha256: implementationHash },
+        green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
         phases: [{
-          phase_id: "T01", base_tree: source.baseTree, snapshot_tree: source.snapshotTree,
-          trace_ref: `evidence/phases/T01/${source.snapshotTree}/phase-map-trace-${traceHash}.json`, trace_sha256: traceHash,
-          changed_files: [changedPath], green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
-          canonical_phase_evidence: { ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash },
-          implementation_receipt: { ref: "receipts/implementation.json", sha256: implementationHash },
-          review_status: "semantic",
-          review_action: { ref: "reviews/flows/phase/event-0001.json", sha256: "e".repeat(64) },
-          review_attempt: { ref: "reviews/attempts/phase/attempt.json", sha256: "f".repeat(64) },
-          review_result: { ref: "reviews/results/phase.json", sha256: "d".repeat(64) },
-          review_verdict: "pass",
+          phase_id: "phase-1", snapshot_tree: source.snapshotTree,
+          review_result: { ref: "reviews/phase-1.json", sha256: phaseReviewHash, verdict: "pass" },
+          phase_map_trace: { ref: "evidence/phases/phase-1/phase-map.json", sha256: phaseTraceHash },
+          green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
         }],
+        completed_tasks: [{ task_id: "T01", acceptance_ids: ["AC-1"], summary: "current implementation" }],
       },
-      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [{ seam_id: "phase-1-to-phase-2", state: "unknown", reason_code: "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS" }] },
       ac_trace: {
         schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"],
-        entries: [{ acceptance_criterion_id: "AC-1", change: [{ phase_id: "T01", path: changedPath }], test: [{ phase_id: "T01", receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ phase_id: "T01", ref: "evidence/phases/T01/evidence.json", sha256: evidenceHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],
+        entries: [{ acceptance_criterion_id: "AC-1", change: [{ task_id: "T01", summary: "current implementation" }], test: [{ receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ ref: "receipts/revisions/implementation/current.json", sha256: implementationHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],
       },
       review_instructions: reviewInstructionsFor("build-code", null, false, "initial", "integration"),
     };

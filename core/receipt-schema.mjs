@@ -4,6 +4,7 @@
  * Pure validation layer. No I/O, no file-system calls.
  * Assertion failures throw TypeError — caller decides how to handle.
  */
+export { createQualityFact } from "../runtime/evidence/quality-fact.mjs";
 
 import {
   RECEIPT_MANIFEST_SCHEMA_VERSION,

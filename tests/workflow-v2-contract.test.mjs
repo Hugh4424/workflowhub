@@ -5,175 +5,87 @@ import { join, resolve } from "node:path";
 const root = resolve(new URL("..", import.meta.url).pathname);
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const readStage = (stage) => readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8");
-const readComponent = (component) => readFileSync(join(root, "skills", component, "SKILL.md"), "utf8");
+const compact = (text) => text.replace(/\s+/g, " ");
 
-describe("five-stage v2 business contract", () => {
-  it.each(stages)("%s has valid identity and one TaskContext bootstrap", (stage) => {
+describe("five-stage current-material contract", () => {
+  it.each(stages)("%s has a current skill identity", (stage) => {
     const skill = readStage(stage);
-    expect(skill).toMatch(new RegExp(`^---[\\s\\S]*name: ${stage}[\\s\\S]*version: 2\\.0\\.0[\\s\\S]*---`));
-    expect(skill).toContain("core/stage-context.mjs");
-    expect(skill).toContain(`bootstrapStage(\"${stage}\"`);
-    expect(skill).toContain("StageContext");
-    expect(skill).not.toMatch(/parseTaskDir|resolveTaskRecordPaths|task_tracking_root|worktree\.json/);
+    expect(skill).toMatch(new RegExp(`^---[\\s\\S]*name: ${stage}[\\s\\S]*version: [0-9]+\\.[0-9]+\\.[0-9]+[\\s\\S]*---`));
   });
 
-  it("keeps every Stage Skill self-contained while the launcher owns the runner", () => {
+  it("makes current materials authoritative and historical records audit-only", () => {
     for (const stage of stages) {
       const skill = readStage(stage);
-      const compact = skill.replace(/\s+/g, " ");
-      expect(compact).toMatch(/Consume only (?:that launcher-supplied|the branded|`bootstrapStage)[\s\S]{0,120}StageContext|Consume only `bootstrapStage/i);
-      expect(compact).toMatch(/Never derive task identity or paths from cwd, a repository, or an (?:issue|external tracker) identifier/i);
-      expect(compact).toMatch(/launcher resolves all[\s\S]*`scripts\/`[\s\S]*`core\/`[\s\S]*`metrics\/`/i);
-      expect(compact).toMatch(/never search for or copy (?:those )?runner files into the target repository/i);
-      expect(skill).not.toMatch(/docs\/contracts\/task-context\.md|config\/workflowhub\.yaml/);
+      expect(skill, stage).toMatch(/current (?:four )?materials/i);
+      expect(skill, stage).toMatch(/audit/i);
     }
-    expect(readStage("verify-code")).not.toMatch(/workflows\/build-code\/SKILL\.md/);
+    expect(compact(readStage("build-code"))).toMatch(/never authorize or block ordinary implementation/i);
+    expect(compact(readStage("verify-code"))).toMatch(/never block a new verification attempt/i);
   });
 
-  it("keeps human briefs inline and the verify repair handoff complete", () => {
-    for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
-      const skill = readStage(stage);
-      const compact = skill.replace(/\s+/g, " ");
-      expect(compact).toMatch(/milestone card[\s\S]{0,220}current progress[\s\S]{0,220}next step[\s\S]{0,220}(?:whether user action is required|whether the user must act)/i);
-      expect(compact).toMatch(/recommended option[\s\S]{0,180}(?:every option's consequence and risk|consequence[\s\S]*risk)/i);
-      expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
-    }
-    expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs reopen --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable reopen\s+ref[\s\S]*upstream Code Builder/i);
+  it("keeps real decisions, review, and human confirmation where they matter", () => {
+    const decision = readStage("make-decision");
+    expect(decision).toMatch(/real `talk-with-zhipeng` conversation/i);
+    expect(decision).toMatch(/Research only when it can materially change/i);
+    expect(decision).toMatch(/independent review through `wh-review`/i);
+    expect(decision).toMatch(/real human answer/i);
+
+    const plan = readStage("build-plan");
+    expect(plan).toMatch(/every FR\/AC/i);
+    expect(plan).toMatch(/independent `wh-review`/i);
+    expect(plan).toMatch(/explicit user accept or reject/i);
   });
 
-  it("maps host-visible interaction, component facts, and concise handoff without host coupling", () => {
-    for (const stage of stages) {
-      const skill = readStage(stage);
-      const compact = skill.replace(/\s+/g, " ");
-      expect(compact, stage).toMatch(/ask.*wait.*present.*host-visible conversation surface/i);
-      expect(compact, stage).toMatch(/Stage-owned.*always.*executed.*conditional.*trigger=false.*reason/i);
-      expect(compact, stage).toMatch(/`skill-deps\.yaml`.*formal artifacts.*`wh-review`.*refs/i);
-      expect(compact, stage).toMatch(/shared result.*risks.*next owner.*user action.*artifact labels/i);
-      expect(compact, stage).toMatch(/(?:downstream|close) handoff surface.*parent progress surface/i);
-      expect(skill, stage).not.toMatch(/Multica|mention:\/\/|用户 UUID|member mention/i);
-    }
+  it("keeps specification ambiguity, review, and revision honest", () => {
+    const spec = readStage("build-spec");
+    expect(spec).toMatch(/material ambiguity/i);
+    expect(spec).toMatch(/one independent `wh-review`/i);
+    expect(spec).toMatch(/Never loop reviews to manufacture a pass/i);
+    expect(spec).toMatch(/current-material revision note/i);
   });
 
-  it("keeps make-decision talk and grill outcomes visible without adding confirmation gates", () => {
-    const skill = readStage("make-decision").replace(/\s+/g, " ");
-    expect(skill).toMatch(/round 1.*host-visible.*round 2.*host-visible.*round 3.*host-visible/i);
-    expect(skill).toMatch(/grill-with-docs.*completion.*changed context files.*no file changes/i);
-    expect(skill).toMatch(/only.*change direction.*wait for the user/i);
+  it("keeps implementation scoped to current tasks and uses proportionate tests", () => {
+    const code = readStage("build-code");
+    expect(code).toMatch(/Tasks\.md is the only Task completion authority/i);
+    expect(code).toMatch(/focused test command/i);
+    expect(compact(code)).toMatch(/complete regression command only when the current plan requires it or once before final build publication/i);
+    expect(code).toMatch(/one independent `wh-review` for the completed Phase/i);
+    expect(code).toMatch(/one independent semantic integration review/i);
+    expect(compact(code)).toMatch(/Do not create a successor, rebind, continuation, recovery bridge, synthetic checkpoint, or replacement task/i);
   });
 
-  it("always scans build-spec ambiguity and invokes spec-clarify only when triggered", () => {
-    const skill = readStage("build-spec").replace(/\s+/g, " ");
-    expect(skill).toMatch(/Always build an `ambiguity-ledger\.v2`/i);
-    expect(skill).toMatch(/spec-clarify.*conditional.*clarification/i);
-    expect(skill).toMatch(/trigger=false.*no material ambiguity/i);
-  });
-
-  it("keeps three stage gates, two automatic stages, and visible quality facts", () => {
-    for (const stage of ["make-decision", "build-plan", "verify-code"])
-      expect(readStage(stage)).toMatch(/confirm|human|user|用户|人工/i);
-    for (const stage of ["build-spec", "build-code"]) {
-      expect(readStage(stage)).toMatch(/automatic|automatically/i);
-      expect(readStage(stage)).not.toMatch(/wait for human confirmation|human-confirmation-ref/i);
-    }
-    expect(readStage("make-decision")).toMatch(/Quality facts are recorded, not converted into automatic quality gates/i);
-    expect(readStage("build-code")).toMatch(/Start only the current Phase[\s\S]*Start the next Phase only after its Tasks are complete/i);
-    expect(readStage("verify-code")).toMatch(/Quality failures remain visible facts/i);
-  });
-
-  it("keeps named design artifacts and component isolation", () => {
-    expect(readStage("build-spec")).toMatch(/spec\.md[\s\S]*ArtifactDir/i);
-    expect(readStage("build-plan")).toMatch(/spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
-    expect(readStage("build-code")).toMatch(/spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/i);
-    for (const stage of ["build-spec", "build-plan", "build-code"]) {
-      expect(readStage(stage)).toMatch(/frozen|controlled|ArtifactDir/i);
-    }
-  });
-
-  it("keeps build-plan research in memory and publishes only plan/tasks artifacts", () => {
-    const skill = readStage("build-plan");
-    const research = readComponent("spec-research");
-    const plan = readComponent("spec-plan");
-    expect(skill).toMatch(/Writes: `plan\.md` and `tasks\.md` only/i);
-    expect(skill).toMatch(/research notes[\s\S]*in-memory|in-memory[\s\S]*research/i);
-    expect(skill).not.toMatch(/Writes:[^\n]*(?:research\.md|data-contracts\.md)/i);
-    expect(research).toMatch(/Return one in-memory `spec-research-result\.v1` value/i);
-    expect(research).toMatch(/Never write a\s+file or publish a formal artifact/i);
-    expect(research).not.toMatch(/controlled writer|research\.md/i);
-    expect(plan).toMatch(/optional frozen research content/i);
-    expect(plan).not.toMatch(/research\.md/i);
-    const steps = JSON.parse(readFileSync(join(root, "workflows", "build-plan", "steps.json"), "utf8"));
-    expect(steps.steps.slice(1, 3).flatMap((step) => step.completion_evidence.map((item) => item.uri_or_path)))
-      .toEqual(["memory://build-plan/research", "memory://build-plan/data-contracts"]);
-  });
-
-  it("keeps independent review, fresh tests, browser QA, and confirmed close", () => {
-    expect(readStage("make-decision")).toMatch(/independent direction review/i);
-    expect(readStage("build-code")).toMatch(/fresh test receipt[\s\S]{0,120}final independent[\s\S]{0,80}integration/i);
-    expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*reuse[\s\S]*accepted build-code[\s\S]*final review/i);
+  it("keeps verification independent, per-AC, and separately authorized for close", () => {
     const verify = readStage("verify-code");
-    expect(verify).toMatch(/plain-language summary[\s\S]*six actions[\s\S]*separate close authorization/i);
-    expect(verify).toMatch(/plan hash[\s\S]*internal binding[\s\S]*do not display/i);
-    expect(verify).toMatch(/Never reuse the verify-code confirmation ref/i);
+    expect(verify).toMatch(/current complete test command/i);
+    expect(verify).toMatch(/every applicable acceptance criterion/i);
+    expect(verify).toMatch(/one independent `wh-review` semantic\/code review/i);
+    expect(verify).toMatch(/normal verify-code confirmation/i);
+    expect(verify).toMatch(/separate explicit authorization/i);
+    expect(verify).toMatch(/Keep it simple/i);
   });
 
-  it("keeps pre-accept build-code repair append-only without a verify reopen", () => {
-    const skill = readStage("build-code");
-    expect(skill).toMatch(/same-Phase repair[\s\S]*--revision=true --recover=<latest-implementation-receipt-ref>/i);
-    expect(skill).toMatch(/repaired tests[\s\S]*new receipt\/output refs/i);
-    expect(skill).toMatch(/does not require or create a verify-code reopen authorization/i);
-    expect(skill).toMatch(/After[\s\S]*accepted[\s\S]*only the controlled verification-failure path/i);
-    expect(skill).toMatch(/<final implementation receipt ref>[\s\S]*<final fresh test receipt ref>/i);
-    expect(skill).toMatch(/normal[^\n]*default[^\n]*receipts\/implementation\.json[^\n]*receipts\/build-tests\.json/i);
-    expect(skill).toMatch(/revision[^\n]*(?:latest|newest)[^\n]*refs/i);
+  it("forbids old history from becoming a normal-work permit", () => {
+    expect(compact(readStage("build-spec"))).toMatch(/Do not create replacement tasks, continuation chains, invalidations, rebinding, or recovery machinery to revise a current specification/i);
+    expect(compact(readStage("build-code"))).toMatch(/Do not create a successor, rebind, continuation, recovery bridge, synthetic checkpoint, or replacement task/i);
+    expect(compact(readStage("verify-code"))).toMatch(/Do not create another task or any historical-evidence progression mechanism/i);
   });
 
-  it("reviews every build-code Phase and then the final worktree integration", () => {
-    const skill = readStage("build-code");
-    expect(skill).toMatch(/publish-phase-evidence/);
-    expect(skill).toMatch(/current `phase_id`/i);
-    expect(skill).toMatch(/Start the next Phase only after its Tasks are complete/i);
-    expect(skill).toMatch(/`worktree \+ integration` `wh-review`[\s\S]{0,120}without historical or cumulative diff/i);
-    expect(skill).toMatch(/A Phase result is gate evidence and cannot replace the final[\s\S]{0,80}`worktree \+ integration` result/i);
-    expect(skill).toMatch(/canonical\s+implementation[\s\S]{0,180}canonical\s+tests[\s\S]{0,180}same snapshot tree/i);
-    expect(skill).toMatch(/same-Phase repair[\s\S]*new receipt\/output refs/i);
-    expect(skill).toMatch(/revise_required[\s\S]*original quality fact/i);
-    expect(skill).toMatch(/controlled `reopen`[\s\S]*last affected completed Phase[\s\S]*`reopen_ref`/i);
-    expect(skill).toMatch(/does not create[\s\S]*(?:Phase registry|Phase history)/i);
-    const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
-    expect(handlers).toMatch(/scope\.subject_kind !== "worktree"[\s\S]{0,160}scope\.review_scope !== "integration"[\s\S]{0,120}scope\.phase_id !== null/);
-    expect(handlers).toMatch(/same-snapshot formal integration review \(subject_kind=worktree, review_scope=integration, phase_id=null\)/);
+  it("keeps active context and step inventory free of retired progression permits", () => {
+    const context = readFileSync(join(root, "CONTEXT.md"), "utf8");
+    const inventory = readFileSync(join(root, "docs/stage-atomic-step-inventory.md"), "utf8");
+    expect(context).toMatch(/历史恢复记录（仅审计）/);
+    expect(context).toMatch(/不授权、阻止或改变普通工作/);
+    expect(context).not.toMatch(/Phase pointer 等业务状态恢复仍使用恢复代次/);
+    expect(context).not.toMatch(/在通过\*\*恢复门禁\*\*后才可成为当前事实/);
+    expect(inventory).not.toMatch(/controlled build-code reopen|plan-hash-bound operation|automatic acceptance/i);
+    expect(inventory).toMatch(/never creates a reopen or recovery permit/i);
   });
 
-  it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {
-    const wholeSkill = readStage("make-decision");
-    const skill = wholeSkill.slice(wholeSkill.indexOf("## Procedure"), wholeSkill.indexOf("## Host interaction"));
-    const positions = [
-      "`talk-with-zhipeng` round 1",
-      "`talk-with-zhipeng` round 2",
-      "`wh-review` direction track",
-      "`talk-with-zhipeng` round 3",
-      "complete `grill-with-docs`",
-      "`wh-review` detail track",
-      "only make-decision confirmation",
-    ].map((marker) => skill.indexOf(marker));
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    expect(skill).toMatch(/Do not substitute a lite or read-only variant/i);
-    expect(skill).toMatch(/round 2[\s\S]*non-blocking conversation checkpoint[\s\S]*not a confirmation gate/i);
-    expect(skill).toMatch(/post-grill `snapshot_tree`[\s\S]*recapture the tree/i);
-
-    const steps = JSON.parse(readFileSync(join(root, "workflows", "make-decision", "steps.json"), "utf8"));
-    expect(steps.steps.map((step) => step.step_slug)).toEqual([
-      "load-context", "triage-scope", "talk-round-1", "research-inputs",
-      "talk-round-2", "blind-direction-review", "talk-round-3",
-      "grill-with-docs", "write-decision-draft", "review-decision-detail",
-      "approve-decision", "publish-decision",
-    ]);
-  });
-
-  it("uses append-only attempts and accepted lineage instead of mutable stage results", () => {
-    for (const stage of stages) expect(readStage(stage)).toMatch(/append-only|attempt/i);
-    for (const stage of stages.slice(1)) expect(readStage(stage)).toMatch(/accepted/i);
-    for (const stage of stages) expect(readStage(stage)).not.toMatch(/stage-result-[a-z-]+\.json/);
+  it("does not make integration review depend on an accepted checkpoint", () => {
+    const adr = readFileSync(join(root, "docs/adr/0007-phase-and-integration-review-material-architecture.md"), "utf8");
+    expect(adr).toMatch(/当前四份材料、当前代码树、fresh test/);
+    expect(adr).toMatch(/不再\s*要求 accepted build-plan checkpoint/);
+    expect(adr).toMatch(/不成为编辑、修复或进入下一阶段的许可门槛/);
+    expect(adr).not.toMatch(/必须从 accepted build-plan checkpoint/);
   });
 });

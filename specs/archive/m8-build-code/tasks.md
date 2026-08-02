@@ -10,7 +10,7 @@ total_tasks: 16
 # Tasks — M8 build-code v1
 
 > 所有 phase ui_change: false（M8 纯 skill 逻辑，无 UI 改动）
-> 验收靶子函数：`core/text-utils.mjs` → `truncateWords(text, maxWords)`
+> 验收靶子函数：`runtime/evidence/text-utils.mjs` → `truncateWords(text, maxWords)`
 > capture 脚本：`workflows/build-code/capture.mjs`（Node ESM .mjs）
 
 ---
@@ -25,7 +25,7 @@ total_tasks: 16
 
 ### Files
 
-- `/Users/Hugh/Hugh/Project/workflowhub/core/text-utils.mjs` — 新建，导出 truncateWords
+- `/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/text-utils.mjs` — 新建，导出 truncateWords
 - `/Users/Hugh/Hugh/Project/workflowhub/tests/build-code-target.test.mjs` — 新建，靶子函数可证伪测试
 
 ### Tasks
@@ -33,7 +33,7 @@ total_tasks: 16
 **Task 1.1 — 写靶子测试（RED）** [FR-ACPT-001]
 
 - 入参：无
-- 出参：测试文件 `tests/build-code-target.test.mjs`，此时 `core/text-utils.mjs` 不存在
+- 出参：测试文件 `tests/build-code-target.test.mjs`，此时 `runtime/evidence/text-utils.mjs` 不存在
 - 精确路径：`/Users/Hugh/Hugh/Project/workflowhub/tests/build-code-target.test.mjs`
 - 测试内容：
   - `truncateWords("hello world foo", 2)` → `"hello world…"`
@@ -45,8 +45,8 @@ total_tasks: 16
 **Task 1.2 — 实现靶子函数（GREEN）** [FR-ACPT-001]
 
 - 入参：RED 证据（exit≠0）
-- 出参：`core/text-utils.mjs` 导出 `export function truncateWords(text, maxWords)`
-- 精确路径：`/Users/Hugh/Hugh/Project/workflowhub/core/text-utils.mjs`
+- 出参：`runtime/evidence/text-utils.mjs` 导出 `export function truncateWords(text, maxWords)`
+- 精确路径：`/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/text-utils.mjs`
 - 实现约束：纯函数，无 IO，无副作用，ESM export
 
 **Task 1.3 — 维护知识文件** [FR-ACPT-001]
@@ -380,7 +380,7 @@ Phase 4 完成条件：两测试文件均 exit=0，覆盖 review 两态 + 降级
   cd /Users/Hugh/Hugh/Project/workflowhub
   node node_modules/.bin/vitest run tests/build-code-target.test.mjs tests/build-code-capture.test.mjs tests/build-code-diff-only.test.mjs tests/build-code-facts.test.mjs tests/build-code-review.test.mjs --passWithNoTests=false
   ```
-- 额外核实：`node --input-type=module --eval "import { truncateWords } from './core/text-utils.mjs'; console.log(truncateWords('a b c', 2))"` 输出 `a b…`
+- 额外核实：`node --input-type=module --eval "import { truncateWords } from './runtime/evidence/text-utils.mjs'; console.log(truncateWords('a b c', 2))"` 输出 `a b…`
 
 **Task 5.5 — 维护知识文件** [FR-REG-001]
 

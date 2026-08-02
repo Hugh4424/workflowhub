@@ -178,7 +178,7 @@ git commit -m "feat(wh-review): seal file-only review delivery"
 
 **Files:**
 
-- Modify: `scripts/run-wh-review-provider-smoke.mjs`
+- Modify: `tools/cli/run-wh-review-provider-smoke.mjs`
 - Modify: `scripts/__tests__/run-wh-review-provider-smoke.test.mjs`
 - Modify: `docs/adr/0002-v4-review-exception-state-matrix.md`
 - Modify: `3rd-review/docs/exceptions.md`
@@ -205,7 +205,7 @@ Run: `npm test` in workflowhub and `npm test` in 3rd-review. The current 3rd-rev
 Run real smoke only through:
 
 ```bash
-WH_REVIEW_PROVIDER_SMOKE=1 WH_REVIEW_NATIVE_AUTH_CONFIRMED=1 WH_REVIEW_SMOKE_ASSUME_NATIVE_AUTH=1 node scripts/run-wh-review-provider-smoke.mjs
+WH_REVIEW_PROVIDER_SMOKE=1 WH_REVIEW_NATIVE_AUTH_CONFIRMED=1 WH_REVIEW_SMOKE_ASSUME_NATIVE_AUTH=1 node tools/cli/run-wh-review-provider-smoke.mjs
 ```
 
 Expected: both providers complete R1/R2 through `file_only`, echo first/middle/last marker plus all three hashes, reuse their sessions, leave source HEAD unchanged, and emit durable evidence. Then use only `3rd-review.mjs run --request` with its standard attachment flags for independent review.

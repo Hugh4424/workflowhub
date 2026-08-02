@@ -59,7 +59,7 @@ M6 已建五段薄骨架（make-decision 是其中一段，纯提示词，facts 
 - `contracts/facts-subschema.json` — make-decision 段 required_keys 加 `decision_log_path`
 - `tests/five-skills-present.test.mjs` — seven-skills 字面量断言 + registry 断言 + 契约形状断言
 - `tests/metric-scan.test.mjs` — 扩到三 skill 正例覆盖
-- `scripts/check-stage-quality.mjs` — 扫描范围扩三 skill
+- `tools/cli/check-stage-quality.mjs` — 扫描范围扩三 skill
 - `roadmap.md`（路径：`/Users/Hugh/Hugh/Knowledge/Projects/multica-agenthub/tasks/agenthub-extraction-program/artifacts/roadmap.md`，在 program artifacts 树（Knowledge），不在 workflowhub 仓）— 命名全局对齐（intake→make-decision 等，仅文档，约 26 处）
 - `CONTEXT.md` — 补「组件 skill」概念定义段
 
@@ -107,7 +107,7 @@ M7 改了 workflow prompts（SKILL.md）、schema（facts-subschema.json）、au
 | schema（journal event / checkpoint / *.schema.json / facts-subschema.json） | **改** | facts-subschema.json 的 make-decision required_keys 加 decision_log_path | T010 |
 | runtime config（.claude/settings.json / 引擎配置） | 不改 | M7 无新 runtime 配置需求；check-stage-quality.mjs 动态遍历 workflows/ 全子目录，新增 skill 自动纳入，无需手改 config | — |
 | knowledge/doc（constitution / CONTEXT / roadmap / Knowledge 规则） | **改** | CONTEXT.md 追加「组件 skill」概念定义段；roadmap.md 命名全局对齐（intake→make-decision 等约 26 处） | T013、T014 |
-| automation gates / CI / hooks（.github/workflows / pre-commit / gate scripts / 测试文件） | **改** | tests/five-skills-present.test.mjs 扩七 skill 字面量断言 + registry 格式断言；tests/metric-scan.test.mjs 扩三 skill 正例覆盖；scripts/check-stage-quality.mjs 增 collector 路径 + stage 字面量检查 | T017、T018、T019 |
+| automation gates / CI / hooks（.github/workflows / pre-commit / gate scripts / 测试文件） | **改** | tests/five-skills-present.test.mjs 扩七 skill 字面量断言 + registry 格式断言；tests/metric-scan.test.mjs 扩三 skill 正例覆盖；tools/cli/check-stage-quality.mjs 增 collector 路径 + stage 字面量检查 | T017、T018、T019 |
 
 ### 触发的 invariant（CONSTITUTION）
 
@@ -225,5 +225,5 @@ workflowhub 是独立仓，不跟 multica upstream merge。本期：
 | SIG-001 | contracts/stage-result.contract.json | 顶层 required: status/error_code/retryable/facts/missing_items/user_decision/reason；facts 开放 object |
 | SIG-002 | contracts/facts-subschema.json | make-decision required_keys: [decision, scope]；本期扩展加 decision_log_path |
 | SIG-003 | config/workflowhub.yaml registry | 数组，每条 {component_id, workflow, path}；本期加两条 |
-| SIG-004 | scripts/check-stage-quality.mjs | CLI 动态遍历 workflows/ 全部子目录（219-242 行），导出 scanSkillMetrics；本期重点补组件 skill 测试用例，不改枚举逻辑 |
+| SIG-004 | tools/cli/check-stage-quality.mjs | CLI 动态遍历 workflows/ 全部子目录（219-242 行），导出 scanSkillMetrics；本期重点补组件 skill 测试用例，不改枚举逻辑 |
 | SIG-005 | metrics/collector.mjs | recordSkeleton / updateOwnResult API，stage 字段用自身 skill 名 |

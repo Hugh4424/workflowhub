@@ -1,0 +1,47 @@
+{
+  "schema_version": "workflowhub-final-gates.v2",
+  "snapshot_tree": "88cb76865eb446e7c10a2f509b311ae1fecf9c0e20a210e604eaf45e2e2af9d2",
+  "status": "passed",
+  "missing_required_commands": [],
+  "commands": {
+    "inventory": {
+      "kind": "inventory",
+      "ref": "evidence/phase-9/inventory-final-rebind.out",
+      "sha256": "17893cdbd1655ee8046eeda37d16defa0ea7431e98c4f0f16596b87ee3ea322e"
+    },
+    "clean_install": {
+      "kind": "clean_install",
+      "ref": "evidence/phase-9/clean-install-final-rebind.out",
+      "sha256": "f565edead9c1965f45d3ec06b64beb89fe4383ba67391a7d8e4224763d19fc24"
+    },
+    "npm_test": {
+      "kind": "npm_test",
+      "ref": "evidence/phase-9/npm-test-final-rebind.out",
+      "sha256": "41c752d4279c4e7b41e84147851ee66dbe52b651c267cefff86110081f1987b2"
+    },
+    "npm_run_check": {
+      "kind": "npm_run_check",
+      "ref": "evidence/phase-9/npm-run-check-final-rebind.out",
+      "sha256": "0b1d5245118281b4e74b01ec1d2450093884ba4471918906725f2852c2e380ee"
+    },
+    "focused_final": {
+      "kind": "focused_final",
+      "ref": "evidence/phase-9/final-targeted-matrix-final-rebind.json",
+      "sha256": "9fcf5bd2b5690143019db49d6875e9b7cbffdaa432276162e214ba3b33042cf0"
+    },
+    "complexity_hard_gates": {
+      "kind": "complexity_hard_gates",
+      "ref": "evidence/phase-9/complexity-hard-gates-final-rebind.out",
+      "sha256": "79a04fdcf12c7e55cbb2dc1e97abacff4ccd605297ef3b955d795bfc046aaea8"
+    },
+    "diff_check": {
+      "kind": "diff_check",
+      "ref": "evidence/phase-9/diff-check-final-rebind.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "summary": {
+    "current_targeted_matrix": "18 requested files; 37 suites; 313 tests passed",
+    "formal_status": "all final commands rerun against the current source tree"
+  }
+}

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveLocalSkill, resolveSkillDispatch, validateReviewBundleProjection, validateSkillBundle } from "../local-skill-resolver.mjs";
+import { resolveLocalSkill, resolveSkillDispatch, validateReviewBundleProjection, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });

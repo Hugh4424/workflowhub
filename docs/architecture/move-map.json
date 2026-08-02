@@ -1,0 +1,1550 @@
+{
+  "schema_version": "repository-move-map.v1",
+  "task_id": "workflowhub-complexity-governance-v2",
+  "phase": "phase-8",
+  "source_boundary": "T052 exact files; Phase 7 KEEP tests excluded from move",
+  "generated_from": "T052 exact file boundary; Phase 7 KEEP tests remain in place; extras are explicit exclusions",
+  "entries": [
+    {
+      "source": "core/audit-summary-carrier.mjs",
+      "destination": "runtime/evidence/audit-summary-carrier.mjs",
+      "status": "move",
+      "sha256_before": "090434b4c823cc685dc2c5038a02b50c6c627b33c75056a0405234df97cae210",
+      "bytes": 4393,
+      "sha256_after": "f2a5a520e0108091bcb9707380f94d24d83b34a6e70227d59780039472f5c4f2",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/boundary-confirm.mjs",
+      "destination": "runtime/evidence/boundary-confirm.mjs",
+      "status": "move",
+      "sha256_before": "4603015e99791c6ee24f3895f11f9f31c750f24a74cab782ebab23be02e918ae",
+      "bytes": 4784,
+      "sha256_after": "5d3b05f29132398301e124e27a49465a5ed9b436d14f0aef542a632c909a27fe",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/canonical-review-result.mjs",
+      "destination": "runtime/review/canonical-review-result.mjs",
+      "status": "move",
+      "sha256_before": "e27f763ff561dee0df940d8c50cee999e9df06e9d14ff2efeb28843168d25f76",
+      "bytes": 13075,
+      "sha256_after": "e27f763ff561dee0df940d8c50cee999e9df06e9d14ff2efeb28843168d25f76",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/canonical-source.mjs",
+      "destination": "runtime/evidence/canonical-source.mjs",
+      "status": "move",
+      "sha256_before": "65e020fb89989e3b29fc2ef253fa0bb2f537b014af9362aa6efb4b43cfeb5519",
+      "bytes": 6707,
+      "sha256_after": "65e020fb89989e3b29fc2ef253fa0bb2f537b014af9362aa6efb4b43cfeb5519",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/canonical-utils.mjs",
+      "destination": "runtime/evidence/canonical-utils.mjs",
+      "status": "move",
+      "sha256_before": "811029fe642247ddf48028bf850d2720b33795236126f2ab1577940608be783b",
+      "bytes": 1000,
+      "sha256_after": "811029fe642247ddf48028bf850d2720b33795236126f2ab1577940608be783b",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/capability-doctor.mjs",
+      "destination": "runtime/evidence/capability-doctor.mjs",
+      "status": "move",
+      "sha256_before": "9d86c41cb8d9d467af5d01823b16f2e5e8449fedfc6b4c8bcb3e538812aad354",
+      "bytes": 2783,
+      "sha256_after": "10fd52d9a7ed96afbaf20b2ed8ceef682fd1ac9ac50af537082eb3ec2ef78ab3",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/check-skill-closure.mjs",
+      "destination": "runtime/evidence/check-skill-closure.mjs",
+      "status": "move",
+      "sha256_before": "42211c7ceb017c8241c9e7cd8eb2ef67482d178ba993fc18ece38b873ea4905f",
+      "bytes": 13676,
+      "sha256_after": "95f78418b1c5e473fc29ab53f70c945b7dd00d310625b35556e9480c7def8a55",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/fact-collector.mjs",
+      "destination": "runtime/evidence/fact-collector.mjs",
+      "status": "move",
+      "sha256_before": "be09bb5f4fccbc1593f62fec4f73b911ce9f2595a9fd72802a4af75a17fd9aef",
+      "bytes": 44956,
+      "sha256_after": "10b8424afaae355275f2c1e9abbec50d4ae1d0a94d00c3c5c353d14283d828a3",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/git-worktree-snapshot.mjs",
+      "destination": "runtime/task/git-worktree-snapshot.mjs",
+      "status": "move",
+      "sha256_before": "a7583fe02c7985339776bdc85847451fb180c386f06113771605c602ad92665a",
+      "bytes": 3317,
+      "sha256_after": "08bc1e9f982ef93e90e4a6aacbb61981bc033ac2e9c6820d19b546031a4a5f7a",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/invocation-identity.mjs",
+      "destination": "runtime/evidence/invocation-identity.mjs",
+      "status": "move",
+      "sha256_before": "58b926cd4530ab52b52209cc66850e432ad987a1a6e8e6a93971aeaaf0531b02",
+      "bytes": 4522,
+      "sha256_after": "d210e432d1ace67ef4eef6af46b35f93959cc8a4a69b9bd807814a108b54d942",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/kernel.mjs",
+      "destination": "runtime/evidence/kernel.mjs",
+      "status": "move",
+      "sha256_before": "76207f3648feeb2ec8bc48ece2e94dd0b63653aa7c4ed7f2d2e565ae9d2e2e77",
+      "bytes": 759,
+      "sha256_after": "7bf00f2b86f7a6785d8b9117018f1bf9ac53051cefcb9f3a7f9ef9b818044d15",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/local-skill-resolver.mjs",
+      "destination": "runtime/adapters/local-skill-resolver.mjs",
+      "status": "move",
+      "sha256_before": "178dfc80288129ab6a9ec3c14bc5d7ba327e743b31ddad6c7bb28e85500070be",
+      "bytes": 8611,
+      "sha256_after": "178dfc80288129ab6a9ec3c14bc5d7ba327e743b31ddad6c7bb28e85500070be",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/protected-paths.mjs",
+      "destination": "runtime/evidence/protected-paths.mjs",
+      "status": "move",
+      "sha256_before": "206e216a8322cc8042fbc48a772b95e7403933e09c634f1e675fe62696920b8b",
+      "bytes": 1968,
+      "sha256_after": "206e216a8322cc8042fbc48a772b95e7403933e09c634f1e675fe62696920b8b",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/receipt-writer.mjs",
+      "destination": "runtime/evidence/receipt-writer.mjs",
+      "status": "move",
+      "sha256_before": "058848eec193d5777e3f70721021cd64f4ec765e4d2b3dfc5a7f1c1212167fb5",
+      "bytes": 4023,
+      "sha256_after": "850bf398e6bb08f5c6ffc6358671c8618892451a8732c6239cddb7d3d85d98ee",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/requirement-ledger.mjs",
+      "destination": "runtime/evidence/requirement-ledger.mjs",
+      "status": "move",
+      "sha256_before": "01691829b039319dc786e6167e62a98fd733ccc296ed2a4c2f4cf8be3a4395f0",
+      "bytes": 7738,
+      "sha256_after": "01691829b039319dc786e6167e62a98fd733ccc296ed2a4c2f4cf8be3a4395f0",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/resolve-path.mjs",
+      "destination": "runtime/adapters/resolve-path.mjs",
+      "status": "move",
+      "sha256_before": "68c7c2c81b7d4fb110792ebb0fce3cfd698f00bd0284cb15d2e8c35b663e89ae",
+      "bytes": 558,
+      "sha256_after": "68c7c2c81b7d4fb110792ebb0fce3cfd698f00bd0284cb15d2e8c35b663e89ae",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/review-flow-authority.mjs",
+      "destination": "runtime/review/review-flow-authority.mjs",
+      "status": "move",
+      "sha256_before": "5dbbc9e99193fe0e7b29bafc3d4ef32fc5a9f84cb324fc14590e9af19dcb60b0",
+      "bytes": 15302,
+      "sha256_after": "5dbbc9e99193fe0e7b29bafc3d4ef32fc5a9f84cb324fc14590e9af19dcb60b0",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/review-result-consumer.mjs",
+      "destination": "runtime/review/review-result-consumer.mjs",
+      "status": "move",
+      "sha256_before": "cc27d68beb9479e69f4cb3b9a107c8bf09e631f0ef1136b65da0c109d5a0f3ff",
+      "bytes": 2352,
+      "sha256_after": "cc27d68beb9479e69f4cb3b9a107c8bf09e631f0ef1136b65da0c109d5a0f3ff",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/runner-identity.mjs",
+      "destination": "runtime/evidence/runner-identity.mjs",
+      "status": "move",
+      "sha256_before": "93297d19f2357c66312703dbbb16fd09bb91a942bdba0dc06f8a5eedd5ed1aea",
+      "bytes": 4659,
+      "sha256_after": "edba6dbdf472193109183489a6b3da1c794fd830809030bd5ecf1cf5a79d27f6",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/ambiguity-ledger.v1.json",
+      "destination": "runtime/schemas/ambiguity-ledger.v1.json",
+      "status": "move",
+      "sha256_before": "d2fba01745bba801cc02f3e065bf232c63ebe381d36111caf756d81952c33478",
+      "bytes": 457,
+      "sha256_after": "d2fba01745bba801cc02f3e065bf232c63ebe381d36111caf756d81952c33478",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/ambiguity-ledger.v2.json",
+      "destination": "runtime/schemas/ambiguity-ledger.v2.json",
+      "status": "move",
+      "sha256_before": "d370af21d45fc828c15f9d7cc137a55c8256d8d7430edb7157178eb60d5eeceb",
+      "bytes": 10241,
+      "sha256_after": "d370af21d45fc828c15f9d7cc137a55c8256d8d7430edb7157178eb60d5eeceb",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/bootstrap-review.v1.json",
+      "destination": "runtime/schemas/bootstrap-review.v1.json",
+      "status": "move",
+      "sha256_before": "e1eff8954d8f38bfa8c432cb546cc410b7509e4bab05dc2777ab3610305744b5",
+      "bytes": 2269,
+      "sha256_after": "e1eff8954d8f38bfa8c432cb546cc410b7509e4bab05dc2777ab3610305744b5",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/browser-qa-evidence.v1.json",
+      "destination": "runtime/schemas/browser-qa-evidence.v1.json",
+      "status": "move",
+      "sha256_before": "8ec260dc26b6c4013917ec055d391dd7536ba84f5951c57b4a65bb7364953ad6",
+      "bytes": 5421,
+      "sha256_after": "8ec260dc26b6c4013917ec055d391dd7536ba84f5951c57b4a65bb7364953ad6",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/decision-correction-appendix.v1.json",
+      "destination": "runtime/schemas/decision-correction-appendix.v1.json",
+      "status": "move",
+      "sha256_before": "6c550f019b47aec495316fa5fbe97bf2bdc6022ba16da8033424000a4eb73e26",
+      "bytes": 1016,
+      "sha256_after": "6c550f019b47aec495316fa5fbe97bf2bdc6022ba16da8033424000a4eb73e26",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/decision-coverage-audit.v1.json",
+      "destination": "runtime/schemas/decision-coverage-audit.v1.json",
+      "status": "move",
+      "sha256_before": "b874dd729beec6944a5f29fdcf147d337a3683d58f1fe661fe5c11e474c27ccd",
+      "bytes": 1783,
+      "sha256_after": "b874dd729beec6944a5f29fdcf147d337a3683d58f1fe661fe5c11e474c27ccd",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/decision-entry.v1.json",
+      "destination": "runtime/schemas/decision-entry.v1.json",
+      "status": "move",
+      "sha256_before": "713c20e2584f6e41024d9902852c9f47b94f955ac50afe97f50162e9af9be23c",
+      "bytes": 1768,
+      "sha256_after": "713c20e2584f6e41024d9902852c9f47b94f955ac50afe97f50162e9af9be23c",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/decision-log-contract.v1.json",
+      "destination": "runtime/schemas/decision-log-contract.v1.json",
+      "status": "move",
+      "sha256_before": "614b7bf9ed15fedff3d0e8a4761bafea18b5171d2a18be26e824a5b7f0e8bfb9",
+      "bytes": 1739,
+      "sha256_after": "614b7bf9ed15fedff3d0e8a4761bafea18b5171d2a18be26e824a5b7f0e8bfb9",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/decision-omission-acceptance.v1.json",
+      "destination": "runtime/schemas/decision-omission-acceptance.v1.json",
+      "status": "move",
+      "sha256_before": "a312ae5c2ae7776402272aca6570e6e9cf0e02c4ecb47fedfc8a16df848eab83",
+      "bytes": 1350,
+      "sha256_after": "a312ae5c2ae7776402272aca6570e6e9cf0e02c4ecb47fedfc8a16df848eab83",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/plan-task-contract.v1.json",
+      "destination": "runtime/schemas/plan-task-contract.v1.json",
+      "status": "move",
+      "sha256_before": "582b69a605bd5ce563753979ad93adc6bf9fa808ddedae853c6d96db230a792b",
+      "bytes": 3213,
+      "sha256_after": "582b69a605bd5ce563753979ad93adc6bf9fa808ddedae853c6d96db230a792b",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/plan-task-contract.v2.json",
+      "destination": "runtime/schemas/plan-task-contract.v2.json",
+      "status": "move",
+      "sha256_before": "c4c2adcc362cb99e48b86a8ce6cef333ba627ef3bd88948f95b56b3faeaba4ff",
+      "bytes": 2950,
+      "sha256_after": "c4c2adcc362cb99e48b86a8ce6cef333ba627ef3bd88948f95b56b3faeaba4ff",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/risk-acceptance.v1.json",
+      "destination": "runtime/schemas/risk-acceptance.v1.json",
+      "status": "move",
+      "sha256_before": "e5d63cef08ff91d89f4f04b360ec0ad7fb192225d0d9609b3e35f811466819a6",
+      "bytes": 2129,
+      "sha256_after": "e5d63cef08ff91d89f4f04b360ec0ad7fb192225d0d9609b3e35f811466819a6",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/runner-replacement-bootstrap-provider-config.v1.json",
+      "destination": "runtime/schemas/runner-replacement-bootstrap-provider-config.v1.json",
+      "status": "move",
+      "sha256_before": "94b0e23be51f256f980a19c58f8014f35b7a471bace6d581a1f5baa721d0e512",
+      "bytes": 1270,
+      "sha256_after": "94b0e23be51f256f980a19c58f8014f35b7a471bace6d581a1f5baa721d0e512",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/runner-replacement-bootstrap-sealed-bundle.v1.json",
+      "destination": "runtime/schemas/runner-replacement-bootstrap-sealed-bundle.v1.json",
+      "status": "move",
+      "sha256_before": "dd9dda096d0f8b6de9f8e3d45ad3540d4deae2b6ea56922ad1dc534423a8406c",
+      "bytes": 1770,
+      "sha256_after": "dd9dda096d0f8b6de9f8e3d45ad3540d4deae2b6ea56922ad1dc534423a8406c",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/runner-replacement-bootstrap-test-receipt.v1.json",
+      "destination": "runtime/schemas/runner-replacement-bootstrap-test-receipt.v1.json",
+      "status": "move",
+      "sha256_before": "1c481948de991f924d90d2e3671c716c7dae5b7a6b8a5e47928358b38cfd028e",
+      "bytes": 1475,
+      "sha256_after": "1c481948de991f924d90d2e3671c716c7dae5b7a6b8a5e47928358b38cfd028e",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/runner-replacement-path-coverage-map.v1.json",
+      "destination": "runtime/schemas/runner-replacement-path-coverage-map.v1.json",
+      "status": "move",
+      "sha256_before": "bbea885c80a2a8d3fddf9b49cd8825b06086ebaaccc97b927a3bcba77e5160df",
+      "bytes": 1395,
+      "sha256_after": "bbea885c80a2a8d3fddf9b49cd8825b06086ebaaccc97b927a3bcba77e5160df",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/stage-completion-facts.v1.json",
+      "destination": "runtime/schemas/stage-completion-facts.v1.json",
+      "status": "move",
+      "sha256_before": "a766af7a4cb9a1e9ce37531de99dac2a49460a11ef53fcdd266f2aed6905330f",
+      "bytes": 8580,
+      "sha256_after": "a766af7a4cb9a1e9ce37531de99dac2a49460a11ef53fcdd266f2aed6905330f",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/stage-content-evidence.v1.json",
+      "destination": "runtime/schemas/stage-content-evidence.v1.json",
+      "status": "move",
+      "sha256_before": "ec7f352ef9c19cb2c2adc5c15f44f0c19b2ccc892100495685800ec4c7573042",
+      "bytes": 2079,
+      "sha256_after": "ec7f352ef9c19cb2c2adc5c15f44f0c19b2ccc892100495685800ec4c7573042",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/stage-skill-invocation.v1.json",
+      "destination": "runtime/schemas/stage-skill-invocation.v1.json",
+      "status": "move",
+      "sha256_before": "c9914153afae3abf1ce83801213a1ac5cbcee60753352c08a9aaa2818d126a65",
+      "bytes": 1527,
+      "sha256_after": "c9914153afae3abf1ce83801213a1ac5cbcee60753352c08a9aaa2818d126a65",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/schemas/task-material-revision.v1.json",
+      "destination": "runtime/schemas/task-material-revision.v1.json",
+      "status": "move",
+      "sha256_before": "b78c560462b7b7bbd9be333c395ec8fbf6dc9393309f557e4f7f2ccc2b863a7b",
+      "bytes": 2767,
+      "sha256_after": "b78c560462b7b7bbd9be333c395ec8fbf6dc9393309f557e4f7f2ccc2b863a7b",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/skill-static-deps.mjs",
+      "destination": "runtime/evidence/skill-static-deps.mjs",
+      "status": "move",
+      "sha256_before": "1df2768aac9942cdb1c01b7c6d2a40005ab8136f592858c9e165d82183418541",
+      "bytes": 4281,
+      "sha256_after": "1df2768aac9942cdb1c01b7c6d2a40005ab8136f592858c9e165d82183418541",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/stage-acceptance-policy.mjs",
+      "destination": "runtime/stage/stage-acceptance-policy.mjs",
+      "status": "move",
+      "sha256_before": "15a043660f08021ed35330ad93fb9ef871629f36d3e65c9cb7fd20728a865765",
+      "bytes": 447,
+      "sha256_after": "15a043660f08021ed35330ad93fb9ef871629f36d3e65c9cb7fd20728a865765",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/stage-content-contracts.mjs",
+      "destination": "runtime/stage/stage-content-contracts.mjs",
+      "status": "move",
+      "sha256_before": "5075b07e15b095fa2b904db2c1622f7d5b3580e56fe08547edd99b1545962ca5",
+      "bytes": 78035,
+      "sha256_after": "c30638b352f85552c3139d181bfd84ad14319ebd0e7522879920b33171209563",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/stage-review-disposition.mjs",
+      "destination": "runtime/review/stage-review-disposition.mjs",
+      "status": "move",
+      "sha256_before": "84bf9ea2b833e380b41caf23c5fecf741280f2627b531b908e2a6b89d5bdc6bd",
+      "bytes": 8178,
+      "sha256_after": "84bf9ea2b833e380b41caf23c5fecf741280f2627b531b908e2a6b89d5bdc6bd",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/stage-skill-runtime.mjs",
+      "destination": "runtime/stage/stage-skill-runtime.mjs",
+      "status": "move",
+      "sha256_before": "3e2523af8d781a60e295208fb24671d11214e87958b6011e5cbab24eddedf215",
+      "bytes": 4899,
+      "sha256_after": "918fc283943d1b967acfa726ca963eadb76aea72efde99050ab9ac8b7f867afc",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/step-manifest.mjs",
+      "destination": "runtime/stage/step-manifest.mjs",
+      "status": "move",
+      "sha256_before": "299990932b06f15cf92c65d3df936a7e931930bc8625922582000806be04508a",
+      "bytes": 6645,
+      "sha256_after": "299990932b06f15cf92c65d3df936a7e931930bc8625922582000806be04508a",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/storage-root.mjs",
+      "destination": "runtime/evidence/storage-root.mjs",
+      "status": "move",
+      "sha256_before": "6019d5d8385b6d8f4c044a4b3d4f262bc2c8be242afee17d515f7ae20e85e089",
+      "bytes": 2343,
+      "sha256_after": "6019d5d8385b6d8f4c044a4b3d4f262bc2c8be242afee17d515f7ae20e85e089",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/task-identity.mjs",
+      "destination": "runtime/task/task-identity.mjs",
+      "status": "move",
+      "sha256_before": "8e1124b56da0fdb5e3ebed66ae8de679cb00a177aabe6b1f6a6eafa6274ce3e5",
+      "bytes": 1583,
+      "sha256_after": "8e1124b56da0fdb5e3ebed66ae8de679cb00a177aabe6b1f6a6eafa6274ce3e5",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/task-kernel.mjs",
+      "destination": "runtime/task/task-kernel.mjs",
+      "status": "move",
+      "sha256_before": "a3bed5f7d1e94bea1cc49aa7d824f278f56cac7166249f1092831969c324be61",
+      "bytes": 185,
+      "sha256_after": "0e5298d8b0fdb0cd41e6a7d1e3db5f5a6759b0cab79889e8f54cb72e5d5a55b9",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/text-utils.mjs",
+      "destination": "runtime/evidence/text-utils.mjs",
+      "status": "move",
+      "sha256_before": "a5eff021f596f4ee331df4499b6d6d7450955a57574c4cf3b9107d7aa8ecf736",
+      "bytes": 249,
+      "sha256_after": "a5eff021f596f4ee331df4499b6d6d7450955a57574c4cf3b9107d7aa8ecf736",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/validate-contract.mjs",
+      "destination": "runtime/evidence/validate-contract.mjs",
+      "status": "move",
+      "sha256_before": "ea9c89c403ec61cfdb9ba11df00436a0666a2e49af2c2a72fd370c2935d24b38",
+      "bytes": 835,
+      "sha256_after": "ea9c89c403ec61cfdb9ba11df00436a0666a2e49af2c2a72fd370c2935d24b38",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/workspace-runner.mjs",
+      "destination": "runtime/task/workspace-runner.mjs",
+      "status": "move",
+      "sha256_before": "5b973757147e4fde99712efde2726b8d51669fff18691afacb7faa0e86619ef1",
+      "bytes": 1344,
+      "sha256_after": "86b755458a018da9acd79a17d8704d34342af26c73bb0343e2f5f6791cb606a2",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/write-boundary-preflight.mjs",
+      "destination": "runtime/evidence/write-boundary-preflight.mjs",
+      "status": "move",
+      "sha256_before": "23e1785cd1b6e15214622ff8a359e87e84a3e0a2dad9679b54c2a7df9ba0f982",
+      "bytes": 7798,
+      "sha256_after": "8acb1e7c7780ecaf981f39f0cee66650eea378f95aa2ccbd1ab5e27274df1da2",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/audit-summary.schema.json",
+      "destination": "runtime/schemas/audit-summary.schema.json",
+      "status": "move",
+      "sha256_before": "dae62178b9ea6c8c9923d1dde0c887ac0f3166cf99ded320ccb894da30c72ff3",
+      "bytes": 900,
+      "sha256_after": "dae62178b9ea6c8c9923d1dde0c887ac0f3166cf99ded320ccb894da30c72ff3",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/human-confirmation.v1.schema.json",
+      "destination": "runtime/schemas/human-confirmation.v1.schema.json",
+      "status": "move",
+      "sha256_before": "f853a6a8a27b61b236d19b94fce9d151edab9a0c9c40e0c5dae9cf2a28a9c703",
+      "bytes": 729,
+      "sha256_after": "f853a6a8a27b61b236d19b94fce9d151edab9a0c9c40e0c5dae9cf2a28a9c703",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/requirement-ledger.schema.json",
+      "destination": "runtime/schemas/requirement-ledger.schema.json",
+      "status": "move",
+      "sha256_before": "73bab36a7a2c2df3c3a0e31bb0e4f0133f9d09c192066ca5e3f0a3b0fd291c54",
+      "bytes": 2215,
+      "sha256_after": "73bab36a7a2c2df3c3a0e31bb0e4f0133f9d09c192066ca5e3f0a3b0fd291c54",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/requirements-coverage.schema.json",
+      "destination": "runtime/schemas/requirements-coverage.schema.json",
+      "status": "move",
+      "sha256_before": "c240a353c65c0e91546caa1b9c0a69ec6c51c56a283e1c3630829ea3b36c20d7",
+      "bytes": 737,
+      "sha256_after": "c240a353c65c0e91546caa1b9c0a69ec6c51c56a283e1c3630829ea3b36c20d7",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/review-bundle.schema.json",
+      "destination": "runtime/schemas/review-bundle.schema.json",
+      "status": "move",
+      "sha256_before": "2a4ad6a2f2efa58553611e835dcc9ed637beba4b717cfa153915775613fabaab",
+      "bytes": 760,
+      "sha256_after": "9ba1699bfd613c5c9d5bbc5b0909db8086b4e8fd51f6e608bf43d5bee96a8aa1",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/skill-bundle.schema.json",
+      "destination": "runtime/schemas/skill-bundle.schema.json",
+      "status": "move",
+      "sha256_before": "babe04fde41840c70477752eab33f38fbf566b88e4a3e47c5fb3e496776bdd37",
+      "bytes": 2853,
+      "sha256_after": "3b8df23fb9894dda64224b28a0a8196a40e8867b87dd40d0a34fdc27a8bdd381",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/skill-catalog.schema.json",
+      "destination": "runtime/schemas/skill-catalog.schema.json",
+      "status": "move",
+      "sha256_before": "621f3fad497a6ab3904a658c129460ad39e4c4ee01093473f15add802c1f7207",
+      "bytes": 5337,
+      "sha256_after": "ee3308ec2016a01a91525f6a8994849e639c6b36d56d1d8e4803944b5ea560a8",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/skills-inventory.schema.json",
+      "destination": "runtime/schemas/skills-inventory.schema.json",
+      "status": "move",
+      "sha256_before": "28ec0665529ea5ec09236d6ae3ea1359cba35f2e93e38907d7f358284ccd98a1",
+      "bytes": 2011,
+      "sha256_after": "baf7355b1ec34c1aec0f258f093ea4ace045e575193e604a07b7f0f689090e48",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/source-manifest.schema.json",
+      "destination": "runtime/schemas/source-manifest.schema.json",
+      "status": "move",
+      "sha256_before": "2e5df95da9b5810ba5e995b5632ba392f2a9a7e7e8e3825b23d14ad713e3db32",
+      "bytes": 1754,
+      "sha256_after": "2e5df95da9b5810ba5e995b5632ba392f2a9a7e7e8e3825b23d14ad713e3db32",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/stage-skill-deps.schema.json",
+      "destination": "runtime/schemas/stage-skill-deps.schema.json",
+      "status": "move",
+      "sha256_before": "96bdbb0ca6f969be3d82277f510ad2bdf4936116d33dd5536fc21ddd561e4b35",
+      "bytes": 2211,
+      "sha256_after": "e6d703e757fdb0dafe25088fed93c764aa71f5cec79a28cd077811bcfe8af37d",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/steps.schema.json",
+      "destination": "runtime/schemas/steps.schema.json",
+      "status": "move",
+      "sha256_before": "f0cfb769d810b18582c6174839ec4a0fec10f8de07bbc6f91dcd36321bb5cc9e",
+      "bytes": 1986,
+      "sha256_after": "73bdf434ebd853291dbb5784a867643132dbbf61acb67384508d051d434222db",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/task-accepted.v2.schema.json",
+      "destination": "runtime/schemas/task-accepted.v2.schema.json",
+      "status": "move",
+      "sha256_before": "69337dda28b8200a359fa51b73b597774800f8857be98798ebf23a12a31abcb5",
+      "bytes": 3966,
+      "sha256_after": "69337dda28b8200a359fa51b73b597774800f8857be98798ebf23a12a31abcb5",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/task-attempt.v2.schema.json",
+      "destination": "runtime/schemas/task-attempt.v2.schema.json",
+      "status": "move",
+      "sha256_before": "7ddc4f75ace496bc47a185e91559b98c0768bdb47d2430e88fea3f23f00ca203",
+      "bytes": 6874,
+      "sha256_after": "7ddc4f75ace496bc47a185e91559b98c0768bdb47d2430e88fea3f23f00ca203",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/audit-aggregate.mjs",
+      "destination": "tools/cli/audit-aggregate.mjs",
+      "status": "move",
+      "sha256_before": "b03b2daea6a9946497394910f56d3d33313ae21929277d19c3a94a926e0f782c",
+      "bytes": 1748,
+      "sha256_after": "33757eadf6755f133dcdf1ceba19229b6865f4e298ab3393e23962adf579cb85",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-anti-host.mjs",
+      "destination": "tools/cli/check-anti-host.mjs",
+      "status": "move",
+      "sha256_before": "92ec9a8f034b869522cb0e022ee00f510aaf249eb9de63976c2f2aad52c83677",
+      "bytes": 7465,
+      "sha256_after": "047cb0276debdb8ff5c0f991169770ac926917744d93d05e6d975c1372380cf7",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-contract.mjs",
+      "destination": "tools/cli/check-contract.mjs",
+      "status": "move",
+      "sha256_before": "ee3ebdb35a684a92031a992ccd00c069a621e3e0d9128214d5b8210dfc6bb5dc",
+      "bytes": 7298,
+      "sha256_after": "1227bcb9ef496530dd48733d4eeb3bdbe10aa7a1df6a760e84f672fc3a8d9ec0",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-extensibility.mjs",
+      "destination": "tools/cli/check-extensibility.mjs",
+      "status": "move",
+      "sha256_before": "d50ebd4808811fdc767aefd664bf9694567ea5cc737d8173704021720d1e8b1b",
+      "bytes": 8411,
+      "sha256_after": "9709ace83612c58b2076248051775d58f08fb4ffe14ab790dd1ce5ef3aa64b04",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-metrics-schema.mjs",
+      "destination": "tools/cli/check-metrics-schema.mjs",
+      "status": "move",
+      "sha256_before": "332e5492360fae17fd6d3780fda0131dd3d03890ab3b524953299765c5bce02b",
+      "bytes": 5517,
+      "sha256_after": "385fe90d23d494daad12e8da4fcfe94b43bb07bd3904eeebe533149793854906",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-stage-quality.mjs",
+      "destination": "tools/cli/check-stage-quality.mjs",
+      "status": "move",
+      "sha256_before": "f2c8be413a1776e820d2f77c825874b016e683817eb24eb945a21428e6996eef",
+      "bytes": 20364,
+      "sha256_after": "54e01cd0f67d0f53bf2202057a7b6e8e95405adeb12b9f7bb7abd6cf0d3968f7",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/check-task-record-paths.mjs",
+      "destination": "tools/cli/check-task-record-paths.mjs",
+      "status": "move",
+      "sha256_before": "1daff9f4fb5000962decfcaa6d9b0621281ff6d83f78f61ce25749eed7f872cd",
+      "bytes": 16059,
+      "sha256_after": "514d17f476c45cbec23550372d3a21b6084c96173f9a12589d273c019c26d480",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/ci-chain-check.mjs",
+      "destination": "tools/cli/ci-chain-check.mjs",
+      "status": "move",
+      "sha256_before": "8f999f42de32d291bea974a6cea3cf6af7a60970cdcc5f986944b1e385f011b0",
+      "bytes": 1301,
+      "sha256_after": "10ccc4b6ab970c1de995dedf3ffbd3970b0f12c011274298bf8d49e60cda8074",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/collect-task-facts.mjs",
+      "destination": "tools/cli/collect-task-facts.mjs",
+      "status": "move",
+      "sha256_before": "290432c5016fb230961dc0d70f271c5c045541a407f9977de35381e34528e5db",
+      "bytes": 3548,
+      "sha256_after": "889fb10c1e8ddb00485daa5aa8f2263253d01f7c6e0cee2f7ebc5360f394a5d7",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/migrate-task-v2.mjs",
+      "destination": "tools/cli/migrate-task-v2.mjs",
+      "status": "move",
+      "sha256_before": "439e24372d7758795bc41f61ae8e4fce3de3b153b64eb02b39c76d9f4bb9a0f7",
+      "bytes": 13583,
+      "sha256_after": "afef0b7ed638ab7cfb6db5f9265cc9d9a3b87505bea178de76e1db9a273f5ea0",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/noop.mjs",
+      "destination": "tools/cli/noop.mjs",
+      "status": "move",
+      "sha256_before": "d19f74f3acfaa61fbde924ffd2973dc9d32729be3c256e32198b35077a31cb2a",
+      "bytes": 251,
+      "sha256_after": "d19f74f3acfaa61fbde924ffd2973dc9d32729be3c256e32198b35077a31cb2a",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/phase-gate.mjs",
+      "destination": "tools/cli/phase-gate.mjs",
+      "status": "move",
+      "sha256_before": "058636fea8f83e9e1ad07ca69c963ab68a60e60ab43a473ad5f81a0dd1a764cc",
+      "bytes": 13093,
+      "sha256_after": "69497a0f8fded971d65a82a536c28bc6ebe7430f7626c19698806611d3618462",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/requirements-ledger.mjs",
+      "destination": "tools/cli/requirements-ledger.mjs",
+      "status": "move",
+      "sha256_before": "8df65771507facafd52eef8ba6fd59608ea3455649e6187a9812fc26487780a5",
+      "bytes": 2244,
+      "sha256_after": "ef5119477bd86e677d2dec3eeac11f3096258a1997f2dfc0f3d49d42e81cf520",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/run-checks.mjs",
+      "destination": "tools/cli/run-checks.mjs",
+      "status": "move",
+      "sha256_before": "564dbf47d0104c015fc5823b1ae499c3e6d543facb541ce4ee10afa4adf3be37",
+      "bytes": 7523,
+      "sha256_after": "c7e8d57c1f304e7176b4eba1b7bb65652fc77b746d5cf8737a98da635a2c43c1",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/run-wh-review-audit-e2e.mjs",
+      "destination": "tools/cli/run-wh-review-audit-e2e.mjs",
+      "status": "move",
+      "sha256_before": "e3f36a7ae88d7f97aad7ce956c6caaba793b39a46ccc2dbb22e5176ec9c57129",
+      "bytes": 3254,
+      "sha256_after": "150f5353890826dfef960af5fbf1fcc42ee652c4b488d685da13ff2af6dc50c5",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/run-wh-review-provider-smoke.mjs",
+      "destination": "tools/cli/run-wh-review-provider-smoke.mjs",
+      "status": "move",
+      "sha256_before": "882dce9c2f74dd0dc8e13fbe68ea61e5f5072a18477003aee6caafcd9451c9d0",
+      "bytes": 2993,
+      "sha256_after": "a46f7e74970cd715b22114d119d012790fce886ce4599eadedce66988ff4b5a9",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/scan-core-files.mjs",
+      "destination": "tools/cli/scan-core-files.mjs",
+      "status": "move",
+      "sha256_before": "617aa1d0e44a195652c4bb3aed051f6d83064963cfdfe50178428eb6fb215112",
+      "bytes": 1258,
+      "sha256_after": "8f338e1e7249d57142a629a0107188ade97177bdbede5bb1976b200765577434",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/smoke-local-skill-dispatch.mjs",
+      "destination": "tools/cli/smoke-local-skill-dispatch.mjs",
+      "status": "move",
+      "sha256_before": "b559e48daa28e86b3187a73060c7220712cfbf60ef3e8da031ed1535c311aeb1",
+      "bytes": 6043,
+      "sha256_after": "7994e3441974ba79922e07e1f41b0640d0a8d21c221fb541b727ad66872d45ff",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/source-manifest.mjs",
+      "destination": "tools/cli/source-manifest.mjs",
+      "status": "move",
+      "sha256_before": "549719eb260963cc05546abeed02344cc35293fd881c8be6d18ac6d37ac7ab82",
+      "bytes": 2008,
+      "sha256_after": "2b168a7dd5139239c80a02c5018b9d02049ed299fdcd067b94eaaf628d39d36f",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/task-bootstrap.mjs",
+      "destination": "tools/cli/task-bootstrap.mjs",
+      "status": "move",
+      "sha256_before": "c1f8625468fb22a4d15cca7d3287f199a467c759aa8b47f069b6fa14aa403d2f",
+      "bytes": 4773,
+      "sha256_after": "bd2215ad448e0bbf307de609546e252f2db1190ab95edb6c665dcd007c7b5847",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/task-migrate-runner-root.mjs",
+      "destination": "tools/cli/task-migrate-runner-root.mjs",
+      "status": "move",
+      "sha256_before": "bfbf02fb430050c4965f8bc235f521d04f33a2856219f1a838862a58279ee505",
+      "bytes": 1651,
+      "sha256_after": "07da145007d904d67068997a4467b49d6fc4fac41a2e9fd9dcae144652834a0e",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/task-migrate-target-repo.mjs",
+      "destination": "tools/cli/task-migrate-target-repo.mjs",
+      "status": "move",
+      "sha256_before": "8764af0a555aad9ebb92077c9513756ea31c17ede671d427faf19f4b3ff6e160",
+      "bytes": 1939,
+      "sha256_after": "8f6d9448cae85f0912caa9f6ea8e94b63f3142c395c94726a207d5ad98072336",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/validate-field-mapping.mjs",
+      "destination": "tools/cli/validate-field-mapping.mjs",
+      "status": "move",
+      "sha256_before": "302aa2a93660cb63de2032a53b173fd1fcf107cb541a2d7998fdec0485b295c8",
+      "bytes": 4705,
+      "sha256_after": "302aa2a93660cb63de2032a53b173fd1fcf107cb541a2d7998fdec0485b295c8",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "scripts/verify-structure.mjs",
+      "destination": "tools/cli/verify-structure.mjs",
+      "status": "move",
+      "sha256_before": "d1b027bd8b99de91c2e821ddc9e167dc54a1f6eade91928c0df39ae13145ce37",
+      "bytes": 5443,
+      "sha256_after": "d1b027bd8b99de91c2e821ddc9e167dc54a1f6eade91928c0df39ae13145ce37",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/runtime-facade.mjs",
+      "destination": "runtime/interface/runtime-facade.mjs",
+      "status": "move",
+      "sha256_before": "b7ad3cf0309fc0d437b22b79266b985d5828f8830f708d23b18f09606280622f",
+      "bytes": 2952,
+      "sha256_after": "b7ad3cf0309fc0d437b22b79266b985d5828f8830f708d23b18f09606280622f",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/runner-contract.mjs",
+      "destination": "runtime/interface/runner-contract.mjs",
+      "status": "move",
+      "sha256_before": "a37773cd9864de20a01613fe84afa133a431ae2698370f5de41e24e2ae62cc3d",
+      "bytes": 2085,
+      "sha256_after": "a37773cd9864de20a01613fe84afa133a431ae2698370f5de41e24e2ae62cc3d",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/skill-bundle-release.mjs",
+      "destination": "runtime/distribution/skill-bundle-release.mjs",
+      "status": "move",
+      "sha256_before": "2900313adcae5ef89bf73032c84cf361583f007be7ed461437dc42f0b79a8cf4",
+      "bytes": 8706,
+      "sha256_after": "260053a23f69dd7eb2c9bcf9d690127ca8cf15e40973f37de0f88d251029678c",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/runner-release.mjs",
+      "destination": "runtime/distribution/runner-release.mjs",
+      "status": "move",
+      "sha256_before": "3b6dab8208914dc7d293ea27488ad1831527dda3fe7668c80b9d1d3fa834f8bd",
+      "bytes": 9098,
+      "sha256_after": "3c101cbe438727314917d37079782eb4130c393bdf80844937d9a8038047327a",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/material-revision.mjs",
+      "destination": "runtime/task/material-revision.mjs",
+      "status": "move",
+      "sha256_before": "7e9ec4168b3ffd76d624878482f20e8c6121f250dff78ede62d01abb7a0c1838",
+      "bytes": 3389,
+      "sha256_after": "774af18bf2ca997f85da97a42f1cd7e9c7ec62706ff03f3fcf65b7da53fe2742",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/quality-fact.mjs",
+      "destination": "runtime/evidence/quality-fact.mjs",
+      "status": "move",
+      "sha256_before": "9f84f18902597eb1f32216c0c1fc52b9828c91ece69e5f9e325e99568d68a344",
+      "bytes": 3343,
+      "sha256_after": "9f84f18902597eb1f32216c0c1fc52b9828c91ece69e5f9e325e99568d68a344",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/freshness.mjs",
+      "destination": "runtime/evidence/freshness.mjs",
+      "status": "move",
+      "sha256_before": "333e063465e3f5edf32a796b6c0d73fc2b28e174029c75baa63040a7673d3101",
+      "bytes": 6468,
+      "sha256_after": "9ec166f05443e5109723f7d7ee6ad4642d0c62e99d13c19ee69457c8afa7e180",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/completion-predicates.mjs",
+      "destination": "runtime/stage/completion-predicates.mjs",
+      "status": "move",
+      "sha256_before": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
+      "bytes": 3330,
+      "sha256_after": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/publication.mjs",
+      "destination": "runtime/stage/publication.mjs",
+      "status": "move",
+      "sha256_before": "42ae6f6667ed6f94fc4039318d517c5a937c88bfdcced2777579928e20ca3cb3",
+      "bytes": 3723,
+      "sha256_after": "5b0e2474fc65a715c28d58deed2dc125f64964673a4549c40638fab0dd16fd45",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/runner-release.schema.json",
+      "destination": "runtime/schemas/runner-release.schema.json",
+      "status": "move",
+      "sha256_before": "b01a21151a178049ffd08858a46be0ee86359ef208ade3eb25ecb6a181079551",
+      "bytes": 963,
+      "sha256_after": "b722702638e2912448fd6b05af0f60e612d72ba2542cfdc2d78385973687b212",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/quality-fact.v1.json",
+      "destination": "runtime/schemas/quality-fact.v1.json",
+      "status": "move",
+      "sha256_before": "f054eae190cf1b3b59d371775795c539ecee5b2db248dba0037c3f63cea74bc0",
+      "bytes": 1466,
+      "sha256_after": "f054eae190cf1b3b59d371775795c539ecee5b2db248dba0037c3f63cea74bc0",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "schemas/publication.v1.json",
+      "destination": "runtime/schemas/publication.v1.json",
+      "status": "move",
+      "sha256_before": "211e4d311fd514a824500444443f267a1615e78fb2070da5cd420cb2c2611153",
+      "bytes": 1029,
+      "sha256_after": "211e4d311fd514a824500444443f267a1615e78fb2070da5cd420cb2c2611153",
+      "content_change": "import/path-only"
+    },
+    {
+      "source": "core/.gitkeep",
+      "destination": null,
+      "status": "keep-structural",
+      "reason": "empty source marker; runtime/evidence/.gitkeep is a separate governed target"
+    },
+    {
+      "source": "core/__tests__/artifact-dir.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/canonical-review-result.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/capability-doctor.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/check-anti-host.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/check-contract.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/check-extensibility.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/check-skill-closure.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/invocation-identity.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/kernel.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/local-skill-resolver.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/protected-paths.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/receipt-writer.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/resolve-path.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/run-checks.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/skill-static-deps.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/stage-acceptance-policy.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/stage-context.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/stage-skill-runtime.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/storage-root.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/task-handle.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/task-identity.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/task-kernel-security.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/task-runner-root-migration.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/task-target-repo-migration.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/validate-contract.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "core/__tests__/workspace-runner.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/canonical-archive-skill-dispatch.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/ci-chain-check.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/migrate-task-v2.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/run-wh-review-audit-e2e.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/run-wh-review-provider-smoke.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/runner-replacement-bridge.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "scripts/__tests__/runner-unbinding-migration.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner migration had no stage, skill, or Multica production caller",
+      "content_change": "replaced by legacy manifest read-only plus fresh invocation coverage"
+    },
+    {
+      "source": "scripts/__tests__/smoke-local-skill-dispatch.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/stage-runtime-acceptance-publication.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "scripts/__tests__/task-bootstrap.test.mjs",
+      "destination": null,
+      "status": "keep-phase7",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+    },
+    {
+      "source": "runtime/evidence/.gitkeep",
+      "destination": null,
+      "status": "keep-structural",
+      "reason": "empty source marker; runtime/evidence/.gitkeep is a separate governed target"
+    },
+    {
+      "source": "core/__tests__/load-config.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/__tests__/parse-framework-config.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/__tests__/runtime-mode.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/__tests__/task-index.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/__tests__/task-kernel-publish.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/__tests__/task-recovery.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "core/__tests__/workspace-manager.test.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/artifact-dir.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/audit-aggregator.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/build-spec-receipt-recovery.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "core/canonical-evidence-validators.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/canonical-receipt-writer.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/chain-topology.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/dispatch-component.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/fact-indexes.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/git-checkpoint.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/journal-appender.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/journal-schema.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/load-config.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/parse-framework-config.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/receipt-schema.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/resolve-component.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/runtime-mode.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/schemas/interaction-completion.v1.json",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/schemas/workflowhub-recovery-credential.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "core/schemas/workflowhub-recovery-generation.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "core/stage-completion-facts.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/stage-content-evidence.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/stage-context.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/stage-handlers.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/stage-runner.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/stage-skill-invocation.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/task-close.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/task-handle.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/task-index.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/task-kernel-implementation.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "core/task-recovery.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "core/workspace.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "scripts/__tests__/stage-runtime-recover-run.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "scripts/__tests__/stage-runtime-spec-recovery.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "scripts/__tests__/task-recovery.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
+    },
+    {
+      "source": "scripts/runtime-cutover.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "scripts/stage-runtime.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "scripts/task-close.mjs",
+      "destination": null,
+      "status": "excluded-not-in-T052",
+      "reason": "existing source outside T052 exact file boundary; left in place"
+    },
+    {
+      "source": "runtime/schemas/bootstrap-review.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-bootstrap-provider-config.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-bootstrap-sealed-bundle.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-bootstrap-test-receipt.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-path-coverage-map.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "tools/cli/task-migrate-runner-root.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "legacy runner migration CLI had no current stage, skill, or Multica production caller"
+    },
+    {
+      "source": "skills/wh-review/scripts/integration-review-subject.mjs",
+      "destination": "runtime/review/integration-review-subject.mjs",
+      "status": "move",
+      "sha256_before": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
+      "sha256_after": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/phase-review-subject.mjs",
+      "destination": "runtime/review/phase-review-subject.mjs",
+      "status": "move",
+      "sha256_before": "63e57699a7b7eb7da9d523cad1a01e0d0c6dc764daf4c16afa03f1270270f85e",
+      "sha256_after": "aa1d316d2d3fb7b56e9c0122dd94bd1933036547b2439fe4690f129c358d5ac4",
+      "content_change": "moved runtime logic; post-move implementation change; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-controller.mjs",
+      "destination": "runtime/review/review-controller.mjs",
+      "status": "move",
+      "sha256_before": "77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79",
+      "sha256_after": "77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-output.mjs",
+      "destination": "runtime/review/review-output.mjs",
+      "status": "move",
+      "sha256_before": "6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744",
+      "sha256_after": "6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/schema-validator.mjs",
+      "destination": "runtime/review/schema-validator.mjs",
+      "status": "move",
+      "sha256_before": "381ea2c4dfefa66008ca0c96981d22cb40290c5cf114c0904c785475ba7f7fea",
+      "sha256_after": "825d8e74731f9f2a8c7e8553fafddf4498eab316cf1af65f23d9d1d2582eb4c0",
+      "content_change": "moved runtime logic; post-move implementation change; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/schemas/attempt.schema.json",
+      "destination": "runtime/review/schemas/attempt.schema.json",
+      "status": "move",
+      "sha256_before": "684d27f900c6c995e56193e6fb765b9db0be47374b2ef10d5504b1aaff7a6e23",
+      "sha256_after": "8c4145641c795130bfe8045fe8fc825dd5c5f9f45175ec67a6bf12f90dad2852",
+      "content_change": "moved runtime schema; post-move implementation change"
+    },
+    {
+      "source": "skills/wh-review/schemas/result.schema.json",
+      "destination": "runtime/review/schemas/result.schema.json",
+      "status": "move",
+      "sha256_before": "9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da",
+      "sha256_after": "9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/resolution.schema.json",
+      "destination": "runtime/review/schemas/resolution.schema.json",
+      "status": "move",
+      "sha256_before": "f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182",
+      "sha256_after": "f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/stage-materials.schema.json",
+      "destination": "runtime/review/schemas/stage-materials.schema.json",
+      "status": "move",
+      "sha256_before": "fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837",
+      "sha256_after": "fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/ac-evidence-summary.schema.json",
+      "destination": "runtime/review/schemas/ac-evidence-summary.schema.json",
+      "status": "move",
+      "sha256_before": "2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a",
+      "sha256_after": "2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/stage-materials.json",
+      "destination": "runtime/review/stage-materials.json",
+      "status": "move",
+      "sha256_before": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
+      "sha256_after": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
+      "content_change": "moved runtime stage-material matrix"
+    }
+  ]
+}

@@ -729,30 +729,6 @@ describe("aggregation and runner", () => {
     expect(requestIds[1]).not.toBe(requestIds[0]);
   });
 
-  it("does not reuse a result or semantic attempt with a binding invalidation", async () => {
-    const { root, attachmentRoot, task } = fixture("simple-review-binding-invalid-"); const calls = [];
-    const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: `session-${calls.length}`, output: pass, error: null } }; } };
-    const options = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
-    const first = await runReviewFixture(options);
-    const resultRaw = task.readRecord(first.resultRef);
-    const resultHash = createHash("sha256").update(resultRaw).digest("hex");
-    const invalidationDir = join(root, "Projects", "Demo", "tasks", "task", "reviews", "binding-invalidations");
-    mkdirSync(invalidationDir, { recursive: true });
-    writeFileSync(join(invalidationDir, `${resultHash}.json`), `${JSON.stringify({
-      schema_version: "review-binding-invalidation.v1",
-      task_id: "task",
-      stage: "build-code",
-      status: "binding_invalid",
-      result_ref: first.resultRef,
-      result_hash: resultHash,
-    }, null, 2)}\n`);
-    const second = await runReviewFixture(options);
-    expect(second).not.toMatchObject({ reused: true });
-    expect(second.resultRef).not.toBe(first.resultRef);
-    expect(calls).toHaveLength(2);
-  });
-
   it("recovers a semantic attempt interrupted before its result and report publication", async () => {
     const { root, attachmentRoot, task } = fixture("simple-review-semantic-attempt-recovery-"); const calls = [];
     const providerClient = { runGroup: async () => { calls.push(true); return { runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null }] }; } };
@@ -830,8 +806,8 @@ describe("aggregation and runner", () => {
     const second = runReviewFixture({
       ...options,
       task: openTask(task.taskPath, task.identity),
-      captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }),
-      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }),
+      captureSource: () => source,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
     });
     await new Promise((resolve) => setImmediate(resolve));
     expect(calls).toHaveLength(1);
@@ -995,8 +971,8 @@ describe("aggregation and runner", () => {
     const second = runReviewFixture({
       ...options,
       task: openTask(task.taskPath, task.identity),
-      captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }),
-      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }),
+      captureSource: () => source,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
     });
     await new Promise((resolve) => setImmediate(resolve));
     expect(calls).toHaveLength(1);
@@ -1008,14 +984,14 @@ describe("aggregation and runner", () => {
     expect(dispatches.size).toBe(1);
   });
 
-  it("does not dispatch a second initial review for the same subject when material or snapshot changes", async () => {
+  it("reuses same-snapshot results but re-reviews a changed build-code integration snapshot", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-change-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
     const base = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient };
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }), buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
-    expect(calls, "ORACLE-REVIEW: one subject has one initial provider dispatch; repairs use resolution/focused verification").toHaveLength(1);
+    expect(calls, "same-snapshot retries reuse; a changed integration snapshot requires a fresh review").toHaveLength(2);
   });
 
   it("fails loudly without a provider call when canonical aggregation was changed", async () => {
@@ -1067,26 +1043,15 @@ describe("aggregation and runner", () => {
     expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
   });
 
-  it("creates a new semantic result for a new snapshot of the same Phase without reusing the old snapshot", async () => {
-    const { attachmentRoot, task } = fixture("simple-review-phase-new-snapshot-");
+  it("does not reuse a semantic Phase result across snapshot trees", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-phase-snapshot-reuse-");
     const calls = [];
     const providerClient = {
       run: async () => {
         calls.push(true);
-        return {
-          runtimeId: `runtime-${calls.length}`,
-          provider: {
-            provider: "kimi",
-            status: "completed",
-            session_id: `session-${calls.length}`,
-            output: pass,
-            error: null,
-          },
-        };
+        return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } };
       },
     };
-    const firstSource = { ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) };
-    const secondSource = { ...firstSource, snapshotTree: "8".repeat(40) };
     const base = {
       task,
       attachmentRoot,
@@ -1097,22 +1062,20 @@ describe("aggregation and runner", () => {
       hostProvider: "codex",
       providers: ["kimi"],
       providerClient,
-      buildMaterials: ({ source: captured }) => ({
-        bundleRoot: attachmentRoot,
-        materialId: createHash("sha256").update(captured.snapshotTree).digest("hex"),
-        manifest: [],
-      }),
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
     };
-
-    const first = await runReviewFixture({ ...base, capturePhaseSource: () => firstSource });
-    const second = await runReviewFixture({ ...base, capturePhaseSource: () => secondSource });
-
-    expect(second).not.toMatchObject({ reused: true });
-    expect(second.resultRef).not.toBe(first.resultRef);
-    expect(second.snapshotTree).toBe(secondSource.snapshotTree);
-    expect(JSON.parse(task.readRecord(first.resultRef)).snapshot_tree).toBe(firstSource.snapshotTree);
-    expect(JSON.parse(task.readRecord(second.resultRef)).snapshot_tree).toBe(secondSource.snapshotTree);
+    const first = await runReviewFixture({
+      ...base,
+      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) }),
+    });
+    const second = await runReviewFixture({
+      ...base,
+      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "8".repeat(40) }),
+    });
     expect(calls).toHaveLength(2);
+    expect(second.reused).not.toBe(true);
+    expect(second.snapshotTree).toBe("8".repeat(40));
+    expect(second.resultRef).not.toBe(first.resultRef);
   });
 
   it("never calls a provider when source capture reports mutation", async () => {

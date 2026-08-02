@@ -57,7 +57,7 @@ valid reviewer JSON. Its input is the normal review input plus exactly
 follow-up review chain. A failed or still-invalid correction remains
 `unavailable`.
 
-Before the first call, read this file and `stage-materials.json`; do not guess
+Before the first call, read this file and `runtime/review/stage-materials.json`; do not guess
 field names. A normal review input has this exact shape:
 
 ```json
@@ -127,7 +127,7 @@ and duplicate adapters are returned as public `SAME_SOURCE` records without a
 CLI call. WorkflowHub records the eligible unique-adapter quorum from that
 attested group. Changing routing belongs to trusted configuration, never to a
 Stage prompt or review request.
-Required `materials` keys come directly from `stage-materials.json`:
+Required `materials` keys come directly from `runtime/review/stage-materials.json`:
 
 - make-decision/direction: `raw_requirement`, `objective_facts`;
 - make-decision/detail: `raw_requirement`, `approved_direction`,
@@ -139,7 +139,7 @@ Required `materials` keys come directly from `stage-materials.json`:
   `test_evidence`, `phase_coverage`, `seam_index`, `ac_trace`;
 - verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
 
-`stage-materials.json` is a strict allowlist: each stage exposes only required
+`runtime/review/stage-materials.json` is a strict allowlist: each stage exposes only required
 and declared optional material. `review_instructions` and packet metadata are
 runner-generated. Only a closure round may additionally carry
 `response_ledger` and runner-generated `previous_review`; arbitrary fields,
@@ -184,7 +184,7 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 
 ## Inputs
 
-`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, and frozen materials. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, commit ranges, providers, models, or `review_scope` are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
+`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, and frozen materials. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, commit ranges, providers, models, or `review_scope` are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The runtime-owned stage matrix is `runtime/review/stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
 
 `build-code` has two non-interchangeable subjects. With `phase_id`, the runner
 derives `review_scope=phase`, resolves the current `phase-diff-scan.v1`, and

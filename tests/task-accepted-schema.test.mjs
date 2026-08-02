@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
-const schema = JSON.parse(readFileSync(new URL("../schemas/task-accepted.v2.schema.json", import.meta.url), "utf8"));
+const schema = JSON.parse(readFileSync(new URL("../runtime/schemas/task-accepted.v2.schema.json", import.meta.url), "utf8"));
 const validate = new Ajv2020({ strict: false, formats: { "date-time": true } }).compile(schema);
 const base = {
   schema_version: "task-accepted.v2",

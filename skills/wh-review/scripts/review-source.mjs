@@ -4,7 +4,7 @@ import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readSync, r
 import { isAbsolute, relative, resolve } from "node:path";
 import { reviewSourceForWorkspace } from "../../../core/workspace.mjs";
 import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
-import { isRuntimeOnlyPath } from "../../../core/canonical-utils.mjs";
+import { isRuntimeOnlyPath } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const CHUNK_BYTES = 64 * 1024;
 
@@ -130,10 +130,16 @@ function parseChangedFiles(root, baseTree, snapshotTree, captureRoot) {
   return changed.filter((entry) => !isRuntimeOnlyPath(entry.path) && !isRuntimeOnlyPath(entry.old_path));
 }
 
-function capture(root, head, indexFile, captureRoot) {
+function capture(root, head, indexFile, captureRoot, excludedPrefixes = []) {
   const env = { ...process.env, GIT_INDEX_FILE: indexFile };
   git(root, ["read-tree", head], { env });
   git(root, ["add", "-A", "--", "."], { env });
+  for (const prefix of excludedPrefixes) {
+    if (typeof prefix !== "string" || prefix.length === 0 || prefix.startsWith("/") || prefix.includes("..")) {
+      fail("SOURCE_UNAVAILABLE", "snapshot exclusion prefix is invalid");
+    }
+    git(root, ["reset", "-q", head, "--", prefix], { env });
+  }
   const staged = resolve(captureRoot, `${relative(captureRoot, indexFile)}.stage.z`);
   runGitToFile(root, ["ls-files", "--stage", "-z"], staged, { env });
   let gitlink = false;
@@ -239,10 +245,13 @@ export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, bas
   const baseTree = text(source, ["rev-parse", `${baseCommit}^{tree}`]);
   const captureRoot = mkdtempSync(resolve(data, "capture-"));
   try {
-    const first = capture(source, capturedHead, resolve(captureRoot, "index-1"), captureRoot);
+    // Execution evidence is task-owned data, not source material. Keep this
+    // capture identical to captureExecutionSnapshot so review-chain identity
+    // cannot drift merely because a receipt was published during the run.
+    const first = capture(source, capturedHead, resolve(captureRoot, "index-1"), captureRoot, ["evidence/"]);
     betweenCaptures?.();
     const secondHead = text(source, ["rev-parse", "HEAD"]);
-    const second = capture(source, secondHead, resolve(captureRoot, "index-2"), captureRoot);
+    const second = capture(source, secondHead, resolve(captureRoot, "index-2"), captureRoot, ["evidence/"]);
     if (secondHead !== capturedHead || second !== first) fail("SOURCE_CHANGED_DURING_CAPTURE", "HEAD or working tree changed during capture");
     const diffPath = includeDiff ? resolve(captureRoot, "changes.diff") : null;
     if (diffPath) runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first, "--", ".", ":(exclude)node_modules"], diffPath);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertRequiredCapabilities, doctorCapabilities } from "../capability-doctor.mjs";
+import { assertRequiredCapabilities, doctorCapabilities } from "../../runtime/evidence/capability-doctor.mjs";
 
 const manifest = {
   runtime_capabilities: [

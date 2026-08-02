@@ -1,0 +1,5 @@
+{
+  "mutation": "bundle-pollution",
+  "seam": "skill bundle release closure",
+  "expected": "exclude forbidden test content"
+}

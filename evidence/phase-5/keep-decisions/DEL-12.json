@@ -1,0 +1,15 @@
+{
+  "schema_version": "proof-evidence.v1",
+  "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8",
+  "kind": "agent-keep-decision",
+  "subject_paths": [
+    "core/dispatch-component.mjs",
+    "core/resolve-component.mjs",
+    "core/task-index.mjs",
+    "workflows/_spike"
+  ],
+  "decision": "KEEP",
+  "actor": "workflowhub-agent",
+  "authorization_source": "explicit user instruction in the active task",
+  "basis": "The active task authorizes autonomous safety decisions. This record is an agent decision for KEEP only; it is not a human confirmation and cannot authorize deletion."
+}

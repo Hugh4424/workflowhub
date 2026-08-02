@@ -7,7 +7,7 @@ import {
   deriveTaskPath,
   validateProjectName,
   validateTaskId,
-} from "../task-identity.mjs";
+} from "../../runtime/task/task-identity.mjs";
 
 describe("task identity", () => {
   it("derives exactly storageRoot/Projects/project/tasks/task", () => {

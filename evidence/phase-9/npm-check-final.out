@@ -1,0 +1,40 @@
+
+> workflowhub@0.0.0 check
+> markdownlint-cli2 "**/*.md" && node tools/cli/verify-structure.mjs && node tools/cli/run-checks.mjs && npm run check:skill-closure && npm run smoke:skill-dispatch
+
+markdownlint-cli2 v0.14.0 (markdownlint v0.35.0)
+Finding: **/*.md !node_modules !specs/archive !specs/m7-intake-v1 !.omc !specs/m9-verify-code !specs/m10-baseline-switch !docs/3rd-review-redesign-draft.md !docs/human-brief-template.md !docs/plain-language-mechanism-design.md !skills/anysearch/README.md !skills/anysearch/scripts/shared/doc_spec.md !skills/anysearch/SKILL.md !skills/debate/examples/sample-verdict.md !skills/debate/references/anti-bias-guardrails.md !skills/simplicity-guard/SKILL.md !skills/spec-clarify/SKILL.md !skills/spec-research/SKILL.md
+Linting: 114 file(s)
+Summary: 0 error(s)
+结构验收 PASS：宪法 21 条 + checklist 锚点全可达 + README 三段 + 文档三件 + CONTEXT 术语/denylist 合规
+[run-checks] running check-anti-host ...
+check-anti-host: OK — scanned 48 file(s), no violations
+[run-checks] running check-extensibility ...
+[FR-EXT-001] verifySwappability ...
+  PASS  component_id=dummy-ok coreDiffEmpty=true
+[FR-EXT-002] verifyExtensibility ...
+  PASS  component_id=dummy-ok coreDiffEmpty=true
+[run-checks] running check-contract ...
+[check-contract] checking: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v2/contracts/component-output.contract.json
+[check-contract] valid sample PASS — validateContract accepted { component_id, output_path }
+[check-contract] invalid sample correctly rejected by validateContract
+[check-contract] PASS — contract structure and FR-NC-005 path-only constraint verified
+[run-checks] running check-metrics-schema ...
+[check-metrics-schema] validating execution-record + knowledge-card schemas
+[check-metrics-schema] PASS — metrics schemas + contracts validated
+[run-checks] running check-stage-quality ...
+[check-stage-quality] scanning 9 file(s) in metrics/ + scripts/ ...
+[check-stage-quality] PASS — quality-class blocking gates = 0
+[run-checks] running check-task-record-paths ...
+[check-task-record-paths] PASS: TaskContext is the only stage path contract
+[run-checks] ALL CHECKS PASSED
+
+> workflowhub@0.0.0 check:skill-closure
+> node runtime/evidence/check-skill-closure.mjs
+
+skill closure: ok
+
+> workflowhub@0.0.0 smoke:skill-dispatch
+> node tools/cli/smoke-local-skill-dispatch.mjs
+
+local skill dispatch smoke: ok (5 stages)

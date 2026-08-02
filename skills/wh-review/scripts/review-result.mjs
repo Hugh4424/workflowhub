@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
-import { aggregateCanonicalProviderResults } from "../../../core/canonical-review-result.mjs";
+import { aggregateCanonicalProviderResults } from "../../../runtime/review/canonical-review-result.mjs";
 
 function safePart(value, label) {
   if (typeof value !== "string" || !/^[a-zA-Z0-9._-]+$/.test(value)) throw new TypeError(`${label} is invalid`);

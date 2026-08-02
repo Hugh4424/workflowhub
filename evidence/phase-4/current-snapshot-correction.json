@@ -1,0 +1,25 @@
+{
+  "schema_version": "phase-4-current-snapshot-correction.v1",
+  "recorded_at": "2026-08-01",
+  "base_commit": "a878de185caa5ccb28a61baf10c76d59bc33827c",
+  "current_scope": "Current candidate state after the Phase 4 permit-removal implementation; evidence-only files are not used as a historical work permit.",
+  "historical_tasks": {
+    "T019": "audit_only",
+    "T020": "audit_only"
+  },
+  "current_gate": {
+    "command": "./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs --reporter=dot",
+    "expected_exit": 0,
+    "actual_exit": 0,
+    "test_files": 4,
+    "tests": 7
+  },
+  "assertions": [
+    "Material revision does not block ordinary progression.",
+    "Stale quality facts block formal verify and close only.",
+    "Historical checkpoints verify Git-reference integrity only.",
+    "Provider retry is limited to the current workflow run and is not a historical permit.",
+    "The read-only runner fixture leaves WorkflowHub source unchanged."
+  ],
+  "formal_completion": "not_claimed"
+}

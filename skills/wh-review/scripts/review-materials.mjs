@@ -5,20 +5,20 @@ import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
+import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const matrix = JSON.parse(readFileSync(resolve(here, "..", "stage-materials.json"), "utf8"));
 const skillPlan = JSON.parse(readFileSync(resolve(here, "..", "stage-skill-plan.json"), "utf8"));
 const workflowhubSkills = resolve(here, "..", "..");
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+const HASH = /^[0-9a-f]{64}$/i;
+
 const STREAM_CHUNK_BYTES = 64 * 1024;
 export const PHASE_DIFF_INLINE_LIMIT_BYTES = 320 * 1024;
-export const SELECTED_CONTEXT_PACKET_LIMIT_BYTES = 330 * 1024;
 const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
-
 function sha256File(path) {
   const hash = createHash("sha256");
   const fd = openSync(path, "r");
@@ -207,54 +207,107 @@ function integrationEntries(value, key) {
   return value.entries;
 }
 
-function validateIntegrationMaterials({ source, materials }) {
+function validateIntegrationMaterials({ task, source, materials }) {
   const coverage = materials.phase_coverage;
-  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage) || coverage.schema_version !== "phase-review-coverage.v1" ||
-      coverage.snapshot_tree !== source.snapshotTree || !coverage.checkpoint || typeof coverage.checkpoint !== "object" ||
-      !Array.isArray(coverage.phases) || coverage.phases.length === 0) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires non-empty final-snapshot phase-review-coverage.v1");
+  const historicalCoverageUnavailable = coverage?.status === "unavailable";
+  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage)
+      || coverage.schema_version !== "phase-review-coverage.v1"
+      || coverage.snapshot_tree !== source.snapshotTree
+      || (historicalCoverageUnavailable && (coverage.checkpoint !== null || !Array.isArray(coverage.phases) || coverage.phases.length !== 0))
+      || (!historicalCoverageUnavailable && (!coverage.checkpoint || typeof coverage.checkpoint.commit !== "string" || typeof coverage.checkpoint.tree !== "string"
+        || !Array.isArray(coverage.phases) || coverage.phases.length === 0
+        || coverage.phases.some((phase) => !phase || typeof phase.phase_id !== "string" || phase.review_result?.ref === undefined
+          || phase.phase_map_trace?.ref === undefined || phase.green_test_receipt?.ref === undefined)))
+      || !Array.isArray(coverage.phases)
+      || !coverage.implementation_receipt || !coverage.green_test_receipt) {
+    throw new Error("MATERIAL_INCOMPLETE: integration requires phase-review-coverage.v1 for the frozen final snapshot");
   }
-  const phaseIds = new Set();
-  const phases = new Map();
-  for (const phase of coverage.phases) {
-    const semanticReview = phase?.review_status === "semantic";
-    const unavailableReview = phase?.review_status === "unavailable";
-    if (!phase || typeof phase !== "object" || Array.isArray(phase) || typeof phase.phase_id !== "string" || phase.phase_id === "" || phaseIds.has(phase.phase_id) ||
-        typeof phase.base_tree !== "string" || typeof phase.snapshot_tree !== "string" || typeof phase.trace_ref !== "string" ||
-        !/^evidence\/phases\/[A-Za-z0-9._/-]+\/phase-map-trace-[a-f0-9]{64}\.json$/.test(phase.trace_ref) ||
-        typeof phase.review_action?.ref !== "string" || typeof phase.review_attempt?.ref !== "string" ||
-        !(semanticReview || unavailableReview) ||
-        (semanticReview && (typeof phase.review_result?.ref !== "string" || !["pass", "revise_required"].includes(phase.review_verdict))) ||
-        (unavailableReview && (phase.review_result !== null || phase.review_verdict !== null)) ||
-        typeof phase.green_test_receipt?.ref !== "string") {
-      throw new Error("MATERIAL_INCOMPLETE: integration coverage phase identity is invalid");
+  const phaseIds = coverage.phases.map(({ phase_id }) => phase_id).filter(Boolean);
+  if (!historicalCoverageUnavailable && new Set(phaseIds).size !== phaseIds.length) throw new Error("MATERIAL_INCOMPLETE: integration Phase coverage contains duplicate phases");
+  for (const [label, value] of [["implementation", coverage.implementation_receipt], ["GREEN", coverage.green_test_receipt]]) {
+    if (typeof value?.ref !== "string" || hashValue(value?.sha256, `integration ${label} receipt hash`) === "") {
+      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt binding is invalid`);
     }
-    hashValue(phase.trace_sha256, `phase_coverage.${phase.phase_id}.trace_sha256`);
-    hashValue(phase.review_action.sha256, `phase_coverage.${phase.phase_id}.review_action.sha256`);
-    hashValue(phase.review_attempt.sha256, `phase_coverage.${phase.phase_id}.review_attempt.sha256`);
-    if (semanticReview) hashValue(phase.review_result.sha256, `phase_coverage.${phase.phase_id}.review_result.sha256`);
-    hashValue(phase.green_test_receipt.sha256, `phase_coverage.${phase.phase_id}.green_test_receipt.sha256`);
-    phaseIds.add(phase.phase_id); phases.set(phase.phase_id, phase);
+    const raw = assertTaskHandle(task).readRecord(value.ref);
+    if (sha256(raw) !== value.sha256.replace(/^sha256:/, "")) throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt hash mismatch`);
+    let receipt;
+    try { receipt = JSON.parse(raw); } catch { throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt must be JSON`); }
+    if (receipt.snapshot_tree !== source.snapshotTree || (label === "GREEN" && receipt.exit_code !== 0)) {
+      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt is not a passing final-snapshot fact`);
+    }
   }
-  const finalPhase = coverage.phases.at(-1);
-  if ((finalPhase.completion_tree ?? finalPhase.snapshot_tree) !== source.snapshotTree) {
-    throw new Error("MATERIAL_INCOMPLETE: integration coverage does not end at the frozen final snapshot");
+  if (historicalCoverageUnavailable) {
+    const seams = materials.seam_index;
+    if (!seams || typeof seams !== "object" || Array.isArray(seams)
+        || seams.schema_version !== "cross-phase-seam-index.v1"
+        || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)
+        || seams.entries.length !== 0) {
+      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires an empty seam index");
+    }
+    const trace = materials.ac_trace;
+    if (!trace || typeof trace !== "object" || Array.isArray(trace)
+        || trace.schema_version !== "ac-change-test-trace.v1"
+        || trace.snapshot_tree !== source.snapshotTree
+        || !Array.isArray(trace.acceptance_ids) || trace.acceptance_ids.length === 0
+        || new Set(trace.acceptance_ids).size !== trace.acceptance_ids.length) {
+      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires a declared AC trace");
+    }
+    const traced = new Set();
+    for (const entry of integrationEntries(trace, "ac_trace")) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)
+          || typeof entry.acceptance_criterion_id !== "string"
+          || !trace.acceptance_ids.includes(entry.acceptance_criterion_id)
+          || traced.has(entry.acceptance_criterion_id)
+          || !Array.isArray(entry.change) || !Array.isArray(entry.test) || !Array.isArray(entry.evidence)
+          || entry.change.length === 0 || entry.test.length === 0 || entry.evidence.length === 0) {
+        throw new Error("MATERIAL_INCOMPLETE: current-only integration AC mapping is incomplete");
+      }
+      traced.add(entry.acceptance_criterion_id);
+      validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
+      for (const change of entry.change) {
+        if (change?.task_id !== null || typeof change.summary !== "string" || change.summary.trim() === "") {
+          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} current change mapping is invalid`);
+        }
+      }
+      for (const test of entry.test) {
+        if (test?.receipt_ref !== coverage.green_test_receipt.ref
+            || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== coverage.green_test_receipt.sha256.replace(/^sha256:/, "")) {
+          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not current GREEN evidence`);
+        }
+      }
+      for (const evidence of entry.evidence) {
+        if (evidence?.ref !== coverage.implementation_receipt.ref
+            || hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) !== coverage.implementation_receipt.sha256.replace(/^sha256:/, "")) {
+          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not current implementation evidence`);
+        }
+      }
+    }
+    if (traced.size !== trace.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: current-only AC trace omits an accepted AC");
+    return;
+  }
+  for (const phase of historicalCoverageUnavailable ? [] : coverage.phases) {
+    for (const [label, binding] of [["phase map trace", phase.phase_map_trace], ["phase review", phase.review_result], ["phase GREEN", phase.green_test_receipt]]) {
+      if (typeof binding?.ref !== "string" || hashValue(binding.sha256, `integration ${label} hash`) === "") {
+        throw new Error(`MATERIAL_INCOMPLETE: integration ${label} binding is invalid`);
+      }
+      const raw = assertTaskHandle(task).readRecord(binding.ref);
+      if (sha256(raw) !== binding.sha256.replace(/^sha256:/, "")) throw new Error(`MATERIAL_INCOMPLETE: integration ${label} hash mismatch`);
+    }
+    if (phase.review_result.verdict !== "pass" || phase.snapshot_tree === undefined) {
+      throw new Error(`MATERIAL_INCOMPLETE: integration Phase ${phase.phase_id} is not a passing snapshot-bound fact`);
+    }
   }
 
   const seams = materials.seam_index;
-  if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "cross-phase-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires a final-snapshot cross-phase-seam-index.v1");
+  if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "cross-phase-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)) {
+    throw new Error("MATERIAL_INCOMPLETE: integration requires a cross-phase seam index");
   }
-  const seamIds = new Set();
-  for (const seam of integrationEntries(seams, "seam_index")) {
-    if (!seam || typeof seam !== "object" || Array.isArray(seam) || typeof seam.seam_id !== "string" || seam.seam_id === "" || seamIds.has(seam.seam_id) ||
-        !phaseIds.has(seam.producer_phase_id) || !phaseIds.has(seam.consumer_phase_id) || !["complete", "not_applicable", "unknown"].includes(seam.disposition)) {
-      throw new Error("MATERIAL_INCOMPLETE: seam_index entry identity is invalid");
+  for (const seam of seams.entries) {
+    if (!seam || typeof seam !== "object" || typeof seam.seam_id !== "string" || !["complete", "unknown", "not_applicable"].includes(seam.state ?? seam.status)) {
+      throw new Error("MATERIAL_INCOMPLETE: integration seam entry is invalid");
     }
-    seamIds.add(seam.seam_id);
-    if (seam.disposition === "complete") validateAnchors("seam_index", seam.seam_id, seam.anchors);
-    else if (seam.anchors !== undefined || typeof seam.reason_code !== "string" || seam.reason_code === "" || typeof seam.reason !== "string" || seam.reason === "") {
-      throw new Error(`MATERIAL_INCOMPLETE: seam_index.${seam.seam_id} must have anchors or an explicit audited disposition`);
+    if ((seam.state ?? seam.status) !== "complete" && seam.reason_code !== "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS") {
+      throw new Error("MATERIAL_INCOMPLETE: uncertified seam must expose TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS");
     }
   }
 
@@ -274,22 +327,27 @@ function validateIntegrationMaterials({ source, materials }) {
     traced.add(entry.acceptance_criterion_id);
     validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
     for (const change of entry.change) {
-      const phase = phases.get(change?.phase_id);
-      if (!phase || typeof change.path !== "string" || !Array.isArray(phase.changed_files) || !phase.changed_files.includes(change.path)) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is not in covered Phase evidence`);
+      const currentReceiptMapping = historicalCoverageUnavailable && change?.task_id === null;
+      if ((!currentReceiptMapping && (typeof change?.task_id !== "string" || !coverage.completed_tasks.some((task) => task?.task_id === change.task_id))) || typeof change.summary !== "string" || change.summary === "") {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is not current completed-task evidence`);
       }
     }
     for (const test of entry.test) {
-      const phase = phases.get(test?.phase_id);
-      if (!phase || test.receipt_ref !== phase.green_test_receipt.ref || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== phase.green_test_receipt.sha256.replace(/^sha256:/, "")) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not the covered GREEN receipt`);
+      if (test?.receipt_ref !== coverage.green_test_receipt.ref || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== coverage.green_test_receipt.sha256.replace(/^sha256:/, "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not current GREEN evidence`);
       }
     }
     for (const evidence of entry.evidence) {
-      const phase = phases.get(evidence?.phase_id);
-      const allowed = [phase?.canonical_phase_evidence, phase?.implementation_receipt, phase?.review_result].filter(Boolean);
-      if (!phase || !allowed.some((binding) => evidence.ref === binding.ref && hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) === binding.sha256.replace(/^sha256:/, ""))) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not canonical covered evidence`);
+      if (evidence?.ref !== coverage.implementation_receipt.ref || hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) !== coverage.implementation_receipt.sha256.replace(/^sha256:/, "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not current implementation evidence`);
+      }
+    }
+    if (entry.evidence_status === "historical_non_replayable") {
+      const disposition = entry.disposition;
+      if (!disposition || disposition.status !== "verified_user_disposition"
+          || typeof disposition.ref !== "string" || !HASH.test(disposition.sha256 ?? "")
+          || typeof disposition.note !== "string" || disposition.note.trim() === "") {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} historical disclosure requires a verified disposition`);
       }
     }
   }
@@ -358,25 +416,7 @@ export function canonicalMaterialManifest(entries) {
   return JSON.stringify(sorted.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest })));
 }
 
-function ruleFor(stage, track, reviewScope = null) {
-  const stageRule = matrix.stages[stage];
-  if (!stageRule) throw new Error(`MATERIAL_INCOMPLETE: unknown stage ${stage}`);
-  if (stage === "make-decision") {
-    const rule = stageRule.tracks?.[track];
-    if (!rule) throw new Error(`MATERIAL_INCOMPLETE: make-decision requires direction or detail track`);
-    return rule;
-  }
-  if (stage === "build-code") {
-    const scope = reviewScope ?? "phase";
-    if (!['phase', 'integration'].includes(scope)) throw new Error("MATERIAL_INCOMPLETE: build-code requires phase or integration review_scope");
-    const rule = stageRule.profiles?.[scope];
-    if (!rule) throw new Error(`MATERIAL_INCOMPLETE: build-code has no ${scope} material profile`);
-    return rule;
-  }
-  if (reviewScope !== null) throw new Error(`MATERIAL_INCOMPLETE: ${stage} does not use review_scope`);
-  if (track !== null && track !== undefined) throw new Error(`MATERIAL_INCOMPLETE: ${stage} does not use a review track`);
-  return stageRule;
-}
+const ruleFor = reviewRuleFor;
 
 function stagePlanFor(stage, track) {
   const stagePlan = skillPlan.stages[stage];
@@ -599,20 +639,6 @@ function diffSections(source) {
   });
 }
 
-function isSummaryEligiblePath(path) {
-  return /(^|\/)(?:test|tests|__tests__|fixtures|evidence|receipts)(?:\/|$)/i.test(path)
-    || /\.(?:snap|golden|log)$/i.test(path);
-}
-
-function semanticDiffBytes(bytes) {
-  const text = bytes.toString("utf8");
-  const trailing = text.endsWith("\n");
-  const lines = text.split("\n");
-  if (trailing) lines.pop();
-  const kept = lines.filter((line) => !line.startsWith(" "));
-  return Buffer.from(`${kept.join("\n")}${trailing ? "\n" : ""}`, "utf8");
-}
-
 function semanticAnchorRanges(change, anchor) {
   let delta = 0;
   for (const hunk of change.hunks) {
@@ -643,20 +669,20 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   for (const section of diffSections(source)) {
     const change = changesByPath.get(section.path);
     if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
-    const semanticBytes = semanticDiffBytes(section.bytes);
-    for (let offset = 0; offset < semanticBytes.length; offset += PHASE_DIFF_SHARD_TARGET_BYTES) {
-      const body = semanticBytes.subarray(offset, Math.min(semanticBytes.length, offset + PHASE_DIFF_SHARD_TARGET_BYTES));
+    // Every changed path is provider-visible. The canonical full diff remains
+    // archived, while these shards are the review packet's complete path view.
+    for (let offset = 0; offset < section.bytes.length; offset += PHASE_DIFF_SHARD_TARGET_BYTES) {
+      const body = section.bytes.subarray(offset, Math.min(section.bytes.length, offset + PHASE_DIFF_SHARD_TARGET_BYTES));
       const shardId = `S-${String(++ordinal).padStart(4, "0")}`;
-      const selected = !isSummaryEligiblePath(section.path);
       const path = `diff-shards/${shardId}.diff`;
-      if (selected) write(bundleRoot, path, body);
+      write(bundleRoot, path, body);
       shards.push({
         shard_id: shardId,
         _source_path: section.path,
         offset,
         bytes: body.length,
         sha256: sha256(body),
-        delivery: selected ? "included" : "summary_only",
+        delivery: "included",
       });
     }
   }
@@ -667,7 +693,6 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const compactChanges = changeMap.changes.map((change) => ({
     change_id: change.change_id,
     path: change.path,
-    hunk_ids: change.hunks.map(({ hunk_id }) => hunk_id),
     shards: shards.filter((shard) => shard._source_path === change.path)
       .map(({ _source_path, ...shard }) => shard),
   }));
@@ -680,9 +705,9 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     anchors: selectedAnchors(materials).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
+      const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
       const shard = change.shards.find(({ delivery }) => delivery === "included");
       if (!shard) throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
-      const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
       return { anchor_id: anchor.id, shard_id: shard.shard_id, source_lines: semanticAnchorRanges(fullChange, anchor) };
     }),
   };
@@ -703,6 +728,9 @@ export function validateDiffIndexBundle(bundleRoot) {
   const covered = new Set();
   for (const change of index.changes ?? []) {
     covered.add(change.change_id);
+    if (!Array.isArray(change.shards) || !change.shards.some(({ delivery }) => delivery === "included")) {
+      throw new Error(`MATERIAL_INCOMPLETE: changed path ${change.path ?? change.change_id} has no provider-visible diff shard`);
+    }
     for (const shard of change.shards ?? []) {
     if (shard.delivery !== "included") continue;
     const path = join(bundleRoot, "diff-shards", `${shard.shard_id}.diff`);
@@ -926,7 +954,20 @@ function writeTestSummary({ bundleRoot, task, materials }) {
   if (sha256(raw) !== evidence.receipt_hash.replace(/^sha256:/, "")) throw new Error("MATERIAL_INCOMPLETE: test receipt hash mismatch");
   let receipt;
   try { receipt = JSON.parse(raw); } catch { throw new Error("MATERIAL_INCOMPLETE: test receipt must be JSON"); }
-  const summary = { schema_version: "wh-review-test-summary.v1", receipt_ref: evidence.receipt_ref, receipt_hash: evidence.receipt_hash.replace(/^sha256:/, ""), command: receipt.command ?? null, exit_code: receipt.exit_code ?? null, snapshot_tree: receipt.snapshot_tree ?? null, started_at: receipt.started_at ?? null, completed_at: receipt.completed_at ?? null, output_hash: receipt.output_hash ?? null, raw_output_included: false };
+  const summary = {
+    schema_version: "wh-review-test-summary.v1",
+    receipt_ref: evidence.receipt_ref,
+    receipt_hash: evidence.receipt_hash.replace(/^sha256:/, ""),
+    command: receipt.command ?? null,
+    exit_code: receipt.exit_code ?? null,
+    snapshot_tree: receipt.snapshot_tree ?? null,
+    started_at: receipt.started_at ?? null,
+    completed_at: receipt.completed_at ?? null,
+    output_hash: receipt.output_hash ?? null,
+    suite_scope: evidence.suite_scope ?? "unspecified",
+    coverage_classes: evidence.coverage_classes ?? [],
+    raw_output_included: false,
+  };
   write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify(summary, null, 2)}\n`, "utf8"));
 }
 
@@ -951,7 +992,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   rejectDirectRawEvidence(materials);
   if (stage === "build-code" && effectiveScope === "integration") {
     validateIntegrationFreshTests({ task, source, materials });
-    validateIntegrationMaterials({ source, materials });
+    validateIntegrationMaterials({ task, source, materials });
   }
   if (stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
   const acEvidenceSummary = stage === "verify-code"
@@ -973,6 +1014,15 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         compacted.acceptance_criteria,
         materials.acceptance_map,
         canonicalMaterialArchive({ reviewDataRoot, label: "approved-spec", bytes }),
+      );
+    }
+    if (compacted.acceptance_criteria && materials.acceptance_map) {
+      const bytes = materialBytes(compacted.acceptance_criteria);
+      compacted.acceptance_criteria = compactApprovedSpec(
+        materials.approved_spec ?? compacted.acceptance_criteria,
+        compacted.acceptance_criteria,
+        materials.acceptance_map,
+        canonicalMaterialArchive({ reviewDataRoot, label: "acceptance-criteria", bytes }),
       );
     }
     providerMaterials = compacted;
@@ -1007,7 +1057,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         base_tree: changeMap.base_tree,
         candidate_tree: changeMap.candidate_tree,
         changes: changeMap.changes.map(({ change_id, path, status, hunks }) => ({
-          change_id, path, status, hunk_ids: hunks.map(({ hunk_id }) => hunk_id),
+          change_id,
+          path,
+          status,
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
@@ -1048,9 +1100,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
-  if (selectedContextDelivery && deliveryBytes > SELECTED_CONTEXT_PACKET_LIMIT_BYTES) {
-    throw new Error(`MATERIAL_TOO_LARGE: selected_context packet is ${deliveryBytes} bytes; limit is ${SELECTED_CONTEXT_PACKET_LIMIT_BYTES}`);
-  }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
   return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
 }

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "task_id", "stage", "attempt_ref", "integrity_hash", "accepted_at", "upstream_refs"],
+  "properties": {
+    "schema_version": { "const": "task-accepted.v2" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "attempt_ref": { "type": "string", "pattern": "^attempt-[0-9]{4}\\.json$" },
+    "integrity_hash": { "type": "string", "pattern": "^(sha256:)?[a-f0-9]{64}$" },
+    "acceptance_mode": { "enum": ["human", "automatic"] },
+    "human_confirmation_ref": { "type": "string", "minLength": 1 },
+    "accepted_at": { "type": "string", "format": "date-time" },
+    "upstream_refs": { "type": "array" },
+    "checkpoint": { "$ref": "#/$defs/checkpoint" },
+    "full_audit_ref": {
+      "type": "string",
+      "pattern": "^evidence/audits/make-decision/[a-f0-9]{64}\\.json$"
+    },
+    "full_audit_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "full_audit_summary_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "full_audit_verdict": { "enum": ["pass", "fail"] }
+  },
+  "oneOf": [
+    {
+      "required": ["human_confirmation_ref"],
+      "not": { "required": ["acceptance_mode"] }
+    },
+    {
+      "required": ["acceptance_mode", "human_confirmation_ref"],
+      "properties": {
+        "acceptance_mode": { "const": "human" },
+        "stage": { "enum": ["make-decision", "build-plan", "verify-code"] }
+      }
+    },
+    {
+      "required": ["acceptance_mode"],
+      "properties": {
+        "acceptance_mode": { "const": "automatic" },
+        "stage": { "enum": ["build-spec", "build-code"] }
+      },
+      "not": { "required": ["human_confirmation_ref"] }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          { "required": ["full_audit_ref"] },
+          { "required": ["full_audit_hash"] },
+          { "required": ["full_audit_summary_hash"] },
+          { "required": ["full_audit_verdict"] }
+        ]
+      },
+      "then": {
+        "required": ["full_audit_ref", "full_audit_hash", "full_audit_summary_hash", "full_audit_verdict"],
+        "properties": { "stage": { "const": "make-decision" } }
+      }
+    }
+  ],
+  "$defs": {
+    "checkpoint": {
+      "type": "object",
+      "required": ["ref", "commit_oid", "tree_oid", "artifacts"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^refs/workflowhub/checkpoints/[^/]+/[^/]+/(build-spec|build-plan)/plan-[a-f0-9]{64}$" },
+        "commit_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "tree_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "blob_oid", "content_hash"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "blob_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+              "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

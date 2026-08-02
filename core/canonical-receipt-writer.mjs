@@ -1,20 +1,22 @@
 import { createHash } from "node:crypto";
+export { createPublication, publishImmutable } from "../runtime/stage/publication.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
-import { createTaskKernel } from "./task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { runWorkspaceCommand } from "./workspace-runner.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
-import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
-import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
+import { runWorkspaceCommand } from "../runtime/task/workspace-runner.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { validateSchema } from "../runtime/review/schema-validator.mjs";
+import { normalizeRuntimeOnlyPaths } from "../runtime/evidence/canonical-utils.mjs";
 import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
-import { carryAuditSummary, verifyAuditSummary } from "./audit-summary-carrier.mjs";
+import { carryAuditSummary, verifyAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
-import { loadStageManifest } from "./step-manifest.mjs";
+import { loadStageManifest } from "../runtime/stage/step-manifest.mjs";
+import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
@@ -113,30 +115,11 @@ function auditableJournalEvents(task, stage, workflowRunId) {
     bucket.push(event);
     byAttempt.set(key, bucket);
   }
-  const invalidated = new Set();
-  const invalidatedEvents = new Map();
-  for (const [key, attemptEvents] of byAttempt) {
-    const [stepId, attemptId] = key.split("\0");
-    const identityHash = sha256(`${workflowRunId}\0${stepId}\0${attemptId}`);
-    const ref = `runs/${stage}/journal-invalidations/${identityHash}.json`;
-    const raw = readCanonicalRecord(task, ref);
-    if (raw === undefined) continue;
-    const record = JSON.parse(raw);
-    if (record.schema_version !== "stage-step-attempt-invalidation.v1"
-        || record.task_id !== task.identity.taskId || record.stage !== stage
-        || record.workflow_run_id !== workflowRunId || record.step_id !== Number(stepId)
-        || record.attempt_id !== attemptId
-        || record.events_hash !== sha256(canonicalHashJson(attemptEvents))) {
-      throw new Error("stage step attempt invalidation binding mismatch");
-    }
-    invalidated.add(key);
-    invalidatedEvents.set(key, attemptEvents);
-  }
-  const auditableEvents = events.filter((event) => !invalidated.has(`${event.step_id}\0${event.attempt_id}`));
+  const auditableEvents = events;
   const authenticatedRetries = auditableEvents
     .filter((event) => event.event_type === "step_entry" && event.retry_of_attempt_id)
     .map((retryEvent) => {
-      const previousEvents = invalidatedEvents.get(`${retryEvent.step_id}\0${retryEvent.retry_of_attempt_id}`);
+      const previousEvents = byAttempt.get(`${retryEvent.step_id}\0${retryEvent.retry_of_attempt_id}`);
       if (previousEvents === undefined) return null;
       return authenticateAuditRetryEvidence({
         task,
@@ -179,7 +162,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
     : { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
   const activeRun = kernel.activeStageRun(stage);
   const workflowRunId = activeRun.run.workflow_run_id;
-  const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
+  const snapshot = captureExecutionSnapshot(safeWorkspace.worktreeRoot);
   const kinds = requiredStageContentKinds(stage);
   const contentEvidence = kinds.map((kind) => {
     const latest = readLatestStageContentEvidence({
@@ -315,7 +298,7 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
   const root = assertWorkspace(workspace).worktreeRoot;
-  return captureGitWorktreeSnapshot(root);
+  return captureExecutionSnapshot(root);
 }
 
 /** Fixed registry for official non-test component receipts. */
@@ -486,6 +469,9 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         const outputHash = sha256(output), commandHash = sha256(command);
         write(outputRef, output);
         const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
+        validateCanonicalTestReceipt(receipt, {
+          taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, subject: component,
+        });
         const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
         return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
       }, { waitMs: TEST_CAPTURE_LOCK_WAIT_MS });

@@ -1,0 +1,2315 @@
+{
+  "schema_version": "workflowhub-legacy-migration-green-proof.v1",
+  "generated_by": "tools/migrations/freeze-legacy-dispositions.mjs",
+  "generated_at": "2026-07-31T01:35:48.215Z",
+  "confirmation": {
+    "decision": "Option A freeze-only disposition: import keeps sources in place with frozen identity and material hashes; archive preserves closed tasks; reject excludes directories without a valid stable identity; no vNext copies, no dual-write, sources untouched",
+    "rule": "legacy active -> import; legacy inactive -> archive; unsupported -> reject",
+    "confirmed_by": "user",
+    "confirmed_at": "2026-07-31",
+    "user_confirmed": true
+  },
+  "inventory_payload_sha256": "dc863370c76cca4cba6623efec962970a843200fd0369a5f4899ffe756421bd6",
+  "inventory_source_aggregate_sha256": "1210382634af2094dc5e83e4a171cb3e62a7647b22fe3b6367e08482d1b1ac2b",
+  "frozen_source_aggregate_sha256": "ba057c00a8b725665d2ef7489e3bd88c5b22c2b4f70c8c65d57df4cb26aab91b",
+  "in_progress_items": [
+    "workflowhub\u0000workflowhub-complexity-governance-v2"
+  ],
+  "stable_ids": [
+    "unknown\u0000agenthub-extraction-program",
+    "unknown\u0000m1-scaffold",
+    "unknown\u0000m10-baseline-switch",
+    "unknown\u0000m11-build-spec-v1",
+    "unknown\u0000m12-build-plan-v1",
+    "unknown\u0000m13-make-decision-v1",
+    "unknown\u0000m13a-moat-skills",
+    "unknown\u0000m13b-build-spec-deepening",
+    "unknown\u0000m13c-build-plan-deepening",
+    "unknown\u0000m13d-build-code-deepening",
+    "unknown\u0000m13e-verify-code-deepening",
+    "unknown\u0000m14a-spec-dual-claude-20260711T0025",
+    "unknown\u0000m14a-spec-dual-kimi-20260711T0025",
+    "unknown\u0000m14a-spec-review-wh-fix-1783691538698",
+    "unknown\u0000m14a-wh-review-acceptance-1783689955377",
+    "unknown\u0000m14a-wh-review-e2e-82acb86",
+    "unknown\u0000m14a-wh-review-e2e-82acb86-claude",
+    "unknown\u0000m14a-wh-review-final-1783690575795",
+    "unknown\u0000m2-microkernel",
+    "unknown\u0000m3-narrow-contract",
+    "unknown\u0000m4-metrics-foundation",
+    "unknown\u0000m5-quality-mechanism",
+    "unknown\u0000m6-five-stage-skeleton",
+    "unknown\u0000m7-intake-v1",
+    "unknown\u0000m8-build-code",
+    "unknown\u0000m9-verify-code",
+    "unknown\u0000make-decision-audit",
+    "unknown\u0000multica-cost-review",
+    "unknown\u0000repo-root-cleanup-20260709T071500Z",
+    "unknown\u0000review-fix-20260711",
+    "unknown\u0000step-gated-audit",
+    "unknown\u0000verify-code-work1-hook-review-20260703T073122Z-da8c04",
+    "unknown\u0000verify-code-work1-hook-review-20260703T073637Z-e8f128",
+    "unknown\u0000wh-quality-convergence",
+    "unknown\u0000wh-review-e2e-20260710-build-spec",
+    "unknown\u0000wh-review-e2e-final",
+    "unknown\u0000wh-review-m14a-43adf99-e2e",
+    "unknown\u0000wh-review-rebuild",
+    "unknown\u0000worktree-unification",
+    "unknown\u0000ZHI-138",
+    "workflowhub\u0000build-plan-baseline-rebind",
+    "workflowhub\u0000close-conflict-simple",
+    "workflowhub\u0000delivery-close-execute",
+    "workflowhub\u0000fix-wh-review-predispatch-v2-20260727",
+    "workflowhub\u0000flow-reliability-cli-guidance-review-20260720",
+    "workflowhub\u0000flow-reliability-cli-guidance-review-20260720-v2",
+    "workflowhub\u0000flow-reliability-cli-guidance-review-20260720-v3",
+    "workflowhub\u0000flow-reliability-current-tree-review-20260720000708",
+    "workflowhub\u0000flow-reliability-current-tree-review-20260720000735",
+    "workflowhub\u0000interaction-quality-amendment",
+    "workflowhub\u0000interaction-quality-amendment-v2",
+    "workflowhub\u0000m14a-audit-contract-layer",
+    "workflowhub\u0000m14a-audit-contract-layer-rebuild",
+    "workflowhub\u0000m14b-fact-collection",
+    "workflowhub\u0000m14b-fact-collection-g2",
+    "workflowhub\u0000make-decision-bootstrap-repair",
+    "workflowhub\u0000multica-006caae8-09ee-43cd-98ba-fca3f0b94077",
+    "workflowhub\u0000multica-1fb79706-c6d9-4284-9e55-d4a4cc9e37a4",
+    "workflowhub\u0000multica-296db234-125d-40eb-96d5-abf702d2dbe4",
+    "workflowhub\u0000multica-38f9c897-c4e8-4c13-b4ba-4609fc05f035",
+    "workflowhub\u0000multica-3a84ec8b-4601-4fda-8cc9-eefd8350ae5b",
+    "workflowhub\u0000multica-5e184887-46f6-4b95-aa9b-878f2e2379c5",
+    "workflowhub\u0000multica-6a6ee876-9efa-4a47-933b-9b866a4dfab6",
+    "workflowhub\u0000multica-7c039943-bff7-4047-87c8-a02799634564",
+    "workflowhub\u0000multica-a0bd3b63-89e7-4519-bfbb-05235ee0434a",
+    "workflowhub\u0000multica-b166d00d-23e4-474f-bee8-de1291129fc4",
+    "workflowhub\u0000multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6",
+    "workflowhub\u0000multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-restart-20260724",
+    "workflowhub\u0000multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-runnerfix-20260724",
+    "workflowhub\u0000multica-flow-reliability-final",
+    "workflowhub\u0000multica-identity-materials-state",
+    "workflowhub\u0000multica-isolation-recovery",
+    "workflowhub\u0000multica-isolation-recovery-v2",
+    "workflowhub\u0000multica-isolation-recovery-v3",
+    "workflowhub\u0000multica-minimal-recovery-v4",
+    "workflowhub\u0000multica-workflowhub-reliability",
+    "workflowhub\u0000multica-workflowhub-reliability-v2",
+    "workflowhub\u0000multica-ZHI-102",
+    "workflowhub\u0000multica-ZHI-831-v2",
+    "workflowhub\u0000multica-ZHI-843",
+    "workflowhub\u0000multica-ZHI-850",
+    "workflowhub\u0000multica-ZHI-851",
+    "workflowhub\u0000multica-ZHI-851-contract-revision-01",
+    "workflowhub\u0000multica-ZHI-891",
+    "workflowhub\u0000preaccept-build-repair-guidance-review-20260720",
+    "workflowhub\u0000preaccept-build-repair-guidance-review-20260720-v2",
+    "workflowhub\u0000prompt-root-init-review-20260719",
+    "workflowhub\u0000prompt-root-init-review-20260719-v2",
+    "workflowhub\u0000review-entry-aggregation-simplification",
+    "workflowhub\u0000review-flow-reset",
+    "workflowhub\u0000review-foundation-baseline",
+    "workflowhub\u0000review-foundation-baseline-v2",
+    "workflowhub\u0000review-foundation-baseline-v3",
+    "workflowhub\u0000self-contained-stage-skill-review-20260720",
+    "workflowhub\u0000spec-plan-context-quality",
+    "workflowhub\u0000stage-content-contracts",
+    "workflowhub\u0000stage-interaction-handoff-completeness",
+    "workflowhub\u0000test-parallel-batch",
+    "workflowhub\u0000v4-gap-final-advice-review-20260717",
+    "workflowhub\u0000v4-gap-final-advice-review-20260717-v2",
+    "workflowhub\u0000wh-review-bundle-closure-skill-sync",
+    "workflowhub\u0000wh-review-materials-v3",
+    "workflowhub\u0000wh-review-materials-v3-evidence-rebuild",
+    "workflowhub\u0000wh-review-v2",
+    "workflowhub\u0000workflow-quality-recording-simplification",
+    "workflowhub\u0000workflowhub-complexity-governance-v2"
+  ],
+  "dispositions": [
+    {
+      "project": "unknown",
+      "task_id": "agenthub-extraction-program",
+      "locator_hash": "907b9865fdfb3a2ddea49b579a9a1453ba34dd98a02ffd0e91c58f6f9cf78f5e",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 271,
+        "content_sha256": "9dbc936f5b2489ecbd35d2bd3a27c6cc3507ad39267d35d2d4552f9f57705705"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 271,
+          "content_sha256": "9dbc936f5b2489ecbd35d2bd3a27c6cc3507ad39267d35d2d4552f9f57705705"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m1-scaffold",
+      "locator_hash": "ae2e6c50eca36e3077910a3007ee5eea0a5225bec9b0ddb270c4a7d81b765a28",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 127,
+        "content_sha256": "eba3c09531f7c4e83c505ff3919850c0194e19fb49e5d35d8477ec9cfdb00172"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 127,
+          "content_sha256": "eba3c09531f7c4e83c505ff3919850c0194e19fb49e5d35d8477ec9cfdb00172"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m10-baseline-switch",
+      "locator_hash": "99ad4cb696e293047ca3603f5752fba7b6c4283009ad599b16cd2fba8c21c446",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 84,
+        "content_sha256": "f0e4321a5f5362154a0e6c7af1f3019ccfa3e5a6b5d8b1430bcb04b2d45b8594"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 84,
+          "content_sha256": "f0e4321a5f5362154a0e6c7af1f3019ccfa3e5a6b5d8b1430bcb04b2d45b8594"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m11-build-spec-v1",
+      "locator_hash": "48a92dbe79c58c95725aeb53de1835e1a4b954b023aff702c2759c7e9169eb2a",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 49,
+        "content_sha256": "7d6842866b8c571869fd27e2502c191da80a06f0b30d44a97e678bdaf81914b6"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 49,
+          "content_sha256": "7d6842866b8c571869fd27e2502c191da80a06f0b30d44a97e678bdaf81914b6"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m12-build-plan-v1",
+      "locator_hash": "4511a0a68c90bc30efdaa9b5fa67da0bd38a3c47ff5f6302ccdbe09f41ef3167",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 198,
+        "content_sha256": "423970208a5c022514b32034b7b8c1c4e598cafe2124a035097d636e46167454"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 198,
+          "content_sha256": "423970208a5c022514b32034b7b8c1c4e598cafe2124a035097d636e46167454"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13-make-decision-v1",
+      "locator_hash": "45df1edad1e1745ff9719297ba309ad64c5c03bb33dff43f77da1391a29ca06b",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 145,
+        "content_sha256": "937829e1af5daeac3b939a45daa1b599c0887e157fbd0fce7c152837d8c0c575"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 145,
+          "content_sha256": "937829e1af5daeac3b939a45daa1b599c0887e157fbd0fce7c152837d8c0c575"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13a-moat-skills",
+      "locator_hash": "475f2e9a117a65783bf2e7350972690cf880b183918b947450641419f45f7ff0",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 50,
+        "content_sha256": "77d7e1b1bd0fc6a5fe3e4b6d2f89dedbb87e0e083844559fb93e9b7e94c74217"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 50,
+          "content_sha256": "77d7e1b1bd0fc6a5fe3e4b6d2f89dedbb87e0e083844559fb93e9b7e94c74217"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13b-build-spec-deepening",
+      "locator_hash": "c457e4bd25d51ca987566519a7b7d1ea873cf9574e02cb6ea42b7b644747ca64",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 81,
+        "content_sha256": "45a6e0040c7c06088ef6ced4f4777d4d3c49d20f91faba899de3e5eeb90c95b0"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 81,
+          "content_sha256": "45a6e0040c7c06088ef6ced4f4777d4d3c49d20f91faba899de3e5eeb90c95b0"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13c-build-plan-deepening",
+      "locator_hash": "8afa5c18e9ee59a763d337762081379f5c63c5eb54dfafd3dd002ba1c92d16b6",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 93,
+        "content_sha256": "56f0d36391a0d318188eb1c7883aa7acff7347bc751c9792801c4da2ea4b56c2"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 93,
+          "content_sha256": "56f0d36391a0d318188eb1c7883aa7acff7347bc751c9792801c4da2ea4b56c2"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13d-build-code-deepening",
+      "locator_hash": "7caf392a9dd52165dcdecc9050b43bf13ff383eb80f37eaa52d9f2637181c85a",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 78,
+        "content_sha256": "53c9004feb970fcf5c074ef0f8a3fda1fc5cf617ea57aaa3477c8501b140cca8"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 78,
+          "content_sha256": "53c9004feb970fcf5c074ef0f8a3fda1fc5cf617ea57aaa3477c8501b140cca8"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m13e-verify-code-deepening",
+      "locator_hash": "27deece68913c8a8857bc896c431dec5f4adffae1e166359353d40ca40018f59",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 86,
+        "content_sha256": "7ba33db9302c6c48d6a4493076081030ecff03abfcaaf6e5a5ccef1bb62cc3ce"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 86,
+          "content_sha256": "7ba33db9302c6c48d6a4493076081030ecff03abfcaaf6e5a5ccef1bb62cc3ce"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-spec-dual-claude-20260711T0025",
+      "locator_hash": "bbfbdbf64ec08717accbcd7efe9fd9ac9f5fe503d8af24b41c61daba7846ea99",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 57,
+        "content_sha256": "70eb581994b01e353097f85a8f5769199a396b1fc7c3c28ec2b4c8b6e4cbf822"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 57,
+          "content_sha256": "70eb581994b01e353097f85a8f5769199a396b1fc7c3c28ec2b4c8b6e4cbf822"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-spec-dual-kimi-20260711T0025",
+      "locator_hash": "84ae5d22ef477677c5bde9187498cba131563f20768bdb1f0fdd58a9cd19c9e2",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 13,
+        "content_sha256": "9b4e8b8d6998747630ef16b7a543498c1a05be3340a3641281df9c1801f5bf95"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 13,
+          "content_sha256": "9b4e8b8d6998747630ef16b7a543498c1a05be3340a3641281df9c1801f5bf95"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-spec-review-wh-fix-1783691538698",
+      "locator_hash": "c296f269eaac821d217ce9112f73d9962c9d3f07edfa1e332525c0723ebad003",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 35,
+        "content_sha256": "0e5e04bcaa4534a344f181414a00cbaff8b2037412e5f74709f1488f22663e20"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 35,
+          "content_sha256": "0e5e04bcaa4534a344f181414a00cbaff8b2037412e5f74709f1488f22663e20"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-wh-review-acceptance-1783689955377",
+      "locator_hash": "ac1d94c9f396b895c7fe20bc638fc27a2a2848b9da8b5bee75195b18717421f0",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 34,
+        "content_sha256": "7fa4dcfa7636ec71b61e303cf2d16dbe5ec8eb795399b59f93b56d74c9806167"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 34,
+          "content_sha256": "7fa4dcfa7636ec71b61e303cf2d16dbe5ec8eb795399b59f93b56d74c9806167"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-wh-review-e2e-82acb86",
+      "locator_hash": "25e2fe692150dba4dd0b3eb92561360bb34387e96815d68d858a137e002ae974",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 8,
+        "content_sha256": "ba83027b871597beeb450a12b1254803ad5964b6c76070345c16c8918ddac09c"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 8,
+          "content_sha256": "ba83027b871597beeb450a12b1254803ad5964b6c76070345c16c8918ddac09c"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-wh-review-e2e-82acb86-claude",
+      "locator_hash": "e7e4ebc87b8db6a04ef63b97ecfca84602f57fbb2a494aeffffd96955c57247d",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 35,
+        "content_sha256": "38626ea8e7625a62a9d639759f952053a9893b357bddb78c9295b0dbea736160"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 35,
+          "content_sha256": "38626ea8e7625a62a9d639759f952053a9893b357bddb78c9295b0dbea736160"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m14a-wh-review-final-1783690575795",
+      "locator_hash": "82f543e5586254fa522e2bae2673ca4363412ea7530a882c114ce06814f17afe",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 34,
+        "content_sha256": "a232779e3191590bede282cbbc194979d489f996e514178628af3af4f18c780c"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 34,
+          "content_sha256": "a232779e3191590bede282cbbc194979d489f996e514178628af3af4f18c780c"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m2-microkernel",
+      "locator_hash": "7e2122aa6fed1eff3cf86473547406105bbc1af3bbd2462d210fbb03480d006a",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 367,
+        "content_sha256": "4c5685d77cc3a665deeeb0f567472995b83de22191b0199921054d512280ef6f"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 367,
+          "content_sha256": "4c5685d77cc3a665deeeb0f567472995b83de22191b0199921054d512280ef6f"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m3-narrow-contract",
+      "locator_hash": "2680c0c84264f4214431a31b2b0a4b613b58dbb00ac54f24147319cf9744f579",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 160,
+        "content_sha256": "52f2f36952b36129281e89b0ca526ec7eadba37e65b59a7ecca2ef385a7b94cb"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 160,
+          "content_sha256": "52f2f36952b36129281e89b0ca526ec7eadba37e65b59a7ecca2ef385a7b94cb"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m4-metrics-foundation",
+      "locator_hash": "4d285e1351a6fb495170aeb67c3ba34faeab26ee52a7709309607f77f2e017c0",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 228,
+        "content_sha256": "2c986f178edddb7af6f58716ad1fb72fff31ad18f88cb722dc91b71bdccaa06b"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 228,
+          "content_sha256": "2c986f178edddb7af6f58716ad1fb72fff31ad18f88cb722dc91b71bdccaa06b"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m5-quality-mechanism",
+      "locator_hash": "4e4b1178cdbf0605250bd2f3c3be221714ae625e235084863cf59d23d36d6b3f",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 253,
+        "content_sha256": "6edbf97cdd5b320135f3de16b53643bf234601aece53861f6a595b5087e415ee"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 253,
+          "content_sha256": "6edbf97cdd5b320135f3de16b53643bf234601aece53861f6a595b5087e415ee"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m6-five-stage-skeleton",
+      "locator_hash": "aec20015ed32bd3e024d19ba8b7da9314954b66faded1a0c229352b1e46d6ae7",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 187,
+        "content_sha256": "da3b8b789763f48ab5d00108b6a9ec26bb04eb2623d118a8c7deac1ab36c837b"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 187,
+          "content_sha256": "da3b8b789763f48ab5d00108b6a9ec26bb04eb2623d118a8c7deac1ab36c837b"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m7-intake-v1",
+      "locator_hash": "36448c2caa0cf6320bf0f8bb9df75428b507cd85a402daa425d5e1894543a5ea",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 286,
+        "content_sha256": "3fd86c7eeef3a6c060d98de923ac1ae7536fbef63072d91b3b0d6440db5d01d5"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 286,
+          "content_sha256": "3fd86c7eeef3a6c060d98de923ac1ae7536fbef63072d91b3b0d6440db5d01d5"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m8-build-code",
+      "locator_hash": "7e16cab066967c39c10abc318a6b9d51f6df6ead1d95fed1f100283e04adcfa6",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 291,
+        "content_sha256": "a9132b1d11282eb866c0378ebfaf95a2df3c97cb5757eb20a1a88482640fc9dc"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 291,
+          "content_sha256": "a9132b1d11282eb866c0378ebfaf95a2df3c97cb5757eb20a1a88482640fc9dc"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "m9-verify-code",
+      "locator_hash": "959be5c8412f4259cdec0ffbc0c1e289c7c5bfb73c56842f804abcdbf2eb2e8b",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 68,
+        "content_sha256": "d96cb0aa9f82ff32d1978f2e09cce0fc183bde51821e7958c12d24e51d9ff1aa"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 68,
+          "content_sha256": "d96cb0aa9f82ff32d1978f2e09cce0fc183bde51821e7958c12d24e51d9ff1aa"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "make-decision-audit",
+      "locator_hash": "4481bc559e3130599d8e0331486d0a47405aec4b56d0bdfe24876b3efb1a99ca",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1004,
+        "content_sha256": "b5656527d0624ec31509363b1325b7b1c335ef4834d59c096b8cb476938ba9eb"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 1004,
+          "content_sha256": "b5656527d0624ec31509363b1325b7b1c335ef4834d59c096b8cb476938ba9eb"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "multica-cost-review",
+      "locator_hash": "e3e2832729ac0b88ce2a70ea21143052dbd4dd625064042ede96267ccd4dcc8c",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 10,
+        "content_sha256": "26a32bd62292830be0d21a71038e452669e4a6e28a41ac91f0a6fb05b469b5f6"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 10,
+          "content_sha256": "26a32bd62292830be0d21a71038e452669e4a6e28a41ac91f0a6fb05b469b5f6"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "repo-root-cleanup-20260709T071500Z",
+      "locator_hash": "e213257c697b2938531266098d146f7e998f0009169c1824de1f76eca73e8110",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 573,
+        "content_sha256": "17468e0d06a851d0bcaabb3cefd955a2d664cd0978a7619ee96c750b1b6adf3a"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 573,
+          "content_sha256": "17468e0d06a851d0bcaabb3cefd955a2d664cd0978a7619ee96c750b1b6adf3a"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "review-fix-20260711",
+      "locator_hash": "d827c7705dd5adff75ffe3f36be913133e8ad8ea9ac97aea2075719109075d5e",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 7,
+        "content_sha256": "4a78b727694594ae9343c38884ebde18b40b8252d6fdd85f340c194aa835dc33"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 7,
+          "content_sha256": "4a78b727694594ae9343c38884ebde18b40b8252d6fdd85f340c194aa835dc33"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "step-gated-audit",
+      "locator_hash": "41afbc2b6329e2b5c4323095f599547d016dd91a6c933c7e6747382687ef05fc",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 263,
+        "content_sha256": "717e6e232e893cab6af3bc4a00bcfcb5aa113c9694d75c6d5c9d77627939e527"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 263,
+          "content_sha256": "717e6e232e893cab6af3bc4a00bcfcb5aa113c9694d75c6d5c9d77627939e527"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "verify-code-work1-hook-review-20260703T073122Z-da8c04",
+      "locator_hash": "78a927823028d1ce1a6b211e2081068328bded6484cc0efdfaa0a3b7fd8c8711",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 14,
+        "content_sha256": "bb6f80fba859f5624a2e4d61a4751f1b4798dba29f23352579c969201f366d06"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 14,
+          "content_sha256": "bb6f80fba859f5624a2e4d61a4751f1b4798dba29f23352579c969201f366d06"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "verify-code-work1-hook-review-20260703T073637Z-e8f128",
+      "locator_hash": "f46bc93925c72e39aa9790e0480bd902d90ca1b0970caee299dfd5bf4b332324",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 14,
+        "content_sha256": "22dd88bed75c3cae76545a23ad039d721de43aedabde533a3b152b092da0f530"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 14,
+          "content_sha256": "22dd88bed75c3cae76545a23ad039d721de43aedabde533a3b152b092da0f530"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "wh-quality-convergence",
+      "locator_hash": "d538eaaf0cf5ec2250eefde5acd301282afc670b65973f58bd526c4bc5bdd55e",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 429,
+        "content_sha256": "3d785b9223ed2e809ec64d493fcb5f70ecf965644da19913cf6afb9390c6096d"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 429,
+          "content_sha256": "3d785b9223ed2e809ec64d493fcb5f70ecf965644da19913cf6afb9390c6096d"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "wh-review-e2e-20260710-build-spec",
+      "locator_hash": "4a136c7f5f969cfebde65edc40a7aff35f92edd3224cd9afa5eb3df0322ccfa1",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 33,
+        "content_sha256": "6b89a4e18157f7e866c65a634a9c11d228afb4bb7e5524a8682217b5bf147f3c"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 33,
+          "content_sha256": "6b89a4e18157f7e866c65a634a9c11d228afb4bb7e5524a8682217b5bf147f3c"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "wh-review-e2e-final",
+      "locator_hash": "35e3181cf9e8bb9f35e1736b355fa404b68f9f0282f71c42258b7a841242168f",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 34,
+        "content_sha256": "860b383da00bd7d9edb37403eb2bce4805ebe4b636d32bf05e138de0b5573555"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 34,
+          "content_sha256": "860b383da00bd7d9edb37403eb2bce4805ebe4b636d32bf05e138de0b5573555"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "wh-review-m14a-43adf99-e2e",
+      "locator_hash": "93f4c456962ea7cc70ff1e9bf42acb85acd9625f77f50d4d8235c31995ed2e1b",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 35,
+        "content_sha256": "51542c10fa880bafdffb08b112f8dd21d5e10a8396a17092a7c92f6d3809ce86"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 35,
+          "content_sha256": "51542c10fa880bafdffb08b112f8dd21d5e10a8396a17092a7c92f6d3809ce86"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "wh-review-rebuild",
+      "locator_hash": "d678831c6c440e09e98c58bfe1b9ef086a12fee759ebaba6167a598c147409fc",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1106,
+        "content_sha256": "3e50916c06765b73c6653cfd7fbc52a00ddaf6cd04e64de18926fd140d903731"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 1106,
+          "content_sha256": "3e50916c06765b73c6653cfd7fbc52a00ddaf6cd04e64de18926fd140d903731"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "worktree-unification",
+      "locator_hash": "0a4c86b99fd4a99d8dd0fa6a256aab898bb893735a8a8990d71098083c4e6ae5",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 561,
+        "content_sha256": "c2fea4855c353ef741d1cac120ff215de62381fec9607c1fb908f396c88b98e4"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 561,
+          "content_sha256": "c2fea4855c353ef741d1cac120ff215de62381fec9607c1fb908f396c88b98e4"
+        }
+      }
+    },
+    {
+      "project": "unknown",
+      "task_id": "ZHI-138",
+      "locator_hash": "5c8b0f7eb357b081309291128d268e3e32753a495b44791f4f7f9f187c355e78",
+      "disposition": "reject",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "f31970cebdd796d2b94e6cb5e0770cc6d7457f7bd3fc6d6d67ed1b40dd054197"
+      },
+      "post_action_receipts": {
+        "action": "reject-no-valid-identity",
+        "source_untouched": true,
+        "reason": "task directory has no task.json identity manifest",
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "f31970cebdd796d2b94e6cb5e0770cc6d7457f7bd3fc6d6d67ed1b40dd054197"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "build-plan-baseline-rebind",
+      "locator_hash": "ae8df7fb52e37baf086202b0c1471c37395cff045ea656da5ceab3e52f72140b",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 53,
+        "content_sha256": "df6634f6cc8dd8db1588323eaa3b2181cf222eff2465ac43340a8ef82bfca188"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "4ff6e6a9e0e3aa7ef9ed423690d51b216e5fda2ffcf0595a553ecedd105e91d0",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 53,
+          "content_sha256": "df6634f6cc8dd8db1588323eaa3b2181cf222eff2465ac43340a8ef82bfca188"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "close-conflict-simple",
+      "locator_hash": "aa64dc8ae7ecd9a6ced1e10662762c0bcccf86707db129e8987daeda7bb6af0a",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 2,
+        "content_sha256": "b0c6bd19ba355b10cbac666cbe34791a23bf9707143f821578ce61af9468d44a"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "3c9a6bd9beacdc8f93a072755579c8d7551505e1285acdb32be4674317b447a9",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 2,
+          "content_sha256": "b0c6bd19ba355b10cbac666cbe34791a23bf9707143f821578ce61af9468d44a"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "delivery-close-execute",
+      "locator_hash": "235ab3207da65b84b26a6bad1f3c832b72818589f1462f8cdce73333d01b413e",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 94,
+        "content_sha256": "3abd41e7b118ab336aa3336f3c59bef318e5f6d8acb9f9f0d2bbfe2a963360e6"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "4ada053c9c93a0f0c3405cddb728aad24c42b16112ac00fa89793d5352aad4db",
+        "source_manifest": {
+          "file_count": 94,
+          "content_sha256": "3abd41e7b118ab336aa3336f3c59bef318e5f6d8acb9f9f0d2bbfe2a963360e6"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "fix-wh-review-predispatch-v2-20260727",
+      "locator_hash": "89faf16b1be87c66c29baf670b351686bfe464fe3a9383edcafd52dfbe62bf8b",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "ca0179a7c9543b58b8e62914763737d4eed8d081672481350967fe65c25ba396"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "beedbf2ec0d513bcbefd97b1c8d7892821dcd05ab02da9c1c4bdaa26a4f7157a",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "ca0179a7c9543b58b8e62914763737d4eed8d081672481350967fe65c25ba396"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "flow-reliability-cli-guidance-review-20260720",
+      "locator_hash": "50881ff19e2034d7a251f811833a1be7504edc4a4d7cdca81b4336ab98079501",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "c3a0283b9c7d3388219ac868d660304d9eea778e7a2a1b9253482b943d2e988f"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "d00f85fb2557323a062b04770cab4398ed62b843237047129530c1260b7b93d1",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "c3a0283b9c7d3388219ac868d660304d9eea778e7a2a1b9253482b943d2e988f"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "flow-reliability-cli-guidance-review-20260720-v2",
+      "locator_hash": "5b5718c4f8b2cd44934b1c785064ee4a8d629c2ee443b7aa9b86156f129784af",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 5,
+        "content_sha256": "3fad7f90e7c7ba6fdc547f84a4fa965592121b68093195f27d059e1eb34e856b"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "d676060fbed38e291177be5d0a0175740ea10f3d75c88001128dd69c6e904509",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 5,
+          "content_sha256": "3fad7f90e7c7ba6fdc547f84a4fa965592121b68093195f27d059e1eb34e856b"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "flow-reliability-cli-guidance-review-20260720-v3",
+      "locator_hash": "0cc6c524d5ca82f41d5ff8ed554a010c0a12fc7e7c83b4722a852c079a4b38a8",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 5,
+        "content_sha256": "edbf2858bdcbaed134a6cc5cd2a14ed8ee5fdbf8eac5860b9189e6b93c965416"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "783514e8b8f92e036524ce3ed116f18d3712525a172ef64a2e061bfa746d0b51",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 5,
+          "content_sha256": "edbf2858bdcbaed134a6cc5cd2a14ed8ee5fdbf8eac5860b9189e6b93c965416"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "flow-reliability-current-tree-review-20260720000708",
+      "locator_hash": "42a237ea1b12dfd42e03872dc6911976c2cac461d0931d06c3a731511581ea8e",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "b04c3f70ed8d2dad71ad95827532b6fd00b72a694dc8bfe55c6b3dd454e5c54b"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "737f222452b9a1619f70c2c144750669dda2fd23ead111c98bebbca451faff86",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "b04c3f70ed8d2dad71ad95827532b6fd00b72a694dc8bfe55c6b3dd454e5c54b"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "flow-reliability-current-tree-review-20260720000735",
+      "locator_hash": "77b0cb275a616bd60e88ac4873d4eb6c6b5d8367b3f3da4bf462fdd4b7d72896",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 10,
+        "content_sha256": "844f606ce4cc8c4169af0283d5c9971d70798aed5e40080320ac67899e74d437"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "1f39d121271fb929f4529fbbe4903411acf91e22aece2b0025a9fdaec555c776",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 10,
+          "content_sha256": "844f606ce4cc8c4169af0283d5c9971d70798aed5e40080320ac67899e74d437"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "interaction-quality-amendment",
+      "locator_hash": "f5effc47fb854867b2a002644aa87b5a39de808c6cdb4ca94931f78820567a4a",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 34,
+        "content_sha256": "4fd1fa0acae53ba7a594ee9ec86e23409c2d7ddfcab3e1504b7944bb86212c9a"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "53c6cef100b79839c6805386b624d8f3db8d7e143a77bfc1cec727b3b54edb4b",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 34,
+          "content_sha256": "4fd1fa0acae53ba7a594ee9ec86e23409c2d7ddfcab3e1504b7944bb86212c9a"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "interaction-quality-amendment-v2",
+      "locator_hash": "d94d0b99bed230a6183edfb3051b73d4642fa75f5118b59597e0c5d0068d110b",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 89,
+        "content_sha256": "d03d347ca9d44856b45c2dde19e7ac45ed276460610a4dc246285f83e25ebcc2"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "1f31b91265f9f5786d8e430754008b273a434ab0f8e618f973c6beb498d0737c",
+        "source_manifest": {
+          "file_count": 89,
+          "content_sha256": "d03d347ca9d44856b45c2dde19e7ac45ed276460610a4dc246285f83e25ebcc2"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "m14a-audit-contract-layer",
+      "locator_hash": "5513e2d8df6d6f29eaae315bcb7b0a3eaa793ac1272f75aee1d34e25def182a1",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1170,
+        "content_sha256": "174002b40cdc43d0a39008fe00a7ae730f7cda4cf2733ccb96653e0e404120fa"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "4f41eeec0e47a7c50a81a1f7793b99c3b45f852531c5b262fba2aba208b08b31",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1170,
+          "content_sha256": "174002b40cdc43d0a39008fe00a7ae730f7cda4cf2733ccb96653e0e404120fa"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "m14a-audit-contract-layer-rebuild",
+      "locator_hash": "8346546390b05e17c7fbf8340fb11deb192f87dc20dea3a2500f2477cd7d984c",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 51,
+        "content_sha256": "3978a24b1b5ed97067e8479c94b738e20a31b96694778bdf8b8db177c3066e9c"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "d6168c21bd277a3a4d364523e2989544fb082b0bf1bdfc3a4aa2666f839daa81",
+        "source_manifest": {
+          "file_count": 51,
+          "content_sha256": "3978a24b1b5ed97067e8479c94b738e20a31b96694778bdf8b8db177c3066e9c"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "m14b-fact-collection",
+      "locator_hash": "af2cadd1520e4b5da68d12c14e67b5638a75f128dfd88c2cca0557faf004d9c8",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 17,
+        "content_sha256": "088312ff970fd3cf6b375b7ea9f15c1826efd818cfd43db97205720fd087f241"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "6ced34c7d20c2f9ebd74429a03ae25af13af37f967b6988a3fef82bae189a2fd",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 17,
+          "content_sha256": "088312ff970fd3cf6b375b7ea9f15c1826efd818cfd43db97205720fd087f241"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "m14b-fact-collection-g2",
+      "locator_hash": "26b61a1933de5bc48453970c7eb7b5c37dfdad823101240426f26322d839bc97",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 309,
+        "content_sha256": "feb092b97e4737276338e8ecdd250fe21b8e2b026abad27c598cb64f71865db9"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "30c3c6bdc06052bfcb53b017fc5c569cd366ed46d8b1970a6293f12bc1c09171",
+        "source_manifest": {
+          "file_count": 309,
+          "content_sha256": "feb092b97e4737276338e8ecdd250fe21b8e2b026abad27c598cb64f71865db9"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "make-decision-bootstrap-repair",
+      "locator_hash": "4d44bd270671585d72e59b70ad650c1cdc06ccb5620facd64da4b6dc3b25e24b",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 33,
+        "content_sha256": "507e6898fa7c874a6987201a323604ba5914ab209e9d10d87b0dde0dc75143d0"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "84c7a6eb20dd496ede33061e0d11d5afe72ae09fbba17b892e5c023870d6a301",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 33,
+          "content_sha256": "507e6898fa7c874a6987201a323604ba5914ab209e9d10d87b0dde0dc75143d0"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-006caae8-09ee-43cd-98ba-fca3f0b94077",
+      "locator_hash": "3217f09afcf6cc889309463b3d566910288996fbd3f19e9adc09363101b5d700",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 7,
+        "content_sha256": "a32f5695d5e2b0f14818e2c0ad02bc1086911416c63f88435de5fe7dae6b7351"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "aa0f5421056567dd5df89d0865eac0d7697717c4017b0edda4cde1fc47fcaa70",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 7,
+          "content_sha256": "a32f5695d5e2b0f14818e2c0ad02bc1086911416c63f88435de5fe7dae6b7351"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-1fb79706-c6d9-4284-9e55-d4a4cc9e37a4",
+      "locator_hash": "75fc1952018063efa7c387b085a3acb827649447dfc90ef91f27379457fd140e",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 139,
+        "content_sha256": "52c1f357c76e41b87e3ce66df14e387a06f8b928e6900297042b921afb7b582d"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "7416b54ef5716c2535137314548e41e09d15ec6d1746883f297f401da6cdf051",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 139,
+          "content_sha256": "52c1f357c76e41b87e3ce66df14e387a06f8b928e6900297042b921afb7b582d"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-296db234-125d-40eb-96d5-abf702d2dbe4",
+      "locator_hash": "f807f783d94d558a94605f9d50d03e4d3313e58340e5f745f959a7f9ad21509c",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 69,
+        "content_sha256": "258b347f2a8068af24009f82a35cdde070fa2b1cc5b2caad3b039d57b2cd1afb"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "8f3ca09c7689d3f18085fd5833c67c5ab6ca2a4bbb5f7fcc026882e17ba51030",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 69,
+          "content_sha256": "258b347f2a8068af24009f82a35cdde070fa2b1cc5b2caad3b039d57b2cd1afb"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-38f9c897-c4e8-4c13-b4ba-4609fc05f035",
+      "locator_hash": "f271e0deabfb4c987b3abdb55c05d1b451f8a552c44926b1ca7752c8e56654cb",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "a84f5e7657456e36ca0dcd70b395a604cc54944342851fb8df2531d3c6b7782e"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "875d2ce20d8b8123048cce2770548092c46f98f0fbaa0e77a6df4174f97fb5a4",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "a84f5e7657456e36ca0dcd70b395a604cc54944342851fb8df2531d3c6b7782e"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-3a84ec8b-4601-4fda-8cc9-eefd8350ae5b",
+      "locator_hash": "f5ce7c68c18d9c740e704344142f0c9603844c21a6b7570ded3cbc6c2e8716a8",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 2,
+        "content_sha256": "2920cfdc1b947e56b34d21bbb84eeae1fad42186973b537f1ff02464e8627dd1"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "3320435d4fed6a88a1903bfc766c8d8f33032cfc7cef3a72f90a5603cd195136",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 2,
+          "content_sha256": "2920cfdc1b947e56b34d21bbb84eeae1fad42186973b537f1ff02464e8627dd1"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-5e184887-46f6-4b95-aa9b-878f2e2379c5",
+      "locator_hash": "d6d1fc0e549fe6763b87ffe8173e0d7005b24c69b820dcddf8208e9662195ce0",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 7,
+        "content_sha256": "700286d8ed99810b83da8cd7dd9a3e25136685723dfb22224cbbee1982a5be56"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "a8099199c7bfa5e37811f02616babe7ae74e7b5a1d9e206ed265faac8780bafe",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 7,
+          "content_sha256": "700286d8ed99810b83da8cd7dd9a3e25136685723dfb22224cbbee1982a5be56"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-6a6ee876-9efa-4a47-933b-9b866a4dfab6",
+      "locator_hash": "f1ff33f13d5dbb9f1bd3c12138922e7db45e3336188a92530930a9295be30876",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 10,
+        "content_sha256": "12eb2c90f53c57c90860526e05a766ff9dcf2d917bdf8aceada9c791842ed2c7"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "026908218831919ff31f6ce785a85d3bf6527e91a1de24681584788c5faf13e3",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 10,
+          "content_sha256": "12eb2c90f53c57c90860526e05a766ff9dcf2d917bdf8aceada9c791842ed2c7"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-7c039943-bff7-4047-87c8-a02799634564",
+      "locator_hash": "de85dc9075d75fd8cce3bb896dbe21edbbbd57356a8806691a99304bb30c812d",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "46660f4ca0610ceeff9f6b8e575a3d27defd64d5c0a964824f43aef9e5359e24"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "e2f7aef013619bbe0fa165c11c58f2cabb1989072425ce7cda95b2e88cac60e5",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "46660f4ca0610ceeff9f6b8e575a3d27defd64d5c0a964824f43aef9e5359e24"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-a0bd3b63-89e7-4519-bfbb-05235ee0434a",
+      "locator_hash": "aed97be4766fc8ed6a93fee924f63aa49140c950b9880dd6a6f12461b13179be",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 5,
+        "content_sha256": "e09d57b69d559e5ab6207d571b73f187620af6c2fd122d869b1838548ec3b294"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "5c68a1eea5992bf3a80b83d1da0bea8f8d38a82afe92e3a4d06a073af2b09558",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 5,
+          "content_sha256": "e09d57b69d559e5ab6207d571b73f187620af6c2fd122d869b1838548ec3b294"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-b166d00d-23e4-474f-bee8-de1291129fc4",
+      "locator_hash": "40cd69071f393b1d37f68003b85d4488417bd006b597d33e00fe2cfd1a83aea5",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "66c5539c3e4c9fcae592b8a9afe92ebfff5f7420fe629bac3b08655cdcd39ff9"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "33c5264f1bfb94a7b3d0801ba58799f52cdacce16a372c2b33dc68bf446ee1a5",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "66c5539c3e4c9fcae592b8a9afe92ebfff5f7420fe629bac3b08655cdcd39ff9"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6",
+      "locator_hash": "22b6c52e8d3fd20b890cd9422f15bd3503e5670cc1f781a2ce116d71b45e010e",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 21,
+        "content_sha256": "c0475f6942546f444eff66c4bc79e1745163a223e40bcad10472d0a891cb80d2"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "c21adbd80b8df60bb7a2331daf0ec1af0df94ff36840c205db665507b99bb1bd",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 21,
+          "content_sha256": "c0475f6942546f444eff66c4bc79e1745163a223e40bcad10472d0a891cb80d2"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-restart-20260724",
+      "locator_hash": "b34661995d331338ec9a917af595e3a10c8ef714bdd53872fab7c1c3dce06578",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "1a82c39a7ea8e3627e8fe0afa94a895fe6c478d919126ef83accc73837dededa"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "26df34de344b7d4b18f333674677815a7dadfc2ce356725c9e13fad5ce035561",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "1a82c39a7ea8e3627e8fe0afa94a895fe6c478d919126ef83accc73837dededa"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-f8ca63bb-a3a0-4d8d-b478-838398b0f2a6-runnerfix-20260724",
+      "locator_hash": "2029472a66b5d2e6c64ffb8538e2f533e11bf9e676c82417c4d0e355cc7811c4",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 42,
+        "content_sha256": "d37ef5bc0e0382343b54fde4c96e7655b4edaa09a0dd15beaf3fb63e04b3bed0"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "af2e8f0cb9c7bbe25eb4578de60b52136f9e4bae5d3a0cb6b1853ae64492d2c8",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 42,
+          "content_sha256": "d37ef5bc0e0382343b54fde4c96e7655b4edaa09a0dd15beaf3fb63e04b3bed0"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-flow-reliability-final",
+      "locator_hash": "2c86ef9714a0ec3c865af0ae3b88213b198730112ba9b5992cd1e9f2165dc46d",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 359,
+        "content_sha256": "f192b03ea6e4e23934df8d1046692e1151e11f8902171b1edcd0969966196664"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "31362e7f2cffe2db7acf580e9c5cc23c636fda4efd7e4db1a8d4419ec3272e05",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 359,
+          "content_sha256": "f192b03ea6e4e23934df8d1046692e1151e11f8902171b1edcd0969966196664"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-identity-materials-state",
+      "locator_hash": "ac2eff686b4f4eed7284b36456fde445385bc8a37c97da8aae5adce5d27c629d",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 481,
+        "content_sha256": "52c6037112728c2e0f4a12f5d2ee76ecd22a13b6c645c1a33e51a6ef7fddde10"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "fe1155ba35ac47abea8aacea9605f3302b364d7364c8fbd3bcfe9dca8d8218d8",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 481,
+          "content_sha256": "52c6037112728c2e0f4a12f5d2ee76ecd22a13b6c645c1a33e51a6ef7fddde10"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-isolation-recovery",
+      "locator_hash": "f39ffa9d82ab4dcd862bca446c8ba38804039be9ad9d3d9f42134d8e977a1843",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 19,
+        "content_sha256": "b7f8a47e609f5064184fe57da39a2c18a6d345ebda3b644054393156a8daad24"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "7f10f3cebbec7e27d12163032b53203f4321e9601ac66650b8f7fb8b670742a5",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 19,
+          "content_sha256": "b7f8a47e609f5064184fe57da39a2c18a6d345ebda3b644054393156a8daad24"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-isolation-recovery-v2",
+      "locator_hash": "fe161339e733b2e3305890f173544edbc42ec6af50baf46895eda141cc001262",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 31,
+        "content_sha256": "62d5e14a58432b4e13d50f8c29eb71027bb78f6b0319d8a3aa2d5e56f7354b07"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "ea6ca30a20ccacfedf2f4abd6a5ee389c48870f4de5972bf56f1b7a6e4c2cc62",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 31,
+          "content_sha256": "62d5e14a58432b4e13d50f8c29eb71027bb78f6b0319d8a3aa2d5e56f7354b07"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-isolation-recovery-v3",
+      "locator_hash": "9c629a3b8c07af993a366b8e09055481345af9f65366c6e1bdfe7584a7a71de7",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 39,
+        "content_sha256": "de8788dbcb873b903896c069622457999a72bd28d61b3614d5516d0adb32e8ff"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "8d89007fe6856362e8be03027ecc62c7ea02c9cdddc0ffed10af89dd2a7dbc94",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 39,
+          "content_sha256": "de8788dbcb873b903896c069622457999a72bd28d61b3614d5516d0adb32e8ff"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-minimal-recovery-v4",
+      "locator_hash": "b8e9b21627e091bf239d2ff9bd1ada4eb16a3efdf8aa9f89e795beee6570d752",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 22,
+        "content_sha256": "36b57daa1b0133ff1333e1858a3fb5006bbc73f7677cf005e2787f4aeea6f6b7"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "e7f3a1199e67212c09827ece593e60ecdd648c5e26b95adf60fba851ef8c1bbd",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 22,
+          "content_sha256": "36b57daa1b0133ff1333e1858a3fb5006bbc73f7677cf005e2787f4aeea6f6b7"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-workflowhub-reliability",
+      "locator_hash": "6a6ce7188fce37a040765961b15de0a6a5aeb96292b2d745b688eec177d3ebb3",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 69,
+        "content_sha256": "d82ccc9b215cacae9fe33ad61b41347b4a8bfe35080b360f7e36ec6c8913cee3"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "d49aca7dd5cfca96f9940903af994e3b8e95264e321c2ebe1555d188b2931afb",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 69,
+          "content_sha256": "d82ccc9b215cacae9fe33ad61b41347b4a8bfe35080b360f7e36ec6c8913cee3"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-workflowhub-reliability-v2",
+      "locator_hash": "87c7ea9da14d5bd367b94fc44df7db7736f0666fd2b71561f9bd5a1268fa6744",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 64,
+        "content_sha256": "9f431a787615f17256675856a777ad23ac4013d640d2ba9bdc8d9adf0d0fa229"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "e0392a9fe10471a1d17339cf7a3a225e9bb670f0aff893cb92535af1b39540f8",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 64,
+          "content_sha256": "9f431a787615f17256675856a777ad23ac4013d640d2ba9bdc8d9adf0d0fa229"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-102",
+      "locator_hash": "0d1b2b962677aec2eaf002887ab761d952c862783d964a52efff487f814bf78a",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 205,
+        "content_sha256": "a597e5a54814fefcb9d2909de28599bf95125e8c5cdf914578c0e05142ce553e"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "75f1aad6c52775a4beab3732f4b56046ec3756d97309f1a2897faf67676685c0",
+        "source_manifest": {
+          "file_count": 205,
+          "content_sha256": "a597e5a54814fefcb9d2909de28599bf95125e8c5cdf914578c0e05142ce553e"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-831-v2",
+      "locator_hash": "6df483bb16951f58ee5b04a08554a366a2e7068668cc148bae5f6c47e1cccc7e",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 173,
+        "content_sha256": "80c1d4b317d0eb7637a9e9ec93577416943813784f71c27d181f6f199859af31"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "abbec581df90ce518a5ad7cbd123a3e075b00fbcbf075966da9168afd845cc33",
+        "source_manifest": {
+          "file_count": 173,
+          "content_sha256": "80c1d4b317d0eb7637a9e9ec93577416943813784f71c27d181f6f199859af31"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-843",
+      "locator_hash": "ed54665e5ad66304d2b2a4ab9fde3eca452fafe5106c6fea1a1b9159800b5752",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 557,
+        "content_sha256": "1771f3d7270176f450e93d86eea6d069dd7147e1d8f9f7fbb0555656a0d7fbc0"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "1ce3ed0a5ad959181abf9d8cbb7938d022f30c569b3243f288f46bb029d51349",
+        "source_manifest": {
+          "file_count": 557,
+          "content_sha256": "1771f3d7270176f450e93d86eea6d069dd7147e1d8f9f7fbb0555656a0d7fbc0"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-850",
+      "locator_hash": "871fee040bc75a84d68414de91287db37d3f0cdfdd18a94fcd7844c0dac68626",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 194,
+        "content_sha256": "5c7f00a12caaf0529f379e6bb8c4d85e88daa7e733324b5594a13e8a4147a24b"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "b0de845cf6b338e6329c4fcf6100711273161794976bee1a60b1e718a9ba0df4",
+        "source_manifest": {
+          "file_count": 194,
+          "content_sha256": "5c7f00a12caaf0529f379e6bb8c4d85e88daa7e733324b5594a13e8a4147a24b"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-851",
+      "locator_hash": "11a587491b185220b715b7f96e4b7fd24d84481d74439b44ee6a92bcdec2e3cf",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 89,
+        "content_sha256": "80d0ee6a7ab57fedaa15cb65636cd6b5db24b9739006ffc51f9daee90ccdd1de"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "895c41cb6d49284298dc9aeda7222716a9e148df037f57c71c8ea08a96e370dc",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 89,
+          "content_sha256": "80d0ee6a7ab57fedaa15cb65636cd6b5db24b9739006ffc51f9daee90ccdd1de"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-851-contract-revision-01",
+      "locator_hash": "9dcb85528c6333928bf805c7aabc8cd5ee07ab332601855a86b5290a9de8acbe",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 108,
+        "content_sha256": "361a5fbb514b96c55c55def820ddef5aed218d6aedf49768ac1fe9459a95f839"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "01528f72fe53098caa5d7cc082cb9d535dc88b58d53071d322de44ef64fef48a",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 108,
+          "content_sha256": "361a5fbb514b96c55c55def820ddef5aed218d6aedf49768ac1fe9459a95f839"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "multica-ZHI-891",
+      "locator_hash": "16ad2e8f75f8fb670588fe47a7586938b37eaf0879896afc4325bf269e3d4f50",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 58,
+        "content_sha256": "13bcce6a1b2c3148f8c8156364b16bc67e2932d88443e14a468772db655c5d06"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "2e56bc7e0dd864cce82984ce4f57a9a546fe1694cc2e4dcd9b46e9eed16128ba",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 58,
+          "content_sha256": "13bcce6a1b2c3148f8c8156364b16bc67e2932d88443e14a468772db655c5d06"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "preaccept-build-repair-guidance-review-20260720",
+      "locator_hash": "3122d8d16c920ebb1092d058027f470092bed6718df3f53a555955392fbf0d47",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "b9e8284539f4a659f18908c5feeb77557f528d9cc23af4e813eef9037c11e403"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "62dd838536ec3ecebcd939d59cab9f9174409d592c779d3a95cacfa67120c0e6",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "b9e8284539f4a659f18908c5feeb77557f528d9cc23af4e813eef9037c11e403"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "preaccept-build-repair-guidance-review-20260720-v2",
+      "locator_hash": "768014334e32dc648b0de8dbe13613e2f347a647e36910fc7ae95eb4b96d7a5e",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 5,
+        "content_sha256": "28115bc0b9ec9565da9b2cdc61e0100cd4af4030d87116a2819debc49aa24249"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "123de85ee01956f71323a74c0e08a87f99a049092ff52a5c03cf66d3dc6c4286",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 5,
+          "content_sha256": "28115bc0b9ec9565da9b2cdc61e0100cd4af4030d87116a2819debc49aa24249"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "prompt-root-init-review-20260719",
+      "locator_hash": "f023ec3f3c25f56a84d2cdf50266239c1709ea6f60434e7f3cb8fe7c71c05d50",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 2,
+        "content_sha256": "d6c81162b23f2973b03b30461a52391f151451fb89d365da06bea12728459a8e"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "c18655a6ff5f634ffbcf3958bc55fe859dfbd05e28b0071d5c6e4ccee14bb6bf",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 2,
+          "content_sha256": "d6c81162b23f2973b03b30461a52391f151451fb89d365da06bea12728459a8e"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "prompt-root-init-review-20260719-v2",
+      "locator_hash": "e63a3d01f76102515f2ae0315a4457c5d3fa12e5d80df68b2d95be8b665e4b3c",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 4,
+        "content_sha256": "fd1a40ee27b163f684e522517830984c751474362826a2f7603f8817854951ce"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "3efa45d06ea3cb74a9276797aabc6ebfa6e28c6bbcf4ac9bff9c3b7d83a10589",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 4,
+          "content_sha256": "fd1a40ee27b163f684e522517830984c751474362826a2f7603f8817854951ce"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "review-entry-aggregation-simplification",
+      "locator_hash": "de08f3dcad7864b8c5b9fa743bba39d94441776614e8b2fb3d2940ca03f6a0d9",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 10,
+        "content_sha256": "0a252fd3bd4652f5a088c03c7a8f3a032db2c7671337fbddedc5ffa26dd43c85"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "8b999c178814e316700fd138061efb2c781842eb40190bd9d4dac8efd1362bc4",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 10,
+          "content_sha256": "0a252fd3bd4652f5a088c03c7a8f3a032db2c7671337fbddedc5ffa26dd43c85"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "review-flow-reset",
+      "locator_hash": "f3fe82ea92e01a99d347bbdd385910f56e0094f0f21ae0e15d4452dc4a9930bb",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 414,
+        "content_sha256": "84df77dcae05a5820ea5117bc39a1c88e386929ab0094bc5ebfc2a19bf886640"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "2d1dfe7a14d1993954a72605e6444d3aaa2c2ea6f783848747415b44b53794ab",
+        "source_manifest": {
+          "file_count": 414,
+          "content_sha256": "84df77dcae05a5820ea5117bc39a1c88e386929ab0094bc5ebfc2a19bf886640"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "review-foundation-baseline",
+      "locator_hash": "0d5f53e7227ae8f0cfc5304a837f7d7642235c0ad672fff39c641e91cb4c46b4",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 322,
+        "content_sha256": "b5c8d89625d04cab992240be67b9977622316f731e38d2e834e823974edf1a4d"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "9e85bc4958ea1a6c8cdf3bfbd48349f52ad3a0c8a8e236e9734d93db2dba68f4",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 322,
+          "content_sha256": "b5c8d89625d04cab992240be67b9977622316f731e38d2e834e823974edf1a4d"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "review-foundation-baseline-v2",
+      "locator_hash": "82e7b34ce3f53a5742e2830204706dbea016de2f4423d4cccd0301b5ba5e4c52",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 39,
+        "content_sha256": "ca6075ae0227400b24b80e7b1ef7cbd777dd4615660dbcb2b08b1f1735ca142f"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "af2ba56e76227854f11e1462e3b758f5a77c93731a8827fbd382640621bd4544",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 39,
+          "content_sha256": "ca6075ae0227400b24b80e7b1ef7cbd777dd4615660dbcb2b08b1f1735ca142f"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "review-foundation-baseline-v3",
+      "locator_hash": "77430097fda972e98188537820d0fa1c1c55ba8e7f3e5769cb871d8736489891",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1761,
+        "content_sha256": "1d2ea928e93e43fbde538f4b68ef9fe509ebb5e3d49469531a4eeec9449b1c29"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "be2d49ef6ece8ae56cf77eaa0c8276cb65cc6835b3592006d58ac8ed09fda40b",
+        "source_manifest": {
+          "file_count": 1761,
+          "content_sha256": "1d2ea928e93e43fbde538f4b68ef9fe509ebb5e3d49469531a4eeec9449b1c29"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "self-contained-stage-skill-review-20260720",
+      "locator_hash": "b649995d1e26d3fa5c0adc9aff04c7c54b39eb3c04777d0ef8b4b1173e7977dd",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 9,
+        "content_sha256": "d3e05c4538f12c971c57bc906ac676b511bfdfd66148067a32e5751db60a3d46"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "77c1caec8fafdf2603dff0cbdc7d6fcc8f1293abd8cde3bb53268d154237af8d",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 9,
+          "content_sha256": "d3e05c4538f12c971c57bc906ac676b511bfdfd66148067a32e5751db60a3d46"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "spec-plan-context-quality",
+      "locator_hash": "66f036b8c91269d7bdd8b26a314bec3adeb800641c5efea411d3d29810e70c24",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 624,
+        "content_sha256": "02bf18eee03bbd8c15d0cde57c4701e1a60cff3f3dbc833366b59bdcf2c2cf0b"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "c4defe334cb277dfafaa7751ed358d256d6419e1fb6de12bfac31808b298f60c",
+        "source_manifest": {
+          "file_count": 624,
+          "content_sha256": "02bf18eee03bbd8c15d0cde57c4701e1a60cff3f3dbc833366b59bdcf2c2cf0b"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "stage-content-contracts",
+      "locator_hash": "88518b7d7d825acf7b5cf62185762ceebe3ccce5b505b4018d49eb5236403273",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 767,
+        "content_sha256": "1f490cd0ec57d22e9036e44ac97b3d386acab1d3f7816e5a444b0f1625b33879"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "a162fc5b4286b5a3be2a25dd9cfdffa5796c131d2713d234cc4b3d72ea3789bf",
+        "source_manifest": {
+          "file_count": 767,
+          "content_sha256": "1f490cd0ec57d22e9036e44ac97b3d386acab1d3f7816e5a444b0f1625b33879"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "stage-interaction-handoff-completeness",
+      "locator_hash": "91295d23a2089b6b75a1a5d4b92e7cf7a23f62790640d21fd356437d45163f6b",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 160,
+        "content_sha256": "283f52270ce8a8fac248a541d7938c82523fdc4b2eb6c93a3572f09f4c7c9752"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "beca7bd418505b6aba9e06caca4171a95728d790d07ae09efcf0e33a2af53f3e",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 160,
+          "content_sha256": "283f52270ce8a8fac248a541d7938c82523fdc4b2eb6c93a3572f09f4c7c9752"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "test-parallel-batch",
+      "locator_hash": "2aa1467c5f63b4053c9486a311a42244d759a9af564671723658f0ea7e7ea82f",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "ca125208c779d02ce4f86f70edfd6e3a6e1349b2ad8f8214fc64486e0aa13d12"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "b79a463e828b8640dd350f5e5be3481918795ca3fc1d466dd4367a2af3829a51",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "ca125208c779d02ce4f86f70edfd6e3a6e1349b2ad8f8214fc64486e0aa13d12"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "v4-gap-final-advice-review-20260717",
+      "locator_hash": "2c6b6ff56868b83e84270dc7d0d9944f588357c33309080c23268871b6e29501",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "f15c8ef9e7aec6333b1b2fbec6da19dda05b57b2a4a042ed67dd95cafad1358a"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "b9f96b14e911c254b269dda74f1722389465967bb1d7c1e6bd60499dc366fdc3",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "f15c8ef9e7aec6333b1b2fbec6da19dda05b57b2a4a042ed67dd95cafad1358a"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "v4-gap-final-advice-review-20260717-v2",
+      "locator_hash": "48956eb060adb2cd91ff8ee028a062bd337e6b550aa116d61e1832b805a0bca4",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 16,
+        "content_sha256": "27cdc02348830fdc9358a033f2a3b5ed47f1d93797e3b07263b1fab1ec651359"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "8b78ab9d4f407afb98a3bc75461cd6ab6b80745f69afded56f4c9b1febc7b92b",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 16,
+          "content_sha256": "27cdc02348830fdc9358a033f2a3b5ed47f1d93797e3b07263b1fab1ec651359"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "wh-review-bundle-closure-skill-sync",
+      "locator_hash": "8d57aba65a2dc94110018f0b01695e2f1ec19aa3a8cbef2aa80f1371394eea1e",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 1,
+        "content_sha256": "7c7e54126834e26f4f7fd9631a1a20f8ad568db251d465acd57b3b819c094ace"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "8b9ec1e9dc045b36cda66fbd33022f954452cff1411b934a1b94226c0b7832c4",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 1,
+          "content_sha256": "7c7e54126834e26f4f7fd9631a1a20f8ad568db251d465acd57b3b819c094ace"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "wh-review-materials-v3",
+      "locator_hash": "36623b41e61d4d78018009590b91d67a888533e6f91e5301ff80b687df15fb5f",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 264,
+        "content_sha256": "bdeca191b0c88c0bd9dba973e34cd30d127aa58fa6a6cd9c9e5941539dc65585"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "9eaf35c30c66e1bc2f4dc4092b132ca12fff6e30fb595c3e4ac7370b9bfeea4b",
+        "materials_current_sha256": null,
+        "source_manifest": {
+          "file_count": 264,
+          "content_sha256": "bdeca191b0c88c0bd9dba973e34cd30d127aa58fa6a6cd9c9e5941539dc65585"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "wh-review-materials-v3-evidence-rebuild",
+      "locator_hash": "679f9d0e3fa8c9115730fe88e86ac6f0efd4b2ed5986a5ef8f64f0e5e1a3637a",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 78,
+        "content_sha256": "6d65f204db5cbc6c2f503237e8d85c534a5342324fefd57100d67a969a96324c"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "7ce503706b99d9169480c22f2dbeefcb21600540a1f702f08ac19425f99b539b",
+        "source_manifest": {
+          "file_count": 78,
+          "content_sha256": "6d65f204db5cbc6c2f503237e8d85c534a5342324fefd57100d67a969a96324c"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "wh-review-v2",
+      "locator_hash": "b9043111b84298a86415eba73a39f9f946407ab05aa7e7519c8b69ff511f0fa3",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 145,
+        "content_sha256": "e76f07254f1220be6eaf66268e1d45d8fde51fc67e270aa8fae030b0c62535de"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "ebb28cd37126e4ed02940408a85e8a6cee05e231dc601d3a12f9820f113f3119",
+        "source_manifest": {
+          "file_count": 145,
+          "content_sha256": "e76f07254f1220be6eaf66268e1d45d8fde51fc67e270aa8fae030b0c62535de"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "workflow-quality-recording-simplification",
+      "locator_hash": "abcd04c6710d36ffb4f2c1e73592232e0dc414405a0e539dbef001761408f323",
+      "disposition": "archive",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 571,
+        "content_sha256": "b2e5cdd29d166ce3ae2e79ad62252d79e4898b3e371bd469c999e9494b887a7e"
+      },
+      "post_action_receipts": {
+        "action": "archive-preserved",
+        "source_untouched": true,
+        "closure_evidence_ref": "results/verify-code/accepted.json",
+        "closure_evidence_sha256": "ea181d68a95cabc9a1a0575436817b8df17684a0708d059ab86aa07a61982489",
+        "source_manifest": {
+          "file_count": 571,
+          "content_sha256": "b2e5cdd29d166ce3ae2e79ad62252d79e4898b3e371bd469c999e9494b887a7e"
+        }
+      }
+    },
+    {
+      "project": "workflowhub",
+      "task_id": "workflowhub-complexity-governance-v2",
+      "locator_hash": "bd8913d747550ae36a92448d54cc819715d740b11dc22d236e4a793089e3aeff",
+      "disposition": "import",
+      "user_confirmed": true,
+      "source_manifest": {
+        "file_count": 431,
+        "content_sha256": "db48ac78a8b9e8a0e4eb699259440255c392161e3da466b4da952dad6f3c1a7e"
+      },
+      "post_action_receipts": {
+        "action": "freeze-hashes-no-copy",
+        "source_untouched": true,
+        "identity_manifest_sha256": "52942f1e0233d2c320acb0ebd78207c36125e11b17a4a4a5d440fb452f18ba7b",
+        "materials_current_sha256": "47793bab015569196dcc161e591276f382fea78bcf97fea80cf7c7496ecd9479",
+        "source_manifest": {
+          "file_count": 431,
+          "content_sha256": "db48ac78a8b9e8a0e4eb699259440255c392161e3da466b4da952dad6f3c1a7e"
+        }
+      }
+    }
+  ],
+  "result": "legacy-source-zero-with-source-aggregate-unchanged"
+}

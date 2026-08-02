@@ -1,0 +1,5 @@
+{
+  "mutation": "identity-tree-hash",
+  "seam": "quality fact freshness",
+  "expected": "stale"
+}

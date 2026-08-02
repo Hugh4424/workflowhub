@@ -84,7 +84,7 @@
 - **Human:** When aggregator verdict is `needs_human`, preserve it and require human resolution.
 - **Decision:** reuse — carry the aggregator's canonical summary unchanged.
 - **Rationale:** Multiple result producers share one reference-preservation behavior.
-- **Evidence:** `schemas/audit-summary.schema.json` and stage-result contract tests.
+- **Evidence:** `runtime/schemas/audit-summary.schema.json` and stage-result contract tests.
 - **Semantic contract:** Reference and preserve, never recompute, the canonical audit verdict.
 - **Mechanism:** audit-summary-reference-carrier
 
@@ -98,7 +98,7 @@
 - **Human:** When canonical verdict is `needs_human`, report it without replacing it.
 - **Decision:** reuse — use shared summary reference/hash verification.
 - **Rationale:** This consumer needs the same preservation semantics as stage-result, not a new verdict.
-- **Evidence:** `schemas/audit-summary.schema.json` and validator contract tests.
+- **Evidence:** `runtime/schemas/audit-summary.schema.json` and validator contract tests.
 - **Semantic contract:** Reference and preserve, never recompute, the canonical audit verdict.
 - **Mechanism:** audit-summary-reference-carrier
 
@@ -112,7 +112,7 @@
 - **Human:** When canonical verdict is `needs_human`, expose it to the human interface unchanged.
 - **Decision:** reuse — use shared summary reference/hash preservation.
 - **Rationale:** Facts assembly shares the carrier semantics and must not become a second adjudicator.
-- **Evidence:** `schemas/audit-summary.schema.json` and facts subschema tests.
+- **Evidence:** `runtime/schemas/audit-summary.schema.json` and facts subschema tests.
 - **Semantic contract:** Reference and preserve, never recompute, the canonical audit verdict.
 - **Mechanism:** audit-summary-reference-carrier
 

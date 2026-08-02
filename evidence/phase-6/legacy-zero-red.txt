@@ -1,0 +1,46 @@
+Phase 6 T047 legacy-zero RED evidence (temporary source-copy harness)
+
+Harness contract
+- schema: workflowhub-phase-6-legacy-zero-red-harness.v1
+- candidate root: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v2
+- candidate production source and formal test sources were not modified
+- a fresh mktemp source copy was initialized as a temporary Git repository
+- `node_modules` was added only after inventory staging as a read-only symlink
+- temporary inventory was regenerated before the gate
+- no full suite was run
+- temporary tree was removed after both focused commands (`cleaned_up=true`)
+
+Injected representative legacy entry
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t047-red-keAYlz` (removed after run)
+- Injected path: `core/legacy-reader.mjs`
+- Injected text: `export function normalizeLegacyTask(value) { return value; }`
+- Injected text SHA-256: `b58949e06b87593eeffab70317198e0cc55ef9d8fbdff02e3984f175cd927bc0`
+- Reference source SHA-256 (`core/task-handle.mjs`): `6d7a5abd8fabc6da2f256a31eb80f3790fce025d869861b1dd2bd439a0a1154d`
+- Mutation diff:
+
+```diff
++export function normalizeLegacyTask(value) { return value; }
+```
+
+Temporary setup exits: `git init=0`, `git add=0`, inventory regeneration `=0`, inventory staging `=0`.
+
+## legacy-zero contract
+
+- Command: `./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary:
+  - exact entry-set assertion received `core/legacy-reader.mjs`
+  - release assertion received `core/legacy-reader.mjs`
+
+## delivery inventory zero gate
+
+- Command: `node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`
+- Exit: `1` (expected `1`)
+- Failure summary:
+
+```text
+legacy path still present in delivery tree: core/legacy-reader.mjs
+legacy runtime reference still present: core/legacy-reader.mjs
+```
+
+Conclusion: the same legacy-zero oracle rejects a representative legacy runtime/importer entry in both source/release contract and delivery inventory. This is current temporary RED evidence, not a replay of the historical migration incident. It does not by itself revise T047/T048 task status or claim GREEN completion.

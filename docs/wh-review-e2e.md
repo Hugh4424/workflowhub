@@ -3,7 +3,7 @@
 Fake-broker matrix:
 
 ```bash
-node scripts/run-wh-review-audit-e2e.mjs --output=/absolute/evidence-directory
+node tools/cli/run-wh-review-audit-e2e.mjs --output=/absolute/evidence-directory
 ```
 
 This runs all five stages, including both `make-decision` tracks, and writes
@@ -40,7 +40,7 @@ Real-provider smoke requires an explicit JSON input. The harness has no reposito
 provider, config, or output defaults and never edits the source repository.
 
 ```bash
-node scripts/run-wh-review-provider-smoke.mjs --input=/absolute/smoke-input.json
+node tools/cli/run-wh-review-provider-smoke.mjs --input=/absolute/smoke-input.json
 ```
 
 Required input fields:

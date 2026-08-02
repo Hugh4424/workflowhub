@@ -6,7 +6,7 @@ import {
   propagateStale,
   validateRequirementLedger,
   verifyRequirementHashes,
-} from "../core/requirement-ledger.mjs";
+} from "../runtime/evidence/requirement-ledger.mjs";
 
 function ref(kind, id, content_hash = `hash-${id}`) {
   return { kind, uri_or_path: `memory://${kind}/${id}`, content_hash };

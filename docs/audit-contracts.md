@@ -2,9 +2,9 @@
 
 ## Authority and schemas
 
-`workflows/{stage}/steps.json` (`schemas/steps.schema.json`) is the sole expected-topology authority. The append-only journal plus entry/exit receipts are the sole observed-fact authority. `schemas/audit-summary.schema.json` defines `AuditSummary`; only `core/audit-aggregator.mjs` may issue its canonical `verdict`. Stage results, validators, and facts assembly carry or verify that summary; none recomputes it.
+`workflows/{stage}/steps.json` (`runtime/schemas/steps.schema.json`) is the sole expected-topology authority. The append-only journal plus entry/exit receipts are the sole observed-fact authority. `runtime/schemas/audit-summary.schema.json` defines `AuditSummary`; only `core/audit-aggregator.mjs` may issue its canonical `verdict`. Stage results, validators, and facts assembly carry or verify that summary; none recomputes it.
 
-`schemas/requirement-ledger.schema.json` defines the immutable requirement ledger: stable requirement IDs, source-to-decision-to-artifact-to-acceptance lineage, hashes, and stale propagation. R1–R9 count toward coverage; R10 is `withdrawn` history and never a coverage denominator item.
+`runtime/schemas/requirement-ledger.schema.json` defines the immutable requirement ledger: stable requirement IDs, source-to-decision-to-artifact-to-acceptance lineage, hashes, and stale propagation. R1–R9 count toward coverage; R10 is `withdrawn` history and never a coverage denominator item.
 
 ## Owners and consumers
 
@@ -21,7 +21,7 @@ native source material outside WorkflowHub and pass only canonical fields.
 
 ## P3 stage-result carrier
 
-New stage-result producers use `core/audit-summary-carrier.mjs`. They emit one unchanged tuple: `audit_contract_version: "v1"`, `audit_summary_ref`, `audit_summary_hash`, and `audit_verdict`. Validators and facts assembly verify this tuple and may load the task-local summary to compare its hash and verdict. They do not inspect journal topology, derive an alternate verdict, or turn diff/test facts into a second quality gate. Unversioned historical stage results are legacy input with a migration hint, never an implicit audit pass.
+New stage-result producers use `runtime/evidence/audit-summary-carrier.mjs`. They emit one unchanged tuple: `audit_contract_version: "v1"`, `audit_summary_ref`, `audit_summary_hash`, and `audit_verdict`. Validators and facts assembly verify this tuple and may load the task-local summary to compare its hash and verdict. They do not inspect journal topology, derive an alternate verdict, or turn diff/test facts into a second quality gate. Unversioned historical stage results are legacy input with a migration hint, never an implicit audit pass.
 
 ## Error, skip, retry, and human semantics
 

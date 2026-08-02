@@ -4,8 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { migrateTask } from "../migrate-task-v2.mjs";
-import { deriveTaskPath } from "../../core/task-identity.mjs";
+import { migrateTask } from "../../tools/cli/migrate-task-v2.mjs";
+import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
 import { assertRuntimeAuthority, quiesceRuntime, readRuntimeMode } from "../../core/runtime-mode.mjs";
 
 const roots = [];

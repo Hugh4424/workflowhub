@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../task-handle.mjs";
-import { deriveTaskPath } from "../task-identity.mjs";
+import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
 import { __setIndexPathForTest, appendTaskIndex, lookupProjectKey, taskIndexEntry } from "../task-index.mjs";
 
 const temporary=[];

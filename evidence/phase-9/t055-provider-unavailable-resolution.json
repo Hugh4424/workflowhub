@@ -1,0 +1,107 @@
+{
+  "schema_version": "workflowhub-t055-provider-unavailable-resolution.v1",
+  "task": "T055",
+  "observed_governed_tree": "dba709d1a567d7622ac6d8aeb013aea490354f8b72ce3f16a8537f5d645c3117",
+  "status": "incomplete_no_three_provider_aggregate",
+  "decision": "Do not manufacture a provider aggregate, do not convert any revise_required result into pass, and do not use a provider failure as a reason to change product code or rerun broad tests.",
+  "review_attempts": [
+    {
+      "ref": "evidence/phase-9/t055-third-review-initial.json",
+      "sha256": "4d8f8a9010463a2e0a155ed9a9823721ebd93dd34f5c689f9621352425b0f7fd",
+      "scope": "earlier frozen packet, not the current governed tree",
+      "providers": {
+        "opencode/k3": "completed; pass; not reusable as a current-tree verdict",
+        "claude-code/opus": "completed; revise_required; not reusable as a current-tree verdict",
+        "cursor/grok": "PROVIDER_PERMISSION_DENIED; no verdict"
+      }
+    },
+    {
+      "ref": "evidence/phase-9/t055-targeted-completion-review.json",
+      "sha256": "4e2e904d3fc0b51ee952fba761b0cf296235f1bcc4b0138f04b85f99b529f767",
+      "scope": "targeted partial packet, not a final quality gate",
+      "providers": {
+        "opencode/k3": "completed; revise_required",
+        "claude-code/opus": "completed; revise_required",
+        "cursor/grok": "PROVIDER_PERMISSION_DENIED; no verdict"
+      },
+      "clean_install_observation": "The packet observed passed=false. That observation is not treated as a current product failure: the later independent current clean-install record below reports status=passed and source_tree_unchanged=true. The targeted packet remains preserved as a limited, earlier review fact."
+    },
+    {
+      "ref": "evidence/phase-9/t055-third-review-followup.json",
+      "sha256": "8c86885de592cdab399598e85c01367e9787febc789163b0387e2af88ca3ba1f",
+      "scope": "latest attempted three-provider follow-up",
+      "providers": {
+        "opencode/k3": "transport completed; textual revise_required findings retained as diagnostics; the emitted payload is not valid structured JSON because its quoted summary is unescaped, so it cannot supply a valid aggregate verdict",
+        "claude-code/opus": "PUBLIC_RESULT_INVALID; output omitted because it contained a private absolute path; no verdict",
+        "cursor/grok": "PROVIDER_PERMISSION_DENIED; attempted a tool outside the scoped bundle; no verdict"
+      }
+    }
+  ],
+  "k3_diagnostic_disposition": {
+    "source": "latest follow-up diagnostic payload; retained without verdict upgrade",
+    "items": [
+      {
+        "topic": "AC-06 and AC-12 replacement proof",
+        "current_evidence": "tests/contract/repository-inventory.test.mjs is present in the current focused matrix and asserts exact task-only allowlist, complete T054 deletion proof, tracked-test dispositions, and live consumer rejection",
+        "status": "current focused evidence exists; no provider has accepted it as a final verdict"
+      },
+      {
+        "topic": "historical runner metadata",
+        "current_evidence": "current progression treats accepted/checkpoint history as read-only and runner-clean-install checks released Runner and Bundle tampering fail-loud",
+        "status": "historical metadata is not restored as a current execution permit; no claim that this replaces a valid provider disposition"
+      },
+      {
+        "topic": "noncanonical trace artifacts",
+        "current_evidence": "current focused matrix includes core/__tests__/task-handle.test.mjs; the architecture review records trace-like artifact and symlink rejection as the retained oracle",
+        "status": "independently exercised; no provider aggregate"
+      },
+      {
+        "topic": "tasks.md prose versus authenticated facts",
+        "current_evidence": "current completion uses authenticated review, quality, reconciliation, and test facts; task prose is not used as a historical continuation permit",
+        "status": "current policy evidence only; no verdict upgrade"
+      },
+      {
+        "topic": "risk-acceptance behavior",
+        "current_evidence": "current focused matrix includes tests/stage-risk-acceptance.test.mjs with rejection cases for invalid, cross-snapshot, duplicate, and partial acceptance",
+        "status": "independently exercised; no provider aggregate"
+      },
+      {
+        "topic": "soft complexity budgets",
+        "current_evidence": "docs/architecture/final-complexity-report.json keeps five budget overruns visible as within_limit=false",
+        "status": "open debt disclosed, not passed"
+      },
+      {
+        "topic": "AC-15 review material truncation",
+        "current_evidence": "the defect belonged to the review packet, not the candidate source; no product pass is inferred from the truncated packet",
+        "status": "packet defect retained"
+      }
+    ]
+  },
+  "independent_current_evidence": [
+    {
+      "ref": "evidence/phase-9/clean-install-current.out",
+      "sha256": "1604f1f2bd4db12049861ae46dfab576a1277e6cea1eee3d86793e86d253cc98",
+      "fact": "status=passed; source_tree_unchanged=true; untracked_unchanged=true"
+    },
+    {
+      "ref": "evidence/phase-9/final-targeted-matrix-current.json",
+      "sha256": "d0572ef1f2a16456ce9324efd06a2ee620f591b517a2d1863ee730658da31455",
+      "fact": "22 files, 119 tests passed"
+    },
+    {
+      "ref": "evidence/phase-9/final-targeted-matrix-final-rebind.json",
+      "sha256": "9fcf5bd2b5690143019db49d6875e9b7cbffdaa432276162e214ba3b33042cf0",
+      "fact": "37 files, 313 tests passed"
+    },
+    {
+      "ref": "evidence/phase-9/architecture-review.json",
+      "sha256": "a2408335a17c484ef3e61465fefa9fa011bd6492e55d746bb75b427fa55c31cd",
+      "fact": "records no-three-provider-aggregate and keeps historical K3 revise_required retained"
+    }
+  ],
+  "task_completion": {
+    "T055": "must remain in_progress: the accepted plan requires same-tree valid semantic results from kimi/k3, claude-code/opus, and cursor/grok. No provider-unavailable fallback is specified.",
+    "T056": "remains a blocked-by-design user confirmation gate. It cannot be marked complete before T055 is formally resolved, and its confirmation is not Git close authorization."
+  },
+  "shortest_next_step": "Do not rerun tests or alter source. Either obtain a valid same-tree three-provider review, or explicitly revise the accepted plan to define a provider-unavailable fallback. Only then present the actual deletion/keep/diff facts to the user for T056 confirmation."
+}

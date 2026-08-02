@@ -20,7 +20,7 @@ upstream: spec.md + decision-log.md (approved 2026-06-25)
 **现有骨架**：`workflows/build-code/SKILL.md`（73 行）定义了 RED→implement→GREEN 循环和 facts.changed/tests 键，是升级起点。
 
 **验收靶子函数**（FR-ACPT-001，D-M8-3）：
-在 workflowhub 新建 `core/text-utils.mjs`，导出一个纯函数 `truncateWords(text, maxWords)`——将字符串截断到最多 maxWords 个单词，超出部分替换为 `…`。该函数与 build-code 无关，是独立靶子，消除循环验证风险。
+在 workflowhub 新建 `runtime/evidence/text-utils.mjs`，导出一个纯函数 `truncateWords(text, maxWords)`——将字符串截断到最多 maxWords 个单词，超出部分替换为 `…`。该函数与 build-code 无关，是独立靶子，消除循环验证风险。
 
 ---
 
@@ -286,7 +286,7 @@ workflowhub/
 
 - `workflows/build-code/SKILL.md`：人工检查四大能力段（TDD/diff-only/3rd-review/facts.review）均存在
 - `workflows/build-code/capture.mjs`：`node --input-type=module --eval "import './workflows/build-code/capture.mjs'"` 无报错
-- `core/text-utils.mjs`：导出 truncateWords，可 import
+- `runtime/evidence/text-utils.mjs`：导出 truncateWords，可 import
 
 ---
 
@@ -360,7 +360,7 @@ workflowhub/
 |------|------|---------|
 | `workflows/build-code/SKILL.md` | 从骨架升 v1（覆写） | FR-TDD-001~005, FR-DIFF-001~003, FR-REVIEW-001~005, FR-SUB-001~002, FR-PKG-001~003 |
 | `workflows/build-code/capture.mjs` | 新建 | FR-TDD-001~005, FR-PKG-002 |
-| `core/text-utils.mjs` | 新建 | FR-ACPT-001 |
+| `runtime/evidence/text-utils.mjs` | 新建 | FR-ACPT-001 |
 | `tests/build-code-target.test.mjs` | 新建 | FR-ACPT-001 |
 | `tests/build-code-capture.test.mjs` | 新建 | FR-TDD-001~005 |
 | `tests/build-code-diff-only.test.mjs` | 新建 | FR-DIFF-001~003 |
@@ -395,4 +395,4 @@ workflowhub/
 | FR-REG-001 | reuse-registry.md 三条目登记 |
 | FR-REG-002 | reuse-registry.md TDD 件来源路径 |
 | FR-WT-001 | SKILL.md worktree 路径可配置说明 |
-| FR-ACPT-001 | core/text-utils.mjs truncateWords + build-code-target.test.mjs |
+| FR-ACPT-001 | runtime/evidence/text-utils.mjs truncateWords + build-code-target.test.mjs |
