@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
-import { createTask, migrateTaskRunnerRoot, migrateTaskToPerInvocation, openTask } from "../task-handle.mjs";
+import { assertWriteBoundary } from "../../runtime/evidence/write-boundary-preflight.mjs";
+import { createTask, openTask } from "../task-handle.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -52,43 +52,84 @@ describe("per-invocation runner identity", () => {
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-1" })).toThrow(/EEXIST|exist/i);
   });
 
-  it("rejects caller identity/path injection and dirty execution without binding the runner branch to business identity", () => {
+  it("binds dirty runner bytes while rejecting caller injection and invocation hash mismatches", () => {
     const f = fixture();
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2", taskPath: f.task.taskPath })).toThrow(/caller-supplied|forbidden/i);
     writeFileSync(join(f.runner, "workflows", "build-code", "SKILL.md"), "# tampered\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" })).toThrow(/clean/i);
-    execFileSync("git", ["checkout", "--", "workflows/build-code/SKILL.md"], { cwd: f.runner });
     writeFileSync(join(f.runner, "untracked-executable.mjs"), "process.exit(0);\n");
-    expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-3" })).toThrow(/clean/i);
-    rmSync(join(f.runner, "untracked-executable.mjs"));
+    const dirty = authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-2" });
+    expect(dirty.identity).toMatchObject({ source_clean: false, source: { git_branch: "task/workflowhub/per-call" } });
+    expect(dirty.identity.source.git_tree).not.toBe(execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: f.runner, encoding: "utf8" }).trim());
+    expect(() => assertWriteBoundary({
+      task: f.task, stage: "build-code", operation: "receipt",
+      invocation: { ...dirty, hash: "0".repeat(64) },
+    })).toThrow(/INVOCATION_RECORD_HASH_MISMATCH/);
+    writeFileSync(join(f.runner, "untracked-executable.mjs"), "process.exit(1);\n");
+    const changed = authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "run-3" });
+    expect(changed.identity.source.git_tree).not.toBe(dirty.identity.source.git_tree);
     expect(() => authenticateOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "release", sourceKind: "release_manifest" })).toThrow(/unsupported/i);
     const other = fixture({ taskId: "other-call" });
     expect(authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" }).identity)
       .toMatchObject({ task_id: "other-call", source: { git_branch: "task/workflowhub/per-call" } });
   });
 
-  it("reads legacy pinned tasks, migrates once with CAS lineage, then disables replacement", () => {
+  it("reads legacy pinned tasks without migrating their runner history", () => {
     const f = fixture({ mode: "legacy" });
-    const pinned = migrateTaskRunnerRoot({
-      taskPath: f.task.taskPath, projectName: "workflowhub", taskId: "per-call",
-      runnerRoot: f.runner, stage: "build-code",
-    });
-    const beforeHash = createHash("sha256").update(pinned.task.readRecord("task.json")).digest("hex");
-    expect(authenticateOfficialInvocation(pinned.task, { runnerRoot: f.runner, stage: "build-code", runId: "legacy" }).identity)
+    const legacyManifest = {
+      ...f.task.manifest,
+      execution_mode: "legacy_pinned",
+      runner_root: "/retired/workflowhub-runner",
+      runner_oid: "f".repeat(40),
+      runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
+    };
+    writeFileSync(join(f.task.taskPath, "task.json"), `${JSON.stringify(legacyManifest, null, 2)}\n`);
+    const pinned = openTask(f.task.taskPath, "workflowhub", "per-call");
+    const before = pinned.readRecord("task.json");
+    expect(authenticateOfficialInvocation(pinned, { runnerRoot: f.runner, stage: "build-code", runId: "legacy" }).identity)
       .toMatchObject({ task_id: "per-call", source_kind: "git_invocation" });
-    const migrated = migrateTaskToPerInvocation({
-      taskPath: f.task.taskPath, projectName: "workflowhub", taskId: "per-call",
-      expectedManifestHash: beforeHash,
-      now: () => "2026-07-27T01:00:00.000Z",
+    expect(openTask(f.task.taskPath, "workflowhub", "per-call").manifest).toMatchObject({
+      execution_mode: "legacy_pinned",
+      runner_root: "/retired/workflowhub-runner",
     });
-    const reopened = openTask(f.task.taskPath, "workflowhub", "per-call");
-    expect(reopened.manifest).toMatchObject({ execution_mode: "per_invocation" });
-    expect(reopened.manifest).not.toHaveProperty("runner_root");
-    const record = JSON.parse(readFileSync(join(f.task.taskPath, migrated.migration_ref), "utf8"));
-    expect(record.legacy_runner.runner_root).toBe(f.runner);
-    expect(migrateTaskToPerInvocation({
-      taskPath: f.task.taskPath, projectName: "workflowhub", taskId: "per-call",
-      expectedManifestHash: beforeHash,
-    }).status).toBe("migrated");
+    expect(pinned.readRecord("task.json")).toBe(before);
+  });
+
+  it("accepts only well-shaped inert legacy runner fields without reading their historical migration", () => {
+    const f = fixture({ mode: "legacy" });
+    const legacyManifest = {
+      ...f.task.manifest,
+      execution_mode: "legacy_pinned",
+      runner_root: "/retired/workflowhub-runner",
+      runner_oid: "a".repeat(40),
+      runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
+    };
+    writeFileSync(join(f.task.taskPath, "task.json"), `${JSON.stringify(legacyManifest, null, 2)}\n`);
+
+    const pinned = openTask(f.task.taskPath, "workflowhub", "per-call");
+    expect(authenticateOfficialInvocation(pinned, { runnerRoot: f.runner, stage: "build-code", runId: "shape-only" }).identity.source)
+      .toMatchObject({ git_branch: "task/workflowhub/per-call" });
+    expect(() => openTask(f.task.taskPath, "workflowhub", "per-call")).not.toThrow();
+  });
+
+  it.each([
+    [{ runner_root: "relative/runner" }, /legacy runner_root, runner_oid, and runner_root_migration/i],
+    [{ runner_root: "relative/runner", runner_oid: "a".repeat(40), runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" } }, /legacy runner_root must be an absolute path/i],
+    [{ runner_root: "/retired/runner", runner_oid: "short", runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" } }, /legacy runner_oid must be a full Git commit OID/i],
+    [{ runner_root: "/retired/runner", runner_oid: "a".repeat(40), runner_root_migration: { ref: "../migration.json" } }, /legacy runner_root_migration must contain one safe migration ref/i],
+  ])("rejects malformed inert legacy runner history: %j", (legacy, expected) => {
+    const f = fixture({ mode: "legacy" });
+    writeFileSync(join(f.task.taskPath, "task.json"), `${JSON.stringify({ ...f.task.manifest, execution_mode: "legacy_pinned", ...legacy }, null, 2)}\n`);
+    expect(() => openTask(f.task.taskPath, "workflowhub", "per-call")).toThrow(expected);
+  });
+
+  it("rejects legacy runner fields on a per-invocation manifest", () => {
+    const f = fixture();
+    writeFileSync(join(f.task.taskPath, "task.json"), `${JSON.stringify({
+      ...f.task.manifest,
+      runner_root: "/retired/runner",
+      runner_oid: "a".repeat(40),
+      runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
+    }, null, 2)}\n`);
+    expect(() => openTask(f.task.taskPath, "workflowhub", "per-call")).toThrow(/per_invocation.*legacy runner fields/i);
   });
 });

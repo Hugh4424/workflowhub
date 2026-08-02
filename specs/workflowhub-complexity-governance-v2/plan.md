@@ -1253,7 +1253,7 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 ### Tasks
 
 - T054 — 执行 clean install、完整测试、3 E2E、5 mutation 和直接 AC 覆盖审计
-- T055 — 通过正式 wh-review 执行三方独立 architecture review 并处置有效 finding
+- T055 — 通过正式 wh-review 执行三方独立 architecture review 并处置有效 finding；若无法形成 aggregate semantic verdict，只保留该次 canonical unavailable attempt 和历史诊断为审计事实，在 verify summary 明示 incomplete；不得称 pass、创建 fallback bridge 或关闭任务。历史 provider tree/output 绝不作为当前工作许可。
 - T056 — 向用户展示最终删除清单、保留项、diff 和复杂度变化并确认
 
 ### Verify

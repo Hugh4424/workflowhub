@@ -12,6 +12,7 @@ import { buildRunnerRelease, installRunnerRelease, validateRunnerRelease } from 
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { createCanonicalSource, createSourceManifest } from "../../runtime/evidence/canonical-source.mjs";
+import { cleanInstall, sourceContentHash } from "../../tools/architecture/clean-install.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const temps = [];
@@ -28,6 +29,50 @@ function runCli(executable, arguments_, options) {
 }
 
 describe("runner release", () => {
+  test("resolves all five released workflow skill closures without a provider or source mutation", async () => {
+    const result = await cleanInstall({ packageRoot: ROOT });
+    expect(result.status).toBe("passed");
+    expect(result.source_tree_unchanged).toBe(true);
+    expect(result.stage_skill_smoke).toMatchObject({
+      status: "passed",
+      mode: "no_provider_preflight",
+      release_inputs_unchanged: true,
+    });
+    expect(result.stage_skill_smoke.stages.map(({ stage }) => stage)).toEqual([
+      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
+    ]);
+    for (const stage of result.stage_skill_smoke.stages) {
+      expect(stage.manifest_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(stage.skill_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(stage.dependencies.length).toBeGreaterThan(0);
+      for (const dependency of stage.dependencies) {
+        expect(dependency.source_skill_hash).toMatch(/^[a-f0-9]{64}$/);
+        expect(dependency.bundle_hash).toMatch(/^[a-f0-9]{64}$/);
+      }
+    }
+  }, 60_000);
+
+  test("hashes tracked source separately from untracked audit files while preserving non-deletion read failures", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-live-source-hash-"));
+    temps.push(root);
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+    fs.writeFileSync(path.join(root, "kept.txt"), "kept\n");
+    fs.writeFileSync(path.join(root, "deleted.txt"), "deleted\n");
+    execFileSync("git", ["add", "kept.txt", "deleted.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-qm", "baseline"], { cwd: root });
+
+    fs.unlinkSync(path.join(root, "deleted.txt"));
+    expect(sourceContentHash(root)).toMatch(/^[a-f0-9]{64}$/);
+
+    const trackedHash = sourceContentHash(root);
+    fs.writeFileSync(path.join(root, "scratch.txt"), "not deliverable\n");
+    // Scratch files are reported by clean-install but cannot perturb the
+    // reproducible release identity.
+    expect(sourceContentHash(root)).toBe(trackedHash);
+  });
+
   test("runs doctor, status, and a minimal canonical write from a clean installed release", async () => {
     const isolated = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-clean-release-")));
     temps.push(isolated);
@@ -49,6 +94,10 @@ describe("runner release", () => {
     expect(new Ajv2020({ strict: false }).compile(schema)(release)).toBe(true);
     expect(release.files.some(({ path: locator }) => locator.startsWith("node_modules/"))).toBe(false);
     expect(release.files.some(({ path: locator }) => locator === "package-lock.json")).toBe(true);
+    // Runtime review schemas are loaded via import.meta.url, which makes them
+    // invisible to JavaScript static-import discovery.  A clean Runner must
+    // still carry them rather than reaching back to the Hub checkout.
+    expect(release.files.some(({ path: locator }) => locator === "runtime/review/schemas/attempt.schema.json")).toBe(true);
     fs.rmSync(path.join(outputDir, "node_modules"), { recursive: true, force: true });
     const installed = installRunnerRelease({ releaseRoot: outputDir, skillBundleRoot: bundleDir });
     expect(installed.status).toBe(0);

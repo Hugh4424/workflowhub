@@ -1,272 +1,111 @@
 ---
 name: build-plan
-description: Turn the accepted specification into an implementation plan and task list.
-version: 2.0.0
+description: Turn the current specification into a reviewable implementation plan and executable task list.
+version: 3.0.0
 ---
 
 # Build Plan
 
-A real review outcome is recorded as returned; `unavailable` never becomes
-`pass`.
+## Purpose
 
-## Main-flow rule
+Turn the current `spec.md` into a readable `plan.md` and executable `tasks.md`.
+The plan must cover scope, phases, dependencies, tests, review, delivery
+boundary, risks, and every FR/AC. The task list must be ordered, bounded, and
+have a command or observable result for each task.
 
-The current `spec.md`, `plan.md`, and `tasks.md` are live working documents.
-Update them in this same task when requirements change. Accepted records,
-checkpoints, receipts, reviews, confirmations, rebinds, and continuations are
-audit information, not licences to edit or continue. Planning quality still
-requires deterministic FR/AC coverage, executable Tasks, one bounded real
-review, a plain-language summary, and human confirmation.
+## Working rule
 
-## Runtime contract
+The current four materials are the source of truth:
 
-The stable Runner interface is the seven-behavior facade in
-`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
-`confirm`, and `authorize`. Commands below are delegated compatibility locators,
-not additional public Runner behaviors.
+1. `decision-log.md`
+2. `spec.md`
+3. `plan.md`
+4. `tasks.md`
 
-`core/stage-context.mjs` is the external runner implementation. Consume only the
-branded StageContext from
-`bootstrapStage("build-plan", ...)`. Read accepted results only with
-`ctx.kernel`; read and write design files only with `ctx.artifacts`.
-Never derive task identity or paths from cwd, a repository, or an issue
-identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`
-locators from the launcher-owned runtime; available runner Git facts are audit
-metadata only. Runner branch, dirty state, and old runner migration history
-never decide the stage result. Never search for or copy runner files into the
-target repository.
+Read the first two and author the latter two. Revise any current material in
+this same task when the work reveals a need. Old accepted records, receipts,
+reviews, checkpoints, snapshots, generations, and runner history are read-only
+audit records. They never license or block normal planning or implementation.
 
-Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=build-plan
---project=<project> --task=<task> --input=<component-receipts.json>`. Use the
-`confirm --attempt=<attempt> --decision=accepted|rejected` records the human
-decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
-confirmations never publish checkpoint refs.
+Current materials decide whether work can continue. Formal publication still
+fails loudly for an invalid current task/workspace/runtime binding, wrong write
+set, mismatched content, or false execution identity. Stage completion still
+requires real research where needed, deterministic planning checks, independent
+review (or real `unavailable`), user confirmation, and handoff.
 
-If the working plan changes after integration, edit the current `plan.md` and
-`tasks.md` in this task and rerun the affected checks. A baseline-rebind record,
-if present, remains historical audit only.
+## Runtime boundary
 
-The loaded Skill is the authoritative contract. Do not search the target
-repository for another Skill file. The target repository's `skills/` directory
-is never an entry.
-`stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help`. Build-plan must not call `prepare`
-and must never pass `--runner-root`.
+Use only the launcher-supplied `StageContext`; use `ctx.kernel` for formal
+records and `ctx.artifacts` for the four materials. Do not derive identity or
+paths from cwd, Git, branch, issue number, or scans. Do not call `prepare`, pass
+`--runner-root`, or copy runner files into the product repository.
 
-Create an OS temporary directory first:
-`TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/workflowhub-build-plan.XXXXXX")"`.
-Every caller-owned draft, receipt payload, run input, or review request must
-stay under `$TMP_DIR`, never in the target base repository or CandidateWorkspace.
-The `artifact` commands below are the only route that copies reviewed drafts
-into the CandidateWorkspace; canonical receipts remain owned by TaskKernel.
-Create temporary inputs with one shell command (`printf`, redirection, or a
-here-document). Never use an editing or patch tool for them: it is not part of
-the Stage contract and can leave the host waiting for an unrelated tool callback.
-
-Use this complete public sequence without inventing flags or input shapes:
-
-1. Before each review, publish both exact drafts under review:
-   `node scripts/stage-runtime.mjs run --action=draft --stage=build-plan
-   --project=<project> --task=<task> --name=plan.md
-   --input=$TMP_DIR/draft-plan.md` and
-   `node scripts/stage-runtime.mjs run --action=draft --stage=build-plan
-   --project=<project> --task=<task> --name=tasks.md
-   --input=$TMP_DIR/draft-tasks.md`.
-2. After review is finished and without changing either artifact, create each
-   official receipt once:
-   `node scripts/stage-runtime.mjs run --action=record --stage=build-plan
-   --project=<project> --task=<task> --component=plan
-   --input=$TMP_DIR/plan-receipt.json` and
-   `node scripts/stage-runtime.mjs run --action=record --stage=build-plan
-   --project=<project> --task=<task> --component=tasks
-   --input=$TMP_DIR/tasks-receipt.json`.
-   Each input shape is exactly `{"content":"<exact final markdown>"}`.
-3. Create `$TMP_DIR/run.json` with exactly:
-   `{"receipts":{"plan":"receipts/plan.json","tasks":"receipts/tasks.json","review":"<canonical review result-or-unavailable-attempt ref>"}}`.
-   When an ordinary post-review edit is covered by the canonical same-flow
-   resolution, add `"review_resolution":"reviews/resolutions/<sha256>.json"`.
-   A structural follow-up instead supplies its current full result as `review`.
-   The runtime rejects a stale or cross-flow result/resolution.
-4. Publish the attempt:
-   `node scripts/stage-runtime.mjs run --action=execute --stage=build-plan
-   --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
-5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
-   through its normal OS temporary lifecycle. Never treat the temporary path as
-   a stage artifact, evidence ref, or handoff item.
-6. Record the human decision using the returned attempt ref:
-   `node scripts/stage-runtime.mjs confirm --action=decision --stage=build-plan
-   --project=<project> --task=<task> --attempt=<attempt-ref>
-   --decision=accepted|rejected`.
-7. Only for an accepted decision, pass the returned confirmation ref:
-   `node scripts/stage-runtime.mjs authorize --action=decision --stage=build-plan
-   --project=<project> --task=<task> --attempt=<attempt-ref>
-   --human-confirmation-ref=<confirmation-ref>`.
-
-Temporary files may be authoring inputs, but are never the reviewed artifacts
-by themselves. Do not create official receipts before review is finished.
-
-Declared runtime components: `spec-research`, `spec-plan`, `spec-tasks`,
-and `wh-review`.
-`simplicity-guard` is provider-visible only inside `wh-review`; it is not a
-planning step.
-
-## Named artifacts
-
-- Reads: `spec.md`.
-- Writes: `plan.md` and `tasks.md` only.
-- In-memory planning material: research notes and extracted data contracts;
-  neither is a standalone artifact.
-- Stage record: append-only build-plan attempt through TaskKernel.
+Use an OS temporary directory for caller-owned drafts and runtime inputs.
+Publish the current reviewed `plan.md` and `tasks.md` via the runtime's artifact,
+receipt, and run schemas. The normal formal sequence is `run`, `confirm`, then
+`accept`; confirmation must be a real human answer. A checkpoint produced by
+`accept` is an audit fact only, never a prerequisite for later work.
 
 ## Procedure
 
-1. Validate context and read the current `spec.md`. Historical accepted
-   build-spec facts remain audit context.
-2. Author the live `plan.md` and `tasks.md` directly. A receipt, checkpoint, or
-   old accepted result never freezes their content.
-3. Give `spec-research` frozen spec content. Keep its result in memory; do not
-   create `research.md`. Extracted data contracts remain in memory and are
-   incorporated into `plan.md` when relevant; do not create a separate contract
-   artifact. Present one host-visible research brief with the conclusions that
-   materially shape the plan and what they change.
-4. Create the draft plan by giving `spec-plan` frozen spec/research content and
-   the `plan.md` writer.
-5. Create the draft task list by giving `spec-tasks` frozen spec/plan content
-   and the `tasks.md` writer. Present one draft brief covering phases, major
-   dependencies, testing/review approach, delivery boundary, and next check.
-   Run the deterministic plan/task validator over the exact named-artifact
-   bytes. It must report complete Phase rows, task rows, executable
-   command/oracle checks, an acyclic dependency graph, and full bidirectional
-   FR/AC coverage. Publish those facts through the controlled content writer as
-   `plan-task-contract.v2`, bound to exact `spec.md`, `plan.md`, and `tasks.md`
-   ReferenceBindings. Each task card must expose its authoritative v2 fields;
-   legacy v1 facts remain read-only compatibility input. Any structural error
-   stops before review; a provider cannot override it.
-6. Run one initial full review over the frozen complete `spec.md`, `plan.md`,
-   `tasks.md`, and matching `plan-task-contract.v2` facts. `spec-analyze` and
-   `plan-eng-review` are provider-visible lenses loaded only by `wh-review`, not
-   separate planning or verdict steps. Components do not locate files
-   themselves. Present one review brief for the effective result. It lists
-   findings and one disposition for each: `fixed`, `rejected_invalid`,
-   `accepted_risk`, or `unverified` when no bound response ledger exists; it is
-   review evidence, not a synthetic stage pass.
-7. If a finding changes either draft, first republish both exact artifacts and
-   regenerate the deterministic contract facts. TaskKernel classifies the
-   change inside the same authenticated review flow:
+1. Read current `decision-log.md` and `spec.md`; identify the FRs, ACs,
+   constraints, non-goals, risks, and open decisions that affect the plan.
+2. Do proportionate `spec-research` only when it can materially change the
+   implementation. Keep research as input to the plan, not a new permanent
+   artifact; otherwise record why it was skipped.
+3. Write current `plan.md` with phases, ownership boundaries, dependencies,
+   data/API changes, risks, tests, independent-review scope, and delivery
+   boundary. Prefer the simplest design that meets the current requirements.
+4. Write current `tasks.md`. Each task names the change, affected area,
+   dependency, and concrete check or observable outcome. Maintain bidirectional
+   FR/AC coverage and an acyclic order.
+5. Run deterministic checks over the exact current materials. They must verify
+   complete phase/task rows, executable checks, dependency acyclicity, and
+   FR/AC coverage. Structural errors stop formal publication until fixed; they
+   do not require a new task or historical-record repair.
+6. Run one independent `wh-review` over the complete current `spec.md`,
+   `plan.md`, and `tasks.md`. `wh-review` alone owns providers and its internal
+   lenses. Record the actual verdict and provider availability; never rewrite
+   unavailable or failed as pass.
+7. Address valid review findings in the same task. Repair, reject invalid
+   findings with evidence, or let the user accept a specific risk. Do not add
+   process machinery or repeat an unchanged review. After a material change,
+   rerun only affected
+   checks and the review needed to assess that change.
+8. Publish exact final plan/task receipts and the stage attempt through the
+   runtime's declared schema. Publication must authenticate current structure;
+   audit gaps remain visible but do not block work.
+9. Present a short plan summary: scope and non-goals, phases/dependencies,
+   FR/AC and check coverage, review facts, risks, and delivery boundary. Get
+   explicit user accept or reject, record it with `confirm`, and pass only an
+   accepted confirmation to `accept`.
 
-   - an ordinary edit uses a verified delta/resolution and makes zero provider
-     calls;
-   - a material structural change may append at most one fresh full review;
-   - unchanged snapshot/material reuses the existing result with zero provider
-     calls.
+## Review, confirmation, and completion
 
-   A stale contract, uncovered delta, or cross-flow resolution stops before
-   provider dispatch. A second structural full request stops before provider
-   dispatch. Do not loop reviews
-   to manufacture a pass. If the one structural follow-up leaves a material
-   actionable finding, report the blocker and its completion condition.
-8. After the review sequence finishes, without changing either artifact, create
-   one final create-only receipt for `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
-   or create official receipts from drafts. Publish the append-only
-   stage attempt with requirement mapping, research status, review facts, and
-   missing items. When review is unavailable, pass its canonical attempt ref so
-   the runtime records the failure reason and provenance; never describe it as
-   a pass or invent a result.
-9. Present the plan summary and record the decision with `confirm`. It must
-   summarize both the accepted specification (what, non-goals, acceptance) and
-   the implementation plan (phases, dependencies, tests, reviews, risks, and
-   expected impact). Only an accepted confirmation may be passed to `accept`,
-   which creates the build-plan checkpoint and accepts the attempt. Use the
-   confirmation-question contract below; do not append generic completed-work,
-   next-step, or user-action sections to that question card. If an external
-   review audit records accepted risk, show its affected area and rationale in
-   this summary; it is visible context for the human confirmation, not an
-   automatic acceptance gate.
+Independent review is quality evidence, not a general progress gate. An
+actionable major or blocking finding needs a real user choice: repair first
+(recommended) or accept the stated risk. Risk acceptance preserves the review
+verdict and never bypasses structural publication checks or the normal plan
+confirmation.
 
-Changing a specification, plan, or task list updates the current files in this
-same task. Rerun affected deterministic checks and the bounded review on the
-new snapshot, then present the updated plain-language summary and confirmation.
+Do not call build-plan complete until the declared planning work, checks,
+independent review fact, user confirmation, and handoff are real. Do not treat
+the confirmation or checkpoint as authorization to commit, push, merge,
+archive, or clean up; those actions require separate authorization.
 
-## Host interaction and completion handoff
+## Communication and handoff
 
-Procedure actions named `ask`, `wait`, or `present` must be projected onto a
-host-visible conversation surface. The invoking host owns delivery and resume;
-WorkflowHub neither identifies a host user nor derives a conversation address.
-Every public message uses the user's language, short Markdown headings, bullets,
-and plain language a high-school student can understand. Use one card type only:
+Use concise plain language in the user's language. A research or draft card
+states only conclusions that affect the plan. A review card states subject,
+actual providers, verdict, important findings, disposition, and next step. A
+confirmation card offers 2–3 meaningful choices only where user input is
+needed. Keep paths, hashes, refs, and commands in formal records.
 
-- A confirmation question card contains only current status, decision, affected
-  scope, and 2–3 mutually exclusive options. Mark one recommendation with its
-  reason and give each option's consequence and risk. Do not add completed-work,
-  next-step, or generic user-action sections.
-- A milestone card contains only current progress, 1–3 important conclusions,
-  next step, and whether user action is required. Publish it for research,
-  draft-plan formation, and final plan; do not stream tool activity.
-- A review card contains the reviewed subject, actual providers, verdict, up to
-  three important findings, intended disposition, and next step. Report actual
-  duration and token usage only when supplied by formal review/runtime facts;
-  otherwise state `not provided`. Do not estimate or rerun review for metrics.
+Use the runtime-owned completion renderer and `skill-deps.yaml`: every always
+component is `executed`; every conditional component is `executed` or
+`trigger=false — reason`. Do not create a separate progress state machine.
 
-Raw paths, hashes, receipt or attempt refs, runner details, shell commands, and
-internal identifiers stay in formal records; public messages name only the
-human-readable artifact and result. An unchanged milestone or reused review
-result is not published again.
-Ask and wait for the user only at the existing plan decision or when an answer
-can change accepted scope. When user action is required, present the problem,
-one recommended option with its reason, mutually exclusive choices, and each
-choice's consequence and risk. Otherwise state `user action: none`.
+## Metrics
 
-Before the Stage completes, report Stage-owned component facts using
-`skill-deps.yaml` as the declared baseline: every `always` component is
-`executed`; every `conditional` component is either `executed` or
-`trigger=false — <reason>`. Cross-check the list with formal artifacts and
-canonical `wh-review` refs. Reviewer-owned lenses appear only through those
-review refs and are never invoked a second time by the Stage.
-
-The official Stage handler is the only completion-facts producer. Publish both
-completion views only through `core/stage-completion-facts.mjs`: the public
-surface receives its user renderer and the downstream surface receives its
-system renderer. Never rebuild, enrich, or recalculate either view in the Skill.
-The shared result, risks, next owner, user action, and artifact labels must stay
-identical; only the system view carries formal refs, hashes, review details,
-dependencies, recovery conditions, and the downstream lookup rule.
-
-Publish the concise rendered completion handoff. Do not copy artifacts or raw logs. The
-invoking host must deliver the same concise facts to its downstream handoff
-surface and parent progress surface. If downstream reports invalid upstream
-input, the host must return the finding and completion condition to the upstream owner
-through those host-owned
-surfaces; do not poll or invent a host-specific recovery mechanism.
-
-## Metrics capability
-
-Use `metrics/collector.mjs` through a launcher-issued capability.
-The trusted launcher creates `metricsLauncherConfig` with
-`createMetricsLauncherConfig(loadedConfig)`. The stage receives that capability
-and calls `configForCollector(metricsLauncherConfig, { task: ctx.task, workspace: ctx.workspace })`;
-it must not pass raw config or choose a metrics path.
-Call `recordSkeleton` at entry and `updateOwnResult` at exit; collection remains
-warn-only.
-
-```json
-{"stage":"build-plan","skill_or_stage":"build-plan"}
-```
-
-## Serious review exception
-
-After the formal review, pause only for an authenticated `actionable`
-`major|blocking` finding. Ask about one finding at a time using a plain-language
-card containing the problem, evidence, consequences, affected scope, and the
-mutually exclusive choices “repair first” (recommended) and “accept risk and
-continue”. Wait for the real host reply and use only `accept-review-risk`.
-Minor, invalid-anchor/evidence, unavailable, timeout, and adapter failures do
-not open this path. The risk choice keeps the original verdict and does not
-replace build-plan's normal confirmation or any structural gate.
-
-## 当前材料 revision
-
-四材料更新使用 task-global append-only `task-material-revision.v1`。caller 只交 summary
-和 source refs；writer 从认证 ArtifactDir 注入 task identity/revision ID，并计算
-changed files、content/source hashes。旧版本只读；
-不要求 repair cycle/reset/rebind/checkpoint，不自动重审，也不把 revision lineage 变成开发 gate。
-材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
-verify/close incomplete，不阻断普通工作，也不需要任何许可证。
+Use only the launcher-issued metrics capability. Record entry and exit; metrics
+failures are warnings and never proof of completion.

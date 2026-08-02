@@ -83,7 +83,7 @@
       "status": "move",
       "sha256_before": "a7583fe02c7985339776bdc85847451fb180c386f06113771605c602ad92665a",
       "bytes": 3317,
-      "sha256_after": "a7583fe02c7985339776bdc85847451fb180c386f06113771605c602ad92665a",
+      "sha256_after": "08bc1e9f982ef93e90e4a6aacbb61981bc033ac2e9c6820d19b546031a4a5f7a",
       "content_change": "import/path-only"
     },
     {
@@ -1109,14 +1109,16 @@
     {
       "source": "scripts/__tests__/runner-replacement-bridge.test.mjs",
       "destination": null,
-      "status": "keep-phase7",
-      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+      "status": "deleted-final-cleanup",
+      "reason": "retained contract-quality test; Phase 7 disposition=keep",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "scripts/__tests__/runner-unbinding-migration.test.mjs",
       "destination": null,
-      "status": "keep-phase7",
-      "reason": "retained contract-quality test; Phase 7 disposition=keep"
+      "status": "deleted-final-cleanup",
+      "reason": "runner migration had no stage, skill, or Multica production caller",
+      "content_change": "replaced by legacy manifest read-only plus fresh invocation coverage"
     },
     {
       "source": "scripts/__tests__/smoke-local-skill-dispatch.test.mjs",
@@ -1181,8 +1183,9 @@
     {
       "source": "core/__tests__/task-recovery.test.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "core/__tests__/workspace-manager.test.mjs",
@@ -1205,8 +1208,9 @@
     {
       "source": "core/build-spec-receipt-recovery.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "core/canonical-evidence-validators.mjs",
@@ -1295,14 +1299,16 @@
     {
       "source": "core/schemas/workflowhub-recovery-credential.v1.json",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "core/schemas/workflowhub-recovery-generation.v1.json",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "core/stage-completion-facts.mjs",
@@ -1367,8 +1373,9 @@
     {
       "source": "core/task-recovery.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "core/workspace.mjs",
@@ -1379,20 +1386,23 @@
     {
       "source": "scripts/__tests__/stage-runtime-recover-run.test.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "scripts/__tests__/stage-runtime-spec-recovery.test.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "scripts/__tests__/task-recovery.test.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "existing source outside T052 exact file boundary; left in place",
+      "content_change": "removed after migration as task-only legacy machinery"
     },
     {
       "source": "scripts/runtime-cutover.mjs",
@@ -1413,16 +1423,128 @@
       "reason": "existing source outside T052 exact file boundary; left in place"
     },
     {
-      "source": "scripts/task-recovery.mjs",
+      "source": "runtime/schemas/bootstrap-review.v1.json",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
     },
     {
-      "source": "scripts/validate-stage-replay.mjs",
+      "source": "runtime/schemas/runner-replacement-bootstrap-provider-config.v1.json",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-bootstrap-sealed-bundle.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-bootstrap-test-receipt.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "runtime/schemas/runner-replacement-path-coverage-map.v1.json",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "runner replacement bootstrap schema had no current production consumer"
+    },
+    {
+      "source": "tools/cli/task-migrate-runner-root.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "legacy runner migration CLI had no current stage, skill, or Multica production caller"
+    },
+    {
+      "source": "skills/wh-review/scripts/integration-review-subject.mjs",
+      "destination": "runtime/review/integration-review-subject.mjs",
+      "status": "move",
+      "sha256_before": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
+      "sha256_after": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/phase-review-subject.mjs",
+      "destination": "runtime/review/phase-review-subject.mjs",
+      "status": "move",
+      "sha256_before": "63e57699a7b7eb7da9d523cad1a01e0d0c6dc764daf4c16afa03f1270270f85e",
+      "sha256_after": "aa1d316d2d3fb7b56e9c0122dd94bd1933036547b2439fe4690f129c358d5ac4",
+      "content_change": "moved runtime logic; post-move implementation change; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-controller.mjs",
+      "destination": "runtime/review/review-controller.mjs",
+      "status": "move",
+      "sha256_before": "77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79",
+      "sha256_after": "77d052b551a9f3436bdd9bdb817a5198fd9b9d16c220a44b086d8c056d2eea79",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/review-output.mjs",
+      "destination": "runtime/review/review-output.mjs",
+      "status": "move",
+      "sha256_before": "6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744",
+      "sha256_after": "6a8ed0aaa9a1219115d5e065af2cecb7c77da16d698d5bffcfb7940e1346d744",
+      "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/scripts/schema-validator.mjs",
+      "destination": "runtime/review/schema-validator.mjs",
+      "status": "move",
+      "sha256_before": "381ea2c4dfefa66008ca0c96981d22cb40290c5cf114c0904c785475ba7f7fea",
+      "sha256_after": "825d8e74731f9f2a8c7e8553fafddf4498eab316cf1af65f23d9d1d2582eb4c0",
+      "content_change": "moved runtime logic; post-move implementation change; skill compatibility shim re-exports destination"
+    },
+    {
+      "source": "skills/wh-review/schemas/attempt.schema.json",
+      "destination": "runtime/review/schemas/attempt.schema.json",
+      "status": "move",
+      "sha256_before": "684d27f900c6c995e56193e6fb765b9db0be47374b2ef10d5504b1aaff7a6e23",
+      "sha256_after": "8c4145641c795130bfe8045fe8fc825dd5c5f9f45175ec67a6bf12f90dad2852",
+      "content_change": "moved runtime schema; post-move implementation change"
+    },
+    {
+      "source": "skills/wh-review/schemas/result.schema.json",
+      "destination": "runtime/review/schemas/result.schema.json",
+      "status": "move",
+      "sha256_before": "9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da",
+      "sha256_after": "9b46dc5cc7f6a29df136178c279c44bc580411118f2215ac9acb471baa3d23da",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/resolution.schema.json",
+      "destination": "runtime/review/schemas/resolution.schema.json",
+      "status": "move",
+      "sha256_before": "f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182",
+      "sha256_after": "f11c9038cd031635facb26ef22b3c335729be43559b881cc0357b5946662a182",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/stage-materials.schema.json",
+      "destination": "runtime/review/schemas/stage-materials.schema.json",
+      "status": "move",
+      "sha256_before": "fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837",
+      "sha256_after": "fa256f5ff9bb952dbc54cd38e444c5b7ac360ceab80c80901edfb3ae3bce4837",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/schemas/ac-evidence-summary.schema.json",
+      "destination": "runtime/review/schemas/ac-evidence-summary.schema.json",
+      "status": "move",
+      "sha256_before": "2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a",
+      "sha256_after": "2a9edc95c861833018e9fa4f2b9a0015d29abd4c64d4d35c145abe76d7a77b9a",
+      "content_change": "moved runtime schema"
+    },
+    {
+      "source": "skills/wh-review/stage-materials.json",
+      "destination": "runtime/review/stage-materials.json",
+      "status": "move",
+      "sha256_before": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
+      "sha256_after": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
+      "content_change": "moved runtime stage-material matrix"
     }
   ]
 }

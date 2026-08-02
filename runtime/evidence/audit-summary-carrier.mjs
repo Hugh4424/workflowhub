@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
-import { assertTaskHandle } from "../../core/task-handle.mjs";
+import { assertTaskReadCapability } from "../../core/task-capability.mjs";
 
 export const AUDIT_CARRIER_VERSION = "v1";
 
@@ -46,7 +46,7 @@ export function verifyAuditSummary(auditSummaryRef, auditSummary, expected = {})
 }
 
 export function loadAuditSummary(task, auditSummaryRef, expected = {}) {
-  const taskHandle = assertTaskHandle(task);
+  const taskHandle = assertTaskReadCapability(task);
   if (!safeRelativeRef(auditSummaryRef)) return { ok: false, errors: ["audit_summary_ref must be a task-relative path"] };
   try {
     const auditSummary = JSON.parse(taskHandle.readRecord(auditSummaryRef));

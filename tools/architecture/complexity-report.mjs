@@ -3,10 +3,11 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listDeliveryFiles } from "./inventory.mjs";
+import { governanceTreeHash, listDeliveryFiles } from "./inventory.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUTPUT = resolve(ROOT, "docs/architecture/complexity-baseline.json");
+const FINAL_OUTPUT = resolve(ROOT, "docs/architecture/final-complexity-report.json");
 const SOURCE_EXTENSIONS = new Set([".mjs", ".js", ".cjs", ".ts", ".tsx"]);
 
 function lineCount(path) {
@@ -36,18 +37,78 @@ function budget(actual, target, limit) {
   return { actual, target, limit, delta_from_target: actual - target, within_limit: actual <= limit };
 }
 
-function grepCount(pattern, files) {
-  let total = 0;
+function forbiddenMarkerAudit(pattern, files) {
+  const paths = [];
   for (const path of files) {
-    const text = readFileSync(resolve(ROOT, path), "utf8");
-    total += (text.match(pattern) ?? []).length;
+    if (pattern.test(readFileSync(resolve(ROOT, path), "utf8"))) paths.push(path);
+    pattern.lastIndex = 0;
   }
-  return total;
+  return { actual: paths.length, paths };
 }
 
-function publicRunnerCommandCount(runtimeText) {
-  const allowlist = runtimeText.match(/if \(!new Set\(\[(.*?)\]\)\.has\(command\)\)/s)?.[1] ?? "";
-  return new Set([...allowlist.matchAll(/"([^"]+)"/g)].map((match) => match[1])).size;
+// These are deliberately the retired *task-progression* subsystem, not broad
+// English words such as "continuation" that still have a legitimate provider
+// review meaning. Every production root is audited, including runtime/tools.
+const RETIRED_PROGRESSION_PATHS = new Set([
+  "core/task-recovery.mjs",
+  "core/build-spec-receipt-recovery.mjs",
+  "scripts/task-recovery.mjs",
+  "scripts/validate-stage-replay.mjs",
+  "scripts/__tests__/runner-replacement-bridge.test.mjs",
+  "core/schemas/workflowhub-recovery-credential.v1.json",
+  "core/schemas/workflowhub-recovery-generation.v1.json",
+]);
+const RETIRED_PROGRESSION_SYMBOLS = Object.freeze([
+  "materialRevisionBaseline",
+  "baseline_rebind_ref",
+  "continuation_ref",
+  "runner-replacement-bridge",
+  "task-recovery",
+  "build-spec-receipt-recovery",
+  "validate-stage-replay",
+  "workflowhub-recovery-credential",
+  "workflowhub-recovery-generation",
+]);
+const RETIRED_PROGRESS_PATTERN = new RegExp(`\\b(?:${RETIRED_PROGRESSION_SYMBOLS.map((value) => value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")).join("|")})\\b`, "i");
+const DUAL_MATERIAL_WRITE_MARKERS = /\b(?:dual.?write|legacy.?writer|writeBoth)\b/i;
+
+function retiredProgressionAudit(productionFiles) {
+  const auditedFiles = productionFiles.filter((path) => path !== "tools/architecture/complexity-report.mjs");
+  const paths = auditedFiles.filter((path) => RETIRED_PROGRESSION_PATHS.has(path));
+  const symbol_hits = [];
+  for (const path of auditedFiles) {
+    if (RETIRED_PROGRESS_PATTERN.test(readFileSync(resolve(ROOT, path), "utf8"))) symbol_hits.push(path);
+    RETIRED_PROGRESS_PATTERN.lastIndex = 0;
+  }
+  return {
+    actual: new Set([...paths, ...symbol_hits]).size,
+    audited_roots: ["core/", "runtime/", "scripts/", "tools/", "skills/", "workflows/"],
+    forbidden_paths: [...RETIRED_PROGRESSION_PATHS].sort(),
+    forbidden_symbols: RETIRED_PROGRESSION_SYMBOLS,
+    paths,
+    symbol_hits,
+  };
+}
+
+function hardGateAudits(productionFiles) {
+  const auditedFiles = productionFiles.filter((path) => path !== "tools/architecture/complexity-report.mjs");
+  return {
+    retiredProgression: retiredProgressionAudit(auditedFiles),
+    // A narrow writer rule avoids treating generic observability fan-out as a
+    // material authority regression, while still covering every writer root.
+    dualMaterialWrite: forbiddenMarkerAudit(
+      DUAL_MATERIAL_WRITE_MARKERS,
+      productionFiles.filter((path) => path !== "tools/architecture/complexity-report.mjs" && /^(?:core|runtime|scripts|tools|workflows)\//.test(path)),
+    ),
+  };
+}
+
+function publicRunnerCommandCount(runtimeFacadeText) {
+  // Count the stable public facade, not the private implementation routes
+  // accepted by the in-process stage dispatcher.  The latter are deliberately
+  // more numerous and are not part of the external Runtime contract.
+  const behaviors = runtimeFacadeText.match(/RUNTIME_BEHAVIORS\s*=\s*Object\.freeze\(\[([^\]]*)\]\)/s)?.[1] ?? "";
+  return new Set([...behaviors.matchAll(/"([^"]+)"/g)].map((match) => match[1])).size;
 }
 
 function sha256(path) {
@@ -182,9 +243,10 @@ export function buildReport() {
     .slice(0, 5);
   const deliveryFiles = listDeliveryFiles();
   const schemas = deliveryFiles.filter((path) => path.endsWith(".schema.json") || path.includes("/schemas/")).length;
-  const runtimeText = readFileSync(resolve(ROOT, "scripts/stage-runtime.mjs"), "utf8");
+  const runtimeFacadeText = readFileSync(resolve(ROOT, "runtime/interface/runtime-facade.mjs"), "utf8");
   const families = persistentObjectFamilies();
   const bundleAudit = bundleContentAudit();
+  const hardGateAudit = hardGateAudits(productionFiles);
   const nodeActual = process.version;
   const npmActual = execFileSync("npm", ["--version"], { cwd: ROOT }).toString("utf8").trim();
 
@@ -192,6 +254,7 @@ export function buildReport() {
     schema_version: "workflowhub-complexity-report.v1",
     source: {
       git_head: execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT }).toString("utf8").trim(),
+      tracked_tree_sha256: governanceTreeHash(),
       tracked_files: execFileSync("git", ["ls-files", "-z"], { cwd: ROOT })
         .toString("utf8").split("\0").filter(Boolean).length,
       delivery_files: deliveryFiles.length,
@@ -235,7 +298,7 @@ export function buildReport() {
     budgets: {
       formal_test_lines: budget(testLines, 10_000, 12_000),
       production_lines: budget(productionLines, 12_000, 15_000),
-      public_runner_behaviors: budget(publicRunnerCommandCount(runtimeText), 7, 8),
+      public_runner_behaviors: budget(publicRunnerCommandCount(runtimeFacadeText), 7, 8),
       schemas: budget(schemas, 8, 10),
       persistent_object_families: budget(families.names.length, 4, 5),
       largest_core_file_lines: budget(
@@ -248,14 +311,16 @@ export function buildReport() {
     },
     hard_gates: {
       dedicated_recovery_state: {
-        actual: grepCount(/\b(reopen|rebind|continuation|recovery)\b/gi, productionFiles),
+        actual: hardGateAudit.retiredProgression.actual,
         required_final: 0,
-        phase_0_status: "observed_for_planned_removal",
+        phase_0_status: hardGateAudit.retiredProgression.actual === 0 ? "observed_zero" : "observed_for_planned_removal",
+        ...hardGateAudit.retiredProgression,
       },
       dual_write_markers: {
-        actual: grepCount(/\b(dual.?write|legacy.?writer|writeBoth)\b/gi, productionFiles),
+        actual: hardGateAudit.dualMaterialWrite.actual,
         required_final: 0,
-        phase_0_status: "observed_for_planned_removal",
+        phase_0_status: hardGateAudit.dualMaterialWrite.actual === 0 ? "observed_zero" : "observed_for_planned_removal",
+        paths: hardGateAudit.dualMaterialWrite.paths,
       },
       bundle_forbidden_content: {
         actual: bundleAudit.violations.length,
@@ -292,6 +357,9 @@ export function validateReport(report) {
   if (!Number.isInteger(report.measurements?.formal_test_files?.actual)) {
     errors.push("formal test file count is required");
   }
+  if (!/^[a-f0-9]{64}$/.test(report.source?.tracked_tree_sha256 ?? "")) {
+    errors.push("current tracked tree sha256 is required");
+  }
   if (!Number.isInteger(report.measurements?.test_support_lines?.actual)) {
     errors.push("test support line count is required");
   }
@@ -317,16 +385,54 @@ export function validateReport(report) {
   }
   for (const name of ["dedicated_recovery_state", "dual_write_markers", "bundle_forbidden_content"]) {
     const gate = report.hard_gates?.[name];
-    if (!gate || !Number.isInteger(gate.actual) || gate.required_final !== 0 || !gate.phase_0_status) {
+    if (!gate || !Number.isInteger(gate.actual) || gate.required_final !== 0 || !gate.phase_0_status
+        || gate.actual !== gate.required_final) {
       errors.push(`hard gate ${name} is incomplete`);
     }
   }
+  const retired = report.hard_gates?.dedicated_recovery_state;
+  if (!Array.isArray(retired?.audited_roots) || !retired.audited_roots.includes("runtime/") || !retired.audited_roots.includes("tools/")
+      || !Array.isArray(retired.forbidden_paths) || retired.forbidden_paths.length === 0
+      || !Array.isArray(retired.forbidden_symbols) || retired.forbidden_symbols.length === 0
+      || !Array.isArray(retired.symbol_hits)) {
+    errors.push("dedicated recovery hard gate must audit all production roots with exact retired artifacts");
+  }
+  return errors;
+}
+
+export function buildFinalReport() {
+  const report = buildReport();
+  return {
+    schema_version: "workflowhub-final-complexity-report.v2",
+    snapshot_tracked_tree_sha256: report.source.tracked_tree_sha256,
+    // Keep the complete, machine-reproducible report instead of a second
+    // hand-maintained summary with numbers that can silently drift.
+    build_report: report,
+  };
+}
+
+export function validateFinalReport(finalReport) {
+  const errors = [];
+  if (finalReport?.schema_version !== "workflowhub-final-complexity-report.v2") errors.push("invalid final complexity report schema");
+  if (!/^[a-f0-9]{64}$/.test(finalReport?.snapshot_tracked_tree_sha256 ?? "")) errors.push("final complexity report snapshot hash is required");
+  const nested = finalReport?.build_report;
+  errors.push(...validateReport(nested ?? {}).map((error) => `final complexity report: ${error}`));
+  if (nested?.source?.tracked_tree_sha256 !== finalReport?.snapshot_tracked_tree_sha256) errors.push("final complexity report snapshot does not match build report");
+  if (JSON.stringify(nested) !== JSON.stringify(buildReport())) errors.push("final complexity report is stale for the current tracked tree");
   return errors;
 }
 
 function main() {
   const check = process.argv.includes("--check-hard-gates");
+  const writeFinal = process.argv.includes("--write-final");
+  if (writeFinal && check) throw new Error("--write-final cannot be combined with --check-hard-gates");
   const expected = buildReport();
+  if (writeFinal) {
+    const finalReport = buildFinalReport();
+    writeFileSync(FINAL_OUTPUT, `${JSON.stringify(finalReport, null, 2)}\n`, "utf8");
+    console.log(`wrote ${relative(ROOT, FINAL_OUTPUT)} (${statSync(FINAL_OUTPUT).size} bytes)`);
+    return;
+  }
   if (check) {
     const actual = JSON.parse(readFileSync(OUTPUT, "utf8"));
     const errors = validateReport(actual);

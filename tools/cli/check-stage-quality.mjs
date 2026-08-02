@@ -27,7 +27,7 @@
  *   node tools/cli/check-stage-quality.mjs --self-test # inject real violation + assert detection
  */
 
-import { readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -172,146 +172,6 @@ const V6_3_UNMEASURABLE_AUTOBLOCK = {
 const CLASSES = [V6_1_FACT_COLLECT_BLOCK, V6_2_STAGE_RESULT_RUNTIME_BLOCK, V6_3_UNMEASURABLE_AUTOBLOCK];
 
 // ---------------------------------------------------------------------------
-// FR-METRIC-002: skill metric-wiring detection
-// ---------------------------------------------------------------------------
-
-/**
- * scanSkillMetrics — check whether a single SKILL.md has both recordSkeleton
- * AND updateOwnResult instructions (i.e. is correctly wired to metrics/collector.mjs).
- *
- * A skill is "wired" when its SKILL.md contains BOTH tokens:
- *   - `recordSkeleton`  (call at stage start)
- *   - `updateOwnResult` (call at stage end)
- *
- * Missing either token → { found: true, missingSkill: <name> }.
- * Both present       → { found: false }.
- *
- * The skill name is derived from the SKILL.md path: the parent directory name
- * (workflows/<name>/SKILL.md).
- */
-export function scanSkillMetrics(skillPath) {
-  // Derive skill name from parent directory
-  const skillName = skillPath.split("/").slice(-2, -1)[0] ?? skillPath;
-
-  let content;
-  try {
-    content = readFileSync(skillPath, "utf8");
-  } catch (err) {
-    // Unreadable — treat as missing wiring so it surfaces as a finding
-    return { found: true, missingSkill: skillName, reason: `cannot read: ${err.message}` };
-  }
-
-  // Sub-skill check (marker-gated via frontmatter `kind: sub-skill`):
-  // helper sub-skills invoked within a parent stage's flow do NOT emit their own
-  // stage-result; their metrics are covered by the orchestrator's record. Skipping
-  // them here IS by design — adding fake recordSkeleton/updateOwnResult would
-  // fabricate stage metrics for non-stage skills, contradicting plan S4.
-  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (fmMatch) {
-    const frontBlock = fmMatch[1];
-    // Extract the first non-whitespace, non-comment token after "kind:".
-    // Handles both "kind: sub-skill" and "kind: sub-skill  # comment".
-    const kindMatch = frontBlock.match(/^kind:\s*([^\s#]+)/m);
-    const fmKind = kindMatch ? kindMatch[1].replace(/^["']|["']$/g, "") : null;
-    if (fmKind === "sub-skill") {
-      return { found: false };
-    }
-  }
-
-  const hasRecordSkeleton = /\brecordSkeleton\b/.test(content);
-  const hasUpdateOwnResult = /\bupdateOwnResult\b/.test(content);
-
-  // T019 check 1: component skills must reference collector.mjs explicitly by path.
-  // Rationale: token names alone (recordSkeleton/updateOwnResult) could appear in docs
-  // without the actual import path — collector.mjs is the canonical reference signal.
-  const hasCollectorMjs = content.includes("collector.mjs");
-
-  // T019 check 2: stage value in the metric-record JSON block must match the skill dir name.
-  // Real SKILL.md files embed stage inside a fenced ```json block as `"stage": "value"`.
-  // We extract the stage from inside a fenced JSON code block to avoid matching prose
-  // mentions of `"stage": "..."` (e.g. explanatory text on the same line).
-  // Only applies when a `"stage":` key is found inside a fenced JSON block; if absent it
-  // is not flagged here (recordSkeleton/updateOwnResult checks already catch unwired skills).
-  // ponytail: scans all fenced json blocks and takes the first "stage" key found inside one.
-  // Upgrade if files use non-fenced JSON or multiple metric blocks with different stages.
-  let stageFieldPresent = false;
-  let actualStage = null;
-  const fencedJsonBlockRe = /```json\s*([\s\S]*?)```/g;
-  let blockMatch;
-  while ((blockMatch = fencedJsonBlockRe.exec(content)) !== null) {
-    const blockBody = blockMatch[1];
-    const stageInBlock = blockBody.match(/"stage"\s*:\s*"([^"]+)"/);
-    if (stageInBlock) {
-      stageFieldPresent = true;
-      actualStage = stageInBlock[1];
-      break; // use first JSON block that has a "stage" key
-    }
-  }
-  // Wrong stage: JSON block stage field exists but doesn't match the dir name.
-  const stageWrong = stageFieldPresent && actualStage !== skillName;
-
-  // B1 fix: wired skills (recordSkeleton + updateOwnResult + collector.mjs all present)
-  // MUST also declare a "stage" key in their fenced JSON metric block. An absent stage
-  // field is a violation — it would otherwise silently pass (false-green).
-  const stageAbsent = hasRecordSkeleton && hasUpdateOwnResult && hasCollectorMjs && !stageFieldPresent;
-
-  if (hasRecordSkeleton && hasUpdateOwnResult && hasCollectorMjs && !stageWrong && !stageAbsent) {
-    return { found: false };
-  }
-
-  const missing = [];
-  if (!hasRecordSkeleton) missing.push("recordSkeleton");
-  if (!hasUpdateOwnResult) missing.push("updateOwnResult");
-  if (!hasCollectorMjs) missing.push("collector.mjs reference");
-  if (stageWrong) missing.push(`stage literal wrong (got "${actualStage}", expected "${skillName}")`);
-  if (stageAbsent) missing.push("missing stage field in metric block");
-
-  return { found: true, missingSkill: skillName, reason: `missing: ${missing.join(", ")}` };
-}
-
-// collectSkillPaths — enumerate workflows/<name>/SKILL.md from the repo root.
-// Returns an array of absolute paths.
-function collectSkillPaths() {
-  const workflowsDir = join(repoRoot, "workflows");
-  let entries;
-  try {
-    entries = readdirSync(workflowsDir, { withFileTypes: true });
-  } catch {
-    return []; // workflows/ dir doesn't exist — nothing to scan
-  }
-
-  const paths = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    // Skip spike/draft dirs
-    if (entry.name.startsWith("_")) continue;
-    const skillMd = join(workflowsDir, entry.name, "SKILL.md");
-    try {
-      statSync(skillMd); // throws if absent
-      paths.push(skillMd);
-    } catch {
-      // No SKILL.md in this dir — skip
-    }
-  }
-  return paths;
-}
-
-/**
- * scanAllSkillMetrics — run metric-wiring check over all discovered SKILL.md files.
- * Returns array of findings: { skillPath, skillName, reason }.
- */
-export function scanAllSkillMetrics(skillPaths) {
-  const findings = [];
-  for (const skillPath of skillPaths) {
-    const result = scanSkillMetrics(skillPath);
-    if (result.found) {
-      findings.push({ skillPath, skillName: result.missingSkill, reason: result.reason });
-    }
-  }
-  return findings;
-}
-
-// ---------------------------------------------------------------------------
 // File collection: metrics/ + scripts/, exclude self
 // ---------------------------------------------------------------------------
 
@@ -402,15 +262,8 @@ function runScan() {
 
   const findings = scanFiles(files);
 
-  // FR-METRIC-002: also check all SKILL.md files for metrics wiring
-  const skillPaths = collectSkillPaths();
-  console.log(`[check-stage-quality] scanning ${skillPaths.length} SKILL.md file(s) for metrics wiring ...`);
-  const metricFindings = scanAllSkillMetrics(skillPaths);
-
-  const totalViolations = findings.length + metricFindings.length;
-
-  if (totalViolations === 0) {
-    console.log(`[check-stage-quality] PASS — quality-class blocking gates = 0, metric wiring = complete`);
+  if (findings.length === 0) {
+    console.log(`[check-stage-quality] PASS — quality-class blocking gates = 0`);
     process.exit(0);
   }
 
@@ -418,11 +271,7 @@ function runScan() {
     const rel = relative(repoRoot, f.file);
     console.error(`[check-stage-quality] VIOLATION ${f.cls} (${f.fr}): ${rel}  →  ${f.match}`);
   }
-  for (const f of metricFindings) {
-    const rel = relative(repoRoot, f.skillPath);
-    console.error(`[check-stage-quality] VIOLATION V6④ (FR-METRIC-002): ${rel}  →  skill "${f.skillName}" ${f.reason}`);
-  }
-  console.error(`[check-stage-quality] FAIL — ${totalViolations} violation(s) found`);
+  console.error(`[check-stage-quality] FAIL — ${findings.length} violation(s) found`);
   process.exit(1);
 }
 

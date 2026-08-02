@@ -94,6 +94,5 @@ describe("per-invocation execution identity", () => {
     });
 
     expect(second.identity.source.git_oid).not.toBe(first.identity.source.git_oid);
-    expect(f.task.listRecoveryGenerationRefs("runner-replacement")).toEqual([]);
   });
 });

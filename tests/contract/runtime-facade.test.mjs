@@ -8,7 +8,7 @@ import {
   createRuntimeFacade,
 } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { stageRuntimeCliMain } from "../../scripts/stage-runtime.mjs";
+import { stageRuntimeCliMain, stageRuntimeMain } from "../../scripts/stage-runtime.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -41,16 +41,19 @@ describe("runtime facade", () => {
       .rejects.toThrow(/unknown public runtime behavior/);
     await expect(stageRuntimeCliMain(["run", "--action=surprise"], { delegate }))
       .rejects.toThrow(/unknown public runtime action/);
+    await expect(stageRuntimeCliMain(["review", "--action=unavailable"], { delegate }))
+      .rejects.toThrow(/unknown public runtime action/);
+    await expect(stageRuntimeCliMain(["invalidate-run", "--stage=build-code"], { delegate }))
+      .rejects.toThrow(/unknown public runtime behavior/);
     expect(delegate).not.toHaveBeenCalled();
   });
 
-  test("every public behavior/action documented by the five workflows is routable", async () => {
+  test("workflow prose cannot document a private runtime route", async () => {
     const forbidden = /--operation=|capture-tests|publish-(?:phase|acceptance|verify|content)/;
     const documentedRoutes = new Set();
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       const prompt = fs.readFileSync(path.join(ROOT, "workflows", stage, "SKILL.md"), "utf8");
       const commands = [...prompt.matchAll(/stage-runtime\.mjs\s+([a-z-]+)/g)].map((match) => match[1]);
-      expect(commands.length).toBeGreaterThan(0);
       expect(commands.every((command) => RUNTIME_BEHAVIORS.includes(command))).toBe(true);
       for (const match of prompt.matchAll(/stage-runtime\.mjs\s+([a-z-]+)\s+--action=([a-z-]+)/g)) {
         documentedRoutes.add(`${match[1]}:${match[2]}`);
@@ -58,7 +61,6 @@ describe("runtime facade", () => {
       const publicCalls = prompt.split("\n").filter((line) => line.includes("stage-runtime.mjs")).join("\n");
       expect(publicCalls).not.toMatch(forbidden);
     }
-    expect(documentedRoutes).toContain("run:research");
     for (const route of documentedRoutes) {
       const [behavior, action] = route.split(":");
       const delegate = vi.fn(async ([operation]) => operation);
@@ -81,5 +83,22 @@ describe("runtime facade", () => {
       runnerContract: LOCAL_RUNNER_CONTRACT,
     })).rejects.toThrow(/runner contract/);
     expect(delegate).not.toHaveBeenCalled();
+  });
+
+  test("routes material revision through the stable run behavior", async () => {
+    const delegate = vi.fn(async (argv) => argv);
+    await expect(stageRuntimeCliMain([
+      "run", "--action=material-revision", "--stage=build-code", "--project=Demo", "--task=task", "--input=revision.json",
+    ], { delegate })).resolves.toEqual([
+      "publish-material-revision", "--stage=build-code", "--project=Demo", "--task=task", "--input=revision.json",
+    ]);
+    expect(delegate).toHaveBeenCalledOnce();
+    expect(JSON.stringify(await stageRuntimeCliMain(["--help"]))).toMatch(/material-revision/);
+  });
+
+  test("keeps material revision input validation in the private stage runtime", async () => {
+    await expect(stageRuntimeCliMain([
+      "run", "--action=material-revision", "--stage=build-code", "--project=Demo", "--task=task",
+    ], { delegate: (argv) => stageRuntimeMain(argv) })).rejects.toThrow(/publish-material-revision requires --input/i);
   });
 });

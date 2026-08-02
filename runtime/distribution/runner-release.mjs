@@ -79,6 +79,11 @@ export async function buildRunnerRelease({
     // release self-contained: installed Runner validation must not reach back
     // into a source checkout or a now-empty legacy schemas/ directory.
     ...filesUnder(root, "runtime/schemas", (locator) => locator.endsWith(".json")),
+    // Review schemas live with the review parser, not in the generic runtime
+    // schema directory.  They are loaded through import.meta.url, so static
+    // import discovery cannot see them; include the declared runtime review
+    // data explicitly in the Runner release.
+    ...filesUnder(root, "runtime/review", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "contracts", (locator) => /\.(?:json|contract)$/.test(locator) || locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
     ...filesUnder(root, "metrics", (locator) => /\.(?:mjs|json)$/.test(locator)),

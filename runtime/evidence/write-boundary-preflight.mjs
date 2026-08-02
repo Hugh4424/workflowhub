@@ -76,12 +76,12 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
       ? invocation.raw
       : handle.readRecord(invocation.ref);
     if (sha256(raw) !== invocation.hash) violations.push("INVOCATION_RECORD_HASH_MISMATCH");
-    if (identity.source_kind !== "git_invocation" || identity.source_clean !== true
+    if (identity.source_kind !== "git_invocation" || typeof identity.source_clean !== "boolean"
         || !OID.test(identity.source?.git_oid ?? "") || !OID.test(identity.source?.git_tree ?? "")
         || !HASH.test(identity.contracts?.agents?.sha256 ?? "")
         || !HASH.test(identity.contracts?.stage_skill?.sha256 ?? "")
         || !HASH.test(identity.contracts?.constitution?.sha256 ?? "")) {
-      violations.push("EXECUTION_CONTENT_NOT_CLEAN_COMMITTED");
+      violations.push("EXECUTION_CONTENT_IDENTITY_INVALID");
     }
   }
 

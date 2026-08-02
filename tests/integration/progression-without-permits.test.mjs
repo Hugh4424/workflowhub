@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTask } from "../../core/task-handle.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
@@ -21,9 +21,22 @@ import { writeHumanConfirmation } from "../helpers/human-confirmation.mjs";
 // T017 的历史失败见 phase-4 RED 证据；当前实现必须通过全部断言。
 
 const temporary = [];
-afterEach(() => {
+afterAll(() => {
   while (temporary.length > 0) rmSync(temporary.pop(), { recursive: true, force: true });
 });
+
+function git(cwd, args) {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error(`git ${args.join(" ")} failed or timed out after 5s: ${error.message}`);
+  }
+}
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-progression-")));
@@ -31,12 +44,12 @@ function fixture() {
   const repo = join(root, "repo");
   const worktree = join(root, "repo-chain-task");
   mkdirSync(repo);
-  execFileSync("git", ["init", "-q"], { cwd: repo });
-  execFileSync("git", ["config", "user.email", "t@example.com"], { cwd: repo });
-  execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-  execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
-  const oid = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/chain-task", worktree, oid], { cwd: repo });
+  git(repo, ["init", "-q"]);
+  git(repo, ["config", "user.email", "t@example.com"]);
+  git(repo, ["config", "user.name", "Test"]);
+  git(repo, ["commit", "--allow-empty", "-qm", "base"]);
+  const oid = git(repo, ["rev-parse", "HEAD"]).trim();
+  git(repo, ["worktree", "add", "-q", "-b", "task/Demo/chain-task", worktree, oid]);
   const taskPath = join(root, "Projects", "Demo", "tasks", "chain-task");
   const task = createTask({
     storageRoot: root,
@@ -137,9 +150,21 @@ async function acceptedChain({ taskPath, worktree, oid }) {
 }
 
 describe("progression without historical permits", () => {
+  let shared;
+
+  beforeAll(async () => {
+    const base = fixture();
+    shared = { ...base, ...await acceptedChain(base) };
+  }, 30_000);
+
+  beforeEach(() => {
+    writeFileSync(join(shared.worktree, "specs", "chain-task", "spec.md"), "spec\n");
+    writeFileSync(join(shared.worktree, "specs", "chain-task", "plan.md"), "plan\n");
+  });
+
   it("材料修改后历史 accepted 仍只读可读，普通工作不被历史许可阻塞", async () => {
-    const { taskPath, worktree, oid } = fixture();
-    const { contextFor } = await acceptedChain({ taskPath, worktree, oid });
+    const { worktree } = shared;
+    const { contextFor } = shared;
 
     // 普通工作：accepted 之后修订材料（Phase 4 后这是合法工作流，不需要 reopen/rebind）。
     writeFileSync(join(worktree, "specs", "chain-task", "spec.md"), "spec revised\n");
@@ -156,8 +181,7 @@ describe("progression without historical permits", () => {
   });
 
   it("真实 build-code runner 在材料修订后仍能到达业务 handler", async () => {
-    const { taskPath, worktree, oid } = fixture();
-    const { contextFor } = await acceptedChain({ taskPath, worktree, oid });
+    const { worktree, contextFor } = shared;
     writeFileSync(join(worktree, "specs", "chain-task", "spec.md"), "spec revised\n");
     writeFileSync(join(worktree, "specs", "chain-task", "plan.md"), "plan revised\n");
 
@@ -171,8 +195,7 @@ describe("progression without historical permits", () => {
   });
 
   it("checkpoint 历史事实保持只读，完整性只对 git refs 校验", async () => {
-    const { task, taskPath, worktree, oid } = fixture();
-    await acceptedChain({ taskPath, worktree, oid });
+    const { task, worktree } = shared;
 
     writeFileSync(join(worktree, "specs", "chain-task", "spec.md"), "spec revised\n");
 
@@ -191,16 +214,12 @@ describe("progression without historical permits", () => {
     })).not.toThrow();
 
     // 历史内容仍可从 git refs 只读读取，且与修订后的活材料无关。
-    const historical = execFileSync("git", ["show", `${checkpoint.commit_oid}:specs/chain-task/spec.md`], {
-      cwd: worktree,
-      encoding: "utf8",
-    });
+    const historical = git(worktree, ["show", `${checkpoint.commit_oid}:specs/chain-task/spec.md`]);
     expect(historical).toBe("spec\n");
   });
 
   it("旧 snapshot_tree 绑定的质量事实判 stale，stale 不阻止普通工作", async () => {
-    const { taskPath, worktree, oid } = fixture();
-    await acceptedChain({ taskPath, worktree, oid });
+    const { worktree } = shared;
     const treeBeforeRevision = captureGitWorktreeSnapshot(worktree).tree;
 
     writeFileSync(join(worktree, "specs", "chain-task", "spec.md"), "spec revised\n");

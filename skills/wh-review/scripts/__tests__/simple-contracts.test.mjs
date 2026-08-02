@@ -5,7 +5,9 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..", "..", "..");
-const schemaRoot = join(root, "wh-review", "schemas");
+const projectRoot = join(root, "..");
+const runtimeReviewRoot = join(projectRoot, "runtime", "review");
+const schemaRoot = join(runtimeReviewRoot, "schemas");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const hash = "a".repeat(64);
 const oid = "b".repeat(40);
@@ -27,7 +29,16 @@ describe("simple wh-review contracts", () => {
       doctor: "scripts/wh-review-cli.mjs doctor"
     });
     expect(manifest).toMatchObject({
-      stage_materials: "stage-materials.json",
+      runtime_review: {
+        stage_materials: "runtime/review/stage-materials.json",
+        schemas: {
+          attempt: "runtime/review/schemas/attempt.schema.json",
+          result: "runtime/review/schemas/result.schema.json",
+          resolution: "runtime/review/schemas/resolution.schema.json",
+          stage_materials: "runtime/review/schemas/stage-materials.schema.json",
+          ac_evidence_summary: "runtime/review/schemas/ac-evidence-summary.schema.json"
+        }
+      },
       stage_skill_plan: "stage-skill-plan.json",
       provider_result_contract: "contracts/workflowhub-result.v2.json"
     });
@@ -44,14 +55,8 @@ describe("simple wh-review contracts", () => {
     for (const file of [
       "contracts/workflowhub-result.v1.json",
       "contracts/workflowhub-result.v2.json",
-      "schemas/attempt.schema.json",
-      "schemas/result.schema.json",
-      "schemas/resolution.schema.json",
-      "schemas/ac-evidence-summary.schema.json",
-      "schemas/stage-materials.schema.json",
       "scripts/review-materials.mjs",
       "scripts/ac-evidence-summary.mjs",
-      "scripts/__tests__/ac-evidence-summary.test.mjs",
       "scripts/review-controller.mjs",
       "scripts/review-output.mjs",
       "scripts/review-provider-client.mjs",
@@ -59,7 +64,6 @@ describe("simple wh-review contracts", () => {
       "scripts/review-runner.mjs",
       "scripts/review-source.mjs",
       "scripts/wh-review-cli.mjs",
-      "stage-materials.json",
       "stage-skill-plan.json"
     ]) expect(bundlePaths).toContain(file);
   });
@@ -109,7 +113,6 @@ describe("simple wh-review contracts", () => {
     for (const executionSkill of ["diagnosing-bugs", "isolated-browser-qa", "test-routing-advisor", "test-strategy", "review-response"])
       expect(reviewerSkills, executionSkill).not.toContain(executionSkill);
 
-    const projectRoot = join(root, "..");
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       const deps = yaml.load(readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8"));
       const reviewOwned = new Set(
@@ -142,7 +145,6 @@ describe("simple wh-review contracts", () => {
     expect(plan.stages["verify-code"].invocation).toBe("post-evidence-non-gate");
     for (const stage of ["build-code", "verify-code"])
       for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
-    const projectRoot = join(root, "..");
     const deps = yaml.load(readFileSync(join(projectRoot, "workflows", "verify-code", "skill-deps.yaml"), "utf8"));
     expect(deps.skills.find(({ name }) => name === "wh-review"))
       .toMatchObject({ execution: "inline", invocation: "always", trigger: "fresh_verification_evidence" });
@@ -196,7 +198,7 @@ describe("simple wh-review contracts", () => {
   });
 
   it("accepts the stage matrix and enforces blind direction inputs", () => {
-    const matrix = readJson(join(root, "wh-review", "stage-materials.json"));
+    const matrix = readJson(join(runtimeReviewRoot, "stage-materials.json"));
     const validate = validator("stage-materials.schema.json");
     expect(validate(matrix), validate.errors).toBe(true);
     expect(matrix.stages["build-plan"].required).toEqual(expect.arrayContaining(["draft_tasks"]));

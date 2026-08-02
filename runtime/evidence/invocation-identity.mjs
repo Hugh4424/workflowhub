@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { canonical } from "./canonical-utils.mjs";
-import { assertTaskHandle, migrateTaskToPerInvocation as migrateTaskManifestToPerInvocation } from "../../core/task-handle.mjs";
+import { assertTaskHandle } from "../../core/task-handle.mjs";
 import { inspectRunnerIdentity } from "./runner-identity.mjs";
+import { captureGitWorktreeSnapshot } from "../task/git-worktree-snapshot.mjs";
 
 const FORBIDDEN = new Set(["identity", "runner_root", "runnerRoot", "root", "path", "task_path", "taskPath"]);
 
@@ -38,12 +38,17 @@ export function inspectOfficialInvocation(taskHandle, options = {}) {
     projectName: task.identity.projectName,
     taskId: task.identity.taskId,
     stage: options.stage,
-    requireClean: true,
+    // A task normally executes from its dirty candidate worktree. Bind the
+    // current bytes below instead of treating HEAD cleanliness as a permit.
+    requireClean: false,
     bindTask: false,
   });
+  const snapshot = captureGitWorktreeSnapshot(inspected.runner_root);
   const source = {
     git_oid: inspected.runner_oid,
-    git_tree: String(execFileSync("git", ["rev-parse", "--verify", "HEAD^{tree}"], { cwd: inspected.runner_root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim().toLowerCase(),
+    // This ephemeral tree contains tracked and untracked current files. It is
+    // an observed source identity, not a caller-supplied path or clean gate.
+    git_tree: snapshot.tree,
     git_branch: inspected.runner_branch,
   };
   const contracts = {
@@ -59,10 +64,10 @@ export function inspectOfficialInvocation(taskHandle, options = {}) {
     run_id: runId,
     stage: options.stage,
     source_kind: "git_invocation",
-    source_clean: true,
+    source_clean: !inspected.runner_dirty,
     source,
     release: {
-      content_id: sha256(canonical({ git_oid: source.git_oid ?? null, contracts })),
+      content_id: sha256(canonical({ git_oid: source.git_oid ?? null, git_tree: source.git_tree, contracts })),
     },
     contracts,
     capabilities,
@@ -99,8 +104,4 @@ export function persistOfficialInvocation(taskHandle, inspected) {
 export function authenticateOfficialInvocation(taskHandle, options = {}) {
   const inspected = inspectOfficialInvocation(taskHandle, options);
   return persistOfficialInvocation(taskHandle, inspected);
-}
-
-export function migrateTaskToPerInvocation(options) {
-  return migrateTaskManifestToPerInvocation(options);
 }

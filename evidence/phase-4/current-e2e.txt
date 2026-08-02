@@ -1,0 +1,7 @@
+T019/T020 current-snapshot verification — 2026-08-01
+
+The historical task records remain audit-only. The current candidate was rechecked directly with:
+
+./node_modules/.bin/vitest run tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs --reporter=dot
+
+Result: exit 0; all 3 E2E flows passed. Each flow uses the read-only runner fixture and proves no WorkflowHub source mutation is needed for normal work, material revision, or same-run provider retry.

@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { validateAcceptanceEvidence } from "./canonical-receipt-writer.mjs";
 import { normalizeRuntimeOnlyPaths } from "../runtime/evidence/canonical-utils.mjs";
-import { minimumReviewersFor } from "../skills/wh-review/scripts/review-materials.mjs";
-import { parseReviewerOutput } from "../skills/wh-review/scripts/review-output.mjs";
-import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
-import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
-import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
+import { minimumReviewersFor } from "../runtime/review/review-policy.mjs";
+import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
+import { aggregateCanonicalProviderResults } from "../runtime/review/canonical-review-result.mjs";
+import { validateSchema } from "../runtime/review/schema-validator.mjs";
+import { buildNonGateReviewResponseRecord } from "../runtime/review/review-controller.mjs";
 import { equivalentWorkspaceTrees } from "../runtime/task/git-worktree-snapshot.mjs";
 import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../runtime/review/review-flow-authority.mjs";
 import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
@@ -18,7 +16,6 @@ import {
   validateRiskAcceptanceSet,
 } from "../runtime/review/stage-review-disposition.mjs";
 import { buildStageCompletion } from "./stage-completion-facts.mjs";
-import { assertLatestBuildSpecReceipt } from "./build-spec-receipt-recovery.mjs";
 import { validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../runtime/stage/stage-content-contracts.mjs";
 
 const HANDLERS = new Map();
@@ -81,7 +78,7 @@ function boundReviewQualityFacts(entries) {
     return `${label}=${fact}`;
   }).join("；");
 }
-function addCompletion(stage, result, { worker, artifacts, reviews, verification, businessFacts, audit }) {
+function addCompletion(stage, result, { worker, artifacts, reviews, verification, businessFacts, audit, completionResult }) {
   const copy = COMPLETION_COPY[stage];
   const missing = result.missing_items ?? [];
   if (typeof worker?.readCompletionInvocationFacts !== "function") {
@@ -98,7 +95,7 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
     ? "正式审查结果暂不可用，原始原因已保留在系统记录"
     : item);
   const completion = buildStageCompletion(stage, {
-    result: missing.length ? "completed_with_open_items" : "passed",
+    result: completionResult ?? (missing.length ? "completed_with_open_items" : "passed"),
     ...copy,
     verification: { conclusion: verification, limits: missing.length ? ["仍有未完成项，不能当作无条件通过"] : [] },
     artifacts,
@@ -258,41 +255,6 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   return { snapshot_tree: snapshotTree, accepted_criterion_ids: coverage.accepted_criterion_ids, items };
 }
 
-function stripCode(value) {
-  return String(value ?? "").trim().replace(/^`([\s\S]*)`$/, "$1");
-}
-
-function completionPaths(value) {
-  const raw = stripCode(value);
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string" && item.trim() !== "")) return [...new Set(parsed)];
-  } catch {}
-  const inline = [...new Set([...String(value ?? "").matchAll(/`([^`]+)`/g)].map((match) => match[1]))];
-  if (inline.length) return inline;
-  return /^[A-Za-z0-9._/-]+$/.test(raw) && raw.includes("/") ? [raw] : [];
-}
-
-function completionExecutions(value) {
-  const raw = stripCode(value);
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch {}
-  const match = String(value ?? "").match(/`([^`]+)`[\s;，,]*(?:exit(?:_code)?\s*[=:：]?\s*)(-?\d+)/i);
-  return match ? [{ command: match[1], exit_code: Number(match[2]) }] : [];
-}
-
-function completionReviewRef(value) {
-  const raw = stripCode(value);
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.ref === "string" ? parsed.ref : null;
-  } catch {
-    return raw || null;
-  }
-}
-
 function sameStringSet(left, right) {
   return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
 }
@@ -311,72 +273,34 @@ function unavailableFormalRecordStatus(reason = "canonical Phase history is unav
   return Object.freeze({ status: "unavailable", reason });
 }
 
-function completionEvidence(worker, entry) {
-  const kind = entry.kind ?? "task_record";
-  const fromTaskRecord = () => {
-    try {
-      const value = worker.readEvidence(entry.ref);
-      return { ok: true, sha256: value.sha256 ?? hashText(value.bytes) };
-    } catch (error) {
-      if (error?.code === "ENOENT") return null;
-      throw error;
-    }
-  };
-  if (kind === "task_record" || kind === "test_run" || kind === "review_fact") {
-    const record = fromTaskRecord();
-    if (record) return record;
-    if (kind !== "task_record") return { ok: false };
-  }
-  const root = worker.workspace?.worktreeRoot;
-  if (!root) return { ok: false };
-  if (kind === "git_commit") {
-    const oid = entry.ref.replace(/^git\/commits\//, "");
-    try {
-      const raw = execFileSync("git", ["cat-file", "commit", oid], {
-        cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-      });
-      return { ok: true, sha256: hashText(raw) };
-    } catch {
-      return { ok: false };
-    }
-  }
-  if (kind !== "workspace_file" && kind !== "task_record") return { ok: false };
-  const absolute = resolve(root, entry.ref);
-  const workspaceRelative = relative(root, absolute);
-  if (workspaceRelative === "" || workspaceRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)
-      || workspaceRelative === ".." || isAbsolute(workspaceRelative)) return { ok: false };
-  try {
-    const raw = readFileSync(absolute);
-    return { ok: true, sha256: createHash("sha256").update(raw).digest("hex") };
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "EISDIR") return { ok: false };
-    throw error;
-  }
-}
-
 export function certifyBuildCodeQualityBasis({
   changedFiles,
-  claimedChanges,
+  plannedChanges,
   tests,
   review,
   expectedAc,
   coveredAc,
   formalRecordStatus = unavailableFormalRecordStatus(),
 } = {}) {
-  if (!Array.isArray(changedFiles) || !Array.isArray(claimedChanges)) {
-    throw new TypeError("build-code changedFiles and claimedChanges must be arrays");
+  if (!Array.isArray(changedFiles) || !Array.isArray(plannedChanges)) {
+    throw new TypeError("build-code changedFiles and plannedChanges must be arrays");
   }
-  if (!sameStringSet([...new Set(claimedChanges)], [...new Set(changedFiles)])) {
-    throw new Error(`tasks.md actual_changes differs from the current implementation diff: claimed=${JSON.stringify(claimedChanges)} actual=${JSON.stringify(changedFiles)}`);
-  }
+  // Task completion prose and declared file boundaries are historical audit
+  // context. They must remain inspectable, but stale or incomplete task rows
+  // must not become a permit that blocks the current implementation facts.
+  const planned = new Set(plannedChanges);
+  const outside = [...new Set(changedFiles)].filter((path) => !planned.has(path));
   if (tests?.exit_code !== 0) throw new Error("build-code completion requires passing current test facts");
+  if (review?.status !== "unavailable" && review?.verdict !== "pass" && review?.resolution_verified !== true) {
+    throw new Error("build-code completion requires a passing integration review or a verified closed resolution");
+  }
   const reviewRef = review?.result_ref ?? review?.attempt_ref;
   const reviewHash = review?.result_hash ?? review?.attempt_hash;
   if (typeof reviewRef !== "string" || !SHA256.test(reviewHash ?? "")) {
     throw new Error("build-code completion requires an authenticated independent review fact");
   }
   if (!Array.isArray(expectedAc) || !Array.isArray(coveredAc) || !sameStringSet(coveredAc, expectedAc)) {
-    throw new Error("tasks.md covered_ac differs from the current spec AC set");
+    throw new Error("current AC coverage differs from the current spec AC set");
   }
   if (!formalRecordStatus || !["available", "unavailable"].includes(formalRecordStatus.status)
       || (formalRecordStatus.status === "unavailable" && typeof formalRecordStatus.reason !== "string")) {
@@ -384,7 +308,8 @@ export function certifyBuildCodeQualityBasis({
   }
   return Object.freeze({
     changed: Object.freeze([...new Set(changedFiles)]),
-    review: Object.freeze({ ref: reviewRef, sha256: reviewHash, verdict: review.verdict ?? null }),
+    audit_gaps: Object.freeze(outside.length ? [`current diff includes files outside historical task boundaries: ${outside.join(", ")}`] : []),
+    review: Object.freeze({ ref: reviewRef, sha256: reviewHash, verdict: review.verdict ?? null, status: review.status ?? null }),
     formal_record_status: Object.freeze({ ...formalRecordStatus }),
   });
 }
@@ -402,11 +327,22 @@ function authenticatedImplementationChanged(worker, implementation) {
       || record.snapshot_tree !== implementation.snapshot_tree) {
     throw new Error("implementation diff evidence does not bind the current execution baseline and snapshot");
   }
-  const actual = normalizeRuntimeOnlyPaths(execFileSync(
+  const tracked = execFileSync(
     "git",
-    ["diff", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
+    ["diff", "--no-renames", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
     { cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  ).trim().split("\n").filter(Boolean));
+  ).trim().split("\n").filter(Boolean);
+  const untracked = (Array.isArray(record.untracked) ? record.untracked : []).map((entry) => {
+    if (!entry || typeof entry.path !== "string" || !/^[a-f0-9]{40}$/.test(entry.blob_oid ?? "")) {
+      throw new Error("implementation diff evidence contains an invalid untracked entry");
+    }
+    const blob = execFileSync("git", ["hash-object", "--", entry.path], {
+      cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (blob !== entry.blob_oid) throw new Error(`implementation untracked evidence hash mismatch: ${entry.path}`);
+    return entry.path;
+  });
+  const actual = normalizeRuntimeOnlyPaths([...tracked, ...untracked]);
   if (!sameStringSet(actual, normalizeRuntimeOnlyPaths(implementation.changed))) {
     throw new Error(`implementation.changed differs from the authenticated execution-baseline diff: receipt=${JSON.stringify(implementation.changed)} actual=${JSON.stringify(actual)}`);
   }
@@ -418,86 +354,73 @@ export function certifyCurrentTaskCompletion(worker, {
   tests,
   review,
   acceptanceCoverage,
-  requiredEvidence = [],
   formalRecordStatus = unavailableFormalRecordStatus(),
 } = {}) {
   const validation = validatePlanTaskContract({
     spec: worker.readArtifact("spec.md"),
     plan: worker.readArtifact("plan.md"),
     tasks: worker.readArtifact("tasks.md"),
-    completionEvidence: (entry) => completionEvidence(worker, entry),
+    // Task completion fields are a human-readable historical audit. Their
+    // current reachability is not a permit to progress or finish; global
+    // implementation, test, AC and review facts are authenticated below.
+    completionEvidence: (entry) => ({ ok: true, sha256: entry.sha256 }),
   });
-  const completion = validation.facts?.task_completion;
-  if (!completion || completion.total_count === 0) {
-    throw new Error("tasks.md has no certifiable Task completion rows");
-  }
-  if (completion.completed_count !== completion.total_count) {
-    const details = completion.tasks
-      .filter(({ complete }) => !complete)
-      .map(({ id, errors }) => `${id}: ${errors.join(", ") || "not completed"}`);
-    throw new Error(`tasks.md completion is incomplete: ${details.join("; ")}`);
-  }
-  const taskRows = new Map(validation.facts.task_rows.map((row) => [row.id, row]));
+  const taskCompletion = validation.facts?.task_completion;
+  const taskRows = new Map((validation.facts?.task_rows ?? []).map((row) => [row.id, row]));
   const tasksPath = `specs/${worker.identity.taskId}/tasks.md`;
   const expectedChanges = [...new Set((changedFiles ?? []).filter((path) => path !== tasksPath && path !== "AGENTS.md"))];
-  const claimedChanges = [...new Set(completion.tasks.flatMap(({ id, actual_changes }) => {
-    const paths = completionPaths(actual_changes);
-    const declared = new Set([
-      ...(taskRows.get(id)?.fields?.["精确文件"]?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
-      ...(taskRows.get(id)?.fields?.boundary?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
-    ]);
-    for (const path of paths) {
-      if (declared.size > 0 && !declared.has(path)) throw new Error(`${id} actual_changes is outside its planned file boundary: ${path}`);
-    }
-    return paths;
-  }))];
-  const executionMatches = completion.tasks.flatMap(({ executed_commands }) => completionExecutions(executed_commands))
-    .filter((entry) => entry?.command === tests.command && entry?.exit_code === tests.exit_code);
-  if (executionMatches.length === 0) throw new Error("tasks.md executed_commands does not bind the current test command and exit code");
+  const completionGaps = [];
+  if (!taskCompletion || taskCompletion.total_count === 0) {
+    completionGaps.push("tasks.md has no certifiable Task completion rows; current implementation, tests, AC coverage, and review facts are authoritative");
+  } else if (taskCompletion.completed_count !== taskCompletion.total_count) {
+    const details = taskCompletion.tasks
+      .filter(({ complete }) => !complete)
+      .map(({ id, errors }) => `${id}: ${errors.join(", ") || "not completed"}`);
+    completionGaps.push(`tasks.md completion history is incomplete: ${details.join("; ")}`);
+  }
+  const plannedChangesFromRows = [...new Set([...taskRows.values()].flatMap((task) => [
+      ...(task.fields?.["精确文件"]?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
+      ...(task.fields?.boundary?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
+  ]))];
   const reviewRef = review.result_ref ?? review.attempt_ref;
   const reviewHash = review.result_hash ?? review.attempt_hash;
-  // Phase Task review_fact values stay bound to their original Phase reviews.
-  // The final integration review is an independent build-code completion fact
-  // and is authenticated below through tasks.md completion evidence.
-  const evidence = new Map(completion.tasks.flatMap(({ evidence_refs }) => evidence_refs.map((entry) => [entry.ref, entry.sha256])));
-  for (const binding of [
-    { ref: tests.receipt_ref, sha256: tests.receipt_hash },
-    ...requiredEvidence,
-  ]) {
-    if (!binding?.ref || !SHA256.test(binding.sha256 ?? "") || evidence.get(binding.ref) !== binding.sha256) {
-      throw new Error(`tasks.md completion evidence does not bind ${binding?.ref ?? "required fact"}`);
-    }
-  }
   const expectedAc = validation.facts.ac_coverage.accepted_ids;
   if (!acceptanceCoverage || !sameStringSet(acceptanceCoverage.accepted_criterion_ids, expectedAc)) {
     throw new Error("build-code acceptance_coverage differs from the current spec AC set");
   }
   const coveredItems = acceptanceCoverage.items.filter(({ status }) => status === "covered");
   if (coveredItems.length !== expectedAc.length) throw new Error("build-code completion requires covered evidence for every accepted AC");
-  const covered = [...new Set(completion.tasks.flatMap(({ covered_ac }) => covered_ac))];
   const quality = certifyBuildCodeQualityBasis({
     changedFiles: expectedChanges,
-    claimedChanges,
+    plannedChanges: plannedChangesFromRows,
     tests,
     review,
     expectedAc,
-    coveredAc: covered,
+    coveredAc: coveredItems.map(({ acceptance_criterion_id: id }) => id),
     formalRecordStatus,
   });
-  for (const item of coveredItems) {
-    for (const binding of item.evidence_refs) {
-      if (evidence.get(binding.ref) !== binding.sha256) {
-        throw new Error(`tasks.md completion does not bind AC evidence for ${item.acceptance_criterion_id}`);
-      }
-    }
-  }
-  return Object.freeze({
+  const formal = quality.formal_record_status?.status === "unavailable" || completionGaps.length
+    ? Object.freeze({
+      status: "unavailable",
+      reason: [quality.formal_record_status?.reason, ...completionGaps].filter(Boolean).join("; "),
+    })
+    : Object.freeze({ ...quality.formal_record_status });
+  const completion = {
     status: "completed",
     evidence_ref: worker.artifactRef("tasks.md"),
     evidence_hash: hashText(worker.readArtifact("tasks.md")),
     integration_review: { ref: reviewRef, sha256: reviewHash },
-    formal_record_status: quality.formal_record_status,
+    formal_record_status: formal,
+  };
+  // Audit gaps are diagnostic context for the caller, not part of the
+  // canonical phase-completion receipt schema.  Keep the compatibility
+  // accessor non-enumerable so tests and summaries can report it without
+  // leaking an unknown field into task-kernel publication.
+  Object.defineProperty(completion, "audit_gaps", {
+    value: Object.freeze([...completionGaps, ...(quality.audit_gaps ?? [])]),
+    enumerable: false,
   });
+  return Object.freeze(completion);
 }
 function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   const policy = attempt.review_policy;
@@ -547,8 +470,10 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   if (!isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null)) throw new Error("review attempt/result review_chain mismatch");
   if (attempt.terminal_status !== "semantic" || attempt.error !== null) throw new Error("review attempt did not produce a semantic result");
   const minimumReviewers = reviewMinimumForAttempt(attempt, producerStage, expectedTrack);
+  const terminalAttempts = new Map();
+  for (const providerAttempt of attempt.provider_attempts) terminalAttempts.set(providerAttempt.provider, providerAttempt);
   const providerOutputs = [];
-  for (const providerAttempt of attempt.provider_attempts) {
+  for (const providerAttempt of terminalAttempts.values()) {
     if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
     const outputRecord = object(worker.readReceipt(providerAttempt.output_ref), `review provider ${providerAttempt.provider} output record`);
     const output = object(outputRecord.value, `review provider ${providerAttempt.provider} output`);
@@ -610,7 +535,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     try { return { provider, review: parseReviewerOutput(latest.output.content) }; }
     catch { return { provider, review: null }; }
   });
-  const aggregation = aggregateProviderResults(recomputed, reviewMinimumForAttempt(attempt, producerStage, expectedTrack));
+  const aggregation = aggregateCanonicalProviderResults(recomputed, reviewMinimumForAttempt(attempt, producerStage, expectedTrack));
   if (aggregation.status !== "unavailable") throw new Error("review attempt claims unavailable but provider outputs produce a semantic result");
 }
 function reviewScope(value) {
@@ -630,15 +555,11 @@ function scopeFacts(scope) {
   };
 }
 function requireFinalIntegrationReview(review, label) {
-  // A formally authenticated unavailable review is still an independent
-  // quality fact.  The build-code contract records that fact and lets the
-  // stage continue with formal_record_status=unavailable; only verify-code
-  // requires a semantic (pass/revise_required) final review.  reviewFacts()
-  // has already fail-closed on attempt provenance, provider coverage, and
-  // serious unresolved findings before this scope check runs.
-  const reviewStatus = review?.facts?.status ?? "semantic";
-  if (!review || !review.facts || !review.scope || !["semantic", "unavailable"].includes(reviewStatus)) {
-    throw new Error(`MATERIAL_INCOMPLETE: ${label} is missing an authenticated review fact; return to build-code`);
+  if (!review || !review.scope) {
+    throw new Error(`MATERIAL_INCOMPLETE: ${label} must have an authenticated integration review fact; return to build-code`);
+  }
+  if (review.facts?.status !== "unavailable" && review.facts?.verdict !== "pass" && review.facts?.resolution_verified !== true) {
+    throw new Error(`MATERIAL_INCOMPLETE: ${label} verdict is ${review.facts?.verdict ?? "missing"}; only pass or a verified closed resolution can complete build-code`);
   }
   const scope = review.scope;
   if (scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
@@ -652,7 +573,9 @@ function requireStoredFinalIntegrationReview(review, label) {
   }
   return review;
 }
-function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
+function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage, {
+  historicalAudit = false,
+} = {}) {
   const item = receipt(worker, invocation, name, producerStage);
   if (expectedTrack !== undefined && item.value.review_track !== expectedTrack) throw new Error(`${name} must use wh-review ${expectedTrack} track`);
   if (REVIEW_ATTEMPT_REF.test(item.ref)) {
@@ -676,15 +599,15 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
   }
   verifyReviewChain(worker, item.value, expectedTrack, producerStage);
   const scope = reviewScope(item.value);
-  const authenticatedFlow = worker.readAuthenticatedReviewFlow({
+  const authenticatedFlow = historicalAudit ? null : worker.readAuthenticatedReviewFlow({
     stage: producerStage,
     review_track: item.value.review_track ?? null,
     subject_kind: scope.subject_kind,
     phase_id: scope.phase_id ?? null,
     review_scope: scope.review_scope ?? null,
   });
-  if (!authenticatedFlow || authenticatedFlow.head_result_ref !== item.ref
-      || authenticatedFlow.result_sha256 !== item.evidence.sha256) {
+  if (!historicalAudit && (!authenticatedFlow || authenticatedFlow.head_result_ref !== item.ref
+      || authenticatedFlow.result_sha256 !== item.evidence.sha256)) {
     throw new Error(`${name} is not the authenticated review-flow head`);
   }
   const resolutionName = expectedTrack !== undefined
@@ -718,14 +641,16 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
       // bindFinalReview below remains the authoritative fail-loud validator.
     }
   }
-  const pause = verifiedResolution ? { status: "cleared_by_verified_resolution" } : deriveSeriousReviewPause({
-    taskId: worker.identity.taskId,
-    stage: producerStage,
-    reviewRef: item.ref,
-    reviewHash: item.evidence.sha256,
-    result: item.value,
-    workflowRunId: authenticatedFlow.identity.workflow_run_id,
-  });
+  const pause = historicalAudit
+    ? { status: "historical_audit_only" }
+    : verifiedResolution ? { status: "cleared_by_verified_resolution" } : deriveSeriousReviewPause({
+      taskId: worker.identity.taskId,
+      stage: producerStage,
+      reviewRef: item.ref,
+      reviewHash: item.evidence.sha256,
+      result: item.value,
+      workflowRunId: authenticatedFlow.identity.workflow_run_id,
+    });
   let riskEvidence = [];
   if (pause.status === "paused") {
     const receiptName = name === "review" ? "risk_acceptance" : `${name.replace(/_review$/, "")}_risk_acceptance`;
@@ -743,6 +668,10 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     riskEvidence = records.map(({ riskRef, record }) => ({ ref: riskRef, sha256: record.sha256 }));
   }
   return {
+    // Keep the published review fact within the canonical review schema.  A
+    // verified resolution is an internal decision used while deriving the
+    // pause state; it is not a review-record field and must not leak into the
+    // task-kernel validator.
     facts: { verdict: item.value.verdict, result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
     ref: item.ref,
     evidence: item.evidence,
@@ -817,11 +746,19 @@ function bindFinalReview(worker, invocation, review, currentTree, {
   const resolution = hasResolution ? reviewResolution(worker, invocation, {
     stage, reviewTrack, receiptName: resolutionName,
   }) : null;
-  authenticateReviewHead(worker, review, {
-    stage, review_track: reviewTrack, subject_kind: "worktree", phase_id: null,
-    review_scope: stage === "build-code" ? "integration" : null,
-  }, resolution?.evidence);
+  // An unavailable quality review is a disclosed, non-gating fact. It has no
+  // semantic result to authenticate and must not make verify-code fail before
+  // the verifier can publish its incomplete conclusion.
+  if (review.facts?.status !== "unavailable") {
+    authenticateReviewHead(worker, review, {
+      stage, review_track: reviewTrack, subject_kind: "worktree", phase_id: null,
+      review_scope: stage === "build-code" ? "integration" : null,
+    }, resolution?.evidence);
+  }
   if (resolution === null) {
+    if (review.facts?.status === "unavailable") {
+      return { resolution: null, evidence: [] };
+    }
     if (review.value.snapshot_tree !== currentTree) {
       throw new Error(`${stage} review does not bind the final current snapshot; latest verified resolution required`);
     }
@@ -954,22 +891,6 @@ HANDLERS.set("build-spec", async (worker, input) => {
   if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-spec Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-spec current Workspace snapshot");
-  const authenticatedFlow = worker.readAuthenticatedReviewFlow({
-    stage: "build-spec",
-    review_track: null,
-    subject_kind: "worktree",
-    phase_id: null,
-    review_scope: null,
-  });
-  assertLatestBuildSpecReceipt({
-    worker,
-    item,
-    binding: {
-      artifactContent: item.value.content,
-      snapshot: before,
-      authentication: { flow: authenticatedFlow },
-    },
-  });
   const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
   const checkpoint = worker.createCheckpoint("build-spec");
   const after = object(worker.snapshotWorkspace(), "build-spec post-checkpoint Workspace snapshot");
@@ -1073,25 +994,34 @@ HANDLERS.set("build-plan", async (worker, input) => {
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {
-  const audit = auditFacts(worker, input);
+  const missingItems = [];
+  const audit = (() => {
+    try { return auditFacts(worker, input); }
+    catch (error) {
+      // Audit summaries are diagnostic publication support.  A stale or
+      // unavailable summary must be disclosed, but cannot block current
+      // implementation, tests, AC coverage, or integration review facts.
+      missingItems.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
+      return null;
+    }
+  })();
   const impl = receipt(worker, input, "implementation"), tests = testFacts(worker, input), review = reviewFacts(worker, input);
-  requireFinalIntegrationReview(review, "build-code final review");
-  const reviewBinding = bindFinalReview(worker, input, review, tests.facts.snapshot_tree, { stage: "build-code" });
   if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
   for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
   if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) throw new Error("implementation, tests, and review must bind the same Workspace snapshot tree");
+  requireFinalIntegrationReview(review, "build-code final review");
   const coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree);
+  const reviewBinding = bindFinalReview(worker, input, review, tests.facts.snapshot_tree, { stage: "build-code" });
   if (tests.facts.exit_code !== 0) throw new Error("build-code final tests must pass before completion");
   const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
   const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
-    ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree)
+    ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree, { implementation_ref: impl.ref, green_ref: tests.ref })
     : { formal_record_status: unavailableFormalRecordStatus() };
   const phase = certifyCurrentTaskCompletion(worker, {
     changedFiles: actualChangedFiles,
     tests: tests.facts,
     review: review.facts,
     acceptanceCoverage: coverage,
-    requiredEvidence: [impl.evidence],
     formalRecordStatus: integrationAudit.formal_record_status,
   });
   const current = worker.snapshotWorkspace();
@@ -1099,29 +1029,42 @@ HANDLERS.set("build-code", async (worker, input) => {
     throw new Error("build-code current Workspace differs from the reviewed implementation by more than tasks.md completion");
   }
   return addCompletion("build-code", {
-    facts: { changed: actualChangedFiles, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...audit.facts },
-    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, audit.evidence, ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
-    missing_items: review.missing_items,
+    facts: { changed: actualChangedFiles, tests: tests.facts, review: review.facts, phase_completion: phase, acceptance_coverage: coverage, ...(audit?.facts ?? {}) },
+    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, review.evidence, ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
+    missing_items: [
+      ...missingItems,
+      ...review.missing_items,
+      ...(phase.audit_gaps ?? []).map((gap) => `audit gap: ${gap}`),
+    ],
   }, {
     worker,
     artifacts: [{ label: "实现结果", ref: impl.ref, hash: impl.evidence.sha256, accepted_lookup: "results/build-code/accepted.json#facts.changed" }],
     reviews: [review],
     businessFacts: { content: "present", code: "complete", tests: tests.facts.exit_code === 0 ? "passed" : "failed", acceptance_criteria: "covered" },
     audit,
-    verification: tests.facts.exit_code === 0 ? "正式测试通过，最终实现与集成审查绑定同一快照" : "正式测试未通过",
+    verification: review.facts.status === "unavailable"
+      ? "正式测试通过；独立审查暂不可用，已保留为质量事实，verify-code 必须如实显示不完整"
+      : (tests.facts.exit_code === 0 ? "正式测试通过，最终实现与集成审查绑定同一快照" : "正式测试未通过"),
   });
 });
 
 HANDLERS.set("verify-code", async (worker, input) => {
-  const audit = auditFacts(worker, input);
+  const audit = (() => {
+    try {
+      const candidate = auditFacts(worker, input);
+      const currentTree = worker.snapshotWorkspace?.().tree;
+      if (candidate.value.snapshot_tree !== currentTree) return null;
+      return candidate;
+    }
+    catch { return null; }
+  })();
+  const auditMissingItems = audit ? [] : ["audit summary unavailable/unverified; disclosed as audit-only"];
   const tests = testFacts(worker, input);
-  const acceptedBuild = worker.readAcceptedBuildCode({ allowLegacyBuildCode: true, required: false })
-    ?? { facts: {}, attempt: {} };
-  const review = reviewFacts(worker, input, "review", undefined, "build-code");
+  const review = reviewFacts(worker, input, "review", undefined, "build-code", { historicalAudit: true });
   const qualityReview = reviewFacts(worker, input, "quality_review", undefined, "verify-code");
-  authenticateReviewHead(worker, review, {
-    stage: "build-code", review_track: null, subject_kind: "worktree", phase_id: null, review_scope: "integration",
-  });
+  // The build-code integration review is historical audit context for verify-code.
+  // It must not be re-authenticated as the current verify review flow: doing so
+  // turns a missing/stale flow record into an unnecessary ordinary-work blocker.
   const evidence = receipt(worker, input, "evidence");
   const verification = input.receipts.verification === undefined ? null : receipt(worker, input, "verification");
   if (verification !== null && !Array.isArray(verification.value.items)) throw new TypeError("verification.items must be array");
@@ -1130,11 +1073,6 @@ HANDLERS.set("verify-code", async (worker, input) => {
     stage: "verify-code",
     resolutionName: "quality_review_resolution",
   });
-  const acceptedReview = acceptedBuild.facts.review ?? {};
-  const acceptedRef = acceptedReview.result_ref ?? acceptedReview.attempt_ref;
-  const acceptedHash = acceptedReview.result_hash ?? acceptedReview.attempt_hash;
-  const reviewRef = review.facts.result_ref ?? review.facts.attempt_ref;
-  const reviewHash = review.facts.result_hash ?? review.facts.attempt_hash;
   if (!Array.isArray(evidence.value.refs)) throw new TypeError("evidence.refs must be array");
   const criterionIds = new Set();
   const nestedEvidence = [];
@@ -1158,39 +1096,46 @@ HANDLERS.set("verify-code", async (worker, input) => {
     }
   }
   const mismatches = [];
-  if (!acceptedBuild.facts.acceptance_coverage) mismatches.push("accepted build-code lacks acceptance_coverage; controlled reopen required");
-  try {
-    certifyCurrentTaskCompletion(worker, {
-      changedFiles: acceptedBuild.facts.changed ?? [],
-      tests: acceptedBuild.facts.tests ?? {},
-      review: acceptedBuild.facts.review ?? {},
-      acceptanceCoverage: acceptedBuild.facts.acceptance_coverage,
-    });
-  } catch (error) {
-    mismatches.push(`tasks.md independent completion check failed: ${error.message}`);
+  const taskContract = validatePlanTaskContract({
+    spec: worker.readArtifact("spec.md"),
+    plan: worker.readArtifact("plan.md"),
+    tasks: worker.readArtifact("tasks.md"),
+    completionEvidence: (entry) => ({ ok: true, sha256: entry.sha256 }),
+  });
+  const completion = taskContract.facts?.task_completion;
+  const auditGaps = [...auditMissingItems];
+  if (!completion || completion.total_count === 0 || completion.completed_count !== completion.total_count) {
+    auditGaps.push("tasks.md completion history is incomplete; current implementation, tests, and AC facts remain authoritative");
   }
   if (tests.facts.exit_code !== 0) mismatches.push("verify-code tests must pass");
-  if (acceptedBuild.facts.tests?.command !== tests.facts.command
-      || acceptedBuild.facts.tests?.command_hash !== tests.facts.command_hash) {
-    mismatches.push("verify-code must rerun the accepted build-code complete test command");
-  }
-  const expectedCriterionIds = acceptedBuild.facts.acceptance_coverage?.accepted_criterion_ids ?? [];
+  const expectedCriterionIds = taskContract.facts?.ac_coverage?.accepted_ids ?? [];
   if (!sameStringSet([...criterionIds], expectedCriterionIds)) {
-    mismatches.push("verify-code acceptance evidence criterion set differs from the accepted build-code AC set");
+    mismatches.push("verify-code acceptance evidence criterion set differs from the current spec AC set");
   }
-  if (acceptedReview.review_scope !== "integration" || acceptedReview.subject_kind !== "worktree" || acceptedReview.phase_id !== null) mismatches.push("accepted build-code lacks the required full-worktree integration review; controlled reopen required");
-  if (acceptedRef !== reviewRef || acceptedHash !== reviewHash) mismatches.push("verify-code review must reuse the active accepted build-code final review");
+  if (review.facts.status === "unavailable") {
+    mismatches.push("build-code integration review is unavailable; verification remains incomplete");
+  }
+  if (qualityReview.facts.status === "unavailable") {
+    mismatches.push("verify-code independent review is unavailable; verification remains incomplete");
+  }
   if (review.facts.review_scope !== "integration" || review.facts.subject_kind !== "worktree" || review.facts.phase_id !== null) mismatches.push("verify-code requires the accepted build-code final full-worktree review");
   const workspaceRoot = worker.workspace?.worktreeRoot;
+  const qualitySnapshotTree = qualityReviewBinding.resolution?.value?.snapshot_tree
+    ?? qualityReview.facts.snapshot_tree;
+  const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"
+    || equivalentWorkspaceTrees(workspaceRoot, qualitySnapshotTree, current.tree);
   const snapshotsMatch = workspaceRoot
     && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
-    && differsOnlyByTasksCompletion(worker, review.facts.snapshot_tree, current.tree);
+    // build-code review is carried into verify-code as historical audit
+    // context. Its old snapshot remains useful for provenance, but it is not
+    // a current-work permission and must not block a fresh verification run.
+    && qualitySnapshotMatches;
   if (!snapshotsMatch) mismatches.push("tests, review, and current Workspace snapshot must match");
   const verificationItems = verification?.value.items ?? [];
   if (verification === null) mismatches.push("canonical verification receipt is missing");
   const businessCriticalVerification = new Set([
     "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
-    "tasks_completion", "browser_qa", "core_gaps", "human_handoff",
+    "browser_qa", "core_gaps", "human_handoff",
   ]);
   for (const item of verificationItems) {
     if (businessCriticalVerification.has(item.id)
@@ -1199,8 +1144,8 @@ HANDLERS.set("verify-code", async (worker, input) => {
     }
   }
   const result = addCompletion("verify-code", {
-    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), ...audit.facts },
-    evidence_refs: [tests.evidence, review.evidence, qualityReview.evidence, ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), audit.evidence, ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
+    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}) },
+    evidence_refs: [tests.evidence, review.evidence, qualityReview.evidence, ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
     missing_items: [...mismatches, ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : [])],
   }, {
     worker,

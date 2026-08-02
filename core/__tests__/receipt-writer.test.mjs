@@ -114,7 +114,7 @@ describe("receipt writer TaskHandle contract", () => {
     ]);
   });
 
-  it("does not fail an audit for a kernel-derived retry of the invalidated target step", () => {
+  it("does not fail an audit for a kernel-derived retry of a failed target step", () => {
     const task = fixture();
     const kernel = createTaskKernel(task);
     const run = kernel.startStageRun("build-spec", { reason: "retry the target step" }).run;
@@ -127,11 +127,6 @@ describe("receipt writer TaskHandle contract", () => {
       entry_journal_entry_id: first.journal_entry_id,
       terminal_status: "failure",
       completion_evidence: { kind: "test", uri_or_path: "evidence/failed" },
-    });
-    kernel.invalidateStageStepAttempt("build-spec", {
-      step_id: 1,
-      attempt_id: "attempt-1",
-      reason: "retry the failed target step",
     });
     const retry = kernel.writeStageStepEntry("build-spec", {
       step_id: 1,

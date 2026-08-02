@@ -1,15 +1,18 @@
-# Phase 9 focused coverage audit
+# Phase 9 coverage audit
 
-Snapshot: `6a75ce97bcc274d1307858c71d6a8fdfbefa255a`
+Current source identity is `88cb76865eb446e7c10a2f509b311ae1fecf9c0e20a210e604eaf45e2e2af9d2`. A simple AC names one focused,
+hash-checked oracle; a matrix AC names a fixed, hash-checked `oracles[]` set.
+Every member occurs in the same canonical Vitest execution.
 
-T054 executed the focused final gate only. All 15 acceptance criteria have a direct, hash-checked evidence reference in `evidence/phase-9/final-coverage.json`. The focused matrix passed:
+The current direct matrix is `evidence/phase-9/final-targeted-matrix-final-rebind.json`: 18 requested test
+files expanded to 37 suites / 313 passing tests. It contains every AC-01..AC-15
+oracle plus the current stage, task-handle, and risk contract tests.
 
-- clean Runner and Skill Bundle install in an empty Multica-like target;
-- three synthetic E2E scenarios: normal, material revision, and idempotent resume;
-- five mutation guards;
-- Skill Bundle closure and final coverage contract;
-- complexity hard-gate reproducibility.
+The final command set was rerun against this source tree: inventory, clean-install,
+`npm test`, `npm run check`, the direct matrix, hard-gate checks, and
+`git diff --check`. Their hash-bound outputs are in
+`evidence/phase-9/final-gates.json`.
 
-The repository source tree was hash-identical before and after clean-install. `node_modules` was created only inside the temporary installation and was not part of either release manifest.
-
-This is deliberately a focused result. The repository-wide `npm test` and `npm run check` were not run in this batch, so T054 is `focused_pass`, not a claim of full-suite completion. T055 three-provider review and T056 user confirmation of the DELETE/KEEP/diff list remain open.
+`docs/architecture/final-complexity-report.json` contains the current full
+`buildReport()` payload, including readable budgets, hotspots, exact hard-zero
+audit scope, and the tracked-tree SHA-256.

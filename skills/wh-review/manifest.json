@@ -7,15 +7,17 @@
     "verify-final": "scripts/wh-review-cli.mjs verify-final",
     "doctor": "scripts/wh-review-cli.mjs doctor"
   },
-  "stage_materials": "stage-materials.json",
-  "stage_skill_plan": "stage-skill-plan.json",
-  "schemas": {
-    "attempt": "schemas/attempt.schema.json",
-    "result": "schemas/result.schema.json",
-    "resolution": "schemas/resolution.schema.json",
-    "stage_materials": "schemas/stage-materials.schema.json",
-    "ac_evidence_summary": "schemas/ac-evidence-summary.schema.json"
+  "runtime_review": {
+    "stage_materials": "runtime/review/stage-materials.json",
+    "schemas": {
+      "attempt": "runtime/review/schemas/attempt.schema.json",
+      "result": "runtime/review/schemas/result.schema.json",
+      "resolution": "runtime/review/schemas/resolution.schema.json",
+      "stage_materials": "runtime/review/schemas/stage-materials.schema.json",
+      "ac_evidence_summary": "runtime/review/schemas/ac-evidence-summary.schema.json"
+    }
   },
+  "stage_skill_plan": "stage-skill-plan.json",
   "provider_result_contract": "contracts/workflowhub-result.v2.json",
   "contracts": {
     "make-decision": {

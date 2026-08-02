@@ -39,6 +39,7 @@ const DELIVERY_ROOTS = Object.freeze([
   "schemas/",
   "skills/",
   "workflows/",
+  "runtime/",
 ]);
 
 function sourceFiles() {

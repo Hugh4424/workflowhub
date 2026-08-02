@@ -16,10 +16,13 @@ const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
-/** Hash the source file list and bytes, excluding generated VCS metadata. */
+/** Hash tracked fixture bytes, excluding generated VCS metadata. */
 export function sourceContentListHash(root = SOURCE_ROOT) {
   const names = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root }).toString("utf8").split("\0").filter(Boolean);
-  const entries = names.map((name) => `${name}\0${hash(fs.readFileSync(path.join(root, name)))}\n`).join("");
+  const entries = names
+    .filter((name) => fs.existsSync(path.join(root, name)))
+    .map((name) => `${name}\0${hash(fs.readFileSync(path.join(root, name)))}\n`)
+    .join("");
   return hash(entries);
 }
 
@@ -116,10 +119,14 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
     if (stage === "make-decision" && !context.candidateWorkspace) context = prepareMakeDecisionWorkspace(context);
     return { context, runner };
   };
-  const sourceHashBefore = sourceContentListHash();
+  // The source checkout is shared by Vitest workers and concurrent developer
+  // activity.  The E2E contract is that the *installed runner* is immutable;
+  // hashing the checkout after the release was built made that assertion depend
+  // on unrelated source edits.  Capture the released fixture identity instead.
+  const sourceHashBefore = sourceContentListHash(runnerRoot);
   const finish = () => {
-    const sourceHashAfter = sourceContentListHash();
-    if (sourceHashAfter !== sourceHashBefore) throw new Error(`WorkflowHub source changed during E2E: ${sourceHashBefore} -> ${sourceHashAfter}`);
+    const sourceHashAfter = sourceContentListHash(runnerRoot);
+    if (sourceHashAfter !== sourceHashBefore) throw new Error(`installed WorkflowHub runner changed during E2E: ${sourceHashBefore} -> ${sourceHashAfter}`);
     return sourceHashAfter;
   };
   const dispose = () => {
@@ -174,7 +181,12 @@ export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRo
     if (stage === "make-decision" && !context.candidateWorkspace) context = prepareMakeDecisionWorkspace(context);
     return { context, runner };
   };
-  return Object.freeze({ root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor, sourceHashBefore, finish: () => sourceContentListHash() });
+  const finish = () => {
+    const sourceHashAfter = sourceContentListHash(runnerRoot);
+    if (sourceHashAfter !== sourceHashBefore) throw new Error(`installed WorkflowHub runner changed during E2E: ${sourceHashBefore} -> ${sourceHashAfter}`);
+    return sourceHashAfter;
+  };
+  return Object.freeze({ root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor, sourceHashBefore, finish });
 }
 
 /** Execute a complete scenario in a plain Node child, outside Vitest's module transformer. */

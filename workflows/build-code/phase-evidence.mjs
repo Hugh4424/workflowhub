@@ -7,53 +7,24 @@ import { resolve } from "node:path";
 import { captureWorkspaceSnapshot } from "../../core/canonical-receipt-writer.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../core/task-handle.mjs";
 import { assertWorkspace } from "../../core/workspace.mjs";
-import { validateSchema } from "../../skills/wh-review/scripts/schema-validator.mjs";
-import { readPhaseMapTrace, validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
+import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import { validatePhaseAcceptanceTrace } from "../../runtime/review/phase-review-subject.mjs";
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
-import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha256, assertSafeRecoveryRef, recoveryError } from "../../core/task-recovery.mjs";
 import { normalizeRuntimeOnlyPaths } from "../../runtime/evidence/canonical-utils.mjs";
 import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../runtime/review/review-flow-authority.mjs";
 import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../runtime/review/stage-review-disposition.mjs";
-import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../runtime/stage/stage-content-contracts.mjs";
-import { readCurrentTaskMaterialRevision } from "../../core/stage-content-evidence.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
-const REOPEN = /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/;
-const PHASE_SUCCESSOR = /^results\/build-code\/revisions\/phase-successor-[0-9]{4}\.json$/;
-const PHASE_TRACE = /^evidence\/phases\/([A-Za-z0-9._-]+)\/([a-f0-9]{40,64})\/phase-map-trace-([a-f0-9]{64})\.json$/;
-const PHASE_RESULT_ARCHIVE = /^evidence\/phase-successors\/[A-Za-z0-9._-]+-phase-result-[a-f0-9]{64}\.json$/;
-const ADJUDICATION_CORRECTION = /^results\/build-code\/revisions\/adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const REVIEW_ACTION = /^reviews\/(?:results\/[A-Za-z0-9._-]+|attempts\/[A-Za-z0-9._-]+\/attempt)\.json$/;
 const RISK_ACCEPTANCE = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
-  "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "guarded_c2_paths", "review_result_ref", "reopen_ref",
-  "repair_review_result_ref", "adjudication_correction_ref", "recovery_ref", "recovery_hash",
-  "risk_acceptance_refs",
-  "phase_successor_reason", "phase_successor_ref", "phase_successor_hash",
-  "predecessor_phase_trace_ref", "predecessor_phase_trace_hash",
+  "red_evidence_ref", "allowed_files", "review_result_ref", "risk_acceptance_refs",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
-const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
-const PHASE_LOCAL_C2_PATHS = Object.freeze([
-  ".github/workflows/ci.yml",
-  "package.json",
-  "scripts/__tests__/ci-chain-check.test.mjs",
-  "tools/cli/ci-chain-check.mjs",
-]);
-
-export function requiresSameAdjudicationCorrection(current, input) {
-  return current?.phase_id === input.phase_id
-    && current?.adjudication_correction_ref !== undefined
-    && input.adjudication_correction_ref !== current.adjudication_correction_ref;
-}
-
-export function predecessorAdjudicationCorrection(current, nextPhaseId) {
-  return current?.phase_id !== nextPhaseId ? current?.adjudication_correction_ref : undefined;
-}
 
 function safeRef(value, pattern, label) {
   if (typeof value !== "string" || !pattern.test(value) || value.includes("..")) throw new TypeError(`${label} is invalid`);
@@ -97,123 +68,58 @@ function readTestReceipt(task, ref, { green }) {
   return { ...receipt, ref };
 }
 
-function authenticateKernelReviewHead(kernel, review, ref, expected, { revisionRef, adjudicationCorrectionRef } = {}) {
-  return assertAuthenticatedReviewHead({
-    readFlow: (subject) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity({
-      ...subject,
-      ...(revisionRef === undefined ? {} : { revision_ref: revisionRef }),
-      ...(adjudicationCorrectionRef === undefined ? {} : { adjudication_correction_ref: adjudicationCorrectionRef }),
-    })),
-    reviewRef: ref,
-    reviewHash: review.hash,
-    result: review.value,
-    expected,
-  });
+function phaseReviewSubject(phaseId) {
+  return {
+    stage: "build-code", review_track: null, subject_kind: "phase",
+    phase_id: phaseId, review_scope: "phase",
+  };
 }
 
 function expectedPhaseReviewIdentity(task, value, expected) {
   if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
     || value.subject_kind !== "phase" || value.phase_id !== expected.phaseId
-    || value.review_scope !== "phase"
-    || value.base_tree !== expected.baseTree || value.candidate_tree !== expected.candidateTree
-    || value.snapshot_tree !== expected.candidateTree
-    || (expected.phaseEvidence !== undefined &&
-        JSON.stringify(value.phase_evidence ?? null) !== JSON.stringify(expected.phaseEvidence))) {
-    throw new Error("formal phase review identity does not match the Phase evidence");
+    || value.review_scope !== "phase" || value.base_tree !== expected.baseTree
+    || value.candidate_tree !== expected.candidateTree || value.snapshot_tree !== expected.candidateTree
+    || JSON.stringify(value.phase_evidence ?? null) !== JSON.stringify(expected.phaseEvidence)) {
+    throw new Error("formal phase review identity does not match current Phase evidence");
   }
 }
 
-function phaseReviewSubject(expected) {
-  return {
-    stage: "build-code", review_track: null, subject_kind: "phase",
-    phase_id: expected.phaseId, review_scope: "phase",
-  };
-}
-
-function reviewFlowReader(kernel, { revisionRef, adjudicationCorrectionRef } = {}) {
-  return (subject) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity({
-    ...subject,
-    ...(revisionRef === undefined ? {} : { revision_ref: revisionRef }),
-    ...(adjudicationCorrectionRef === undefined ? {} : { adjudication_correction_ref: adjudicationCorrectionRef }),
-  }));
-}
-
-function readFormalPhaseReview(task, kernel, ref, expected, options = {}) {
+function readFormalPhaseReview(task, kernel, ref, expected) {
   safeRef(ref, REVIEW_ACTION, "review action ref");
   const review = readJson(task, ref, "formal phase review action");
+  const subject = phaseReviewSubject(expected.phaseId);
   if (ref.startsWith("reviews/attempts/")) {
     validateSchema("attempt", review.value);
-    const value = review.value;
-    expectedPhaseReviewIdentity(task, value, expected);
-    if (value.terminal_status !== "unavailable" || !value.error
-      || !Array.isArray(value.provider_attempts)
-      || (value.provider_attempts.length === 0 && value.error?.code !== "MATERIAL_INCOMPLETE")) {
+    expectedPhaseReviewIdentity(task, review.value, expected);
+    if (review.value.terminal_status !== "unavailable" || !review.value.error
+      || !Array.isArray(review.value.provider_attempts) || review.value.provider_attempts.length === 0) {
       throw new Error("formal phase review attempt is not an unavailable provider attempt");
     }
     const authenticated = assertAuthenticatedReviewAttempt({
-      readFlow: reviewFlowReader(kernel, options),
-      attemptRef: ref,
-      attemptHash: review.hash,
-      attempt: value,
-      expected: phaseReviewSubject(expected),
+      readFlow: (requested) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity(requested)),
+      attemptRef: ref, attemptHash: review.hash, attempt: review.value, expected: subject,
     });
-    return {
-      ...review, ref, status: "unavailable", verdict: null,
-      attempt_ref: ref, attempt: review, authenticated,
-    };
+    return { ...review, ref, status: "unavailable", verdict: null, attempt_ref: ref, attempt: review, authenticated };
   }
   validateSchema("result", review.value);
-  const value = review.value;
-  expectedPhaseReviewIdentity(task, value, expected);
-  if (!["pass", "revise_required"].includes(value.verdict)) {
+  expectedPhaseReviewIdentity(task, review.value, expected);
+  if (!new Set(["pass", "revise_required"]).has(review.value.verdict)) {
     throw new Error("formal phase review semantic verdict is invalid");
   }
-  const authenticated = authenticateKernelReviewHead(kernel, review, ref, phaseReviewSubject(expected), options);
-  const attempt = readJson(task, value.attempt_ref, "formal phase review attempt");
+  const authenticated = assertAuthenticatedReviewHead({
+    readFlow: (requested) => kernel.readReviewFlow(kernel.deriveReviewFlowIdentity(requested)),
+    reviewRef: ref, reviewHash: review.hash, result: review.value, expected: subject,
+  });
+  const attempt = readJson(task, review.value.attempt_ref, "formal phase review attempt");
   validateSchema("attempt", attempt.value);
   for (const key of ["task_id", "stage", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
-    if (attempt.value[key] !== value[key]) throw new Error(`formal phase review attempt/result ${key} mismatch`);
+    if (attempt.value[key] !== review.value[key]) throw new Error(`formal phase review attempt/result ${key} mismatch`);
   }
-  if (JSON.stringify(attempt.value.phase_evidence ?? null) !== JSON.stringify(value.phase_evidence ?? null)) {
+  if (JSON.stringify(attempt.value.phase_evidence ?? null) !== JSON.stringify(review.value.phase_evidence ?? null)) {
     throw new Error("formal phase review attempt/result phase_evidence mismatch");
   }
-  return {
-    ...review, ref, status: "semantic", verdict: value.verdict,
-    attempt_ref: value.attempt_ref, attempt, authenticated,
-  };
-}
-
-function readPreAcceptRepairReview(task, kernel, ref, expectedCandidateTree) {
-  safeRef(ref, /^reviews\/results\/[A-Za-z0-9._-]+\.json$/, "repair review result ref");
-  const review = readJson(task, ref, "pre-accept repair review result");
-  validateSchema("result", review.value);
-  const value = review.value;
-  if (value.task_id !== task.identity.taskId || value.stage !== "build-code"
-    || value.subject_kind !== "worktree" || value.review_scope !== "integration" || value.phase_id !== null
-    || value.candidate_tree !== expectedCandidateTree || value.snapshot_tree !== expectedCandidateTree
-    || value.verdict !== "revise_required") {
-    throw new Error("pre-accept repair review identity does not match the current Phase");
-  }
-  authenticateKernelReviewHead(kernel, review, ref, {
-    stage: "build-code", review_track: null, subject_kind: "worktree",
-    phase_id: null, review_scope: "integration",
-  });
-  const attempt = readJson(task, value.attempt_ref, "pre-accept repair review attempt");
-  validateSchema("attempt", attempt.value);
-  for (const key of ["task_id", "stage", "subject_kind", "review_scope", "base_tree", "candidate_tree", "snapshot_tree", "material_id"]) {
-    if (attempt.value[key] !== value[key]) throw new Error(`pre-accept repair review attempt/result ${key} mismatch`);
-  }
-  return review;
-}
-
-function hasAcceptedBuildCode(task) {
-  try {
-    task.readRecord("results/build-code/accepted.json");
-    return true;
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
+  return { ...review, ref, status: "semantic", verdict: review.value.verdict, attempt_ref: review.value.attempt_ref, attempt, authenticated };
 }
 
 function bindPhaseReviewRisks(task, review, refs) {
@@ -225,14 +131,12 @@ function bindPhaseReviewRisks(task, review, refs) {
     if (supplied.length) throw new Error("unavailable Phase review cannot use a risk acceptance");
     return [];
   }
-  const preliminary = deriveSeriousReviewPause({
-    taskId: task.identity.taskId,
-    stage: "build-code",
-    reviewRef: review.ref,
-    reviewHash: review.hash,
-    result: review.value,
+  const pause = deriveSeriousReviewPause({
+    taskId: task.identity.taskId, stage: "build-code", reviewRef: review.ref,
+    reviewHash: review.hash, result: review.value,
+    workflowRunId: review.authenticated.flow.identity.workflow_run_id,
   });
-  if (preliminary.status !== "paused") {
+  if (pause.status !== "paused") {
     if (supplied.length) throw new Error("risk acceptance cannot override a Phase review without actionable serious findings");
     return [];
   }
@@ -244,920 +148,11 @@ function bindPhaseReviewRisks(task, review, refs) {
     if (record.hash !== match[1]) throw new Error("Phase risk acceptance is not content-addressed");
     return record;
   });
-  const workflowRunId = review.authenticated.flow.identity.workflow_run_id;
-  const pause = deriveSeriousReviewPause({
-    taskId: task.identity.taskId,
-    stage: "build-code",
-    reviewRef: review.ref,
-    reviewHash: review.hash,
-    result: review.value,
-    workflowRunId,
-  });
   validateRiskAcceptanceSet({ acceptances: records.map(({ value }) => value), pause });
   return records.map((record, index) => ({ ref: supplied[index], sha256: record.hash }));
 }
 
-function phaseMapTrace({
-  scan, scanRef, scanHash, canonicalEvidenceRef, canonicalEvidenceHash,
-  implementation, green, red, review, implementationCommitRef, riskAcceptances,
-}) {
-  const value = review.value;
-  const acceptanceTrace = validatePhaseAcceptanceTrace({
-    trace: review.attempt.value.phase_ac_trace,
-    phaseId: scan.phase_id,
-    baseTree: value.base_tree,
-    snapshotTree: scan.snapshot_tree,
-    changedFiles: scan.changed_files,
-    greenTestReceipt: { ref: green.ref, sha256: green.hash },
-    required: false,
-  });
-  return {
-    schema_version: "phase-map-trace.v1",
-    phase_id: scan.phase_id,
-    baseline_commit: scan.baseline_commit,
-    implementation_commit: scan.implementation_commit,
-    implementation_commit_ref: implementationCommitRef,
-    base_tree: value.base_tree,
-    snapshot_tree: scan.snapshot_tree,
-    allowed_files: [...scan.allowed_files],
-    guarded_c2_paths: [...(scan.guarded_c2_paths ?? [])],
-    guarded_changes: [...(scan.guarded_changes ?? [])],
-    changed_files: [...scan.changed_files],
-    canonical_phase_evidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidenceHash },
-    diff_scan: { ref: scanRef, sha256: scanHash },
-    implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
-    green_test_receipt: { ref: green.ref, sha256: green.hash },
-    red_test_receipt: red === null ? null : { ref: red.ref, sha256: red.hash },
-    review_status: review.status,
-    review_result: review.status === "semantic" ? { ref: review.ref, sha256: review.hash } : null,
-    review_attempt: { ref: review.attempt_ref, sha256: review.attempt.hash },
-    material_id: value.material_id,
-    review_scope: "phase",
-    verdict: review.verdict,
-    risk_acceptances: riskAcceptances,
-    ...(acceptanceTrace === null ? {} : { acceptance_trace: acceptanceTrace }),
-  };
-}
-
-function currentPhaseResult(task) {
-  try { return readJson(task, "phase-result.json", "current Phase result").value; }
-  catch (error) {
-    if (/is missing/.test(error.message)) return null;
-    throw error;
-  }
-}
-
-function currentPhaseReviewVerdict(task, phaseResult) {
-  const ref = phaseResult?.review?.action_ref ?? phaseResult?.review?.result_ref;
-  if (ref === undefined) return null;
-  const review = readJson(task, ref, "current Phase review action").value;
-  if (review?.terminal_status === "unavailable") return "unavailable";
-  if (!["pass", "revise_required"].includes(review?.verdict)) {
-    throw new Error("current Phase review verdict is invalid");
-  }
-  return review.verdict;
-}
-
-function currentPhaseReviewRef(phaseResult) {
-  return phaseResult?.review?.action_ref ?? phaseResult?.review?.result_ref;
-}
-
-function nextPhaseSuccessorRef(task) {
-  for (let sequence = 1; sequence <= 9999; sequence += 1) {
-    const ref = `results/build-code/revisions/phase-successor-${String(sequence).padStart(4, "0")}.json`;
-    try { task.readRecord(ref); }
-    catch (error) {
-      if (error?.code === "ENOENT") return ref;
-      throw error;
-    }
-  }
-  throw new Error("phase successor sequence is exhausted");
-}
-
-function assertSuccessorGitContinuity(workspace, previousBaseline, currentCommit, { allowLegacyTreeBaseline = false } = {}) {
-  try {
-    execFileSync("git", ["merge-base", "--is-ancestor", previousBaseline, currentCommit], {
-      cwd: workspace.worktreeRoot, stdio: "ignore",
-    });
-    return "commit-ancestor";
-  } catch {
-    if (!allowLegacyTreeBaseline) throw new Error("phase successor requires a real Git ancestor from the prior Phase baseline");
-    const baselineType = execFileSync("git", ["cat-file", "-t", previousBaseline], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    if (!new Set(["commit", "tree"]).has(baselineType)) throw new Error("phase successor requires a real Git ancestor from the prior Phase baseline");
-    const currentHead = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    try {
-      execFileSync("git", ["merge-base", "--is-ancestor", currentHead, currentCommit], {
-        cwd: workspace.worktreeRoot, stdio: "ignore",
-      });
-    } catch {
-      throw new Error("legacy tree baseline is not continuous with the current execution commit");
-    }
-    return baselineType === "tree" ? "legacy-tree-current-head-continuity" : "legacy-commit-current-head-continuity";
-  }
-}
-
-function gitTree(sourceRoot, commit) {
-  return execFileSync("git", ["rev-parse", `${commit}^{tree}`], {
-    cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-}
-
-export function validateAwaitingReviewSuccessorPreconditions({
-  task,
-  workspace,
-  current,
-  predecessorReview,
-  previousImplementationTree,
-  previousGreenTree,
-  previousSnapshotTree,
-  predecessorCandidateTree,
-  previousAllowedFiles,
-  allowedFiles,
-  previousGuardedC2Paths,
-  guardedC2Paths,
-} = {}) {
-  if (!current || current.status !== "awaiting_review") {
-    throw new Error("awaiting-review Phase successor requires the current awaiting-review Phase");
-  }
-  if (!predecessorReview || predecessorReview.status !== "unavailable" || predecessorReview.verdict !== null
-      || typeof predecessorReview.ref !== "string" || !HASH.test(predecessorReview.hash ?? "")) {
-    throw new Error("awaiting-review Phase successor requires an authenticated unavailable predecessor review");
-  }
-  if (previousImplementationTree !== previousGreenTree) {
-    throw new Error("awaiting-review Phase successor previous receipts do not bind each other");
-  }
-  if (predecessorCandidateTree !== undefined
-      ? predecessorCandidateTree !== previousSnapshotTree
-      : previousImplementationTree !== previousSnapshotTree) {
-    throw new Error("awaiting-review Phase successor previous receipts do not bind the current Phase snapshot");
-  }
-  const previousAllowed = normalizeRuntimeOnlyPaths(previousAllowedFiles ?? []);
-  const currentAllowed = normalizeRuntimeOnlyPaths(allowedFiles ?? []);
-  const previousSet = new Set(previousAllowed);
-  const currentSet = new Set(currentAllowed);
-  const additions = currentAllowed.filter((path) => !previousSet.has(path));
-  const removals = previousAllowed.filter((path) => !currentSet.has(path));
-  const allowlistedCorrection = additions.length > 0
-    && removals.length === 0
-    && materialAuthorizesAllowlistAdditions({ task, workspace, additions });
-  if ((!allowlistedCorrection && JSON.stringify(previousAllowed) !== JSON.stringify(currentAllowed))
-      || JSON.stringify(normalizeRuntimeOnlyPaths(previousGuardedC2Paths ?? [])) !== JSON.stringify(normalizeRuntimeOnlyPaths(guardedC2Paths ?? []))) {
-    throw new Error("awaiting-review Phase successor allowlist does not bind the current Phase");
-  }
-  return true;
-}
-
-function materialAuthorizesAllowlistAdditions({ task, workspace, additions } = {}) {
-  if (!task || !workspace || !Array.isArray(additions) || additions.length === 0) return false;
-  let material;
-  try { material = readCurrentTaskMaterialRevision({ task }); }
-  catch { return false; }
-  if (material === undefined || !material.value?.changed_files?.includes("tasks.md")) return false;
-  const taskId = task.identity?.taskId;
-  if (typeof taskId !== "string" || taskId.includes("..") || taskId.includes("/")) return false;
-  let tasks;
-  try { tasks = readFileSync(resolve(workspace.worktreeRoot, "specs", taskId, "tasks.md"), "utf8"); }
-  catch { return false; }
-  const start = tasks.indexOf("#### T054");
-  const end = tasks.indexOf("#### T055", start < 0 ? 0 : start);
-  if (start < 0) return false;
-  const section = tasks.slice(start, end < 0 ? tasks.length : end);
-  const authorized = new Set();
-  for (const match of section.matchAll(/追加(?:文件|精确文件)\*{0,2}\s*[:：]\s*([^\n]+)/g)) {
-    for (const path of match[1].matchAll(/`([^`]+)`/g)) authorized.add(path[1]);
-  }
-  return additions.every((path) => authorized.has(path));
-}
-
-function createPhaseSuccessor({ task, kernel, workspace, phaseId, current, predecessorReview, predecessorPhaseTrace, implementation, green, allowedFiles, guardedC2Paths, reason, expectedRef }) {
-  if (!current || !["done", "awaiting_review"].includes(current.status) || current.phase_id !== phaseId) {
-    throw new Error("phase successor requires the current Phase");
-  }
-  const previousSubject = predecessorPhaseTrace === undefined
-    ? phaseSubject(task, workspace, current)
-    : { scan: predecessorPhaseTrace.scan.value, subject: predecessorPhaseTrace.subject };
-  // When a completed Phase advances from an explicitly bound pending
-  // successor, preserve that successor's authenticated unavailable review
-  // binding.  No new review fact is invented by successor creation.
-  const effectivePredecessorReview = predecessorReview
-    ?? (predecessorPhaseTrace === undefined ? null : predecessorReviewFromTrace(predecessorPhaseTrace));
-  try {
-    execFileSync("git", ["merge-base", "--is-ancestor", previousSubject.scan.baseline_commit, previousSubject.scan.implementation_commit], {
-      cwd: workspace.worktreeRoot, stdio: "ignore",
-    });
-  } catch {
-    throw new Error("phase successor predecessor Phase Git ancestry is invalid");
-  }
-  if (current.status === "awaiting_review") {
-    const previousImplementation = predecessorPhaseTrace?.implementation
-      ?? readImplementation(task, current.evidence?.implementation_receipt_ref);
-    const previousGreen = predecessorPhaseTrace?.green
-      ?? readTestReceipt(task, current.evidence?.green_test_receipt_ref, { green: true });
-    if (!previousImplementation || !previousGreen) {
-      throw new Error("awaiting-review Phase successor requires the previous implementation and GREEN receipts");
-    }
-    for (const [label, receipt] of [["implementation", previousImplementation], ["GREEN", previousGreen]]) {
-      const receiptTree = execFileSync("git", ["rev-parse", `${receipt.value.snapshot_commit}^{tree}`], {
-        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-      }).trim();
-      if (receiptTree !== receipt.value.snapshot_tree) {
-        throw new Error(`awaiting-review Phase successor previous ${label} receipt tree mismatch`);
-      }
-    }
-    validateAwaitingReviewSuccessorPreconditions({
-      task,
-      workspace,
-      current,
-      predecessorReview,
-      previousImplementationTree: previousImplementation.value.snapshot_tree,
-      previousGreenTree: previousGreen.value.snapshot_tree,
-      previousSnapshotTree: previousSubject.scan.snapshot_tree,
-      predecessorCandidateTree: predecessorPhaseTrace?.trace?.schema_version === "phase-map-trace.pending.v1"
-        ? undefined : effectivePredecessorReview?.attempt?.value?.candidate_tree,
-      previousAllowedFiles: previousSubject.scan.allowed_files,
-      allowedFiles,
-      previousGuardedC2Paths: previousSubject.scan.guarded_c2_paths,
-      guardedC2Paths,
-    });
-  }
-  if (typeof reason !== "string" || reason.trim() === "") throw new TypeError("phase_successor_reason is required");
-  const previousCommit = previousSubject.scan.implementation_commit;
-  const currentSnapshotCommit = implementation.value.snapshot_commit;
-  const baselineContinuity = assertSuccessorGitContinuity(workspace, previousSubject.scan.baseline_commit, currentSnapshotCommit, {
-    allowLegacyTreeBaseline: current.status === "awaiting_review" && predecessorReview?.status === "unavailable",
-  });
-  const material = readCurrentTaskMaterialRevision({ task });
-  if (material === undefined) throw new Error("phase successor requires the current task material revision");
-  const ref = nextPhaseSuccessorRef(task);
-  if (expectedRef !== undefined && ref !== expectedRef) throw new Error("phase successor sequence changed while publishing");
-  // The phase pointer is mutable: publishing the successor necessarily rewrites
-  // phase-result.json. Preserve the predecessor bytes under an immutable,
-  // content-addressed evidence ref before doing that so later validation never
-  // depends on whichever record happens to be current.
-  const previousPhaseResultRaw = task.readRecord("phase-result.json");
-  const previousPhaseResultHash = sha256(previousPhaseResultRaw);
-  const previousPhaseResultArchiveRef = `evidence/phase-successors/${phaseId}-phase-result-${previousPhaseResultHash}.json`;
-  publishIdempotently(task, kernel, previousPhaseResultArchiveRef, previousPhaseResultRaw, "previous Phase result archive");
-  const value = {
-    schema_version: "workflowhub-build-code-phase-successor.v2",
-    task_id: task.identity.taskId,
-    stage: "build-code",
-    phase_id: current.phase_id,
-    reason: reason.trim(),
-    previous_phase_result_ref: "phase-result.json",
-    previous_phase_result_hash: previousPhaseResultHash,
-    previous_phase_result_archive_ref: previousPhaseResultArchiveRef,
-    previous_phase_result_archive_hash: previousPhaseResultHash,
-    previous_baseline_commit: previousSubject.scan.baseline_commit,
-    previous_implementation_commit: previousCommit,
-    previous_snapshot_tree: previousSubject.scan.snapshot_tree,
-    baseline_continuity: baselineContinuity,
-    previous_diff_scan_ref: predecessorPhaseTrace?.trace?.diff_scan?.ref ?? current.diff_scan?.path ?? current.evidence?.diff,
-    previous_diff_scan_hash: predecessorPhaseTrace?.trace?.diff_scan?.sha256
-      ?? sha256(task.readRecord(current.diff_scan?.path ?? current.evidence?.diff)),
-    previous_canonical_phase_evidence_ref: predecessorPhaseTrace?.trace?.canonical_phase_evidence?.ref ?? current.evidence?.canonical_phase_evidence_ref,
-    previous_canonical_phase_evidence_hash: predecessorPhaseTrace?.trace?.canonical_phase_evidence?.sha256
-      ?? (current.evidence?.canonical_phase_evidence_ref
-        ? sha256(task.readRecord(current.evidence.canonical_phase_evidence_ref)) : undefined),
-    ...(predecessorPhaseTrace === undefined ? {} : {
-      predecessor_phase_trace_ref: predecessorPhaseTrace.traceRef,
-      predecessor_phase_trace_hash: predecessorPhaseTrace.traceSha256,
-    }),
-    ...(effectivePredecessorReview === null || effectivePredecessorReview === undefined ? {} : {
-      previous_phase_review_ref: effectivePredecessorReview.ref,
-      previous_phase_review_hash: effectivePredecessorReview.hash,
-    }),
-    current_snapshot_tree: implementation.value.snapshot_tree,
-    current_snapshot_commit: currentSnapshotCommit,
-    implementation_receipt_ref: implementation.ref,
-    implementation_receipt_hash: implementation.hash,
-    green_test_receipt_ref: green.ref,
-    green_test_receipt_hash: green.hash,
-    material_revision_ref: material.ref,
-    material_revision_hash: material.hash,
-    allowed_files: [...allowedFiles],
-    guarded_c2_paths: [...guardedC2Paths],
-    created_at: new Date().toISOString(),
-  };
-  const raw = canonical(value);
-  const hash = sha256(raw);
-  publishIdempotently(task, kernel, ref, raw, "phase successor");
-  return Object.freeze({ ref, hash, value });
-}
-
-/** Read an immutable predecessor Phase result.  The live phase-result pointer
- * may legitimately have moved on to a successor; only this archive is a
- * valid historical parent. */
-export function readHistoricalPhaseResult(task, archiveRef, expectedHash, phaseId) {
-  const archiveMatch = /^evidence\/phase-successors\/[A-Za-z0-9._-]+-phase-result-([a-f0-9]{64})\.json$/.exec(archiveRef ?? "");
-  if (!archiveMatch || !HASH.test(expectedHash ?? "") || archiveMatch[1] !== expectedHash) {
-    throw new TypeError("historical Phase result archive binding is invalid");
-  }
-  const predecessor = readJson(task, archiveRef, "previous Phase result archive");
-  if (predecessor.hash !== expectedHash || predecessor.value?.phase_id !== phaseId) {
-    throw new Error("phase successor predecessor Phase result archive hash mismatch");
-  }
-  return predecessor;
-}
-
-export function readPhaseSuccessor(task, ref, hash, { phaseId, current, predecessorReview, implementation, green, allowedFiles, guardedC2Paths, workspace } = {}) {
-  if (!PHASE_SUCCESSOR.test(ref ?? "") || !HASH.test(hash ?? "")) throw new TypeError("phase successor binding is invalid");
-  const record = readJson(task, ref, "phase successor");
-  if (record.hash !== hash) throw new Error("phase successor hash mismatch");
-  const value = record.value;
-  if (value.schema_version !== "workflowhub-build-code-phase-successor.v2"
-      || value.task_id !== task.identity.taskId || value.stage !== "build-code" || value.phase_id !== phaseId
-      || value.previous_phase_result_ref !== "phase-result.json"
-      || value.implementation_receipt_ref !== implementation.ref
-      || value.implementation_receipt_hash !== implementation.hash
-      || value.green_test_receipt_ref !== green.ref || value.green_test_receipt_hash !== green.hash
-      || value.current_snapshot_tree !== implementation.value.snapshot_tree
-      || JSON.stringify(value.allowed_files) !== JSON.stringify(allowedFiles)
-      || JSON.stringify(value.guarded_c2_paths) !== JSON.stringify(guardedC2Paths)) {
-    throw new Error("phase successor binding does not match current receipts or allowlist");
-  }
-  const material = readCurrentTaskMaterialRevision({ task });
-  if (material === undefined || value.material_revision_ref !== material.ref || value.material_revision_hash !== material.hash) {
-    throw new Error("phase successor material revision is stale");
-  }
-  if (!PHASE_RESULT_ARCHIVE.test(value.previous_phase_result_archive_ref ?? "")
-      || !HASH.test(value.previous_phase_result_archive_hash ?? "")
-      || value.previous_phase_result_archive_hash !== value.previous_phase_result_hash) {
-    throw new Error("phase successor predecessor Phase result archive binding is invalid");
-  }
-  const predecessor = readHistoricalPhaseResult(
-    task,
-    value.previous_phase_result_archive_ref,
-    value.previous_phase_result_archive_hash,
-    phaseId,
-  );
-  if (predecessor.hash !== value.previous_phase_result_hash) {
-    throw new Error("phase successor predecessor Phase result archive hash mismatch");
-  }
-  const explicitPredecessor = value.predecessor_phase_trace_ref !== undefined
-    || value.predecessor_phase_trace_hash !== undefined;
-  if (explicitPredecessor) {
-    if (typeof value.predecessor_phase_trace_ref !== "string"
-        || (!PHASE_TRACE.test(value.predecessor_phase_trace_ref)
-          && !PHASE_SUCCESSOR.test(value.predecessor_phase_trace_ref))
-        || !HASH.test(value.predecessor_phase_trace_hash ?? "")) {
-      throw new Error("phase successor explicit predecessor Phase trace or successor binding is invalid");
-    }
-    const predecessorTrace = readExplicitPredecessorPhaseTrace({
-      task, workspace, phaseId, ref: value.predecessor_phase_trace_ref,
-      hash: value.predecessor_phase_trace_hash, currentImplementation: implementation,
-    });
-    if (predecessorTrace.trace.snapshot_tree !== value.previous_snapshot_tree
-        || predecessorTrace.trace.baseline_commit !== value.previous_baseline_commit
-        || predecessorTrace.trace.implementation_commit !== value.previous_implementation_commit
-        || predecessorTrace.trace.diff_scan.ref !== value.previous_diff_scan_ref
-        || predecessorTrace.trace.diff_scan.sha256 !== value.previous_diff_scan_hash
-        || predecessorTrace.trace.canonical_phase_evidence.ref !== value.previous_canonical_phase_evidence_ref
-        || predecessorTrace.trace.canonical_phase_evidence.sha256 !== value.previous_canonical_phase_evidence_hash) {
-      throw new Error("phase successor explicit predecessor Phase trace does not bind its evidence");
-    }
-    if (current?.status === "awaiting_review"
-        && (value.previous_phase_review_ref !== predecessorTrace.attempt.ref
-          || value.previous_phase_review_hash !== predecessorTrace.attempt.sha256)) {
-      throw new Error("phase successor explicit predecessor review binding is invalid");
-    }
-  }
-  if (current?.status === "awaiting_review") {
-    const expectedReview = explicitPredecessor
-      ? (() => {
-        const trace = readExplicitPredecessorPhaseTrace({
-          task, workspace, phaseId, ref: value.predecessor_phase_trace_ref,
-          hash: value.predecessor_phase_trace_hash, currentImplementation: implementation,
-        });
-        return { ref: trace.attempt.ref, hash: trace.attempt.sha256 };
-      })()
-      : predecessorReview;
-    if (value.previous_phase_review_ref !== expectedReview?.ref || value.previous_phase_review_hash !== expectedReview?.hash) {
-      throw new Error("phase successor predecessor review binding is invalid");
-    }
-    const explicitTrace = explicitPredecessor
-      ? readExplicitPredecessorPhaseTrace({
-        task, workspace, phaseId, ref: value.predecessor_phase_trace_ref,
-        hash: value.predecessor_phase_trace_hash, currentImplementation: implementation,
-      })
-      : null;
-    const predecessorDiffRef = explicitTrace?.trace.diff_scan.ref ?? predecessor.value?.diff_scan?.path ?? predecessor.value?.evidence?.diff;
-    const predecessorCanonicalRef = explicitTrace?.trace.canonical_phase_evidence.ref ?? predecessor.value?.evidence?.canonical_phase_evidence_ref;
-    if (typeof predecessorDiffRef !== "string" || typeof predecessorCanonicalRef !== "string"
-        || value.previous_snapshot_tree !== (explicitTrace?.trace.snapshot_tree ?? predecessor.value?.snapshot_tree)
-        || value.previous_diff_scan_ref !== predecessorDiffRef
-        || value.previous_diff_scan_hash !== sha256(task.readRecord(predecessorDiffRef))
-        || value.previous_canonical_phase_evidence_ref !== predecessorCanonicalRef
-        || value.previous_canonical_phase_evidence_hash !== sha256(task.readRecord(predecessorCanonicalRef))) {
-      throw new Error("phase successor previous Phase evidence is stale");
-    }
-    const predecessorScan = explicitTrace?.scan.value ?? readJson(task, predecessorDiffRef, "previous Phase diff scan").value;
-    const previousAllowed = normalizeRuntimeOnlyPaths(predecessorScan.allowed_files ?? []);
-    const currentAllowed = normalizeRuntimeOnlyPaths(value.allowed_files ?? []);
-    const additions = currentAllowed.filter((path) => !new Set(previousAllowed).has(path));
-    const removals = previousAllowed.filter((path) => !new Set(currentAllowed).has(path));
-    const allowlistMatches = JSON.stringify(previousAllowed) === JSON.stringify(currentAllowed)
-      || (explicitPredecessor && removals.length === 0
-        && materialAuthorizesAllowlistAdditions({ task, workspace, additions }));
-    if (predecessorScan.snapshot_tree !== value.previous_snapshot_tree
-        || !allowlistMatches
-        || JSON.stringify(normalizeRuntimeOnlyPaths(predecessorScan.guarded_c2_paths ?? [])) !== JSON.stringify(normalizeRuntimeOnlyPaths(value.guarded_c2_paths ?? []))) {
-      throw new Error("phase successor previous Phase evidence or allowlist is stale");
-    }
-  }
-  if (!OID.test(value.previous_baseline_commit ?? "") || !OID.test(value.current_snapshot_commit ?? "")) {
-    throw new Error("phase successor Git commit identity is invalid");
-  }
-  try {
-    const tree = execFileSync("git", ["rev-parse", `${value.current_snapshot_commit}^{tree}`], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    if (tree !== value.current_snapshot_tree) throw new Error("tree mismatch");
-    assertSuccessorGitContinuity(workspace, value.previous_baseline_commit, value.current_snapshot_commit, {
-      allowLegacyTreeBaseline: current?.status === "awaiting_review"
-        && String(value.baseline_continuity ?? "").startsWith("legacy-"),
-    });
-  } catch {
-    throw new Error("phase successor Git ancestry or tree binding is invalid");
-  }
-  if (!current || current.phase_id !== phaseId || !["done", "awaiting_review"].includes(current.status)
-      || current.phase_successor_ref !== ref || current.phase_successor_hash !== hash) {
-    throw new Error("phase successor is not the current append-only continuation");
-  }
-  return Object.freeze({ ref, hash, value });
-}
-
-function phaseTasksSection(document, phaseHeading) {
-  const lines = String(document).split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === `## ${phaseHeading}`);
-  if (start < 0) throw new Error(`tasks.md is missing the completed Phase section: ${phaseHeading}`);
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index])) {
-      end = index;
-      break;
-    }
-  }
-  return lines.slice(start, end).join("\n");
-}
-
-function phaseSubject(task, workspace, phaseResult) {
-  const diffRef = phaseResult?.diff_scan?.path ?? phaseResult?.evidence?.diff;
-  if (!diffRef) throw new Error("current Phase result has no canonical diff scan");
-  const scan = readJson(task, diffRef, "current Phase diff scan").value;
-  return {
-    scan,
-    subject: validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: workspace.worktreeRoot, phaseId: phaseResult.phase_id }),
-  };
-}
-
-/**
- * Resolve an explicit immutable predecessor.  A successor may be based on an
- * older canonical phase trace even when phase-result.json now points at a
- * different attempt; the trace itself is the authority for the historical
- * evidence, while the new implementation must remain a Git descendant.
- */
-function readPendingSuccessorTrace({
-  task, workspace, phaseId, ref, hash, currentImplementation, current, currentEvidence,
-} = {}) {
-  const successorRecord = readJson(task, ref, "pending predecessor Phase successor");
-  const successor = successorRecord.value;
-  if (successorRecord.hash !== hash
-      || successor?.schema_version !== "workflowhub-build-code-phase-successor.v2"
-      || successor.task_id !== task.identity.taskId || successor.stage !== "build-code"
-      || successor.phase_id !== phaseId
-      || !OID.test(successor.current_snapshot_tree ?? "")
-      || !OID.test(successor.current_snapshot_commit ?? "")
-      || !HASH.test(successor.material_revision_hash ?? "")
-      || (!PHASE_TRACE.test(successor.predecessor_phase_trace_ref ?? "")
-        && !PHASE_SUCCESSOR.test(successor.predecessor_phase_trace_ref ?? ""))
-      || !HASH.test(successor.predecessor_phase_trace_hash ?? "")) {
-    throw new Error("explicit pending predecessor Phase successor binding is invalid");
-  }
-
-  const material = readCurrentTaskMaterialRevision({ task });
-  if (material === undefined || material.hash !== successor.material_revision_hash) {
-    throw new Error("explicit pending predecessor Phase successor material is stale");
-  }
-
-  const previousTrace = PHASE_SUCCESSOR.test(successor.predecessor_phase_trace_ref)
-    ? readPendingSuccessorTrace({
-      task, workspace, phaseId, ref: successor.predecessor_phase_trace_ref,
-      hash: successor.predecessor_phase_trace_hash, currentImplementation,
-      currentEvidence: {
-        diffRef: successor.previous_diff_scan_ref,
-        diffHash: successor.previous_diff_scan_hash,
-        canonicalRef: successor.previous_canonical_phase_evidence_ref,
-        canonicalHash: successor.previous_canonical_phase_evidence_hash,
-      },
-    })
-    : readPhaseMapTrace({
-      task, sourceRoot: workspace.worktreeRoot, traceRef: successor.predecessor_phase_trace_ref,
-    });
-  if (previousTrace.traceSha256 !== successor.predecessor_phase_trace_hash
-      || previousTrace.trace.phase_id !== phaseId
-      || previousTrace.trace.review_status !== "unavailable"
-      || successor.previous_phase_review_ref !== previousTrace.attempt?.ref
-      || successor.previous_phase_review_hash !== previousTrace.attempt?.sha256) {
-    throw new Error("explicit pending predecessor Phase successor old review is not unavailable and bound");
-  }
-
-  const evidenceRefs = currentEvidence ?? {
-    diffRef: current?.diff_scan?.path ?? current?.evidence?.diff,
-    canonicalRef: current?.evidence?.canonical_phase_evidence_ref,
-  };
-  if (typeof evidenceRefs.diffRef !== "string" || typeof evidenceRefs.canonicalRef !== "string") {
-    throw new Error("explicit pending predecessor Phase successor has no current Phase evidence");
-  }
-  const scan = readJson(task, evidenceRefs.diffRef, "current pending predecessor Phase diff scan");
-  const canonicalEvidence = readJson(task, evidenceRefs.canonicalRef, "current pending predecessor Phase evidence");
-  const scanValue = scan.value;
-  const canonicalValue = canonicalEvidence.value;
-  const implementation = readImplementation(task, successor.implementation_receipt_ref);
-  const green = readTestReceipt(task, successor.green_test_receipt_ref, { green: true });
-  const allowedFiles = successor.allowed_files ?? [];
-  const guardedC2Paths = successor.guarded_c2_paths ?? [];
-  if (canonicalValue?.phase_id !== phaseId
-      || canonicalValue?.status !== "awaiting_review"
-      || scanValue?.phase_id !== phaseId
-      || scanValue.snapshot_tree !== successor.current_snapshot_tree
-      || scanValue.safe !== true
-      || (scanValue.violations ?? []).length !== 0
-      || (scanValue.allowlist_violations ?? []).length !== 0
-      || JSON.stringify(scanValue.allowed_files ?? []) !== JSON.stringify(allowedFiles)
-      || JSON.stringify(scanValue.guarded_c2_paths ?? []) !== JSON.stringify(guardedC2Paths)
-      || implementation.value.snapshot_tree !== successor.current_snapshot_tree
-      || green.value.snapshot_tree !== successor.current_snapshot_tree
-      || gitTree(workspace.worktreeRoot, implementation.value.snapshot_commit) !== successor.current_snapshot_tree
-      || gitTree(workspace.worktreeRoot, green.value.snapshot_commit) !== successor.current_snapshot_tree
-      || gitTree(workspace.worktreeRoot, successor.current_snapshot_commit) !== successor.current_snapshot_tree) {
-    throw new Error("explicit pending predecessor Phase successor receipts or allowlist are stale");
-  }
-  if (currentImplementation?.value?.snapshot_commit !== undefined) {
-    try {
-      execFileSync("git", ["merge-base", "--is-ancestor", successor.current_snapshot_commit, currentImplementation.value.snapshot_commit], {
-        cwd: workspace.worktreeRoot, stdio: "ignore",
-      });
-    } catch {
-      throw new Error("explicit pending predecessor Phase successor Git ancestry is invalid");
-    }
-  }
-  const subject = validatePhaseReviewEvidence({
-    phaseResult: canonicalValue, scan: scanValue, sourceRoot: workspace.worktreeRoot, phaseId,
-  });
-  return Object.freeze({
-    traceRef: ref,
-    traceSha256: hash,
-    trace: Object.freeze({
-      schema_version: "phase-map-trace.pending.v1",
-      phase_id: phaseId,
-      baseline_commit: scanValue.baseline_commit,
-      implementation_commit: scanValue.implementation_commit,
-      base_tree: scanValue.base_tree,
-      snapshot_tree: successor.current_snapshot_tree,
-      allowed_files: [...allowedFiles],
-      guarded_c2_paths: [...guardedC2Paths],
-      changed_files: [...(scanValue.changed_files ?? [])],
-      canonical_phase_evidence: { ref: evidenceRefs.canonicalRef, sha256: canonicalEvidence.sha256 },
-      diff_scan: { ref: evidenceRefs.diffRef, sha256: scan.sha256 },
-      implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
-      green_test_receipt: { ref: green.ref, sha256: green.hash },
-      red_test_receipt: null,
-      review_status: "unavailable",
-      review_result: null,
-      review_attempt: { ref: previousTrace.attempt.ref, sha256: previousTrace.attempt.sha256 },
-      material_id: successor.material_revision_hash,
-      review_scope: "phase",
-      verdict: null,
-      risk_acceptances: [],
-    }),
-    phaseEvidence: canonicalEvidence,
-    scan,
-    implementation,
-    green,
-    red: null,
-    review: null,
-    attempt: previousTrace.attempt,
-    acceptanceTrace: null,
-    predecessorTrace: previousTrace.traceRef,
-    subject,
-  });
-}
-
-function readExplicitPredecessorPhaseTrace({ task, workspace, phaseId, ref, hash, currentImplementation } = {}) {
-  safeRef(ref, new RegExp(`(?:${PHASE_TRACE.source})|(?:${PHASE_SUCCESSOR.source})`), "predecessor_phase_trace_ref");
-  if (!HASH.test(hash ?? "")) throw new TypeError("predecessor_phase_trace_hash is invalid");
-  if (PHASE_SUCCESSOR.test(ref)) {
-    const successorRecord = readJson(task, ref, "pending predecessor Phase successor");
-    const successor = successorRecord.value;
-    const current = currentPhaseResult(task);
-    if (!current || current.phase_id !== phaseId || !["awaiting_review", "done"].includes(current.status)) {
-      throw new Error("explicit pending predecessor Phase successor is not the current Phase");
-    }
-    const isCurrentSuccessor = current.phase_successor_ref === ref && current.phase_successor_hash === hash;
-    let linkedSuccessor = null;
-    if (!isCurrentSuccessor && PHASE_SUCCESSOR.test(current.phase_successor_ref ?? "")) {
-      const linkedRecord = readJson(task, current.phase_successor_ref, "current Phase successor");
-      if (linkedRecord.hash !== current.phase_successor_hash) {
-        throw new Error("current Phase successor hash binding is invalid");
-      }
-      linkedSuccessor = linkedRecord.value;
-      if (linkedSuccessor?.predecessor_phase_trace_ref !== ref
-          || linkedSuccessor?.predecessor_phase_trace_hash !== hash) {
-        throw new Error("explicit pending predecessor Phase successor is not linked from the current successor");
-      }
-    }
-    if (!isCurrentSuccessor && linkedSuccessor === null) {
-      throw new Error("explicit pending predecessor Phase successor is not the current Phase");
-    }
-    const currentEvidence = isCurrentSuccessor
-      ? {
-        diffRef: current.diff_scan?.path ?? current.evidence?.diff,
-        canonicalRef: current.evidence?.canonical_phase_evidence_ref,
-      }
-      : {
-        diffRef: linkedSuccessor.previous_diff_scan_ref,
-        canonicalRef: linkedSuccessor.previous_canonical_phase_evidence_ref,
-      };
-    const pending = readPendingSuccessorTrace({
-      task, workspace, phaseId, ref, hash, currentImplementation,
-      currentEvidence,
-      current,
-    });
-    if (isCurrentSuccessor && current.status === "done" && pending.trace.snapshot_tree !== current.review?.snapshot_tree) {
-      throw new Error("explicit pending predecessor Phase successor does not match the completed current Phase");
-    }
-    return pending;
-  }
-  const predecessor = readPhaseMapTrace({ task, sourceRoot: workspace.worktreeRoot, traceRef: ref });
-  if (predecessor.traceSha256 !== hash || predecessor.trace.phase_id !== phaseId) {
-    throw new Error("explicit predecessor Phase trace hash or phase mismatch");
-  }
-  if (typeof predecessor.trace.material_id !== "string" || predecessor.trace.material_id.trim() === "") {
-    throw new Error("explicit predecessor Phase trace material identity is invalid");
-  }
-  if (currentImplementation?.value?.snapshot_commit !== undefined) {
-    try {
-      execFileSync("git", ["merge-base", "--is-ancestor", predecessor.trace.implementation_commit, currentImplementation.value.snapshot_commit], {
-        cwd: workspace.worktreeRoot, stdio: "ignore",
-      });
-    } catch {
-      // Historical unavailable traces may come from a prior ephemeral runner
-      // lineage.  Preserve the existing legacy continuity rule: the current
-      // execution HEAD must be an ancestor of the new implementation commit;
-      // semantic traces never receive this relaxation.
-      if (predecessor.trace.review_status !== "unavailable") {
-        throw new Error("explicit predecessor Phase trace is not a Git ancestor of the current implementation");
-      }
-      try {
-        const head = execFileSync("git", ["rev-parse", "HEAD"], {
-          cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-        }).trim();
-        execFileSync("git", ["merge-base", "--is-ancestor", head, currentImplementation.value.snapshot_commit], {
-          cwd: workspace.worktreeRoot, stdio: "ignore",
-        });
-      } catch {
-        throw new Error("explicit predecessor Phase trace is not a Git ancestor of the current implementation");
-      }
-    }
-  }
-  return predecessor;
-}
-
-function predecessorReviewFromTrace(predecessor) {
-  const attempt = predecessor?.attempt;
-  if (!attempt || typeof attempt.ref !== "string" || !HASH.test(attempt.sha256 ?? "")) {
-    throw new Error("explicit predecessor Phase trace has no complete review attempt");
-  }
-  const reviewStatus = predecessor.trace.review_status ?? (predecessor.review === null ? "unavailable" : "semantic");
-  return Object.freeze({
-    ref: attempt.ref,
-    hash: attempt.sha256,
-    status: reviewStatus,
-    verdict: reviewStatus === "semantic" ? predecessor.trace.verdict : null,
-    attempt,
-  });
-}
-
-/**
- * A pending successor carries the unavailable review that justified its
- * creation.  A later publication may bind a newer review for the successor's
- * snapshot, but the historical unavailable fact must remain distinct and
- * authenticated.
- */
-export function validatePendingSuccessorReviewBinding({
-  predecessorReview,
-  currentReview,
-  currentReviewRef,
-  taskId,
-  phaseId,
-  snapshotTree,
-} = {}) {
-  if (!predecessorReview || predecessorReview.status !== "unavailable" || predecessorReview.verdict !== null
-      || typeof predecessorReview.ref !== "string" || !HASH.test(predecessorReview.hash ?? "")) {
-    throw new Error("pending successor requires an authenticated unavailable predecessor review");
-  }
-  if (typeof currentReviewRef !== "string" || currentReviewRef.trim() === "") {
-    throw new Error("pending successor requires the current review result ref");
-  }
-  if (currentReviewRef === predecessorReview.ref) {
-    throw new Error("pending successor current review must differ from its predecessor review");
-  }
-  if (!currentReview || !["unavailable", "semantic"].includes(currentReview.status)
-      || currentReview.ref !== currentReviewRef) {
-    throw new Error("pending successor current review is not authenticated");
-  }
-  const attempt = currentReview.attempt?.value;
-  if (!attempt || attempt.task_id !== taskId || attempt.stage !== "build-code"
-      || attempt.subject_kind !== "phase" || attempt.phase_id !== phaseId
-      || attempt.review_scope !== "phase" || attempt.snapshot_tree !== snapshotTree) {
-    throw new Error("pending successor current review does not bind task, Phase, or snapshot");
-  }
-  return true;
-}
-
-function tasksOnlyBaseline(task, workspace, previous) {
-  const previousCommit = previous.scan.implementation_commit;
-  const tasksPath = `specs/${task.identity.taskId}/tasks.md`;
-  const before = execFileSync("git", ["show", `${previousCommit}:${tasksPath}`], {
-    cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  });
-  const after = readFileSync(resolve(workspace.worktreeRoot, tasksPath), "utf8");
-  const phaseTasks = resolvePhaseTaskIds({
-    plan: readFileSync(resolve(workspace.worktreeRoot, `specs/${task.identity.taskId}/plan.md`), "utf8"),
-    tasks: after,
-    phaseId: previous.phaseResult.phase_id,
-  });
-  const requiredRefs = [
-    previous.phaseResult.evidence?.implementation_receipt_ref,
-    previous.phaseResult.evidence?.green_test_receipt_ref,
-    currentPhaseReviewRef(previous.phaseResult),
-  ];
-  const requiredBindings = requiredRefs.map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
-  const seam = validateTasksOnlyCompletionSeam({
-    before,
-    after,
-    allowedTaskIds: phaseTasks.task_ids,
-    requiredBindings,
-    expectedReviewRef: currentPhaseReviewRef(previous.phaseResult),
-    completionEvidence: ({ ref }) => {
-      try { return task.readRecord(ref); }
-      catch (error) {
-        if (error?.code === "ENOENT") return undefined;
-        throw error;
-      }
-    },
-  });
-  if (!seam.ok) throw new Error(`invalid tasks-only completion seam: ${seam.errors.join("; ")}`);
-  const index = resolve(tmpdir(), `workflowhub-tasks-seam-${randomUUID()}.index`);
-  const env = { ...process.env, GIT_INDEX_FILE: index };
-  try {
-    execFileSync("git", ["read-tree", `${previousCommit}^{tree}`], { cwd: workspace.worktreeRoot, env, stdio: "ignore" });
-    execFileSync("git", ["add", "--", tasksPath], { cwd: workspace.worktreeRoot, env, stdio: "ignore" });
-    const tree = execFileSync("git", ["write-tree"], {
-      cwd: workspace.worktreeRoot, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    const baseline = execFileSync("git", ["commit-tree", tree, "-p", previousCommit, "-m", "workflowhub tasks completion seam"], {
-      cwd: workspace.worktreeRoot,
-      env: {
-        ...env,
-        GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
-        GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
-        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
-      },
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    const captured = execFileSync("git", ["show", `${baseline}:${tasksPath}`], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (captured !== after) throw new Error("tasks-only completion seam changed while its baseline was captured");
-    return baseline;
-  } finally {
-    rmSync(index, { force: true });
-  }
-}
-
-export function materialRevisionBaseline(task, workspace, previous) {
-  const revision = readCurrentTaskMaterialRevision({ task });
-  if (revision === undefined) throw new Error("current material revision is required for a material baseline");
-  const root = workspace.worktreeRoot;
-  const taskRoot = `specs/${task.identity.taskId}`;
-  const paths = MATERIAL_FILES.map((name) => `${taskRoot}/${name}`);
-  for (const name of MATERIAL_FILES.filter((name) => name !== "tasks.md")) {
-    const live = readFileSync(resolve(root, taskRoot, name), "utf8");
-    if (sha256(live) !== revision.value.hashes[name]) {
-      throw new Error(`current material revision does not bind live ${name}`);
-    }
-  }
-  const tasksPath = `${taskRoot}/tasks.md`;
-  const liveTasks = readFileSync(resolve(root, tasksPath), "utf8");
-  const revisionTasksHash = revision.value.hashes["tasks.md"];
-  const previousTasks = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${tasksPath}`], {
-    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  });
-  const previousPlanPath = `${taskRoot}/plan.md`;
-  const previousPlan = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${previousPlanPath}`], {
-    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  });
-  const phaseTasks = resolvePhaseTaskIds({ plan: previousPlan, tasks: previousTasks, phaseId: previous.phaseResult.phase_id });
-  const previousPhaseTasks = phaseTasksSection(previousTasks, phaseTasks.phase);
-  const validateCompletionSeam = (after, label) => {
-    const requiredRefs = [
-      previous.phaseResult.evidence?.implementation_receipt_ref,
-      previous.phaseResult.evidence?.green_test_receipt_ref,
-      currentPhaseReviewRef(previous.phaseResult),
-    ];
-    const requiredBindings = requiredRefs.map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
-    const afterSection = phaseTasksSection(after, phaseTasks.phase)
-      .replace(/^(#####\s+执行状态填写区（唯一完成权威）\s*)$/gm, "$1\n<!-- workflowhub completion facts audit -->");
-    const seam = validateTasksOnlyCompletionSeam({
-      // Material revisions may legitimately edit future tasks. Restrict the
-      // seam to the already completed Phase so those edits cannot hide a
-      // forged completion fact, while remaining material changes stay free.
-      before: previousPhaseTasks,
-      after: afterSection,
-      allowedTaskIds: phaseTasks.task_ids,
-      requiredBindings,
-      expectedReviewRef: currentPhaseReviewRef(previous.phaseResult),
-      completionEvidence: ({ ref }) => {
-        try { return task.readRecord(ref); }
-        catch (error) {
-          if (error?.code === "ENOENT") return undefined;
-          throw error;
-        }
-      },
-    });
-    if (!seam.ok) throw new Error(`invalid ${label} completion seam: ${seam.errors.join("; ")}`);
-  };
-  // A revision that changes the completed Phase tasks must carry a valid
-  // completion seam itself; otherwise a malicious revision could overwrite
-  // prior Phase facts and still become the next Phase baseline. Future-Phase
-  // task edits are intentionally outside this seam. A later completion update
-  // is only allowed when the revision left the full tasks document unchanged,
-  // so the two writes cannot be conflated.
-  validateCompletionSeam(liveTasks, "material revision");
-  if (sha256(liveTasks) !== revisionTasksHash) {
-    if (revisionTasksHash !== sha256(previousTasks)) {
-      throw new Error("current material revision is stale after tasks completion; publish a new revision from the current tasks.md");
-    }
-    validateCompletionSeam(liveTasks, "tasks-only after material revision");
-  }
-  const index = resolve(tmpdir(), `workflowhub-material-seam-${randomUUID()}.index`);
-  const env = { ...process.env, GIT_INDEX_FILE: index };
-  const parent = previous.scan.implementation_commit;
-  try {
-    execFileSync("git", ["read-tree", `${parent}^{tree}`], { cwd: root, env, stdio: "ignore" });
-    execFileSync("git", ["add", "--", ...paths], { cwd: root, env, stdio: "ignore" });
-    const tree = execFileSync("git", ["write-tree"], {
-      cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    return execFileSync("git", ["commit-tree", tree, "-p", parent, "-m", "workflowhub material revision baseline"], {
-      cwd: root,
-      env: {
-        ...env,
-        GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
-        GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
-        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
-      },
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  } finally {
-    rmSync(index, { force: true });
-  }
-}
-
-function materialRevisionDiffersFromCommit(task, workspace, previous) {
-  const revision = readCurrentTaskMaterialRevision({ task });
-  if (revision === undefined) return false;
-  const root = workspace.worktreeRoot;
-  const taskRoot = `specs/${task.identity.taskId}`;
-  return MATERIAL_FILES.some((name) => {
-    const path = `${taskRoot}/${name}`;
-    let historical;
-    try {
-      historical = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${path}`], {
-        cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (error) {
-      if (error?.status === 128) return true;
-      throw error;
-    }
-    return sha256(historical) !== revision.value.hashes[name];
-  });
-}
-
-function currentMaterialsBaseline(task, kernel, workspace) {
-  try {
-    return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+function currentMaterialsBaseline(task, workspace) {
   const root = workspace.worktreeRoot;
   const head = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
@@ -1169,9 +164,7 @@ function currentMaterialsBaseline(task, kernel, workspace) {
   try {
     execFileSync("git", ["read-tree", `${head}^{tree}`], { cwd: root, env, stdio: "ignore" });
     execFileSync("git", ["add", "--", ...paths], { cwd: root, env, stdio: "ignore" });
-    const tree = execFileSync("git", ["write-tree"], {
-      cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
+    const tree = execFileSync("git", ["write-tree"], { cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
     return execFileSync("git", ["commit-tree", tree, "-p", head, "-m", "workflowhub current task materials baseline"], {
       cwd: root,
       env: {
@@ -1179,68 +172,11 @@ function currentMaterialsBaseline(task, kernel, workspace) {
         GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
         GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
         GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
-      },
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
+      }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     }).trim();
   } finally {
     rmSync(index, { force: true });
   }
-}
-
-function deriveBaseline({ task, kernel, workspace, input, current, red }) {
-  if (current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined) {
-    if (current.recovery_ref !== input.recovery_ref || current.recovery_hash !== input.recovery_hash) {
-      throw new Error("recovery bootstrap must use the current recovery binding");
-    }
-    const generation = readRecoveryGeneration(task, "phase-pointer");
-    if (!generation || generation.ref !== current.recovery_ref || recoverySha256(generation.raw) !== current.recovery_hash) {
-      throw new Error("recovery bootstrap generation is invalid");
-    }
-    const credential = readRecoveryCredential(task, generation.value.credential_ref, generation.value.credential_hash, "phase-pointer");
-    const subject = credential.value.phase_subject;
-    if (subject?.target_phase_id !== input.phase_id) throw new Error("recovery bootstrap Phase does not match the credential");
-    return subject.baseline_commit;
-  }
-  if (!current) {
-    if (input.previous_phase_review_ref !== undefined) throw new Error("first Phase must not provide previous_phase_review_ref");
-    const baseline = currentMaterialsBaseline(task, kernel, workspace);
-    const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    if (red && red.value.snapshot_tree !== baselineTree) {
-      throw new Error("RED test receipt must bind the current task-material baseline tree");
-    }
-    return baseline;
-  }
-  const previous = phaseSubject(task, workspace, current);
-  if (current.phase_id !== input.phase_id) {
-    if (input.repair_review_result_ref !== undefined) throw new Error("pre-accept repair review must target the current Phase");
-    if (input.previous_phase_review_ref !== currentPhaseReviewRef(current)) throw new Error("next Phase requires the current previous_phase_review_ref");
-    readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
-      ...(current.reopen_ref === undefined ? {} : { revisionRef: current.reopen_ref }),
-      ...(predecessorAdjudicationCorrection(current, input.phase_id) === undefined ? {}
-        : { adjudicationCorrectionRef: predecessorAdjudicationCorrection(current, input.phase_id) }),
-    });
-    if (materialRevisionDiffersFromCommit(task, workspace, { ...previous, phaseResult: current })) {
-      return materialRevisionBaseline(task, workspace, { ...previous, phaseResult: current });
-    }
-    return tasksOnlyBaseline(task, workspace, { ...previous, phaseResult: current });
-  }
-  if (input.repair_review_result_ref !== undefined) {
-    if (input.reopen_ref !== undefined) throw new Error("pre-accept repair review cannot be combined with reopen_ref");
-    if (current.status !== "done") throw new Error("pre-accept repair review requires the current completed Phase");
-    if (hasAcceptedBuildCode(task)) throw new Error("pre-accept repair review is unavailable after build-code acceptance");
-    readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, previous.scan.snapshot_tree);
-    return previous.scan.baseline_commit;
-  }
-  if (input.previous_phase_review_ref === undefined) return previous.scan.baseline_commit;
-  if (input.previous_phase_review_ref !== currentPhaseReviewRef(current)) throw new Error("same-Phase repair review reference mismatch");
-  const review = readFormalPhaseReview(task, kernel, input.previous_phase_review_ref, previous.subject, {
-    ...((input.reopen_ref ?? current.reopen_ref) === undefined ? {} : { revisionRef: input.reopen_ref ?? current.reopen_ref }),
-  });
-  if (review.verdict !== "revise_required") throw new Error("a changed same-Phase identity requires a revise_required review");
-  return previous.scan.baseline_commit;
 }
 
 function phaseCommit(workspace, tree, baseline, phaseId) {
@@ -1255,78 +191,9 @@ function phaseCommit(workspace, tree, baseline, phaseId) {
   }).trim();
 }
 
-export function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot, {
-  task,
-  currentPhase,
-  input,
-} = {}) {
-  if (snapshot.tree === implementation.value.snapshot_tree) return;
-  const runtimeOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "runtime-context");
-  const tasksDocumentPath = task?.identity?.taskId === undefined
-    ? null
-    : `specs/${task.identity.taskId}/tasks.md`;
-  const phaseInTasksOnlyWindow = currentPhase?.phase_id === input?.phase_id
-    && currentPhase?.status === "awaiting_review"
-    && tasksDocumentPath !== null;
-  if (phaseInTasksOnlyWindow) {
-    const requiredRefs = [input.implementation_receipt_ref, input.green_test_receipt_ref, input.review_result_ref];
-    if (requiredRefs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
-      throw new Error("tasks-only completion seam requires implementation, GREEN, and review refs");
-    }
-    const scan = createPhaseDiffScan({
-      sourceRoot: workspace.worktreeRoot,
-      phaseId: "tasks-completion-seam",
-      baselineCommit: implementation.value.snapshot_commit,
-      implementationCommit: phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "tasks-completion-seam"),
-      allowedFiles: [tasksDocumentPath],
-    });
-    const changed = new Set(scan.changed_files);
-    const onlyTasksAndRuntime = scan.safe
-      && changed.has(tasksDocumentPath)
-      && changed.size === 1;
-    if (onlyTasksAndRuntime) {
-      const planPath = `specs/${task.identity.taskId}/plan.md`;
-      const before = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${tasksDocumentPath}`], {
-        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-      });
-      const plan = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${planPath}`], {
-        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-      });
-      const after = readFileSync(resolve(workspace.worktreeRoot, tasksDocumentPath), "utf8");
-      const phaseTasks = resolvePhaseTaskIds({ plan, tasks: before, phaseId: input.phase_id });
-      const requiredBindings = [
-        input.implementation_receipt_ref,
-        input.green_test_receipt_ref,
-        ...(typeof input.review_result_ref === "string" ? [input.review_result_ref] : []),
-      ].map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
-      const seam = validateTasksOnlyCompletionSeam({
-        before,
-        after,
-        allowedTaskIds: phaseTasks.task_ids,
-        requiredBindings,
-        expectedReviewRef: input.review_result_ref,
-        completionEvidence: ({ ref }) => {
-          try { return task.readRecord(ref); }
-          catch (error) {
-            if (error?.code === "ENOENT") return undefined;
-            throw error;
-          }
-        },
-      });
-      if (seam.ok) return;
-      throw new Error(`invalid tasks-only completion seam: ${seam.errors.join("; ")}`);
-    }
-  }
-  const runtimeOnly = createPhaseDiffScan({
-    sourceRoot: workspace.worktreeRoot,
-    phaseId: "runtime-context",
-    baselineCommit: implementation.value.snapshot_commit,
-    implementationCommit: runtimeOnlyCommit,
-    allowedFiles: [],
-  });
-  if (!runtimeOnly.safe || runtimeOnly.changed_files.length !== 1 || runtimeOnly.changed_files[0] !== "AGENTS.md"
-    || runtimeOnly.runtime_controlled_changes.length !== 1 || runtimeOnly.runtime_controlled_changes[0].path !== "AGENTS.md") {
-    throw new Error("live Workspace snapshot drifted from the implementation receipt");
+export function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot) {
+  if (snapshot.tree !== implementation.value.snapshot_tree) {
+    throw new Error("live Workspace snapshot drifted from the implementation receipt; collect fresh current evidence");
   }
 }
 
@@ -1334,139 +201,69 @@ function phaseCommitRef(task, phaseId, snapshotTree) {
   return `refs/workflowhub/phases/${task.identity.projectName}/${task.identity.taskId}/build-code/${phaseId}/snapshot-${snapshotTree}`;
 }
 
-function readPinnedCommit(workspace, ref) {
-  try {
-    return execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  } catch (error) {
-    if (error.status === 128) return null;
-    throw new Error(`Phase snapshot ref could not be read: ${ref}`);
-  }
-}
-
 function pinPhaseCommit(workspace, task, phaseId, snapshotTree, implementationCommit) {
   const ref = phaseCommitRef(task, phaseId, snapshotTree);
-  const current = readPinnedCommit(workspace, ref);
+  const resolveRef = () => {
+    try { return execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); }
+    catch (error) { if (error.status === 128) return null; throw error; }
+  };
+  const current = resolveRef();
   if (current !== null && current !== implementationCommit) throw new Error("Phase snapshot ref already points to a different commit");
   if (current === null) {
-    try {
-      execFileSync("git", ["update-ref", ref, implementationCommit, "0".repeat(40)], {
-        cwd: workspace.worktreeRoot, stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch {
-      const raced = readPinnedCommit(workspace, ref);
-      if (raced !== implementationCommit) throw new Error("Phase snapshot ref could not be created immutably");
-    }
+    try { execFileSync("git", ["update-ref", ref, implementationCommit, "0".repeat(40)], { cwd: workspace.worktreeRoot, stdio: ["ignore", "pipe", "pipe"] }); }
+    catch { if (resolveRef() !== implementationCommit) throw new Error("Phase snapshot ref could not be created immutably"); }
   }
-  const pinned = readPinnedCommit(workspace, ref);
-  if (pinned !== implementationCommit) throw new Error("Phase snapshot ref no longer points to the implementation commit");
-  const pinnedTree = execFileSync("git", ["rev-parse", `${pinned}^{tree}`], {
-    cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  if (pinnedTree !== snapshotTree) throw new Error("Phase snapshot ref tree does not match the implementation snapshot");
   return ref;
 }
 
 function publishIdempotently(task, kernel, ref, raw, label) {
   try {
-    const existing = task.readRecord(ref);
-    if (existing !== raw) throw new Error(`${label} already exists with different content`);
+    if (task.readRecord(ref) !== raw) throw new Error(`${label} already exists with different content`);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
     kernel.publishCanonicalRecord(ref, raw);
   }
 }
 
-function reviewIdentityKey(identity) {
-  return JSON.stringify([
-    identity.stage, identity.review_track, identity.subject_kind,
-    identity.phase_id, identity.review_scope,
-  ]);
-}
-
-function withReviewFlowLocks(kernel, identities, operation, index = 0) {
-  if (index >= identities.length) return operation();
-  return kernel.withReviewFlowLock(identities[index], () => withReviewFlowLocks(kernel, identities, operation, index + 1));
+function phaseMapTrace({ scan, scanRef, scanHash, canonicalEvidenceRef, canonicalEvidenceHash, implementation, green, red, review, implementationCommitRef, riskAcceptances }) {
+  const acceptanceTrace = validatePhaseAcceptanceTrace({
+    trace: review.attempt.value.phase_ac_trace,
+    phaseId: scan.phase_id, baseTree: review.value.base_tree, snapshotTree: scan.snapshot_tree,
+    changedFiles: scan.changed_files, greenTestReceipt: { ref: green.ref, sha256: green.hash }, required: false,
+  });
+  return {
+    schema_version: "phase-map-trace.v1", phase_id: scan.phase_id,
+    baseline_commit: scan.baseline_commit, implementation_commit: scan.implementation_commit,
+    implementation_commit_ref: implementationCommitRef, base_tree: review.value.base_tree,
+    snapshot_tree: scan.snapshot_tree, allowed_files: [...scan.allowed_files], changed_files: [...scan.changed_files],
+    canonical_phase_evidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidenceHash },
+    diff_scan: { ref: scanRef, sha256: scanHash },
+    implementation_receipt: { ref: implementation.ref, sha256: implementation.hash },
+    green_test_receipt: { ref: green.ref, sha256: green.hash },
+    red_test_receipt: red === null ? null : { ref: red.ref, sha256: red.hash },
+    review_status: review.status, review_result: review.status === "semantic" ? { ref: review.ref, sha256: review.hash } : null,
+    review_attempt: { ref: review.attempt_ref, sha256: review.attempt.hash }, material_id: review.value.material_id,
+    review_scope: "phase", verdict: review.verdict, risk_acceptances: riskAcceptances,
+    ...(acceptanceTrace === null ? {} : { acceptance_trace: acceptanceTrace }),
+  };
 }
 
 export function validatePhaseEvidenceInput(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)
     || Object.keys(input).some((key) => !INPUT_KEYS.has(key))) throw new TypeError("phase evidence input contains unknown fields");
   if (!PHASE.test(input.phase_id ?? "")) throw new TypeError("phase_id is invalid");
-  if (input.reopen_ref !== undefined && !REOPEN.test(input.reopen_ref)) throw new TypeError("reopen_ref is invalid");
-  if (input.phase_successor_reason !== undefined
-      && (typeof input.phase_successor_reason !== "string" || input.phase_successor_reason.trim() === "" || input.phase_successor_reason.length > 500)) {
-    throw new TypeError("phase_successor_reason must be concise controlled text");
-  }
-  if ((input.phase_successor_ref === undefined) !== (input.phase_successor_hash === undefined)) {
-    throw new TypeError("phase_successor_ref and phase_successor_hash must be provided together");
-  }
-  if (input.phase_successor_ref !== undefined && !PHASE_SUCCESSOR.test(input.phase_successor_ref)) {
-    throw new TypeError("phase_successor_ref is invalid");
-  }
-  if (input.phase_successor_hash !== undefined && !HASH.test(input.phase_successor_hash)) {
-    throw new TypeError("phase_successor_hash is invalid");
-  }
-  if (input.phase_successor_ref !== undefined && input.phase_successor_reason !== undefined) {
-    throw new TypeError("phase_successor_ref and phase_successor_reason are mutually exclusive");
-  }
-  if ((input.predecessor_phase_trace_ref === undefined) !== (input.predecessor_phase_trace_hash === undefined)) {
-    throw new TypeError("predecessor_phase_trace_ref and predecessor_phase_trace_hash must be provided together");
-  }
-  if (input.predecessor_phase_trace_ref !== undefined
-      && !PHASE_TRACE.test(input.predecessor_phase_trace_ref)
-      && !PHASE_SUCCESSOR.test(input.predecessor_phase_trace_ref)) {
-    throw new TypeError("predecessor_phase_trace_ref is invalid");
-  }
-  if (input.predecessor_phase_trace_hash !== undefined && !HASH.test(input.predecessor_phase_trace_hash)) {
-    throw new TypeError("predecessor_phase_trace_hash is invalid");
-  }
-  if (input.predecessor_phase_trace_ref !== undefined && input.phase_successor_reason === undefined) {
-    throw new TypeError("explicit predecessor Phase trace or successor requires phase_successor_reason");
-  }
-  if (input.adjudication_correction_ref !== undefined && !ADJUDICATION_CORRECTION.test(input.adjudication_correction_ref)) throw new TypeError("adjudication_correction_ref is invalid");
-  if (input.reopen_ref !== undefined && input.adjudication_correction_ref !== undefined) throw new TypeError("reopen_ref and adjudication_correction_ref are mutually exclusive");
-  if ((input.recovery_ref === undefined) !== (input.recovery_hash === undefined)) throw new TypeError("recovery_ref and recovery_hash must be provided together");
   if (input.risk_acceptance_refs !== undefined
     && (!Array.isArray(input.risk_acceptance_refs)
       || input.risk_acceptance_refs.some((ref) => typeof ref !== "string" || !RISK_ACCEPTANCE.test(ref))
       || new Set(input.risk_acceptance_refs).size !== input.risk_acceptance_refs.length)) {
     throw new TypeError("risk_acceptance_refs must contain unique canonical risk acceptance refs");
   }
-  if (input.recovery_ref !== undefined) {
-    assertSafeRecoveryRef(input.recovery_ref, "recovery_ref");
-    if (!/^identity\/recoveries\/phase-pointer-[0-9]{4}\.json$/.test(input.recovery_ref) || !HASH.test(input.recovery_hash ?? "")) throw new TypeError("recovery_ref is invalid");
-  }
   if (!Array.isArray(input.allowed_files) || !input.allowed_files.every((file) => typeof file === "string" && file.length > 0
     && !file.startsWith("/") && !file.includes("\\") && file.split("/").every((part) => part && part !== "." && part !== ".."))
     || new Set(input.allowed_files).size !== input.allowed_files.length) {
     throw new TypeError("allowed_files must be an array of repository-relative paths");
   }
-  if (input.guarded_c2_paths !== undefined && (!Array.isArray(input.guarded_c2_paths)
-    || !input.guarded_c2_paths.every((file) => typeof file === "string" && file.length > 0
-      && !file.startsWith("/") && !file.includes("\\") && file.split("/").every((part) => part && part !== "." && part !== ".."))
-    || new Set(input.guarded_c2_paths).size !== input.guarded_c2_paths.length)) {
-    throw new TypeError("guarded_c2_paths must be an array of unique repository-relative paths");
-  }
   return input;
-}
-
-function validatePhaseLocalC2Declaration(task, workspace, phaseId, guardedC2Paths) {
-  if (guardedC2Paths.length === 0) return;
-  if (phaseId !== "phase-8") throw new Error("guarded_c2_paths are only allowed for phase-8");
-  if (JSON.stringify(guardedC2Paths) !== JSON.stringify([...PHASE_LOCAL_C2_PATHS].sort())) {
-    throw new Error("guarded_c2_paths must exactly match the declared Phase 8 C2 paths");
-  }
-  const taskId = task.identity?.taskId;
-  if (typeof taskId !== "string" || taskId.length === 0 || taskId.includes("..") || taskId.includes("/")) {
-    throw new Error("guarded_c2_paths cannot resolve the task plan");
-  }
-  const taskPlan = resolve(workspace.worktreeRoot, "specs", taskId, "tasks.md");
-  const content = readFileSync(taskPlan, "utf8");
-  for (const path of PHASE_LOCAL_C2_PATHS) {
-    if (!content.includes(`\`${path}\``)) throw new Error(`guarded_c2_path is not declared by the Phase card: ${path}`);
-  }
 }
 
 export function publishBuildCodePhaseEvidence(context, rawInput) {
@@ -1475,365 +272,56 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
   const workspace = assertWorkspace(context?.workspace);
   const input = validatePhaseEvidenceInput(rawInput);
   const allowedFiles = normalizeRuntimeOnlyPaths(input.allowed_files);
-  const guardedC2Paths = normalizeRuntimeOnlyPaths(input.guarded_c2_paths ?? []);
-  validatePhaseLocalC2Declaration(task, workspace, input.phase_id, guardedC2Paths);
   const implementation = readImplementation(task, input.implementation_receipt_ref);
   const green = readTestReceipt(task, input.green_test_receipt_ref, { green: true });
   const red = input.red_evidence_ref === undefined ? null : readTestReceipt(task, input.red_evidence_ref, { green: false });
-  if (green.value.snapshot_tree !== implementation.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", "GREEN and implementation snapshot trees do not match");
-  const implementationCommitTree = execFileSync("git", ["rev-parse", `${implementation.value.snapshot_commit}^{tree}`], {
-    cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  if (implementationCommitTree !== implementation.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", "implementation snapshot_commit tree mismatch");
-  for (const [label, receipt] of [["GREEN", green], ...(red ? [["RED", red]] : [])]) {
-    const receiptTree = execFileSync("git", ["rev-parse", `${receipt.value.snapshot_commit}^{tree}`], {
-      cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    if (receiptTree !== receipt.value.snapshot_tree) throw recoveryError("RECOVERY_PHASE_CONTINUATION_MISMATCH", `${label} test receipt snapshot_commit tree mismatch`);
-  }
+  if (green.value.snapshot_tree !== implementation.value.snapshot_tree) throw new Error("GREEN and implementation snapshot trees do not match");
+  const implementationTree = execFileSync("git", ["rev-parse", `${implementation.value.snapshot_commit}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  if (implementationTree !== implementation.value.snapshot_tree) throw new Error("implementation snapshot_commit tree mismatch");
+  const receiptTree = execFileSync("git", ["rev-parse", `${green.value.snapshot_commit}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  if (receiptTree !== green.value.snapshot_tree) throw new Error("GREEN test receipt snapshot_commit tree mismatch");
 
-  const successorFlowRef = input.phase_successor_ref ?? (input.phase_successor_reason === undefined ? undefined : nextPhaseSuccessorRef(task));
-  const publishLocked = () => task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
-    const reopen = input.reopen_ref === undefined ? null : kernel.buildCodeReopenProvenance(input.reopen_ref);
-    const adjudicationCorrection = input.adjudication_correction_ref === undefined ? null
-      : kernel.readBuildCodeAdjudicationCorrection(input.adjudication_correction_ref, {
-        phaseId: input.phase_id,
-        snapshotTree: implementation.value.snapshot_tree,
-      });
+  return task.withRecordLock("locks/build-code-phase-evidence.lock", () => {
     const before = captureWorkspaceSnapshot(workspace);
-    const current = currentPhaseResult(task);
-    const pendingSuccessorContinuation = input.phase_successor_ref !== undefined
-      && current?.status === "awaiting_review"
-      && current.phase_id === input.phase_id;
-    let predecessorReview = null;
-    let predecessorPhaseTrace = null;
-    let successor = null;
-    if (input.phase_successor_reason !== undefined
-        && (!current || current.phase_id !== input.phase_id || !["done", "awaiting_review"].includes(current.status))) {
-      throw new Error("phase successor requires the current Phase");
-    }
-    if (input.phase_successor_reason !== undefined && input.predecessor_phase_trace_ref !== undefined) {
-      predecessorPhaseTrace = readExplicitPredecessorPhaseTrace({
-        task, workspace, phaseId: input.phase_id,
-        ref: input.predecessor_phase_trace_ref, hash: input.predecessor_phase_trace_hash,
-        currentImplementation: implementation,
-      });
-      if (current?.status === "awaiting_review") {
-        const expectedReviewRef = predecessorPhaseTrace.attempt.ref;
-        if (input.review_result_ref !== undefined && input.review_result_ref !== expectedReviewRef) {
-          throw new Error("explicit predecessor review ref does not match the canonical predecessor trace");
-        }
-        predecessorReview = input.review_result_ref === undefined
-          ? predecessorReviewFromTrace(predecessorPhaseTrace)
-          : readFormalPhaseReview(task, kernel, input.review_result_ref, predecessorPhaseTrace.subject);
-      }
-      if (current && current.phase_id === input.phase_id) {
-        const live = phaseSubject(task, workspace, current);
-        try {
-          execFileSync("git", ["merge-base", "--is-ancestor", live.scan.implementation_commit, implementation.value.snapshot_commit], {
-            cwd: workspace.worktreeRoot, stdio: "ignore",
-          });
-        } catch {
-          if (predecessorPhaseTrace.trace.review_status !== "unavailable") {
-            throw new Error("explicit predecessor successor would move the live Phase pointer backwards");
-          }
-          try {
-            const head = execFileSync("git", ["rev-parse", "HEAD"], {
-              cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-            }).trim();
-            execFileSync("git", ["merge-base", "--is-ancestor", head, implementation.value.snapshot_commit], {
-              cwd: workspace.worktreeRoot, stdio: "ignore",
-            });
-          } catch {
-            throw new Error("explicit predecessor successor would move the live Phase pointer backwards");
-          }
-        }
-      }
-    }
-    if (current?.status === "awaiting_review" && input.phase_successor_reason !== undefined && predecessorPhaseTrace === null) {
-      if (input.review_result_ref === undefined) {
-        throw new Error("awaiting-review Phase successor requires the predecessor review result ref");
-      }
-      const previous = phaseSubject(task, workspace, current);
-      predecessorReview = readFormalPhaseReview(task, kernel, input.review_result_ref, previous.subject);
-    }
-    if (current?.status === "awaiting_review" && input.phase_successor_reason !== undefined) {
-      const previous = predecessorPhaseTrace === null ? phaseSubject(task, workspace, current) : {
-        scan: predecessorPhaseTrace.scan.value,
-        subject: predecessorPhaseTrace.subject,
-      };
-      validateAwaitingReviewSuccessorPreconditions({
-        task,
-        workspace,
-        current,
-        predecessorReview,
-        previousSnapshotTree: previous.scan.snapshot_tree,
-        previousAllowedFiles: previous.scan.allowed_files,
-        allowedFiles,
-        previousGuardedC2Paths: previous.scan.guarded_c2_paths,
-        guardedC2Paths,
-        previousImplementationTree: predecessorPhaseTrace?.implementation.value.snapshot_tree
-          ?? readImplementation(task, current.evidence?.implementation_receipt_ref).value.snapshot_tree,
-        previousGreenTree: predecessorPhaseTrace?.green.value.snapshot_tree
-          ?? readTestReceipt(task, current.evidence?.green_test_receipt_ref, { green: true }).value.snapshot_tree,
-        predecessorCandidateTree: predecessorPhaseTrace?.trace?.schema_version === "phase-map-trace.pending.v1"
-          ? undefined : predecessorReview.attempt?.value?.candidate_tree,
-      });
-    }
-    if (current?.status === "done" && input.phase_successor_reason !== undefined && input.review_result_ref !== undefined) {
-      throw new Error("completed Phase successor creation must precede formal review binding");
-    }
-    if (pendingSuccessorContinuation && predecessorReview === null) {
-      if (input.review_result_ref === undefined) {
-        throw new Error("pending successor requires the current review result ref");
-      }
-      const pendingTrace = readExplicitPredecessorPhaseTrace({
-        task,
-        workspace,
-        phaseId: input.phase_id,
-        ref: input.phase_successor_ref,
-        hash: input.phase_successor_hash,
-        currentImplementation: implementation,
-      });
-      predecessorReview = predecessorReviewFromTrace(pendingTrace);
-    }
-    if (input.phase_successor_ref !== undefined) {
-      successor = readPhaseSuccessor(task, input.phase_successor_ref, input.phase_successor_hash, {
-        phaseId: input.phase_id, current, predecessorReview, implementation, green, allowedFiles, guardedC2Paths, workspace,
-      });
-    }
-    if (input.recovery_ref === undefined) {
-      assertLiveWorkspaceMatchesImplementation(workspace, implementation, before, { task, currentPhase: current, input });
-    }
-    if (current?.recovery_ref !== undefined) {
-      if (input.recovery_ref !== current.recovery_ref || input.recovery_hash !== current.recovery_hash) throw new Error("recovered Phase publication requires the current recovery_ref and recovery_hash");
-      const generation = readRecoveryGeneration(task, "phase-pointer");
-      if (!generation || generation.ref !== input.recovery_ref || recoverySha256(generation.raw) !== input.recovery_hash) throw new Error("recovered Phase publication recovery generation is invalid");
-    } else if (input.recovery_ref !== undefined) {
-      throw new Error("recovery_ref does not match the current Phase pointer");
-    }
-    const repairReviewRef = input.repair_review_result_ref ?? (current?.phase_id === input.phase_id ? current.repair_review_result_ref : undefined);
-    if (input.repair_review_result_ref !== undefined && input.reopen_ref !== undefined) {
-      throw new Error("pre-accept repair review cannot be combined with reopen_ref");
-    }
-    if (input.repair_review_result_ref !== undefined && (!current || current.phase_id !== input.phase_id || current.status !== "done")) {
-      throw new Error("pre-accept repair review requires the current completed Phase");
-    }
-    if (input.repair_review_result_ref !== undefined && hasAcceptedBuildCode(task)) {
-      throw new Error("pre-accept repair review is unavailable after build-code acceptance");
-    }
-    if (input.repair_review_result_ref !== undefined) {
-      const currentSubject = phaseSubject(task, workspace, current);
-      readPreAcceptRepairReview(task, kernel, input.repair_review_result_ref, currentSubject.scan.snapshot_tree);
-    }
-    if (reopen && (!current || current.phase_id !== input.phase_id)) {
-      throw new Error("reopen_ref may repair only the current completed Phase");
-    }
-    if (current?.reopen_ref !== undefined && input.reopen_ref !== current.reopen_ref) {
-      throw new Error("reopened Phase publication requires the same reopen_ref");
-    }
-    if (requiresSameAdjudicationCorrection(current, input)) {
-      throw new Error("corrected Phase publication requires the same adjudication_correction_ref");
-    }
-    const recoveryBootstrap = current?.recovery_ref !== undefined && current?.diff_scan === undefined && current?.evidence?.diff === undefined;
-    if (current?.phase_id === input.phase_id && !recoveryBootstrap) {
-      const existing = phaseSubject(task, workspace, current);
-      const currentReviewVerdict = currentPhaseReviewVerdict(task, current);
-      const sameIdentity = existing.scan.snapshot_tree === implementation.value.snapshot_tree
-        && current.evidence?.implementation_receipt_ref === input.implementation_receipt_ref
-        && current.evidence?.green_test_receipt_ref === input.green_test_receipt_ref
-        && current.evidence?.red_evidence_ref === input.red_evidence_ref
-        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.allowed_files ?? [])) === JSON.stringify(allowedFiles)
-        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.guarded_c2_paths ?? [])) === JSON.stringify(guardedC2Paths);
-      if (sameIdentity && reopen && current.reopen_ref === undefined) {
-        throw new Error("reopen_ref requires a changed current completed Phase identity");
-      }
-      if (sameIdentity && input.phase_successor_reason !== undefined) {
-        throw new Error("phase successor requires a changed current Phase identity");
-      }
-      if (sameIdentity && current.review) {
-        if (input.review_result_ref !== undefined && input.review_result_ref !== currentPhaseReviewRef(current)) {
-          throw new Error("the same Phase identity must reuse its existing formal review");
-        }
-        return Object.freeze({
-          phase_id: input.phase_id, baseline_commit: existing.scan.baseline_commit,
-          implementation_commit: existing.scan.implementation_commit, base_tree: existing.subject.baseTree,
-          snapshot_tree: existing.scan.snapshot_tree, diff_scan_ref: current.diff_scan.path,
-          canonical_phase_evidence_ref: current.evidence.canonical_phase_evidence_ref,
-          review_result_ref: currentPhaseReviewRef(current),
-          review_verdict: currentReviewVerdict,
-        });
-      }
-      if (sameIdentity && input.review_result_ref === undefined) {
-        return Object.freeze({
-          phase_id: input.phase_id, baseline_commit: existing.scan.baseline_commit,
-          implementation_commit: existing.scan.implementation_commit, base_tree: existing.subject.baseTree,
-          snapshot_tree: existing.scan.snapshot_tree, diff_scan_ref: current.diff_scan.path,
-          canonical_phase_evidence_ref: current.evidence.canonical_phase_evidence_ref,
-        });
-      }
-      const successorEligible = current.status === "done" && currentReviewVerdict !== "revise_required"
-        || current.status === "awaiting_review" && predecessorReview?.status === "unavailable";
-      if (!sameIdentity && successorEligible) {
-        if (!reopen && repairReviewRef === undefined && successor === null && input.phase_successor_reason === undefined) {
-          throw new Error("a completed Phase identity is closed and cannot be reopened");
-        }
-        if (!reopen && repairReviewRef === undefined && successor === null && input.phase_successor_reason !== undefined) {
-          successor = createPhaseSuccessor({
-            task, kernel, workspace, phaseId: input.phase_id, current, implementation, green,
-            predecessorReview, predecessorPhaseTrace,
-            allowedFiles, guardedC2Paths, reason: input.phase_successor_reason, expectedRef: successorFlowRef,
-          });
-        }
-      }
-      if (!sameIdentity && currentReviewVerdict === "revise_required" && input.previous_phase_review_ref === undefined) {
-        throw new Error("a changed same-Phase identity requires previous_phase_review_ref");
-      }
-    }
-    const baseline = deriveBaseline({ task, kernel, workspace, input, current, red });
-    const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim();
-    if (red && red.value.snapshot_tree !== baselineTree) throw new Error("RED test receipt must bind the Phase baseline tree");
+    assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
+    const baseline = red === null ? currentMaterialsBaseline(task, workspace) : red.value.snapshot_commit;
+    const baselineTree = execFileSync("git", ["rev-parse", `${baseline}^{tree}`], { cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    if (red !== null && red.value.snapshot_tree !== baselineTree) throw new Error("RED test receipt must bind the current Phase baseline tree");
     const implementationCommit = phaseCommit(workspace, implementation.value.snapshot_tree, baseline, input.phase_id);
     const implementationCommitRef = pinPhaseCommit(workspace, task, input.phase_id, implementation.value.snapshot_tree, implementationCommit);
-    const scan = createPhaseDiffScan({
-      sourceRoot: workspace.worktreeRoot, phaseId: input.phase_id, baselineCommit: baseline,
-      implementationCommit, allowedFiles, guardedC2Paths,
-    });
+    const scan = createPhaseDiffScan({ sourceRoot: workspace.worktreeRoot, phaseId: input.phase_id, baselineCommit: baseline, implementationCommit, allowedFiles });
     if (!scan.safe) throw new Error(`Phase diff is outside the allowed scope: ${JSON.stringify(scan.allowlist_violations)}`);
-    const after = captureWorkspaceSnapshot(workspace);
-    if (after.tree !== before.tree) throw new Error("live Workspace changed while Phase evidence was being published");
-
-    const scanRaw = canonical(scan);
+    if (captureWorkspaceSnapshot(workspace).tree !== before.tree) throw new Error("live Workspace changed while Phase evidence was being published");
     const namespace = `evidence/phases/${input.phase_id}/${scan.snapshot_tree}`;
+    const scanRaw = canonical(scan);
     const scanRef = `${namespace}/diff-scan-${sha256(scanRaw)}.json`;
     publishIdempotently(task, kernel, scanRef, scanRaw, "Phase diff scan");
-    const baseTree = baselineTree;
     const evidence = {
-      phase_id: input.phase_id,
-      status: "awaiting_review",
-      needs_human: false,
-      ...(input.recovery_ref === undefined ? {} : { recovery_ref: input.recovery_ref, recovery_hash: input.recovery_hash }),
-      ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
-      ...(successor === null ? {} : { phase_successor_ref: successor.ref, phase_successor_hash: successor.hash }),
-      ...(adjudicationCorrection === null ? {} : { adjudication_correction_ref: adjudicationCorrection.ref }),
-      ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
-      tests: {
-        ...(red ? { red: { path: input.red_evidence_ref } } : {}),
-        green: { path: input.green_test_receipt_ref },
-      },
-      diff_scan: { path: scanRef },
-      declared_allowed_files: allowedFiles,
-      declared_guarded_c2_paths: guardedC2Paths,
-      evidence: {
-        diff: scanRef,
-        implementation_receipt_ref: input.implementation_receipt_ref,
-        green_test_receipt_ref: input.green_test_receipt_ref,
-        ...(red ? { red_evidence_ref: input.red_evidence_ref } : {}),
-      },
+      phase_id: input.phase_id, status: input.review_result_ref === undefined ? "awaiting_review" : "done", needs_human: false,
+      tests: { ...(red === null ? {} : { red: { path: input.red_evidence_ref } }), green: { path: input.green_test_receipt_ref } },
+      diff_scan: { path: scanRef }, declared_allowed_files: allowedFiles,
+      evidence: { diff: scanRef, implementation_receipt_ref: input.implementation_receipt_ref, green_test_receipt_ref: input.green_test_receipt_ref, ...(red === null ? {} : { red_evidence_ref: input.red_evidence_ref }) },
     };
     const evidenceRaw = canonical(evidence);
     const canonicalEvidenceHash = sha256(evidenceRaw);
     const canonicalEvidenceRef = `${namespace}/phase-evidence-${canonicalEvidenceHash}.json`;
     publishIdempotently(task, kernel, canonicalEvidenceRef, evidenceRaw, "canonical Phase evidence");
     evidence.evidence.canonical_phase_evidence_ref = canonicalEvidenceRef;
-
     let review;
-    if (input.review_result_ref !== undefined && (predecessorReview === null || pendingSuccessorContinuation)) {
-      const reviewRevisionRef = successor?.ref ?? input.reopen_ref;
-      const reviewOptions = {
-        ...(reviewRevisionRef === undefined || !hasAcceptedBuildCode(task) ? {} : { revisionRef: reviewRevisionRef }),
-        ...(input.adjudication_correction_ref === undefined ? {} : { adjudicationCorrectionRef: input.adjudication_correction_ref }),
-      };
-      const phaseEvidence = pendingSuccessorContinuation || input.recovery_ref !== undefined
-        ? {
-          ref: canonicalEvidenceRef,
-          sha256: canonicalEvidenceHash,
-          ...(input.recovery_ref === undefined ? {} : {
-            recovery_ref: input.recovery_ref,
-            recovery_hash: input.recovery_hash,
-          }),
-        }
-        : undefined;
+    if (input.review_result_ref !== undefined) {
       review = readFormalPhaseReview(task, kernel, input.review_result_ref, {
-        phaseId: input.phase_id, baseTree, candidateTree: scan.snapshot_tree,
-        ...(phaseEvidence === undefined ? {} : { phaseEvidence }),
-      }, reviewOptions);
-      if (pendingSuccessorContinuation) {
-        validatePendingSuccessorReviewBinding({
-          predecessorReview,
-          currentReview: review,
-          currentReviewRef: input.review_result_ref,
-          taskId: task.identity.taskId,
-          phaseId: input.phase_id,
-          snapshotTree: scan.snapshot_tree,
-        });
-      }
-      const riskAcceptances = bindPhaseReviewRisks(task, review, input.risk_acceptance_refs);
-      const trace = phaseMapTrace({
-        scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash,
-        implementation, green, red, review, implementationCommitRef, riskAcceptances,
+        phaseId: input.phase_id, baseTree: baselineTree, candidateTree: scan.snapshot_tree,
+        phaseEvidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidenceHash },
       });
+      const riskAcceptances = bindPhaseReviewRisks(task, review, input.risk_acceptance_refs);
+      const trace = phaseMapTrace({ scan, scanRef, scanHash: sha256(scanRaw), canonicalEvidenceRef, canonicalEvidenceHash, implementation, green, red, review, implementationCommitRef, riskAcceptances });
       const traceRaw = canonical(trace);
-      const traceHash = sha256(traceRaw);
-      const traceRef = `${namespace}/phase-map-trace-${traceHash}.json`;
+      const traceRef = `${namespace}/phase-map-trace-${sha256(traceRaw)}.json`;
       publishIdempotently(task, kernel, traceRef, traceRaw, "Phase map trace");
       evidence.evidence.phase_map_trace_ref = traceRef;
-      evidence.evidence.phase_map_trace_hash = traceHash;
-      evidence.review = {
-        action_ref: input.review_result_ref,
-        ...(review.status === "semantic" ? { result_ref: input.review_result_ref } : {}),
-        snapshot_tree: scan.snapshot_tree,
-        status: review.status,
-        verdict: review.verdict,
-        risk_acceptances: riskAcceptances,
-      };
-      evidence.status = "done";
+      evidence.review = { action_ref: input.review_result_ref, ...(review.status === "semantic" ? { result_ref: input.review_result_ref } : {}), snapshot_tree: scan.snapshot_tree, status: review.status, verdict: review.verdict, risk_acceptances: riskAcceptances };
     }
     task.writeRecordAtomic("phase-result.json", canonical(evidence));
-    return Object.freeze({
-      phase_id: input.phase_id, baseline_commit: baseline, implementation_commit: implementationCommit,
-      base_tree: baseTree, snapshot_tree: scan.snapshot_tree, diff_scan_ref: scanRef,
-      canonical_phase_evidence_ref: canonicalEvidenceRef,
-      ...(input.reopen_ref === undefined ? {} : { reopen_ref: input.reopen_ref }),
-      ...(successor === null ? {} : { phase_successor_ref: successor.ref, phase_successor_hash: successor.hash }),
-      ...(input.adjudication_correction_ref === undefined ? {} : { adjudication_correction_ref: input.adjudication_correction_ref }),
-      ...(repairReviewRef === undefined ? {} : { repair_review_result_ref: repairReviewRef }),
-      ...(review ? {
-        review_result_ref: input.review_result_ref, review_status: review.status, review_verdict: review.verdict,
-        phase_map_trace_ref: evidence.evidence.phase_map_trace_ref, phase_map_trace_hash: evidence.evidence.phase_map_trace_hash,
-      } : {}),
-    });
+    return Object.freeze({ phase_id: input.phase_id, baseline_commit: baseline, implementation_commit: implementationCommit, base_tree: baselineTree, snapshot_tree: scan.snapshot_tree, diff_scan_ref: scanRef, canonical_phase_evidence_ref: canonicalEvidenceRef, ...(review ? { review_result_ref: input.review_result_ref, review_status: review.status, review_verdict: review.verdict, phase_map_trace_ref: evidence.evidence.phase_map_trace_ref } : {}) });
   });
-  const flowIdentities = [kernel.deriveReviewFlowIdentity({
-    stage: "build-code", review_track: null, subject_kind: "phase",
-    phase_id: input.phase_id, review_scope: "phase",
-    ...((successorFlowRef ?? input.reopen_ref) === undefined || !hasAcceptedBuildCode(task) ? {} : { revision_ref: successorFlowRef ?? input.reopen_ref }),
-    ...(input.adjudication_correction_ref === undefined ? {} : { adjudication_correction_ref: input.adjudication_correction_ref }),
-  })];
-  if (input.previous_phase_review_ref !== undefined) {
-    const previous = readJson(task, input.previous_phase_review_ref, "previous Phase review result").value;
-    flowIdentities.push(kernel.deriveReviewFlowIdentity({
-      stage: "build-code", review_track: null, subject_kind: "phase",
-      phase_id: previous.phase_id, review_scope: "phase",
-      ...((successorFlowRef ?? input.reopen_ref) === undefined || !hasAcceptedBuildCode(task) ? {} : { revision_ref: successorFlowRef ?? input.reopen_ref }),
-    }));
-  }
-  if (input.phase_successor_reason !== undefined && input.review_result_ref !== undefined) {
-    flowIdentities.push(kernel.deriveReviewFlowIdentity({
-      stage: "build-code", review_track: null, subject_kind: "phase",
-      phase_id: input.phase_id, review_scope: "phase",
-    }));
-  }
-  if (input.repair_review_result_ref !== undefined) {
-    flowIdentities.push(kernel.deriveReviewFlowIdentity({
-      stage: "build-code", review_track: null, subject_kind: "worktree",
-      phase_id: null, review_scope: "integration",
-    }));
-  }
-  const uniqueFlowIdentities = [...new Map(flowIdentities.map((identity) => [reviewIdentityKey(identity), identity])).values()]
-    .sort((left, right) => reviewIdentityKey(left).localeCompare(reviewIdentityKey(right)));
-  const runLocked = () => (input.reopen_ref === undefined && input.phase_successor_reason === undefined && input.phase_successor_ref === undefined)
-    ? publishLocked()
-    : task.withRecordLock("locks/build-code.publication.lock", publishLocked);
-  return withReviewFlowLocks(kernel, uniqueFlowIdentities, runLocked);
 }

@@ -280,7 +280,7 @@ Skill Bundle 是 Multica 的轻量消费物，Runner Release 是正式执行和�
 
 - **FR-TEST-001**：测试策略必须覆盖五阶段合成任务、材料修订、严重 finding、正式写入故障、旧任务迁移 fixture、Multica 干净安装和关键质量谓词的反脆弱验证。
   - **最小矩阵**：3 条合成 E2E（正常执行且 WorkflowHub 源码前后不变；材料中途修订、旧事实失效并修复严重 finding；正式写入中断或 review unavailable 后同输入幂等恢复）和 5 个故意破坏样本（身份/tree/hash 错绑、缺 completion、review 不可用或严重 finding、确认与不可逆授权混淆、Bundle 闭包污染）
-  - **原子故障矩阵**：MaterialRevision、QualityFact、Publication 三类 writer 均覆盖 temp write、fsync、rename、CAS 和 current pointer 故障，任何情况下不得产生半成品或假 current。
+  - **原子故障矩阵**：MaterialRevision 覆盖 temp write、fsync、rename、CAS 和唯一 `materials/current` 指针；QualityFact 与 Publication 是 immutable create-only，只覆盖其真实 temp write、fsync、rename、create-race 和同输入幂等，不得伪造 CAS/current pointer。每个不适用故障点必须在 writer contract 声明非适用理由；任何适用路径不得产生半成品或假 current。
   - **测试处置**：冻结树中的每个 tracked test 必须恰好标记 keep、merge、move 或 delete；delete 必须绑定已删除机制和替代 oracle，不能以数量目标为理由。
   - **业务隔离**：clean-install Runner 以只读方式执行合成业务任务；执行前后 WorkflowHub 源码树 tracked 与 untracked 内容哈希必须完全相同。
   - **最终审查**：交付前执行独立三方 architecture review，并向用户展示最终 diff 与逐删除结果
@@ -443,7 +443,7 @@ Skill Bundle 是 Multica 的轻量消费物，Runner Release 是正式执行和�
 - [ ] **AC-06**：每个删除项均有完整删除证明，缺项自动保留。
   - **需求**：FR-DEL-001、FR-DEL-002
   - **验证方法**：逐删除 proof card 与反向消费者验收
-  - **通过条件**：完整字段、消费者归零、质量替代和回滚均可核验；用户逐项确认删除清单
+  - **通过条件**：完整字段、消费者归零、质量替代和回滚均可核验；用户逐项确认删除清单；T054 的 6 项 task-only artifact（3 个工具、2 个专属测试、1 个 TSV）同样必须绑定历史基线、live 归零、反向消费者归零、替代 oracle 和 T054 授权
   - **失败条件**：缺少任一证明仍允许删除
   - **证据类型**：evidence
 - [ ] **AC-07**：删除按垂直切片完成，旧能力不可达且质量负测不退化。

@@ -5,8 +5,8 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bootstrapStage } from "../stage-context.mjs";
-import { createTask, migrateTaskRunnerRoot } from "../task-handle.mjs";
+import { bootstrapStage, prepareMakeDecisionWorkspace } from "../stage-context.mjs";
+import { createTask, openTask } from "../task-handle.mjs";
 import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
 import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
@@ -119,7 +119,14 @@ function fixture({ acceptDecision = true, migrateRunner = false, perInvocation =
     execFileSync("git", ["add", "."], { cwd: runnerRoot });
     execFileSync("git", ["commit", "-qm", "runner"], { cwd: runnerRoot });
     if (migrateRunner) {
-      activeTask = migrateTaskRunnerRoot({ taskPath, projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", runnerRoot: realpathSync(runnerRoot), stage: "verify-code" }).task;
+      writeFileSync(join(taskPath, "task.json"), `${JSON.stringify({
+        ...task.manifest,
+        execution_mode: "legacy_pinned",
+        runner_root: "/retired/workflowhub-runner",
+        runner_oid: "0".repeat(40),
+        runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
+      }, null, 2)}\n`);
+      activeTask = openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation");
     }
   }
   const candidate = prepareTaskWorkspace(activeTask);
@@ -211,20 +218,21 @@ describe("bootstrapStage", () => {
     expect(context.task.taskPath).toBe(taskPath);
   });
 
-  it("sidecar mode rejects runner drift immediately after opening the task", () => {
+  it("sidecar mode ignores a legacy pinned runner when opening the current stage", () => {
     const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "runner drift"], { cwd: runnerRoot });
 
-    expect(() => bootstrapStage("build-spec", {
+    const context = bootstrapStage("build-spec", {
       mode: "sidecar",
       taskPath,
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
-      runnerRoot,
-    })).toThrow(/runner identity mismatch/i);
+    });
+
+    expect(context.task.taskPath).toBe(taskPath);
   });
 
-  it("fails a dirty official write before mutation and shares one authenticated boundary across child writes", async () => {
+  it("records dirty current bytes as an observed identity and shares one authenticated boundary across child writes", async () => {
     const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
     const context = bootstrapStage("build-spec", {
       mode: "sidecar",
@@ -237,12 +245,17 @@ describe("bootstrapStage", () => {
     expect(typeof authenticateStageWriteBoundary).toBe("function");
 
     writeFileSync(join(runnerRoot, "dirty.txt"), "not committed\n");
-    expect(() => authenticateStageWriteBoundary(context, {
+    const dirty = authenticateStageWriteBoundary(context, {
       runnerRoot,
       operation: "accept",
       runId: "dirty-write",
-    })).toThrow(/clean/i);
-    expect(() => context.task.readRecord("identity/executions/dirty-write.json")).toThrow();
+    });
+    expect(dirty).toMatchObject({
+      status: "valid",
+      path_card: { authority: "informational_only" },
+    });
+    expect(JSON.parse(context.task.readRecord("identity/executions/dirty-write.json")))
+      .toMatchObject({ source_clean: false, run_id: "dirty-write" });
 
     rmSync(join(runnerRoot, "dirty.txt"));
     expect(authenticateStageWriteBoundary(context, {
@@ -260,7 +273,7 @@ describe("bootstrapStage", () => {
     });
     context.kernel.publishCanonicalRecord("evidence/shared-preflight-child-a.json", '{"child":"a"}\n');
     context.kernel.publishCanonicalRecord("evidence/shared-preflight-child-b.json", '{"child":"b"}\n');
-    expect(readdirSync(join(taskPath, "identity", "executions"))).toEqual(["clean-write.json"]);
+    expect(readdirSync(join(taskPath, "identity", "executions"))).toEqual(["clean-write.json", "dirty-write.json"]);
   });
 
   it("persists one per-invocation identity only at the final Workspace-bound write boundary", async () => {
@@ -289,7 +302,7 @@ describe("bootstrapStage", () => {
     });
   });
 
-  it("leaves no per-invocation record when the final shared boundary fails", async () => {
+  it("leaves no per-invocation record when the runner input is not a Git worktree", async () => {
     const { taskPath, runnerRoot } = fixture({ perInvocation: true });
     const context = bootstrapStage("build-spec", {
       mode: "sidecar",
@@ -298,14 +311,12 @@ describe("bootstrapStage", () => {
       taskId: "paperbuilder-phase-foundation",
       runnerRoot,
     });
-    writeFileSync(join(runnerRoot, "dirty.txt"), "dirty\n");
-
     const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
     expect(() => authenticateStageWriteBoundary(context, {
-      runnerRoot,
+      runnerRoot: join(runnerRoot, "not-a-git-worktree"),
       operation: "accept",
       runId: "failed-owner-write",
-    })).toThrow(/clean/i);
+    })).toThrow(/Git|runner/i);
     expect(() => readdirSync(join(taskPath, "identity", "executions"))).toThrow();
   });
 
@@ -460,6 +471,20 @@ describe("bootstrapStage", () => {
       facts,
     });
     expect(() => context.kernel.acceptAttempt("make-decision", correct.attempt_ref, writeHumanConfirmation(context.kernel, "make-decision", correct))).not.toThrow();
+  });
+
+  it("prepares the current task workspace after an accepted decision without reading history as a permit", () => {
+    const { storageRoot } = fixture();
+    const context = bootstrapStage("make-decision", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+    });
+
+    const prepared = prepareMakeDecisionWorkspace(context);
+    expect(prepared.candidateWorkspace.worktreeRoot).toContain("paperbuilder-phase-foundation");
   });
 
   it.each(["build-spec", "build-plan", "verify-code"])(

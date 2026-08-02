@@ -1,0 +1,20 @@
+Phase 7 test-structure focused evidence (current candidate snapshot)
+
+Commands
+- node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests
+- ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --maxWorkers=1
+
+Result
+- test disposition: 145 test files, exactly one disposition each.
+- mutation guards: 5 tests passed.
+- test-disposition contract: 5 tests passed.
+- repository inventory contract: 6 tests passed after regenerating complexity
+  reports before the inventory TSV.
+
+Protected oracles
+- The three five-stage E2E tests, atomic-write fault tests, and legacy-zero test
+  remain protected by the plan and were not deleted.
+- Migration-only deletion-proof and migration-proof scaffolding is not restored.
+
+This is a focused Phase 7 gate. Full test execution remains reserved for the
+final formal gate, as required by the current task instruction.

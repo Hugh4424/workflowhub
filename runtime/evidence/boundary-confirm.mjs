@@ -21,7 +21,7 @@ function writeBoundaryDecision(cfg, executionId, entry) {
   const patch = {
     boundary_decisions: { source: SOURCE_TAG, ...entry },
   };
-  // ponytail: dual-write matches other collector callers; global write omitted here
+  // This collector follows the other callers' payload shape; global write is omitted here.
   // since boundary_decisions is task-level state — upgrade if global rollup needed.
   // upsert returns false on write failure (writeAll) WITHOUT throwing — surface it
   // as a stderr warn so a silent loss of the boundary decision is observable

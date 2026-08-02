@@ -6,14 +6,11 @@ import { assertRuntimeAuthority } from "./runtime-mode.mjs";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "../runtime/task/task-identity.mjs";
 import { openTask } from "./task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { assertTaskRunnerIdentity } from "../runtime/evidence/runner-identity.mjs";
 import { authenticateWriteBoundary } from "../runtime/evidence/write-boundary-preflight.mjs";
 import {
   assertWorkspace,
-  openAcceptedCandidateWorkspace,
   openCurrentTaskWorkspace,
   prepareTaskWorkspace,
-  recoverTaskWorkspace,
   validateTaskWorkspaceAttempt,
 } from "./workspace.mjs";
 
@@ -60,31 +57,7 @@ function bindCandidateWorkspace(context, candidate) {
 export function prepareMakeDecisionWorkspace(context) {
   const task = context?.task;
   if (!task) throw new TypeError("unprepared make-decision StageContext required");
-  const kernel = createTaskKernel(task);
-  let accepted;
-  try { accepted = kernel.readAccepted("make-decision"); }
-  catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  if (accepted) {
-    const candidate = openAcceptedCandidateWorkspace(task, accepted);
-    const continuationKernel = createTaskKernel(task, { candidateWorkspace: candidate });
-    return Object.freeze({
-      ...context,
-      kernel: continuationKernel,
-      workflowRunId: continuationKernel.deriveStageWorkflowRunId(context.stage),
-      candidateWorkspace: candidate,
-    });
-  }
   return bindCandidateWorkspace(context, prepareTaskWorkspace(task));
-}
-
-/** Bind only the authenticated existing worktree used by make-decision recover-run. */
-export function recoverMakeDecisionWorkspace(context) {
-  if (arguments.length !== 1 || !context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
-    throw new TypeError("unprepared make-decision StageContext required for recovery");
-  }
-  return bindCandidateWorkspace(context, recoverTaskWorkspace(context.task));
 }
 
 /** Revalidate the published attempt immediately before acceptance. */
@@ -182,9 +155,6 @@ export function bootstrapStage(
   }
 
   const taskHandle = openTask(resolvedTaskPath, project, task);
-  if (taskHandle.manifest.runner_root !== undefined) {
-    assertTaskRunnerIdentity(taskHandle, { runnerRoot, stage: normalizedStage });
-  }
   if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
     throw new TypeError("workspaceLifecycle is only valid for make-decision");
   }

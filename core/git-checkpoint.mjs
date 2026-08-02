@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { relative, resolve } from "node:path";
 
 import { artifactReference, assertArtifactDir } from "./artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
-import { assertTaskHandle } from "./task-handle.mjs";
+import { captureGitWorktreeSnapshot, ensureGitSnapshotObjectStore } from "../runtime/task/git-worktree-snapshot.mjs";
+import { assertTaskHandle } from "./task-capability.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 
 const CHECKPOINTS = new WeakSet();
@@ -18,6 +18,10 @@ const STAGE_ARTIFACTS = Object.freeze({
 });
 
 function git(cwd, args, { env, input, encoding = "utf8" } = {}) {
+  // Historical checkpoint trees may have been captured by a prior runner
+  // process.  Reopen the repository-keyed external object store before every
+  // checkpoint operation so no stage depends on mutable .git objects.
+  ensureGitSnapshotObjectStore(cwd);
   try { return execFileSync("git", args, { cwd, env: env ? { ...process.env, ...env } : process.env, input, encoding, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] }); }
   catch (error) { throw new Error(`Git checkpoint command failed (${args.join(" ")}): ${error.stderr?.toString().trim() || error.message}`); }
 }
@@ -72,14 +76,12 @@ export function assertGitCheckpointPlan(value) {
   return value;
 }
 
-export function verifyGitCheckpointPlan({ workspace, artifacts, task, plan, baseCommit, baseTree, baselineRebindHash } = {}) {
+export function verifyGitCheckpointPlan({ workspace, artifacts, task, plan, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace); const safeArtifacts = assertArtifactDir(artifacts); const safeTask = assertTaskHandle(task);
   if (!plan || typeof plan !== "object" || Array.isArray(plan) || plan.schema_version !== "git-checkpoint-plan.v1" || !expectedNames(plan.stage)) throw new Error("checkpoint plan shape invalid");
   const safePlan = plan;
   if (safeArtifacts.worktreeRoot !== safeWorkspace.worktreeRoot) throw new Error("ArtifactDir is not bound to Workspace");
-  if (baselineRebindHash !== undefined && safePlan.baseline_rebind_hash !== baselineRebindHash) throw new Error("checkpoint plan baseline rebind authorization hash mismatch");
-  if (safePlan.baseline_rebind_hash !== undefined && !/^[a-f0-9]{64}$/.test(safePlan.baseline_rebind_hash)) throw new Error("checkpoint plan baseline_rebind_hash invalid");
-  const payload = { schema_version: safePlan.schema_version, stage: safePlan.stage, parent_commit: safePlan.parent_commit, artifacts: safePlan.artifacts, ...(safePlan.baseline_rebind_hash === undefined ? {} : { baseline_rebind_hash: safePlan.baseline_rebind_hash }) };
+  const payload = { schema_version: safePlan.schema_version, stage: safePlan.stage, parent_commit: safePlan.parent_commit, artifacts: safePlan.artifacts };
   if (safePlan.plan_hash !== sha256(`${JSON.stringify(payload)}\n`)) throw new Error("checkpoint plan hash mismatch");
   authenticatedBase(safeWorkspace.worktreeRoot, safePlan, baseCommit, baseTree);
   for (const [index, name] of expectedNames(safePlan.stage).entries()) {
@@ -127,7 +129,7 @@ export function verifyGitCheckpoint({ repoRoot, checkpoint, projectName, taskId,
   return checkpoint;
 }
 
-export function createGitCheckpoint({ workspace, artifacts, task, stage, baseCommit, baseTree, baselineRebindHash } = {}) {
+export function createGitCheckpoint({ workspace, artifacts, task, stage, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace);
   const safeArtifacts = assertArtifactDir(artifacts);
   const safeTask = assertTaskHandle(task);
@@ -140,18 +142,17 @@ export function createGitCheckpoint({ workspace, artifacts, task, stage, baseCom
     const content = Buffer.from(safeArtifacts.read(name));
     return { path, blob_oid: String(git(repoRoot, ["hash-object", "--no-filters", safeArtifacts.path(name)])).trim(), content_hash: sha256(content) };
   });
-  if (baselineRebindHash !== undefined && !/^[a-f0-9]{64}$/.test(baselineRebindHash)) throw new Error("checkpoint baseline rebind authorization hash invalid");
-  const payload = { schema_version: "git-checkpoint-plan.v1", stage, parent_commit: baseCommit, artifacts: artifactRecords, ...(baselineRebindHash === undefined ? {} : { baseline_rebind_hash: baselineRebindHash }) };
+  const payload = { schema_version: "git-checkpoint-plan.v1", stage, parent_commit: baseCommit, artifacts: artifactRecords };
   const plan = { ...payload, plan_hash: sha256(`${JSON.stringify(payload)}\n`) };
   CHECKPOINT_PLANS.add(plan);
   return Object.freeze(plan);
 }
 
-export function materializeGitCheckpoint({ workspace, artifacts, task, plan, publishRef, baseCommit, baseTree, baselineRebindHash } = {}) {
+export function materializeGitCheckpoint({ workspace, artifacts, task, plan, publishRef, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace);
   const safeArtifacts = assertArtifactDir(artifacts);
   const safeTask = assertTaskHandle(task);
-  const safePlan = verifyGitCheckpointPlan({ workspace: safeWorkspace, artifacts: safeArtifacts, task: safeTask, plan, baseCommit, baseTree, baselineRebindHash });
+  const safePlan = verifyGitCheckpointPlan({ workspace: safeWorkspace, artifacts: safeArtifacts, task: safeTask, plan, baseCommit, baseTree });
   const stage = safePlan.stage;
   const names = expectedNames(stage);
   const repoRoot = safeWorkspace.worktreeRoot;

@@ -498,11 +498,11 @@
 - **review_fact**：`reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json`
 - **completed_at**：2026-07-30T18:23:30Z
 
-#### T011 — 先注入全部正式 writer 的五类故障
+#### T011 — 先按真实写入原语注入正式 writer 故障
 
 - **ID**：T011
 - **Phase**：Phase 2：单一材料修订与派生发布
-- **goal**：先注入全部正式 writer 的五类故障
+- **goal**：先按真实写入原语注入正式 writer 故障
 - **design_state**：ready
 - **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T010
@@ -510,7 +510,7 @@
 - **并行**：否 — 依赖与文件所有权要求串行
 - **FR**：FR-MAT-002、FR-PUB-002
 - **AC**：AC-03、AC-12
-- **动作**：对三类正式 writer 参数化注入五类故障 RED
+- **动作**：MaterialRevision 注入 temp/fsync/rename/CAS/current；QualityFact/Publication 注入 temp/fsync/rename、create-race 与同输入幂等，并要求 CAS/current 非适用理由
 - **精确文件**：`tests/integration/atomic-write-faults.test.mjs`
 - **boundary**：files: `tests/integration/atomic-write-faults.test.mjs`; symbols/regions: 本 Task goal 对应区域
 - **输出**：真实 RED
@@ -519,7 +519,7 @@
 - **paired_task**：T012
 - **gate_cmd**：`./node_modules/.bin/vitest run tests/integration/atomic-write-faults.test.mjs`
 - **expected_exit**：1
-- **oracle**：ORACLE-ATOMIC-WRITES：MaterialRevision、QualityFact、Publication 在 temp/fsync/rename/CAS/current 任一故障下只能 old-or-new，无半写
+- **oracle**：ORACLE-ATOMIC-WRITES：MaterialRevision 在五个真实故障点只能 old-or-new；QualityFact/Publication 在 create-only 原语故障、create-race 和幂等下无半写，且不创建假 current pointer；所有非适用点有明确理由
 - **evidence_path**：`evidence/phase-2/atomic-red.txt`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
@@ -548,16 +548,16 @@
 - **并行**：否 — 依赖与文件所有权要求串行
 - **FR**：FR-MAT-002、FR-PUB-002
 - **AC**：AC-03、AC-12
-- **动作**：复用 TaskHandle 安全原语统一三类正式写入
+- **动作**：复用 TaskHandle 安全原语：MaterialRevision 维护唯一 CAS current；QualityFact/Publication 保持 immutable create-only
 - **精确文件**：`core/material-revision.mjs`、`core/quality-fact.mjs`、`core/publication.mjs`、`core/canonical-receipt-writer.mjs`、`core/receipt-schema.mjs`、`core/task-handle.mjs`、`tests/integration/atomic-write-faults.test.mjs`
 - **boundary**：files: `core/material-revision.mjs`、`core/quality-fact.mjs`、`core/publication.mjs`、`core/canonical-receipt-writer.mjs`、`core/receipt-schema.mjs`、`core/task-handle.mjs`、`tests/integration/atomic-write-faults.test.mjs`; symbols/regions: 本 Task goal 对应区域
-- **输出**：无半写、无重复 generation、无 writer 例外
+- **输出**：无半写；MaterialRevision 仅一个 current winner；QualityFact/Publication create-only 并发唯一胜者或同输入幂等；无假 current pointer
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：GREEN
 - **paired_task**：T011
 - **gate_cmd**：`./node_modules/.bin/vitest run tests/integration/atomic-write-faults.test.mjs`
 - **expected_exit**：0
-- **oracle**：ORACLE-ATOMIC-WRITES：三类 writer × 五故障点安全、同输入幂等、并发恰一胜者
+- **oracle**：ORACLE-ATOMIC-WRITES：按 writer 真实原语覆盖故障；MaterialRevision 的 CAS/current 安全，QualityFact/Publication 的 create-race/幂等安全，所有非适用点有明确理由
 - **evidence_path**：`evidence/phase-2/atomic-green.txt`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
@@ -760,7 +760,7 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：固化不可变 legacy-import-proof（106 项用户确认处置，源聚合不变）；同 Phase 删除 legacy reader/importer/schema/fixture 与公开入口，inventory `--require-zero=legacy-runtime`=0；带 `--require-cases` 请求在最终 tree fail-loud（旧 writer 不可用，证据 `evidence/phase-3/legacy-cases-unavailable.txt`）。披露：一次性 importer 的删除前 fixture 用例执行证据未留存且代码不在 git 历史，无法重放；最终 AC-08 验收在 verify-code 携带本披露。
+- **actual_changes**：固化不可变 legacy-import-proof（106 项用户确认处置，源聚合不变）；同 Phase 删除 legacy reader/importer/schema/fixture 与公开入口，inventory --require-zero=legacy-runtime=0；带 --require-cases 请求在最终 tree fail-loud（旧 writer 不可用，证据 evidence/phase-3/legacy-cases-unavailable.txt）。披露：一次性 importer 的删除前 fixture 用例执行证据未留存且代码不在 git 历史，无法重放；最终 AC-08 验收在 verify-code 携带本披露。
 - **executed_commands**：`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-current-tree && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（Phase 3 gate，exit 0）；`npm test`（全量回归，exit 0）；`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-cases=supported,idempotent,missing-identity,hash-conflict,current-conflict,unknown-source --require-current-tree`（exit 1，旧 writer 不可用证明）
 - **evidence_refs**：`[{"ref":"receipts/revisions/implementation/730ec45dfd54a62029b3b8285b9ffe27de7349ea0b6dfcb73efaa165a90e41e8.json","sha256":"647286b2af6198b0a5d9e269ab4faa72eb0993658b475528148da2da3acda191"},{"ref":"receipts/build-tests-phase-3-v2.json","sha256":"718cf5a7508cf3bd86b74a37bf89a7589a85bf40210b3f09c5b0b9ac903dc0a6"},{"ref":"receipts/build-tests-phase-3-regression-v2.json","sha256":"a7ded8d94f7fbd199db7b377183f5515b141e0b43a4e5f7e13fb6b8bfbd62ddd"},{"ref":"reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json","sha256":"3fc1776048296a858b432a2c1bf7c4193d395bcdca0cf98fd7bcbc8c58987049"}]`
 - **covered_ac**：AC-08、AC-13
@@ -803,8 +803,8 @@
 ### Files
 
 - **NEW**：`tests/e2e/five-stage-normal.test.mjs`、`tests/e2e/five-stage-material-revision.test.mjs`、`tests/e2e/five-stage-idempotent-resume.test.mjs`、`tests/helpers/read-only-runner-fixture.mjs`、`tests/integration/progression-without-permits.test.mjs`
-- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/stage-context.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`
-- **DO NOT TOUCH**：`core/task-handle.mjs`、`docs/architecture/legacy-import-proof.json`
+- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/workspace.mjs`、`core/stage-context.mjs`、`core/stage-runner.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`
+- **DO NOT TOUCH**：`docs/architecture/legacy-import-proof.json`
 
 ### Tasks
 
@@ -841,9 +841,9 @@
 - **status**：`completed`
 - **actual_changes**：新增 progression-without-permits RED，复现旧 checkpoint 将普通材料修订误判为工作许可的阻塞。
 - **executed_commands**：`./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs`（RED 证据）；Phase 4 GREEN 与补充完整回归 receipt 复跑。
-- **evidence_refs**：[{"ref":"evidence/phase-4/progression-red.txt","sha256":"d0c0a86034a442ffe7ed3e41856210aaadb2c598432d511058207f634fdf9bcd"},{"ref":"receipts/revisions/implementation/6c6dff097b04d28c465854b3d4df47eb128ab510d0de670b329d91b5c3677d6c.json","sha256":"9b5aaa93c12966269d577bc5975975e021253e419face48f70cd592f6f699eba"},{"ref":"receipts/build-tests-phase-4-current.json","sha256":"04da5039b6faaf3bfcf3d4cb4ad6098b44a57a4316e9b1da1aca3a91ef72005e"},{"ref":"reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json","sha256":"92a475f027d04e30369484f6230cbae5f9f4ebf0f1aeeeb5b82470fcd2bbcb5f"}]
+- **evidence_refs**：[{"ref":"evidence/phase-4/progression-red.json","sha256":"33c377832cb4ed0bcab35fd067952c5bd15149bb844e56b7b2d1f62277872908"}]
 - **covered_ac**：AC-01、AC-02、AC-04、AC-09。
-- **evidence_refs**：[{"ref":"evidence/phase-4/progression-red.txt","sha256":"d0c0a86034a442ffe7ed3e41856210aaadb2c598432d511058207f634fdf9bcd"},{"ref":"receipts/revisions/implementation/6c6dff097b04d28c465854b3d4df47eb128ab510d0de670b329d91b5c3677d6c.json","sha256":"9b5aaa93c12966269d577bc5975975e021253e419face48f70cd592f6f699eba"},{"ref":"receipts/build-tests-phase-4-current.json","sha256":"04da5039b6faaf3bfcf3d4cb4ad6098b44a57a4316e9b1da1aca3a91ef72005e"},{"ref":"reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json","sha256":"92a475f027d04e30369484f6230cbae5f9f4ebf0f1aeeeb5b82470fcd2bbcb5f"}]
+- **evidence_refs**：[{"ref":"evidence/phase-4/progression-red.json","sha256":"33c377832cb4ed0bcab35fd067952c5bd15149bb844e56b7b2d1f62277872908"}]
 - **review_fact**：`reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json`
 - **completed_at**：2026-07-31
 
@@ -860,8 +860,8 @@
 - **FR**：FR-FLOW-001、FR-RUN-001、FR-MAT-001、FR-PUB-001
 - **AC**：AC-01、AC-02、AC-04、AC-09
 - **动作**：改五阶段消费面与 verify/close 选择器
-- **精确文件**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/stage-context.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`tests/integration/progression-without-permits.test.mjs`
-- **boundary**：files: `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/stage-context.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`tests/integration/progression-without-permits.test.mjs`; symbols/regions: 本 Task goal 对应区域
+- **精确文件**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/workspace.mjs`、`core/stage-context.mjs`、`core/stage-runner.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`core/task-handle.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`tests/integration/progression-without-permits.test.mjs`
+- **boundary**：files: `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/workspace.mjs`、`core/stage-context.mjs`、`core/stage-runner.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`core/task-handle.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`tests/integration/progression-without-permits.test.mjs`; symbols/regions: 当前四材料、当前快照与当前质量事实的普通推进路径
 - **输出**：历史事实只读且不授予许可
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：GREEN
@@ -878,13 +878,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：checkpoint 仅校验 Git ref 完整性；历史 accepted/checkpoint 不再授予普通推进许可；stale quality facts 留给 verify/close 新鲜度门；`readAccepted` 固定为历史只读读取。
-- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs`；Phase 4 GREEN 与补充完整回归 receipt 复跑。
-- **evidence_refs**：[{"ref":"evidence/build-tests-phase-4-t018-gate-v5.output","sha256":"ec4f69bc0354a3cc49d828e73629fd79040a3f23170f85975dbb98081d96bcf4"},{"ref":"receipts/revisions/implementation/6c6dff097b04d28c465854b3d4df47eb128ab510d0de670b329d91b5c3677d6c.json","sha256":"9b5aaa93c12966269d577bc5975975e021253e419face48f70cd592f6f699eba"},{"ref":"receipts/build-tests-phase-4-current.json","sha256":"04da5039b6faaf3bfcf3d4cb4ad6098b44a57a4316e9b1da1aca3a91ef72005e"},{"ref":"reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json","sha256":"92a475f027d04e30369484f6230cbae5f9f4ebf0f1aeeeb5b82470fcd2bbcb5f9f"}]
+- **actual_changes**：切断 checkpoint/reopen/rebind/recovery/review-reset/legacy runner 历史对普通启动、stage runner、TaskKernel 和 workspace 的许可读取；当前材料与当前质量事实仍是 formal verify/close 的 fail-closed 边界。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs --reporter=dot`（7 passed）；补充 runner/review 定向组 104 passed；`npm run check` PASS。
+- **evidence_refs**：[{"ref":"evidence/phase-4/progression-green.json","sha256":"c093951bdda10b51f746da603cdbc6fb2f0a941ff3a590d2be4d8db118cb3e43"}]
 - **covered_ac**：AC-01、AC-02、AC-04、AC-09。
-- **evidence_refs**：[{"ref":"evidence/build-tests-phase-4-t018-gate-v5.output","sha256":"ec4f69bc0354a3cc49d828e73629fd79040a3f23170f85975dbb98081d96bcf4"},{"ref":"receipts/revisions/implementation/6c6dff097b04d28c465854b3d4df47eb128ab510d0de670b329d91b5c3677d6c.json","sha256":"9b5aaa93c12966269d577bc5975975e021253e419face48f70cd592f6f699eba"},{"ref":"receipts/build-tests-phase-4-current.json","sha256":"04da5039b6faaf3bfcf3d4cb4ad6098b44a57a4316e9b1da1aca3a91ef72005e"},{"ref":"reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json","sha256":"92a475f027d04e30369484f6230cbae5f9f4ebf0f1aeeeb5b82470fcd2bbcb5f"}]
-- **review_fact**：`reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json`
-- **completed_at**：2026-07-31
+- **review_fact**：Kimi/K3 sealed-diff review `bfd65be6-bae4-45ee-a9bf-5a659a67e83f` found stale recovery-test residue; the two files, inventory rows, and dead CLI verbs were deleted and focused regression passed. Opus was cancelled and Grok exceeded the sealed bundle scope; neither is counted as a verdict.
+- **completed_at**：2026-08-01。
 
 #### T019 — 先固定三条完整五阶段恢复 E2E 与源码不可变合同
 
@@ -925,6 +924,12 @@
 - **review_fact**：`reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json`
 - **completed_at**：2026-07-31
 
+**current_snapshot_status**：`audit_only`
+
+**current_snapshot_reason**：implementation and tests changed after the historical snapshot; its unavailable local receipt/review refs are not current GREEN evidence.
+
+**current_snapshot_evidence_ref**：`evidence/phase-4/current-snapshot-correction.json` (`sha256:5b3389a7ba8da287029b569fe2da5f6d7c2c1477749d51ac6785a18b8939294f`)
+
 #### T020 — 完成三条合成五阶段恢复 E2E
 
 - **ID**：T020
@@ -962,6 +967,12 @@
 - **covered_ac**：AC-01、AC-02、AC-03、AC-12。
 - **review_fact**：`reviews/results/build-code-default-e2bdf012a97ae4c90eb16e89a9e83c6368297991-67e3e3f6-5f25-4f83-9133-414d60e061e3.json`
 - **completed_at**：2026-07-31
+
+**current_snapshot_status**：`audit_only`
+
+**current_snapshot_reason**：implementation and tests changed after the historical snapshot; its unavailable local receipt/review refs are not current GREEN evidence.
+
+**current_snapshot_evidence_ref**：`evidence/phase-4/current-snapshot-correction.json` (`sha256:5b3389a7ba8da287029b569fe2da5f6d7c2c1477749d51ac6785a18b8939294f`)
 
 ### Verify
 
@@ -1026,8 +1037,8 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`
 - **expected_exit**：0
 - **oracle**：ORACLE-DELETE-CONFIRM：12 项 proof 完整且各自有用户选择；未确认为 KEEP
-- **evidence_path**：`evidence/phase-5/deletion-consumer-audit.json`
-- **STOP**：用户未逐项确认或任一 proof 缺字段时 STOP/KEEP。
+- **evidence_path**：`evidence/phase-5/keep-disposition.json`
+- **STOP**：用户未逐项确认或任一 proof 缺字段时 STOP/KEEP；本次用户授权只允许自主 KEEP，不能替代逐项 DELETE confirmation。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：确认不能推断 Git 提交或推送授权。
 
@@ -1035,12 +1046,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **actual_changes**：冻结当前 12 个切片 disposition；完整 proof 不足时统一 KEEP，部分旧删除以 PARTIAL_DELETE 事实公开记录。自主授权只支持安全 KEEP，不伪装逐项 DELETE confirmation。
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --confirm-keep`; `node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; `node tools/architecture/deletion-proof.mjs --check`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"de2bdeacab61d6fe1328663f32ec7a12254dad0628444a6b9ddab37304d45f99"}]`
+- **covered_ac**：AC-06、AC-07、AC-13；未授权删除保持 KEEP。
+- **review_fact**：current-tree-disposition-summary; autonomous-KEEP-only authorization
+- **completed_at**：N/A
 
 #### T022 — 先证明 DEL-01 Grill replacement 旧入口仍可达
 
@@ -1064,7 +1075,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-01 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-grill-replacement.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-01`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-01：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-01-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-01 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：Grill replacement 隐藏消费者未被覆盖。
@@ -1073,9 +1084,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-01 按当前 deletion-proof gate 保持 KEEP；候选路径仍存在，未执行删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1102,7 +1113,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-01 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-grill-replacement.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-01`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-01：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-01-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-01 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：Grill replacement 删除不完整留下孤儿或局部绿掩盖全局退化。
@@ -1111,9 +1122,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-01 GREEN 未执行是预期 KEEP 分支；当前 gate 明确未授权删除，路径与替代质量语义保留。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1140,7 +1151,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-02 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-phase-trace.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-02`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-02：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-02-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-02 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：Phase trace lineage 隐藏消费者未被覆盖。
@@ -1149,9 +1160,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-02 按当前 deletion-proof gate 保持 KEEP；canonical review lineage 路径仍存在，未执行删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1178,7 +1189,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-02 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-phase-trace.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-02`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-02：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-02-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-02 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：Phase trace lineage 删除不完整留下孤儿或局部绿掩盖全局退化。
@@ -1187,9 +1198,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-02 GREEN 未执行是预期 KEEP 分支；review lineage 保留为质量边界。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1223,14 +1234,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-03 RED 未重放（旧实现快照不存在）；当前 source 已移除专用 invalidation 入口，保留 journal-only retry 认证。不得把缺失的历史 RED 写成已执行。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs core/__tests__/receipt-writer.test.mjs tests/contract/runtime-facade.test.mjs core/__tests__/task-handle.test.mjs --maxWorkers=1`（exit 0，51 tests）；retired-identifier scan；`node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/del-03-green.txt","sha256":"db83c276e04c0525804d9e908cfea8d0ab6e06448fbe434f26b94c12867be4ce"},{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
+- **covered_ac**：AC-06/AC-07 的当前-source deletion proof；历史 RED 仍明确 unavailable。
+- **review_fact**：`current-source-focused-review; historical-red-unavailable`
+- **completed_at**：N/A
 
 #### T027 — 垂直删除 DEL-03 专用 invalidation
 
@@ -1261,14 +1272,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：删除专用 invalidation CLI/handler/kernel state、canonical invalidation paths 和 receipt coupling；retry 改为上一唯一非成功 terminal journal exit 认证。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/progression-without-permits.test.mjs core/__tests__/receipt-writer.test.mjs tests/contract/runtime-facade.test.mjs core/__tests__/task-handle.test.mjs --maxWorkers=1`（exit 0，51 tests）；`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`；`node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/del-03-green.txt","sha256":"db83c276e04c0525804d9e908cfea8d0ab6e06448fbe434f26b94c12867be4ce"},{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
+- **covered_ac**：AC-06、AC-07、AC-12（当前-source focused gate）；full/3-E2E 最终门尚未宣称完成。
+- **review_fact**：`current-source-focused-review; no-final-build-code-acceptance`
+- **completed_at**：N/A
 
 #### T028 — 先证明 DEL-04 continuation 旧入口仍可达
 
@@ -1299,14 +1310,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-04 的当前 diff 暗示旧 continuation 入口已收敛，但没有独立 RED、consumer audit 和当前树 GREEN proof，保持未完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T029 — 垂直删除 DEL-04 continuation
 
@@ -1337,14 +1348,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-04 GREEN 未正式证明；不能用旧 shared receipt 证明 continuation 已安全删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T030 — 先证明 DEL-05 rebind 旧入口仍可达
 
@@ -1375,14 +1386,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-05 当前 diff 只说明部分 rebind 入口被移除；独立 proof、替代路径和回滚边界未绑定，保持未完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T031 — 垂直删除 DEL-05 rebind
 
@@ -1413,14 +1424,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-05 GREEN 未正式证明；不得把历史 rebind 记录当作当前树的删除结论。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T032 — 先证明 DEL-06 reopen 旧入口仍可达
 
@@ -1451,14 +1462,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-06 的当前 diff 需要逐文件 consumer audit；没有当前树 RED/GREEN 对，保持未完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T033 — 垂直删除 DEL-06 reopen
 
@@ -1489,14 +1500,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-06 GREEN 未正式证明；保留旧 KEEP 事实，不宣称 reopen 机制已完成删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T034 — 先证明 DEL-07 stage recovery 与 recover-spec 旧入口仍可达
 
@@ -1527,14 +1538,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-07 RED 未重放（旧 recovery 实现快照不存在）；当前 source 已移除 dedicated recovery state、recover-spec/recover-run 入口及 recovery schemas/tests。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs tests/final-cutover-guards.red.test.mjs tests/contract/runtime-facade.test.mjs --maxWorkers=1`（exit 0，69 tests）；`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`；`node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/del-07-green.txt","sha256":"2abe15281da0d59f14cc14ea4e65fb76612eb974224c4aca28315133d4ab8411"},{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
+- **covered_ac**：AC-06/AC-07 当前-source zero-state proof；历史 RED 明确 unavailable。
+- **review_fact**：`current-source-focused-review; historical-red-unavailable`
+- **completed_at**：N/A
 
 #### T035 — 垂直删除 DEL-07 stage recovery 与 recover-spec
 
@@ -1565,14 +1576,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：删除 dedicated recovery implementation、credential/generation schemas、recover tests and replay helper; normal append-only material revision remains.
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs tests/final-cutover-guards.red.test.mjs tests/contract/runtime-facade.test.mjs --maxWorkers=1`（exit 0，69 tests）；`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`；`node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/del-07-green.txt","sha256":"2abe15281da0d59f14cc14ea4e65fb76612eb974224c4aca28315133d4ab8411"},{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
+- **covered_ac**：AC-06、AC-07、AC-12（current-source focused gate）；最终 full/clean-install gate 尚未完成。
+- **review_fact**：`current-source-focused-review; no-final-build-code-acceptance`
+- **completed_at**：N/A
 
 #### T036 — 先证明 DEL-08 recovery/reset workspace CAS 旧入口仍可达
 
@@ -1596,21 +1607,21 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-08 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-recovery-workspace.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-08`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-08：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-08-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-08 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：recovery/reset workspace CAS 隐藏消费者未被覆盖。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-08 只完成 task-recovery 一侧的删减；workspace/runtime-root CAS 仍保留，切片未完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T037 — 垂直删除 DEL-08 recovery/reset workspace CAS
 
@@ -1634,21 +1645,21 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-08 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-recovery-workspace.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-08`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-08：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-08-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-08 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：recovery/reset workspace CAS 删除不完整留下孤儿或局部绿掩盖全局退化。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-08 GREEN 未正式证明；保留 workspace/runtime-root CAS 以维持交付质量，不能标记为完整删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T038 — 先证明 DEL-09 重复 invocation/completion projection 旧入口仍可达
 
@@ -1672,7 +1683,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-09 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-duplicate-projection.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-09`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-09：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-09-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-09 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：重复 invocation/completion projection 隐藏消费者未被覆盖。
@@ -1681,9 +1692,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-09 按当前 deletion-proof gate 保持 KEEP；重复 projection 质量路径仍存在，未执行删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1710,7 +1721,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-09 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-duplicate-projection.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-09`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-09：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-09-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-09 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：重复 invocation/completion projection 删除不完整留下孤儿或局部绿掩盖全局退化。
@@ -1719,9 +1730,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-09 GREEN 未执行是预期 KEEP 分支；不删除仍在使用的重复 projection 质量语义。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1748,7 +1759,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-10 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-transition-journal.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-10`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-10：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-10-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-10 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：stage-transition journal 隐藏消费者未被覆盖。
@@ -1757,9 +1768,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-10 按当前 deletion-proof gate 保持 KEEP；stage-transition journal 仍是可审计质量事实，未执行删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1786,7 +1797,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-10 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-transition-journal.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-10`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-10：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-10-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-10 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：stage-transition journal 删除不完整留下孤儿或局部绿掩盖全局退化。
@@ -1795,9 +1806,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-10 GREEN 未执行是预期 KEEP 分支；保留 journal 以维持交付审计。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1824,21 +1835,21 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-11 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-shadow-checkpoint.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-11`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-11：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-11-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-11 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：shadow current/head/checkpoint 隐藏消费者未被覆盖。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-11 只移除了部分 shadow/permit 读取；checkpoint/current/accepted authority 仍是质量核心，切片未完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T043 — 垂直删除 DEL-11 shadow current/head/checkpoint
 
@@ -1862,21 +1873,21 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-11 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-shadow-checkpoint.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-11`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-11：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-11-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-11 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：shadow current/head/checkpoint 删除不完整留下孤儿或局部绿掩盖全局退化。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [x] **任务完成**
-- **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- [ ] **任务完成**
+- **status**：`in_progress`
+- **actual_changes**：DEL-11 GREEN 未正式证明；authority 事实必须保留，不能用旧 KEEP receipt 宣称删除完成。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **completed_at**：N/A
 
 #### T044 — 先证明 DEL-12 旧 dispatch/config/index/spike 旧入口仍可达
 
@@ -1900,7 +1911,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-12 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-obsolete-tools.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-12`
 - **expected_exit**：1
 - **oracle**：ORACLE-DEL-12：旧入口 unsupported，替代路径和同一负测通过
-- **evidence_path**：`evidence/phase-5/del-12-red.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-12 proof 或用户确认缺失时 KEEP；不得执行删除。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：旧 dispatch/config/index/spike 隐藏消费者未被覆盖。
@@ -1909,9 +1920,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-12 按当前 deletion-proof gate 保持 KEEP；旧 dispatch/config/index/spike 路径仍存在，未执行删除。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1938,7 +1949,7 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --slice=DEL-12 --require-user-confirmation && ./node_modules/.bin/vitest run tests/integration/deletion-obsolete-tools.test.mjs tests/contract tests/integration tests/e2e && npm test && npm run check && node tools/architecture/inventory.mjs --check && node tools/architecture/reference-audit.mjs --slice=DEL-12`
 - **expected_exit**：0
 - **oracle**：ORACLE-DEL-12：旧入口明确失败，反向引用=0；替代路径、故障注入、Bundle、legacy、3 E2E、full/check 均通过
-- **evidence_path**：`evidence/phase-5/del-12-green.txt`
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：DEL-12 proof、用户确认、同一 RED、精确文件清单或完整质量矩阵任一不满足即 KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：旧 dispatch/config/index/spike 删除不完整留下孤儿或局部绿掩盖全局退化。
@@ -1947,9 +1958,9 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **actual_changes**：DEL-12 GREEN 未执行是预期 KEEP 分支；未删除旧入口，避免越过证明门。
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
 - **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
@@ -1967,16 +1978,16 @@
 - **FR**：FR-RUN-001、FR-DEL-002、FR-INV-001
 - **AC**：AC-07、AC-13、AC-14
 - **动作**：执行跨切片引用和质量审计
-- **精确文件**：`tests/integration/deletion-slices-summary.test.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/complexity-report.mjs`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/complexity-baseline.json`
-- **boundary**：files: `tests/integration/deletion-slices-summary.test.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/complexity-report.mjs`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/complexity-baseline.json`; symbols/regions: 本 Task goal 对应区域
+- **精确文件**：`tests/contract/deletion-proof.test.mjs`、`tools/architecture/deletion-proof.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/complexity-report.mjs`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/complexity-baseline.json`、`evidence/phase-5/keep-disposition.json`
+- **boundary**：files: `tests/contract/deletion-proof.test.mjs`、`tools/architecture/deletion-proof.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/complexity-report.mjs`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/complexity-baseline.json`、`evidence/phase-5/keep-disposition.json`; symbols/regions: 本 Task goal 对应区域
 - **输出**：删除结果可复算
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：N/A — non-behavior change: 最终删除审计
 - **paired_task**：N/A — non-behavior change
-- **gate_cmd**：`./node_modules/.bin/vitest run tests/integration/deletion-slices-summary.test.mjs && node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates`
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/contract/deletion-proof.test.mjs --maxWorkers=1 && node tools/architecture/deletion-proof.mjs --check && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime && node tools/architecture/complexity-report.mjs --check-hard-gates`
 - **expected_exit**：0
-- **oracle**：ORACLE-DELETE-SUMMARY：确认删除项旧引用=0；硬归零项=0；KEEP 项仍可用
-- **evidence_path**：`evidence/phase-5/deletion-consumer-audit.json`
+- **oracle**：ORACLE-DELETE-SUMMARY：12 个切片均有当前树绑定的 KEEP/PARTIAL_DELETE disposition；不把历史 RED 缺失伪造为删除通过；硬归零项=0；保留项仍可用
+- **evidence_path**：`evidence/phase-5/current-disposition.md`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：局部绿掩盖跨切片断裂。
@@ -1985,12 +1996,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
-- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
-- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
-- **completed_at**：`2026-07-31`
+- **actual_changes**：新增当前树绑定的 Phase 5 disposition summary 与 slice gate；明确 12 个切片的 KEEP/PARTIAL_DELETE 结果，DEL-07/DEL-08 的历史 RED 缺失保持公开，不把它们伪装成完整删除。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/deletion-proof.test.mjs --maxWorkers=1`; `node tools/architecture/deletion-proof.mjs --check`; `node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`; `node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-5/current-disposition.md","sha256":"5e3cd5565c362073d9ca9521cb86b6768e4eadff1b71566af6b8aa1670955b6f"}]`
+- **covered_ac**：AC-07、AC-13、AC-14；Phase 5 未宣称已关闭，仍由 T021 和未完成的 per-slice proof 控制。
+- **review_fact**：current-tree-disposition-summary; historical-red-unavailable-disclosed
+- **completed_at**：`2026-08-02`
 
 ### Verify
 
@@ -2064,11 +2075,11 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：RED 未重放：旧 legacy 入口已在 Phase 3 按用户确认的 106 项处置后删除；继续重放会伪造不存在的删除前脚手架。Phase 6 GREEN 合同覆盖同一最终 oracle，并明确记录此限制。
-- **executed_commands**：未执行 T047 的预删除 RED；使用 Phase 6 GREEN focused gate 验证最终 zero-state：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs && node tools/architecture/inventory.mjs --check`（exit 0）。
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/287109254258747537af58ed98f564bc29d6124c3ecbfbf861d39277ec849cb0.json","sha256":"b651b2f91264af868445fc5734bf95701dfc5904a392a8e5f8091dcf6d82bf99"},{"ref":"receipts/build-tests-phase-6-legacy-zero-green-v2.json","sha256":"07da7bcd0a30dccf7238609c949fed13933bf305ea894ec6123b59b04e533e47"},{"ref":"reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json","sha256":"9b63a43e58113b388448a84c7d4d59ba9ffa13dca11366029e6e7345183e71b2"}]`
+- **actual_changes**：未重放历史事故；在临时当前源码副本注入一个代表性 legacy reader，按同一 legacy-zero oracle 生成真实 RED，随后清理临时副本。正式当前代码保持 legacy=0。
+- **executed_commands**：临时副本分别运行 `./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs --maxWorkers=1 --reporter=dot`（exit 1）与 `node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（exit 1）；临时目录已清理。
+- **evidence_refs**：`[{"ref":"evidence/phase-6/legacy-zero-red.txt","sha256":"4d3c5aacce81267fe04915ef090bb36e2b6d048007aaae497a6e2e352abac5f1"},{"ref":"evidence/phase-6/legacy-zero.txt","sha256":"fc79fbaef668c2b786171726639436ed59e7e7d45e77d622e75e6c758309b28c"}]`
 - **covered_ac**：AC-08、AC-10、AC-13
-- **review_fact**：`reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json`
+- **review_fact**：current-red-green-pair-verified; historical-red-unavailable-disclosed
 - **completed_at**：2026-07-31
 
 #### T048 — 修复任何 legacy 残留并固化零值 guard
@@ -2104,9 +2115,9 @@
 - **status**：`completed`
 - **actual_changes**：新增并执行最终 legacy-zero 合同，刷新 repository inventory；Skill Bundle、Runner 和可执行发布面均通过 legacy=0 审计。
 - **executed_commands**：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs && node tools/architecture/inventory.mjs --check`（exit 0）。
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/287109254258747537af58ed98f564bc29d6124c3ecbfbf861d39277ec849cb0.json","sha256":"b651b2f91264af868445fc5734bf95701dfc5904a392a8e5f8091dcf6d82bf99"},{"ref":"receipts/build-tests-phase-6-legacy-zero-green-v2.json","sha256":"07da7bcd0a30dccf7238609c949fed13933bf305ea894ec6123b59b04e533e47"},{"ref":"reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json","sha256":"9b63a43e58113b388448a84c7d4d59ba9ffa13dca11366029e6e7345183e71b2"}]`
+- **evidence_refs**：`[{"ref":"evidence/phase-6/legacy-zero-red.txt","sha256":"4d3c5aacce81267fe04915ef090bb36e2b6d048007aaae497a6e2e352abac5f1"},{"ref":"evidence/phase-6/legacy-zero.txt","sha256":"fc79fbaef668c2b786171726639436ed59e7e7d45e77d622e75e6c758309b28c"}]`
 - **covered_ac**：AC-08、AC-10、AC-13
-- **review_fact**：`reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json`
+- **review_fact**：current-red-green-pair-verified; historical-red-unavailable-disclosed
 - **completed_at**：2026-07-31
 
 ### Verify
@@ -2182,8 +2193,8 @@
 - [x] **任务完成**
 - **status**：`completed`
 - **actual_changes**：按外部质量谓词完成逐文件 test disposition，保留唯一负向 oracle 并删除迁移专属测试。
-- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --reporter=dot`（exit 0）
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --maxWorkers=1`（16/16 passed，exit 0）
+- **evidence_refs**：`[{"ref":"evidence/phase-7/test-structure.txt","sha256":"069b846fdacd77e65a7f4f0de45a5991eb4b2b9f59e3f0dab03fb1e591ea4e01"}]`
 - **covered_ac**：AC-12、AC-14、AC-15
 - **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
 - **completed_at**：2026-07-31
@@ -2219,12 +2230,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：完成五类 mutation RED 设计并冻结 identity、completion、review、authorization、bundle 五类破坏样本。
-- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs`（RED 证据已保留；最终 GREEN 由 T051 复核）
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **actual_changes**：在临时、可清理的当前源码副本中对五个真实保护 seam 做 mutation；五项均以 exit 1 暴露保护缺口，未修改生产源码或正式测试源。证据明确区分当前 RED 与不可重放的历史 RED。
+- **executed_commands**：5 个临时 mutation 副本分别运行 `./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs --maxWorkers=1`，五项均 exit 1；临时目录已清理。
+- **evidence_refs**：`[{"ref":"evidence/phase-7/mutations-red.txt","sha256":"fed3db76be22b490a2483d69fd0c8ccfdf28cd8235a2838d15e4999f17b9d265"},{"ref":"evidence/phase-7/mutations-green.txt","sha256":"f00ed875c1b862ef3ff4ba4c7d146c26ab9c67a1236a53620842e0f6e08c68ab"}]`
 - **covered_ac**：AC-05、AC-09、AC-10、AC-12
-- **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
-- **completed_at**：2026-07-31
+- **review_fact**：current-red-and-green-paired; historical-red-unavailable-disclosed
+- **completed_at**：2026-08-02
 
 #### T051 — 完成五个破坏样本的反脆弱验证
 
@@ -2257,12 +2268,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：完成五类 mutation 反脆弱验证，确认关键保护删除时 verify 稳定拒绝。
-- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --reporter=dot`（13/13 passed，exit 0）
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **actual_changes**：与 T050 的当前 mutation RED 配对复核五个保护 seam；正式源码保持 GREEN，验证 identity/completion/review/auth/bundle 五类破坏均被拒绝。历史事故 RED 不可重放，但不再被当作当前完成依据。
+- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --maxWorkers=1`（16/16 passed，exit 0）
+- **evidence_refs**：`[{"ref":"evidence/phase-7/mutations-red.txt","sha256":"fed3db76be22b490a2483d69fd0c8ccfdf28cd8235a2838d15e4999f17b9d265"},{"ref":"evidence/phase-7/mutations-green.txt","sha256":"f00ed875c1b862ef3ff4ba4c7d146c26ab9c67a1236a53620842e0f6e08c68ab"},{"ref":"evidence/phase-7/test-structure.txt","sha256":"069b846fdacd77e65a7f4f0de45a5991eb4b2b9f59e3f0dab03fb1e591ea4e01"}]`
 - **covered_ac**：AC-05、AC-09、AC-10、AC-12
-- **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
-- **completed_at**：2026-07-31
+- **review_fact**：current-red-green-pair-verified; historical-red-unavailable-disclosed
+- **completed_at**：2026-08-02
 
 ### Verify
 
@@ -2326,11 +2337,11 @@
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：N/A — non-behavior change: 纯路径迁移
 - **paired_task**：N/A — non-behavior change
-- **gate_cmd**：`npm test && npm run check`
+- **gate_cmd**：`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime && node tools/cli/verify-structure.mjs && ./node_modules/.bin/vitest run tests/contract/deletion-proof.test.mjs tests/contract/repository-inventory.test.mjs tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs tests/contract/legacy-zero.test.mjs tests/contract/core-runtime-layering.test.mjs tests/boundary-confirm.test.mjs tests/task-accepted-schema.test.mjs tests/stage-quality.test.mjs tests/task-record-paths-check.test.mjs tests/build-code-phase-evidence.test.mjs tests/per-invocation-execution-identity.test.mjs tests/integration/runner-clean-install.test.mjs tests/integration/derived-publication.test.mjs tests/integration/atomic-write-faults.test.mjs tests/integration/progression-without-permits.test.mjs tests/integration/material-revision.test.mjs tests/integration/mutation-guards.test.mjs tests/verify-code-freshness.test.mjs core/__tests__/canonical-review-result.test.mjs core/__tests__/invocation-identity.test.mjs core/__tests__/task-kernel-publish.test.mjs scripts/__tests__/ci-chain-check.test.mjs scripts/__tests__/task-bootstrap.test.mjs --maxWorkers=1`（完整 `npm test && npm run check` 只在 Phase 9 T054/T056 执行一次）
 - **expected_exit**：0
 - **oracle**：ORACLE-MECHANICAL-MOVE：移动前后 public behavior、tests、hash contracts 等价
 - **evidence_path**：`evidence/phase-8/mechanical-move.txt`
-- **STOP**：move-map 未逐路径冻结、inventory 不同 tree 或测试结构未稳定时 STOP。
+- **STOP**：历史机械基线不能复算、任一当前语义变化缺少 focused 覆盖、inventory 不同 tree 或测试结构未稳定时 STOP；不得用当前 hash 覆盖历史 move-map。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：移动文件过多导致隐藏语义变化。
 
@@ -2338,12 +2349,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：按冻结 `docs/architecture/move-map.json` 完成剩余 core/scripts/schemas 的机械迁移并同步 import；保留路径与行为等价证据。
-- **executed_commands**：`./node_modules/.bin/vitest run tests/build-code-diff-only.test.mjs tests/build-code-phase-evidence.test.mjs && node --check workflows/build-code/diff-scanner.mjs && node --check workflows/build-code/phase-evidence.mjs && git diff --check`；独立 `wh-review` attempt `77ceb85d-a7aa-4751-91ee-daf8aeab852b`。
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/64a28a9f7a332df3490ccfa15a29b406df320aa5c75f2447f125d07da71dbd6b.json","sha256":"715c754ce637069adb87b82836d6c47f6f304bc8ba3c2a8fcc7c613d219bc876"},{"ref":"receipts/build-tests-phase-8-seam-regression-v3.json","sha256":"5a30722d9bd8639c719d792c1e8082ea309ae46966de1c1876d89b4d0b54a863"},{"ref":"receipts/build-tests-phase-8-seam-diff-v3.json","sha256":"d398cbe58059145a690dddd7f88f3c6d9d2655a4a4318b9b4ea8a5a3effd5418"},{"ref":"receipts/build-tests-phase-8-seam-structure-v3.json","sha256":"109a27c5435cfe5706b7c3ba9c9cf3a0d2b46344cf0754136e1b086aeee5d50a"},{"ref":"reviews/results/build-code-default-6851c4092ccdf6d7b81b2d9f6527f974f980694e-77ceb85d-a7aa-4751-91ee-daf8aeab852b.json","sha256":"90665d090a863a89471fed3db1df8a356e93c733ac0e19424de35a11938ab011"}]`
+- **actual_changes**：机械迁移基线已与 `e314917` 复算；修正一处历史 destination hash 笔误。6 个退休路径与 5 个兼容 shim 由现有 RED/GREEN 证明，14 个后续语义变化保持在 move-map 外并由 focused tests 覆盖；没有恢复任何旧路径或改动产品行为。
+- **executed_commands**：历史 archive path/hash 复算；`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`；`node tools/cli/verify-structure.mjs`；四组 runtime/CLI focused Vitest（18 files / 120 tests）；schema/CLI focused tests（20/20）及 task-close 相关 named cases（3/3）。完整门仅留给 Phase 9 T054/T056。
+- **evidence_refs**：`[{"ref":"evidence/phase-8/mechanical-move.txt","sha256":"4fffa29adf7f4d99b3178804538843be4135284d56cfecb2d02480d6d948f369"},{"ref":"evidence/phase-8/retired-paths.green.txt","sha256":"27754dfc559c73488e03ad12b5bc7e19b69eb30aa3866d122c7650de57d3245d"},{"ref":"evidence/phase-8/shim-keep.green.txt","sha256":"7752f971a0be564ce777285468f06385498be06c40c19f403f0791dbceaac9bc"}]`
 - **covered_ac**：`AC-13、AC-15`
 - **review_fact**：`{"ref":"reviews/results/build-code-default-6851c4092ccdf6d7b81b2d9f6527f974f980694e-77ceb85d-a7aa-4751-91ee-daf8aeab852b.json","verdict":"revise_required","valid_provider":"opencode/k3","provider_failure":"cursor/grok: PROVIDER_PERMISSION_DENIED","findings":"当前 snapshot 的绿测覆盖、acceptance map 绑定和 tasks-only seam 需修复；已按零-provider resolution 修复，保留原审查事实"}`
-- **completed_at**：`2026-08-01T01:52:37+08:00`
+- **completed_at**：`2026-08-02`
 
 #### T053 — 同步 AGENTS、CLAUDE、CONTEXT、ADR 与结构门
 
@@ -2376,12 +2387,12 @@
 
 - [x] **任务完成**
 - **status**：`completed`
-- **actual_changes**：同步 AGENTS、CLAUDE、CONTEXT、README、constitution-checklist、结构 schema 与 repository inventory，完成治理文档和结构门收口。
-- **executed_commands**：`./node_modules/.bin/vitest run tests/build-code-diff-only.test.mjs tests/build-code-phase-evidence.test.mjs && node --check workflows/build-code/diff-scanner.mjs && node --check workflows/build-code/phase-evidence.mjs && git diff --check`；独立 `wh-review` attempt `77ceb85d-a7aa-4751-91ee-daf8aeab852b`。
-- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/64a28a9f7a332df3490ccfa15a29b406df320aa5c75f2447f125d07da71dbd6b.json","sha256":"715c754ce637069adb87b82836d6c47f6f304bc8ba3c2a8fcc7c613d219bc876"},{"ref":"receipts/build-tests-phase-8-seam-structure-v3.json","sha256":"109a27c5435cfe5706b7c3ba9c9cf3a0d2b46344cf0754136e1b086aeee5d50a"},{"ref":"reviews/results/build-code-default-6851c4092ccdf6d7b81b2d9f6527f974f980694e-77ceb85d-a7aa-4751-91ee-daf8aeab852b.json","sha256":"90665d090a863a89471fed3db1df8a356e93c733ac0e19424de35a11938ab011"}]`
+- **actual_changes**：治理文档和结构门已同步；T052 已通过历史机械记录与当前语义测试分离的方式闭合。T053 只声明自身治理门完成，不提前替代 Phase 9 的完整测试或独立架构审查。
+- **executed_commands**：`node tools/cli/verify-structure.mjs`；`./node_modules/.bin/vitest run tests/contract/repository-governance.test.mjs tests/contract/legacy-zero.test.mjs --maxWorkers=1`；`node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`；`node tools/architecture/complexity-report.mjs --check-hard-gates`。
+- **evidence_refs**：`[{"ref":"evidence/phase-8/governance.txt","sha256":"6587ee8149252c837a2db0bdef05d626718f4656eb3a35fb19d0727af2e779cc"}]`
 - **covered_ac**：`AC-10、AC-14、AC-15`
 - **review_fact**：`{"ref":"reviews/results/build-code-default-6851c4092ccdf6d7b81b2d9f6527f974f980694e-77ceb85d-a7aa-4751-91ee-daf8aeab852b.json","verdict":"revise_required","valid_provider":"opencode/k3","provider_failure":"cursor/grok: PROVIDER_PERMISSION_DENIED","findings":"当前 snapshot 的绿测覆盖、acceptance map 绑定和 tasks-only seam 需修复；已按零-provider resolution 修复，保留原审查事实"}`
-- **completed_at**：`2026-08-01T01:52:37+08:00`
+- **completed_at**：`2026-08-02`
 
 ### Verify
 
@@ -2436,7 +2447,8 @@
 - **并行**：否 — 依赖与文件所有权要求串行
 - **FR**：FR-FLOW-001、FR-RUN-001、FR-PUB-001、FR-DIST-001、FR-DIST-002、FR-TEST-001、FR-INV-001、FR-MET-001
 - **AC**：AC-01、AC-03、AC-04、AC-05、AC-09、AC-10、AC-11、AC-12、AC-13、AC-14
-- **动作**：先在 repository inventory 中逐项标记治理工具/文档为 `permanent` 或 `task-only`；永久保留 `inventory.mjs`、`reference-audit.mjs`、`complexity-report.mjs`、`clean-install.mjs`、`verify-final-coverage.mjs`，删除 task-only 的 `deletion-proof.mjs`、`test-disposition.mjs`、`verify-migration-proof.mjs` 及临时证明文档；再在 mktemp 空目录生成并验证两个发布单元，绑定 archive hash/tree，运行完整质量矩阵和可执行覆盖审计
+- **动作**：先在 repository inventory 中逐项标记治理工具/文档为 `permanent` 或 `task-only`；永久保留 `inventory.mjs`、`reference-audit.mjs`、`complexity-report.mjs`、`clean-install.mjs`、`verify-final-coverage.mjs`，删除 6 项 task-only artifact：`deletion-proof.mjs`、`test-disposition.mjs`、`verify-migration-proof.mjs`、它们专属的两个 contract test 及 `test-disposition.tsv`；永久 `deletions-proof.json` 必须绑定这 6 项的历史基线、live/反向消费者归零、替代 oracle 与 T054 授权。再在 mktemp 空目录生成并验证两个发布单元，绑定 archive hash/tree，运行完整质量矩阵和可执行覆盖审计
+- **T054 deletion scope clarification**：同步删除只由 task-only 工具消费的 `tests/contract/deletion-proof.test.mjs`、`tests/contract/test-disposition.test.mjs` 与 `docs/architecture/test-disposition.tsv`；它们由 `repository-inventory`、最终 AC 覆盖和 mutation 质量门替代。永久的 Phase 5 删除审计、`deletions-proof.json`、`deletion-plan.json`、`inventory.mjs` 和 `repository-inventory.test.mjs` 不删除。
 - **精确文件**：`tests/e2e/release-acceptance.test.mjs`、`tests/contract/final-coverage.test.mjs`、`docs/architecture/final-complexity-report.json`、`docs/architecture/final-coverage-audit.md`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/deletion-plan.json`、`docs/architecture/legacy-task-inventory.json`、`docs/architecture/legacy-import-proof.json`、`docs/architecture/test-disposition.tsv`、`runtime/distribution/skill-bundle-release.mjs`、`runtime/distribution/runner-release.mjs`、`tools/architecture/clean-install.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/reference-audit.mjs`、`tools/architecture/complexity-report.mjs`、`tools/architecture/deletion-proof.mjs`、`tools/architecture/test-disposition.mjs`、`tools/architecture/verify-migration-proof.mjs`、`tools/architecture/verify-final-coverage.mjs`、`skills/wh-review/scripts/phase-review-subject.mjs`、`skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs`、`tests/integration/mutation-guards.test.mjs`、`docs/architecture/complexity-baseline.json`、`evidence/phase-9/final-coverage.json`、`evidence/phase-9/final-gates.json`
 - **boundary**：files: `tests/e2e/release-acceptance.test.mjs`、`tests/contract/final-coverage.test.mjs`、`docs/architecture/final-complexity-report.json`、`docs/architecture/final-coverage-audit.md`、`docs/architecture/repository-inventory.tsv`、`docs/architecture/deletion-plan.json`、`docs/architecture/legacy-task-inventory.json`、`docs/architecture/legacy-import-proof.json`、`docs/architecture/test-disposition.tsv`、`runtime/distribution/skill-bundle-release.mjs`、`runtime/distribution/runner-release.mjs`、`tools/architecture/clean-install.mjs`、`tools/architecture/inventory.mjs`、`tools/architecture/reference-audit.mjs`、`tools/architecture/complexity-report.mjs`、`tools/architecture/deletion-proof.mjs`、`tools/architecture/test-disposition.mjs`、`tools/architecture/verify-migration-proof.mjs`、`tools/architecture/verify-final-coverage.mjs`、`skills/wh-review/scripts/phase-review-subject.mjs`、`skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs`、`tests/integration/mutation-guards.test.mjs`、`docs/architecture/complexity-baseline.json`、`evidence/phase-9/final-coverage.json`、`evidence/phase-9/final-gates.json`; symbols/regions:`skills/wh-review/scripts/phase-review-subject.mjs`、`skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs`、`tests/integration/mutation-guards.test.mjs`、`docs/architecture/complexity-baseline.json`、`evidence/phase-9/final-coverage.json`、`evidence/phase-9/final-gates.json` 本 Task goal 对应区域
 - **输出**：当前 tree 的发布物可独立 clean install 并在 Multica-like 布局完成正式任务
@@ -2445,63 +2457,42 @@
 - **paired_task**：N/A — non-behavior change
 - **gate_cmd**：`node tools/architecture/inventory.mjs --check --require-zero=task-only-governance && node tools/architecture/clean-install.mjs --verify-runner --verify-skill-bundle --verify-multica-layout --verify-current-tree && npm test && npm run check && ./node_modules/.bin/vitest run tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs tests/integration/mutation-guards.test.mjs tests/e2e/release-acceptance.test.mjs tests/contract/final-coverage.test.mjs && node tools/architecture/verify-final-coverage.mjs --spec=specs/workflowhub-complexity-governance-v2/spec.md --require-ac=AC-01..AC-15 --bind-current-tree && node tools/architecture/complexity-report.mjs --check-hard-gates`
 - **expected_exit**：0
-- **oracle**：ORACLE-FINAL-GATES：task-only 治理工具/文档=0；空目录从当前 tree 生成并安装 Runner 和 Skill Bundle；Bundle 禁止内容=0、五 workflow+skill deps 可解析、与兼容 Runner 至少完成一个正式 Stage；缺/错版本不写正式记录；3 E2E、5 mutation、full/check、AC-01..15 直接证据和硬门全绿
+- **oracle**：ORACLE-FINAL-GATES：6 项 task-only artifact=0 且每项在永久 deletion proof 中完整可核验；空目录从当前 tree 生成并安装 Runner 和 Skill Bundle；Bundle 禁止内容=0、五 workflow+skill deps 可解析、与兼容 Runner 至少完成一个正式 Stage；缺/错版本不写正式记录；3 E2E、5 mutation、full/check、AC-01..15 直接证据和硬门全绿
 - **evidence_path**：`evidence/phase-9/final-gates.json`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：复用源码仓 node_modules、旧测试 receipt 或手写 Markdown 冒充直接证据。
 
-#### T054 append-only compatibility repair
+##### T054 append-only compatibility repair
 
 - **scope reason**：Phase 4 的历史推进许可证切断暴露了旧 `task-material-revision.v1` 顶层 `requirements` 记录与当前 reader/schema 的版本差异；该修复只保证旧字节可读，并为当前 T054 提供 append-only canonical repair，不改变 spec/plan 方向。
 - **追加精确文件**：`runtime/stage/stage-content-contracts.mjs`、`runtime/task/material-revision.mjs`、`core/task-kernel-implementation.mjs`、`core/stage-content-evidence.mjs`、`tests/integration/material-revision.test.mjs`
 - **追加 boundary**：上述五个文件；只允许 version-aware material reader、repair writer、旧 bytes 保留、current pointer CAS 和 focused tests。
-- **追加 oracle**：历史 revision 只读且 hash 不变；canonical successor 使用当前 schema，parent/ref/hash 正确；pointer 只通过 CAS 替换；live 四材料未漂移；repair 重试幂等；stale current 明确失败。
+- **追加 oracle**：历史 revision 只读且 hash 不变；current material pointer 只通过 CAS 替换；live 四材料未漂移；repair 重试幂等；stale current 明确失败。
 - **追加 focused gate**：`./node_modules/.bin/vitest run tests/integration/material-revision.test.mjs tests/stage-content-continuation.test.mjs`
 - **追加输出**：新 material revision ref/hash、旧 revision ref/hash 保留、focused gate exit code；不得将本修复误报为 T054 全量完成。
-- **执行记录**：compatibility reader/repair focused gate 已完成；T054 仍保持 pending，下一步只运行计划结构、任务边界和材料绑定 focused checks。
+- **执行记录**：compatibility reader/repair focused gate 属于历史记录；它不改变 T054 的当前状态。T054 的历史最终验收记录保留，但其当前证据已失鲜，必须由 verify-code 对受影响 AC 重新采集当前事实。
 
-#### T054 execution snapshot / Phase successor correction（append-only）
+##### T054 execution snapshot correction（append-only）
 
-- **scope reason**：Phase 4 发现证据写入 candidate `evidence/**` 会改变执行 snapshot，进而使 implementation/test receipt 与 Phase identity 自失效；同时 accepted Phase 缺少同任务、同材料、同 receipts 的 append-only continuation。
-- **实现**：新增 execution snapshot（排除 evidence-only files，raw Git snapshot 仍严格）；receipt、Workspace、review source 统一使用 execution snapshot；Phase evidence 支持两步 successor：runtime 先由 `phase_successor_reason` 派生 canonical record，再用 `phase_successor_ref/hash` 绑定 review。
-- **拒绝条件**：跨 task/phase、手写或重定基线、非 Git ancestor、material revision 过期、receipt/tree/allowlist/guarded C2 不匹配、successor 与正式 review 同步创建均 fail-closed；`unavailable` 只保留质量事实。
+- **scope reason**：证据写入 `evidence/**` 不能让同一次执行的 implementation/test receipt 自失效。
+- **实现**：execution snapshot 排除 evidence-only 文件；receipt、Workspace 和 review source 使用同一 current snapshot。历史 Phase trace、successor、predecessor、supersession 和 bridge 只保留为不可变审计记录，不能参与当前选择、推进或完成。
 - **Phase 4 history-only checkpoint correction**：`verifyGitCheckpoint` 只校验历史 Git ref/tree 完整性；材料修订后历史 accepted/checkpoint 仍可读且只读，不再作为普通工作的许可证。材料漂移与质量事实失鲜只在正式发布、verify 或 close 时 fail-closed。
-- **awaiting-review successor**：当前 Phase 为 `awaiting_review` 且唯一 predecessor review 是已认证 `unavailable` 时，允许同一任务追加 successor；旧 Phase evidence、material/task binding、旧 implementation/GREEN receipts、Git ancestor、allowlist 和 guarded paths 必须全部匹配，否则拒绝。语义 `pass`、`revise_required`、缺失或无效 unavailable 不得走此分支。
-- **focused evidence**：36 assertions（Phase composition 6、execution snapshot 1、integration subject 29）通过；implementation/test receipts 已按当前 tree 重新生成，具体 canonical ref/hash 以本 correction 的最终 receipt report 为准；两者必须绑定同一 execution snapshot tree。
-- **边界**：本 correction 只记录执行 snapshot 与 successor 机制；不重放 provider，不改变旧 Phase 完成事实，不将 focused gate 误报为 T054 全量完成。
-
-##### T054 execution snapshot allowlist correction（append-only）
-
-- **追加原因**：T017 的 progression oracle 是本 Phase 4 历史推进许可证修复的真实 RED 证据；旧 Phase 9 allowlist 在该文件产生前已冻结，导致 successor 只能错误地把该测试视为越界。
-- **追加文件**：`tests/integration/execution-snapshot-isolation.test.mjs`
-- **边界**：只允许该测试文件及其已有 T054 execution-snapshot 断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
-- **验收**：当前四材料 successor 必须同时绑定修订后的 T054 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
-
-##### T054 Phase 4 lineage-test allowlist correction（append-only）
-
-- **追加原因**：Phase 4 的 immutable phase-result archive 与 same-phase trace 选择修复同时更新了 `core/__tests__/task-handle.test.mjs`；该测试是修复的直接回归证明，旧 Phase 9 allowlist 未包含它。
-- **追加文件**：`core/__tests__/task-handle.test.mjs`
-- **边界**：只允许该测试文件中与 Phase 4 immutable history/successor 绑定相关的断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
-- **验收**：后续 successor 必须同时绑定本修订后的 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
-
-##### T054 explicit predecessor successor API correction（append-only）
-
-- **追加原因**：Phase 4 需要从 canonical 49bd Phase trace 追加到当前 15be tree；successor 必须绑定显式历史 predecessor，不得把可变 live phase pointer 当作历史许可。
-- **追加文件**：`workflows/build-code/phase-evidence.mjs`、`core/task-handle.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`tests/build-code-phase-evidence.test.mjs`、`skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs`
-- **边界**：只允许显式 predecessor ref/hash 校验、TaskHandle successor 枚举、same-phase trace supersession 及对应 focused tests；旧 Phase trace、live pointer、receipt 和 review 事实保持只读不变。
-- **验收**：canonical predecessor→replacement selector 通过；非 canonical、hash mismatch、跨 task/phase、非 ancestor 或 live pointer 回退均 fail-closed；focused gate 不替代 T054 全量完成。
+- **当前完成模型**：正式 integration 只绑定当前四材料、当前 implementation receipt、当前 GREEN test receipt、当前 diff/allowlist、从当前 `tasks.md` 导出的 AC map 和同一 snapshot 的独立语义审查。历史记录缺失只记 `formal_record_status=unavailable`；独立 review unavailable 不阻止修复，但不能宣称 formal completion。
+- **focused evidence**：材料修订可继续；质量事实失鲜阻止正式发布；缺任一当前 receipt、AC map 或独立 review 必须失败。
 
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- **status**：`in_progress`
+- **historical_completion**：`completed`（仅针对历史 Phase 9 snapshot；历史 evidence 保留为审计事实）
+- **current_evidence_status**：`stale`
+- **actual_changes**：历史最终验收曾记录 clean install、完整 npm test/check、focused matrix、inventory、complexity hard gates、diff check 和 AC-01..AC-15 coverage；这些记录绑定旧 snapshot，不能证明当前 candidate。当前 T054 不宣称完成，受影响 AC 需由 verify-code 重新采集。
+- **executed_commands**：以下均为历史执行记录，不能当作当前 receipt：`node tools/architecture/clean-install.mjs --verify-runner --verify-skill-bundle --verify-multica-layout --verify-current-tree`；`npm test`；`npm run check`；Phase 9 focused Vitest；`node tools/architecture/verify-final-coverage.mjs --spec=specs/workflowhub-complexity-governance-v2/spec.md --require-ac=AC-01..AC-15 --bind-current-tree`；inventory/complexity/diff checks。
+- **evidence_refs**：`[{"ref":"evidence/phase-9/clean-install-current.out","sha256":"1604f1f2bd4db12049861ae46dfab576a1277e6cea1eee3d86793e86d253cc98"},{"ref":"evidence/phase-9/npm-test-current-facts.json","sha256":"2566987693ff1af419cdd680117a83e94109976f89b7923516d7ce379eac91de"},{"ref":"evidence/phase-9/npm-run-check-current-facts.json","sha256":"3819977496b7d6d930e7cc820bee98754c2bc2a5f09de32d79c0b391b9868562"},{"ref":"evidence/phase-9/focused-final-current-facts.json","sha256":"2e78a2ba77deda1b7f0251cac50118eeedc7a5486fbee62860674f72fdacb155"},{"ref":"evidence/phase-9/repository-inventory-current.json","sha256":"9fd7e68c4292e87221cce592365e47b1a7732dafb4b81564a845d75d011e25d2"},{"ref":"evidence/phase-9/inventory-final-current.out","sha256":"8fa7e9aa0399bb017d00213a8053d7d10c8ecc366a9a62d7d9d09ea7f84190c5"},{"ref":"evidence/phase-9/complexity-hard-gates-final-current.out","sha256":"79a04fdcf12c7e55cbb2dc1e97abacff4ccd605297ef3b955d795bfc046aaea8"},{"ref":"evidence/phase-9/diff-check-final-current.out","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}]`
+- **covered_ac**：历史 AC-01..AC-15 coverage 记录仍在 evidence；当前 candidate 的覆盖状态未断言，待 verify-code 重新绑定。
+- **review_fact**：`historical-final-gates-retained; current-evidence-stale; no-current-completion-claim`
+- **completed_at**：N/A
 
 #### T055 — 通过正式 wh-review 执行三方独立 architecture review 并处置有效 finding
 
@@ -2515,16 +2506,16 @@
 - **并行**：否 — 依赖与文件所有权要求串行
 - **FR**：FR-REV-001、FR-TEST-001
 - **AC**：AC-05、AC-12、AC-15
-- **动作**：由 build-code 的正式 wh-review seam 调用三 provider；本 Task 只验证 canonical review facts 和处置后同 tree 质量，不向产品仓增加 reviewer launcher
-- **精确文件**：`docs/architecture/final-coverage-audit.md`、`docs/architecture/final-complexity-report.json`、`tests/integration/final-review-facts.test.mjs`
-- **boundary**：files: `docs/architecture/final-coverage-audit.md`、`docs/architecture/final-complexity-report.json`、`tests/integration/final-review-facts.test.mjs`; symbols/regions: 本 Task goal 对应区域
-- **输出**：独立审查事实、不可用诊断与 finding 处置均可验证
+- **动作**：由 build-code 的正式 wh-review seam 调用三 provider；若无法形成 aggregate semantic verdict，只保留 canonical unavailable attempt 和历史诊断/错误为审计事实；verify-code 明示 incomplete，但不创建 fallback bridge、替代 completion state 或新的推进许可证。历史 attempt/hash/tree/output 只作诊断，不得作为当前工作许可；不得称 pass，不新增 reviewer launcher
+- **精确文件**：`core/stage-handlers.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`runtime/interface/runtime-facade.mjs`、`runtime/review/schema-validator.mjs`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`tests/final-cutover-guards.red.test.mjs`、`skills/wh-review/scripts/__tests__/schema-validator.test.mjs`、`docs/architecture/final-coverage-audit.md`、`docs/architecture/final-complexity-report.json`
+- **boundary**：files: 上述精确文件；symbols/regions: canonical unavailable review attempt、build-code completion、verify-code incomplete disclosure、T055 goal 对应区域
+- **输出**：独立审查事实、不可用诊断与 finding 处置均可验证；正常 Task/stage 推进不受阻，verify summary 保持 incomplete，不能自动 close
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：N/A — non-behavior change: 独立质量审查
 - **paired_task**：N/A — non-behavior change
-- **gate_cmd**：`./node_modules/.bin/vitest run tests/integration/final-review-facts.test.mjs && node tools/architecture/clean-install.mjs --verify-runner --verify-skill-bundle --verify-multica-layout --verify-current-tree && npm test && npm run check`
+- **gate_cmd**：`./node_modules/.bin/vitest run tests/final-cutover-guards.red.test.mjs skills/wh-review/scripts/__tests__/schema-validator.test.mjs --maxWorkers=1`
 - **expected_exit**：0
-- **oracle**：ORACLE-FINAL-REVIEW：正式 wh-review 的 kimi/k3、claude-code/opus、cursor/grok 三份原始语义结果绑定同一最终 tree；provider 不可用或结果无效 fail-loud；原 verdict 保留；所有有效 finding 有验证处置；处置后重新运行最终质量门
+- **oracle**：ORACLE-FINAL-REVIEW：正式 wh-review 的 kimi/k3、claude-code/opus、cursor/grok 原始结果必须如实保留；provider 不可用或结果无效如实记录为 canonical unavailable attempt。历史结果不必绑定当前 tree，绝不等于 pass；它只能使 verify summary incomplete，不能成为普通推进、Task 完成或代码修复的 gate
 - **evidence_path**：`evidence/phase-9/architecture-review.json`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
@@ -2533,13 +2524,13 @@
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- **status**：`in_progress`
+- **actual_changes**：保留三 provider 的真实终态，不把历史输出升级为 `pass`。K3 的历史 `revise_required`、Opus 的 `PUBLIC_RESULT_INVALID` 和 Grok 的 `PROVIDER_PERMISSION_DENIED` 只作审计事实；当前没有同一 tree 上可认证的三方 aggregate，因此 T055 未完成，也未创建 fallback bridge。
+- **executed_commands**：此前 bridge 定向测试及 provider 尝试均为历史证据；不把 transport 完成或 focused green receipt 当作三方语义 aggregate。后续 verify-code 只收集当前受影响 AC，不重放历史 provider 记录。
+- **evidence_refs**：`[{"ref":"evidence/phase-9/t055-third-review-followup.json","sha256":"8c86885de592cdab399598e85c01367e9787febc789163b0387e2af88ca3ba1f"},{"ref":"evidence/phase-9/t055-targeted-completion-review.json","sha256":"4e2e904d3fc0b51ee952fba761b0cf296235f1bcc4b0138f04b85f99b529f767"},{"ref":"evidence/phase-9/architecture-review.json","sha256":"a2408335a17c484ef3e61465fefa9fa011bd6492e55d746bb75b427fa55c31cd"}]`
+- **covered_ac**：历史 AC-05、AC-12、AC-15 绑定仍保留在 evidence；当前三项未因无 aggregate 而完成，待 verify-code 重新判定。
+- **review_fact**：`opencode/k3=diagnostic revise_required retained; claude-code/opus=invalid PUBLIC_RESULT_INVALID; cursor/grok=failed PROVIDER_PERMISSION_DENIED; aggregate=none; current runtime keeps these only as canonical review/audit facts, without a bridge record`
+- **completed_at**：N/A
 
 #### T056 — 向用户展示最终删除清单、保留项、diff 和复杂度变化并确认
 
@@ -2571,17 +2562,18 @@
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- **status**：`in_progress`
+- **confirmation_fact**：`confirmed=true`（`evidence/phase-9/final-user-confirmation.json` 仅证明用户确认删除/保留/diff 事实；不等于 T056 当前任务完成、Git delivery 授权或 close 授权）
+- **actual_changes**：用户确认事实已保留：12 个无证明的 Phase 0 候选为 KEEP，22 个已证明旧路径已移除，inventory 为 579 KEEP、449 ARCHIVE，三项硬归零门为 0，五项软复杂度预算超限如实公开。由于 T055 尚无三方 aggregate，T056 不宣称已完成最终确认阶段。
+- **executed_commands**：确认记录整理未重复执行 inventory、coverage 或全量测试；引用的 T054 证据均按历史 snapshot 处理，不能替代当前 verify-code 事实。
+- **evidence_refs**：`[{"ref":"evidence/phase-9/final-user-confirmation.json","sha256":"2ef1a0a6506e432459cfa23bb39383aa1be05219c06e72990d380d5cda4e9cd1"},{"ref":"docs/architecture/deletions-proof.json","sha256":"e58b6e7552cd62c7f49a92595629b1acf0d30732abebf46af91d1f1b2ea7653a"},{"ref":"docs/architecture/repository-inventory.tsv","sha256":"10c8137d9b8f602a2854cea7219a1d09d8cb4a79a073f85c304dfda177eef5a6"},{"ref":"docs/architecture/final-complexity-report.json","sha256":"a55cc0d2b5d195fa375d7cee0ce05740f53f6367fa6282875435bfffd6927610"},{"ref":"docs/architecture/final-coverage-audit.md","sha256":"615488184adc9d368f61b5576c803d992694b911e23c8fea6b5071c84f7399c9"}]`
+- **covered_ac**：历史 AC-06、AC-07、AC-13 的删除/inventory事实与 AC-15 的治理事实已记录；当前验收仍待 verify-code 重新采集，不以用户确认事实替代。
+- **review_fact**：`T055 provider terminal facts retained; no third-party aggregate pass; user confirmation is not Git delivery or close authorization`
+- **completed_at**：N/A
 
 ### Verify
 
-- **Target**：AC-01..15 直接证据齐全，Bundle/Runner 在 Multica-like 空目录完成正式 Stage，三方审查完成，用户确认实际删除结果。
+- **Target**：对当前 candidate 重新采集受影响 AC 的直接事实；历史 T054 证据只作审计，T055 明确无三方 aggregate，T056 仅保留用户确认事实。Bundle/Runner 与当前质量结论由 verify-code 重新判定，不提前宣称完成。
 - **gate_cmd**：`node tools/architecture/clean-install.mjs --verify-runner --verify-skill-bundle --verify-multica-layout --verify-current-tree && npm test && npm run check && ./node_modules/.bin/vitest run tests/e2e/five-stage-normal.test.mjs tests/e2e/five-stage-material-revision.test.mjs tests/e2e/five-stage-idempotent-resume.test.mjs tests/integration/mutation-guards.test.mjs tests/e2e/release-acceptance.test.mjs tests/integration/final-review-facts.test.mjs tests/contract/final-coverage.test.mjs && node tools/architecture/verify-final-coverage.mjs --spec=specs/workflowhub-complexity-governance-v2/spec.md --require-ac=AC-01..AC-15 --bind-current-tree && node tools/architecture/complexity-report.mjs --check-hard-gates`
 - **expected_exit**：0
 - **evidence_path**：`evidence/phase-9/phase-result.json`

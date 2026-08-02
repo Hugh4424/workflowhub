@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
+import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
 import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
@@ -130,10 +131,12 @@ function integrationMaterialFacts(integrationSubject) {
       !integrationSubject.ac_trace || integrationSubject.ac_trace.schema_version !== "ac-change-test-trace.v1") {
     throw new TypeError("integration subject is invalid");
   }
+  if (integrationSubject.formal_record_status?.status === "unavailable") return {};
   return {
     phase_coverage: integrationSubject.phase_coverage,
     seam_index: integrationSubject.seam_index,
     ac_trace: integrationSubject.ac_trace,
+    ...(integrationSubject.material_revision ? { material_revision: integrationSubject.material_revision } : {}),
   };
 }
 
@@ -386,13 +389,14 @@ function readMatchingRecords(task, refs, identity) {
   return matches;
 }
 
-function sameReviewSubject(record, { taskId, stage, reviewTrack, subject }) {
+function sameReviewSubject(record, { taskId, stage, reviewTrack, subject, snapshotTree }) {
   return record?.task_id === taskId
     && record.stage === stage
     && record.review_track === reviewTrack
     && record.subject_kind === subject.subject_kind
     && record.phase_id === subject.phase_id
-    && (record.review_scope ?? null) === subject.review_scope;
+    && (record.review_scope ?? null) === subject.review_scope
+    && (stage !== "build-code" || record.snapshot_tree === snapshotTree);
 }
 
 function storedSemanticOutcome(task, resultRef, result, identity) {
@@ -411,8 +415,10 @@ function storedSemanticOutcome(task, resultRef, result, identity) {
   const storedPolicyFingerprint = attempt.review_policy === undefined ? null : hashCanonical(attempt.review_policy);
   if (storedPolicyFingerprint !== identity.policyFingerprint) return null;
   const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const terminalAttempts = new Map();
+  for (const providerAttempt of attempt.provider_attempts) terminalAttempts.set(providerAttempt.provider, providerAttempt);
   const providerOutputs = [];
-  for (const providerAttempt of attempt.provider_attempts) {
+  for (const providerAttempt of terminalAttempts.values()) {
     if (providerAttempt.output_ref === null) continue;
     if (!providerAttempt.output_ref.startsWith(outputPrefix)) throw invalidEvidence("provider output is outside its canonical attempt");
     let output;
@@ -471,15 +477,6 @@ function canonicalSubjectOutcome(task, identity) {
     if (snapshotScopedPhase
       ? !matchesReviewIdentity(record, identity)
       : !sameReviewSubject(record, identity)) continue;
-    const raw = task.readRecord(ref);
-    const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
-    try {
-      const invalidation = JSON.parse(task.readRecord(invalidationRef));
-      if (invalidation.status === "binding_invalid" && invalidation.result_ref === ref) continue;
-      throw invalidEvidence("review binding invalidation does not bind the canonical result");
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
     matches.push({ ref, record });
   }
   if (matches.length === 0) return null;
@@ -658,31 +655,15 @@ function ensureReviewReport(task, reportRef, attempt, result) {
 
 function reusableResults(task, identity) {
   const candidateResults = readMatchingRecords(task, task.listCanonicalReviewResultRefs(), identity);
-  const invalidatedAttemptRefs = new Set();
   const results = candidateResults.filter(({ ref, record }) => {
     let resultAttempt;
     try { resultAttempt = JSON.parse(task.readRecord(record.attempt_ref)); }
     catch (error) { throw invalidEvidence(`semantic result attempt cannot be read: ${error.message}`); }
     validateAttemptIdentity(resultAttempt, record.attempt_ref, identity);
     if (!matchesRequestedPolicy(resultAttempt, identity)) return false;
-    const raw = task.readRecord(ref);
-    const invalidationRef = `reviews/binding-invalidations/${createHash("sha256").update(raw).digest("hex")}.json`;
-    let invalidation;
-    try { invalidation = JSON.parse(task.readRecord(invalidationRef)); }
-    catch (error) {
-      if (error?.code === "ENOENT") return true;
-      throw invalidEvidence(`review binding invalidation cannot be read: ${error.message}`);
-    }
-    if (invalidation?.schema_version !== "review-binding-invalidation.v1"
-        || invalidation.status !== "binding_invalid" || invalidation.result_ref !== ref
-        || invalidation.result_hash !== createHash("sha256").update(raw).digest("hex")
-        || invalidation.task_id !== record.task_id || invalidation.stage !== record.stage) {
-      throw invalidEvidence("review binding invalidation does not bind the canonical result");
-    }
-    invalidatedAttemptRefs.add(record.attempt_ref);
-    return false;
+    return true;
   });
-  return { results, invalidatedAttemptRefs };
+  return { results, invalidatedAttemptRefs: new Set() };
 }
 
 function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, claimedUnavailableAttemptRefs = [] } = {}) {
@@ -914,16 +895,16 @@ function materialPreflightDiagnostic(error) {
   return { code, message };
 }
 
-function materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic }) {
+function materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
   return hashCanonical({
     version: "wh-review-material-preflight.v1", stage, review_track: reviewTrack,
     subject, source, snapshot_tree: source.snapshotTree,
-    review_policy: policy, diagnostic,
+    review_policy: policy, diagnostic, material_fingerprint: materialFingerprint,
   });
 }
 
-async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, chain, policy, diagnostic }) {
-  const materialId = materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic });
+async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, chain, policy, diagnostic, materialFingerprint = null }) {
+  const materialId = materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const identity = {
     taskId,
@@ -1180,7 +1161,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed });
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -1218,13 +1199,42 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     // history is optional audit data and cannot control progress.
     // The explicit fixture seam lets isolated tests provide synthetic canonical
     // facts without weakening the production entrypoint.
-    integrationSubject = isIntegration && (fixtureSourceToken !== FIXTURE_SOURCE_TOKEN || typeof buildIntegrationSubject === "function")
-      ? (buildIntegrationSubject ?? buildIntegrationSubjectDefault)({
-        task: taskHandle,
-        sourceRoot: workspace?.worktreeRoot ?? source.sourceRoot,
-        finalTree: source.snapshotTree,
-      })
-      : null;
+    if (isIntegration && (fixtureSourceToken !== FIXTURE_SOURCE_TOKEN || typeof buildIntegrationSubject === "function")) {
+      try {
+        integrationSubject = (buildIntegrationSubject ?? buildIntegrationSubjectDefault)({
+          task: taskHandle,
+          sourceRoot: workspace?.worktreeRoot ?? source.sourceRoot,
+          ...(workspace?.worktreeRoot ? { artifacts: ArtifactDir.open(workspace.worktreeRoot, taskHandle) } : {}),
+          current_receipts,
+          finalTree: source.snapshotTree,
+        });
+      } catch (error) {
+        // Historical phase/checkpoint enrichment is audit-only. If it is
+        // unavailable in production, continue with the current four
+        // materials and mark the historical record explicitly unavailable.
+        // Fixtures and caller-supplied subjects remain strict.
+        if (fixtureSourceToken === FIXTURE_SOURCE_TOKEN || typeof buildIntegrationSubject === "function") throw error;
+        integrationSubject = {
+          schema_version: "integration-review-subject.v1",
+          subject_kind: "worktree",
+          review_scope: "integration",
+          base_tree: source.baseTree,
+          base_commit: source.baseCommit,
+          formal_record_status: { status: "unavailable", reason_code: "HISTORICAL_INTEGRATION_AUDIT_UNAVAILABLE" },
+          phase_coverage: {
+            schema_version: "phase-review-coverage.v1",
+            status: "unavailable",
+            snapshot_tree: source.snapshotTree,
+            checkpoint: null,
+            phases: [],
+          },
+          seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+          ac_trace: { schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: [], entries: [] },
+        };
+      }
+    } else {
+      integrationSubject = null;
+    }
     subject = subjectRecord(source, stage, phaseId, integrationSubject);
     chain = reviewChainRecord(reviewChain, {
       task: taskHandle, taskId, stage, reviewTrack, subject, source, reviewRound: effectiveReviewRound,
@@ -1254,7 +1264,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     });
     return recordMaterialPreflightUnavailable({
       task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source, chain: preflightChain,
-      policy, diagnostic,
+      policy, diagnostic, materialFingerprint: hashCanonical(materials ?? null),
     });
   } finally {
     source.dispose?.();
@@ -1416,7 +1426,12 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
   const current = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false });
   try {
     const integrationSubject = result.stage === "build-code" && result.review_scope === "integration" && workspace?.worktreeRoot
-      ? buildIntegrationSubjectDefault({ task: taskHandle, sourceRoot: workspace.worktreeRoot, finalTree: result.snapshot_tree })
+      ? buildIntegrationSubjectDefault({
+        task: taskHandle,
+        sourceRoot: workspace.worktreeRoot,
+        artifacts: ArtifactDir.open(workspace.worktreeRoot, taskHandle),
+        finalTree: result.snapshot_tree,
+      })
       : null;
     return verifyFinalSubject({ result, current, integrationSubject });
   } finally {

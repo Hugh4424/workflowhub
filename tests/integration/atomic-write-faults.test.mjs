@@ -184,9 +184,13 @@ describe("atomic formal writers", () => {
     ]) {
       it(`${family} declares and exercises its real ${fault} fault contract`, () => {
         const contractKey = fault === "cas" ? "CAS" : fault;
-        if (!WRITER_FAULT_CONTRACT[family][contractKey]) {
+        const applicability = WRITER_FAULT_CONTRACT[family][contractKey];
+        expect(applicability).toMatchObject({ applies: expect.any(Boolean), reason: expect.any(String) });
+        expect(applicability.reason.trim()).not.toBe("");
+        if (!applicability.applies) {
           expect(["quality", "publication"]).toContain(family);
           expect(["cas", "current"]).toContain(fault);
+          expect(applicability.reason).toMatch(/immutable|current pointer|content identity/i);
           return;
         }
         const { task } = realTask(`${family}-${fault}`);
@@ -258,6 +262,16 @@ describe("atomic formal writers", () => {
     const args = { ref: "phase2-writer/fact.json", raw: "same", read: task.readRecord, create: task.createRecordAtomic };
     expect(publishImmutable(args)).toMatchObject({ idempotent: false });
     expect(publishImmutable(args)).toMatchObject({ idempotent: true });
+  });
+
+  it.each(["quality", "publication"])("%s declares no CAS/current pointer and never creates one", (family) => {
+    const { task } = realTask(`${family}-no-current`);
+    for (const key of ["CAS", "current"]) {
+      expect(WRITER_FAULT_CONTRACT[family][key]).toMatchObject({ applies: false, reason: expect.any(String) });
+    }
+    const record = legalRecords(family);
+    publishers[family]({ record, read: task.readRecord, create: task.createRecordAtomic });
+    expect(() => task.readRecord("materials/current.json")).toThrow(/ENOENT/);
   });
 
   it("production MaterialRevision admits one different-input winner from a shared authenticated head", async () => {

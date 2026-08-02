@@ -13,7 +13,6 @@
     "accepted_at": { "type": "string", "format": "date-time" },
     "upstream_refs": { "type": "array" },
     "checkpoint": { "$ref": "#/$defs/checkpoint" },
-    "baseline_rebind_provenance": { "$ref": "#/$defs/baseline_rebind_provenance" },
     "full_audit_ref": {
       "type": "string",
       "pattern": "^evidence/audits/make-decision/[a-f0-9]{64}\\.json$"
@@ -57,10 +56,6 @@
         "required": ["full_audit_ref", "full_audit_hash", "full_audit_summary_hash", "full_audit_verdict"],
         "properties": { "stage": { "const": "make-decision" } }
       }
-    },
-    {
-      "if": { "required": ["baseline_rebind_provenance"] },
-      "then": { "properties": { "stage": { "const": "build-plan" } } }
     }
   ],
   "$defs": {
@@ -84,18 +79,6 @@
             "additionalProperties": false
           }
         }
-      },
-      "additionalProperties": false
-    },
-    "baseline_rebind_provenance": {
-      "type": "object",
-      "required": ["authorization_ref", "authorization_hash"],
-      "properties": {
-        "authorization_ref": {
-          "type": "string",
-          "pattern": "^results/build-plan/revisions/baseline-rebind-[0-9]{4}\\.json$"
-        },
-        "authorization_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "additionalProperties": false
     }

@@ -95,25 +95,14 @@ make-decision 的完整决策记录；逐题保存问题、最终选择、推荐
 **跳步事实（skip fact）**：
 正式执行记录中标为跳过并带有原因的步骤结果；它不是成功，也不由采集器推测。
 
-## 恢复术语
+## 历史恢复记录（仅审计）
 
-**恢复代次（recovery generation）**：
-同一任务为恢复可认证执行而追加的一份记录，始终保留其前一份记录。
+旧版本曾使用 recovery generation、stage recovery run/source、recovery gate、phase
+pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象只保留在历史记录中，
+用于排错和解释旧任务；它们不是当前领域对象，也不授权、阻止或改变普通工作。
 
-runner replacement generation 只属于 `legacy_pinned` 历史兼容。`per_invocation` 任务的正常
-WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态恢复仍使用恢复代次。
-
-**阶段恢复 run（stage recovery run）**：
-同一任务为恢复中断或已失效的正式阶段而追加的新的 stage run。它只引用旧 run 作为
-`recovery_source_ref/hash`，不继承旧 run 的 invocation、完成或 accepted 事实；新 run 必须
-在当前已认证、干净工作树的完整 HEAD 上重新产生自己的事实。它不是新的任务、不是重开
-许可，也不改写旧 run。
-
-**恢复来源（recovery source）**：
-被新阶段恢复 run 引用的最近历史 run。有效 invalidation 使旧 run 不能继续作为 active run，
-但仍可作为下一次恢复的只读来源；同一未失效恢复 run 不能被重复消费。make-decision 的
-活动恢复 run 后续命令与方向/详情审查使用同一已认证 recovery workspace；普通 `prepare`
-和已接受 run 仍使用原有严格工作区规则。
+当前任务不创建恢复代次或阶段恢复 run。材料修订直接更新当前四份材料，并重新采集受影响
+的测试、AC 和审查事实；旧 hash、checkpoint 和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
 同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
@@ -124,9 +113,6 @@ WorkflowHub 升级不创建 recovery generation；Phase pointer 等业务状态�
 ledger/coverage 字节和 lineage 不可变；pointer 可在 append-only revision 后更新。复用
 当前 ledger 前必须同时核验 ledger 与 coverage 的 ref、hash 和实际内容，不能用指针本身
 冒充覆盖事实。
-
-**恢复门禁（recovery gate）**：
-恢复前按恢复目标一次性核验任务身份、来源、收据和工作树，任一不符即拒绝且不影响其他目标。
 
 **当前 Phase 结果（current Phase result）**：
 某个工作树当前可继续使用的最新正式 Phase 结果；旧结果仍是历史，不会被覆盖。
@@ -240,28 +226,24 @@ verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文�
 - 采用：用户必须先看到具体问题、证据、影响范围和可能后果，再对绑定的 finding 或遗漏做明确选择；review risk 与 decision omission 使用不同记录。
 - 拒绝：不接受通用“用户同意”，不跨 finding/快照复用，不把风险承担改写成质量通过，也不建设通用风险治理平台。
 
-## Review-flow reset 术语（2026-07-28）
+## 历史审查代次（仅审计）
 
-**review-flow generation**：一个由受认证 reset 记录派生的独立审查主题；它继承旧主题的可追溯来源，但不改变旧主题的 head、verdict 或审查额度。
-
-**合法 reset**：只在当前快照相对旧主题发生可核验的结构变化、旧主题仍是当前 head、且阶段尚未接受时，追加一份绑定旧主题与新快照的 reset 记录；普通内容修订不能借此获得新主题。
-
-_避免_：把 reset 叫成“重置通过状态”或“重新打开 accepted”；它不改质量结论，也不改变阶段确认边界。
-
-**同链复审额度**：单个 review-flow generation 内允许的结构性 full review 次数；额度耗尽只对该 generation 生效，不阻止经过合法 reset 的新 generation 重新开始一次初始审查。
+旧 review-flow generation、reset 和 replacement 记录只用于解释历史审查输入与结果。
+当前审查以当前四份材料、当前代码和当前事实为输入；修订后只重算受影响的质量事实，不
+创建新的推进许可或复审状态机。
 
 ## 关系与边界
 
 - 一个 **决策卡**只处理一个决策轴，并通过**调用方可见对话面**完成问答。
 - 一个阶段用**用户完成卡**向用户说明结果，用**下游交接**向后续阶段交付正式事实；两者不能互相替代。
 - **阶段协调**为每个 Phase 生成一张 **Phase Card**；**Phase 执行**消费它并返回正式证据。
-- 一个 **恢复代次**只属于一个工作流任务，并在通过**恢复门禁**后才可成为当前事实。
 - 新的 **当前 Phase 结果**会替代当前指针，但不会改写旧的正式结果。
 - 平台特有的地址、状态和派发方式属于宿主映射，不是 WorkflowHub 领域术语。
 
 ## 已消除的歧义
 
-- “reset”统一指创建**恢复代次**后的受控重新绑定；不表示删除、覆盖或手改旧记录。
+- “材料修订”只表示当前四份材料内容发生变化；它不创建 reset、reopen、rebind 或 recovery
+  许可，也不覆盖任何历史记录。
 **推进资格（progression eligibility）**：
 build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 存在且可读。它只回答“能否进入或继续工作”，accepted、receipt、review、audit 与历史 snapshot 不增加许可证。
 

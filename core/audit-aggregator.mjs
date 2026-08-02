@@ -40,9 +40,9 @@ function completedDependency(event, stageSlug) {
 }
 
 /**
- * Authenticate one retry against the kernel-owned journal and invalidation.
- * The returned capability is process-local; copying its fields does not confer
- * authority to promote an observed retry into expected work.
+ * Authenticate one retry against the kernel-owned append-only journal.
+ * A retry is valid only after the immediately previous attempt has a single
+ * non-success terminal exit. No separate invalidation record is needed.
  */
 export function authenticateAuditRetryEvidence({
   task,
@@ -88,22 +88,12 @@ export function authenticateAuditRetryEvidence({
     throw new Error("audit retry journal binding mismatch");
   }
 
-  const previousEventsHash = sha256(canonicalJson(previousEvents));
-  const identityHash = sha256(`${workflowRunId}\0${retryEvent.step_id}\0${retryEvent.retry_of_attempt_id}`);
-  const invalidationRef = `runs/${stageSlug}/journal-invalidations/${identityHash}.json`;
-  const invalidationRaw = safeTask.readRecord(invalidationRef);
-  const invalidation = JSON.parse(invalidationRaw);
-  if (invalidation.schema_version !== "stage-step-attempt-invalidation.v1"
-      || invalidation.task_id !== safeTask.identity.taskId
-      || invalidation.stage !== stageSlug
-      || invalidation.workflow_run_id !== workflowRunId
-      || invalidation.step_id !== retryEvent.step_id
-      || invalidation.attempt_id !== retryEvent.retry_of_attempt_id
-      || invalidation.events_hash !== previousEventsHash
-      || !nonEmptyString(invalidation.reason)
-      || !Number.isFinite(Date.parse(invalidation.created_at))) {
-    throw new Error("audit retry invalidation binding mismatch");
+  const previousExit = previousEvents.find((event) => event.event_type === "step_exit");
+  if (!previousExit || previousEvents.filter((event) => event.event_type === "step_exit").length !== 1
+      || !["failure", "blocked", "needs_human"].includes(previousExit.terminal_status)) {
+    throw new Error("audit retry previous attempt must have one non-success terminal exit");
   }
+  const previousEventsHash = sha256(canonicalJson(previousEvents));
 
   const evidence = Object.freeze({
     task_id: safeTask.identity.taskId,
@@ -114,8 +104,6 @@ export function authenticateAuditRetryEvidence({
     retry_of_attempt_id: retryEvent.retry_of_attempt_id,
     retry_event_hash: sha256(canonicalJson(retryEvent)),
     previous_events_hash: previousEventsHash,
-    invalidation_ref: invalidationRef,
-    invalidation_hash: sha256(invalidationRaw),
   });
   AUTHENTICATED_RETRY_EVIDENCE.add(evidence);
   return evidence;

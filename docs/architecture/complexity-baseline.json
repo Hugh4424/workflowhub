@@ -1,33 +1,30 @@
 {
   "schema_version": "workflowhub-complexity-report.v1",
   "source": {
-    "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
-    "tracked_files": 1001,
-    "delivery_files": 1084,
-    "source_files": 319
+    "git_head": "b0bb020756ac6896deaef9973b23726fcae6224f",
+    "tracked_tree_sha256": "1ff483cf5b765fc8d395aa93855d621086f7147185b4cc47676c24b383e234a2",
+    "tracked_files": 1064,
+    "delivery_files": 1029,
+    "source_files": 296
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 158,
+      "actual": 143,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
-      "actual": 490,
+      "actual": 502,
       "files": 15,
       "definition": "non-test files under tests, fixtures, or helpers"
     },
     "persistent_object_families": {
       "source": "core/task-handle.mjs",
-      "source_sha256": "39fa8b143d5194dc9e9e65afe6515b5b004e20e5fcf529c0abe742c1b97ab617",
+      "source_sha256": "e237055160096341ca899046fc73c40a16c12c929e1ff6f114edd36b122bac6a",
       "names": [
         "confirmations",
         "evidence",
-        "identity",
         "journal",
         "materials",
-        "phase-result",
-        "publications",
-        "quality",
         "receipts",
         "requirements",
         "results",
@@ -38,88 +35,7 @@
     },
     "bundle_content_audit": {
       "manifests": 31,
-      "violations": [
-        {
-          "manifest": "skills/debate/skill-bundle.json",
-          "path": "__tests__/skill-contract.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/diagnosing-bugs/skill-bundle.json",
-          "path": "__tests__/skill-contract.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/isolated-browser-qa/skill-bundle.json",
-          "path": "__tests__/skill-contract.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/review-response/skill-bundle.json",
-          "path": "__tests__/skill-contract.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/test-routing-advisor/skill-bundle.json",
-          "path": "__tests__/skill-contract.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "__tests__/human-brief-behavioral.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/review-runner.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/review-controller.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/review-source-materials.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/ac-evidence-summary.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/simple-contracts.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/simple-e2e-faults.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/simple-reliability.red.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/schema-validator.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/third-review-host-config.test.mjs",
-          "reason": "forbidden delivery content"
-        },
-        {
-          "manifest": "skills/wh-review/skill-bundle.json",
-          "path": "scripts/__tests__/wh-review-cli.test.mjs",
-          "reason": "forbidden delivery content"
-        }
-      ]
+      "violations": []
     }
   },
   "runtime_boundary": {
@@ -144,45 +60,45 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 33930,
+      "actual": 25581,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 23930,
+      "delta_from_target": 15581,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 39671,
+      "actual": 30239,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 27671,
+      "delta_from_target": 18239,
       "within_limit": false
     },
     "public_runner_behaviors": {
-      "actual": 33,
+      "actual": 7,
       "target": 7,
       "limit": 8,
-      "delta_from_target": 26,
-      "within_limit": false
+      "delta_from_target": 0,
+      "within_limit": true
     },
     "schemas": {
-      "actual": 48,
+      "actual": 36,
       "target": 8,
       "limit": 10,
-      "delta_from_target": 40,
+      "delta_from_target": 28,
       "within_limit": false
     },
     "persistent_object_families": {
-      "actual": 14,
+      "actual": 10,
       "target": 4,
       "limit": 5,
-      "delta_from_target": 10,
+      "delta_from_target": 6,
       "within_limit": false
     },
     "largest_core_file_lines": {
-      "actual": 5091,
+      "actual": 2983,
       "target": 800,
       "limit": 1000,
-      "delta_from_target": 4291,
+      "delta_from_target": 2183,
       "within_limit": false
     },
     "focused_test_seconds": {
@@ -202,41 +118,72 @@
   },
   "hard_gates": {
     "dedicated_recovery_state": {
-      "actual": 515,
+      "actual": 0,
       "required_final": 0,
-      "phase_0_status": "observed_for_planned_removal"
+      "phase_0_status": "observed_zero",
+      "audited_roots": [
+        "core/",
+        "runtime/",
+        "scripts/",
+        "tools/",
+        "skills/",
+        "workflows/"
+      ],
+      "forbidden_paths": [
+        "core/build-spec-receipt-recovery.mjs",
+        "core/schemas/workflowhub-recovery-credential.v1.json",
+        "core/schemas/workflowhub-recovery-generation.v1.json",
+        "core/task-recovery.mjs",
+        "scripts/__tests__/runner-replacement-bridge.test.mjs",
+        "scripts/task-recovery.mjs",
+        "scripts/validate-stage-replay.mjs"
+      ],
+      "forbidden_symbols": [
+        "materialRevisionBaseline",
+        "baseline_rebind_ref",
+        "continuation_ref",
+        "runner-replacement-bridge",
+        "task-recovery",
+        "build-spec-receipt-recovery",
+        "validate-stage-replay",
+        "workflowhub-recovery-credential",
+        "workflowhub-recovery-generation"
+      ],
+      "paths": [],
+      "symbol_hits": []
     },
     "dual_write_markers": {
-      "actual": 3,
+      "actual": 0,
       "required_final": 0,
-      "phase_0_status": "observed_for_planned_removal"
+      "phase_0_status": "observed_zero",
+      "paths": []
     },
     "bundle_forbidden_content": {
-      "actual": 16,
+      "actual": 0,
       "required_final": 0,
-      "phase_0_status": "observed_for_planned_removal"
+      "phase_0_status": "observed_zero"
     }
   },
   "hotspots": [
     {
       "path": "core/task-kernel-implementation.mjs",
-      "lines": 5091
-    },
-    {
-      "path": "core/__tests__/task-kernel-publish.test.mjs",
-      "lines": 2601
+      "lines": 2983
     },
     {
       "path": "tests/stage-content-evidence.test.mjs",
-      "lines": 1749
+      "lines": 1808
     },
     {
-      "path": "scripts/task-recovery.mjs",
-      "lines": 1742
+      "path": "runtime/stage/stage-content-contracts.mjs",
+      "lines": 1623
     },
     {
-      "path": "core/task-handle.mjs",
-      "lines": 1725
+      "path": "skills/wh-review/scripts/review-runner.mjs",
+      "lines": 1441
+    },
+    {
+      "path": "tests/final-cutover-guards.red.test.mjs",
+      "lines": 1362
     }
   ],
   "follow_up": [

@@ -1,0 +1,14 @@
+Phase 6 legacy-zero focused evidence (current candidate snapshot)
+
+Command
+./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs --maxWorkers=1
+node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime
+
+Result
+- legacy-zero contract: 3 tests passed.
+- delivery inventory: 1033 files, exactly one disposition each.
+- legacy runtime scan: zero forbidden legacy paths/symbols in the audited roots.
+- historical import proof remains read-only; no old data or Git history was rewritten.
+
+This is a focused Phase 6 gate. It is not a claim that the final build-code
+acceptance or full-suite gate has completed.

@@ -2,9 +2,27 @@ import { sha256 } from "../evidence/freshness.mjs";
 import { deriveStageCompletion } from "./completion-predicates.mjs";
 
 export const WRITER_FAULT_CONTRACT = Object.freeze({
-  material: Object.freeze({ temp: true, fsync: true, rename: true, CAS: true, current: true }),
-  quality: Object.freeze({ temp: true, fsync: true, rename: true, CAS: false, current: false }),
-  publication: Object.freeze({ temp: true, fsync: true, rename: true, CAS: false, current: false }),
+  material: Object.freeze({
+    temp: Object.freeze({ applies: true, reason: "revision bytes use atomic replacement" }),
+    fsync: Object.freeze({ applies: true, reason: "revision bytes must be durable before publication" }),
+    rename: Object.freeze({ applies: true, reason: "revision replacement is published by rename" }),
+    CAS: Object.freeze({ applies: true, reason: "material current revision has one compare-and-swap winner" }),
+    current: Object.freeze({ applies: true, reason: "material current pointer is the only mutable writer pointer" }),
+  }),
+  quality: Object.freeze({
+    temp: Object.freeze({ applies: true, reason: "immutable fact bytes use create-only atomic write" }),
+    fsync: Object.freeze({ applies: true, reason: "immutable fact bytes must be durable" }),
+    rename: Object.freeze({ applies: true, reason: "create-only record publication uses rename" }),
+    CAS: Object.freeze({ applies: false, reason: "immutable quality facts have no mutable current pointer" }),
+    current: Object.freeze({ applies: false, reason: "immutable quality facts are addressed by content identity only" }),
+  }),
+  publication: Object.freeze({
+    temp: Object.freeze({ applies: true, reason: "immutable publication bytes use create-only atomic write" }),
+    fsync: Object.freeze({ applies: true, reason: "immutable publication bytes must be durable" }),
+    rename: Object.freeze({ applies: true, reason: "create-only publication record is published by rename" }),
+    CAS: Object.freeze({ applies: false, reason: "derived publications have no mutable current pointer" }),
+    current: Object.freeze({ applies: false, reason: "derived publications are addressed by content identity only" }),
+  }),
 });
 
 function readOptional(read, ref) {

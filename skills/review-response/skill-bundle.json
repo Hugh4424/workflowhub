@@ -11,10 +11,6 @@
       "sha256": "f4bd9073dea0119ccb6c0db7b73a9fd6d938b39a3f5689c17e09594c8bed89aa"
     },
     {
-      "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "dc62f17f84ffd199987f75d488b0607fdf31e50ef6ba009324cb7cad4f3110a1"
-    },
-    {
       "path": "scripts/validate-response.mjs",
       "sha256": "fcb76f709c8e4923c6e83964042576e75251f4b783e14da1c8d94fa01f5e2ea8"
     }

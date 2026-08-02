@@ -2,16 +2,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
+import { createTask, openTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { canonical } from "../core/task-recovery.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
-import { runRecovery } from "../scripts/task-recovery.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
@@ -189,66 +187,6 @@ function delivery(f) {
   };
 }
 
-function workspaceIdentity(root) {
-  const common = git(root, "rev-parse", "--git-common-dir");
-  return {
-    worktree_root: realpathSync(root),
-    git_common_dir: realpathSync(resolve(root, common)),
-    branch: git(root, "symbolic-ref", "--quiet", "--short", "HEAD"),
-    head: git(root, "rev-parse", "HEAD"),
-    snapshot_tree: git(root, "rev-parse", "HEAD^{tree}"),
-  };
-}
-
-function authorizeDirtyCloseRebind(f, runnerRoot, cleanRoot) {
-  const accepted = f.kernel.readAccepted("make-decision");
-  const retained = [
-    "results/make-decision/accepted.json",
-    "results/build-code/accepted.json",
-    "results/verify-code/accepted.json",
-  ].map((ref) => ({ ref, hash: sha256(f.task.readRecord(ref)) }));
-  const authorizedSubject = {
-    previous_workspace: workspaceIdentity(f.worktree),
-    clean_workspace: workspaceIdentity(cleanRoot),
-    retained_artifact_refs: retained,
-    next_stage: "task-close",
-  };
-  const authorization = {
-    schema_version: "workflowhub-dirty-cleanup-rebind-authorization.v1",
-    project_name: f.task.identity.projectName,
-    task_id: f.task.identity.taskId,
-    purpose: "dirty-cleanup-rebind",
-    recovery_kind: "dirty-cleanup-rebind",
-    decision: "accepted",
-    credential_nonce: "close-chain-rebind",
-    single_use: true,
-    accepted_business_snapshot: { ref: accepted.accepted_ref, hash: accepted.accepted_hash },
-    credential_subject_hash: sha256(canonical(authorizedSubject)),
-    ...authorizedSubject,
-    authorized_at: "2026-07-29T00:00:00.000Z",
-  };
-  const raw = canonical(authorization);
-  const hash = sha256(raw);
-  const ref = `evidence/authorizations/dirty-cleanup-rebind/${hash}.json`;
-  mkdirSync(join(f.task.taskPath, "evidence", "authorizations", "dirty-cleanup-rebind"), { recursive: true });
-  writeFileSync(join(f.task.taskPath, ref), raw);
-  return runRecovery([
-    "dirty-cleanup-rebind",
-    `--task-path=${f.task.taskPath}`,
-    `--project=${f.task.identity.projectName}`,
-    `--task=${f.task.identity.taskId}`,
-    `--runner-root=${runnerRoot}`,
-    "--stage=verify-code",
-    `--authorization-ref=${ref}`,
-    `--authorization-hash=${hash}`,
-    `--previous-workspace-root=${f.worktree}`,
-    `--clean-workspace-root=${cleanRoot}`,
-    `--retained-artifact-refs=${retained.map(({ ref: retainedRef }) => retainedRef).join(",")}`,
-    `--retained-artifact-hashes=${retained.map(({ hash: retainedHash }) => retainedHash).join(",")}`,
-    "--nonce=close-chain-rebind",
-  ]);
-}
-
 function createRunner(f) {
   const runner = join(f.root, "runner");
   mkdirSync(runner);
@@ -334,28 +272,29 @@ describe("delivery close verifier", () => {
       .toThrow(/fresh verify-code facts|stale/i);
   });
 
-  it("migrates an authenticated task target from its worktree to the checked-out main repository before close preparation", async () => {
+  it("prepares close from the current target despite legacy runner history", async () => {
     const api = await import("../core/task-close.mjs");
-    const f = fixture({ targetRepo: "worktree" });
-    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) })).toThrow(/target branch|checked out/i);
-    const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" });
+    const f = fixture();
     const runnerRoot = createRunner(f);
-    const runnerMigrated = migrateTaskRunnerRoot({ taskPath: migrated.task.taskPath, projectName: "Demo", taskId: "close-task", runnerRoot, stage: "verify-code" });
-    const kernel = createTaskKernel(runnerMigrated.task);
-    expect(migrated.task.manifest.target_repo_root).toBe(f.repo);
-    expect(runnerMigrated.task.readRecord(migrated.migration_ref)).toContain("task-target-repo-root-migration.v1");
-    const verifyContext = bootstrapStage("verify-code", { mode: "sidecar", taskPath: runnerMigrated.task.taskPath, projectName: "Demo", taskId: "close-task", runnerRoot });
+    writeFileSync(join(f.task.taskPath, "task.json"), `${JSON.stringify({
+      ...f.task.manifest,
+      execution_mode: "legacy_pinned",
+      runner_root: "/retired/workflowhub-runner",
+      runner_oid: "0".repeat(40),
+      runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
+    }, null, 2)}\n`);
+    const legacyTask = openTask(f.task.taskPath, "Demo", "close-task");
+    git(runnerRoot, "commit", "--allow-empty", "-qm", "runner drift");
+    const kernel = createTaskKernel(legacyTask);
+    const verifyContext = bootstrapStage("verify-code", { mode: "sidecar", taskPath: legacyTask.taskPath, projectName: "Demo", taskId: "close-task" });
     expect(verifyContext.workspace.worktreeRoot).toBe(f.worktree);
-    expect(api.prepareDeliveryClosePlan({ task: runnerMigrated.task, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
-    expect(migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" })).toMatchObject({ idempotent_replay: true });
+    expect(api.prepareDeliveryClosePlan({ task: legacyTask, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
   });
 
-  it("keeps fetch out of both the core executor and verifier instructions", () => {
-    const core = readFileSync(join(process.cwd(), "core", "task-close.mjs"), "utf8");
+  it("keeps historical close tooling out of verify-code instructions", () => {
     const skill = readFileSync(join(process.cwd(), "workflows", "verify-code", "SKILL.md"), "utf8");
-    expect(core).not.toMatch(/\[\s*["']fetch["']/);
-    expect(skill).not.toMatch(/git fetch/i);
-    expect(skill).toMatch(/task-close\.mjs execute[\s\S]*Do not issue the six Git operations by hand/i);
+    expect(skill).not.toMatch(/task-close\.mjs|six Git operations|git fetch/i);
+    expect(skill).toMatch(/does not\s+authorize commit, push, merge, archive, worktree cleanup, branch deletion/i);
   });
 
   it("reports every unfinished physical action and completes only after delivery, archive, merge, push, and cleanup", async () => {
@@ -420,48 +359,6 @@ describe("delivery close verifier", () => {
     git(f.repo, "branch", "wrong-task", f.taskCommit);
     expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: { ...delivery(f), task_branch: "wrong-task" } })).toThrow(/accepted Workspace|task branch/i);
     expect(git(f.repo, "rev-parse", "main")).toBe(git(f.repo, "rev-parse", "origin/main"));
-  });
-
-  it("runs formal dirty rebind through normal close using the authenticated effective Workspace", async () => {
-    const api = await import("../core/task-close.mjs");
-    const f = fixture();
-    const runnerRoot = createRunner(f);
-    writeFileSync(join(f.worktree, "preserved-dirty-user.txt"), "preserved dirty bytes\n");
-    const cleanRoot = join(f.root, "close-task-clean");
-    git(f.repo, "worktree", "add", "--force", "-q", cleanRoot, "task/Demo/close-task");
-
-    const recovery = authorizeDirtyCloseRebind(f, runnerRoot, cleanRoot);
-    expect(recovery).toMatchObject({
-      credential_ref: "identity/recovery-credentials/dirty-cleanup-rebind/close-chain-rebind.json",
-      generation: 1,
-      next_entry: "normal task-close",
-    });
-
-    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
-    expect(prepared.plan.delivery.worktree_root).toBe(realpathSync(cleanRoot));
-    const confirmation = api.confirmClosePlan({
-      task: f.task,
-      kernel: f.kernel,
-      plan: prepared.plan,
-      outcome: "confirmed",
-    });
-    const result = await api.executeClosePlan({
-      task: f.task,
-      kernel: f.kernel,
-      plan: prepared.plan,
-      closeConfirmationRef: confirmation.ref,
-      executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }),
-    });
-
-    expect(result).toMatchObject({
-      status: "completed",
-      physical_state: { archive: true, merge: true, push: true, worktree_cleanup: true, branch_cleanup: true },
-    });
-    expect(existsSync(cleanRoot)).toBe(false);
-    expect(readFileSync(join(f.worktree, "preserved-dirty-user.txt"), "utf8")).toBe("preserved dirty bytes\n");
-    expect(git(f.worktree, "status", "--porcelain", "--untracked-files=all")).toContain("preserved-dirty-user.txt");
-    expect(() => git(f.worktree, "symbolic-ref", "--quiet", "--short", "HEAD")).toThrow();
-    expect(git(f.worktree, "rev-parse", "HEAD")).toBe(f.taskCommit);
   });
 
   it("executes the six fixed delivery steps and reconciles a second run", async () => {
@@ -748,12 +645,11 @@ describe("delivery close verifier", () => {
     }
   });
 
-  it("leaves task, target, worktree, and remote bytes unchanged when close write-boundary authentication fails", () => {
+  it("records a dirty runner identity without blocking close preparation", () => {
     const f = fixture();
     const script = committedTaskCloseRuntime(f);
     writeFileSync(join(dirname(dirname(script)), "dirty-runtime.txt"), "dirty\n");
     const identity = [`--task-path=${f.task.taskPath}`, "--project=Demo", "--task=close-task"];
-    const taskBefore = fileBytes(f.task.taskPath);
     const repositoryBefore = {
       target: git(f.repo, "rev-parse", "main"),
       target_tree: git(f.repo, "rev-parse", "main^{tree}"),
@@ -764,12 +660,17 @@ describe("delivery close verifier", () => {
       remote: git(f.repo, "ls-remote", "origin", "refs/heads/main"),
     };
 
-    expect(() => execFileSync(process.execPath, [script, "prepare", ...identity,
+    const prepared = JSON.parse(execFileSync(process.execPath, [script, "prepare", ...identity,
       "--task-branch=task/Demo/close-task", "--target-branch=main", "--remote=origin", `--task-commit=${f.taskCommit}`,
-      "--spec-source=specs/task", "--spec-archive=specs/archive/task"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }))
-      .toThrow(/clean/i);
+      "--spec-source=specs/task", "--spec-archive=specs/archive/task"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+    expect(prepared.plan_hash).toMatch(/^[a-f0-9]{64}$/);
+    const executionRoot = join(f.task.taskPath, "identity", "executions");
+    const executions = readdirSync(executionRoot).map((name) => JSON.parse(readFileSync(join(executionRoot, name), "utf8")));
+    expect(executions).toContainEqual(expect.objectContaining({
+      stage: "verify-code",
+      source_clean: false,
+    }));
 
-    expect(fileBytes(f.task.taskPath)).toEqual(taskBefore);
     expect({
       target: git(f.repo, "rev-parse", "main"),
       target_tree: git(f.repo, "rev-parse", "main^{tree}"),

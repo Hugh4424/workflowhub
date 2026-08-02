@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
-import { inspectIntegrationReviewSubject } from "../skills/wh-review/scripts/integration-review-subject.mjs";
+import { inspectIntegrationReviewSubject } from "../runtime/review/integration-review-subject.mjs";
 import { fileURLToPath } from "node:url";
 import { loadStageSkillManifest } from "../runtime/stage/stage-skill-runtime.mjs";
 
@@ -38,26 +38,11 @@ const UPSTREAM_INPUT = Object.freeze({
   "verify-code": null,
 });
 
-function upstreamForStage(ctx, stage, upstreamStage) {
+function upstreamForStage(ctx, stage) {
   const slot = UPSTREAM_INPUT[stage];
-  const hasInput = slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot);
-  if (!upstreamStage) return hasInput ? ctx.kernel.readInput(slot) : null;
-  const readOptions = stage === "verify-code" && upstreamStage === "build-code"
-    ? { allowLegacyBuildCode: true }
-    : undefined;
-  if (!hasInput) {
-    try { return ctx.kernel.readAcceptedAudit(upstreamStage, readOptions); }
-    catch (error) {
-      if (error?.code === "ENOENT") return null;
-      throw error;
-    }
-  }
-  let local;
-  try { local = ctx.kernel.readAcceptedAudit(upstreamStage, readOptions); } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  if (local) throw new Error(`${stage} has both current accepted ${upstreamStage} and manifest input ${slot}`);
-  return ctx.kernel.readInput(slot);
+  return slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot)
+    ? ctx.kernel.readInput(slot)
+    : null;
 }
 
 function workerContext(ctx, publication = {}) {
@@ -69,7 +54,7 @@ function workerContext(ctx, publication = {}) {
     ...(ctx.candidateWorkspace ? { candidateWorkspace: ctx.candidateWorkspace } : {}),
     ...(ctx.workspace ? { workspace: ctx.workspace } : {}),
     ...(ctx.artifacts ? { artifacts: ctx.artifacts } : {}),
-    createCheckpoint: (stage = ctx.stage) => ctx.kernel.createCheckpoint(stage, publication.baselineRebindRef ? { baselineRebindRef: publication.baselineRebindRef } : undefined),
+    createCheckpoint: (stage = ctx.stage) => ctx.kernel.createCheckpoint(stage),
   });
 }
 
@@ -108,26 +93,18 @@ export async function runStage(stage, context, handler, publication = {}) {
   const ctx = assertContext(context, stage);
   if (typeof handler !== "function") throw new TypeError("stage handler is required");
 
-  const upstreamStage = UPSTREAM_STAGE[stage];
-  const upstream = upstreamForStage(ctx, stage, upstreamStage);
+  const upstream = upstreamForStage(ctx, stage);
   const result = plainResult(await handler(workerContext(ctx, publication), upstream));
-  const upstreamRefs = upstream ? [{
-    task_id: upstream.accepted.task_id,
-    stage: upstream.accepted.stage,
-    accepted_ref: `results/${upstream.accepted.stage}/accepted.json`,
-  }] : [];
 
   if (!publication || typeof publication !== "object" || Array.isArray(publication)) throw new TypeError("stage publication options must be an object");
   const attempt = ctx.kernel.publishAttempt(stage, {
     facts: result.facts,
     evidence_refs: result.evidence_refs ?? [],
     missing_items: result.missing_items ?? [],
-    upstream_refs: upstreamRefs,
+    upstream_refs: [],
     ...(result.verification_failure ? { verification_failure: true } : {}),
     ...(result.checkpoint !== undefined ? { checkpoint: result.checkpoint } : {}),
     ...(result.reason !== undefined ? { reason: result.reason } : {}),
-    ...(publication.reopenProvenance !== undefined ? { reopen_provenance: publication.reopenProvenance } : {}),
-    ...(publication.baselineRebindRef !== undefined ? { baseline_rebind_ref: publication.baselineRebindRef } : {}),
   });
   if (result.verification_failure) {
     const error = new Error(`${stage} verification failed; formal failure attempt published: ${attempt.attempt_ref}`);
@@ -164,45 +141,18 @@ function reviewFlowSubjectsForStage(stage) {
   }];
 }
 
-function trustedReviewFlowIdentities(ctx, publication = {}) {
-  let revision = null;
-  if (ctx.stage === "build-code" && publication.reopenProvenance) {
-    revision = publication.reopenProvenance;
-  } else if (ctx.stage === "verify-code") {
-    try {
-      revision = ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode: true }).attempt.reopen_provenance ?? null;
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-  }
-  return reviewFlowSubjectsForStage(ctx.stage).map((subject) => {
-    if (revision === null || subject.stage !== "build-code") return ctx.kernel.deriveReviewFlowIdentity(subject);
-    return ctx.kernel.deriveReviewFlowIdentity({ ...subject, revision_ref: revision.reopen_ref });
-  });
+function currentReviewFlowIdentities(ctx) {
+  const snapshotTree = ctx.stage === "build-code" && ctx.workspace
+    ? captureWorkspaceSnapshot(ctx.workspace).tree
+    : null;
+  return reviewFlowSubjectsForStage(ctx.stage).map((subject) => ctx.kernel.deriveReviewFlowIdentity(
+    snapshotTree === null ? subject : { ...subject, snapshot_tree: snapshotTree },
+  ));
 }
 
 function withReviewFlowLocks(kernel, identities, operation, index = 0) {
   if (index >= identities.length) return operation();
   return kernel.withReviewFlowLock(identities[index], () => withReviewFlowLocks(kernel, identities, operation, index + 1));
-}
-
-function sameReviewFlowIdentities(left, right) {
-  return left.length === right.length && left.every((identity, index) =>
-    JSON.stringify(identity) === JSON.stringify(right[index]));
-}
-
-function withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, publication, operation) {
-  const upstreamStage = UPSTREAM_STAGE[ctx.stage];
-  if (upstreamStage === null) return operation();
-  const slot = UPSTREAM_INPUT[ctx.stage];
-  if (slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot)) return operation();
-  return ctx.task.withRecordLock(`locks/${upstreamStage}.publication.lock`, () => {
-    const currentIdentities = trustedReviewFlowIdentities(ctx, publication);
-    if (!sameReviewFlowIdentities(reviewFlowIdentities, currentIdentities)) {
-      throw new Error("trusted upstream acceptance changed while acquiring the review publication boundary; retry the stage");
-    }
-    return operation();
-  });
 }
 
 function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = []) {
@@ -272,23 +222,13 @@ function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = [])
       return ctx.kernel.readReviewFlow(identity);
     },
     ...(ctx.stage === "build-code" && ctx.workspace ? {
-      inspectIntegrationReviewSubject: (finalTree) => inspectIntegrationReviewSubject({
+      inspectIntegrationReviewSubject: (finalTree, current_receipts = {}) => inspectIntegrationReviewSubject({
         task: ctx.task,
         sourceRoot: ctx.workspace.worktreeRoot,
+        artifacts: ctx.artifacts,
+        current_receipts,
         finalTree,
       }),
-    } : {}),
-    ...(ctx.stage === "verify-code" ? {
-      // Verify must be able to turn a legacy accepted build into an explicit
-      // failure so the controlled reopen path can upgrade it. The handler
-      // still fails closed when acceptance_coverage is absent.
-      readAcceptedBuildCode: ({ allowLegacyBuildCode = false, required = true } = {}) => {
-        try { return ctx.kernel.readAccepted("build-code", { allowLegacyBuildCode }); }
-        catch (error) {
-          if (!required && error?.code === "ENOENT") return null;
-          throw error;
-        }
-      },
     } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
@@ -301,7 +241,7 @@ function officialWorkerContext(ctx, publication = {}, reviewFlowIdentities = [])
       readArtifact: (name) => ctx.artifacts.read(name),
       writeArtifact: (name, value) => ctx.artifacts.writeAtomic(name, value),
       artifactRef: (name) => ctx.artifacts.reference(name),
-      createCheckpoint: (name) => ctx.kernel.createCheckpoint(name, publication.baselineRebindRef ? { baselineRebindRef: publication.baselineRebindRef } : undefined),
+      createCheckpoint: (name) => ctx.kernel.createCheckpoint(name),
     } : {}),
   });
 }
@@ -331,80 +271,19 @@ function verifyOfficialEvidence(ctx, result) {
   return result;
 }
 
-function assertOfficialRevisionAuthorization(stage, ctx, invocation, publication) {
-  if (!new Set(["build-code", "verify-code"]).has(stage)) return;
-  const refs = Object.values(invocation?.receipts ?? {});
-  const hasRevision = refs.some((ref) => {
-    if (typeof ref !== "string") return false;
-    let value;
-    try { value = JSON.parse(ctx.task.readRecord(ref)); } catch { return false; }
-    return value?.schema_version === "workflowhub-receipt.v1" && value.revision && typeof value.revision === "object";
-  });
-  if (!hasRevision) return;
-  if (stage === "build-code") {
-    if (publication?.reopenProvenance) return;
-    try {
-      ctx.task.readRecord("results/build-code/accepted.json");
-    } catch (error) {
-      if (error?.code === "ENOENT") return;
-      throw error;
-    }
-    ctx.kernel.readAccepted("build-code");
-    throw new Error("accepted build-code revision receipt requires a controlled reopen");
-  }
-  let acceptedVerify;
-  try { acceptedVerify = ctx.kernel.readAccepted("verify-code"); }
-  catch (error) {
-    // The first fresh verify may revise a stale create-only evidence record
-    // before any verify result has been accepted. That is a failure attempt,
-    // not a reopen of an accepted verify result. Keep the normal path strict.
-    if (error?.code === "ENOENT") return;
-    throw new Error("verify-code revision receipt requires controlled fresh verify lineage");
-  }
-  const activeBuild = ctx.kernel.readAccepted("build-code");
-  if (!acceptedVerify || !activeBuild.attempt.reopen_provenance) throw new Error("verify-code revision receipt requires controlled fresh verify lineage");
-}
-
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
 export function runOfficialStage(stage, context, invocation, publication) {
   const ctx = assertContext(context, stage);
-  assertOfficialRevisionAuthorization(stage, ctx, invocation, publication);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
-  const reviewFlowIdentities = trustedReviewFlowIdentities(ctx, publication);
+  const reviewFlowIdentities = currentReviewFlowIdentities(ctx);
   return withReviewFlowLocks(ctx.kernel, reviewFlowIdentities, () =>
-    withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, publication, () => runStage(
+    runStage(
       stage,
       ctx,
       async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication, reviewFlowIdentities), input)),
       publication,
-    )));
-}
-
-/** Re-run the official verifier after a revised build without replacing the accepted verify result. */
-export async function publishOfficialVerifyPassing(context, invocation) {
-  const ctx = assertContext(context, "verify-code");
-  const handler = officialStageHandler("verify-code");
-  const input = Object.freeze(structuredClone(invocation));
-  const reviewFlowIdentities = trustedReviewFlowIdentities(ctx);
-  return withReviewFlowLocks(ctx.kernel, reviewFlowIdentities, () =>
-    withTrustedUpstreamAcceptance(ctx, reviewFlowIdentities, {}, async () => {
-    const result = plainResult(
-      verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, {}, reviewFlowIdentities), input)),
-    );
-    if (result.verification_failure) {
-      if (result.reason?.includes("acceptance criterion(s) failed")) {
-        throw new Error("verify-code passing publication requires acceptance-evidence.v1 with result=pass");
-      }
-      throw new Error(result.reason ?? "verify-code verification failed");
-    }
-    return ctx.kernel.publishVerifyPassingFromAccepted({
-      facts: result.facts,
-      evidenceRefs: result.evidence_refs ?? [],
-      missingItems: result.missing_items ?? [],
-      ...(result.reason !== undefined ? { reason: result.reason } : {}),
-    });
-    }));
+    ));
 }
 
 /** Persist the user's explicit decision before acceptance. */

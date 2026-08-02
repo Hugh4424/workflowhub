@@ -164,9 +164,13 @@ export function authenticateCanonicalReviewResult({
 }) {
   const { minimum, priority, eligible } = policyFacts(attempt, fallbackMinimumReviewers);
   const outputByRef = new Map(providerOutputs.map((item) => [item.ref, item]));
-  const latestCompleted = new Map();
+  const terminalProviderAttempts = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
     if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    terminalProviderAttempts.set(providerAttempt.provider, providerAttempt);
+  }
+  const latestCompleted = new Map();
+  for (const providerAttempt of terminalProviderAttempts.values()) {
     const output = outputByRef.get(providerAttempt.output_ref);
     if (!output || output.provider !== providerAttempt.provider) invalid("completed provider output is missing or misbound");
     latestCompleted.set(providerAttempt.provider, {

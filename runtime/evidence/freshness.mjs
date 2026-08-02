@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
 import { validateCanonicalTestReceipt, validateHumanConfirmation } from "../../core/canonical-evidence-validators.mjs";
-import { validateAcceptanceEvidence } from "../../core/task-kernel-implementation.mjs";
-import { validateSchema } from "../../skills/wh-review/scripts/schema-validator.mjs";
+import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
+import { validateSchema } from "../review/schema-validator.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 

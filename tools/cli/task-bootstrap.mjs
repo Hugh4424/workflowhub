@@ -6,7 +6,6 @@ import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
-import { assertTaskRunnerIdentity } from "../../runtime/evidence/runner-identity.mjs";
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../core/task-handle.mjs";
@@ -20,19 +19,9 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
     const unexpected = Object.keys(values).find((key) => !allowed.has(key));
     if (unexpected) throw new TypeError(`--${unexpected} is invalid for existing task bootstrap`);
     const task = openTask(values["task-path"], values.project, values.task);
-    if (task.manifest.execution_mode === "per_invocation") {
-      const runnerIdentity = values["runner-root"] && values.stage
-        ? authenticateOfficialInvocation(task, { runnerRoot: values["runner-root"], stage: values.stage }).identity
-        : undefined;
-      return Object.freeze({
-        task_path: task.taskPath,
-        project: task.identity.projectName,
-        task: task.identity.taskId,
-        ...(runnerIdentity ? { runner_identity: runnerIdentity } : {}),
-      });
-    }
-    for (const key of ["runner-root", "stage"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required for existing task bootstrap`);
-    const runnerIdentity = assertTaskRunnerIdentity(task, { runnerRoot: values["runner-root"], stage: values.stage });
+    const runnerIdentity = values["runner-root"] && values.stage
+      ? authenticateOfficialInvocation(task, { runnerRoot: values["runner-root"], stage: values.stage }).identity
+      : undefined;
     return Object.freeze({
       task_path: task.taskPath,
       project: task.identity.projectName,

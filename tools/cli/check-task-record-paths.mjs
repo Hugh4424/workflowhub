@@ -64,7 +64,6 @@ const FIXTURE_ALLOWLIST = new Set([
   "scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs",
   "scripts/__tests__/task-bootstrap.test.mjs",
   "scripts/__tests__/migrate-task-v2.test.mjs",
-  "scripts/__tests__/runner-unbinding-migration.test.mjs",
   "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
   "skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs",
   "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
@@ -89,7 +88,6 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["runtime/evidence/invocation-identity.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/stage-content-evidence.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/stage/step-manifest.mjs", new Set(["cwd identity discovery"])],
-  ["tools/cli/task-migrate-runner-root.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", new Set(["cwd identity discovery"])],
 ]);

@@ -111,101 +111,6 @@ describe("TaskHandle", () => {
     ]);
   });
 
-  it("enumerates the complete sorted review-flow reset namespace and rejects noncanonical entries", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const baseFlowId = "a".repeat(64);
-    const resetsRoot = join(taskPath, "reviews", "flow-resets", baseFlowId);
-    mkdirSync(resetsRoot, { recursive: true });
-    writeFileSync(join(resetsRoot, "reset-0003.json"), "{}");
-    writeFileSync(join(resetsRoot, "reset-0001.json"), "{}");
-    expect(task.listCanonicalReviewFlowResetRefs(baseFlowId)).toEqual([
-      `reviews/flow-resets/${baseFlowId}/reset-0001.json`,
-      `reviews/flow-resets/${baseFlowId}/reset-0003.json`,
-    ]);
-    writeFileSync(join(resetsRoot, "ignored.txt"), "{}");
-    expect(() => task.listCanonicalReviewFlowResetRefs(baseFlowId))
-      .toThrow(/regular numbered JSON file|canonical review flow reset/i);
-  });
-
-  it("enumerates only content-addressed Phase map traces in the narrow evidence namespace", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const snapshot = "a".repeat(40);
-    const tracesRoot = join(taskPath, "evidence", "phases", "T02", snapshot);
-    mkdirSync(tracesRoot, { recursive: true });
-    const first = "1".repeat(64), second = "2".repeat(64);
-    writeFileSync(join(tracesRoot, `phase-map-trace-${second}.json`), "{}");
-    writeFileSync(join(tracesRoot, `phase-map-trace-${first}.json`), "{}");
-    expect(task.listCanonicalPhaseMapTraceRefs()).toEqual([
-      `evidence/phases/T02/${snapshot}/phase-map-trace-${first}.json`,
-      `evidence/phases/T02/${snapshot}/phase-map-trace-${second}.json`,
-    ]);
-  });
-
-  it("can ignore historical non-trace notes only for the integration resolver", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const snapshot = "d".repeat(40);
-    const tracesRoot = join(taskPath, "evidence", "phases", "T04", snapshot);
-    mkdirSync(tracesRoot, { recursive: true });
-    const trace = "e".repeat(64);
-    writeFileSync(join(tracesRoot, `phase-map-trace-${trace}.json`), "{}\n");
-    writeFileSync(join(tracesRoot, "current-refresh-legacy.json"), "{}\n");
-
-    expect(() => task.listCanonicalPhaseMapTraceRefs()).toThrow(/invalid trace record/);
-    expect(task.listCanonicalPhaseMapTraceRefs({ tolerateHistoricalInvalidRecords: true })).toEqual([
-      `evidence/phases/T04/${snapshot}/phase-map-trace-${trace}.json`,
-    ]);
-  });
-
-  it("rejects noncanonical entries and symlinks in the Phase trace namespace", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const snapshot = "b".repeat(40);
-    const tracesRoot = join(taskPath, "evidence", "phases", "T03", snapshot);
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-phase-trace-outside-"));
-    temporaryDirs.push(outside);
-    mkdirSync(tracesRoot, { recursive: true });
-    symlinkSync(outside, join(tracesRoot, `phase-map-trace-${"c".repeat(64)}.json`));
-    expect(() => task.listCanonicalPhaseMapTraceRefs()).toThrow(/symlink|regular/i);
-  });
-
-  it("enumerates only sorted regular content-addressed Phase review corrections", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const correctionsRoot = join(taskPath, "identity", "phase-review-corrections");
-    mkdirSync(correctionsRoot, { recursive: true });
-    const oldTree = "a".repeat(40), newTree = "b".repeat(40);
-    const first = `phase-T02-${oldTree}-${newTree}-${"1".repeat(64)}.json`;
-    const second = `phase-T02-${oldTree}-${newTree}-${"2".repeat(64)}.json`;
-    writeFileSync(join(correctionsRoot, second), "{}");
-    writeFileSync(join(correctionsRoot, first), "{}");
-
-    expect(task.listCanonicalPhaseReviewCorrectionRefs()).toEqual([
-      `identity/phase-review-corrections/${first}`,
-      `identity/phase-review-corrections/${second}`,
-    ]);
-  });
-
-  it("rejects noncanonical and symlinked Phase review corrections", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const correctionsRoot = join(taskPath, "identity", "phase-review-corrections");
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-phase-review-correction-outside-"));
-    temporaryDirs.push(outside);
-    mkdirSync(correctionsRoot, { recursive: true });
-    const oldTree = "a".repeat(40), newTree = "b".repeat(40);
-    const name = `phase-T02-${oldTree}-${newTree}-${"3".repeat(64)}.json`;
-    writeFileSync(join(outside, name), "{}");
-    symlinkSync(join(outside, name), join(correctionsRoot, name));
-    expect(() => task.listCanonicalPhaseReviewCorrectionRefs()).toThrow(/symlink|regular/i);
-
-    rmSync(join(correctionsRoot, name));
-    writeFileSync(join(correctionsRoot, "phase-T02-not-content-addressed.json"), "{}");
-    expect(() => task.listCanonicalPhaseReviewCorrectionRefs()).toThrow(/content-addressed|regular/i);
-  });
-
   it("enumerates external review audits without treating them as review results", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });
@@ -219,6 +124,47 @@ describe("TaskHandle", () => {
       `reviews/resolutions/${a}.json`,
       `reviews/resolutions/${b}.json`,
     ]);
+  });
+
+  it("enumerates only sorted canonical Phase map traces", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const first = join(taskPath, "evidence", "phases", "phase-1", "a".repeat(40));
+    const second = join(taskPath, "evidence", "phases", "phase-0", "b".repeat(40));
+    mkdirSync(first, { recursive: true });
+    mkdirSync(second, { recursive: true });
+    writeFileSync(join(first, `phase-map-trace-${"c".repeat(64)}.json`), "{}");
+    writeFileSync(join(second, `phase-map-trace-${"d".repeat(64)}.json`), "{}");
+    writeFileSync(join(second, "phase-diff-scan.v1.json"), "{}");
+    writeFileSync(join(second, "phase-evidence.json"), "{}");
+    writeFileSync(join(second, "notes.txt"), "ignored");
+    expect(task.listCanonicalPhaseTraceRefs()).toEqual([
+      `evidence/phases/phase-0/${"b".repeat(40)}/phase-map-trace-${"d".repeat(64)}.json`,
+      `evidence/phases/phase-1/${"a".repeat(40)}/phase-map-trace-${"c".repeat(64)}.json`,
+    ]);
+  });
+
+  it("rejects trace-like noncanonical Phase artifacts while ignoring ordinary auxiliary evidence", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const treeRoot = join(taskPath, "evidence", "phases", "phase-1", "a".repeat(40));
+    mkdirSync(treeRoot, { recursive: true });
+    writeFileSync(join(treeRoot, "phase-diff-scan.v1.json"), "{}");
+    writeFileSync(join(treeRoot, "phase-evidence.json"), "{}");
+    writeFileSync(join(treeRoot, "phase-map-trace-not-content-addressed.json"), "{}");
+
+    expect(() => task.listCanonicalPhaseTraceRefs()).toThrow(/noncanonical phase map trace artifact/i);
+  });
+
+  it("rejects symlinked Phase trace snapshots", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-phase-trace-outside-"));
+    temporaryDirs.push(outside);
+    const phasesRoot = join(taskPath, "evidence", "phases");
+    mkdirSync(phasesRoot, { recursive: true });
+    symlinkSync(outside, join(phasesRoot, "phase-1"));
+    expect(() => task.listCanonicalPhaseTraceRefs()).toThrow(/symlink|directory/i);
   });
 
   it("enumerates only sorted regular canonical review attempts", () => {
@@ -616,6 +562,18 @@ describe("TaskHandle", () => {
       { event: "stage_started", stage: "build-spec" },
       { event: "stage_finished", stage: "build-spec" },
     ]);
+  });
+
+  it("rejects retired stage invalidation record paths", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    for (const ref of [
+      "runs/build-code/invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+      "runs/build-code/journal-invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+      "results/build-code/invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+    ]) {
+      expect(() => task.writeRecordAtomic(ref, "{}\n")).toThrow(/kernel record path required|record is kernel-owned|results records are kernel-owned/);
+    }
   });
 
   it("honors an explicit bounded wait when another process owns a record lock", async () => {

@@ -1,0 +1,108 @@
+Phase 7 T050 mutation RED evidence (temporary source-copy harness)
+
+Harness contract
+- schema: workflowhub-phase-7-mutations-red-harness.v1
+- candidate root: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v2
+- source and formal test files in the candidate worktree were not modified
+- each case used a fresh mktemp source copy; `.git`, `node_modules`, and `evidence` were excluded
+- `node_modules` was a read-only symlink to the candidate dependency cache
+- each temporary tree was removed after its focused run (`cleaned_up=true`)
+- no full suite was run
+- expected result for every mutation: exit code 1
+- all five mutations produced stable RED: 5/5
+
+The existing identity fixture did not isolate tree freshness because its fact object omits `schema_version`, making the fact stale independently of the tree. Therefore identity used a temporary-only focused oracle with a complete canonical fact. No formal test source was changed.
+
+## 1. identity-tree-hash
+
+- Description: force freshness tree dependency to `current`, ignoring snapshot-tree mismatch.
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t050-red-QWfKHw` (removed after run)
+- Changed file: `runtime/evidence/freshness.mjs`
+- Before SHA-256: `4a0e497234be40e17e22f962624935418c0f0e90cea9f81387757c00a8883173`
+- Mutated SHA-256: `bc4d38db13caaa23a18199ed6ccc53d921dc5258d67565e5dc09d7560c270406`
+- Diff:
+
+```diff
+-    tree: fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
++    tree: "current",
+```
+
+- Command: `./node_modules/.bin/vitest run tests/integration/t050-identity-oracle.test.mjs --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary: expected `"stale"`, received `"current"`.
+
+## 2. missing-completion
+
+- Description: remove `assertStageCompleted` rejection for incomplete observations.
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t050-red-IlpPaJ` (removed after run)
+- Changed file: `runtime/stage/completion-predicates.mjs`
+- Before SHA-256: `7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af`
+- Mutated SHA-256: `f13fcb498be7454b71022130911a7f4ab0bc27dfd9bb9c879110f028c6574db4`
+- Diff:
+
+```diff
+-  if (result.status !== "completed") throw new Error(`${stage} incomplete: ${result.missing.join(", ")}`);
++  if (false) throw new Error("mutated incomplete guard");
+```
+
+- Command: `./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs -t "rejects missing stage completion" --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary: `expected [Function] to throw an error`.
+
+## 3. review-major
+
+- Description: allow a failed review fact into completion satisfaction.
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t050-red-HJ8WcY` (removed after run)
+- Changed file: `runtime/stage/completion-predicates.mjs`
+- Before SHA-256: `7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af`
+- Mutated SHA-256: `85beda10c05e0dc3366ed856015881da241f086536058dc1c3e70afa6a4756dd`
+- Diff:
+
+```diff
+-    if (!fact || fact.stage !== stage || fact.status !== "passed"
++    if (!fact || fact.stage !== stage || false
+```
+
+- Command: `./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs -t "rejects a failed major review instead of treating it as complete" --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary: `expected [] to include 'integration_review'`.
+
+## 4. confirmation-authorization
+
+- Description: ignore authentication on completion observations.
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t050-red-JybRTj` (removed after run)
+- Changed file: `runtime/stage/completion-predicates.mjs`
+- Before SHA-256: `7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af`
+- Mutated SHA-256: `3d271cc10602ec33b6fc0c12016ac7bd719b8e0ee711aaa78da9303e35232d76`
+- Diff:
+
+```diff
+-        || observation.authenticated !== true || observation.freshness?.status !== "current") continue;
++        || false || observation.freshness?.status !== "current") continue;
+```
+
+- Command: `./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs -t "rejects an unauthenticated human confirmation" --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary: `expected [] to include 'human_confirmation'`.
+
+## 5. bundle-pollution
+
+- Description: disable forbidden-path rejection and closure filtering so test content enters the bundle.
+- Temporary tree: `/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/workflowhub-t050-red-cATLCU` (removed after run)
+- Changed file: `runtime/distribution/skill-bundle-release.mjs`
+- Before SHA-256: `260053a23f69dd7eb2c9bcf9d690127ca8cf15e40973f37de0f88d251029678c`
+- Mutated SHA-256: `a098883903bea459cbace68b35b23e42acd9da61d488ef2fd412432fc0530a02`
+- Diff:
+
+```diff
+-  if (FORBIDDEN.test(locator)) throw new Error(`skill bundle contains forbidden path: ${locator}`);
++  if (false) throw new Error("mutated forbidden locator guard");
+-    if (!FORBIDDEN.test(locator)) locators.add(locator);
++    if (true) locators.add(locator);
+```
+
+- Command: `./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs -t "excludes test pollution from the published Skill Bundle" --maxWorkers=1 --reporter=dot`
+- Exit: `1` (expected `1`)
+- Failure summary: `expected true to be false`; polluted `tests/` content appeared in the release file list.
+
+Conclusion: T050 now has real, reproducible temporary RED evidence for all five mutation seams. This does not claim historical pre-fix RED or close T051; T051 still needs the current GREEN receipt and the normal task/review binding.

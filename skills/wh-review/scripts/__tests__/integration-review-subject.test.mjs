@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { ArtifactDir } from "../../../../core/artifact-dir.mjs";
+import { createTask, openTask } from "../../../../core/task-handle.mjs";
 import { buildIntegrationReviewSubject, inspectIntegrationReviewSubject } from "../integration-review-subject.mjs";
 
 const sha = (raw) => createHash("sha256").update(raw).digest("hex");
@@ -14,6 +16,7 @@ function fixture({ stale = false, missingAc = false } = {}) {
   execFileSync("git", ["init", "-q"], { cwd: root });
   execFileSync("git", ["config", "user.name", "fixture"], { cwd: root });
   execFileSync("git", ["config", "user.email", "fixture@example.test"], { cwd: root });
+  const storage = mkdtempSync(join(realpathSync(process.cwd()), ".workflowhub-integration-storage-"));
   const taskId = "current-only"; const dir = join(root, "specs", taskId); mkdirSync(dir, { recursive: true });
   const taskBody = `#### T001 — current proof\n\n##### 执行状态填写区（唯一完成权威）\n\n- [x] **任务完成**\n- **status**：\`completed\`\n- **actual_changes**：current implementation\n- **covered_ac**：${missingAc ? "AC-01" : "AC-01、AC-02"}\n- **evidence_refs**：PLACEHOLDER\n`;
   const files = { "decision-log.md": "# decision\n", "spec.md": "# spec\nAC-01\nAC-02\n", "plan.md": "# plan\n", "tasks.md": taskBody };
@@ -32,36 +35,57 @@ function fixture({ stale = false, missingAc = false } = {}) {
   writeFileSync(join(dir, "tasks.md"), files["tasks.md"]);
   const revision = { task_id: taskId, hashes: Object.fromEntries(Object.entries(files).map(([name, raw]) => [name, sha(raw)])) };
   const revisionRaw = JSON.stringify(revision); const pointer = { task_id: taskId, revision_ref: "materials/revisions/current.json", revision_hash: sha(revisionRaw) };
-  const records = new Map([
-    ["materials/current.json", JSON.stringify(pointer)], ["materials/revisions/current.json", revisionRaw],
-    [refs[0].ref, implementationRaw], [refs[1].ref, greenRaw],
-  ]);
-  const reads = [];
-  return { root, finalTree, reads, task: { identity: { taskId }, readRecord(ref) { reads.push(ref); if (!records.has(ref)) throw new Error(`unexpected historic read: ${ref}`); return records.get(ref); } }, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  const task = createTask({
+    storageRoot: storage,
+    manifest: {
+      schema_version: "1.0.0", project_name: "fixture", task_id: taskId,
+      created_at: "2026-08-02T00:00:00.000Z", target_repo_root: root, issue_ids: [], inputs: {},
+    },
+  });
+  for (const [ref, raw] of [["materials/current.json", JSON.stringify(pointer)], ["materials/revisions/current.json", revisionRaw]]) {
+    task.writeRecordAtomic(ref, raw);
+  }
+  for (const [ref, raw] of [[refs[0].ref, implementationRaw], [refs[1].ref, greenRaw]]) {
+    const destination = join(task.taskPath, ref);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, raw);
+  }
+  const currentTask = openTask(task.taskPath, task.identity);
+  return {
+    root, finalTree, task: currentTask, artifacts: ArtifactDir.open(root, currentTask),
+    cleanup: () => { rmSync(root, { recursive: true, force: true }); rmSync(storage, { recursive: true, force: true }); },
+  };
 }
 
 describe("integration review subject current-state boundary", () => {
-  it("builds a semantic-reviewable current-snapshot subject without phase history", () => {
+  it("keeps missing historical Phase coverage as an audit gap", () => {
     const f = fixture();
     try {
-      const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, finalTree: f.finalTree });
-      expect(subject).toMatchObject({ schema_version: "integration-review-subject.v1", formal_record_status: { status: "available" }, phase_coverage: { schema_version: "current-worktree-coverage.v1", snapshot_tree: f.finalTree }, ac_trace: { schema_version: "ac-change-test-trace.v1", acceptance_ids: ["AC-01", "AC-02"] } });
-      expect(subject.ac_trace.entries).toHaveLength(2);
-      expect(f.reads).not.toContain("phase-result.json");
-      expect(f.reads).not.toContain("results/build-plan/accepted.json");
-    } finally { f.cleanup(); }
+      const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
+      expect(subject.formal_record_status).toMatchObject({ status: "unavailable" });
+      expect(subject.audit_gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "historical_phase_coverage" }),
+      ]));
+    }
+    finally { f.cleanup(); }
   });
 
-  it("fails closed when an accepted AC has no current completed-task evidence", () => {
+  it("keeps missing current Task rows as an AC audit gap", () => {
     const f = fixture({ missingAc: true });
-    try { expect(() => buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, finalTree: f.finalTree })).toThrow(/no completed evidence for AC-02/); }
+    try {
+      const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
+      expect(subject.ac_trace.entries).toHaveLength(2);
+      expect(subject.audit_gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "task_completion_history" }),
+      ]));
+    }
     finally { f.cleanup(); }
   });
 
   it("reports missing same-snapshot evidence as unavailable audit data", () => {
     const f = fixture({ stale: true });
     try {
-      const subject = inspectIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, finalTree: f.finalTree });
+      const subject = inspectIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
       expect(subject.formal_record_status).toMatchObject({ status: "unavailable", reason: expect.stringMatching(/current implementation receipt/) });
     } finally { f.cleanup(); }
   });

@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 import { validateTaskId } from "../runtime/task/task-identity.mjs";
-import { assertTaskHandle } from "./task-handle.mjs";
+import { assertTaskHandle } from "./task-capability.mjs";
 
 function assertInside(basePath, candidatePath) {
   const rel = relative(basePath, candidatePath);

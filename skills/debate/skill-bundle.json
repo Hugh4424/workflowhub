@@ -11,20 +11,12 @@
       "sha256": "989f8fcb087d2ffe99093647a20cbb80a8e525cd062d452e39756e76e48f8ee9"
     },
     {
-      "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "7759fda198cdb3887a501c3ca532a4fa562f798bd7819e1634a724ab7617e56a"
-    },
-    {
       "path": "examples/sample-input.md",
       "sha256": "8b2196f52eacc48d71e023ad8a186bf3bdc2f383308062300b90c259ba6e13ed"
     },
     {
       "path": "examples/sample-verdict.md",
       "sha256": "388de02edb89385b646e350dbc1bcc94bb6abcded4b6cda4f0dd749f50ec7971"
-    },
-    {
-      "path": "pk-rules.test.ts",
-      "sha256": "c1ba054e3115cd23575906bfb5bffcd94d051cc3fe807c5bb72c8d92d269464f"
     },
     {
       "path": "pk-rules.ts",

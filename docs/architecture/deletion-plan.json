@@ -44,8 +44,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-01.json",
-          "sha256": "053d82590746266d0dbbbcc174cd3e4528e96d53ad7c933f9ce8bc32bab6ebb6",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a5a08fde9dd50d90addad470f62183466eb1bafedfeb3f737556743204051bb9",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -90,8 +90,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-02.json",
-          "sha256": "e8aa2e478208190117c4743e2dc8df29c19e3cb5a58f9bd2e60fc0cc7ab2388c",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a2fd1dd1ab37f4eb170869d39e72160d6866e55d685686a07b333b56044c2bae",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -136,8 +136,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-03.json",
-          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a70ad069c3a49467dcfe9bed28b705291b7aae372062cf2fca0151b36f174291",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -182,8 +182,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-04.json",
-          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a70ad069c3a49467dcfe9bed28b705291b7aae372062cf2fca0151b36f174291",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -228,8 +228,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-05.json",
-          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a70ad069c3a49467dcfe9bed28b705291b7aae372062cf2fca0151b36f174291",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -274,8 +274,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-06.json",
-          "sha256": "80ecf33c984b1bd167e6c278b2f51e9f2c8fa1c7fbd93331670df41b18d027ac",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a70ad069c3a49467dcfe9bed28b705291b7aae372062cf2fca0151b36f174291",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -305,6 +305,7 @@
       "rollbackEvidence": "pending: isolated T035 diff",
       "decision": "KEEP",
       "missingProof": [
+        "candidatePaths",
         "consumers",
         "consumerAudit",
         "retainedQualitySemantics",
@@ -321,8 +322,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-07.json",
-          "sha256": "44f43525055d416a67eb35fcf7dff43a97346e0a4e51ef36d527384783fd04ae",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "9d945f490d252d56dfe814ff44628332569081926c66bc4aba57a303b592d5d5",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -352,6 +353,7 @@
       "rollbackEvidence": "pending: isolated T037 diff",
       "decision": "KEEP",
       "missingProof": [
+        "candidatePaths",
         "consumers",
         "consumerAudit",
         "retainedQualitySemantics",
@@ -368,8 +370,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-08.json",
-          "sha256": "e131df8808813a079a966135774ce86e46928713b495dd615f3bcd313a477e0a",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "03a44c2a28244f5f129fef0a02f4b47a129432ffbf1caa571b8dc337dbbadafb",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -415,8 +417,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-09.json",
-          "sha256": "62cd9570729b6c4dc9e6a7b55e8b941c3e01eb58d01ae1fcfcafbd174ae07ecc",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "a90703061dcdde72da183e3c51f34909741d1a68a04905f323da4a58420b5035",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -462,8 +464,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-10.json",
-          "sha256": "b7852c48b5d6614f37e39154cb08b89cc2d01965618529c3c8aef01af50bbb1d",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "589c5bfacb78b83d530dbf49909e7ed8b5be13d768ad76a2b83406096df0ef71",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -509,8 +511,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-11.json",
-          "sha256": "5c00994a979837fdf26033cece7091bbf5f6e2bdb3190149858dbdc498af9fa6",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "f840bdbd55b676b0373c2279092eeed8fb0c7d0ffde8ff46746dfe8e3ff60068",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     },
@@ -557,8 +559,8 @@
         "status": "recorded_keep",
         "evidence": {
           "ref": "evidence/phase-5/keep-decisions/DEL-12.json",
-          "sha256": "b5ece4cd6e762515e9f425dab7162644302b18262290e3b99db1563d0a22746b",
-          "snapshot_tree": "d64242d686d92228a221c8ebabf9106d85437826"
+          "sha256": "7d2198039516cf613bd9db1ab75d0a8dfb9ad8356bc99c5845d3dabee226cccd",
+          "snapshot_tree": "bd78a16336ddadad009a81b9ee284b6f20ea1ec24ba615185d8ed94615fc38e8"
         }
       }
     }

@@ -9,7 +9,7 @@ import { runReview, verifyFinal } from "./review-runner.mjs";
 import { capturePhaseReviewSource } from "./review-source.mjs";
 import { buildClassificationManifest, buildNonGateReviewResponseRecord, buildReviewChain, deriveChangeClassification, selectReviewRound } from "./review-controller.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
-import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace, recoverMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
+import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
 import { openTask } from "../../../core/task-handle.mjs";
 import { captureExecutionSnapshot } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
@@ -28,33 +28,14 @@ function previousResult(task, ref, stage, reviewTrack) {
   return { ...result, result_ref: ref, result_sha256: createHash("sha256").update(raw).digest("hex") };
 }
 
-function reviewBindingInvalidated(task, ref) {
-  const raw = task.readRecord(ref);
-  const resultHash = createHash("sha256").update(raw).digest("hex");
-  let record;
-  try { record = JSON.parse(task.readRecord(`reviews/binding-invalidations/${resultHash}.json`)); }
-  catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw new Error(`review binding invalidation cannot be read: ${error.message}`);
-  }
-  if (record?.schema_version !== "review-binding-invalidation.v1"
-      || record.status !== "binding_invalid" || record.result_ref !== ref
-      || record.result_hash !== resultHash) {
-    throw new Error("review binding invalidation does not bind the canonical result");
-  }
-  return true;
-}
-
-export function reviewFlowIdentity({ kernel, assertedWorkflowRunId, stage, reviewTrack = null, phaseId = null, snapshotTree = null, revisionRef = null, adjudicationCorrectionRef = null } = {}) {
+export function reviewFlowIdentity({ kernel, assertedWorkflowRunId, stage, reviewTrack = null, phaseId = null, snapshotTree = null } = {}) {
   const identity = kernel.deriveReviewFlowIdentity({
     stage,
     review_track: reviewTrack,
     subject_kind: phaseId === null ? "worktree" : "phase",
     phase_id: phaseId,
     review_scope: stage === "build-code" ? (phaseId === null ? "integration" : "phase") : null,
-    ...(stage === "build-code" && phaseId !== null ? { snapshot_tree: snapshotTree } : {}),
-    ...(revisionRef === null ? {} : { revision_ref: revisionRef }),
-    ...(adjudicationCorrectionRef === null ? {} : { adjudication_correction_ref: adjudicationCorrectionRef }),
+    ...(stage === "build-code" && snapshotTree !== null ? { snapshot_tree: snapshotTree } : {}),
   });
   if (assertedWorkflowRunId !== undefined && assertedWorkflowRunId !== identity.workflow_run_id) {
     throw new Error("workflow_run_id assertion does not match authenticated stage lineage");
@@ -80,7 +61,6 @@ export function resolveReviewFlowHead({ task, kernel, identity, previousResultRe
   if (previousResultRef !== undefined && previousResultRef !== headRef) {
     throw replayMismatch("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
   }
-  if (headRef !== null && reviewBindingInvalidated(task, headRef)) return { flow, prior: null };
   return {
     flow,
     prior: headRef === null ? null : previousResult(task, headRef, identity.stage, identity.review_track),
@@ -253,10 +233,7 @@ export function resolveTrustedReviewSubject(input) {
     runnerRoot: RUNNER_ROOT,
   });
   if (stage === "make-decision") {
-    const active = context.kernel.activeStageRun("make-decision", { required: false });
-    context = active?.run.recovery_source_ref !== undefined
-      ? recoverMakeDecisionWorkspace(context)
-      : prepareMakeDecisionWorkspace(context);
+    context = prepareMakeDecisionWorkspace(context);
     return {
       taskId,
       task: context.task,
@@ -315,14 +292,12 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack);
   const workflowRunId = input.workflow_run_id ?? input.workflowRunId;
-  const revisionRef = input.revision_ref ?? input.revisionRef ?? null;
-  const adjudicationCorrectionRef = input.adjudication_correction_ref ?? input.adjudicationCorrectionRef ?? null;
   // Phase flow identity is snapshot-scoped. Resolve the trusted frozen Phase
   // tree before deriving the CAS key; callers cannot supply this identity.
   const currentSnapshotTree = frozenSnapshotTree(trusted, phaseId);
   const flowIdentity = reviewFlowIdentity({
     kernel: trusted.kernel, assertedWorkflowRunId: workflowRunId, stage, reviewTrack, phaseId,
-    snapshotTree: currentSnapshotTree, revisionRef, adjudicationCorrectionRef,
+    snapshotTree: currentSnapshotTree,
   });
   const suppliedPreviousRef = Object.prototype.hasOwnProperty.call(input, "previous_result_ref")
     ? input.previous_result_ref
@@ -347,15 +322,9 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     throw new Error("MATERIAL_INCOMPLETE: a new Phase snapshot requires previous_result_ref and response_ledger lineage");
   }
   if (formatCorrection && flow?.head_result_ref) throw new Error("REVIEW_CLOSED: format correction cannot replace a semantic review-flow head");
-  // A Phase is immutable evidence. Controller identity must use that frozen
-  // Phase tree rather than the live worktree, which can already contain the
-  // repair that makes an interrupted review recoverable.
-  if (adjudicationCorrectionRef !== null) {
-    trusted.kernel.readBuildCodeAdjudicationCorrection(adjudicationCorrectionRef, {
-      phaseId,
-      snapshotTree: currentSnapshotTree,
-    });
-  }
+  // A Phase is immutable evidence. Its frozen tree selects the review
+  // subject. Historical corrections can be cited in materials, but they are
+  // not an authorisation prerequisite for a current review.
   const machineChangeClassification = frozenChangeClassification(prior, currentSnapshotTree, input.materials);
   const suppliedLedger = input.materials?.response_ledger ?? null;
   const controllerLedger = suppliedLedger === null || machineChangeClassification === null
@@ -413,6 +382,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
         ...(input.materials ?? {}), response_ledger: controllerLedger,
       }, round: control.round, previousResult: prior,
     }),
+    current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
     // Binding proof stays outside provider-visible packet material. The runner
     // validates it only against the controller-derived chain hash.
     controlLedger: controllerLedger,

@@ -46,7 +46,7 @@ describe("TaskContext static guard", () => {
     expect(result.stdout).toContain("TaskContext is the only stage path contract");
   });
 
-  it("accepts a minimal repository that routes all stages through bootstrapStage", () => {
+  it("accepts a minimal repository without a generic stage bootstrap protocol", () => {
     const result = run(fixture());
     expect(result.status, result.stderr).toBe(0);
   });
@@ -103,12 +103,10 @@ describe("TaskContext static guard", () => {
     expect(result.stderr).toContain("cwd identity discovery");
   });
 
-  it("fails when any stage omits the common bootstrap contract", () => {
+  it("does not require every Stage Skill to advertise a generic bootstrap helper", () => {
     const root = fixture();
     writeFileSync(join(root, "workflows", "build-plan", "SKILL.md"), "legacy stage\n");
     const result = run(root);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("workflows/build-plan/SKILL.md");
-    expect(result.stderr).toContain("bootstrapStage");
+    expect(result.status, result.stderr).toBe(0);
   });
 });

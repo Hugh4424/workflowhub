@@ -1,0 +1,135 @@
+{
+  "schema_version": "workflowhub-complexity-governance-v2-current-status-ledger.v1",
+  "task_id": "workflowhub-complexity-governance-v2",
+  "scope": "append-only current task/evidence reconciliation",
+  "recorded_at": "2026-08-02",
+  "authority": "current ledger supersedes completion claims in stale historical snapshots without deleting historical evidence",
+  "current_snapshot": {
+    "status": "targeted_facts_collected",
+    "reason": "The current candidate tree has a fresh affected-AC matrix and regenerated architecture reports. This is sufficient current evidence for ordinary progression, but not a formal completion claim.",
+    "head": "b0bb020756ac6896deaef9973b23726fcae6224f",
+    "snapshot_kind": "execution_snapshot_excludes_evidence",
+    "tree": "f3740b02d23c44ee8b885ee59d9bb3a7d7d17dff",
+    "targeted_matrix": {
+      "ref": "evidence/phase-9/final-targeted-matrix-current.json",
+      "sha256": "a1576c333e658be8c9896e75f09d52e96f7134b019f73f39201e4d6fe879d84e",
+      "exit_code": 0,
+      "test_suites": 39,
+      "passed_suites": 39,
+      "failed_suites": 0,
+      "tests": 249,
+      "passed_tests": 249,
+      "failed_tests": 0
+    },
+    "derived_reports": [
+      {"ref": "docs/architecture/repository-inventory.tsv", "sha256": "3dfe5989045a05b05a347a289ff7b3915cd5a59ecb44880e13e15a800d1f21fc"},
+      {"ref": "docs/architecture/complexity-baseline.json", "sha256": "a8a31c8468df9fd5ae60163b8bc40b32b4cfcff8771cac3fb5915bb646f7077d"},
+      {"ref": "docs/architecture/final-complexity-report.json", "sha256": "92360a09ec7cee2dad2e0bf727197acdf935a1f73ae01743e962a31bc1a2c012"}
+    ],
+    "formal_completion": false,
+    "formal_verify": {
+      "status": "incomplete",
+      "reason": "The public verify-code entry could not publish a conclusion because the task store has no results/build-code/accepted.json. The runtime stopped before provider dispatch; no PASS or provider verdict was manufactured.",
+      "attempted_at": "2026-08-02",
+      "targeted_facts_ref": "receipts/verify-tests-current-targeted-v2.json",
+      "targeted_facts_hash": "f39063c770e3ef1ddc0d722695d1a075a83b1df0193cac3e3743251b36203338",
+      "targeted_facts": {
+        "test_suites": 39,
+        "tests": 249,
+        "passed": 249,
+        "exit_code": 0
+      },
+      "precondition_error": "ENOENT: results/build-code/accepted.json",
+      "quality_review": "unavailable_before_provider",
+      "formal_fact_ref": "evidence/phase-9/formal-verify-incomplete.json",
+      "formal_fact_hash": "7f9902283742fe7fa9776145b7cef7b2fa3295e5a73c82b2928954d7bed62021",
+      "next_action": "Do not repeat the full suite. Restore or publish a truthful current build-code acceptance record, then rerun only the verify entry and affected AC checks."
+    }
+  },
+  "phase_5_slices": {
+    "ids": [
+      "T026", "T027", "T028", "T029", "T030", "T031", "T032", "T033",
+      "T034", "T035", "T036", "T037", "T042", "T043"
+    ],
+    "status": "in_progress",
+    "disposition": "KEEP",
+    "completed": false,
+    "reason": "Required same-slice RED/GREEN proof, consumer audit, or deletion boundary is unavailable or incomplete; no in-progress slice is promoted to completed by a historical receipt."
+  },
+  "T054": {
+    "status": "in_progress",
+    "completed": false,
+    "historical_completion": {
+      "status": "completed",
+      "scope": "historical Phase 9 snapshot only",
+      "evidence_refs": [
+        {
+          "ref": "evidence/phase-9/final-gates.json",
+          "sha256": "6f637cf7148d5fc3e413cec22946aac3a27d1d60e41e95a9e1e17b8eba55c9a2"
+        },
+        {
+          "ref": "evidence/phase-9/final-coverage.json",
+          "sha256": "ce90257959f3b9e661a91bc53ecd25edb0d6e447238b6a0053b7920ea360d8cd"
+        }
+      ]
+    },
+    "current_evidence_status": "current_targeted_facts",
+    "current_completion_claim": false,
+    "current_evidence_refs": [
+      "evidence/phase-9/final-targeted-matrix-current.json",
+      "docs/architecture/repository-inventory.tsv",
+      "docs/architecture/complexity-baseline.json",
+      "docs/architecture/final-complexity-report.json"
+    ],
+    "next_action": "Run one current verify-code conclusion; keep any quality incompleteness explicit."
+  },
+  "T055": {
+    "status": "in_progress",
+    "completed": false,
+    "review_status": "no_three_provider_aggregate",
+    "provider_facts": {
+      "opencode/k3": "diagnostic revise_required retained",
+      "claude-code/opus": "PUBLIC_RESULT_INVALID; no valid verdict",
+      "cursor/grok": "PROVIDER_PERMISSION_DENIED; no valid verdict"
+    },
+    "evidence_refs": [
+      {
+        "ref": "evidence/phase-9/architecture-review.json",
+        "sha256": "a2408335a17c484ef3e61465fefa9fa011bd6492e55d746bb75b427fa55c31cd"
+      },
+      {
+        "ref": "evidence/phase-9/t055-provider-unavailable-resolution.json",
+        "sha256": "36bce0fac99083d3742688cc457f0fa3e6e6869d01caf9c844a35bc11d8ea51a"
+      }
+    ],
+    "aggregate_pass": false,
+    "fallback_bridge": false,
+    "current_completion_claim": false,
+    "next_action": "Keep the unavailable/invalid attempts as audit facts; do not manufacture an aggregate or use it as a progression permit."
+  },
+  "T056": {
+    "status": "in_progress",
+    "completed": false,
+    "confirmation_fact": {
+      "confirmed": true,
+      "ref": "evidence/phase-9/final-user-confirmation.json",
+      "sha256": "2ef1a0a6506e432459cfa23bb39383aa1be05219c06e72990d380d5cda4e9cd1",
+      "meaning": "The user authorized the planned deletion/retention decision; this is not T055 completion, Git delivery authorization, or close authorization."
+    },
+    "current_completion_claim": false,
+    "next_action": "Retain the confirmation fact and let verify-code bind the current deletion/diff facts after current AC collection."
+  },
+  "preserved_historical_records": [
+    "evidence/phase-9/final-gates.json",
+    "evidence/phase-9/final-coverage.json",
+    "evidence/phase-9/architecture-review.json",
+    "evidence/phase-9/t055-provider-unavailable-resolution.json",
+    "evidence/phase-9/final-user-confirmation.json"
+  ],
+  "prohibited_inferences": [
+    "A historical T054 completion is not current-tree completion.",
+    "A green focused receipt is not a three-provider semantic aggregate.",
+    "A confirmed T056 user fact is not Git delivery or close authorization.",
+    "No Phase 5 KEEP/in_progress slice may be marked completed by stale evidence."
+  ]
+}

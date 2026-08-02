@@ -1,0 +1,144 @@
+{
+  "version": 4,
+  "outcome": "completed",
+  "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+  "round": 1,
+  "host_provider": "codex",
+  "selected_tier": null,
+  "providers": [
+    {
+      "provider": "opencode/k3",
+      "adapter": "opencode",
+      "model": "liuyankimi/k3-256k",
+      "effort": "high",
+      "thinking": null,
+      "status": "completed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "4cfa314ecdf64bb96c631aba23b89878741480e35281afab042aee64d444da08",
+      "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+      "session_id": "ses_03f53187bffebUH6Znk5BQ7ayt",
+      "session_file_path": null,
+      "continuable": true,
+      "timing": {
+        "started_at_ms": 1785643983851,
+        "completed_at_ms": 1785644083233,
+        "duration_ms": 99398
+      },
+      "usage": {
+        "total": 13246,
+        "input": 13150,
+        "output": 96,
+        "reasoning": 0,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "retry": {
+        "count": 0,
+        "progress_events": 39
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+        "provider": "opencode/k3",
+        "stdout_sha256": "e377334f2e242dcb9b565d61365710b79ae70fb326f5c94f1790f84db562ba04",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": null,
+      "output": "{\n  \"verdict\":\"revise_required\",\n  \"summary\":\"当前片段总体保留了目标：日常工作不再被历史检查点阻塞、正式发布仍以当前质量事实闭门判定、独立审查仍被认证。但当前证据中 clean_install 观察为失败，且 K3-F1/F5/F6 所引用的关键执行证据不在本包内，无法独立确认这些处置，需补齐证据后再放行。\",\n  \"resolution_assessments\":[\n    {\"id\":\"K3-F1\",\"status\":\"insufficient\",\"reason\":\"观测矩阵确实含 progression-without-permits 测试且通过，但所引用的 phase-evidence 与 diff-only 测试执行及完整套件输出不在本包证据中，声明的无旧票据重标无法独立核实。\"},\n    {\"id\":\"K3-F2\",\"status\":\"confirmed\",\"reason\":\"verify-final-coverage 要求每条 AC 绑定受测 oracle 源与仅限 phase-9 归档的哈希校验执行记录，校验真实 Vitest 报告并绑定当前树，deferred 在 final 模式被拒。\"},\n    {\"id\":\"K3-F3\",\"status\":\"confirmed\",\"reason\":\"diff 删除了按 tasks.md 声明放行的完成机制，完成证据不再作为通行许可，改由当前测试、审查与快照一致性判定，progression-without-permits 测试通过。\"},\n    {\"id\":\"K3-F4\",\"status\":\"confirmed\",\"reason\":\"含 runtimeOnlyCommit 引用的历史分支随完成许可机制一并删除，diff 中 completionEvidence 及任务专属路径处理整体移除，所有片段未见该标识符复活。\"},\n    {\"id\":\"K3-F5\",\"status\":\"insufficient\",\"reason\":\"PHASE_LOCAL_C2_PATHS 的删除仅由缺席扫描声明，本包无相关片段，且所引用的 build-code-phase-evidence 测试未出现在观测执行中，无法独立确认。\"},\n    {\"id\":\"K3-F6\",\"status\":\"insufficient\",\"reason\":\"integration-review-subject 实现与 review-layering 等测试均未包含在本包片段与观测矩阵中，phaseCompactSummary 缺席同样仅有声明，无法核实。\"}\n  ],\n  \"findings\":[\n    {\"severity\":\"blocking\",\"path\":\"current-focused-oracles.json\",\"issue\":\"当前树证据中 clean_install 观察 passed=false，而最终门清单将 clean_install 列为必需命令，与正式发布应以当前质量事实闭门通过相矛盾。\",\"recommendation\":\"补齐绑定当前树的 clean_install 通过证据，或在最终门记录中如实声明缺失并阻断发布。\"},\n    {\"severity\":\"major\",\"path\":\"current-focused-oracles.json\",\"issue\":\"观测矩阵缺少 K3-F1 与 K3-F5 所引用的 build-code-phase-evidence 与 build-code-diff-only 测试执行，且 limits 声明未跑全套件，使相关处置声明缺乏当前证据支撑。\",\"recommendation\":\"提供含这些 oracle 的归档执行记录并纳入哈希校验的覆盖合同。\"},\n    {\"severity\":\"minor\",\"path\":\"changes.diff\",\"issue\":\"certifyCurrentTaskCompletion 将 AGENTS.md 从边界校验集合中静默过滤而非显式拒绝，越界改动是否被拦截依赖未随包提供的 protected-paths 模块。\",\"recommendation\":\"随包提供 protected-paths 片段以核实保护，或在边界校验中对 AGENTS.md 改动显式报错。\"}\n  ]\n}",
+      "error": null
+    },
+    {
+      "provider": "claude-code/opus",
+      "adapter": "claude-code",
+      "model": "claude-opus-5",
+      "effort": "high",
+      "thinking": null,
+      "status": "completed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "4cfa314ecdf64bb96c631aba23b89878741480e35281afab042aee64d444da08",
+      "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+      "session_id": "8e4514f4-f004-423e-b6dd-2c77c71fe7e0",
+      "session_file_path": null,
+      "continuable": true,
+      "timing": {
+        "started_at_ms": 1785643983874,
+        "completed_at_ms": 1785644173581,
+        "duration_ms": 189732
+      },
+      "usage": {
+        "input_tokens": 44652,
+        "cache_creation_input_tokens": 103621,
+        "cache_read_input_tokens": 85299,
+        "output_tokens": 9623,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 103621
+        },
+        "inference_geo": "",
+        "iterations": [],
+        "speed": "standard"
+      },
+      "retry": {
+        "count": 0,
+        "progress_events": 4139
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+        "provider": "claude-code/opus",
+        "stdout_sha256": "ded6f8c2ac31b0f45f23a98bab554f5c9686c39a90f99ac641e798c4ec666fb2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": null,
+      "output": "```json\n{\n  \"verdict\": \"revise_required\",\n  \"summary\": \"当前片段在“历史不再充当工作许可”和“覆盖绑定当前证据”两条目标上方向正确，但正式发布未对当前质量事实真正 fail-closed：观测中的 clean_install 为失败，而最终门校验只验引用哈希不验执行结果；AGENTS.md 在完成边界校验中仍是无条件例外；K3-F4/F5/F6 声称的删除与缺席扫描在本包内无可核证据。\",\n  \"resolution_assessments\": [\n    {\n      \"id\": \"K3-F1\",\n      \"status\": \"insufficient\",\n      \"reason\": \"观测矩阵确实包含 progression-without-permits（4 断言通过），但矩阵 18 个文件中没有 build-code-phase-evidence 与 build-code-diff-only，包内也无 npm-test-final 的执行观测，全量套件含这两项的说法无法核验。\"\n    },\n    {\n      \"id\": \"K3-F2\",\n      \"status\": \"confirmed\",\n      \"reason\": \"diff 显示 coverage 升级为 v2：oracle 必须是 tests/ 下真实测试源、execution 必须是 evidence/phase-9 归档且逐字节哈希校验、并要求 oracle 出现在同一次成功 Vitest 报告中，currentTree 改绑 governanceTreeHash，确实不再用规格行号或变更 ID。\"\n    },\n    {\n      \"id\": \"K3-F3\",\n      \"status\": \"refuted\",\n      \"reason\": \"certifyCurrentTaskCompletion 中 expectedChanges 仍无条件过滤掉 AGENTS.md，触及 AGENTS.md 的实现改动永不触发文件边界失败；声称承担保护职责的 protected-paths 模块未随包提供，故“不再是完成例外”与现有源码相矛盾。\"\n    },\n    {\n      \"id\": \"K3-F4\",\n      \"status\": \"insufficient\",\n      \"reason\": \"包内 diff 不含任何 runtimeOnlyCommit 的删除行，oracle 事实中也没有该缺席扫描的输出，只有 ledger 的文字声明，无法独立确认该引用已随分支移除。\"\n    },\n    {\n      \"id\": \"K3-F5\",\n      \"status\": \"insufficient\",\n      \"reason\": \"diff 中没有 PHASE_LOCAL_C2_PATHS 相关的删除记录，缺席扫描结果未作为观测提供，且所引 build-code-phase-evidence 测试不在观测矩阵内。\"\n    },\n    {\n      \"id\": \"K3-F6\",\n      \"status\": \"insufficient\",\n      \"reason\": \"仅能看到 stage-handlers 的 review 依赖由 skills/wh-review 迁到 runtime/review（层次方向合理），但 integration-review-subject 源码与 review-layering 测试均未随包，观测矩阵也不含这些测试，phaseCompactSummary 缺席不可核。\"\n    }\n  ],\n  \"findings\": [\n    {\n      \"severity\": \"blocking\",\n      \"path\": \"current-focused-oracles.json\",\n      \"issue\": \"clean_install 观测为 passed:false，而 T055 的 gate_cmd 要求 clean-install（含 --verify-current-tree）退出码 0；按当前证据最终质量门并未通过，完成结论不成立。\",\n      \"recommendation\": \"先定位并修复 clean-install 失败原因，在同一最终 tree 上重跑同一条 gate_cmd 并以退出 0 的归档输出替换该观测。\"\n    },\n    {\n      \"severity\": \"blocking\",\n      \"path\": \"sources/07-final-coverage.md\",\n      \"issue\": \"validateFinalGates 只校验各 gate 证据的 ref/hash/kind 与自述 status，完全不校验该门的实际执行结果；一份失败的 clean_install 输出同样能通过校验并让 status=passed，正式发布因此不再对当前质量事实 fail-closed。\",\n      \"recommendation\": \"为每个 gate evidence 增加结果结构校验（如 exit_code===0 或 success===true），并要求 status=passed 时所有门的证据均自证成功，否则报错。\"\n    },\n    {\n      \"severity\": \"major\",\n      \"path\": \"sources/07-final-coverage.md\",\n      \"issue\": \"executionRanOracles 在 execution.ref 不以 .json 结尾时直接 return，静默跳过“oracle 是否真的被执行”的校验；而 validateHashCheckedRef 只检查 phase-9 前缀，不限制扩展名，AC 可绑定 .out 之类归档文件绕过该检查。\",\n      \"recommendation\": \"强制 item.execution.ref 必须是 .json 的 Vitest 报告，非 .json 时直接推入错误，不再静默返回。\"\n    },\n    {\n      \"severity\": \"major\",\n      \"path\": \"changes.diff\",\n      \"issue\": \"完成边界认证仍把 AGENTS.md 从 expectedChanges 中无条件剔除，历史的 AGENTS.md 例外在当前完成路径上依然存在。\",\n      \"recommendation\": \"去掉该过滤，让 AGENTS.md 改动照常受计划文件边界约束，或用受保护路径清单显式拒绝，并补一条针对性测试。\"\n    },\n    {\n      \"severity\": \"major\",\n      \"path\": \"changes.diff\",\n      \"issue\": \"certifyBuildCodeQualityBasis 与 requireFinalIntegrationReview 允许 verdict 非 pass 时凭 resolution_verified 完成 build-code，而 selectReviewRound 对 build-code 恒返回 round:\\\"none\\\"，包内又未提供 resolution 验证与零 provider 绑定的实现，“独立审查仍然真实”无法核验。\",\n      \"recommendation\": \"随包提供 bindFinalReview／resolution 验证的源码与测试，或在最终阶段要求语义 pass，避免自证闭环成为唯一凭据。\"\n    },\n    {\n      \"severity\": \"major\",\n      \"path\": \"changes.diff\",\n      \"issue\": \"listDeliveryFiles 由 --cached --others 改为仅 tracked，legacy-runtime 零门与 task-only 反向引用扫描不再覆盖未跟踪文件，注释把该职责转交 clean-install，而 clean-install 当前恰为失败。\",\n      \"recommendation\": \"恢复对未跟踪文件的扫描，或在 clean-install 通过并给出对应观测后再依赖该补偿控制。\"\n    },\n    {\n      \"severity\": \"minor\",\n      \"path\": \"resolution-ledger.json\",\n      \"issue\": \"多条 verification 引用的测试（build-code-phase-evidence、build-code-diff-only、final-coverage、review-layering、integration-review-subject）均不在观测矩阵的 18 个文件中；矩阵实际来源文件名为 final-targeted-matrix-final-rebind.json，与 ledger 引用的 final-targeted-matrix.json 不一致。\",\n      \"recommendation\": \"提供覆盖上述测试的同一次执行记录，并统一 ledger 与观测中的证据文件名以保持谱系可追。\"\n    },\n    {\n      \"severity\": \"minor\",\n      \"path\": \"changes.diff\",\n      \"issue\": \"build-spec 移除了 assertLatestBuildSpecReceipt 与 readAuthenticatedReviewFlow 调用，只要内容哈希一致，旧的 spec receipt 仍可被复用为当前完成事实。\",\n      \"recommendation\": \"保留 latest-receipt 断言，或补一项等效的当前性校验（receipt 与当前快照/审查流头部绑定）。\"\n    }\n  ]\n}\n```",
+      "error": null
+    },
+    {
+      "provider": "cursor/grok",
+      "adapter": "cursor",
+      "model": "cursor-grok-4.5-high",
+      "effort": null,
+      "thinking": null,
+      "status": "failed",
+      "result_protocol": "workflowhub-result.v2",
+      "material_id": "4cfa314ecdf64bb96c631aba23b89878741480e35281afab042aee64d444da08",
+      "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+      "session_id": null,
+      "session_file_path": null,
+      "continuable": false,
+      "timing": {
+        "started_at_ms": 1785643983896,
+        "completed_at_ms": 1785644002359,
+        "duration_ms": 18501
+      },
+      "usage": null,
+      "retry": {
+        "count": 0,
+        "progress_events": 65
+      },
+      "raw_output_ref": {
+        "version": "broker-output-ref.v1",
+        "runtime_id": "c062f44b-1c63-4a2b-98a6-deedeb5f2fef",
+        "provider": "cursor/grok",
+        "stdout_sha256": "2140c0cb55db55b6cfa31b3e207b6e902effa92c9f124e33641f5ceb57d34b55",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "unavailable_diagnostics": {
+        "code": "PROVIDER_PERMISSION_DENIED",
+        "message": "Cursor Agent attempted a tool outside the scoped review bundle"
+      },
+      "output": null,
+      "error": {
+        "code": "PROVIDER_PERMISSION_DENIED",
+        "message": "Cursor Agent attempted a tool outside the scoped review bundle"
+      }
+    }
+  ]
+}

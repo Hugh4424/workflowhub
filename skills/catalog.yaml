@@ -19,7 +19,8 @@ skills:
     status: adopted
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
-    used_by_stages: [make-decision]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *anysearch, path: "SKILL.md", skill_url: "https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/SKILL.md" }]
     local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装
     dependency_closure: [skills/anysearch]
@@ -113,7 +114,8 @@ skills:
     status: adapted
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
-    used_by_stages: [build-spec]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
     local_changes: 去 task identity；内置可读模板；PFACT/SCN/FR/AC/OPEN typed closure；接 workflowhub metrics
     dependency_closure: [skills/spec-specify]
@@ -126,7 +128,8 @@ skills:
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
-    used_by_stages: [build-spec]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
     local_changes: 去 .specify/git 耦合；task-id 参数化
     dependency_closure: [skills/spec-clarify]
@@ -139,7 +142,8 @@ skills:
     status: adapted
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
-    used_by_stages: [build-plan]
+    standalone: true
+    used_by_stages: []
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
@@ -154,7 +158,8 @@ skills:
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
-    used_by_stages: [build-plan]
+    standalone: true
+    used_by_stages: []
     upstream:
       - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
@@ -247,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 914c4ef4026b31d877b2feb9f7402da2773700c6b6d7002f5e4d4e8fd79ae686
+    local_bundle_hash: 05bdeeddc44715b02350cf5038e9f78e650f17b033389d7486e46d0dff938828
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -343,7 +348,8 @@ skills:
     status: native
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
-    used_by_stages: [verify-code]
+    standalone: true
+    used_by_stages: []
     upstream: []
     local_changes: WorkflowHub close 冲突恢复约束
     dependency_closure: [skills/resolving-merge-conflicts]
@@ -356,7 +362,8 @@ skills:
     status: adapted
     purpose: 从 AC、UI impact 和风险生成测试路由
     design_idea: 独立上下文产出 AC-to-test-route strategy
-    used_by_stages: [verify-code]
+    standalone: true
+    used_by_stages: []
     upstream:
       - { <<: *matt, path: "skills/engineering/tdd/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md" }
       - { <<: *superpowers, path: "skills/test-driven-development/testing-anti-patterns.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md" }
@@ -366,12 +373,13 @@ skills:
   - name: debate
     path: skills/debate/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 165d14b8df4e1a8d646581b1c2dfc4f2b6bb8296d90f8e24c3d044a874e092dd
+    local_bundle_hash: 35627c10094c38c9e57913347de93f7f656601a43c8367f48baf9bf365af5c5d
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 对方向级分歧执行可选对抗审查
     design_idea: 双方对等陈述，judge 不参与倡议，最多两轮
-    used_by_stages: [make-decision]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *debate, path: "SKILL.md", skill_url: "https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md" }]
     local_changes: 仓内路径；可选增强；失败记录 diagnostic 后继续
     dependency_closure: [skills/debate]
@@ -379,12 +387,13 @@ skills:
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 752d6895cdb0efbd23516af5848c23eb1990969fbfd7629ae5d157be5e7fe49a
+    local_bundle_hash: 7f50397d98926dd5345f337f7e8cc2407cca061733fdc5821f32ae46c2e0db68
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用可重复证据定位根因后单点修复
     design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
-    used_by_stages: [build-code]
+    standalone: true
+    used_by_stages: []
     upstream:
       - { <<: *matt, path: "skills/engineering/diagnosing-bugs", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs" }
       - { <<: *superpowers, path: "skills/systematic-debugging", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging" }
@@ -395,12 +404,13 @@ skills:
   - name: review-response
     path: skills/review-response/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 4f5f35ec66a05418d25cd5190ad0ec030e594f48a35072ef625a81244e8010f9
+    local_bundle_hash: 6e989caada28c4ebc20617474586efa62718a0c78f6e39e9a1c1cdc376aeeb05
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 严格消费 revise_required finding
     design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
-    used_by_stages: [build-code]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *superpowers, path: "skills/receiving-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review" }]
     local_changes: 适配 wh-review continuation flow；允许用证据拒绝错误建议
     dependency_closure: [skills/review-response]
@@ -408,12 +418,13 @@ skills:
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c2bbffec606f340d51d7aab855d6bbda5c7fa3397c18c9aea6219730ee10d190
+    local_bundle_hash: f792706199c272d26d2db36cd7036ebf59dcd4993c6d8139b18346f9dbeb8639
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 为 build-code 判定 simple/feature/fullstack 测试层级
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
-    used_by_stages: [build-code]
+    standalone: true
+    used_by_stages: []
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
     local_changes: 删除固定外仓执行器；改成 workflowhub 三档 JSON 合同
     dependency_closure: [skills/test-routing-advisor]
@@ -421,13 +432,14 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: aad3c1115050207ab42641391a155b7354914c05e093d4b6de1e381ab026bbe3
+    local_bundle_hash: 285a0178c2f43845398f9d1a1a0f3f3cbbd286a0980cebadae7b070ed8f8c7bb
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
-    used_by_stages: [verify-code]
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "aad3c1115050207ab42641391a155b7354914c05e093d4b6de1e381ab026bbe3", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    standalone: true
+    used_by_stages: []
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "285a0178c2f43845398f9d1a1a0f3f3cbbd286a0980cebadae7b070ed8f8c7bb", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
     local_changes: 搬入完整闭包；去个人绝对路径；按 repo-relative manifest 调用
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录

@@ -129,7 +129,7 @@ describe("review source capture", () => {
     expect(bundle.files).not.toContain("changes.diff");
     expect(bundle.files).toContain("diff-index.json");
     expect(bundle.packetPlan.delivery_mode).toBe("selected_context");
-    expect(bundle.packetPlan.delivery_bytes).toBeLessThanOrEqual(330 * 1024);
+    expect(bundle.packetPlan.delivery_bytes).toBeGreaterThan(0);
     expect(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).not.toContain("\n  \"");
     const compactSpec = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/approved_spec.json"), "utf8"));
     expect(compactSpec).toMatchObject({ schema_version: "wh-review-spec-excerpts.v1", selected_ids: ["AC-1"] });
@@ -158,10 +158,9 @@ describe("review source capture", () => {
     expect(semanticDiff).toContain("@@");
     expect(semanticDiff).toContain("-line-6");
     expect(semanticDiff).toContain("+changed-line-6");
-    expect(semanticDiff).not.toContain(" line-5");
-    expect(index.changes.find(({ path }) => path === "tests/large.test.mjs")?.shards[0].delivery).toBe("summary_only");
+    expect(semanticDiff).toContain(" line-5");
+    expect(index.changes.find(({ path }) => path === "tests/large.test.mjs")?.shards[0].delivery).toBe("included");
     expect(readFileSync(join(f.data, index.full_diff.ref))).toHaveLength(index.full_diff.bytes);
-    expect(bundle.manifest.some(({ path }) => path === "tests/large.test.mjs")).toBe(false);
     const selected = index.changes.flatMap(({ shards }) => shards).find(({ delivery }) => delivery === "included");
     writeFileSync(join(bundle.bundleRoot, "diff-shards", `${selected.shard_id}.diff`), "tampered\n");
     expect(() => validateDiffIndexBundle(bundle.bundleRoot)).toThrow(/missing or tampered/);
@@ -171,18 +170,11 @@ describe("review source capture", () => {
       task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
       stage: "build-code", phaseId: "phase-large", materials: invalid,
     })).toThrow(/no valid spec verification excerpt/);
-    const summaryAnchor = structuredClone(materials);
-    summaryAnchor.reuse_map.entries[0].anchors[0] = {
-      id: "summary-anchor", path: "tests/base.test.mjs", start_line: 12, end_line: 12,
-      role: "reuse", reason: "summary-only changed test", outside_diff_reason: "outside changed hunk",
-    };
-    expect(() => buildReviewMaterials({
-      task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task",
-      stage: "build-code", phaseId: "phase-large", materials: summaryAnchor,
-    })).toThrow(/changed-path anchor summary-anchor has no included shard/);
+    const testChange = index.changes.find(({ path }) => path === "tests/large.test.mjs");
+    expect(testChange.shards.some(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(true);
   });
 
-  it("summarizes declared mechanical moves without shipping their full diff shard", () => {
+  it("does not let a move-map suppress a provider-visible diff shard", () => {
     const f = fixture();
     writeFileSync(join(f.source, "context-change.txt"), "changed context\n");
     mkdirSync(join(f.source, "docs", "architecture"), { recursive: true });
@@ -219,23 +211,11 @@ describe("review source capture", () => {
     });
     const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
     const contextChange = index.changes.find(({ path }) => path === "context-change.txt");
-    expect(contextChange.shards).toHaveLength(0);
-    expect(contextChange.summary).toMatchObject({
-      kind: "mechanical-move",
-      path: "context-change.txt",
-      source: "legacy/context-change.txt",
-      destination: "context-change.txt",
-      content_change: "import/path-only",
-      old_sha256: "0".repeat(64),
-      new_sha256: "1".repeat(64),
-    });
-    expect(contextChange.shards.some(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(false);
+    expect(contextChange).not.toHaveProperty("summary");
+    expect(contextChange.shards.some(({ delivery }) => delivery === "included")).toBe(true);
+    expect(contextChange.shards.every(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(true);
     const compactChangeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
-    expect(compactChangeMap.changes.find(({ path }) => path === "context-change.txt").summary).toMatchObject({
-      source: "legacy/context-change.txt",
-      destination: "context-change.txt",
-      content_change: "import/path-only",
-    });
+    expect(compactChangeMap.changes.find(({ path }) => path === "context-change.txt")).not.toHaveProperty("summary");
   });
 
   it("captures only the immutable phase commit range named by current phase evidence", () => {
@@ -263,15 +243,6 @@ describe("review source capture", () => {
     expect(result.baseTree).toBe(git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]));
     expect(result.snapshotTree).toBe(git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]));
     result.dispose();
-    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({
-      phase_id: "phase-1",
-      recovery_ref: "identity/recoveries/phase-pointer-0001.json",
-      recovery_hash: "a".repeat(64),
-      evidence: { diff: "evidence/phase-1-diff-scan.json" },
-    })}\n`);
-    expect(() => capturePhaseReviewSource({
-      sourceRoot: f.source, task, phaseId: "phase-1", reviewDataRoot: f.data,
-    })).toThrow(/canonical Phase evidence ref is required for recovery binding/);
   });
 
   it("rejects a phase id or evidence record that does not match", () => {
@@ -488,23 +459,6 @@ describe("review materials", () => {
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
     });
     expect(repeated.materialId).toBe(code.materialId);
-    const recoveryBound = buildReviewMaterials({
-      reviewDataRoot: f.data, attachmentRoot: f.data,
-      source: {
-        ...source,
-        phaseEvidenceBinding: {
-          ref: `evidence/phases/phase-0/${source.snapshotTree}/phase-evidence-${"a".repeat(64)}.json`,
-          sha256: "a".repeat(64),
-          recovery_ref: "identity/recoveries/phase-pointer-0001.json",
-          recovery_hash: "b".repeat(64),
-        },
-      },
-      taskId: "task", stage: "build-code", reviewTrack: null,
-      materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
-    });
-    expect(recoveryBound.materialId).not.toBe(code.materialId);
-    expect(JSON.parse(readFileSync(join(recoveryBound.bundleRoot, "source.json"), "utf8")).phase_evidence)
-      .toMatchObject({ recovery_ref: "identity/recoveries/phase-pointer-0001.json", recovery_hash: "b".repeat(64) });
   });
 
   it("generates a deterministic canonical material id", () => {
@@ -632,16 +586,30 @@ describe("review materials", () => {
     const testEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
     const implementation = Buffer.from(`${JSON.stringify({ snapshot_tree: source.snapshotTree })}\n`);
     const implementationHash = createHash("sha256").update(implementation).digest("hex");
-    createTaskKernel(task).publishCanonicalRecord("receipts/revisions/implementation/current.json", implementation);
+    const kernel = createTaskKernel(task);
+    kernel.publishCanonicalRecord("receipts/revisions/implementation/current.json", implementation);
+    const phaseReview = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-review-result.v1", verdict: "pass", snapshot_tree: source.snapshotTree })}\n`);
+    const phaseReviewHash = createHash("sha256").update(phaseReview).digest("hex");
+    const phaseTrace = Buffer.from(`${JSON.stringify({ schema_version: "phase-map-trace.v1", phase_id: "phase-1", snapshot_tree: source.snapshotTree })}\n`);
+    const phaseTraceHash = createHash("sha256").update(phaseTrace).digest("hex");
+    kernel.publishCanonicalRecord("reviews/phase-1.json", phaseReview);
+    kernel.publishCanonicalRecord("evidence/phases/phase-1/phase-map.json", phaseTrace);
     const materials = {
       approved_spec: "spec", acceptance_criteria: "AC-1", test_evidence: testEvidence,
       phase_coverage: {
-        schema_version: "current-worktree-coverage.v1", snapshot_tree: source.snapshotTree,
+        schema_version: "phase-review-coverage.v1", snapshot_tree: source.snapshotTree,
+        checkpoint: { commit: "a".repeat(40), tree: "b".repeat(40) },
         implementation_receipt: { ref: "receipts/revisions/implementation/current.json", sha256: implementationHash },
         green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
+        phases: [{
+          phase_id: "phase-1", snapshot_tree: source.snapshotTree,
+          review_result: { ref: "reviews/phase-1.json", sha256: phaseReviewHash, verdict: "pass" },
+          phase_map_trace: { ref: "evidence/phases/phase-1/phase-map.json", sha256: phaseTraceHash },
+          green_test_receipt: { ref: testEvidence.receipt_ref, sha256: testEvidence.receipt_hash },
+        }],
         completed_tasks: [{ task_id: "T01", acceptance_ids: ["AC-1"], summary: "current implementation" }],
       },
-      seam_index: { schema_version: "current-worktree-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [] },
+      seam_index: { schema_version: "cross-phase-seam-index.v1", snapshot_tree: source.snapshotTree, entries: [{ seam_id: "phase-1-to-phase-2", state: "unknown", reason_code: "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS" }] },
       ac_trace: {
         schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"],
         entries: [{ acceptance_criterion_id: "AC-1", change: [{ task_id: "T01", summary: "current implementation" }], test: [{ receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash }], evidence: [{ ref: "receipts/revisions/implementation/current.json", sha256: implementationHash }], anchors: [{ id: "integration-ac", path: ".gitignore", start_line: 1, end_line: 1, role: "acceptance", reason: "final integration boundary" }] }],

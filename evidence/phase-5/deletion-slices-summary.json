@@ -1,0 +1,24 @@
+{
+  "schema_version": "workflowhub-deletion-summary.v2",
+  "snapshot_tree": "09c398fd3ea763a693c216eb92a477e703b9b0045bbcf25c71e1f6af33bdff3d",
+  "disposition_counts": {
+    "KEEP": 5,
+    "PARTIAL_DELETE": 7,
+    "DELETE": 0
+  },
+  "partial_delete_ids": ["DEL-03", "DEL-04", "DEL-05", "DEL-06", "DEL-07", "DEL-08", "DEL-11"],
+  "historical_red_unavailable_ids": ["DEL-03", "DEL-04", "DEL-05", "DEL-06", "DEL-07", "DEL-08", "DEL-11"],
+  "consumer_audit_ref": "evidence/phase-5/deletion-consumer-audit.json",
+  "consumer_audit_sha256": "0a127d63b6fa1a2fb2feaaf54ad7e4df956967a84ac94582db0db3a3e409b3da",
+  "keep_disposition_ref": "evidence/phase-5/keep-disposition.json",
+  "keep_disposition_sha256": "d0feae8470812bb676be6018e07323d7caad5e5c627debb732cba03e7c2886a6",
+  "quality": {
+    "deletion_proof": "pass",
+    "inventory_legacy_zero": "pass",
+    "complexity_hard_gates": "pass",
+    "focused_contract": "pass: tests/contract/deletion-proof.test.mjs (8 tests)"
+  },
+  "phase5_closed": false,
+  "closure_blocker": "Current-tree consumer summary is now bound, but partial slices still lack complete replacement and historical RED evidence; Phase 5 remains open and no DELETE is authorized.",
+  "result": "All twelve candidates remain KEEP at the deletion gate; seven partial historical reductions are disclosed; no Phase 5 deletion was performed."
+}
