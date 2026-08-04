@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "81d9e10c2b602e08f1834ad0156003c19b59961deeb997851dcd4e55a9b7868f"
+      "sha256": "85d9f9a27d4f184014430cb1ab760f6cfd2c97d6154f06bf40963048e9e7207d"
     },
     {
       "path": "scripts/multica-skill-sync.mjs",
-      "sha256": "b39a920e9e158073a61d12c2791fa641162cd3ce29d5169b91875feadee998e6"
+      "sha256": "eb9cf8d009dd9b2d9110b2c7680d5bd73d4a1989a424190c9a54dcf4414a373a"
     }
   ],
   "runtime_dependencies": [

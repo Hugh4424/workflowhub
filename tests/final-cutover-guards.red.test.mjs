@@ -640,6 +640,9 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const result = await officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } });
     expect(result.verification_failure).toBe(true);
     expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
+    expect(result.missing_items).toEqual(expect.arrayContaining([
+      expect.stringMatching(/review findings require per-finding analysis and disposition/i),
+    ]));
     expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
   });
 
