@@ -445,7 +445,7 @@ function stagePlanFor(stage, track) {
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewRound = "initial", reviewScope = null) {
   const rule = ruleFor(stage, track, reviewScope);
-  if (!new Set(["initial", "closure", "full", "legacy"]).has(reviewRound)) throw new TypeError("reviewRound is invalid");
+  if (!new Set(["initial", "incremental", "closure", "full", "legacy"]).has(reviewRound)) throw new TypeError("reviewRound is invalid");
   const plan = stagePlanFor(stage, track);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
@@ -455,7 +455,9 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
-  const roundInstruction = reviewRound === "closure"
+  const roundInstruction = reviewRound === "incremental"
+    ? "This is a bounded incremental review. The prior pass is an immutable baseline. Review only requirements/review_delta.json and its direct impacts; unchanged baseline material is intentionally omitted from the provider packet. Do not reopen unchanged sections and do not seek a new pass for unchanged content."
+    : reviewRound === "closure"
     ? "This is a bounded closure review. Review only the prior actionable findings and response ledger, whether each claimed repair is complete, and whether a non-fix has a stated reason. Do not reopen a full design/code review unless the supplied delta proves a material change."
     : "This is a full review of the supplied stage subject.";
   return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the included diff-shards/ and summaries as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${blind} ${roundInstruction} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
@@ -998,7 +1000,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   for (const key of rule.required) if (!(key in materials) || !materialPresent(materials[key])) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${key}`);
   validateMaterialAllowlist(rule, materials, reviewRound);
   if (stage === "make-decision" && reviewTrack === "direction") {
-    const allowed = new Set(rule.required);
+    const allowed = new Set([...rule.required, ...rule.optional]);
     for (const key of Object.keys(materials)) if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
   }
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
@@ -1019,6 +1021,13 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
     : null;
   let providerMaterials = Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence"));
+  if (reviewRound === "incremental") {
+    if (!materialPresent(materials.review_delta)) throw new Error("MATERIAL_INCOMPLETE: incremental review requires runner-generated review_delta");
+    providerMaterials = {
+      review_instructions: materials.review_instructions,
+      review_delta: materials.review_delta,
+    };
+  }
   const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
   if (selectedContextDelivery) {
     const compacted = { ...providerMaterials };
@@ -1088,7 +1097,13 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   // Context is never inferred from repository size or file membership. Every
   // provider-visible source excerpt is named by a validated stage map anchor.
-  writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, canonicalOnly: selectedContextDelivery });
+  writeSelectedContext({
+    bundleRoot,
+    reviewDataRoot,
+    source,
+    materials: reviewRound === "incremental" ? { review_delta: materials.review_delta } : materials,
+    canonicalOnly: selectedContextDelivery,
+  });
 
   const stagePlan = stagePlanFor(stage, reviewTrack);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${reviewTrack ?? "default"}`);

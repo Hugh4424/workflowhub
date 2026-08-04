@@ -261,13 +261,20 @@ and terminal `workflowhub-result.v2` group. wh-review never reads broker private
 state, attachment workspaces, or `/tmp/3rd-review`. The canonical attempt stores
 only public profile, timing, usage, retry, runtime/session IDs, and normalized
 public diagnostics. Session reuse is an optional optimization, not proof of
-correctness. A retry always sends the complete current bundle. A format
-correction or fresh session is transport recovery, not a cap on later formal
-review attempts; every failed attempt remains immutable evidence. Build-code
+correctness. A transport retry always sends the complete current bundle. A
+format correction or fresh session is transport recovery, not a cap on later
+formal review attempts; every failed attempt remains immutable evidence. The
+semantic incremental round described below is a separate runner-derived scope.
+Build-code
 has no cycle, time, token, output-size, or repeated-finding stop rule. Every
 repaired snapshot is a new Phase identity and receives one review from its
 complete frozen material; a single frozen identity is never reviewed repeatedly
-until its provider verdict becomes `pass`.
+until its provider verdict becomes `pass`. For `make-decision`, `build-spec`,
+and `build-plan`, a prior `pass` baseline plus changed current material uses a
+runner-generated `review_delta`: providers inspect only the added or changed
+material and its direct impacts. This is an evidence-scope optimization, not a
+new gate or a request to manufacture `pass`; if the delta cannot be safely
+derived, the runner records the fallback full review explicitly.
 
 ### Finding aggregation
 

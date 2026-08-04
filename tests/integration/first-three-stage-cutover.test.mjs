@@ -45,7 +45,7 @@ function fixture() {
   return { task, candidate, kernel, artifacts };
 }
 
-function publishReviewFixture(state) {
+function publishReviewFixture(state, verdict = "pass") {
   const snapshot = state.candidate.captureSnapshot();
   const value = {
     version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-spec",
@@ -53,8 +53,8 @@ function publishReviewFixture(state) {
     source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
     snapshot_tree: snapshot.tree, material_id: "0".repeat(64),
     attempt_ref: "quality/reviews/attempts/first-three-build-spec/attempt.json",
-    provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "fixture review passed", findings: [] } }],
-    verdict: "pass", findings: [],
+    provider_results: [{ provider: "fixture", output: { verdict, summary: `fixture review ${verdict}`, findings: verdict === "pass" ? [] : [{ severity: "minor", path: "spec.md", line: 1, issue: "fixture finding", recommendation: "record it" }] } }],
+    verdict, findings: verdict === "pass" ? [] : [{ provider: "fixture", severity: "minor", path: "spec.md", line: 1, issue: "fixture finding", recommendation: "record it" }],
   };
   const raw = `${JSON.stringify(value, null, 2)}\n`;
   const ref = "quality/reviews/results/first-three-build-spec.json";
@@ -118,5 +118,21 @@ describe("first three stage vNext cutover", () => {
     expect(second.quality_fact_refs).toEqual(first.quality_fact_refs);
     expect(second.publication_ref).toBe(first.publication_ref);
     expect(readdirSync(join(state.task.taskPath, "quality", "facts"))).toHaveLength(first.quality_fact_refs.length);
+  });
+
+  it("does not require a provider pass for build-spec progression", async () => {
+    const state = fixture();
+    const review = publishReviewFixture(state, "revise_required");
+    const context = {
+      stage: "build-spec", task: state.task, kernel: state.kernel, identity: state.task.identity,
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("build-spec"),
+      manifest: state.task.manifest, candidateWorkspace: state.candidate,
+    };
+    const result = await runStage("build-spec", context, async () => ({
+      facts: { source: "review-opinion" }, evidence_refs: [review],
+    }));
+    expect(result.status).toBe("completed");
+    expect(result.quality_status).toBe("incomplete");
+    expect(result.quality_warnings).toContain("independent_review:failed");
   });
 });

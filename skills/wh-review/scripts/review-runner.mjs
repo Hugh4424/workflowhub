@@ -203,7 +203,7 @@ function reviewPolicyRecord(value) {
     same_source_exclusions: stringList(value.same_source_exclusions, "reviewPolicy.same_source_exclusions"),
     effective_profiles: effectiveProfiles,
     round: value.round === undefined ? "legacy" : (() => {
-      if (!["initial", "closure", "full", "legacy"].includes(value.round)) throw new TypeError("reviewPolicy.round is invalid");
+      if (!["initial", "incremental", "closure", "full", "legacy"].includes(value.round)) throw new TypeError("reviewPolicy.round is invalid");
       return value.round;
     })(),
   };
@@ -1100,7 +1100,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const policy = reviewPolicyRecord(reviewPolicy);
   if (policy?.source !== "wh_review.v2" && providers.includes(hostProvider)) throw new TypeError("provider must differ from hostProvider");
   const effectiveReviewRound = reviewRound ?? policy?.round ?? "initial";
-  if (!["initial", "closure", "full", "legacy"].includes(effectiveReviewRound)) throw new TypeError("reviewRound is invalid");
+  if (!["initial", "incremental", "closure", "full", "legacy"].includes(effectiveReviewRound)) throw new TypeError("reviewRound is invalid");
   if (policy && effectiveReviewRound !== policy.round) throw new TypeError("reviewRound must equal reviewPolicy.round");
   if (policy && !isDeepStrictEqual(policy.requested_profiles, providers)) throw new TypeError("reviewPolicy requested_profiles must equal broker reviewer group");
   if (!previousRuntimeIds || typeof previousRuntimeIds !== "object" || Array.isArray(previousRuntimeIds)) throw new TypeError("previousRuntimeIds must be an object keyed by provider");
