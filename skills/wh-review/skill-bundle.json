@@ -72,7 +72,7 @@
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "4fc10c53ce26100bcb2eb665c59b8afcf229b452240b28697d913845fbebaf95"
+      "sha256": "0c1e41c385972b77870971c9c6ff0edb505289e1ac1a00734947c2c1383ef179"
     },
     {
       "path": "scripts/review-runner.mjs",

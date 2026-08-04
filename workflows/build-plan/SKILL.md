@@ -72,10 +72,15 @@ snapshot is a provenance fact only, never a prerequisite or work permit.
    process machinery or repeat an unchanged review. After a material change,
    rerun only affected
    checks and the review needed to assess that change.
-8. Publish exact final plan/task receipts and the stage attempt through the
+8. Before handoff, the main agent must inspect every finding and record its
+   disposition, evidence, and next action. A finding cannot be silently carried
+   into implementation. This disposition is a quality fact, not a hidden gate:
+   it keeps unavailable or unresolved quality visible without blocking ordinary
+   same-task repair or progression.
+9. Publish exact final plan/task receipts and the stage attempt through the
    runtime's declared schema. Publication must authenticate current structure;
    audit gaps remain visible but do not block work.
-9. Present a short plan summary: scope and non-goals, phases/dependencies,
+10. Present a short plan summary: scope and non-goals, phases/dependencies,
    FR/AC and check coverage, review facts, risks, and delivery boundary. Get
    explicit user accept or reject, record it with `confirm`, and pass only an
    accepted confirmation to `accept`.

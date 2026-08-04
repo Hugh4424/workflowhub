@@ -70,11 +70,16 @@ current materials.
    lock on further work. Fix valid issues in the current spec; reject an invalid
    finding with a reason; or ask the user to accept a concrete risk when a
    serious issue will remain.
-3. After a material spec revision, update the material revision note and rerun
+3. Before handoff, the main agent must inspect every finding and record its
+   disposition and evidence. Do not move directly to the next stage with an
+   unexplained review result. This is a quality fact and handoff record, not a
+   hidden gate: unavailable or ordinary findings remain visible without
+   blocking continued drafting or repair.
+4. After a material spec revision, update the material revision note and rerun
    the ambiguity gate. Request another independent review only when the change
    materially alters what the prior review covered; otherwise disclose the
    review's remaining scope.
-4. Never loop reviews to manufacture a pass or rewrite historical verdicts.
+5. Never loop reviews to manufacture a pass or rewrite historical verdicts.
 
 ## User confirmation and handoff
 

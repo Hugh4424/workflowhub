@@ -35,6 +35,8 @@ never prove the current implementation correct.
    unknown when it is actually available. A stale or missing receipt is a
    visible quality warning, not a reason to stop stage progression or return to
    build-code. Focused tests belong to build-code.
+   The current complete test command and its observed snapshot are the only
+   basis for the final verification test fact.
    Do not rerun the full suite because of a material-only edit, task-row
    completion, evidence synchronization, review unavailability, or handoff
    formatting. After a failed suite, run only affected tests while repairing;
@@ -48,11 +50,21 @@ never prove the current implementation correct.
    Record the returned verdict and findings exactly. If the provider is
    unavailable, record `unavailable`; do not invent a pass or substitute an
    unrequested provider.
-6. Produce a short verification summary: current snapshot, tests, per-AC result,
+6. Before handoff, the main agent must inspect every review finding and record
+   its disposition: `fixed`, `rejected_invalid`, `accepted_risk`, or
+   `needs_human`. A valid implementation finding returns to the same current
+   build-code Task for repair; it does not become a new task. An unresolved
+   serious finding needs exact risk acceptance, while the original verdict
+   remains unchanged. A review that is unavailable or invalid gets an explicit
+   incomplete disposition; it is never silently skipped.
+7. Produce a short verification summary: current snapshot, tests, per-AC result,
    review result, unresolved risks, and a clear overall conclusion. Keep stage
    progression and the formal acceptance conclusion separate.
 
-Review is a quality fact, not a license to start or continue repairs. An
+Review is a quality fact, not a license to claim completion. The disposition
+step is required for an honest handoff, but it is not a hidden quality gate:
+normal same-task repair and progression remain possible while quality is
+incomplete. An
 authenticated actionable major/blocking finding must be repaired, or the user
 must explicitly accept that specific risk before the conclusion can claim the
 work is accepted. Ordinary findings, invalid output, timeout, and unavailable
