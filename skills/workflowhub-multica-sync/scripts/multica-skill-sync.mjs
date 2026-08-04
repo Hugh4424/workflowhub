@@ -91,7 +91,23 @@ function multica(profile, workspace, argv, options = {}) {
   try {
     return jsonRun("multica", ["--profile", profile, "--workspace-id", workspace, ...argv], options);
   } catch (error) {
-    if (error instanceof SyncError) throw new SyncError(error.code === "CLI_TIMEOUT" ? "MULTICA_TIMEOUT" : "MULTICA_UNAVAILABLE", `Multica CLI 无法确认：${error.message}`, error);
+    if (error instanceof SyncError) {
+      const code = error.code === "CLI_TIMEOUT"
+        ? "MULTICA_TIMEOUT"
+        : error.code === "OUTPUT_INVALID"
+          ? "MULTICA_OUTPUT_INVALID"
+          : "MULTICA_UNAVAILABLE";
+      throw new SyncError(code, `Multica CLI 无法确认：${error.message}`, error);
+    }
+    throw error;
+  }
+}
+function multicaMutation(profile, workspace, argv, options = {}) {
+  try { return multica(profile, workspace, argv, options); }
+  catch (error) {
+    if (error instanceof SyncError && error.code === "MULTICA_OUTPUT_INVALID") {
+      return { status: "accepted_unstructured" };
+    }
     throw error;
   }
 }
@@ -114,6 +130,9 @@ function managedSkillNames(repo, timeoutMs) {
 
 function externalSkillNames(repo, timeoutMs) {
   return new Set(catalogEntries(repo, timeoutMs).filter(entry => entry.status === "adopted").map(entry => entry.name));
+}
+function retiredSkillNames(repo, timeoutMs) {
+  return new Set((catalog(repo, timeoutMs).skills ?? []).filter(entry => entry.status === "absorbed").map(entry => entry.name));
 }
 
 function bundleFor(repo, name, timeoutMs) {
@@ -218,6 +237,10 @@ function snapshotHash(report) {
       prompt_sha256: item.prompt?.sha256 ?? null,
       actual_skills: [...(item.binding?.actual ?? [])].sort(),
     })),
+    retired_online_skills: [...(report.retired_online_skills ?? [])].sort(),
+    retired_bindings: [...(report.retired_bindings ?? [])]
+      .map(item => ({ agent_id: item.agent_id, agent_name: item.agent_name, skill_id: item.skill_id, skill_name: item.skill_name }))
+      .sort((a, b) => canonical(a).localeCompare(canonical(b))),
   };
   return sha(canonical(value));
 }
@@ -232,6 +255,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   const scopeFiles = ["skills/catalog.yaml", ...STAGES.map(stage => `workflows/${stage}/skill-deps.yaml`)]
     .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs)) }));
   const externalNames = externalSkillNames(repo, timeoutMs);
+  const retiredNames = retiredSkillNames(repo, timeoutMs);
   const listedSkills = listSkills(profile, workspace, timeoutMs);
   const onlineSkills = new Map(listedSkills.map(item => [item.name, item]));
   const skillReports = [];
@@ -280,6 +304,11 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   }
 
   const unmanagedOnline = [...onlineSkills.keys()].filter(name => !localNames.has(name)).sort();
+  const retiredOnline = unmanagedOnline.filter(name => retiredNames.has(name)).sort();
+  const externalOnline = unmanagedOnline.filter(name => !retiredNames.has(name)).sort();
+  const retiredBindings = listedAgents.flatMap(agent => (agent.skills ?? [])
+    .filter(skill => retiredNames.has(skill.name))
+    .map(skill => ({ agent_id: agent.id, agent_name: agent.name, skill_id: skill.id, skill_name: skill.name })));
   const syncBlockers = [];
   if (statusText) syncBlockers.push("dirty_worktree");
   if (!originMain || originMain !== mainCommit) syncBlockers.push("main_origin_mismatch");
@@ -293,6 +322,9 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     agent_changes: agentReports.filter(item => item.status === "needs_update").length,
     agent_warnings: agentReports.filter(item => item.status === "needs_review").length,
     unmanaged_online_skills: unmanagedOnline,
+    retired_online_skills: retiredOnline,
+    external_online_skills: externalOnline,
+    retired_binding_count: retiredBindings.length,
     dirty_worktree: Boolean(statusText),
     branch,
     main_commit: mainCommit,
@@ -301,16 +333,40 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     closure_reason: closure.reason ?? null,
     sync_blockers: syncBlockers,
   };
-  const report = { version: "workflowhub-multica-sync.v2", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports };
+  const report = { version: "workflowhub-multica-sync.v3", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
+  report.plan = buildActionPlan(report, true);
   report.snapshot_hash = snapshotHash(report);
   return report;
+}
+
+function buildActionPlan(report, cleanupExtra) {
+  const plan = [];
+  for (const item of report.skills) {
+    if (item.status === "external_unmanaged") continue;
+    if (item.status === "missing_online") plan.push({ action: "create_skill", name: item.name, path: item.path });
+    else if (item.primary_mismatch) plan.push({ action: "update_skill", name: item.name, path: item.path });
+    for (const file of item.files.missing ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
+    for (const file of item.files.mismatched ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
+    if (cleanupExtra) for (const file of item.files.extra ?? []) plan.push({ action: "delete_extra_file", name: item.name, path: file });
+  }
+  if (cleanupExtra) {
+    for (const binding of report.retired_bindings ?? []) plan.push({ action: "unbind_retired_skill", agent: binding.agent_name, skill: binding.skill_name });
+    for (const name of report.retired_online_skills ?? []) plan.push({ action: "delete_retired_skill", name });
+  }
+  for (const item of report.agents) {
+    if (item.prompt?.legacy?.length || item.prompt?.missing_current?.length) plan.push({ action: "update_agent_prompt", agent: item.name });
+    for (const name of item.binding?.missing ?? []) plan.push({ action: "bind_skill", agent: item.name, skill: name });
+  }
+  return plan;
 }
 
 function printAudit(report) {
   const { summary } = report;
   console.log(`main=${summary.main_commit} origin/main=${summary.origin_main ?? "not-found"} branch=${summary.branch} dirty=${summary.dirty_worktree} snapshot=${report.snapshot_hash}`);
-  console.log(`技能：本地闭包 ${summary.local_skill_count}，需处理 ${summary.skill_changes}，无法确认 ${summary.unconfirmed}，外部差异 ${summary.external_differences}，Multica 额外技能 ${summary.unmanaged_online_skills.join(", ") || "无"}`);
-  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}；闭包=${summary.closure_status}`);
+  console.log(`技能：本地闭包 ${summary.local_skill_count}，需处理 ${summary.skill_changes}，无法确认 ${summary.unconfirmed}，外部差异 ${summary.external_differences}`);
+  console.log(`Multica 旧技能：${summary.retired_online_skills.join(", ") || "无"}；外部保留：${summary.external_online_skills.join(", ") || "无"}`);
+  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；闭包=${summary.closure_status}`);
+  console.log(`B 执行计划：${report.plan.length} 项；包含本地同步、旧技能解绑/删除和托管技能多余文件清理；外部技能不变`);
   if (summary.sync_blockers.length) console.log(`同步阻塞：${summary.sync_blockers.join(", ")}`);
   for (const item of report.skills.filter(value => value.status !== "match" || value.files.extra.length)) console.log(`- 技能 ${item.name}: ${item.status}; primary=${item.primary_mismatch ? "不一致" : "一致"}; missing=${item.files.missing.join(",") || "无"}; unreadable=${item.files.unreadable?.join(",") || "无"}; mismatched=${item.files.mismatched.join(",") || "无"}; extra=${item.files.extra.join(",") || "无"}`);
   for (const item of report.agents.filter(value => value.status !== "match")) console.log(`- Agent ${item.name}: ${item.status}; 缺技能=${item.binding?.missing?.join(",") || "无"}; 额外技能=${item.binding?.unexpected?.join(",") || "无"}; 重复=${item.binding?.duplicates?.join(",") || "无"}; 旧提示词=${item.prompt?.legacy?.join(",") || "无"}; 当前规则缺失=${item.prompt?.missing_current?.join(",") || "无"}`);
@@ -349,6 +405,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
 
   const actions = [];
   const externalNames = externalSkillNames(report.repo, timeoutMs);
+  const retiredNames = new Set(report.retired_online_skills ?? []);
   const byName = new Map(listSkills(report.profile, report.workspace, timeoutMs).map(item => [item.name, item]));
   for (const item of report.skills) {
     if (externalNames.has(item.name)) continue;
@@ -361,7 +418,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
       online = created; byName.set(item.name, online); actions.push(`create skill ${item.name}`);
       assertSkillReadback(report.profile, report.workspace, online, item, {}, timeoutMs);
     } else if (item.primary_mismatch) {
-      multica(report.profile, report.workspace, ["skill", "update", online.id, "--content-stdin", "--output", "json"], { input: content, timeoutMs });
+      multicaMutation(report.profile, report.workspace, ["skill", "update", online.id, "--content-stdin", "--output", "json"], { input: content, timeoutMs });
       assertSkillReadback(report.profile, report.workspace, online, item, {}, timeoutMs);
       actions.push(`update skill ${item.name}`);
     }
@@ -370,7 +427,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
     for (const file of filesToUpsert) {
       const bytes = mainBytes(report.repo, `skills/${item.name}/${file}`, timeoutMs);
       const expected = sha(bytes);
-      multica(report.profile, report.workspace, ["skill", "files", "upsert", online.id, "--path", file, "--content-stdin", "--output", "json"], { input: bytes, timeoutMs });
+      multicaMutation(report.profile, report.workspace, ["skill", "files", "upsert", online.id, "--path", file, "--content-stdin", "--output", "json"], { input: bytes, timeoutMs });
       assertSkillReadback(report.profile, report.workspace, online, item, { [file]: expected }, timeoutMs);
       actions.push(`upsert ${item.name}/${file}`);
     }
@@ -380,11 +437,41 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
       for (const filePath of item.files.extra) {
         const file = files.get(filePath);
         if (!file?.id) throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${filePath} 缺少删除 ID`);
-        multica(report.profile, report.workspace, ["skill", "files", "delete", online.id, file.id], { timeoutMs });
+        multicaMutation(report.profile, report.workspace, ["skill", "files", "delete", online.id, file.id], { timeoutMs });
         const after = onlineSkillDetail(report.profile, report.workspace, online, timeoutMs);
         if (after.files.some(value => value.path === filePath)) throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${filePath} 删除后仍存在`);
         actions.push(`delete ${item.name}/${filePath}`);
       }
+    }
+  }
+
+  if (cleanupExtra && retiredNames.size) {
+    const currentAgents = listAgents(report.profile, report.workspace, timeoutMs);
+    for (const agent of currentAgents) {
+      const removed = (agent.skills ?? []).filter(skill => retiredNames.has(skill.name));
+      if (!removed.length) continue;
+      const kept = (agent.skills ?? []).filter(skill => !retiredNames.has(skill.name));
+      multicaMutation(report.profile, report.workspace, ["agent", "skills", "set", agent.id, "--skill-ids", kept.map(skill => skill.id).join(","), "--output", "json"], { timeoutMs });
+      const readback = readbackAgent(report.profile, report.workspace, agent.id, timeoutMs);
+      const remaining = (readback.skills ?? []).map(skill => skill.name ?? skill);
+      if (remaining.some(name => retiredNames.has(name))) throw new SyncError("READBACK_MISMATCH", `${agent.name} 仍绑定已吸收技能`);
+      for (const skill of kept) if (!remaining.includes(skill.name)) throw new SyncError("READBACK_MISMATCH", `${agent.name} 回读丢失现有技能 ${skill.name}`);
+      actions.push(`unbind ${agent.name}: ${removed.map(skill => skill.name).join(", ")}`);
+    }
+
+    const stillBound = listAgents(report.profile, report.workspace, timeoutMs).flatMap(agent => (agent.skills ?? [])
+      .filter(skill => retiredNames.has(skill.name))
+      .map(skill => `${agent.name}/${skill.name}`));
+    if (stillBound.length) throw new SyncError("READBACK_MISMATCH", `已吸收技能仍有绑定：${stillBound.join(", ")}`);
+
+    const currentSkills = listSkills(report.profile, report.workspace, timeoutMs);
+    for (const name of [...retiredNames].sort()) {
+      const skill = currentSkills.find(item => item.name === name);
+      if (!skill) continue;
+      multicaMutation(report.profile, report.workspace, ["skill", "delete", skill.id, "--yes"], { timeoutMs });
+      const after = listSkills(report.profile, report.workspace, timeoutMs);
+      if (after.some(item => item.id === skill.id || item.name === name)) throw new SyncError("READBACK_MISMATCH", `已吸收技能 ${name} 删除后仍存在`);
+      actions.push(`delete retired skill ${name}`);
     }
   }
 
@@ -397,7 +484,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
       const next = rewritePrompt(agent.instructions ?? "");
       const nextIssues = promptIssues(next);
       if (nextIssues.legacy.length || nextIssues.missing_current.length) throw new SyncError("MANUAL_REVIEW_REQUIRED", `${item.name} 提示词无法安全修复`);
-      multica(report.profile, report.workspace, ["agent", "update", agent.id, "--instructions", next, "--output", "json"], { timeoutMs });
+      multicaMutation(report.profile, report.workspace, ["agent", "update", agent.id, "--instructions", next, "--output", "json"], { timeoutMs });
       const readback = readbackAgent(report.profile, report.workspace, agent.id, timeoutMs);
       if (promptIssues(readback.instructions ?? "").legacy.length || promptIssues(readback.instructions ?? "").missing_current.length) throw new SyncError("READBACK_MISMATCH", `${item.name} 提示词回读仍不符合当前规则`);
       actions.push(`update agent prompt ${item.name}`);
@@ -405,7 +492,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
     const missingIds = item.binding.missing.map(name => skillIds.get(name)).filter(Boolean);
     if (item.binding.missing.length && missingIds.length !== item.binding.missing.length) throw new SyncError("SKILL_UNAVAILABLE", `${item.name} 缺少可绑定的技能 ID`);
     if (missingIds.length) {
-      multica(report.profile, report.workspace, ["agent", "skills", "add", agent.id, "--skill-ids", missingIds.join(","), "--output", "json"], { timeoutMs });
+      multicaMutation(report.profile, report.workspace, ["agent", "skills", "add", agent.id, "--skill-ids", missingIds.join(","), "--output", "json"], { timeoutMs });
       const readback = readbackAgent(report.profile, report.workspace, agent.id, timeoutMs);
       const after = bindingIssues(item.binding.expected, readback.skills ?? []);
       if (after.missing.length) throw new SyncError("READBACK_MISMATCH", `${item.name} 技能绑定回读仍缺少：${after.missing.join(",")}`);

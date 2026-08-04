@@ -237,8 +237,8 @@ skills:
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: e75f8c383a118a7d6190b96ef496f43ccc4c26db6cceebec3ec252d36fe994ad
+    local_version: 1.1.0
+    local_bundle_hash: 485ea59fb33f85e6e4cf51e3ac4a302725cee37442c0267f880c63d87459c0be
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
