@@ -3,9 +3,10 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { assertTaskHandle } from "../../core/task-handle.mjs";
+import { assertTaskHandle } from "../../runtime/task/task-handle.mjs";
 import { inspectOfficialInvocation, persistOfficialInvocation } from "./invocation-identity.mjs";
-import { assertCandidateWorkspace, assertWorkspace } from "../../core/workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "../../runtime/task/workspace.mjs";
+import { assertCurrentSourceDigest, captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const OID = /^[a-f0-9]{40}$/;
@@ -40,7 +41,7 @@ function gitCommonDir(root) {
  * Read-only structural facts shared by formal write boundaries. It deliberately
  * knows nothing about review quality, provider availability, or human approval.
  */
-export function inspectWriteBoundary({ task, stage, operation, invocation, workspace } = {}) {
+export function inspectWriteBoundary({ task, stage, operation, invocation, workspace, sourceDigest } = {}) {
   const handle = assertTaskHandle(task);
   if (!STAGES.has(stage)) throw new TypeError("write boundary stage is invalid");
   if (typeof operation !== "string" || !/^[a-z][a-z0-9._-]*$/.test(operation)) {
@@ -48,12 +49,16 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
   }
 
   const violations = [];
+  if (sourceDigest !== undefined && !HASH.test(sourceDigest ?? "")) {
+    throw new TypeError("write boundary sourceDigest must be a sha256");
+  }
   const targetTop = targetGitTop(handle.manifest.target_repo_root);
   if (targetTop !== handle.manifest.target_repo_root) violations.push("TARGET_GIT_TOP_MISMATCH");
   let worktreeRoot = null;
+  let observedSourceDigest = null;
   if (workspace !== undefined) {
+    let authenticatedWorkspace;
     try {
-      let authenticatedWorkspace;
       try { authenticatedWorkspace = assertWorkspace(workspace); }
       catch { authenticatedWorkspace = assertCandidateWorkspace(workspace); }
       worktreeRoot = authenticatedWorkspace.worktreeRoot;
@@ -63,6 +68,17 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
       if (common !== targetCommon) violations.push("WORKTREE_TASK_REPOSITORY_MISMATCH");
     } catch {
       violations.push("WORKTREE_IDENTITY_INVALID");
+    }
+    if (worktreeRoot !== null) {
+      try {
+      const snapshot = sourceDigest === undefined
+        ? captureGitWorktreeSnapshot(worktreeRoot)
+        : assertCurrentSourceDigest(worktreeRoot, sourceDigest);
+      observedSourceDigest = snapshot.source_digest;
+      } catch (error) {
+        if (error?.code === "FORMAL_LFS_CONTENT_UNAVAILABLE" || error?.code === "FORMAL_SNAPSHOT_MISMATCH") throw error;
+        violations.push("SOURCE_SNAPSHOT_UNAVAILABLE");
+      }
     }
   }
 
@@ -94,6 +110,7 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
     worktree_root: worktreeRoot,
     invocation_ref: invocation?.ref ?? null,
     invocation_hash: invocation?.hash ?? null,
+    source_digest: observedSourceDigest,
     authority_refs: invocation?.ref ? [{ ref: invocation.ref, sha256: invocation.hash }] : [],
     legacy_identity: handle.manifest.execution_mode === "per_invocation" ? "absent" : "not_applicable",
     status: violations.length === 0 ? "valid" : "invalid",
@@ -106,6 +123,7 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
       source: Object.freeze({
         invocation_ref: invocation?.ref ?? null,
         invocation_hash: invocation?.hash ?? null,
+        source_digest: observedSourceDigest,
       }),
       authority: "informational_only",
     }),
@@ -130,6 +148,7 @@ export function authenticateWriteBoundary({
   operation,
   runnerRoot,
   workspace,
+  sourceDigest,
   runId,
 } = {}) {
   const handle = assertTaskHandle(task);
@@ -144,6 +163,7 @@ export function authenticateWriteBoundary({
     operation,
     invocation: inspected,
     ...(workspace === undefined ? {} : { workspace }),
+    ...(sourceDigest === undefined ? {} : { sourceDigest }),
   });
   persistOfficialInvocation(handle, inspected);
   return boundary;

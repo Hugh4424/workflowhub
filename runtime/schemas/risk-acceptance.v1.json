@@ -33,7 +33,7 @@
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "workflow_run_id": { "type": "string", "minLength": 1 },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-    "review_ref": { "type": "string", "pattern": "^reviews/results/[A-Za-z0-9._-]+\\.json$" },
+    "review_ref": { "type": "string", "pattern": "^quality/reviews/results/[A-Za-z0-9._-]+\\.json$" },
     "review_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "review_verdict": { "enum": ["pass", "revise_required"] },
     "finding_ref": { "type": "string", "minLength": 1 },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeAcceptanceEvidencePublication } from "../stage-runtime.mjs";
+import { normalizeAcceptanceEvidencePublication } from "../../tools/cli/stage-runtime.mjs";
 
 describe("verify-code acceptance publication input", () => {
   const tree = "b".repeat(40);

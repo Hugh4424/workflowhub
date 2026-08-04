@@ -5,26 +5,10 @@ import { selectReviewRound } from "../skills/wh-review/scripts/review-controller
 
 const route = { mode: "full_on_structural_rework", initial: ["external/reviewer"] };
 const previous = {
-  result_ref: "reviews/results/build-plan.json",
+  result_ref: "quality/reviews/results/build-plan.json",
   verdict: "pass",
   snapshot_tree: "a".repeat(40),
   adjudication: { clusters: [] },
-};
-const ordinary = {
-  version: "wh-review-response-ledger.v1",
-  previous_result_ref: previous.result_ref,
-  previous_snapshot_tree: previous.snapshot_tree,
-  current_snapshot_tree: "b".repeat(40),
-  change: {
-    changed_dimensions: [],
-    rationale: "wording only",
-    evidence_refs: ["evidence/delta.json"],
-  },
-  responses: [],
-};
-const structural = {
-  ...ordinary,
-  change: { ...ordinary.change, changed_dimensions: ["schema"] },
 };
 
 describe("non-code review policy", () => {
@@ -35,31 +19,21 @@ describe("non-code review policy", () => {
     expect(skill).toMatch(/(?:never|not)[\s\S]{0,120}(?:block|license|permission|proceed)/i);
   });
 
-  it.each(["build-spec", "build-plan", "verify-code"])("%s ordinary edit dispatches no provider", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s does not review the same snapshot twice", (stage) => {
     expect(selectReviewRound({
       stage,
       route,
       previousResult: previous,
-      ledger: ordinary,
-      currentSnapshotTree: ordinary.current_snapshot_tree,
-    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
+      currentSnapshotTree: previous.snapshot_tree,
+    })).toEqual({ round: "none", reason: "current_quality_fact_recorded" });
   });
 
-  it.each(["build-spec", "build-plan", "verify-code"])("%s records structural repair without another provider dispatch", (stage) => {
+  it.each(["build-spec", "build-plan", "verify-code"])("%s starts one review for a changed snapshot", (stage) => {
     expect(selectReviewRound({
       stage,
       route,
       previousResult: previous,
-      ledger: structural,
-      currentSnapshotTree: structural.current_snapshot_tree,
-    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
-    expect(selectReviewRound({
-      stage,
-      route,
-      previousResult: previous,
-      ledger: structural,
-      currentSnapshotTree: structural.current_snapshot_tree,
-      structuralFullAlreadyRecorded: true,
-    })).toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
+      currentSnapshotTree: "b".repeat(40),
+    })).toEqual({ round: "initial", reason: "changed_snapshot" });
   });
 });

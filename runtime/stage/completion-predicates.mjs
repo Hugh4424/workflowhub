@@ -1,3 +1,4 @@
+
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const DERIVED = new WeakSet();
 
@@ -19,9 +20,8 @@ export const STAGE_PREDICATES = Object.freeze({
     human_confirmation: "confirmation",
   }),
   "build-code": Object.freeze({
-    tasks_complete: "acceptance_criterion", risk_tests_fresh: "test", full_tests_fresh: "test",
-    acceptance_criteria: "acceptance_criterion", phase_reviews: "review",
-    integration_review: "review",
+    tasks_complete: "acceptance_criterion", risk_tests_fresh: "test",
+    acceptance_criteria: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
     full_tests_fresh: "test", same_build_integration_review: "review",
@@ -57,6 +57,34 @@ export function deriveStageCompletion(stage, observations = []) {
   });
   DERIVED.add(result);
   return result;
+}
+
+// Stage progression is deliberately separate from quality completion.  A
+// stage may have failed, stale, or unavailable quality facts and still move
+// forward on the current four-material/task record.  The quality facts remain
+// visible through deriveStageCompletion and never become a progression permit.
+export function deriveStageProgress(stage, observations = [], materials = null) {
+  if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+  if (!Array.isArray(observations)) throw new TypeError("progress observations must be an array");
+  const requirements = STAGE_PREDICATES[stage];
+  const materialNames = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+  const missingMaterials = materials === null
+    ? materialNames
+    : materialNames.filter((name) => typeof materials?.[name] !== "string" || materials[name].trim() === "");
+  return Object.freeze({
+    stage,
+    status: missingMaterials.length === 0 ? "completed" : "in_progress",
+    authority: "current-four-materials-and-plan-tasks",
+    predicates: Object.freeze(Object.fromEntries(Object.keys(requirements).map((subject) => [
+      subject, Object.freeze({
+        kind: requirements[subject],
+        status: missingMaterials.length === 0 ? "material_ready" : "waiting_for_materials",
+        fact_ref: null,
+      }),
+    ]))),
+    fact_refs: Object.freeze([]),
+    missing: Object.freeze(missingMaterials.map((name) => `material:${name}`)),
+  });
 }
 
 export function assertStageCompleted(stage, observations) {

@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
-import { createTask } from "../core/task-handle.mjs";
+import { writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { validatePhaseCompletion } from "../core/task-kernel-implementation.mjs";
-import { openAcceptedWorkspace } from "../core/workspace.mjs";
+import { validatePhaseCompletion } from "../runtime/task/task-kernel-implementation.mjs";
+import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
 
 const temporary = [];
 function fixture() {
@@ -72,7 +72,7 @@ describe("official component receipt authority", () => {
   it("publishes allowlisted content and derives implementation completion outside the caller payload", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
-    expect(spec.ref).toBe("receipts/spec.json");
+    expect(spec.ref).toBe("quality/evidence/spec.json");
     expect(writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } })).toMatchObject({ ref: spec.ref, sha256: spec.sha256, revision: false });
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
@@ -89,24 +89,18 @@ describe("official component receipt authority", () => {
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 
-  it("publishes hash-addressed component revisions without replacing the original receipt", () => {
+  it("retires component replacement and requires a new current material", () => {
     const { task } = fixture();
     const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v1\n" } });
-    const revised = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref });
-    const repeated = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref });
-    expect(first.ref).toBe("receipts/plan.json");
+    expect(first.ref).toBe("quality/evidence/plan.json");
     expect(task.readRecord(first.ref)).toContain("# Plan v1");
-    expect(revised).toMatchObject({ revision: true, previous_ref: first.ref, previous_hash: first.sha256 });
-    expect(revised.ref).toMatch(/^receipts\/revisions\/plan\/[a-f0-9]{64}\.json$/);
-    expect(revised.value.revision).toMatchObject({ previous_ref: first.ref, previous_hash: first.sha256, content_hash: revised.content_hash });
-    expect(repeated).toMatchObject({ ref: revised.ref, sha256: revised.sha256, content_hash: revised.content_hash });
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref })).toThrow(/REPLACEMENT_RETIRED/);
   });
 
   it("rejects a revision whose deterministic content ref is bound to another source", () => {
     const { task } = fixture();
     const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v1\n" } });
-    const middle = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: first.ref });
-    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: middle.ref })).toThrow(/revision source mismatch/i);
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: first.ref })).toThrow(/REPLACEMENT_RETIRED/);
   });
 
   it("records pass and fail acceptance facts with unique identities and closed refs", () => {
@@ -168,7 +162,7 @@ describe("official component receipt authority", () => {
       },
     });
     expect(receipt).toMatchObject({
-      ref: "receipts/verification.json",
+      ref: "quality/evidence/verification.json",
       value: { items: expect.arrayContaining([expect.objectContaining({ id: "human_handoff" })]) },
     });
   });

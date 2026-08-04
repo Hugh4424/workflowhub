@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
-  "description": "Canonical required facts consumed by TaskKernel for both attempt publication and accepted-result reads.",
+  "version": "2.1.0",
+  "description": "Canonical required facts consumed by the current TaskKernel quality/publication path.",
   "stages": {
     "make-decision": {
       "required_keys": ["worktree_root", "baseline_commit"],
@@ -14,19 +14,21 @@
       }
     },
     "build-spec": {
-      "required_keys": ["spec_ref", "checkpoint"],
+      "required_keys": ["spec_ref", "snapshot_tree", "source_digest"],
       "semantics": {
         "spec_ref": "Named spec artifact reference",
-        "checkpoint": "Immutable Git checkpoint facts",
+        "snapshot_tree": "Current authenticated workspace tree used for this fact",
+        "source_digest": "Current authenticated source-content digest used for this fact",
         "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref consumed by new official attempts"
       }
     },
     "build-plan": {
-      "required_keys": ["plan_ref", "tasks_ref", "checkpoint"],
+      "required_keys": ["plan_ref", "tasks_ref", "snapshot_tree", "source_digest"],
       "semantics": {
         "plan_ref": "Named plan artifact reference",
         "tasks_ref": "Named tasks artifact reference",
-        "checkpoint": "Immutable Git checkpoint facts",
+        "snapshot_tree": "Current authenticated workspace tree used for this fact",
+        "source_digest": "Current authenticated source-content digest used for this fact",
         "review": "Task-relative wh-review semantic result ref or provenance-bound unavailable attempt ref consumed by new official attempts"
       }
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
+import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 
 function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
@@ -13,6 +13,12 @@ function observations(stage) {
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
+  it("reserves full-suite freshness for final verification", () => {
+    expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
+    expect(STAGE_PREDICATES["build-code"].risk_tests_fresh).toBe("test");
+    expect(STAGE_PREDICATES["verify-code"].full_tests_fresh).toBe("test");
+  });
+
   for (const stage of Object.keys(STAGE_PREDICATES)) {
     it(`${stage} completes from the exact authenticated fresh fact set`, () => {
       expect(deriveStageCompletion(stage, observations(stage))).toMatchObject({ stage, status: "completed", missing: [] });
@@ -26,7 +32,7 @@ describe("five-stage completion predicates derive only from quality facts", () =
   }
 
   it.each([
-    ["build-code", "phase_reviews"],
+    ["build-code", "integration_review"],
     ["build-code", "acceptance_criteria"],
     ["verify-code", "human_confirmation"],
   ])("%s cannot complete without required %s", (stage, subject) => {
@@ -51,5 +57,34 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
     facts[0] = { ...observations("build-plan")[0], fact: { ...facts[0].fact, value: { ...facts[0].fact.value, kind: "test" } } };
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
+  });
+
+  it("keeps stage progress independent from quality status and freshness", () => {
+    const facts = observations("build-code").map((entry) => ({
+      ...entry,
+      authenticated: false,
+      recorded: true,
+      freshness: { status: "stale" },
+      fact: { ...entry.fact, value: { ...entry.fact.value, status: "failed" } },
+    }));
+    expect(deriveStageProgress("build-code", facts, {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+      "plan.md": "plan",
+      "tasks.md": "tasks",
+    })).toMatchObject({
+      status: "completed",
+      authority: "current-four-materials-and-plan-tasks",
+      missing: [],
+    });
+  });
+
+  it("does not require quality observations for material-led progress", () => {
+    expect(deriveStageProgress("verify-code", [], {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+      "plan.md": "plan",
+      "tasks.md": "tasks",
+    })).toMatchObject({ status: "completed", missing: [], fact_refs: [] });
   });
 });

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub/task-index.v1",
+  "title": "WorkflowHub task fact and quality index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "facts", "quality", "archives"],
+  "properties": {
+    "schema_version": { "const": "task-index.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "facts": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviews", "tests", "verify"],
+      "properties": {
+        "reviews": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "tests": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "verify": { "anyOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] }
+      }
+    },
+    "archives": { "type": "array", "items": { "$ref": "#/$defs/ref" } }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "sha256", "schema", "task_id", "logical_ref", "content_hash", "version", "related_task_id", "external_raw_ref", "external_governance_archive_ref"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "schema": { "type": "string", "minLength": 1 },
+        "task_id": { "type": "string", "minLength": 1 },
+        "logical_ref": { "type": "string", "minLength": 1 },
+        "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "version": { "type": "string", "minLength": 1 },
+        "related_task_id": { "type": "string", "minLength": 1 },
+        "external_raw_ref": { "type": ["string", "null"] },
+        "external_governance_archive_ref": { "type": ["string", "null"] },
+        "stage": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -9,6 +9,24 @@ const EVIDENCE_TYPES = Object.freeze({
   confirmation: "human_confirmation",
 });
 
+/** Fields that define an immutable quality fact's content identity. */
+export function qualityFactIdentity(value) {
+  return {
+    task_id: value?.task_id,
+    stage: value?.stage,
+    material_revision: value?.material_revision,
+    snapshot_tree: value?.snapshot_tree,
+    kind: value?.kind,
+    status: value?.status,
+    subject: value?.subject,
+    evidence: value?.evidence,
+  };
+}
+
+export function qualityFactDigest(value) {
+  return sha256(JSON.stringify(qualityFactIdentity(value)));
+}
+
 export function createQualityFact({ taskId, stage, materialRevision, snapshotTree, kind, status, subject, evidence = [], recordedAt = new Date().toISOString() }) {
   if (typeof taskId !== "string" || taskId.trim() === "" || !STAGES.has(stage)) throw new TypeError("quality fact identity is invalid");
   if (!/^revision-[a-f0-9]{64}$/.test(materialRevision ?? "") || typeof snapshotTree !== "string" || snapshotTree.trim() === "") throw new TypeError("quality fact material revision and snapshot tree are required");
@@ -20,11 +38,11 @@ export function createQualityFact({ taskId, stage, materialRevision, snapshotTre
     throw new TypeError("quality fact requires typed canonical evidence");
   }
   if (!Number.isFinite(Date.parse(recordedAt))) throw new TypeError("quality fact recordedAt is invalid");
-  const identity = {
+  const identity = qualityFactIdentity({
     task_id: taskId, stage, material_revision: materialRevision, snapshot_tree: snapshotTree,
     kind, status, subject, evidence,
-  };
-  const digest = sha256(JSON.stringify(identity));
+  });
+  const digest = qualityFactDigest(identity);
   const value = Object.freeze({ schema_version: "quality-fact.v1", fact_id: `quality-${digest}`, ...identity, recorded_at: recordedAt });
   const raw = `${JSON.stringify(value, null, 2)}\n`;
   return Object.freeze({ value, raw, ref: `quality/facts/${digest}.json`, sha256: sha256(raw) });

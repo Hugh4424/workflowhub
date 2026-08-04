@@ -111,35 +111,35 @@ skills:
     local_version: 1.1.0
     local_bundle_hash: e9db2e05b56c7e92409f0160a25144c82a16d0f919a43a74715da999397977c5
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
-    local_changes: 去 task identity；内置可读模板；PFACT/SCN/FR/AC/OPEN typed closure；接 workflowhub metrics
-    dependency_closure: [skills/spec-specify]
+    local_changes: 已吸收到 build-spec 当前四材料流程；保留上游 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 9843b71859ade20a93af39e31525d4542489bf46bb6114e01048614ba5899b1d
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
-    local_changes: 去 .specify/git 耦合；task-id 参数化
-    dependency_closure: [skills/spec-clarify]
+    local_changes: 已吸收到 build-spec 当前歧义处理；保留上游 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.1.0
     local_bundle_hash: b72c58da84645ccdf0b1a10b1bee4ab1a082daf9ad48b124b57f95e44385be06
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
@@ -147,15 +147,15 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 去分支耦合；接可选冻结研究内容；重排可读模板；保留八段 Phase/风险/宪法；吸收条件接口合同
-    dependency_closure: [skills/spec-plan]
+    local_changes: 已吸收到 build-plan 当前唯一 plan 合同；保留上游 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.1.0
     local_bundle_hash: 37c6ca828d9c5bead7e890dd4cc66ef7fbe90219abf67f4f8f6036a083fa958b
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
     standalone: true
@@ -163,8 +163,8 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 去 .specify/git 耦合；唯一四组任务卡；适配 v3 phase/验证/文件边界合同
-    dependency_closure: [skills/spec-tasks]
+    local_changes: 已吸收到 build-plan 当前唯一 tasks 合同；保留上游 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
@@ -184,28 +184,28 @@ skills:
     local_version: 1.0.0
     local_bundle_hash: 22512da6779c471471905f54a7ae4479d43da596a61cecdec6cc757518bb37db
     last_reviewed_at: "2026-07-14"
-    status: native
+    status: absorbed
     standalone: true
     purpose: 为 canonical workflow step 生成或校验 typed receipt
     design_idea: 只承载步骤证据，不引入第二 verdict engine
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: make-decision audit P0 原生证据合同；由各 stage Receipt wiring 直接消费
-    dependency_closure: [skills/stage-step-receipts]
+    local_changes: 已吸收到 runtime receipt wiring；保留历史合同 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 随 canonical step 与 receipt schema 变更审查
   - name: audit-summary-carrier
     path: skills/audit-summary-carrier/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: c4e736fb8b55e3a0996caeead7368a77b2cbd31becc98af5eb4c70c47b513621
     last_reviewed_at: "2026-07-14"
-    status: native
+    status: absorbed
     standalone: true
     purpose: 在阶段间传递有界审计摘要
     design_idea: 保留可验证引用，不复制第二份事实源
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: make-decision audit P0 原生合同；由 stage-result audit_summary 字段消费
-    dependency_closure: [skills/audit-summary-carrier]
+    local_changes: 已吸收到 runtime evidence facts；保留历史合同 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 随 stage-result audit schema 变更审查
   - name: requirement-lineage
     path: skills/requirement-lineage/SKILL.md
@@ -226,21 +226,21 @@ skills:
     local_version: 0.1.0
     local_bundle_hash: a314c58bd6dfdb5b6ac20281a0c41459f7829e6311684c25465914c9617de0bf
     last_reviewed_at: "2026-07-14"
-    status: native
+    status: adapted
     standalone: true
     purpose: 记录宿主把 WorkflowHub 阶段事实投影到外部任务系统的规则
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
     used_by_stages: []
     upstream: []
-    local_changes: 当前作为独立宿主协议草案保存，未接入五个阶段依赖
-    dependency_closure: [skills/workflowhub-host-protocol]
+    local_changes: 保留仓内 provenance；排除核心 Bundle 和生产扫描，未接入五个阶段依赖
+    dependency_closure: []
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: e75f8c383a118a7d6190b96ef496f43ccc4c26db6cceebec3ec252d36fe994ad
     last_reviewed_at: "2026-07-14"
-    status: native
+    status: adapted
     standalone: true
     purpose: 审计本机 WorkflowHub 技能与 Multica 技能和 agent 提示词的一致性
     design_idea: 固定 main 快照，先生成差异报告，用户确认后才同步
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 05bdeeddc44715b02350cf5038e9f78e650f17b033389d7486e46d0dff938828
+    local_bundle_hash: b59bc49610c3e6ba6f1b1f895c0c4787a4bcc0a911e599ede0e987ff10b53191
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -359,7 +359,7 @@ skills:
     local_version: 1.0.0
     local_bundle_hash: 46dc51676f159e20c95991868dd5365c7063c09e94bbf50d6825e5dabeaee629
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 从 AC、UI impact 和风险生成测试路由
     design_idea: 独立上下文产出 AC-to-test-route strategy
     standalone: true
@@ -367,8 +367,8 @@ skills:
     upstream:
       - { <<: *matt, path: "skills/engineering/tdd/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md" }
       - { <<: *superpowers, path: "skills/test-driven-development/testing-anti-patterns.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md" }
-    local_changes: 适配 workflowhub L2/L3 证据合同
-    dependency_closure: [skills/test-strategy]
+    local_changes: 已吸收到 build-code/verify-code 当前测试与 fresh-evidence 合同；保留 provenance，不保留独立 runtime skill
+    dependency_closure: []
     update_policy: 人工比较路由和风险规则
   - name: debate
     path: skills/debate/SKILL.md
@@ -381,8 +381,8 @@ skills:
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *debate, path: "SKILL.md", skill_url: "https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md" }]
-    local_changes: 仓内路径；可选增强；失败记录 diagnostic 后继续
-    dependency_closure: [skills/debate]
+    local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描
+    dependency_closure: []
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
@@ -398,22 +398,22 @@ skills:
       - { <<: *matt, path: "skills/engineering/diagnosing-bugs", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs" }
       - { <<: *superpowers, path: "skills/systematic-debugging", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging" }
       - { <<: *gstack, path: "investigate", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate" }
-    local_changes: 合并为 workflowhub 结构化根因证据合同；去框架 runtime
-    dependency_closure: [skills/diagnosing-bugs]
+    local_changes: 保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描
+    dependency_closure: []
     update_policy: 三方更新时比较诊断方法；禁止引入自动补丁循环
   - name: review-response
     path: skills/review-response/SKILL.md
     local_version: 1.0.0
     local_bundle_hash: 6e989caada28c4ebc20617474586efa62718a0c78f6e39e9a1c1cdc376aeeb05
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: absorbed
     purpose: 严格消费 revise_required finding
     design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *superpowers, path: "skills/receiving-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review" }]
-    local_changes: 适配 wh-review continuation flow；允许用证据拒绝错误建议
-    dependency_closure: [skills/review-response]
+    local_changes: 最小 disposition fact 已合并到 wh-review；删除独立 flow/resolution validator
+    dependency_closure: [skills/wh-review]
     update_policy: 人工比较 finding 消费纪律，不引入宿主专属命令
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
@@ -426,8 +426,8 @@ skills:
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
-    local_changes: 删除固定外仓执行器；改成 workflowhub 三档 JSON 合同
-    dependency_closure: [skills/test-routing-advisor]
+    local_changes: 保留仓内 provenance；测试层级由 build-code 当前流程决定，不进入核心 Bundle 或生产扫描
+    dependency_closure: []
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md

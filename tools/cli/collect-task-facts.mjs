@@ -8,7 +8,7 @@ import { RUNTIME_FACT_V2_SOURCES } from "../../config/runtime-fact-v2-sources.mj
 import { TRANSCRIPT_SOURCES } from "../../config/transcript-sources.mjs";
 import { collectTaskFacts, createRuntimeFactRegistry, createRuntimeFactV2Registry, createTranscriptSourceRegistry } from "../../runtime/evidence/fact-collector.mjs";
 import { loadConfig } from "../../core/load-config.mjs";
-import { bootstrapStage } from "../../core/stage-context.mjs";
+import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { configForCollector, createMetricsLauncherConfig, recordSkeleton, updateOwnResult } from "../../metrics/collector.mjs";
 
 function parseArgs(argv) {

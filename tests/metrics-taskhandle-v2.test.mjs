@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../core/task-handle.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
 import { configForCollector, createMetricsLauncherConfig, recordSkeleton, updateOwnResult } from "../metrics/collector.mjs";
 
 const temporary = [];

@@ -7,6 +7,8 @@ import { deflateSync } from "node:zlib";
 
 const AUTO_MANAGED_RUNTIME_BLOCK = /<!-- BEGIN ([A-Z][A-Z0-9_-]*-RUNTIME) \(auto-managed; do not edit\) -->\r?\n[\s\S]*?<!-- END \1 -->\r?\n?/g;
 const SNAPSHOT_OBJECT_ROOT = resolve(tmpdir(), "workflowhub-git-snapshots");
+const LFS_POINTER_VERSION = "version https://git-lfs.github.com/spec/v1";
+const HASH = /^[a-f0-9]{64}$/;
 
 /** Files written while recording execution facts are not source material. */
 export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/"]);
@@ -15,7 +17,8 @@ function git(root, args, options = {}) {
   return execFileSync("git", args, {
     cwd: root,
     encoding: options.encoding ?? "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    ...(options.input === undefined ? {} : { input: options.input }),
     ...(options.env === undefined ? {} : { env: options.env }),
   });
 }
@@ -78,6 +81,93 @@ function workspacePath(root, path) {
   return absolute;
 }
 
+function sha256(body) {
+  return createHash("sha256").update(body).digest("hex");
+}
+
+function parseLfsPointer(body) {
+  if (!Buffer.isBuffer(body) || body.length > 1024 * 1024) return null;
+  const lines = body.toString("utf8").split(/\r?\n/);
+  if (lines[0] !== LFS_POINTER_VERSION) return null;
+  const oid = /^oid sha256:([a-f0-9]{64})$/.exec(lines[1] ?? "")?.[1];
+  const size = /^size ([0-9]+)$/.exec(lines[2] ?? "")?.[1];
+  if (!oid || size === undefined || lines.slice(3).some((line) => line.trim() !== "")) return null;
+  return { oid, size: Number(size) };
+}
+
+function lfsFilterMap(root, paths) {
+  if (paths.length === 0) return new Map();
+  const input = Buffer.from(`${paths.join("\0")}\0`);
+  const output = Buffer.from(git(root, ["check-attr", "-z", "--stdin", "filter"], { encoding: "buffer", input }));
+  const fields = output.toString("utf8").split("\0").filter((field, index, all) => index < all.length - 1 || field !== "");
+  const filters = new Map();
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    if (fields[index + 1] !== "filter") continue;
+    filters.set(fields[index], fields[index + 2] === "unspecified" ? null : fields[index + 2]);
+  }
+  return filters;
+}
+
+function formalLfsUnavailable(path, pointer) {
+  const error = new Error(`FORMAL_LFS_CONTENT_UNAVAILABLE: ${path} is an unhydrated Git LFS pointer (${pointer.oid})`);
+  error.code = "FORMAL_LFS_CONTENT_UNAVAILABLE";
+  error.path = path;
+  error.lfs_oid = pointer.oid;
+  error.lfs_size = pointer.size;
+  return error;
+}
+
+function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree } = {}) {
+  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes));
+  const filters = lfsFilterMap(root, filePaths);
+  const entries = [];
+  for (const path of filePaths.sort()) {
+    const absolute = workspacePath(root, path);
+    const head = headEntriesByPath.get(path)?.entry ?? null;
+    let stat;
+    try { stat = lstatSync(absolute); }
+    catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      entries.push({ path, status: "missing", kind: head?.type === "commit" ? "submodule" : "file", git_blob_oid: head?.oid ?? null, content_sha256: null, bytes: null, filter: filters.get(path) ?? null, lfs: null });
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      const body = Buffer.from(readlinkSync(absolute));
+      entries.push({ path, status: "present", kind: "symlink", git_blob_oid: hashObject(format, "blob", body), content_sha256: sha256(body), bytes: body.length, filter: filters.get(path) ?? null, lfs: null });
+      continue;
+    }
+    if (stat.isDirectory()) {
+      const oid = gitText(absolute, ["rev-parse", "HEAD"]);
+      if (!/^[a-f0-9]{40,64}$/.test(oid)) throw new Error(`nested Git workspace has an invalid HEAD: ${path}`);
+      entries.push({ path, status: "present", kind: "submodule", git_blob_oid: oid, content_sha256: null, bytes: null, filter: null, lfs: null });
+      continue;
+    }
+    if (!stat.isFile()) throw new Error(`unsupported workspace entry type: ${path}`);
+    const body = readFileSync(absolute);
+    const pointer = parseLfsPointer(body);
+    const filter = filters.get(path) ?? null;
+    if (filter === "lfs" && pointer) throw formalLfsUnavailable(path, pointer);
+    entries.push({
+      path,
+      status: "present",
+      kind: "file",
+      git_blob_oid: hashObject(format, "blob", body),
+      content_sha256: sha256(body),
+      bytes: body.length,
+      filter,
+      lfs: { configured: filter === "lfs", pointer: pointer !== null, hydrated: pointer === null, oid: pointer?.oid ?? null, size: pointer?.size ?? null },
+    });
+  }
+  const unsigned = {
+    schema_version: "workflowhub-source-manifest.v1",
+    head_commit: head,
+    git_tree: gitTree,
+    content_tree: contentTree,
+    entries,
+  };
+  return Object.freeze({ ...unsigned, source_digest: sha256(JSON.stringify(unsigned)) });
+}
+
 function fileEntry(root, path, format, objectDir) {
   const absolute = workspacePath(root, path);
   let stat;
@@ -134,6 +224,15 @@ function excluded(path, prefixes) { return prefixes.some((prefix) => path.starts
 function headEntries(root, head, prefixes) {
   if (prefixes.length === 0) return [];
   const output = Buffer.from(git(root, ["ls-tree", "-r", "-z", head, "--", ...prefixes], { encoding: "buffer" })).toString("utf8");
+  return parseHeadEntries(output);
+}
+
+function allHeadEntries(root, head) {
+  const output = Buffer.from(git(root, ["ls-tree", "-r", "-z", head], { encoding: "buffer" })).toString("utf8");
+  return parseHeadEntries(output);
+}
+
+function parseHeadEntries(output) {
   return output.split("\0").filter(Boolean).map((line) => {
     const match = /^(\d+) (blob|commit) ([a-f0-9]{40,64})\t(.+)$/.exec(line);
     if (!match) throw new Error(`invalid Git tree entry: ${line}`);
@@ -142,7 +241,7 @@ function headEntries(root, head, prefixes) {
   });
 }
 
-function workspaceTree(root, head, format, objectDir, excludedPrefixes) {
+function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserveExcludedHead = true) {
   assertExcludedPrefixes(excludedPrefixes);
   const paths = new Set([
     ...gitPaths(root, ["ls-files", "-z"]),
@@ -154,7 +253,9 @@ function workspaceTree(root, head, format, objectDir, excludedPrefixes) {
     const entry = fileEntry(root, path, format, objectDir);
     if (entry !== null) addPath(tree, path, entry);
   }
-  for (const { path, entry } of headEntries(root, head, excludedPrefixes)) addPath(tree, path, entry);
+  if (preserveExcludedHead) {
+    for (const { path, entry } of headEntries(root, head, excludedPrefixes)) addPath(tree, path, entry);
+  }
   return writeTree(tree, format, objectDir);
 }
 
@@ -165,10 +266,24 @@ function snapshotCommit(head, tree, format, objectDir) {
 
 function captureSnapshot(root, excludedPrefixes = []) {
   const head = gitText(root, ["rev-parse", "HEAD"]);
+  const gitTree = gitText(root, ["rev-parse", "HEAD^{tree}"]);
   const format = objectFormat(root);
   const objectDir = ensureGitSnapshotObjectStore(root);
+  const excludedHeadEntries = headEntries(root, head, excludedPrefixes);
+  const paths = new Set([
+    ...gitPaths(root, ["ls-files", "-z"]),
+    ...gitPaths(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
+    ...excludedHeadEntries.map(({ path }) => path),
+  ]);
+  // Evidence is a publication product, not source. Keep its writes from
+  // changing the source digest even when the caller requests the full
+  // worktree snapshot used by review.
+  const sourceHeadEntries = allHeadEntries(root, head).filter(({ path }) => !excluded(path, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES));
+  const sourceHeadEntriesByPath = new Map(sourceHeadEntries.map((entry) => [entry.path, entry]));
+  const contentTree = workspaceTree(root, head, format, objectDir, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, false);
+  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree });
   const tree = workspaceTree(root, head, format, objectDir, excludedPrefixes);
-  return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir) });
+  return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir), source_digest: manifest.source_digest, source_manifest: manifest });
 }
 
 /** Capture tracked, dirty, and untracked bytes without writing repository .git. */
@@ -176,6 +291,20 @@ export function captureGitWorktreeSnapshot(root) { return captureSnapshot(root);
 
 /** Capture a snapshot while preserving HEAD bytes for execution-record files. */
 export function captureExecutionSnapshot(root) { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES); }
+
+/** Re-read the current source manifest and require the caller's digest to be current. */
+export function assertCurrentSourceDigest(root, expectedDigest) {
+  if (!HASH.test(expectedDigest ?? "")) throw new TypeError("expected source digest must be a sha256");
+  const snapshot = captureGitWorktreeSnapshot(root);
+  if (snapshot.source_digest !== expectedDigest) {
+    const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected ${expectedDigest}, observed ${snapshot.source_digest}`);
+    error.code = "FORMAL_SNAPSHOT_MISMATCH";
+    error.expected_source_digest = expectedDigest;
+    error.observed_source_digest = snapshot.source_digest;
+    throw error;
+  }
+  return snapshot;
+}
 
 function treeFile(root, tree, path) {
   const entry = gitText(root, ["ls-tree", tree, "--", path]);

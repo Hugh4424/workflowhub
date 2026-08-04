@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runReviewFixture } from "../../skills/wh-review/scripts/review-runner.mjs";
-import { createTask } from "../../core/task-handle.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 
 const oid = "1".repeat(40); const materialId = "a".repeat(64);
 const source = Object.freeze({ targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead: oid, snapshotTree: oid });

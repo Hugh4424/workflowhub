@@ -2,8 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
-import { reviewSourceForWorkspace } from "../../../core/workspace.mjs";
-import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
+import { reviewSourceForWorkspace } from "../../../runtime/task/workspace.mjs";
 import { isRuntimeOnlyPath } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const CHUNK_BYTES = 64 * 1024;
@@ -257,34 +256,6 @@ export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, bas
     if (diffPath) runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first, "--", ".", ":(exclude)node_modules"], diffPath);
     const changedFiles = includeDiff ? parseChangedFiles(source, baseTree, first, captureRoot) : [];
     return sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree, snapshotTree: first, diffPath, changedFiles, captureRoot });
-  } catch (error) {
-    rmSync(captureRoot, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-export function capturePhaseReviewSource({ sourceRoot, task, phaseId, reviewDataRoot } = {}) {
-  if (!sourceRoot) throw new TypeError("sourceRoot is required");
-  const source = realpathSync(resolve(sourceRoot));
-  const data = assertReviewDataRoot({ sourceRoot: source, targetRepoRoot: source, reviewDataRoot });
-  const subject = resolvePhaseReviewSubject({ task, sourceRoot: source, phaseId });
-  const captureRoot = mkdtempSync(resolve(data, "capture-phase-"));
-  try {
-    const diffPath = resolve(captureRoot, "changes.diff");
-    runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", subject.baseTree, subject.candidateTree, "--", ".", ":(exclude)node_modules"], diffPath);
-    const changedFiles = parseChangedFiles(source, subject.baseTree, subject.candidateTree, captureRoot);
-    return sourceRecord({
-      source,
-      targetCommit: subject.baselineCommit,
-      capturedHead: subject.implementationCommit,
-      baseCommit: subject.baselineCommit,
-      baseTree: subject.baseTree,
-      snapshotTree: subject.candidateTree,
-      diffPath,
-      changedFiles,
-      captureRoot,
-      phaseEvidenceBinding: subject.phaseEvidence,
-    });
   } catch (error) {
     rmSync(captureRoot, { recursive: true, force: true });
     throw error;

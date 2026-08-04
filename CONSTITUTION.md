@@ -160,6 +160,10 @@
 - **正例**：一个技能既能在本项目调用，也能搬到另一处独立运行。
 - **反例**：技能写死了对某宿主的隐式依赖，离开该宿主就无法运行。
 
+## 治理实施边界（不新增宪法条款）
+
+以下是对现有 F/Q/S 条款的运行时落地声明，不改变宪法条款数量、编号或版本：四份当前材料是唯一工作真相；vNext task 使用 facts 与 `quality/*` 单写事实；质量事实不是推进许可证；旧 accepted/revision/lineage/flow/checkpoint 记录只读；公共入口只有七类稳定行为；不可逆操作使用独立 `authorize --op=<commit|push|merge|archive|cleanup>`；新增控制面必须有唯一 consumer、owner、替代和删除条件。
+
 ## 治理（Governance）
 
 - **优先级**：本宪法相对项目内其它惯例与临时约定具有更高优先级；冲突时以宪法为准。
@@ -169,6 +173,10 @@
 **Version**: 1.5.0 | **Ratified**: 2026-06-22 | **Last Amended**: 2026-07-28
 
 **修订记录**：
+
+- 2026-08-03（治理同步）：本次只同步执行规则、术语和人工交接材料，不新增、改写、拆分或合并宪法条款；Version 保持 1.5.0，checklist 仍为 21 条。
+
+**旧条目到新条目的映射**：1.4.0 → 1.5.0 保留 21 条宪法条目；F3/F4/F6/F7/F8/F9/Q1/Q2 仅明确推进资格、正式 publication、完成判据和不可逆授权的边界，其余条目保持原编号与语义。
 
 - 1.5.0（2026-07-28）：F3/F4/F6/F7/F8/F9/Q1/Q2 明确分离推进资格、正式 publication 与完成判据。build-code/verify-code 只凭当前四材料进入或继续；accepted、收据、审查和历史事实不作准入许可证；task/worktree/runtime 写边界与核心 publication 结构仍 fail-loud，实际测试、逐 AC、独立审查事实和交接缺失时不得宣称完成。保留三处正常确认、serious finding 的 repair-or-risk 处置和不可逆外部操作独立授权。来源：用户纠正 gate 死结，同时明确不得降低 WorkflowHub 执行质量。
 - 1.4.0（2026-07-27）：旧→新映射为 F6→F6、F8→F8、F9→F9、Q3→Q3；其余 17 条不变。任务不再永久绑定 runner 路径与提交；正式入口按调用认证干净、已提交的 WorkflowHub，并追加执行身份。runner replacement 降为遗留迁移前兼容，不再承担正常工具升级。执行身份是结构事实，不是质量裁决。来源：Stage 内容契约任务追加的 runner 架构选择与 v2–v22 实际膨胀审计；兼容边界见 ADR 0008。

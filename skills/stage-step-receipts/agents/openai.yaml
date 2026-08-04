@@ -1,4 +1,0 @@
-interface:
-  display_name: "Stage Step Receipts"
-  short_description: "Create typed workflow step receipts"
-  default_prompt: "Create or validate a typed receipt for a workflow step."

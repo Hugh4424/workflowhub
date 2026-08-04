@@ -10,9 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createStageContentEvidenceWriter } from "../core/stage-content-evidence.mjs";
-import { createTask } from "../core/task-handle.mjs";
-import { prepareTaskWorkspace } from "../core/workspace.mjs";
+import { createStageContentEvidenceWriter } from "../runtime/evidence/stage-content-evidence.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
+import { prepareTaskWorkspace } from "../runtime/task/workspace.mjs";
 
 const temporary = [];
 const originalCwd = process.cwd();

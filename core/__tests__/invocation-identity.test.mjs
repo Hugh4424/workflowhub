@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { assertWriteBoundary } from "../../runtime/evidence/write-boundary-preflight.mjs";
-import { createTask, openTask } from "../task-handle.mjs";
+import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });

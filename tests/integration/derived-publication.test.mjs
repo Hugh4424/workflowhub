@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
-import { createMaterialRevision } from "../../runtime/task/material-revision.mjs";
-import { createPublication, rebuildPublication } from "../../runtime/stage/publication.mjs";
+import { createPublication, isFormallyAcceptedPublication, rebuildPublication } from "../../runtime/stage/publication.mjs";
 import { createQualityFact, publishQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
-const materials = { "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks" };
-const requirements = {
-  ledger: { ref: "requirements/ledger.json", hash: "1".repeat(64) },
-  coverage: { ref: "requirements/coverage.json", hash: "2".repeat(64) },
-};
+const revision = { revision_id: `revision-${"a".repeat(64)}`, task_id: "task" };
 
 function store() {
   const records = new Map();
@@ -32,13 +27,14 @@ function evidenceType(kind) {
 
 function currentFacts({ io, stage, revision, tree = "b".repeat(40) }) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind]) => {
+    const evidenceStage = stage === "verify-code" && subject === "same_build_integration_review" ? "build-code" : stage;
     const nested = kind === "review" ? {
-      version: "wh-review-result.v1", task_id: "task", stage, review_track: stage === "make-decision" ? "detail" : null,
+      version: "wh-review-result.v1", task_id: "task", stage: evidenceStage, review_track: evidenceStage === "make-decision" ? "detail" : null,
       source: { target_commit: "a".repeat(40), base_commit: "a".repeat(40), base_tree: "a".repeat(40), captured_head: "a".repeat(40) },
       snapshot_tree: tree, material_id: "a".repeat(64), attempt_ref: "reviews/attempts/a/attempt.json",
       subject_kind: subject === "phase_reviews" ? "phase" : "worktree",
       phase_id: subject === "phase_reviews" ? "phase-1" : null,
-      review_scope: subject === "phase_reviews" ? "phase" : stage === "build-code" ? "integration" : null,
+      review_scope: subject === "phase_reviews" ? "phase" : evidenceStage === "build-code" ? "integration" : null,
       ...(subject === "phase_reviews" ? { base_tree: "a".repeat(40), candidate_tree: "a".repeat(40) } : {}),
       provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "pass", findings: [] } }],
       verdict: "pass", findings: [],
@@ -77,11 +73,10 @@ function currentFacts({ io, stage, revision, tree = "b".repeat(40) }) {
 
 describe("derived publication", () => {
   it("persists predicate results/fact refs and rebuilds without trusting serialized completion", () => {
-    const revision = createMaterialRevision({ taskId: "task", materials, requirements, changeSummary: "initial", sourceRefs: [{ ref: "source", hash: "a".repeat(64) }] });
     const io = store();
-    const observations = currentFacts({ io, stage: "build-code", revision: revision.revision });
+    const observations = currentFacts({ io, stage: "build-code", revision });
     const input = {
-      taskId: "task", stage: "build-code", materialRevision: revision.revision,
+      taskId: "task", stage: "build-code", materialRevision: revision,
       qualityFacts: observations.map((entry) => entry.fact),
       freshness: observations.map((entry) => entry.freshness),
       snapshotTree: "b".repeat(40), read: io.read,
@@ -89,16 +84,34 @@ describe("derived publication", () => {
     const publication = createPublication(input);
     expect(publication.value.completion.fact_refs).toHaveLength(Object.keys(STAGE_PREDICATES["build-code"]).length);
     const tampered = { ...publication.value, completion: { status: "completed", missing: [] } };
-    const rebuilt = rebuildPublication({ publication: tampered, materialRevision: revision.revision, qualityFacts: input.qualityFacts, freshness: input.freshness, read: io.read });
+    const rebuilt = rebuildPublication({ publication: tampered, materialRevision: revision, qualityFacts: input.qualityFacts, freshness: input.freshness, read: io.read });
     expect(rebuilt.value.completion.predicates).toEqual(publication.value.completion.predicates);
+    expect(publication.value.completion).toMatchObject({ quality_status: "passed", progression_only: false, formal_acceptance: "not_granted" });
+    expect(isFormallyAcceptedPublication(publication)).toBe(false);
+  });
+
+  it("marks incomplete-quality publication as progression-only and never formally accepted", () => {
+    const io = store();
+    const observations = currentFacts({ io, stage: "build-code", revision });
+    const publication = createPublication({
+      taskId: "task", stage: "build-code", materialRevision: revision,
+      qualityFacts: observations.map((entry) => entry.fact),
+      freshness: observations.map((entry, index) => index === 0 ? { ...entry.freshness, status: "stale", authenticated: false } : entry.freshness),
+      snapshotTree: "b".repeat(40), read: io.read,
+      allowIncompleteQuality: true,
+      progression: { status: "completed", authority: "current-four-materials-and-plan-tasks" },
+    });
+    expect(publication.value.completion).toMatchObject({
+      status: "completed", quality_status: "incomplete", progression_only: true, formal_acceptance: "not_granted",
+    });
+    expect(isFormallyAcceptedPublication(publication)).toBe(false);
   });
 
   it("rejects missing, stale, unauthenticated and canonical-byte-tampered facts", () => {
-    const revision = createMaterialRevision({ taskId: "task", materials, requirements, changeSummary: "initial", sourceRefs: [{ ref: "source", hash: "a".repeat(64) }] });
     const io = store();
-    const observations = currentFacts({ io, stage: "verify-code", revision: revision.revision });
+    const observations = currentFacts({ io, stage: "verify-code", revision });
     const base = {
-      taskId: "task", stage: "verify-code", materialRevision: revision.revision,
+      taskId: "task", stage: "verify-code", materialRevision: revision,
       qualityFacts: observations.map((entry) => entry.fact),
       freshness: observations.map((entry) => entry.freshness),
       snapshotTree: "b".repeat(40), read: io.read,

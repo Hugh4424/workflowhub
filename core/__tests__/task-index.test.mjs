@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTask } from "../task-handle.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
-import { __setIndexPathForTest, appendTaskIndex, lookupProjectKey, taskIndexEntry } from "../task-index.mjs";
+import { __setIndexPathForTest, appendTaskIndex, lookupProjectKey, taskIndexEntry } from "../../runtime/task/task-index.mjs";
 
 const temporary=[];
 function fixture() { const root=realpathSync(mkdtempSync(join(tmpdir(),"task-index-v2-"))); temporary.push(root); return createTask({storageRoot:root,taskPath:deriveTaskPath(root,"Demo","task-aa"),manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"task-aa",created_at:new Date().toISOString(),target_repo_root:join(root,"repo"),issue_ids:[],inputs:{}}}); }

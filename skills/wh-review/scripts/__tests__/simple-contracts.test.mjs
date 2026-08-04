@@ -34,7 +34,6 @@ describe("simple wh-review contracts", () => {
         schemas: {
           attempt: "runtime/review/schemas/attempt.schema.json",
           result: "runtime/review/schemas/result.schema.json",
-          resolution: "runtime/review/schemas/resolution.schema.json",
           stage_materials: "runtime/review/schemas/stage-materials.schema.json",
           ac_evidence_summary: "runtime/review/schemas/ac-evidence-summary.schema.json"
         }

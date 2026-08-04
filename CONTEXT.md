@@ -102,7 +102,7 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 用于排错和解释旧任务；它们不是当前领域对象，也不授权、阻止或改变普通工作。
 
 当前任务不创建恢复代次或阶段恢复 run。材料修订直接更新当前四份材料，并重新采集受影响
-的测试、AC 和审查事实；旧 hash、checkpoint 和 run 只作为只读审计上下文。
+的测试、AC 和审查事实；旧 hash、阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
 同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
@@ -169,6 +169,10 @@ build-code 结束时对最终快照的跨 Phase 交互审查。它读取连续�
 逐条 AC 的可读验收视图，记录结果、场景、判定标准、实际结果、证据引用/hash 和覆盖边界；它来自已认证证据，不包含原始日志。
 
 ## verify-code 深化术语（m13e）
+
+## 当前治理边界
+
+四材料决定是否可以继续工作；测试、审查、历史、inventory 和复杂度报告只提供事实，不是推进许可证。正式完成仍必须如实呈现测试、逐条验收、独立审查或 unavailable、交接和不可逆操作授权；旧条目到新条目的映射只记录治理演进，不生成新的控制链。历史 task 和历史 bytes 只读，provenance 与原始失败事实保留；新增机制必须登记职责、真实 consumer、owner、测试和删除/保留条件。
 
 **查痕（trace-check）**：
 verify-code 新增步骤，位于 test-strategy 之后、L3 之前。扫描 evidence/ 目录下各 phase 已产出的报告，核对是否存在、exit_code=0、以及是否通过 git_sha/content_hash 交叉验证（与 P0-3 freshness 校验同一套交叉验证逻辑，不单独只看 mtime）。缺口写入 `trace-check-report.json`，并把没有证据覆盖的验收标准写入 `missing_ac_coverage[]`。

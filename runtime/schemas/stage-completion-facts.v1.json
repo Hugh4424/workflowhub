@@ -113,12 +113,12 @@
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["label", "ref", "hash", "accepted_lookup"],
+      "required": ["label", "ref", "hash", "publication_lookup"],
       "properties": {
         "label": { "type": "string", "minLength": 1 },
         "ref": { "type": "string", "minLength": 1 },
         "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "accepted_lookup": { "type": "string", "minLength": 1 }
+        "publication_lookup": { "type": "string", "minLength": 1 }
       }
     },
     "component": {

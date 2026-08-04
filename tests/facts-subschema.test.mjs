@@ -17,7 +17,7 @@ describe("facts subschema completion ownership", () => {
   });
 
   it("does not let the implementation receipt accept a caller completion claim", () => {
-    const writer = read("core/canonical-receipt-writer.mjs");
+    const writer = read("runtime/evidence/canonical-receipt-writer.mjs");
 
     expect(writer).toMatch(/implementation payload must be empty/i);
     expect(writer).not.toMatch(/implementation payload accepts only phase_completion/i);

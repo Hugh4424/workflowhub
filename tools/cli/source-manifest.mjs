@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCanonicalSource, createSourceManifest, canonicalJson } from "../../runtime/evidence/canonical-source.mjs";
-import { bootstrapStage } from "../../core/stage-context.mjs";
+import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 
 function fail(code, message) { process.stderr.write(`${code}: ${message}\n`); process.exitCode = 2; }
 function args(argv) {

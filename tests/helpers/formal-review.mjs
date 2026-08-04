@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { createCanonicalReviewWriter } from "../../core/canonical-receipt-writer.mjs";
+import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-result.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -9,9 +9,10 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain } = {}) {
   const attemptId = randomUUID();
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
-  const attemptRef = `reviews/attempts/${attemptId}/attempt.json`;
-  const outputRef = `reviews/attempts/${attemptId}/providers/${provider}.output.json`;
-  const resultRef = `reviews/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
+  const reviewRoot = task.manifest.record_model === "vnext-single-write" ? "quality/reviews" : "reviews";
+  const attemptRef = `${reviewRoot}/attempts/${attemptId}/attempt.json`;
+  const outputRef = `${reviewRoot}/attempts/${attemptId}/providers/${provider}.output.json`;
+  const resultRef = `${reviewRoot}/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
   const source = { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree };
   const finding = {
     severity: "major",

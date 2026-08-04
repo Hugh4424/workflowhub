@@ -4,7 +4,7 @@ import {
   createStageCompletionFacts,
   renderSystemCompletion,
   renderUserCompletion,
-} from "../core/stage-completion-facts.mjs";
+} from "../runtime/evidence/stage-completion-facts.mjs";
 
 const HASH = "a".repeat(64);
 const SOURCE_KEYS = [
@@ -29,7 +29,7 @@ function fixture(overrides = {}) {
       label: "实现结果",
       ref: "receipts/implementation.json",
       hash: HASH,
-      accepted_lookup: "results/build-code/accepted.json#facts",
+      publication_lookup: "publications/build-code/#facts",
     }],
     review: {
       conclusion: "正式审查通过",
@@ -225,7 +225,7 @@ describe("stage completion facts", () => {
         label: "实现结果",
         ref: "receipts/implementation.json",
         hash: HASH,
-        accepted_lookup: "results/build-code/accepted.json#facts",
+        publication_lookup: "publications/build-code/#facts",
       }],
       dependencies: ["已接受的实现计划"],
       recovery_conditions: ["若下游发现输入无效，返回当前阶段修复"],

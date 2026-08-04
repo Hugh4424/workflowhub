@@ -1,8 +1,8 @@
 import { posix } from "node:path";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
+import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
+import { createCanonicalReviewWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
 import { aggregateCanonicalProviderResults } from "../../../runtime/review/canonical-review-result.mjs";
 
 function safePart(value, label) {
@@ -126,16 +126,40 @@ export function aggregateProviderResults(providerResults, minimumReviewers = 1, 
   return aggregateCanonicalProviderResults(providerResults, minimumReviewers, { profilePriority });
 }
 
-export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {
+const DISPOSITION_DECISIONS = new Set(["accept", "partial", "reject", "needs_human"]);
+
+// A disposition is the smallest durable fact needed after a finding is
+// consumed. Replay bindings, repair flow, and re-review orchestration belong
+// to the wh-review controller and are deliberately not part of this contract.
+export function validateReviewDisposition(value) {
+  const errors = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { valid: false, errors: ["disposition must be an object"] };
+  }
+  if (typeof value.finding_id !== "string" || value.finding_id.trim() === "") errors.push("finding_id required");
+  if (!DISPOSITION_DECISIONS.has(value.decision)) errors.push("invalid decision");
+  if (["accept", "partial"].includes(value.decision)) {
+    for (const field of ["verification", "root_cause", "evidence", "rereview_flow_id"]) {
+      if (typeof value[field] !== "string" || value[field].trim() === "") errors.push(`${field} required for accepted finding`);
+    }
+  }
+  if (value.decision === "reject" && (typeof value.evidence !== "string" || value.evidence.trim() === "")) {
+    errors.push("evidence required for rejected finding");
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree, root = "quality/reviews" }) {
   const id = safePart(attemptId, "attemptId");
   const track = reviewTrack ?? "default";
-  const attemptDirectoryRef = posix.join("reviews", "attempts", id);
+  const reviewRoot = "quality/reviews";
+  const attemptDirectoryRef = posix.join(reviewRoot, "attempts", id);
   const resultName = `${safePart(stage, "stage")}-${safePart(track, "reviewTrack")}-${safePart(snapshotTree, "snapshotTree")}-${id}.json`;
   return {
     attemptRef: posix.join(attemptDirectoryRef, "attempt.json"),
     providerDirectoryRef: posix.join(attemptDirectoryRef, "providers"),
-    resultRef: posix.join("reviews", "results", resultName),
-    reportRef: posix.join("reviews", "reports", `${id}.md`),
+    resultRef: posix.join(reviewRoot, "results", resultName),
+    reportRef: posix.join(reviewRoot, "reports", `${id}.md`),
   };
 }
 
@@ -164,16 +188,6 @@ export function writeAttempt(task, ref, attempt) {
 export function writeSemanticResult(task, ref, result) {
   const safeTask = assertTaskHandle(task);
   return createCanonicalReviewWriter({ task: safeTask, taskId: result?.task_id, stage: result?.stage }).writeResult(ref, result);
-}
-
-export function resolutionRef(resolution) {
-  if (!resolution || typeof resolution !== "object") throw new TypeError("resolution is required");
-  return `reviews/resolutions/${createHash("sha256").update(canonicalJson(resolution)).digest("hex")}.json`;
-}
-
-export function writeReviewResolution(task, ref, resolution) {
-  const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: resolution?.task_id, stage: resolution?.stage }).writeResolution(ref, resolution);
 }
 
 function markdown(value) { return String(value ?? "").replaceAll("|", "\\|").replaceAll("\n", " "); }

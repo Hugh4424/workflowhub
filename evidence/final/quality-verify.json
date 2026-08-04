@@ -1,0 +1,401 @@
+{
+  "schema_version": "quality-verify.v1",
+  "task_id": "workflowhub-complexity-governance-v3-20260802",
+  "stage": "build-code",
+  "ac_id": "AC-001",
+  "status": "passed",
+  "method": "per-AC final quality fact set",
+  "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+  "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+  "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+  "created_at": "2026-08-04T05:30:00.000Z",
+  "acceptance_criteria": [
+    {
+      "ac_id": "AC-001",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-002",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-003",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-004",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-005",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-006",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-007",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-008",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-009",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-010",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-011",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-012",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-013",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-014",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-015",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-016",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-017",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-018",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-019",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-020",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-021",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-022",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-023",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-024",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-025",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-026",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-027",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-028",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-029",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-030",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-031",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-032",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-033",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-034",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-035",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-036",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-037",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-038",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-039",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-040",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-041",
+      "status": "passed",
+      "method": "npm test after deterministic derived-report repair",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-042",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    },
+    {
+      "ac_id": "AC-043",
+      "status": "passed",
+      "method": "current final targeted oracle matrix",
+      "evidence_ref": "evidence/phase-9/final-targeted-matrix-r008.json",
+      "evidence_hash": "8de5d0f8a649114ff331c407c685162057f684dfa100aa8006fd3fb2ba225aad",
+      "material_digest": "fbddc676c9ef74fd3ff896e605e471145e97c4d7bb16417f4cf056d09111ae32",
+      "created_at": "2026-08-04T05:30:00.000Z"
+    }
+  ]
+}

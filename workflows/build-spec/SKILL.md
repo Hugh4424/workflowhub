@@ -16,7 +16,7 @@ the current four materials:
 - `plan.md` — current implementation approach, when it already exists.
 - `tasks.md` — current executable work breakdown, when it already exists.
 
-Old accepted records, receipts, checkpoints, review outputs, and runner history
+Old accepted records, receipts, review outputs, and runner history
 are read-only audit facts. They never decide whether this task may continue.
 Do not create replacement tasks, continuation chains, invalidations, rebinding,
 or recovery machinery to revise a current specification.

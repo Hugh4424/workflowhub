@@ -6,15 +6,14 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
-import { capturePhaseReviewSource } from "./review-source.mjs";
-import { buildClassificationManifest, buildNonGateReviewResponseRecord, buildReviewChain, deriveChangeClassification, selectReviewRound } from "./review-controller.mjs";
+import { selectReviewRound } from "./review-controller.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
-import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
-import { openTask } from "../../../core/task-handle.mjs";
+import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../runtime/stage/stage-context.mjs";
+import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { captureExecutionSnapshot } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const OID = /^[a-f0-9]{40,64}$/;
 
 function previousResult(task, ref, stage, reviewTrack) {
@@ -43,7 +42,7 @@ export function reviewFlowIdentity({ kernel, assertedWorkflowRunId, stage, revie
   return identity;
 }
 
-export function resolveReviewFlowHead({ task, kernel, identity, previousResultRef } = {}) {
+export function resolveReviewFlowHead({ task, kernel, identity, previousResultRef, currentSnapshotTree = null } = {}) {
   const replayMismatch = (message) => {
     const error = new Error(`REPLAY_MISMATCH: ${message}`);
     error.code = "REPLAY_MISMATCH";
@@ -51,9 +50,10 @@ export function resolveReviewFlowHead({ task, kernel, identity, previousResultRe
   };
   const flow = kernel.readReviewFlow(identity);
   const headRef = flow?.head_result_ref ?? null;
-  if (flow === null && previousResultRef !== undefined && identity.snapshot_tree !== undefined) {
+  const effectiveSnapshotTree = identity.snapshot_tree ?? currentSnapshotTree;
+  if (flow === null && previousResultRef !== undefined && effectiveSnapshotTree !== null) {
     const prior = previousResult(task, previousResultRef, identity.stage, identity.review_track);
-    if (!sameReviewSubject(prior, identity) || prior.snapshot_tree === identity.snapshot_tree) {
+    if (!sameReviewSubject(prior, identity) || prior.snapshot_tree === effectiveSnapshotTree) {
       throw replayMismatch("review flow CAS failed: previous_result_ref is stale or belongs to another flow");
     }
     return { flow: null, prior };
@@ -72,48 +72,6 @@ function sameReviewSubject(left, right) {
     left?.subject_kind === right?.subject_kind && left?.phase_id === right?.phase_id;
 }
 
-function chainRoot(result) {
-  return RESULT_REF.test(result?.review_chain?.root_result_ref ?? "")
-    ? result.review_chain.root_result_ref
-    : result?.result_ref;
-}
-
-function readPriorResult(task, ref, subject) {
-  const result = previousResult(task, ref, subject.stage, subject.review_track);
-  if (!sameReviewSubject(result, subject)) throw new Error("review chain parent does not match the current review subject");
-  return result;
-}
-
-export function closureFailureCount(task, stage, reviewTrack, prior) {
-  const root = chainRoot(prior);
-  if (!RESULT_REF.test(root ?? "")) throw new TypeError("prior review has no canonical chain root");
-  let count = 0;
-  for (const ref of task.listCanonicalReviewResultRefs()) {
-    try {
-      const result = JSON.parse(task.readRecord(ref));
-      if (!sameReviewSubject(result, prior) || result?.stage !== stage || result.review_track !== reviewTrack || result.verdict !== "revise_required") continue;
-      const attempt = JSON.parse(task.readRecord(result.attempt_ref));
-      if (attempt?.review_policy?.round === "closure" && result.review_chain?.root_result_ref === root) count += 1;
-    } catch { throw new Error("canonical prior review evidence is unreadable"); }
-  }
-  return count;
-}
-
-/** Only a semantic structural result consumes the one-shot non-code budget. */
-export function structuralFullAlreadyRecorded(task, prior) {
-  const root = chainRoot(prior);
-  if (!RESULT_REF.test(root ?? "")) throw new TypeError("prior review has no canonical chain root");
-  const refs = task.listCanonicalReviewResultRefs();
-  for (const ref of refs) {
-    let record;
-    try { record = JSON.parse(task.readRecord(ref)); }
-    catch { throw new Error("canonical structural review audit is unreadable"); }
-    if (!sameReviewSubject(record, prior) || record?.review_chain?.round !== "full") continue;
-    if (record.review_chain.root_result_ref === root) return true;
-  }
-  return false;
-}
-
 export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } = {}) {
   if (identity?.stage !== "make-decision" || flow === null || flow === undefined) return flow;
   if (flow.event_kind === "provider_attempt") {
@@ -123,7 +81,7 @@ export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } =
       attempt_ref: flow.action_ref,
     });
   }
-  if (flow.head_result_ref && new Set(["semantic_result", "resolution"]).has(flow.event_kind)) {
+  if (flow.head_result_ref && flow.event_kind === "semantic_result") {
     return kernel.advanceReviewFlow(identity, {
       expected_head_ref: flow.head_result_ref,
       expected_event_ref: flow.event_ref,
@@ -133,84 +91,21 @@ export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } =
   return flow;
 }
 
-export function selectCanonicalReviewRound({ task, stage, route, previousResult = null, ledger = null, closureFailures = 0, currentSnapshotTree = null, flow = null, changeClassification = null } = {}) {
-  const freshBuildCodePhase = stage === "build-code"
-    && previousResult?.subject_kind === "phase"
-    && currentSnapshotTree !== null
-    && previousResult.snapshot_tree !== currentSnapshotTree
-    && flow === null;
-  return selectReviewRound({
-    stage, route,
-    previousResult: freshBuildCodePhase ? null : previousResult,
-    ledger: freshBuildCodePhase ? null : ledger,
-    closureFailures, currentSnapshotTree, changeClassification,
-    structuralFullAlreadyRecorded: route?.mode === "full_on_structural_rework" && previousResult !== null
-      ? (flow === null ? structuralFullAlreadyRecorded(task, previousResult) : flow.structural_full_reviews > 0)
-      : false,
-  });
+export function selectCanonicalReviewRound({ stage, route, previousResult = null, currentSnapshotTree = null } = {}) {
+  return selectReviewRound({ stage, route, previousResult, currentSnapshotTree });
 }
 
-function closurePriorReview(result) {
-  return {
-    result_ref: result.result_ref,
-    snapshot_tree: result.snapshot_tree,
-    actionable_findings: (result.adjudication?.clusters ?? []).filter(({ disposition }) => disposition === "actionable").map((finding) => ({
-      id: finding.id, severity: finding.severity, path: finding.path, ...(finding.line ? { line: finding.line } : {}),
-      issue: finding.issue, root_cause: finding.root_cause, recommendation: finding.recommendation,
-    })),
-  };
-}
-
-/**
- * The response ledger is controller/audit evidence, not fresh-review material.
- * Keeping this projection here makes it impossible for a full second review to
- * accidentally become a closure packet just because the caller supplied a
- * ledger to explain the preceding repair.
- */
 export function providerVisibleMaterialsForRound({ materials = {}, round, previousResult = null } = {}) {
-  const { response_ledger: responseLedger, ...providerMaterials } = materials;
-  if (round !== "closure") return providerMaterials;
-  return {
-    ...providerMaterials,
-    response_ledger: responseLedger,
-    previous_review: closurePriorReview(previousResult),
-  };
+  const { response_ledger: _responseLedger, previous_review: _previousReview, ...providerMaterials } = materials;
+  return providerMaterials;
 }
 
 function frozenSnapshotTree(trusted, phaseId = null) {
-  if (phaseId !== null) {
-    const workspace = assertWorkspace(trusted.workspace);
-    // Phase capture now keeps its complete diff in a caller-owned external
-    // directory. This preflight only needs the frozen tree identity, so release
-    // that temporary capture immediately rather than leaving a private diff
-    // artifact behind for the full review path to create again.
-    const source = capturePhaseReviewSource({
-      sourceRoot: workspace.worktreeRoot,
-      task: trusted.task,
-      phaseId,
-      reviewDataRoot: trusted.task.taskPath,
-    });
-    try {
-      return source.snapshotTree;
-    } finally {
-      source.dispose();
-    }
-  }
   const snapshot = trusted.workspace
     ? captureExecutionSnapshot(assertWorkspace(trusted.workspace).worktreeRoot)
     : trusted.candidateWorkspace?.captureSnapshot?.();
   if (!OID.test(snapshot?.tree ?? "")) throw new Error("authenticated Workspace snapshot is unavailable");
   return snapshot.tree;
-}
-
-function frozenChangeClassification(previousResult, currentSnapshotTree, materials) {
-  if (previousResult === null) return null;
-  return deriveChangeClassification({
-    previousSnapshotTree: previousResult.snapshot_tree,
-    currentSnapshotTree,
-    previousManifest: previousResult.classification_manifest ?? null,
-    currentManifest: buildClassificationManifest(materials ?? {}),
-  });
 }
 
 export function resolveTrustedReviewSubject(input) {
@@ -292,75 +187,47 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
   const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack);
   const workflowRunId = input.workflow_run_id ?? input.workflowRunId;
-  // Phase flow identity is snapshot-scoped. Resolve the trusted frozen Phase
-  // tree before deriving the CAS key; callers cannot supply this identity.
   const currentSnapshotTree = frozenSnapshotTree(trusted, phaseId);
-  const flowIdentity = reviewFlowIdentity({
+  const qualityOnly = trusted.task.manifest.record_model === "vnext-single-write";
+  const flowIdentity = qualityOnly ? null : reviewFlowIdentity({
     kernel: trusted.kernel, assertedWorkflowRunId: workflowRunId, stage, reviewTrack, phaseId,
     snapshotTree: currentSnapshotTree,
   });
   const suppliedPreviousRef = Object.prototype.hasOwnProperty.call(input, "previous_result_ref")
     ? input.previous_result_ref
     : Object.prototype.hasOwnProperty.call(input, "previousResultRef") ? input.previousResultRef : undefined;
-  return trusted.kernel.withReviewFlowLock(flowIdentity, async () => {
-  // Ordering is a dispatch precondition, not a publication-afterthought.
-  // Fail before material capture or any provider call when the active
-  // make-decision run has not completed the exact predecessor step.
-  trusted.kernel.assertReviewFlowReady(flowIdentity);
-  const { flow, prior } = resolveReviewFlowHead({
-    task: trusted.task, kernel: trusted.kernel, identity: flowIdentity,
-    previousResultRef: suppliedPreviousRef,
-  });
-  reconcileMakeDecisionReviewProgress({
+  const executeReview = async () => {
+  // vNext review is an immutable quality fact. It deliberately does not
+  // create or consult the retired mutable review-flow control plane.
+  if (!qualityOnly) trusted.kernel.assertReviewFlowReady(flowIdentity);
+  const { flow, prior } = qualityOnly
+    ? {
+      flow: null,
+      prior: suppliedPreviousRef === undefined ? null : previousResult(trusted.task, suppliedPreviousRef, stage, reviewTrack),
+    }
+    : resolveReviewFlowHead({
+      task: trusted.task, kernel: trusted.kernel, identity: flowIdentity,
+      previousResultRef: suppliedPreviousRef, currentSnapshotTree,
+    });
+  if (!qualityOnly) reconcileMakeDecisionReviewProgress({
     kernel: trusted.kernel,
     identity: flowIdentity,
     flow,
   });
-  const flowHistory = trusted.kernel.readReviewFlowHistory(flowIdentity);
-  if (stage === "build-code" && phaseId !== null && flow === null && prior !== null
-      && input.materials?.response_ledger == null) {
-    throw new Error("MATERIAL_INCOMPLETE: a new Phase snapshot requires previous_result_ref and response_ledger lineage");
-  }
+  const flowHistory = qualityOnly ? { provider_attempt_refs: [] } : trusted.kernel.readReviewFlowHistory(flowIdentity);
   if (formatCorrection && flow?.head_result_ref) throw new Error("REVIEW_CLOSED: format correction cannot replace a semantic review-flow head");
-  // A Phase is immutable evidence. Its frozen tree selects the review
-  // subject. Historical corrections can be cited in materials, but they are
-  // not an authorisation prerequisite for a current review.
-  const machineChangeClassification = frozenChangeClassification(prior, currentSnapshotTree, input.materials);
-  const suppliedLedger = input.materials?.response_ledger ?? null;
-  const controllerLedger = suppliedLedger === null || machineChangeClassification === null
-    ? suppliedLedger
-    : { ...suppliedLedger, change_classification: machineChangeClassification };
   const control = selectCanonicalReviewRound({
-    task: trusted.task, stage, route, previousResult: prior, ledger: controllerLedger,
-    currentSnapshotTree, flow, changeClassification: machineChangeClassification,
-    closureFailures: route?.mode === "adaptive" && prior !== null ? closureFailureCount(trusted.task, stage, reviewTrack, prior) : 0,
+    stage, route, previousResult: prior, currentSnapshotTree,
   });
   if (control.round === "none") {
-    if (!new Set(["review_non_gate_recorded", "post_full_non_gate_recorded"]).has(control.reason)) {
-      throw new Error(`REVIEW_CLOSED: ${control.reason}`);
-    }
-    const resolution = buildNonGateReviewResponseRecord({
-      taskId: trusted.taskId, stage, reviewTrack, previousResult: prior,
-      previousAttempt: JSON.parse(trusted.task.readRecord(prior.attempt_ref)),
-      previousResultSha256: prior.result_sha256, ledger: controllerLedger,
-      currentSnapshotTree,
-    });
-    const recorded = trusted.kernel.recordReviewResolution(flowIdentity, {
-      expected_head_ref: flow?.head_result_ref ?? null,
-      expected_event_ref: flow?.event_ref ?? null,
-      resolution,
-    });
-    return {
-      status: "recorded", verdict: null, resolution_ref: recorded.resolution_ref,
-      previous_result_ref: prior.result_ref, snapshot_tree: currentSnapshotTree,
-    };
+    throw new Error("REVIEW_CLOSED: current quality fact already recorded; use a changed snapshot");
   }
-  const profileSet = control.round === "closure" ? "closure" : "initial";
+  const profileSet = "initial";
   const selection = selectTrustedReviewProviderSelection(thirdReview.config, hostProvider, route, profileSet);
   const reviewPolicy = {
     source: route ? "wh_review.v2" : "legacy_3rd_review",
     mode: route?.mode ?? "legacy",
-    minimum_heterologous: route ? (profileSet === "closure" ? 1 : (route.minimum_heterologous ?? 1)) : null,
+    minimum_heterologous: route ? (route.minimum_heterologous ?? 1) : null,
     requested_profiles: selection.requestedProfiles,
     ...(selection.requestedProfileSpecs.length ? { requested_profile_specs: selection.requestedProfileSpecs } : {}),
     eligible_profiles: selection.eligibleProfiles,
@@ -368,40 +235,29 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     effective_profiles: selection.effectiveProfiles,
     round: control.round,
   };
-  const reviewChain = buildReviewChain({
-    previousResult: prior, ledger: controllerLedger,
-    currentSnapshotTree, round: control.round,
-  });
   const result = await runReview({
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
     stage, phaseId, reviewTrack, uiScope: input.ui_scope === true,
-    // The ledger is controller/audit data. Full reviews must see a fresh packet
-    // and stage-material validation forbids closure-only fields outside closure.
     materials: providerVisibleMaterialsForRound({
-      materials: controllerLedger === null ? (input.materials ?? {}) : {
-        ...(input.materials ?? {}), response_ledger: controllerLedger,
-      }, round: control.round, previousResult: prior,
+      materials: input.materials ?? {}, round: control.round, previousResult: prior,
     }),
     current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
-    // Binding proof stays outside provider-visible packet material. The runner
-    // validates it only against the controller-derived chain hash.
-    controlLedger: controllerLedger,
     hostProvider,
     // The broker owns adapter-level exclusion. Keep the complete configured
     // group here so it can attest SAME_SOURCE rather than trusting a local
     // pre-filter; policy still records the eligible heterologous quorum.
-    providers: selection.providers, reviewPolicy, reviewRound: control.round, reviewChain,
+    providers: selection.providers, reviewPolicy, reviewRound: control.round,
     reuseUnavailable: true,
     claimedUnavailableAttemptRefs: flowHistory.provider_attempt_refs,
     previousRuntimeIds: input.previous_runtime_ids ?? input.previousRuntimeIds ?? {}, formatCorrectionAttemptRef, providerClient: client,
   });
-  if (result.status === "semantic") {
+  if (!qualityOnly && result.status === "semantic") {
     trusted.kernel.advanceReviewFlow(flowIdentity, {
       expected_head_ref: flow?.head_result_ref ?? null,
       expected_event_ref: flow?.event_ref ?? null,
       result_ref: result.resultRef,
     });
-  } else {
+  } else if (!qualityOnly) {
     trusted.kernel.recordReviewAttempt(flowIdentity, {
       expected_head_ref: flow?.head_result_ref ?? null,
       expected_event_ref: flow?.event_ref ?? null,
@@ -417,7 +273,8 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
     ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
   };
-  });
+  };
+  return qualityOnly ? executeReview() : trusted.kernel.withReviewFlowLock(flowIdentity, executeReview);
 }
 
 export function verifyFinalReview(input) {

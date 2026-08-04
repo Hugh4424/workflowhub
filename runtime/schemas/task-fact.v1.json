@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub/task-fact.v1",
+  "title": "WorkflowHub append-only task fact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "stage", "material_digest", "source_digest", "invocation_id", "source", "status", "content_hash", "created_at", "output_ref"],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "material_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "invocation_id": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 },
+    "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "output_ref": { "type": "string", "minLength": 1 }
+  }
+}

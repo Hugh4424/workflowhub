@@ -21,7 +21,28 @@
         }
       }
     },
-    "completion": { "type": "object" },
+    "completion": {
+      "type": "object",
+      "required": ["status", "progression_only", "formal_acceptance", "quality_status"],
+      "properties": {
+        "status": { "const": "completed" },
+        "progression_only": { "type": "boolean" },
+        "formal_acceptance": { "const": "not_granted" },
+        "quality_status": { "enum": ["passed", "incomplete"] },
+        "quality_missing": { "type": "array" },
+        "progression_authority": { "const": "current-four-materials-and-plan-tasks" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "progression_only": { "const": true } } },
+          "then": { "required": ["quality_missing", "progression_authority"] }
+        },
+        {
+          "if": { "properties": { "progression_only": { "const": false } } },
+          "then": { "properties": { "quality_status": { "const": "passed" } } }
+        }
+      ]
+    },
     "snapshot_tree": { "type": "string", "minLength": 1 }
   }
 }

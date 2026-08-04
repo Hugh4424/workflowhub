@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { governanceTreeHash } from "./inventory.mjs";
+import { auditReferences, classifyReferenceAudit } from "./reference-audit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -94,12 +95,178 @@ function itemOracles(item, label, errors) {
 }
 
 function requiredIds(value) {
+  if (/^\d+$/.test(String(value ?? ""))) {
+    const count = Number(value);
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error(`invalid --require-ac value: ${value}`);
+    return Array.from({ length: count }, (_, index) => `AC-${String(index + 1).padStart(3, "0")}`);
+  }
   const match = String(value ?? "").match(/^(AC-\d+)(?:\.\.(AC-\d+))?$/);
   if (!match) throw new Error(`invalid --require-ac value: ${value}`);
   const first = Number(match[1].slice(3));
   const last = match[2] ? Number(match[2].slice(3)) : first;
   if (last < first) throw new Error("--require-ac range must be ascending");
   return Array.from({ length: last - first + 1 }, (_, index) => `AC-${String(first + index).padStart(2, "0")}`);
+}
+
+const FINAL_VERIFICATION_FLAGS = Object.freeze(new Set([
+  "--governance",
+  "--handoff",
+  "--require-same-review-tree",
+  "--require-review-raw-hash",
+  "--require-reference-clean",
+  "--progress",
+  "--bind-current-tree",
+  "--allow-incomplete",
+]));
+
+export function parseFinalVerificationArgs(argv = []) {
+  const errors = [];
+  const flags = new Set();
+  let required_ac = null;
+  for (const argument of argv) {
+    const name = argument.split("=", 1)[0];
+    if (name === "--require-ac") {
+      try { required_ac = requiredIds(argument.slice("--require-ac=".length)); }
+      catch { errors.push("unknown_argument"); }
+      continue;
+    }
+    if (name === "--spec") continue;
+    if (FINAL_VERIFICATION_FLAGS.has(argument)) {
+      flags.add(argument);
+      continue;
+    }
+    errors.push("unknown_argument");
+  }
+  return { flags, required_ac, errors: [...new Set(errors)] };
+}
+
+export function validateFinalCoverageRequirements({ coverage, required_ids = [] } = {}) {
+  const errors = [];
+  const qualityVerify = coverage?.quality_verify;
+  let qualityRecords = new Map();
+  if (!qualityVerify || typeof qualityVerify !== "object" || Array.isArray(qualityVerify)) {
+    errors.push("quality_verify_missing");
+  } else {
+    const qualityPath = path.resolve(ROOT, qualityVerify.ref ?? "");
+    const relative = path.relative(ROOT, qualityPath);
+    if (relative.startsWith("..") || path.isAbsolute(relative) || !fs.existsSync(qualityPath)
+        || !/^[a-f0-9]{64}$/.test(qualityVerify.sha256 ?? "")) {
+      errors.push("quality_verify_unresolvable");
+    } else if (sha256(fs.readFileSync(qualityPath)) !== qualityVerify.sha256) {
+      errors.push("quality_verify_unresolvable");
+    } else {
+      try {
+        const value = JSON.parse(fs.readFileSync(qualityPath, "utf8"));
+        const requiredFields = ["schema_version", "task_id", "stage", "ac_id", "status", "method", "evidence_ref", "evidence_hash", "material_digest", "created_at"];
+        if (value.schema_version !== "quality-verify.v1"
+            || requiredFields.some((field) => value[field] === undefined)
+            || !/^[a-f0-9]{64}$/.test(value.evidence_hash ?? "")
+            || !/^[a-f0-9]{64}$/.test(value.material_digest ?? "")
+            || !/^[a-f0-9]{64}$/.test(qualityVerify.sha256)) {
+          errors.push("quality_verify_schema_invalid");
+        } else if (!Array.isArray(value.acceptance_criteria)) {
+          errors.push("quality_verify_ac_records_missing");
+        } else {
+          qualityRecords = new Map(value.acceptance_criteria.map((record) => [record?.ac_id, record]));
+        }
+      } catch {
+        errors.push("quality_verify_schema_invalid");
+      }
+    }
+  }
+  const items = new Map((coverage?.items ?? []).map((item) => [item?.acceptance_criterion_id, item]));
+  for (const id of required_ids) {
+    const item = items.get(id);
+    if (!item) {
+      errors.push("missing_ac");
+      continue;
+    }
+    const qualityRecord = qualityRecords.get(id);
+    if (!qualityRecord || !["passed", "failed", "unknown", "unavailable", "incomplete", "missing"].includes(qualityRecord.status)) {
+      errors.push("ac_quality_fact_missing");
+    }
+    const detail = String(item.detail ?? item.result ?? "").trim();
+    if (/^(?:see tests?|evidence(?: only)?|tbd|n\/a|covered)$/i.test(detail)) {
+      errors.push("ac_evidence_generic_fill");
+      continue;
+    }
+    const evidence = item.evidence ?? item.oracle;
+    if (!evidence?.ref || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")) {
+      errors.push("ac_evidence_unresolvable");
+      continue;
+    }
+    const target = path.resolve(ROOT, evidence.ref);
+    if (!fs.existsSync(target) || sha256(fs.readFileSync(target)) !== evidence.sha256) {
+      errors.push("ac_evidence_unresolvable");
+    }
+  }
+  return errors;
+}
+
+export function validateReviewTreeBinding({ manifest, actual_tree_hash } = {}) {
+  if (!manifest || manifest.review_tree_hash !== actual_tree_hash) return ["review_tree_drift"];
+  return [];
+}
+
+export function validateReviewRawHash({ review } = {}) {
+  if (!review || !/^evidence\/(?:final|phase-[^/]+)\//.test(review.raw_ref ?? "")
+      || !/^[a-f0-9]{64}$/.test(review.raw_sha256 ?? "")) return ["review_raw_hash_missing"];
+  return [];
+}
+
+export function validateReferenceClean({ violations = [], allowed_violations = [] } = {}) {
+  return violations.length || allowed_violations.length ? ["reference_consumer_residual"] : [];
+}
+
+export function validateHandoffBinding({ artifacts, required = ["deletion_list", "retention_list", "m14_m17_impact", "change_summary"] } = {}) {
+  if (!artifacts || Object.keys(artifacts).length === 0) return ["handoff_incomplete"];
+  if (required.some((name) => !artifacts[name])) return ["final_evidence_binding_drift"];
+  const errors = [];
+  for (const name of required) {
+    const item = artifacts[name];
+    const expectedRef = finalArtifactEntries()[name];
+    if (typeof item.ref !== "string" || item.ref !== expectedRef || !/^[a-f0-9]{64}$/.test(item.sha256 ?? "")) {
+      errors.push("final_evidence_binding_drift");
+      continue;
+    }
+    const target = path.resolve(ROOT, item.ref);
+    if (!fs.existsSync(target) || sha256(fs.readFileSync(target)) !== item.sha256) errors.push("final_evidence_binding_drift");
+  }
+  return [...new Set(errors)];
+}
+
+export function validateGovernanceContract({
+  constitution = "",
+  checklist = "",
+  context = "",
+  constitution_ids = [...String(constitution).matchAll(/^###\s+((?:F|Q|S)\d+)/gm)].map((match) => match[1]),
+  checklist_ids = [...String(checklist).matchAll(/\*\*((?:F|Q|S)\d+)\*\*/g)].map((match) => match[1]),
+  expected_version = "1.5.0",
+  expected_revision = "2026-07-28",
+  expected_count = 21,
+  agents = "",
+  require_agents = false,
+} = {}) {
+  const errors = [];
+  if (!new RegExp(`(?:\\*\\*)?Version(?:\\*\\*)?:\\s*${expected_version}`).test(String(constitution))) errors.push("constitution_version_drift");
+  if (!String(constitution).includes(expected_revision)) errors.push("constitution_revision_drift");
+  if (!/旧.*(?:→|到).*新.*(?:映射|mapping)/i.test(`${constitution}\n${context}`)) errors.push("constitution_mapping_drift");
+  const count = String(checklist).match(/条目数[^\d]*(\d+)/)?.[1];
+  if (Number(count) !== expected_count || checklist_ids.length !== expected_count && constitution_ids.length === expected_count) {
+    errors.push("checklist_count_drift");
+  }
+  const expectedIds = [...new Set(constitution_ids)].sort();
+  const actualIds = [...new Set(checklist_ids)].sort();
+  if (expectedIds.join(",") !== actualIds.join(",")) errors.push("checklist_entry_drift");
+  if (require_agents) {
+    const currentRules = String(agents);
+    if (!/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/.test(currentRules)) errors.push("agents_material_authority_drift");
+    if (!/(?:测试|审查|历史)[\s\S]*(?:事实|证据)[\s\S]*(?:推进|许可证|授权)/.test(currentRules)) errors.push("agents_quality_progression_drift");
+    if (!/(?:历史|history)[\s\S]*(?:只读|read-only)/i.test(currentRules)) errors.push("agents_history_boundary_drift");
+    if (!/provenance/i.test(currentRules)) errors.push("agents_provenance_drift");
+    if (!/(?:新|new)[\s\S]*(?:机制|mechanism)[\s\S]*(?:登记|consumer|owner)/i.test(currentRules)) errors.push("agents_new_mechanism_drift");
+  }
+  return [...new Set(errors)];
 }
 
 export function extractAcceptanceCriteria(specText) {
@@ -195,7 +362,91 @@ export function validateFinalGates({ gates, currentTree = null, allowIncomplete 
   return errors;
 }
 
+function finalArtifactEntries() {
+  return {
+    deletion_list: "evidence/final/deletion-list.json",
+    retention_list: "evidence/final/retention-list.json",
+    m14_m17_impact: "evidence/final/m14-m17-impact.md",
+    change_summary: "evidence/final/change-summary.md",
+  };
+}
+
+function loadFinalArtifacts() {
+  const manifestPath = path.resolve(ROOT, "evidence/phase-7/governance-handoff.json");
+  if (!fs.existsSync(manifestPath)) return {};
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    return manifest?.artifacts && typeof manifest.artifacts === "object" ? manifest.artifacts : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadGovernanceContract() {
+  const constitution = fs.readFileSync(path.resolve(ROOT, "CONSTITUTION.md"), "utf8");
+  const checklist = fs.readFileSync(path.resolve(ROOT, "constitution-checklist.md"), "utf8");
+  const context = fs.readFileSync(path.resolve(ROOT, "CONTEXT.md"), "utf8");
+  const agents = fs.readFileSync(path.resolve(ROOT, "AGENTS.md"), "utf8");
+  return {
+    constitution,
+    checklist,
+    context,
+    agents,
+    require_agents: true,
+    constitution_ids: [...constitution.matchAll(/^###\s+((?:F|Q|S)\d+)/gm)].map((match) => match[1]),
+    checklist_ids: [...checklist.matchAll(/\*\*((?:F|Q|S)\d+)(?:\s|\*)/g)].map((match) => match[1]),
+  };
+}
+
+function enhancedVerification({ argv }) {
+  const parsed = parseFinalVerificationArgs(argv);
+  if (parsed.errors.length) return { errors: parsed.errors };
+  const errors = [];
+  const flags = parsed.flags;
+  if (flags.has("--governance")) errors.push(...validateGovernanceContract(loadGovernanceContract()));
+  if (flags.has("--handoff")) errors.push(...validateHandoffBinding({ artifacts: loadFinalArtifacts() }));
+  if (parsed.required_ac) {
+    const specPath = argv.find((arg) => arg.startsWith("--spec="))?.slice("--spec=".length)
+      ?? "specs/workflowhub-complexity-governance-v3-20260802/spec.md";
+    const specText = fs.readFileSync(path.resolve(ROOT, specPath), "utf8");
+    const coveragePath = path.resolve(ROOT, "evidence/final/final-coverage.json");
+    let coverage = null;
+    try { coverage = JSON.parse(fs.readFileSync(coveragePath, "utf8")); } catch { /* classify as missing AC below */ }
+    errors.push(...validateFinalCoverageRequirements({ coverage, required_ids: parsed.required_ac }));
+    if (flags.has("--require-same-review-tree")) {
+      let manifest = null;
+      try { manifest = JSON.parse(fs.readFileSync(path.resolve(ROOT, "evidence/final/review-tree-manifest.json"), "utf8")); } catch { /* drift */ }
+      errors.push(...validateReviewTreeBinding({ manifest, actual_tree_hash: governanceTreeHash() }));
+    }
+    if (flags.has("--require-review-raw-hash")) {
+      let review = null;
+      try { review = JSON.parse(fs.readFileSync(path.resolve(ROOT, "evidence/final/review.json"), "utf8")); } catch { /* missing */ }
+      errors.push(...validateReviewRawHash({ review }));
+    }
+    if (flags.has("--require-reference-clean")) {
+      // The final flag deliberately has no KEEP allow-list. Run the real
+      // reference audit so the final result reflects current consumers rather
+      // than a synthetic sentinel.
+      const referenceAudit = classifyReferenceAudit(auditReferences(), new Set());
+      errors.push(...validateReferenceClean(referenceAudit));
+    }
+    if (!specText) errors.push("missing_ac");
+  }
+  return { errors: [...new Set(errors)] };
+}
+
 function main() {
+  const argv = process.argv.slice(2);
+  if (argv.some((arg) => ["--governance", "--handoff", "--require-same-review-tree", "--require-review-raw-hash", "--require-reference-clean"].includes(arg))) {
+    const result = enhancedVerification({ argv });
+    if (result.errors.length) {
+      console.error(result.errors.join("\n"));
+      process.exitCode = 1;
+      return;
+    }
+    console.log("final governance coverage ok");
+    return;
+  }
   const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
   const requiredArg = process.argv.find((arg) => arg.startsWith("--require-ac="));
   if (!specArg || !requiredArg) {

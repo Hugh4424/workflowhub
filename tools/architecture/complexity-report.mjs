@@ -196,7 +196,7 @@ function firstPathSegments(pattern) {
 }
 
 export function persistentObjectFamilies() {
-  const sourcePath = "core/task-handle.mjs";
+  const sourcePath = "runtime/task/task-handle.mjs";
   const text = readFileSync(resolve(ROOT, sourcePath), "utf8");
   const source = text.match(/if \(!\/(\^\(\?:.*?\)\$)\/\.test\(relativePath\).*kernel record path required/s)?.[1];
   if (!source) throw new Error("canonical kernel record-path contract not found");

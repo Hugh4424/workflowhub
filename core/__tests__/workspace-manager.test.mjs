@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../task-handle.mjs";
-import { assertWorkspace, openAcceptedWorkspace, openCurrentTaskWorkspace, prepareTaskWorkspace, validateTaskWorkspaceAttempt } from "../workspace.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
+import { assertWorkspace, openAcceptedWorkspace, openCurrentTaskWorkspace, prepareTaskWorkspace, validateTaskWorkspaceAttempt } from "../../runtime/task/workspace.mjs";
 
 const roots = [];
 
@@ -135,7 +135,7 @@ describe("deterministic WorktreeManager", () => {
   });
 
   it("does not expose lifecycle recovery entrypoints", async () => {
-    const workspace = await import("../workspace.mjs");
+    const workspace = await import("../../runtime/task/workspace.mjs");
     expect(workspace).not.toHaveProperty("recoverTaskWorkspace");
   });
 });

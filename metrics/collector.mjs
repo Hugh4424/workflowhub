@@ -20,8 +20,8 @@ import { dirname, isAbsolute, join, resolve } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { spawnSync } from "child_process";
-import { assertTaskHandle } from "../core/task-handle.mjs";
-import { assertWorkspace } from "../core/stage-context.mjs";
+import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
+import { assertWorkspace } from "../runtime/stage/stage-context.mjs";
 
 const GAP = "gap";
 const OWN_RESULTS = new Set([

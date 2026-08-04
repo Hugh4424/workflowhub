@@ -18,6 +18,12 @@ The formal provider/runtime result reports duration and token usage, or says
 `not provided` when those facts are unavailable.
 Never estimate or rerun an unchanged review.
 
+After a finding is consumed, the only small standalone disposition fact is
+`finding_id` plus `decision` (`accept`, `partial`, `reject`, or `needs_human`)
+and the evidence fields required by that decision. Replay binding, repair flow,
+and re-review orchestration stay inside this skill's controller; they are not a
+second response skill or a second completion authority.
+
 ## Commands
 
 Production callers use only:
@@ -141,39 +147,16 @@ Required `materials` keys come directly from `runtime/review/stage-materials.jso
 
 `runtime/review/stage-materials.json` is a strict allowlist: each stage exposes only required
 and declared optional material. `review_instructions` and packet metadata are
-runner-generated. Only a closure round may additionally carry
-`response_ledger` and runner-generated `previous_review`; arbitrary fields,
-raw-output references and caller-supplied generated material fail before any
-provider call.
+runner-generated. Previous results are read-only provenance; response ledgers,
+resolution records, raw-output references and caller-supplied generated material
+fail before any provider call.
 
-For a follow-up after `revise_required`, the caller may supply the canonical
-`previous_result_ref` plus a `response_ledger` in `materials`. For
-`full_on_structural_rework`, build-spec, build-plan and verify-code treat the
-first review as a quality fact, not a pass gate. Verify-code runs its initial
-configured review only after its fresh tests and acceptance evidence are
-complete; it never replaces the accepted build-code final review used for
-verify-stage lineage. A normal repair makes no second provider call; WorkflowHub writes an external
-`wh-review-resolution.v1` audit record with `verified` or `unverified`
-evidence state. It never claims `fixed` or `pass` when that evidence is absent.
-Only when a complete, bound ledger explicitly declares a change to direction,
-AC, interface, schema, state, security, concurrency, topology, phase order or
-test strategy, it runs at most one
-fresh full review through the initial high-strength group. That second finding
-set is also a quality fact: it neither loops nor decides stage acceptance.
-After that one structural full review, a complete ledger may mark its findings
-`fixed` or `accepted_risk`; WorkflowHub records only a zero-provider resolution
-action. It does not review again, move the semantic head, change the persisted
-verdict, or claim `pass`.
-The ledger is controller/audit data and is never sent in a full-review packet.
-`accepted_risk` is recorded and must be shown at the build-plan or verify-code
-human boundary; it does not auto-escalate or block. Callers cannot select a
-round. V2 host configuration fixes make-decision to `single_round`,
-build-spec/build-plan/verify-code to `full_on_structural_rework`, and
-build-code to `full_only`; therefore a V2 non-code stage cannot select a cheap
-closure review. Build-code never uses this shortcut: each repaired snapshot is
-a new Phase identity and receives one fresh complete phase review. Its original
-quality verdict is preserved; it does not loop on one frozen identity until
-`pass`.
+Each snapshot gets at most one semantic review. A `revise_required` result stays
+`revise_required`; it is not cleared by evidence, risk acceptance, a zero-provider
+action, or another same-snapshot review. A changed snapshot starts one fresh review.
+`verify-code` performs its independent review only after fresh tests and acceptance
+evidence are available and never replaces the build-code integration fact. Callers
+cannot select a round or provider; host configuration remains authoritative.
 
 The runner supplies `review_instructions`; callers must not add it. A
 `build-code` phase review also adds `phase_id`. `verify-final` replaces
@@ -190,9 +173,8 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 derives `review_scope=phase`, resolves the current `phase-diff-scan.v1`, and
 regenerates the complete frozen `base_tree..candidate_tree` diff. Without
 `phase_id`, it derives `review_scope=integration` for the final worktree
-review. Integration first reconstructs one unique continuous, formally
-reviewed Phase-trace chain from the accepted build-plan checkpoint to the final
-tree;
+review. Integration binds the current implementation and GREEN facts directly
+to the final source snapshot; historical phase facts are audit context only.
 it validates the current test identity and AC trace before it can call a
 provider. A missing, branched, stale, or legacy-only trace is
 `MATERIAL_INCOMPLETE`, not a reason to send a cumulative diff. A legacy final
@@ -236,7 +218,7 @@ Only two durable record types exist:
 - `attempt`: transport, material, provider status, and public diagnostics. It may end `unavailable`; it contains neither raw output nor broker-private paths.
 - `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and its declared review subject. A phase result records `phase_id`, `base_tree`, and `candidate_tree`; a worktree result records the captured `snapshot_tree`.
 
-Every attempt also publishes `reviews/reports/<attempt-id>.md`. It is rendered
+Every attempt also publishes `quality/reviews/reports/<attempt-id>.md` for vNext tasks. It is rendered
 only from public canonical facts: route/profile/model/effort/thinking, duration
 and token usage (or unavailability), runtime/session IDs, coverage, every
 provider's findings, root causes, correction direction, and unavailable
@@ -252,7 +234,7 @@ state to decide that a healthy review has stopped.
 CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage results store only that pair:
 
 ```json
-{"result_ref":"reviews/results/<result>.json","snapshot_tree":"<git-tree>"}
+{"result_ref":"quality/reviews/results/<result>.json","snapshot_tree":"<git-tree>"}
 ```
 
 Consumers open the referenced formal result and do not trust a copied verdict.
@@ -306,9 +288,8 @@ Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pu
 tree to equal `result.snapshot_tree`; a Phase result, a legacy worktree result,
 or an integration-scope mismatch cannot authorize commit or merge. A worktree
 mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run the final integration
-review again. Phase results are consumed only by phase-gate, which compares
-their `phase_id`, `base_tree`, and `candidate_tree` with the current Phase
-evidence. For build-code integration, `pass` and `revise_required` are both
+review again. Phase results remain quality/audit facts; they do not create a
+separate phase gate or permission chain. For build-code integration, `pass` and `revise_required` are both
 authenticated quality facts; finalization preserves the original verdict and
 does not claim that the stage passed.
 

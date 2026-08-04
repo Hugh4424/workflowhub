@@ -14,8 +14,8 @@ function expectSchemaError(name, value, pointer) {
 }
 
 describe("schema-validator", () => {
-  it("compiles the review, resolution, and AC evidence schemas", () => {
-    expect(compiledSchemaNames).toEqual(["attempt", "result", "resolution", "ac_evidence_summary"]);
+  it("compiles only current review and AC evidence schemas", () => {
+    expect(compiledSchemaNames).toEqual(["attempt", "result", "ac_evidence_summary"]);
   });
 
   it("rejects unknown attempt fields", () => {
@@ -84,23 +84,16 @@ describe("schema-validator", () => {
     expect(validateSchema("result", result)).toEqual(result);
   });
 
-  it("rejects a resolution with an untrusted extra field", () => {
-    const resolution = {
-      version: "wh-review-resolution.v1", task_id: "task-1", stage: "build-spec", review_track: null,
-      outcome: "recorded_non_gate_response", previous_result_ref: "reviews/results/prior.json",
-      previous_result_sha256: hash, previous_snapshot_tree: oid, snapshot_tree: oid,
-      evidence_state: "verified", response_ledger: {}, response_ledger_sha256: hash,
-      unverified_reason: null, accepted_risk_count: 0, leaked: "secret-value",
-    };
-    expectSchemaError("resolution", resolution, "/leaked");
+  it("does not expose the retired resolution schema", () => {
+    expect(() => validateSchema("resolution", {})).toThrow(/unknown schema: resolution/);
   });
 
   it("requires every provider-visible AC summary field", () => {
     const summary = {
-      schema_version: "ac-evidence-summary.v1", snapshot_tree: oid,
+      schema_version: "ac-evidence-summary.v1", snapshot_tree: oid, source_digest: hash,
       test_receipt: { ref: "receipts/tests.json", sha256: hash },
       criteria: [{
-        acceptance_criterion_id: "AC-1", result: "pass", acceptance_leaf: { ref: "evidence/ac-1.json", sha256: hash },
+        acceptance_criterion_id: "AC-1", result: "pass", status: "passed", source_digest: hash, acceptance_leaf: { ref: "evidence/ac-1.json", sha256: hash },
         nested_evidence: [{ ref: "evidence/ac-1-proof.json", sha256: hash }], scenario: "scenario", oracle: "oracle",
         actual_outcome: "pass", evidence_type: "acceptance_leaf", coverage_limits: ["unknown"], exceptions: ["unknown"],
       }],

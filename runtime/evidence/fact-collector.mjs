@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import yaml from "js-yaml";
 
 import { artifactReference, assertArtifactDir } from "../../core/artifact-dir.mjs";
@@ -29,8 +30,8 @@ import {
   validateSkillsSchemaContract,
 } from "../../core/fact-indexes.mjs";
 import { captureGitWorktreeSnapshot } from "../task/git-worktree-snapshot.mjs";
-import { assertTaskHandle, assertTaskKernel } from "../../core/task-handle.mjs";
-import { assertWorkspace } from "../../core/workspace.mjs";
+import { assertTaskHandle, assertTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { assertWorkspace } from "../../runtime/task/workspace.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const INDEX_REFS = Object.freeze([
@@ -54,6 +55,7 @@ const RUNTIME_V2_ENTRY_FIELDS = new Set(["fact_type", "source_class", "registrat
 const WRITE_HOOK_NAMES = new Set(["afterParentPrecheck", "beforeFileFsync", "afterOpenBeforeRename", "beforeDirectoryFsync"]);
 const text = (value) => typeof value === "string" && value.trim() !== "";
 const plain = (value) => value && typeof value === "object" && !Array.isArray(value);
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function safeRef(value) {
   return text(value) && !path.isAbsolute(value) && !value.includes("\\")
@@ -217,22 +219,19 @@ export function preflightFactCollection(ctx) {
   if (ctx.identity?.projectName !== task.identity.projectName || ctx.identity?.taskId !== task.identity.taskId || kernel.task !== task) {
     throw wrongWorktree("WRONG_WORKTREE: StageContext identity mismatch");
   }
-  let decision;
-  try { decision = kernel.readAccepted("make-decision"); }
-  catch (error) { throw wrongWorktree(`WRONG_WORKTREE: accepted make-decision unavailable (${error.code ?? "invalid"})`); }
-  const accepted = decision?.accepted;
-  const attempt = decision?.attempt;
-  const facts = decision?.facts;
-  const attemptRef = accepted?.attempt_ref;
-  if (!text(attemptRef) || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw wrongWorktree("WRONG_WORKTREE: accepted make-decision attempt reference invalid");
-  if (attempt?.task_id !== task.identity.taskId || attempt?.stage !== "make-decision" || !plain(facts)
-      || facts.worktree_root !== workspace.worktreeRoot || facts.baseline_commit !== workspace.baselineCommit) {
-    throw wrongWorktree("WRONG_WORKTREE: accepted Workspace binding mismatch");
+  if (task.manifest.record_model !== "vnext-single-write") throw wrongWorktree("WRONG_WORKTREE: fact collection requires vnext-single-write task");
+  const materials = {};
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    try { materials[name] = artifacts.read(name); }
+    catch (error) { throw wrongWorktree(`MATERIAL_INCOMPLETE: ${name} (${error.code ?? "invalid"})`); }
   }
   let snapshot;
   try { workspace.assertValid(); snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot); }
-  catch { throw wrongWorktree("WRONG_WORKTREE: Workspace snapshot unavailable"); }
-  return Object.freeze({ task, kernel, workspace, artifacts, accepted, decisionAttempt: attempt, snapshot });
+  catch (error) {
+    if (error?.code === "FORMAL_LFS_CONTENT_UNAVAILABLE") throw error;
+    throw wrongWorktree("WRONG_WORKTREE: Workspace snapshot unavailable");
+  }
+  return Object.freeze({ task, kernel, workspace, artifacts, materials: Object.freeze(materials), snapshot });
 }
 
 function transcriptError(entry, status, reason, code) {
@@ -597,43 +596,21 @@ function addFactRefs(target, facts, sourceRef, stage, runId) {
   add("handoff", facts?.handoff_ref, facts?.handoff_hash);
 }
 
-function readAttempt(preflight, ref, stage) {
-  try {
-    const raw = preflight.task.readRecord(ref);
-    const value = JSON.parse(raw);
-    if (value?.task_id !== preflight.task.identity.taskId || value?.stage !== stage || !plain(value.facts)) throw new Error("canonical attempt identity mismatch");
-    return { value, raw };
-  } catch (error) { return { error }; }
-}
-
 export function buildArtifactProjection(preflight) {
   const candidates = [];
-  const attempts = [];
-  for (const stage of STAGES) {
-    const refs = new Set(preflight.task.listStageAttemptRefs(stage));
-    try {
-      const accepted = preflight.kernel.readAccepted(stage).accepted;
-      if (/^attempt-[0-9]{4}\.json$/.test(accepted?.attempt_ref ?? "")) {
-        const ref = `results/${stage}/${accepted.attempt_ref}`;
-        refs.add(ref);
-        attempts.push({ stage, ref, content_hash: trustedContentHash(accepted.integrity_hash) });
-      }
-    } catch (error) { if (error?.code && error.code !== "ENOENT") candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:accepted`, stage, status: "unknown", ref: `results/${stage}/accepted.json`, required: false, source_ref: `results/${stage}/accepted.json`, reason: "read_error", error: safeError("READ_ERROR", "READ_ERROR") })); }
-    for (const ref of [...refs].sort()) if (!attempts.some((item) => item.stage === stage && item.ref === ref)) attempts.push({ stage, ref, content_hash: null });
+  for (const [stage, names] of Object.entries({
+    "make-decision": ["decision-log.md"],
+    "build-spec": ["spec.md"],
+    "build-plan": ["plan.md", "tasks.md"],
+  })) for (const name of names) {
+    const ref = `materials/${name}`;
+    candidates.push(createArtifactRecord({
+      record_kind: "material", id: ref, stage, status: "present", ref, required: true,
+      content_hash: sha256(preflight.materials[name]), source_ref: name,
+    }));
   }
-  for (const { stage, ref, content_hash } of attempts) {
-    const parsed = readAttempt(preflight, ref, stage);
-    if (parsed.error) {
-      const missing = parsed.error?.code === "ENOENT";
-      candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:${path.basename(ref)}`, stage, status: missing ? "missing" : "unknown", ref, required: true, source_ref: ref, reason: missing ? "not_found" : "read_error", error: missing ? null : safeError("READ_ERROR", "READ_ERROR") }));
-      continue;
-    }
-    const runId = text(parsed.value.run_id) ? parsed.value.run_id : null;
-    candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:${path.basename(ref)}`, run_id: runId, stage, status: "present", ref, required: true, content_hash, source_ref: ref }));
-    const declared = [];
-    addFactRefs(declared, parsed.value.facts, ref, stage, runId);
-    for (const item of parsed.value.evidence_refs ?? []) if (plain(item)) addFactRefs(declared, { evidence_refs: [item] }, ref, stage, runId);
-    for (const item of declared) candidates.push(artifactForReference(preflight, item));
+  for (const ref of preflight.task.listCanonicalReviewResultRefs()) {
+    candidates.push(artifactForReference(preflight, { kind: "review", ref, source_ref: ref, required: false }));
   }
   const merged = mergeArtifactRecords(candidates);
   if (!merged.ok) throw new Error(`artifact projection invalid: ${merged.code ?? "INVALID_RECORD"}`);
@@ -671,7 +648,7 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   const handoff = artifacts.filter((item) => item.record_kind === "handoff");
   const facts = [
     createHealthFact({ fact_id: "health:task_dir", domain: "task_dir", status: "present", observed_value: true, source_ref: "task.json" }),
-    createHealthFact({ fact_id: "health:worktree", domain: "worktree", status: "present", observed_value: preflight.snapshot.tree, source_ref: "results/make-decision/accepted.json" }),
+    createHealthFact({ fact_id: "health:worktree", domain: "worktree", status: "present", observed_value: preflight.snapshot.tree, source_ref: "publications/make-decision/" }),
     createHealthFact({ fact_id: "health:review", domain: "review", status: artifactRefs.some((item) => item.status === "unknown") ? "unknown" : artifactRefs.some((item) => item.status === "missing") ? "missing" : artifactRefs.length ? "present" : "unknown", observed_value: artifactRefs.length, source_ref: artifactRefs[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:verify", domain: "verify", status: verify.some((item) => item.status === "unknown") ? "unknown" : verify.some((item) => item.status === "missing") ? "missing" : verify.length ? "present" : "unknown", observed_value: verify.length, source_ref: verify[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:handoff", domain: "handoff", status: handoff.some((item) => item.status === "unknown") ? "unknown" : handoff.some((item) => item.status === "missing") ? "missing" : handoff.length ? "present" : "unknown", observed_value: handoff.length, source_ref: handoff[0]?.source_ref ?? null }),

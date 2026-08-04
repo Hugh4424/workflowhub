@@ -1,0 +1,6 @@
+{
+  "version": 4,
+  "host_provider": "codex",
+  "prompt": "请独立审查当前 vNext stage/close 修复实现是否可合并。只读取冻结附件。重点检查：1) currentQualityValue 的 fact hash/ref 校验是否与 quality-fact.v1 生成规则完全一致；2) 从 test receipt 读取 snapshot_commit 时，task/stage、receipt hash、fact tree、commit tree、commit parent 是否全部认证，是否误伤合法 dirty-worktree snapshot；3) receipt 缺失 ref/ENOENT 的 MATERIAL_INCOMPLETE 是否覆盖 public run 且没有旧 results 副作用；4) public status 是否正确传递 fact ref/sha256 并能识别当前五阶段事实；5) 回归测试是否真实走 public CLI argv、是否保留 vNext single-write 与宪法 F3/F4/F8/F9/Q1/Q2/Q3；6) 是否有新增复杂度、遗漏或隐藏阻塞。请按“必须修正 / 建议修正 / 可接受”输出，给具体文件、行号和最小修复建议。不要修改文件。",
+  "continuation": null
+}

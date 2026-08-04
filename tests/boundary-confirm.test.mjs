@@ -13,7 +13,7 @@ import { tmpdir } from "os";
 
 import { confirmBoundary, confirmIrreversible } from "../runtime/evidence/boundary-confirm.mjs";
 import { configForCollector, createMetricsLauncherConfig, recordSkeleton } from "../metrics/collector.mjs";
-import { createTask } from "../core/task-handle.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
 
 let workDir;
 let task;

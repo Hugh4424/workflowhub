@@ -28,10 +28,18 @@ never prove the current implementation correct.
    criteria, open risks, and the completion rows in `tasks.md`.
 2. Inspect the current implementation and diff. Independently compare it with
    the current materials. Do not trust an earlier builder summary.
-3. Run the current complete test command for this delivery. Record the actual
-   command, result, and output. A failure, missing command, or stale result is
-   a failed or unknown fact, never a pass. Focused tests belong to build-code;
-   final verify-code runs the complete suite once.
+3. Check for a current passing full-suite receipt first. It is reusable only
+   when its source/test-contract digest and observed snapshot match the
+   current candidate. If it matches, consume the receipt and do not run the
+   suite again. Otherwise, record the complete-test fact as passed, failed, or
+   unknown when it is actually available. A stale or missing receipt is a
+   visible quality warning, not a reason to stop stage progression or return to
+   build-code. Focused tests belong to build-code.
+   Do not rerun the full suite because of a material-only edit, task-row
+   completion, evidence synchronization, review unavailability, or handoff
+   formatting. After a failed suite, run only affected tests while repairing;
+   a new full suite requires a changed production/test-contract candidate and
+   a new final verification boundary.
 4. Check every applicable acceptance criterion against observed evidence.
    State `pass`, `fail`, or `unknown` for each one; do not infer coverage from
    an aggregate green test run.
@@ -40,8 +48,9 @@ never prove the current implementation correct.
    Record the returned verdict and findings exactly. If the provider is
    unavailable, record `unavailable`; do not invent a pass or substitute an
    unrequested provider.
-6. Produce a short verification summary: current snapshot, tests, per-AC
-   result, review result, unresolved risks, and a clear overall conclusion.
+6. Produce a short verification summary: current snapshot, tests, per-AC result,
+   review result, unresolved risks, and a clear overall conclusion. Keep stage
+   progression and the formal acceptance conclusion separate.
 
 Review is a quality fact, not a license to start or continue repairs. An
 authenticated actionable major/blocking finding must be repaired, or the user
@@ -58,10 +67,10 @@ repair. Historical provider output may be cited only as audit context.
 - **Pass candidate**: the current implementation matches the four materials,
   the current complete test suite is green, every applicable AC is `pass`, and the independent
   review has no unresolved actionable major/blocking finding.
-- **Fail or unknown**: record the exact fail/unknown evidence and return to
-  `build-code` in this same task. The builder fixes the current code/materials,
-  reruns only affected tests, and then verify-code runs again from the current
-  state.
+- **Fail or unknown**: record the exact fail/unknown evidence as a quality
+  warning. Continue the same task according to the current `plan.md` and
+  `tasks.md`; only an explicit user decision about formal acceptance changes
+  the final conclusion.
 
 Do not create another task or any historical-evidence progression mechanism.
 Historical evidence remains audit-only. A failure never authorizes close

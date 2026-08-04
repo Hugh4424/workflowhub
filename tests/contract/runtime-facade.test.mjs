@@ -8,7 +8,7 @@ import {
   createRuntimeFacade,
 } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { stageRuntimeCliMain, stageRuntimeMain } from "../../scripts/stage-runtime.mjs";
+import { stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -39,6 +39,10 @@ describe("runtime facade", () => {
     const delegate = vi.fn();
     await expect(stageRuntimeCliMain(["receipt", "--action=record"], { delegate }))
       .rejects.toThrow(/unknown public runtime behavior/);
+    await expect(stageRuntimeMain(["accept", "--stage=build-code"]))
+      .rejects.toThrow(/usage: stage-runtime/i);
+    await expect(stageRuntimeMain(["publish-acceptance-evidence", "--stage=build-code"]))
+      .rejects.toThrow(/usage: stage-runtime/i);
     await expect(stageRuntimeCliMain(["run", "--action=surprise"], { delegate }))
       .rejects.toThrow(/unknown public runtime action/);
     await expect(stageRuntimeCliMain(["review", "--action=unavailable"], { delegate }))
@@ -72,12 +76,12 @@ describe("runtime facade", () => {
 
   test("runner contract is checked before every delegated operation", async () => {
     const delegate = vi.fn();
-    await expect(stageRuntimeCliMain(["run", "--action=record"], {
+    await expect(stageRuntimeCliMain(["run", "--action=execute"], {
       delegate,
       skillBundleContract: { runner_contract_major: 1, runner_contract_min_minor: 2 },
       runnerContract: { runner_contract_major: 1, runner_contract_minor: 1 },
     })).rejects.toThrow(/runner contract minor mismatch/);
-    await expect(stageRuntimeCliMain(["run", "--action=record"], {
+    await expect(stageRuntimeCliMain(["run", "--action=execute"], {
       delegate,
       skillBundleContract: null,
       runnerContract: LOCAL_RUNNER_CONTRACT,
@@ -85,20 +89,19 @@ describe("runtime facade", () => {
     expect(delegate).not.toHaveBeenCalled();
   });
 
-  test("routes material revision through the stable run behavior", async () => {
-    const delegate = vi.fn(async (argv) => argv);
+  test("does not expose material revision as a public behavior", async () => {
+    const delegate = vi.fn();
     await expect(stageRuntimeCliMain([
       "run", "--action=material-revision", "--stage=build-code", "--project=Demo", "--task=task", "--input=revision.json",
-    ], { delegate })).resolves.toEqual([
-      "publish-material-revision", "--stage=build-code", "--project=Demo", "--task=task", "--input=revision.json",
-    ]);
-    expect(delegate).toHaveBeenCalledOnce();
-    expect(JSON.stringify(await stageRuntimeCliMain(["--help"]))).toMatch(/material-revision/);
+    ], { delegate })).rejects.toThrow(/unknown public runtime action/i);
+    expect(delegate).not.toHaveBeenCalled();
+    expect(JSON.stringify(await stageRuntimeCliMain(["--help"]))).not.toMatch(/material-revision/);
   });
 
-  test("keeps material revision input validation in the private stage runtime", async () => {
+  test("does not route material revision to the private stage runtime", async () => {
     await expect(stageRuntimeCliMain([
       "run", "--action=material-revision", "--stage=build-code", "--project=Demo", "--task=task",
-    ], { delegate: (argv) => stageRuntimeMain(argv) })).rejects.toThrow(/publish-material-revision requires --input/i);
+    ], { delegate: (argv) => stageRuntimeMain(argv) })).rejects.toThrow(/unknown public runtime action/i);
   });
+
 });

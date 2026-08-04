@@ -24,7 +24,7 @@ The current materials are the source of truth:
 
 At this stage, author the decision log from the original requirement and current
 facts. Later stages may revise it in the same task. Old accepted records,
-receipts, reviews, checkpoints, snapshots, generations, worktrees, and runner
+receipts, reviews, snapshots, generations, worktrees, and runner
 history are read-only audit records. They never license or block ordinary work.
 
 Keep three questions separate:
@@ -48,15 +48,16 @@ product files. Do not copy runner files into the target repository or pass
 `--runner-root`. Caller-owned temporary inputs stay under an OS temporary
 directory; canonical records stay TaskKernel-owned.
 
-The normal formal sequence is `prepare`, `start-run`, `run`, `confirm`, then
-`accept`. `confirm` must contain a real human answer. Only an accepted
-confirmation may be passed to `accept`. A rejected confirmation is an honest
-result; preserve it and revise the current material if needed.
+The current public sequence is `run`, `confirm`, then `authorize` when an
+irreversible operation needs authorization. There is no public `prepare`,
+`start-run`, or accepted-result writer. `confirm` must contain a real human answer.
+A rejected confirmation is an honest result; preserve it and revise the
+current material if needed.
 
 ## Procedure
 
-1. Read the original requirement and objective current facts. Start a canonical
-   run and publish the requirements ledger.
+1. Read the original requirement and current facts. Run the stage preflight and
+   publish only the current decision facts and quality facts.
 2. Run real `talk-with-zhipeng` conversation(s). Ask only questions whose
    answers could change direction. Do not invent user answers. Finish when
    direction-changing ambiguity is resolved or explicitly recorded.
@@ -79,14 +80,14 @@ result; preserve it and revise the current material if needed.
    never requires a new task or repeat review solely to manufacture a pass. If
    the current material changes,
    update it and run only the review or check genuinely affected by that change.
-8. Publish the current decision receipt and attempt using the runtime's declared
+8. Publish the current decision receipt and facts using the runtime's declared
    schema. Publication must reject wrong task/workspace/runtime bindings,
    mismatched content, or false execution identity. Missing historical evidence
    is disclosed as audit debt, not used to prevent work.
 9. Present a short decision card: direction, scope, non-goals, success criteria,
    main risks, review facts, and unresolved items. Ask for explicit accept or
-   reject. Record the real answer with `confirm`; on acceptance, publish the
-   formal result with `accept`.
+   reject and record the real answer with `confirm`; use `authorize` only for
+   a separately authorized irreversible operation.
 
 ## Review and quality
 

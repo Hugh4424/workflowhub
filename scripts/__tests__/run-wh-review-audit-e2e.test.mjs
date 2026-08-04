@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runAuditE2E } from "../../tools/cli/run-wh-review-audit-e2e.mjs";
-import { openTask } from "../../core/task-handle.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
 import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
 describe("simple audit E2E", () => {
   it("writes evidence for five stages and both decision tracks", async () => {

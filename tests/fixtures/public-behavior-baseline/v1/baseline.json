@@ -1,0 +1,1062 @@
+{
+  "help": {
+    "status": 0,
+    "signal": null,
+    "stdout": "{\n  \"behaviors\": [\n    \"doctor\",\n    \"status\",\n    \"run\",\n    \"review\",\n    \"verify\",\n    \"confirm\",\n    \"authorize\"\n  ],\n  \"actions\": {\n    \"doctor\": [\n      \"workspace\"\n    ],\n    \"status\": [\n      \"begin\",\n      \"repair\"\n    ],\n    \"run\": [\n      \"execute\",\n      \"scope\",\n      \"research\",\n      \"draft\",\n      \"record\",\n      \"content\",\n      \"material-revision\"\n    ],\n    \"review\": [\n      \"invoke\",\n      \"risk\"\n    ],\n    \"verify\": [\n      \"tests\",\n      \"phase\",\n      \"criterion\"\n    ],\n    \"confirm\": [\n      \"decision\"\n    ],\n    \"authorize\": [\n      \"decision\",\n      \"risk\"\n    ]\n  }\n}\n",
+    "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+    "hashes": {
+      "raw_stdout_sha256": "3110ec1e3d42098f9956f1a91487ba3043a33722343bb6f1f6999a9a3514967b",
+      "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+      "normalized_stdout_sha256": "3110ec1e3d42098f9956f1a91487ba3043a33722343bb6f1f6999a9a3514967b",
+      "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+    }
+  },
+  "doctor": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "workspace",
+        "argv": [
+          "doctor",
+          "--action=workspace",
+          "--project=Baseline",
+          "--task=public-behavior-doctor-default",
+          "--stage=make-decision",
+          "--stage=make-decision"
+        ],
+        "input": null,
+        "setup": [],
+        "write_set": [
+          "identity/executions/db2f27c3-debd-421f-82f9-e636c1f7777f.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/db2f27c3-debd-421f-82f9-e636c1f7777f.json",
+            "sha256": "1cd6384574554e48acbeac7c357c6128112fd66379eaeb803ae40f2fa6c2b10d"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "8dbc903f2bed0f0b1eeb75d3f5dce9e1e07a38c87a82e5053d1f605100d7fea1"
+          }
+        ],
+        "write_set_content_hash": "8e8f8541e1b67723e07e228c76e2dbbc016a0c469ebf80b5c903dc47baff36bd",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "0c73d63e23a64911f93edfcb98592c7d0f3aceae364b61d762b61f2284a08673",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "workspace",
+        "argv": [
+          "doctor",
+          "--action=workspace",
+          "--project=Baseline",
+          "--task=public-behavior-doctor-alternate",
+          "--stage=make-decision",
+          "--stage=make-decision"
+        ],
+        "input": null,
+        "setup": [],
+        "write_set": [
+          "identity/executions/b479382d-bdf9-4876-87d9-b82004d84066.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/b479382d-bdf9-4876-87d9-b82004d84066.json",
+            "sha256": "2c293b050a5158e6279a513200732b93edbd7c3b43dc33473458971877e4cf66"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "cdd3712464ed9162ab70760dfec333749a20f75bd966972b7efb8b77c9771f97"
+          }
+        ],
+        "write_set_content_hash": "989cbe9c18a240635da6f89ce68a729fa502eac30f2be6d313646a31a68a31c0",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "d3f26352af324e9933ff9b5402bc50e4b5dce9520144b296a9e41483c7c27181",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "status": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "begin",
+        "argv": [
+          "status",
+          "--action=begin",
+          "--project=Baseline",
+          "--task=public-behavior-status-default",
+          "--stage=make-decision",
+          "--reason=fixed baseline begin"
+        ],
+        "input": null,
+        "setup": [],
+        "write_set": [
+          "identity/executions/3940b996-f4ec-44d9-9541-07f3802431d4.json",
+          "journal.jsonl",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/3940b996-f4ec-44d9-9541-07f3802431d4.json",
+            "sha256": "9a0d0a1abf7e5f806b7044c6fd59a97f9c79e2a023624f57b1e37a3f43350f74"
+          },
+          {
+            "ref": "journal.jsonl",
+            "sha256": "867e87f84f9d1b598e325bc1a705678666f8fb6da85c53c189d9ce84760dd1e0"
+          },
+          {
+            "ref": "runs/make-decision/run-0001.json",
+            "sha256": "6f87d6a409768987882723aede5b43c62dd87c536a1f72721afe0a6c63cbb708"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "5c82ca924999f13c0e8b824aa27deeab19cd163e8635ed6b4a66e3903820b101"
+          }
+        ],
+        "write_set_content_hash": "7cb99a69265b7077d86bff74b43a26d337ad114f11ddbf193fb9994b391e76c0",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "journal.jsonl",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ref\": \"runs/make-decision/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-status-default\",\n    \"stage\": \"make-decision\",\n    \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n    \"run_ref\": \"runs/make-decision/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline begin\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "09dc83cc154b83a3bc79ccd27457bf6c9dc730edbc4feff7e612388857ee0e11",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "38f10934951c355841a6a807458585d4a3f99e0abdca7d4891455f32d26ecb7a",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "begin",
+        "argv": [
+          "status",
+          "--action=begin",
+          "--project=Baseline",
+          "--task=public-behavior-status-alternate",
+          "--stage=make-decision",
+          "--reason=fixed baseline begin"
+        ],
+        "input": null,
+        "setup": [],
+        "write_set": [
+          "identity/executions/a26fc1ec-91ea-497f-8d1a-1c79b1acc668.json",
+          "journal.jsonl",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/a26fc1ec-91ea-497f-8d1a-1c79b1acc668.json",
+            "sha256": "6de477b5cf163ff462fbafb4e86a025d29e1cb597f985ccc6f1d6118127e4d2c"
+          },
+          {
+            "ref": "journal.jsonl",
+            "sha256": "46bc81c9df5d521e3ce32473542d252fe1a1fafc4ea374caad763893a5b904b1"
+          },
+          {
+            "ref": "runs/make-decision/run-0001.json",
+            "sha256": "9047f8ec398e9f070e901fa8cf7974de9e9b37dc50066a0118ec2851f8334768"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "119b42ffd5824947d7f015dbff4167a8a22df82529daa0b872a56d8e53956bbf"
+          }
+        ],
+        "write_set_content_hash": "52da98cec41085023329cbfffbae3b8f9b9f3baf4f5d0a1abfe4924e730f815c",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "journal.jsonl",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ref\": \"runs/make-decision/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-status-alternate\",\n    \"stage\": \"make-decision\",\n    \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n    \"run_ref\": \"runs/make-decision/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline begin\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "8c9a89acba704f872d07ce08cef43560f6252405a6eb5fba7b62ff751779e9b6",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "c7142996481998068f9e95084f17437b1f8c0b0ec55f5bbf4f78b226143a2d13",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "run": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "scope",
+        "argv": [
+          "run",
+          "--action=scope",
+          "--project=Baseline",
+          "--task=public-behavior-run-default",
+          "--stage=make-decision",
+          "--input=<PATH>"
+        ],
+        "input": {
+          "ref": "requirements.json",
+          "sha256": "6891484f7fb186544eb1de135a4934d9e489623ea1f9a54a664cc472c428bb0a"
+        },
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"ref\": \"runs/make-decision/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-run-default\",\n    \"stage\": \"make-decision\",\n    \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n    \"run_ref\": \"runs/make-decision/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline status default\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "0f30ca1000c15c419216c1d8d9801d9a59157c3d8e88a2475578265d5058d5ed",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "649daafd4f5f56e6fe00b4944f3d2740a325f5a838170fc3bc4aa304712fbd1a",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "identity/executions/4f368092-ea3b-45a3-95de-8594c2fc68d3.json",
+          "identity/executions/7e15ee8d-d1c2-4237-b2be-46eb57b03188.json",
+          "journal.jsonl",
+          "requirements/coverage.json",
+          "requirements/current.json",
+          "requirements/ledger.json",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/4f368092-ea3b-45a3-95de-8594c2fc68d3.json",
+            "sha256": "150a361aa0fe31cc61b0b0a64b8a181d5bb3f2b01912ac73c711f38bf9d7660d"
+          },
+          {
+            "ref": "identity/executions/7e15ee8d-d1c2-4237-b2be-46eb57b03188.json",
+            "sha256": "f684793b7e70821a9928b7d96a36e128df97ac76c90f2680681cf069b431491b"
+          },
+          {
+            "ref": "journal.jsonl",
+            "sha256": "8cc97ae6dedb6083e0bfecae42d74545eb86ffcc33f2ca38d1c157b19fe781d8"
+          },
+          {
+            "ref": "requirements/coverage.json",
+            "sha256": "48b037c5b5b797a6fa4d52024e6eebade0854ed483b740bbefa8c0f4188d2e8b"
+          },
+          {
+            "ref": "requirements/current.json",
+            "sha256": "3300cba7428a8a7cb9f9d945e19ae7c6e3e4a01bf50461cde80865006b059ff4"
+          },
+          {
+            "ref": "requirements/ledger.json",
+            "sha256": "31d4144ffdf24dbf17da773df814486b0a2d61dac99c541d7eaa7c1b87235212"
+          },
+          {
+            "ref": "runs/make-decision/run-0001.json",
+            "sha256": "80dbe05296cf1623ac51175a5fa2add272e2a6ef5534f0415de1dde0b93d5253"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "db19ef04f09e0aec291a0d40956b01c069ca4fc5d7a13c4227cac917bd0b22c5"
+          }
+        ],
+        "write_set_content_hash": "70736db3ffebd8b800f8c2f8b6e1b9f6c478971dca1f8b40f5232abdf3bf5fab",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "journal.jsonl",
+          "requirements/coverage.json",
+          "requirements/current.json",
+          "requirements/ledger.json",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ledger_ref\": \"requirements/ledger.json\",\n  \"ledger_hash\": \"<SHA256>\",\n  \"coverage_ref\": \"requirements/coverage.json\",\n  \"coverage_hash\": \"<SHA256>\",\n  \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n  \"parent_ref\": null,\n  \"supersedes\": [],\n  \"current\": true\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "a89768995269abfa46124c61d8e5d426eaaf733b15fb0b7a5c8febf244e1eeb3",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "15cd26e5515a4ccd91639b5fca00d1f22c923055903881a916c5363317188fc2",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "scope",
+        "argv": [
+          "run",
+          "--action=scope",
+          "--project=Baseline",
+          "--task=public-behavior-run-alternate",
+          "--stage=make-decision",
+          "--input=<PATH>"
+        ],
+        "input": {
+          "ref": "requirements.json",
+          "sha256": "6891484f7fb186544eb1de135a4934d9e489623ea1f9a54a664cc472c428bb0a"
+        },
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"ref\": \"runs/make-decision/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-run-alternate\",\n    \"stage\": \"make-decision\",\n    \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n    \"run_ref\": \"runs/make-decision/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline status alternate\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "e508632686cfb80c14b638f4cd271263e3f681b1f53633b32a2d77ef06713030",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "0cd09bdcc58739f350c2c32d663e2f7c7e67fce8db9c78b4208c40690bbdfcba",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "identity/executions/21ad76da-f161-4ab2-a069-5e1c540be3c3.json",
+          "identity/executions/cacb957a-7cd0-4d66-aac2-28ac9f531ef4.json",
+          "journal.jsonl",
+          "requirements/coverage.json",
+          "requirements/current.json",
+          "requirements/ledger.json",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "identity/executions/21ad76da-f161-4ab2-a069-5e1c540be3c3.json",
+            "sha256": "f089744386ba2f750d3b335e6ff61078723fe471d074105e75bfffd02d89275f"
+          },
+          {
+            "ref": "identity/executions/cacb957a-7cd0-4d66-aac2-28ac9f531ef4.json",
+            "sha256": "695843c1e8baad1d5e155f5a3675af14c88eb53893da81ae74d7e47f17a9d2c1"
+          },
+          {
+            "ref": "journal.jsonl",
+            "sha256": "9edc16db7be8e8992b3bf4a21d783e1e1d56d58f5632ff57ff84e4d7946f8db8"
+          },
+          {
+            "ref": "requirements/coverage.json",
+            "sha256": "48b037c5b5b797a6fa4d52024e6eebade0854ed483b740bbefa8c0f4188d2e8b"
+          },
+          {
+            "ref": "requirements/current.json",
+            "sha256": "03446944a6b22593547a5a5070840f7af2681e4bc999e188ec5c9fc39afc95f8"
+          },
+          {
+            "ref": "requirements/ledger.json",
+            "sha256": "31d4144ffdf24dbf17da773df814486b0a2d61dac99c541d7eaa7c1b87235212"
+          },
+          {
+            "ref": "runs/make-decision/run-0001.json",
+            "sha256": "7b300bcadc1be9a0d09c86459058016124ad4142a039db4323a359a4eb2e0c6b"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "34670949d9fe3f3ff2a2291c07915cb33c8ba99c2f3ce3a66dfc54196201441e"
+          }
+        ],
+        "write_set_content_hash": "2e15c4dbf3ddc8b203515458fd76f8c07f237b333ab7dca3e8e529a4f2f9c5a7",
+        "public_write_set": [
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "journal.jsonl",
+          "requirements/coverage.json",
+          "requirements/current.json",
+          "requirements/ledger.json",
+          "runs/make-decision/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ledger_ref\": \"requirements/ledger.json\",\n  \"ledger_hash\": \"<SHA256>\",\n  \"coverage_ref\": \"requirements/coverage.json\",\n  \"coverage_hash\": \"<SHA256>\",\n  \"workflow_run_id\": \"make-decision:0001:<UUID>\",\n  \"parent_ref\": null,\n  \"supersedes\": [],\n  \"current\": true\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "89f370819871a7ac3680af805b7d4dcabad01f269e074b37a947fc63be6860af",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "15cd26e5515a4ccd91639b5fca00d1f22c923055903881a916c5363317188fc2",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "review": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "invoke",
+        "argv": [
+          "review",
+          "--action=invoke",
+          "--project=Baseline",
+          "--task=public-behavior-review-default",
+          "--stage=make-decision",
+          "--stage=build-spec",
+          "--name=plan-design-review",
+          "--invocation-key=baseline",
+          "--triggered=false",
+          "--reason=not required for fixed baseline"
+        ],
+        "input": null,
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "98b1599679a150d15577e5e4a935a508c604c4ca967423131e524dc5782483ad",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          },
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"ref\": \"runs/build-spec/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-review-default\",\n    \"stage\": \"build-spec\",\n    \"workflow_run_id\": \"build-spec:0001:<UUID>\",\n    \"run_ref\": \"runs/build-spec/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline review default\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "d795d7f9f2baf88ad8774e5572c0e897098ae5632312c355cb80b3f15ca5e846",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "862d447fb01c7e8a9c0c137389a46debe06142106b4cc03a2e7dd0dff64220e2",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "evidence/invocations/579a57644d26c65ebbddc598c6e1660bb4e08e6f404615a2bd4989260ca1d5ec/plan-design-review/baseline.json",
+          "identity/executions/37069d27-029b-43ea-9887-5340912496e7.json",
+          "identity/executions/3715bdee-43d5-42e2-ad2a-d822d0ed730e.json",
+          "identity/executions/8fc1a112-5846-4274-9c44-2c8dff3c5423.json",
+          "runs/build-spec/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "evidence/invocations/579a57644d26c65ebbddc598c6e1660bb4e08e6f404615a2bd4989260ca1d5ec/plan-design-review/baseline.json",
+            "sha256": "e1b6881c9b8e2b639750d615caaaf94e113b2ca36863deeeb03f7c33b8d7b6a9"
+          },
+          {
+            "ref": "identity/executions/37069d27-029b-43ea-9887-5340912496e7.json",
+            "sha256": "367173ca670bdf9f8c891f3885d5492502d158c6f0444857ec21a28c6247b304"
+          },
+          {
+            "ref": "identity/executions/3715bdee-43d5-42e2-ad2a-d822d0ed730e.json",
+            "sha256": "12a1a8f14ff1b8bcd5dfbe5711646b78768a92fe6ecea359f6b8a9df4425bb8e"
+          },
+          {
+            "ref": "identity/executions/8fc1a112-5846-4274-9c44-2c8dff3c5423.json",
+            "sha256": "bde386b52a428d28f9c3746cc9b59b23c21770a279cf235b8fab594f60a2cbc8"
+          },
+          {
+            "ref": "runs/build-spec/run-0001.json",
+            "sha256": "291859eebf534f3365d8aa29c6b73ab0d781e5d553be49596d8e122d36ed20bf"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "a2468a04706e1ca55dd512d337e636ce264375df91982de5ae48247c230630e6"
+          }
+        ],
+        "write_set_content_hash": "738284ac8afa279cf9efe32f53edd1a5704fd8742de5f83db093ebe94e7bf610",
+        "public_write_set": [
+          "evidence/invocations/<SHA256>/plan-design-review/baseline.json",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "runs/build-spec/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"status\": \"trigger=false\",\n  \"invocation\": {\n    \"schema_version\": \"stage-skill-invocation.v1\",\n    \"task_id\": \"public-behavior-review-default\",\n    \"workflow_run_id\": \"build-spec:0001:<UUID>\",\n    \"stage\": \"build-spec\",\n    \"name\": \"plan-design-review\",\n    \"invocation_key\": \"baseline\",\n    \"declared_trigger\": \"ui_scope\",\n    \"bundle_hash\": \"<SHA256>\",\n    \"status\": \"not_invoked\",\n    \"reason\": \"not required for fixed baseline\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "3376dc78de93f1a3057c62f59487efa411d599dc1798b5f0e0ba06ccab1e64f3",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "722197532b82c72e4dd21b9b6a54040a38ad2b8ba71385387959ea5b422d05e1",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "invoke",
+        "argv": [
+          "review",
+          "--action=invoke",
+          "--project=Baseline",
+          "--task=public-behavior-review-alternate",
+          "--stage=make-decision",
+          "--stage=build-spec",
+          "--name=plan-design-review",
+          "--invocation-key=baseline",
+          "--triggered=false",
+          "--reason=not required for fixed baseline"
+        ],
+        "input": null,
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "edecc52383a8b4259598c1b77ab8a58aba4fe83ef2da5a4b6eed5101165ce0f2",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          },
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"ref\": \"runs/build-spec/run-0001.json\",\n  \"hash\": \"<SHA256>\",\n  \"run\": {\n    \"schema_version\": \"stage-run.v1\",\n    \"task_id\": \"public-behavior-review-alternate\",\n    \"stage\": \"build-spec\",\n    \"workflow_run_id\": \"build-spec:0001:<UUID>\",\n    \"run_ref\": \"runs/build-spec/run-0001.json\",\n    \"previous_run_ref\": null,\n    \"previous_run_hash\": null,\n    \"reason\": \"fixed baseline review alternate\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "14501eea415cc1153df09080e851606e7fc403b845b0a73bf9234c0a62f9adca",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "041c44709fb08b4eee040c3cf2115f123a44655c080fa195cb32ebb5cf47a030",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "evidence/invocations/76b28a975cc625095b84cf3c4e975391df9daba3c63bc886d252324ae22ab9a9/plan-design-review/baseline.json",
+          "identity/executions/198c1c5c-b5b9-45bb-a99f-e3bd838247a0.json",
+          "identity/executions/a199e6aa-f370-4e1e-94c1-9d1403553b5d.json",
+          "identity/executions/d3852594-2d59-4096-beec-9f5a4717a609.json",
+          "runs/build-spec/run-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "evidence/invocations/76b28a975cc625095b84cf3c4e975391df9daba3c63bc886d252324ae22ab9a9/plan-design-review/baseline.json",
+            "sha256": "00bf233f5972728db9ad774e277e2dbc295525d9f97dda2466a58ef2b2dd11a7"
+          },
+          {
+            "ref": "identity/executions/198c1c5c-b5b9-45bb-a99f-e3bd838247a0.json",
+            "sha256": "3dc369845ef0b26be3f8a32275228c441b0f765120b1da12b9a0287853a89489"
+          },
+          {
+            "ref": "identity/executions/a199e6aa-f370-4e1e-94c1-9d1403553b5d.json",
+            "sha256": "f3fc3fd4e32334fb2a3cc5e4ee849a9444ee68073a34562135d89f2ee74b941a"
+          },
+          {
+            "ref": "identity/executions/d3852594-2d59-4096-beec-9f5a4717a609.json",
+            "sha256": "2674cbd1c0e4277cdac478f8dc9c401e1580a2106f725cfc5273c80dc64eb405"
+          },
+          {
+            "ref": "runs/build-spec/run-0001.json",
+            "sha256": "6a57caad4db59718036ea563a7d717e52c45bf83d363118c2764b6c65098cad3"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "3b08f8ecd789107afc5ecba93d0f29873de0e9ea13285fcf11be224f08aafaf4"
+          }
+        ],
+        "write_set_content_hash": "6748c9631eb23ed270b5058484070d7e1875c36f9ece1db5697f25df0389aa61",
+        "public_write_set": [
+          "evidence/invocations/<SHA256>/plan-design-review/baseline.json",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "runs/build-spec/run-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"status\": \"trigger=false\",\n  \"invocation\": {\n    \"schema_version\": \"stage-skill-invocation.v1\",\n    \"task_id\": \"public-behavior-review-alternate\",\n    \"workflow_run_id\": \"build-spec:0001:<UUID>\",\n    \"stage\": \"build-spec\",\n    \"name\": \"plan-design-review\",\n    \"invocation_key\": \"baseline\",\n    \"declared_trigger\": \"ui_scope\",\n    \"bundle_hash\": \"<SHA256>\",\n    \"status\": \"not_invoked\",\n    \"reason\": \"not required for fixed baseline\",\n    \"created_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "6dab87d6f378a45c0d5a93357dbf4e1b41fb10a55922165f7bf2d3e5b422bd8c",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "06a41d1b8a3b398cffadda69d4503a4f25bfa89e22ffeae64b4da86e852433b9",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "verify": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "tests",
+        "argv": [
+          "verify",
+          "--action=tests",
+          "--project=Baseline",
+          "--task=public-behavior-verify-default",
+          "--stage=verify-code",
+          "--input=<PATH>"
+        ],
+        "input": {
+          "ref": "verify.json",
+          "sha256": "3e046dcc2230b6144dc831c02679973f6a954e81f83fb4792f252ce0f1543b44"
+        },
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "75312d822256da6f1812f3ef49474f2c93429ce4a1fb81cd370025b140bb8f92",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "evidence/baseline-verify-default.output",
+          "identity/executions/727d11d3-3c76-48cb-9dc3-61d111973a24.json",
+          "identity/executions/82dfbd31-1f90-4e5c-b094-c8046c1a2a0e.json",
+          "receipts/baseline-verify-default.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "evidence/baseline-verify-default.output",
+            "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+          },
+          {
+            "ref": "identity/executions/727d11d3-3c76-48cb-9dc3-61d111973a24.json",
+            "sha256": "68382e22f2b7a3850d55785e31d0dfb8bdeacd9baa2fa2d6d45a528422da69af"
+          },
+          {
+            "ref": "identity/executions/82dfbd31-1f90-4e5c-b094-c8046c1a2a0e.json",
+            "sha256": "9345750b1ca4463d24d63730ca761379656203bd623740f2a120118d40173681"
+          },
+          {
+            "ref": "receipts/baseline-verify-default.json",
+            "sha256": "47481cfd9c0a793908d1832d1c6f8c6beb5bfd3590e859002008c2901ae8c115"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "763ca82ed8a9afd984042ec7323a41a5c3b424c949fc525e0be73b7d21d06748"
+          }
+        ],
+        "write_set_content_hash": "282f8af3cc86d2e657763f885911039106eda2ce5bce0dfaa81cfe989fc5f963",
+        "public_write_set": [
+          "evidence/baseline-verify-default.output",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "receipts/baseline-verify-default.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"schema_version\": \"workflowhub-receipt.v1\",\n  \"task_id\": \"public-behavior-verify-default\",\n  \"stage\": \"verify-code\",\n  \"producer\": {\n    \"stage\": \"verify-code\",\n    \"component\": \"verify-code-test-capture\",\n    \"version\": \"1.0.0\"\n  },\n  \"command\": \"true\",\n  \"command_hash\": \"<SHA256>\",\n  \"exit_code\": 0,\n  \"snapshot_head\": \"<GIT_OID>\",\n  \"snapshot_tree\": \"<GIT_OID>\",\n  \"snapshot_commit\": \"<GIT_OID>\",\n  \"started_at\": \"<TIME>\",\n  \"completed_at\": \"<TIME>\",\n  \"output_ref\": \"evidence/baseline-verify-default.output\",\n  \"output_hash\": \"<SHA256>\",\n  \"receipt_ref\": \"receipts/baseline-verify-default.json\",\n  \"receipt_hash\": \"<SHA256>\"\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "e0e962ec1580879ba79f9b0ef5e40238ba151abbcd4b1cc4064dc5e3c555c2a4",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "f21e2078098319cc721d0e43f4e92f2831e8fca3524ceb5aa15e3f787138c5c3",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "tests",
+        "argv": [
+          "verify",
+          "--action=tests",
+          "--project=Baseline",
+          "--task=public-behavior-verify-alternate",
+          "--stage=verify-code",
+          "--input=<PATH>"
+        ],
+        "input": {
+          "ref": "verify.json",
+          "sha256": "f9c2055f655eb07c2bd2a7716b28eabedeb0da4be7c91a48d370a302977cbbcd"
+        },
+        "setup": [
+          {
+            "status": 0,
+            "signal": null,
+            "stdout": "{\n  \"worktree_root\": \"<PATH>\",\n  \"baseline_commit\": \"<GIT_OID>\"\n}\n",
+            "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+            "hashes": {
+              "raw_stdout_sha256": "4c95b95ceee6416ccfe26768805a54c4adebacf3e488f32ab6e214b8513e3801",
+              "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+              "normalized_stdout_sha256": "c55b59695516cf5fcaee5beabfa240112c25384ca405b9a0229904c9684afb10",
+              "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+            }
+          }
+        ],
+        "write_set": [
+          "evidence/baseline-verify-alternate.output",
+          "identity/executions/84a85e2b-6238-4feb-8134-1e391e1a2950.json",
+          "identity/executions/dd858937-5dd2-46b6-99a5-bc995a2fdeb1.json",
+          "receipts/baseline-verify-alternate.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "evidence/baseline-verify-alternate.output",
+            "sha256": "c44ce26ba0d35679b81f9ad5f4e42c6ac10b86d1fe1efacf6c9dcc8e85a3dc7f"
+          },
+          {
+            "ref": "identity/executions/84a85e2b-6238-4feb-8134-1e391e1a2950.json",
+            "sha256": "21b7e784418534cd0c548acc3dc357b163df1a1c73a03b79a47bb1a89c715031"
+          },
+          {
+            "ref": "identity/executions/dd858937-5dd2-46b6-99a5-bc995a2fdeb1.json",
+            "sha256": "87ec813c17b62a183701e3cbf6ea01e4b67768c9b74528c94200652a7b2894b3"
+          },
+          {
+            "ref": "receipts/baseline-verify-alternate.json",
+            "sha256": "af76f64eac162e43ea0418acc5e48fb76f213f2ff156fb7b825676d4a028ec55"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "24a0834635e81ed7d39cfdb793ffca9e38b6761c3b2a6434246484028d79246f"
+          }
+        ],
+        "write_set_content_hash": "f98d42e9db0acd67f97ac11d2cbd020229a621800d0760268431fcc1e6acdd8a",
+        "public_write_set": [
+          "evidence/baseline-verify-alternate.output",
+          "identity/executions/<UUID>.json",
+          "identity/executions/<UUID>.json",
+          "receipts/baseline-verify-alternate.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"schema_version\": \"workflowhub-receipt.v1\",\n  \"task_id\": \"public-behavior-verify-alternate\",\n  \"stage\": \"verify-code\",\n  \"producer\": {\n    \"stage\": \"verify-code\",\n    \"component\": \"verify-code-test-capture\",\n    \"version\": \"1.0.0\"\n  },\n  \"command\": \"node -e \\\"process.stdout.write('fixed-baseline-alternate')\\\"\",\n  \"command_hash\": \"<SHA256>\",\n  \"exit_code\": 0,\n  \"snapshot_head\": \"<GIT_OID>\",\n  \"snapshot_tree\": \"<GIT_OID>\",\n  \"snapshot_commit\": \"<GIT_OID>\",\n  \"started_at\": \"<TIME>\",\n  \"completed_at\": \"<TIME>\",\n  \"output_ref\": \"evidence/baseline-verify-alternate.output\",\n  \"output_hash\": \"<SHA256>\",\n  \"receipt_ref\": \"receipts/baseline-verify-alternate.json\",\n  \"receipt_hash\": \"<SHA256>\"\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "b1455132a128e6c4446c2b4a3857fed661c077a1161489a413680fb882df0de4",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "40d901cffe6b40a9f40cefc887076c168664f8811f9adf3b2a54d47cbcce07ff",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "confirm": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "decision",
+        "argv": [
+          "confirm",
+          "--action=decision",
+          "--project=Baseline",
+          "--task=public-behavior-confirm-default-legacy",
+          "--stage=make-decision",
+          "--attempt=attempt-0001.json",
+          "--decision=accepted"
+        ],
+        "input": {
+          "attempt_ref": "attempt-0001.json",
+          "confirmation_ref": null
+        },
+        "setup": [],
+        "write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/769888be-6092-4b3c-abf8-4b1611737734.json",
+          "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "confirmations/make-decision/attempt-0001.json",
+            "sha256": "7137b81042cffae12144ab639f79c6938dc2e3993d65eb710fedd82e1f4bf76b"
+          },
+          {
+            "ref": "identity/executions/769888be-6092-4b3c-abf8-4b1611737734.json",
+            "sha256": "c97fad3fd0cc7e49ba010dc6ce88d5d65519e110ca04cdbe9567dc8448934680"
+          },
+          {
+            "ref": "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+            "sha256": "ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea"
+          },
+          {
+            "ref": "results/make-decision/attempt-0001.json",
+            "sha256": "bd91b3eb95dec59a248daa4acb36b3bafcc52b90fa2b8cba96ca7af416cf1afd"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "c08f31c142b58a83700a0819aa323c79afb4471b2e5015cbc6a80b1f4def0787"
+          }
+        ],
+        "write_set_content_hash": "cd9aa0282a042bdfb3b588488bc39b31024d2dacd96434e71279e98af727d097",
+        "public_write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/<UUID>.json",
+          "receipts/decision-log/<SHA256>.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ref\": \"confirmations/make-decision/attempt-0001.json\",\n  \"confirmation\": {\n    \"schema_version\": \"human-confirmation.v1\",\n    \"task_id\": \"public-behavior-confirm-default-legacy\",\n    \"stage\": \"make-decision\",\n    \"attempt_ref\": \"attempt-0001.json\",\n    \"decision\": \"accepted\",\n    \"confirmed_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "48bf8323844d52867acd6d8ef12e75e50999920d40df4acb0e22e60e30638ceb",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "242f354f10e2c0336e7fe9d2c783ff7d96773c0862a0eb5917c914c0ad6c1217",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "decision",
+        "argv": [
+          "confirm",
+          "--action=decision",
+          "--project=Baseline",
+          "--task=public-behavior-confirm-alternate-legacy",
+          "--stage=make-decision",
+          "--attempt=attempt-0001.json",
+          "--decision=accepted"
+        ],
+        "input": {
+          "attempt_ref": "attempt-0001.json",
+          "confirmation_ref": null
+        },
+        "setup": [],
+        "write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/bb34fb94-2b83-4eb6-a3e8-e1c52130c430.json",
+          "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "confirmations/make-decision/attempt-0001.json",
+            "sha256": "1b89695a73ef0c16e8a264753f8b438e2a77eced30e27ed56f7809c9e8929345"
+          },
+          {
+            "ref": "identity/executions/bb34fb94-2b83-4eb6-a3e8-e1c52130c430.json",
+            "sha256": "95aedf473b27f5f0dbf13d5007f780a72668d3d03e10b8a4f2089bc21e629d65"
+          },
+          {
+            "ref": "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+            "sha256": "ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea"
+          },
+          {
+            "ref": "results/make-decision/attempt-0001.json",
+            "sha256": "352637d1b5d946731b6e2dc0f7e489a069b2e943158b7bd213586ca35e99d60e"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "bc3dd6f4f8a7cc50010c0fb44abe4d036dae7e75425c49c8251842b5561c91b3"
+          }
+        ],
+        "write_set_content_hash": "ea863b3d76391a002b602e1d2f1f3e2ba15adc684c1805be91275756ec1f8032",
+        "public_write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/<UUID>.json",
+          "receipts/decision-log/<SHA256>.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 0,
+          "signal": null,
+          "stdout": "{\n  \"ref\": \"confirmations/make-decision/attempt-0001.json\",\n  \"confirmation\": {\n    \"schema_version\": \"human-confirmation.v1\",\n    \"task_id\": \"public-behavior-confirm-alternate-legacy\",\n    \"stage\": \"make-decision\",\n    \"attempt_ref\": \"attempt-0001.json\",\n    \"decision\": \"accepted\",\n    \"confirmed_at\": \"<TIME>\"\n  }\n}\n",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\n",
+          "hashes": {
+            "raw_stdout_sha256": "c0ef8c587df6d364919297ed3853abeab70ab49e903db46e989957580b30f89e",
+            "raw_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5",
+            "normalized_stdout_sha256": "59fc7881aa24430dfd30bd71dc78716cf1be5f417c4b6cb94c9aa247278e877d",
+            "normalized_stderr_sha256": "baaf7c4bd7e0ffca816ad87de74f799891bfe5adc945870e1283a5eaf23f32a5"
+          }
+        }
+      }
+    ]
+  },
+  "authorize": {
+    "cases": [
+      {
+        "case_id": "default",
+        "action": "decision",
+        "argv": [
+          "authorize",
+          "--action=decision",
+          "--project=Baseline",
+          "--task=public-behavior-authorize-default-legacy",
+          "--stage=make-decision",
+          "--attempt=attempt-0001.json",
+          "--human-confirmation-ref=confirmations/make-decision/attempt-0001.json"
+        ],
+        "input": {
+          "attempt_ref": "attempt-0001.json",
+          "confirmation_ref": "confirmations/make-decision/attempt-0001.json"
+        },
+        "setup": [],
+        "write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/0ba381f2-072e-4fb3-a0a6-16b5f1ec75ee.json",
+          "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "confirmations/make-decision/attempt-0001.json",
+            "sha256": "ece51adc31a29748830262f6874e0e8861d16bde80a8d00663183877151cd185"
+          },
+          {
+            "ref": "identity/executions/0ba381f2-072e-4fb3-a0a6-16b5f1ec75ee.json",
+            "sha256": "534f752e0f8b6315f522e9d57ba34013875c7e6ed8a0f40361861d198d2bb784"
+          },
+          {
+            "ref": "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+            "sha256": "ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea"
+          },
+          {
+            "ref": "results/make-decision/attempt-0001.json",
+            "sha256": "702588396deb8d049b9adbd6944ac8861742ca2d2d5f9360216721d8912c5d18"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "6c1b4d1101fefbf7a3e6404886dadc6521c29af6259ffeccd486125acc0b393f"
+          }
+        ],
+        "write_set_content_hash": "50d7395acac3b3062b560783f4e2f0d7e9dd6ff93b89526ac4283f733db5a84d",
+        "public_write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/<UUID>.json",
+          "receipts/decision-log/<SHA256>.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nError: full audit writer is only valid for a bounded human-confirmation attempt\n    at file://<PATH>\n    at withRecordLockAt (file://<PATH>\n    at Object.withRecordLock (file://<PATH>\n    at acceptWithStageLock (file://<PATH>\n    at acceptWithRelatedStageLocks (file://<PATH>\n    at Object.acceptAttempt (file://<PATH>\n    at acceptStageAttempt (file://<PATH>\n    at stageRuntimeMain (file://<PATH>\n    at invokeRuntimeCommand.skillBundleContract.skillBundleContract (file://<PATH>\n    at Proxy.<anonymous> (file://<PATH>\n",
+          "hashes": {
+            "raw_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "raw_stderr_sha256": "66a0fb15ba6fcf522377454535a71c756f2f8d9b87a3b4197fb0b57d7ee73c43",
+            "normalized_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "normalized_stderr_sha256": "f49756d34115214bdaf166c5006717c2e520f8ee417fba3ab78310d8785dadc9"
+          }
+        }
+      },
+      {
+        "case_id": "alternate",
+        "action": "decision",
+        "argv": [
+          "authorize",
+          "--action=decision",
+          "--project=Baseline",
+          "--task=public-behavior-authorize-alternate-legacy",
+          "--stage=make-decision",
+          "--attempt=attempt-0001.json",
+          "--human-confirmation-ref=confirmations/make-decision/attempt-0001.json"
+        ],
+        "input": {
+          "attempt_ref": "attempt-0001.json",
+          "confirmation_ref": "confirmations/make-decision/attempt-0001.json"
+        },
+        "setup": [],
+        "write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/a972264b-9cc7-4299-baa2-22e51b9e3a51.json",
+          "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "write_set_content": [
+          {
+            "ref": "confirmations/make-decision/attempt-0001.json",
+            "sha256": "82ef759e0d820a328c5ad3c07d4afc5c81a51ec14d5a6dcae1e0391d7b8478c1"
+          },
+          {
+            "ref": "identity/executions/a972264b-9cc7-4299-baa2-22e51b9e3a51.json",
+            "sha256": "21cd51568011b25ba46c807bad58bd4e9b9f698fc295659857ed4fb30311c282"
+          },
+          {
+            "ref": "receipts/decision-log/ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea.md",
+            "sha256": "ab2049b0a38ec263d03142504a595df4a9042d8842b974f14e81f33485fecaea"
+          },
+          {
+            "ref": "results/make-decision/attempt-0001.json",
+            "sha256": "751a48cb7839547347b75db22048bcb15ff1991cdd3d40c7a21123d62ffbe67f"
+          },
+          {
+            "ref": "task.json",
+            "sha256": "cc98a7d2573811855881d316b0c952d0f7d80165f43f88207780f8bd37f3addc"
+          }
+        ],
+        "write_set_content_hash": "3b8aeca575f47907bd075bf8452e1f3454c96eea9229815a4bacaa32cd264eeb",
+        "public_write_set": [
+          "confirmations/make-decision/attempt-0001.json",
+          "identity/executions/<UUID>.json",
+          "receipts/decision-log/<SHA256>.md",
+          "results/make-decision/attempt-0001.json",
+          "task.json"
+        ],
+        "result": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "unknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/created_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nunknown format \"date-time\" ignored in schema at path \"#/properties/accepted_at\"\nError: full audit writer is only valid for a bounded human-confirmation attempt\n    at file://<PATH>\n    at withRecordLockAt (file://<PATH>\n    at Object.withRecordLock (file://<PATH>\n    at acceptWithStageLock (file://<PATH>\n    at acceptWithRelatedStageLocks (file://<PATH>\n    at Object.acceptAttempt (file://<PATH>\n    at acceptStageAttempt (file://<PATH>\n    at stageRuntimeMain (file://<PATH>\n    at invokeRuntimeCommand.skillBundleContract.skillBundleContract (file://<PATH>\n    at Proxy.<anonymous> (file://<PATH>\n",
+          "hashes": {
+            "raw_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "raw_stderr_sha256": "66a0fb15ba6fcf522377454535a71c756f2f8d9b87a3b4197fb0b57d7ee73c43",
+            "normalized_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "normalized_stderr_sha256": "f49756d34115214bdaf166c5006717c2e520f8ee417fba3ab78310d8785dadc9"
+          }
+        }
+      }
+    ]
+  }
+}

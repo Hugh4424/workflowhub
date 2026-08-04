@@ -170,7 +170,7 @@ export async function cleanInstall({ packageRoot = ROOT, verifyRunner = true, ve
       const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
       const bootstrap = run(process.execPath, [path.join(runnerRoot, "tools/cli/task-bootstrap.mjs"),
         "--project=CleanInstall", "--task=release-smoke", `--target-repo=${targetRoot}`], { cwd: runnerRoot, env });
-      const runtime = path.join(runnerRoot, "scripts/stage-runtime.mjs");
+      const runtime = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
       const doctor = run(process.execPath, [runtime, "doctor", "--action=workspace", "--stage=make-decision",
         "--project=CleanInstall", "--task=release-smoke"], { cwd: targetRoot, env });
       layout = { bootstrap_exit: bootstrap.status, doctor_exit: doctor.status, target_git: true };

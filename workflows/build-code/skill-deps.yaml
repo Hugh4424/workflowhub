@@ -4,7 +4,6 @@ skills:
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
-  - { id: python, kind: cli, doctor: [python3, --version], required_when: l2_test_routing, absence_semantics: blocked }
   - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: phase_execution, absence_semantics: blocked }
   - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
   - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }

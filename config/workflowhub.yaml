@@ -21,24 +21,9 @@ registry:
   - component_id: verify-code
     workflow: vibecoding
     path: workflows/verify-code/SKILL.md
-  - component_id: scope-triage
-    workflow: scope-triage
-    path: skills/scope-triage/SKILL.md
   - component_id: decision-log
     workflow: decision-log
     path: skills/decision-log/SKILL.md
-  - component_id: spec-specify
-    workflow: spec-specify
-    path: skills/spec-specify/SKILL.md
-  - component_id: spec-clarify
-    workflow: spec-clarify
-    path: skills/spec-clarify/SKILL.md
-  - component_id: stage-step-receipts
-    workflow: audit-contracts
-    path: skills/stage-step-receipts/SKILL.md
-  - component_id: audit-summary-carrier
-    workflow: audit-contracts
-    path: skills/audit-summary-carrier/SKILL.md
   - component_id: requirement-lineage
     workflow: audit-contracts
     path: skills/requirement-lineage/SKILL.md

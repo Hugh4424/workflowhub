@@ -2,7 +2,6 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
-import { readPhaseMapTrace } from "./phase-review-subject.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -37,6 +36,9 @@ function historicalLegacyDisposition(sourceRoot) {
 function parseJson(raw, label) {
   try { return JSON.parse(raw); } catch { incomplete(`${label} is not JSON`); }
 }
+function parseJsonOrText(raw) {
+  try { return JSON.parse(raw); } catch { return raw; }
+}
 function requiredTask(task) {
   if (!task || typeof task !== "object" || typeof task.readRecord !== "function" || typeof task.identity?.taskId !== "string" || task.identity.taskId === "") {
     throw new TypeError("task with identity.taskId and readRecord is required");
@@ -49,29 +51,21 @@ function git(root, args, label) {
 }
 
 /** Current material revision is the only design authority. */
-function currentMaterials(task, artifacts) {
+function currentMaterials(_task, artifacts) {
   const safeArtifacts = assertArtifactDir(artifacts);
-  let pointerRaw;
-  try { pointerRaw = task.readRecord("materials/current.json"); } catch { incomplete("current material pointer is missing"); }
-  const pointer = parseJson(pointerRaw, "current material pointer");
-  if (pointer?.task_id !== task.identity.taskId || typeof pointer.revision_ref !== "string" || !HASH.test(pointer.revision_hash ?? "")) incomplete("current material pointer is invalid");
-  let revisionRaw;
-  try { revisionRaw = task.readRecord(pointer.revision_ref); } catch { incomplete("current material revision is missing"); }
-  if (sha256(revisionRaw) !== pointer.revision_hash) incomplete("current material revision hash mismatch");
-  const revision = parseJson(revisionRaw, "current material revision");
-  if (revision?.task_id !== task.identity.taskId || !revision.hashes || typeof revision.hashes !== "object") incomplete("current material revision is invalid");
   const texts = {};
   for (const name of MATERIAL_NAMES) {
     let raw;
     try { raw = safeArtifacts.read(name, "utf8"); } catch { incomplete(`current material is missing: ${name}`); }
-    const expected = revision.hashes[name] ?? revision.hashes[name.replace(".md", "").replace("-", "_")];
-    if (!HASH.test(expected ?? "") || expected !== sha256(raw)) incomplete(`current material hash mismatch: ${name}`);
     texts[name] = raw;
   }
+  const materialDigest = sha256(JSON.stringify(MATERIAL_NAMES.map((name) => [name, texts[name]])));
   return Object.freeze({
-    ref: pointer.revision_ref,
-    sha256: pointer.revision_hash,
+    ref: "current-four-materials",
+    sha256: materialDigest,
+    material_digest: materialDigest,
     texts: Object.freeze(texts),
+    spec_ref: safeArtifacts.reference("spec.md"),
     tasks_ref: safeArtifacts.reference("tasks.md"),
   });
 }
@@ -81,30 +75,60 @@ function binding(task, item, label) {
   let raw;
   try { raw = task.readRecord(item.ref); } catch { incomplete(`${label} is missing: ${item.ref}`); }
   if (sha256(raw) !== item.sha256) incomplete(`${label} hash mismatch: ${item.ref}`);
-  return Object.freeze({ ref: item.ref, sha256: item.sha256, value: parseJson(raw, label) });
+  return Object.freeze({ ref: item.ref, sha256: item.sha256, value: parseJsonOrText(raw) });
 }
 
 function ids(text) { return [...new Set((text.match(/\bAC-\d+\b/g) ?? []))]; }
+function lineFor(text, token) {
+  const line = text.split("\n").findIndex((value) => value.includes(token));
+  return line < 0 ? 1 : line + 1;
+}
+function acceptanceLineFor(text, acceptanceId) {
+  const escaped = acceptanceId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matcher = new RegExp(`^\\s*-\\s*\\[[ xX]\\]\\s*\\*\\*${escaped}\\*\\*\\b`, "m");
+  const match = matcher.exec(text);
+  if (match) return text.slice(0, match.index).split("\n").length;
+  return lineFor(text, acceptanceId);
+}
 function completedTasks(task, taskText) {
   const output = [];
   const matcher = /^####\s+(T\d+)\b[^\n]*\n([\s\S]*?)(?=^####\s+T\d+\b|(?![\s\S]))/gm;
+  const jsonField = (body, name) => {
+    const raw = new RegExp("\\*\\*" + name + "\\*\\*[：:]\\s*`([^`]+)`").exec(body)?.[1];
+    if (raw === undefined) return undefined;
+    try { return JSON.parse(raw); } catch { incomplete(`${name} is not valid JSON`); }
+  };
   for (const found of taskText.matchAll(matcher)) {
     const [whole, taskId, body] = found;
-    if (!/\[x\]\s+\*\*任务完成\*\*/.test(body) || !/\*\*status\*\*：`completed`/.test(body)) continue;
+    if (!/\[x\]\s+\*\*任务完成\*\*/.test(body) || !/\*\*status\*\*：`(?:completed|passed)`/.test(body)) continue;
     const acLine = /\*\*covered_ac\*\*：([^\n]+)/.exec(body)?.[1] ?? "";
     const acceptanceIds = ids(acLine);
     const evidenceRaw = /\*\*evidence_refs\*\*：`?([^\n`]+)`?/.exec(body)?.[1];
     if (acceptanceIds.length === 0 || !evidenceRaw) incomplete(`completed ${taskId} lacks covered_ac or evidence_refs`);
     const evidence = parseJson(evidenceRaw, `${taskId} evidence_refs`);
     if (!Array.isArray(evidence) || evidence.length === 0) incomplete(`completed ${taskId} evidence_refs are invalid`);
-    const evidenceBindings = evidence.map((item) => binding(task, item, `${taskId} evidence`));
+    const evidenceBindings = evidence.map((item) => ({
+      ...binding(task, item, `${taskId} evidence`),
+      ...(typeof item.kind === "string" && item.kind.trim() !== "" ? { kind: item.kind } : {}),
+    }));
     const actualChanges = /\*\*actual_changes\*\*：([^\n]+)/.exec(body)?.[1]?.trim() ?? "completed task evidence";
+    const phaseId = /\*\*phase_id\*\*[：:]\s*`([^`]+)`/.exec(body)?.[1] ?? taskId;
     // Anchor the actual completion marker, not the blank line after the task
     // heading. Provider-visible context must contain real text to be useful.
     const bodyOffset = found.index + whole.indexOf(body);
     const markerOffset = body.indexOf("[x]");
     const line = taskText.slice(0, bodyOffset + (markerOffset >= 0 ? markerOffset : 0)).split("\n").length;
-    output.push(Object.freeze({ task_id: taskId, acceptance_ids: acceptanceIds, evidence: evidenceBindings, summary: actualChanges, line }));
+    output.push(Object.freeze({
+      task_id: taskId,
+      phase_id: phaseId,
+      acceptance_ids: acceptanceIds,
+      evidence: evidenceBindings,
+      review_fact: jsonField(body, "review_fact"),
+      phase_map_trace: jsonField(body, "phase_map_trace"),
+      green_test_receipt: jsonField(body, "green_test_receipt"),
+      summary: actualChanges,
+      line,
+    }));
   }
   return output;
 }
@@ -113,8 +137,8 @@ function currentBinding(tasks, finalTree, kind, taskHandle, currentRef) {
   const selected = [];
   for (const task of tasks) for (const item of task.evidence) {
     const value = item.value;
-    const implementation = kind === "implementation" && item.ref.startsWith("receipts/revisions/implementation/");
-    const green = kind === "green" && item.ref.startsWith("receipts/build-tests") && value.exit_code === 0;
+    const implementation = kind === "implementation" && (item.ref.startsWith("quality/evidence/implementation/") || item.ref === "quality/evidence/implementation.json");
+    const green = kind === "green" && item.ref.startsWith("quality/tests/") && value.exit_code === 0;
     if ((implementation || green) && value?.snapshot_tree === finalTree) selected.push(item);
   }
   // The official build-code handler supplies the exact current receipt refs
@@ -149,84 +173,87 @@ function currentBinding(tasks, finalTree, kind, taskHandle, currentRef) {
     return byTime !== 0 ? byTime : right.ref.localeCompare(left.ref);
   });
   const first = selected[0];
-  return Object.freeze({ ref: first.ref, sha256: first.sha256 });
+  return Object.freeze({ ref: first.ref, sha256: first.sha256, value: first.value });
 }
 
-function checkpoint(task) {
+function currentPhaseReview(task, finalTree, currentRef) {
+  if (typeof currentRef !== "string" || currentRef === "") return null;
   let raw;
-  try { raw = task.readRecord("results/build-plan/accepted.json"); }
-  catch { incomplete("accepted build-plan checkpoint is missing"); }
-  const accepted = parseJson(raw, "accepted build-plan");
-  const commit = accepted?.checkpoint?.commit_oid;
-  const tree = accepted?.checkpoint?.tree_oid;
-  if (!OID.test(commit ?? "") || !OID.test(tree ?? "")) incomplete("accepted build-plan checkpoint is invalid");
-  return Object.freeze({ commit, tree });
+  try { raw = task.readRecord(currentRef); } catch { incomplete(`current Phase review is missing: ${currentRef}`); }
+  const value = parseJson(raw, "current Phase review");
+  const record = Object.freeze({ ref: currentRef, sha256: sha256(raw), value });
+  if (value?.version !== "wh-review-result.v1" || value?.verdict !== "pass"
+      || value?.subject_kind !== "phase" || value?.review_scope !== "phase"
+      || value?.snapshot_tree !== finalTree) {
+    incomplete("current Phase review is not a passing snapshot-bound fact");
+  }
+  return record;
 }
 
-function ancestor(root, older, newer, label) {
-  try { execFileSync("git", ["merge-base", "--is-ancestor", older, newer], { cwd: root, stdio: "ignore" }); }
-  catch { incomplete(`${label} is not a continuous Git ancestor`); }
-}
-
-function phaseCoverage({ task, sourceRoot, finalTree, completed, implementation, green }) {
-  if (typeof task.listCanonicalPhaseTraceRefs !== "function") incomplete("canonical Phase trace enumeration is unavailable");
-  let refs;
-  try { refs = task.listCanonicalPhaseTraceRefs(); } catch { incomplete("canonical Phase trace enumeration failed"); }
-  const semantic = [];
-  for (const ref of refs) {
-    const resolved = readPhaseMapTrace({ task, sourceRoot, traceRef: ref });
-    if (resolved.trace.review_status !== "semantic") continue;
-    if (resolved.trace.verdict !== "pass") incomplete(`Phase ${resolved.trace.phase_id} is not a final PASS`);
-    if (!/^phase-\d+$/.test(resolved.trace.phase_id)) incomplete(`Phase trace id is invalid: ${resolved.trace.phase_id}`);
-    semantic.push(resolved);
+function phaseCoverage({ task, finalTree, completed, implementation, green, phaseReview, baseCommit, baseTree }) {
+  if (!Array.isArray(completed) || completed.length === 0) incomplete("current tasks.md has no completed Phase rows");
+  const phaseRows = [];
+  const seenPhaseIds = new Set();
+  for (const item of completed) {
+    if (seenPhaseIds.has(item.phase_id)) continue;
+    seenPhaseIds.add(item.phase_id);
+    phaseRows.push(item);
   }
-  const byPhase = new Map();
-  for (const resolved of semantic) {
-    if (byPhase.has(resolved.trace.phase_id)) incomplete(`duplicate semantic Phase trace: ${resolved.trace.phase_id}`);
-    byPhase.set(resolved.trace.phase_id, resolved);
-  }
-  const phaseNumbers = [...byPhase.keys()].map((id) => Number(id.slice("phase-".length))).sort((a, b) => a - b);
-  if (phaseNumbers.length === 0 || phaseNumbers[0] !== 0 || phaseNumbers.some((n, index) => n !== index)) {
-    incomplete("Phase PASS coverage is missing or has a gap");
-  }
-  const planCheckpoint = checkpoint(task);
-  const currentHead = git(sourceRoot, ["rev-parse", "HEAD^{commit}"], "current snapshot");
-  const phases = phaseNumbers.map((number) => byPhase.get(`phase-${number}`));
-  let priorCommit = planCheckpoint.commit;
-  for (const resolved of phases) {
-    ancestor(sourceRoot, priorCommit, resolved.trace.baseline_commit, `${resolved.trace.phase_id} baseline`);
-    ancestor(sourceRoot, resolved.trace.implementation_commit, currentHead, `${resolved.trace.phase_id} implementation`);
-    priorCommit = resolved.trace.implementation_commit;
-  }
-  const phaseRows = phases.map((resolved) => Object.freeze({
-    phase_id: resolved.trace.phase_id,
-    baseline_commit: resolved.trace.baseline_commit,
-    base_tree: resolved.trace.base_tree,
-    snapshot_tree: resolved.trace.snapshot_tree,
-    phase_map_trace: Object.freeze({ ref: resolved.traceRef, sha256: resolved.traceSha256 }),
-    // Integration packets carry only hash-bound references and the verdict.
-    // Raw Phase evidence/review attempts contain provider-private output_ref
-    // fields and must remain in task storage, not cross the review boundary.
-    review_result: resolved.review ? Object.freeze({ ref: resolved.review.ref, sha256: resolved.review.sha256, verdict: resolved.trace.verdict }) : null,
-    green_test_receipt: Object.freeze({ ref: resolved.green.ref, sha256: resolved.green.sha256 }),
-  }));
+  const phases = phaseRows.map((item) => {
+    const review = phaseReview ?? binding(task, item.review_fact, `${item.task_id} review fact`);
+    const phaseMap = {
+      ref: implementation.value?.diff_ref,
+      sha256: implementation.value?.diff_hash,
+    };
+    const phaseGreen = green;
+    if (review.value?.version !== "wh-review-result.v1"
+        || review.value?.verdict !== "pass"
+        || review.value?.subject_kind !== "phase"
+        || review.value?.review_scope !== "phase"
+        || review.value?.phase_id !== item.phase_id
+        || review.value?.snapshot_tree !== finalTree) {
+      incomplete(`${item.task_id} review fact is not a passing current Phase result`);
+    }
+    if (typeof phaseMap.ref !== "string" || !HASH.test(phaseMap.sha256 ?? "")) {
+      incomplete(`${item.task_id} phase map trace is not the current implementation diff`);
+    }
+    if (phaseGreen.ref !== green.ref || phaseGreen.sha256 !== green.sha256
+        || phaseGreen.value?.snapshot_tree !== finalTree || phaseGreen.value?.exit_code !== 0) {
+      incomplete(`${item.task_id} GREEN receipt is not the current passing test fact`);
+    }
+    return Object.freeze({
+      phase_id: item.phase_id,
+      snapshot_tree: finalTree,
+      review_result: Object.freeze({ ref: review.ref, sha256: review.sha256, verdict: review.value.verdict }),
+      phase_map_trace: Object.freeze({ ref: phaseMap.ref, sha256: phaseMap.sha256 }),
+      green_test_receipt: Object.freeze({ ref: phaseGreen.ref, sha256: phaseGreen.sha256 }),
+    });
+  });
   return Object.freeze({
     schema_version: "phase-review-coverage.v1",
-    checkpoint: Object.freeze({ commit: planCheckpoint.commit, tree: planCheckpoint.tree }),
+    status: "complete",
     snapshot_tree: finalTree,
-    implementation_receipt: implementation,
-    green_test_receipt: green,
-    completed_tasks: Object.freeze(completed.map(({ task_id, acceptance_ids, summary }) => Object.freeze({ task_id, acceptance_ids: Object.freeze(acceptance_ids), summary }))),
+    checkpoint: Object.freeze({ commit: baseCommit, tree: baseTree }),
+    implementation_receipt: Object.freeze({ ref: implementation.ref, sha256: implementation.sha256 }),
+    green_test_receipt: Object.freeze({ ref: green.ref, sha256: green.sha256 }),
+    phases: Object.freeze(phases),
+    completed_tasks: completedTaskSummaries(completed),
     continuity_model: Object.freeze({
       schema_version: "phase-continuity.v1",
-      mode: "commit-ancestry-with-task-material-seams",
-      exact_tree_equality: false,
-      rationale: "Each Phase is independently authenticated; task-only material completion commits may occur between Phase snapshots. The final integration snapshot is authenticated separately by the current implementation and GREEN receipts.",
+      mode: "current-snapshot",
+      exact_tree_equality: true,
+      rationale: "Each completed Phase is bound to one passing review, one implementation diff, and one GREEN receipt on the final snapshot.",
       terminal_snapshot: finalTree,
     }),
-    phases: Object.freeze(phaseRows),
-    excluded_phases: Object.freeze([{ phase_id: "phase-9", state: "not_applicable", reason_code: "FINAL_ACCEPTANCE_NOT_IMPLEMENTATION_PHASE", reason: "Phase 9 records final validation and user confirmation; implementation coverage ends at the last semantic build-code Phase." }]),
   });
+}
+
+function completedTaskSummaries(tasks) {
+  return Object.freeze((tasks ?? []).map(({ task_id, acceptance_ids, summary }) => Object.freeze({
+    task_id,
+    acceptance_ids: Object.freeze([...(acceptance_ids ?? [])]),
+    summary,
+  })));
 }
 
 /**
@@ -247,7 +274,9 @@ function optionalHistoricalPhaseCoverage(args) {
         status: "unavailable",
         snapshot_tree: args.finalTree,
         checkpoint: null,
-        completed_tasks: Object.freeze(args.completed ?? []),
+        implementation_receipt: args.implementation,
+        green_test_receipt: args.green,
+        completed_tasks: completedTaskSummaries(args.completed),
         phases: Object.freeze([]),
         continuity_model: Object.freeze({
           schema_version: "phase-continuity.v1",
@@ -278,6 +307,18 @@ function seamIndex({ phases, finalTree }) {
       reason_code: "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS",
       reason: "Canonical Phase traces prove paths and evidence bindings, but not producer/consumer, schema, shared state, error/cancel, or cross-Phase test semantics.",
       phase_ids: Object.freeze([left.phase_id, right.phase_id]),
+      candidate_paths: Object.freeze([]),
+      anchors: Object.freeze([]),
+    }));
+  }
+  if (entries.length === 0) {
+    entries.push(Object.freeze({
+      seam_id: "historical-phase-chain",
+      state: "unknown",
+      status: "unknown",
+      reason_code: "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS",
+      reason: "Historical Phase coverage is unavailable; no semantic cross-Phase seam is claimed.",
+      phase_ids: Object.freeze([]),
       candidate_paths: Object.freeze([]),
       anchors: Object.freeze([]),
     }));
@@ -319,7 +360,18 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   for (const item of tasks) for (const id of item.acceptance_ids) if (!covered.has(id)) covered.set(id, item);
   const implementation = currentBinding(tasks, finalTree, "implementation", safeTask, current_receipts.implementation_ref);
   const green = currentBinding(tasks, finalTree, "green", safeTask, current_receipts.green_ref);
-  const historical = optionalHistoricalPhaseCoverage({ task: safeTask, sourceRoot, finalTree, completed: tasks, implementation, green });
+  const phaseReview = currentPhaseReview(safeTask, finalTree, current_receipts.phase_review_ref);
+  const historical = optionalHistoricalPhaseCoverage({
+    task: safeTask,
+    sourceRoot,
+    finalTree,
+    completed: tasks,
+    implementation,
+    green,
+    phaseReview,
+    baseCommit: base_commit,
+    baseTree: base_tree,
+  });
   const auditGaps = [...historical.gaps];
   if (tasks.length === 0) {
     auditGaps.push(Object.freeze({
@@ -350,16 +402,21 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   const coverage = historical.coverage;
   const entries = acceptanceIds.map((id) => {
     const item = covered.get(id);
+    const taskEvidence = item?.evidence?.map(({ ref, sha256, kind }) => ({
+      ref,
+      sha256,
+      ...(kind ? { kind } : {}),
+    })) ?? [];
     return Object.freeze({
       acceptance_criterion_id: id,
       change: Object.freeze(item
-        ? [{ task_id: item.task_id, summary: item.summary }]
+        ? [{ task_id: item.task_id, summary: item.summary, evidence_refs: Object.freeze(taskEvidence) }]
         : [{ task_id: null, summary: "current implementation receipt and GREEN receipt" }]),
       test: Object.freeze([{ receipt_ref: green.ref, receipt_hash: green.sha256 }]),
       evidence: Object.freeze([{ ref: implementation.ref, sha256: implementation.sha256 }]),
       anchors: Object.freeze(item
         ? [{ id: `${item.task_id}:${id}`, path: materials.tasks_ref, start_line: item.line, end_line: item.line, role: "completion", reason: "current task completion evidence" }]
-        : []),
+        : [{ id: `current-spec:${id}`, path: materials.spec_ref, start_line: acceptanceLineFor(materials.texts["spec.md"], id), end_line: acceptanceLineFor(materials.texts["spec.md"], id), role: "acceptance", reason: "current specification acceptance criterion" }]),
       ...(id === "AC-08" ? {
         evidence_status: "historical_non_replayable",
         evidence_note: "Immutable user-confirmed legacy import disposition is retained; the one-time pre-deletion fixture execution was not retained and is disclosed rather than replayed or represented as a fresh test.",

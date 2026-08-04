@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createTask } from "../task-handle.mjs";
-import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runCandidateWorkspaceCommand, runWorkspaceCommand } from "../../runtime/task/workspace-runner.mjs";
 
 const temporary = [];

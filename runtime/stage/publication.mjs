@@ -25,6 +25,13 @@ export const WRITER_FAULT_CONTRACT = Object.freeze({
   }),
 });
 
+export function isFormallyAcceptedPublication(publication) {
+  const completion = publication?.value?.completion ?? publication?.completion;
+  return completion?.formal_acceptance === "accepted"
+    && completion?.progression_only !== true
+    && completion?.quality_status === "passed";
+}
+
 function readOptional(read, ref) {
   try { return read(ref); } catch (error) {
     if (error?.code === "ENOENT") return undefined;
@@ -32,21 +39,27 @@ function readOptional(read, ref) {
   }
 }
 
-export function createPublication({ taskId, stage, materialRevision, qualityFacts, freshness, snapshotTree, read }) {
+export function createPublication({ taskId, stage, materialRevision, qualityFacts, freshness, snapshotTree, read, allowIncompleteQuality = false, progression = null }) {
   const observations = qualityFacts.map((fact, index) => ({
     fact,
     freshness: freshness[index],
     authenticated: freshness[index]?.authenticated === true,
   }));
   const completion = deriveStageCompletion(stage, observations);
-  if (completion?.status !== "completed") throw new Error(`${stage} publication requires derived completion`);
+  if (completion?.status !== "completed" && !allowIncompleteQuality) throw new Error(`${stage} publication requires derived completion`);
+  if (allowIncompleteQuality && (progression?.status !== "completed"
+      || progression.authority !== "current-four-materials-and-plan-tasks")) {
+    throw new Error(`${stage} progression publication requires current plan/tasks progress`);
+  }
   if (!materialRevision?.revision_id || materialRevision.task_id !== taskId) throw new TypeError("publication requires task-bound material revision");
   if (!Array.isArray(qualityFacts) || !Array.isArray(freshness) || qualityFacts.length !== freshness.length) throw new TypeError("publication quality facts/freshness mismatch");
   for (const [index, fact] of qualityFacts.entries()) {
-    if (fact.value.task_id !== taskId || fact.value.stage !== stage
+    if (!allowIncompleteQuality && (fact.value.task_id !== taskId || fact.value.stage !== stage
         || fact.value.material_revision !== materialRevision.revision_id
         || fact.value.snapshot_tree !== snapshotTree
-        || freshness[index]?.status !== "current") throw new Error("publication requires fresh task/stage/revision/tree-bound quality facts");
+        || freshness[index]?.status !== "current")) {
+      throw new Error("publication requires fresh task/stage/revision/tree-bound quality facts");
+    }
     if (typeof read !== "function" || sha256(read(fact.ref)) !== fact.sha256) throw new Error("publication quality fact canonical bytes mismatch");
   }
   const value = Object.freeze({
@@ -55,7 +68,22 @@ export function createPublication({ taskId, stage, materialRevision, qualityFact
     stage,
     material_revision: materialRevision.revision_id,
     quality_fact_refs: qualityFacts.map(({ ref, sha256: hash }) => ({ ref, sha256: hash })),
-    completion,
+    completion: allowIncompleteQuality
+      ? Object.freeze({
+        ...completion,
+        status: "completed",
+        quality_status: completion.status === "completed" ? "passed" : "incomplete",
+        quality_missing: completion.missing,
+        progression_authority: progression.authority,
+        progression_only: true,
+        formal_acceptance: "not_granted",
+      })
+      : Object.freeze({
+        ...completion,
+        quality_status: "passed",
+        progression_only: false,
+        formal_acceptance: "not_granted",
+      }),
     snapshot_tree: snapshotTree,
   });
   const raw = `${JSON.stringify(value, null, 2)}\n`;
@@ -71,6 +99,10 @@ export function rebuildPublication({ publication, materialRevision, qualityFacts
     qualityFacts,
     freshness,
     snapshotTree: publication.snapshot_tree,
+    allowIncompleteQuality: publication.value?.completion?.progression_only === true,
+    progression: publication.value?.completion?.progression_only === true
+      ? { status: "completed", authority: publication.value.completion.progression_authority ?? "current-four-materials-and-plan-tasks" }
+      : null,
     read,
   });
 }

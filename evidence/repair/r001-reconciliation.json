@@ -1,0 +1,10 @@
+{
+  "schema_version": "workflowhub-repair-proof-pointer.v1",
+  "task_id": "workflowhub-complexity-governance-v3-20260802",
+  "repair_task": "R001",
+  "status": "reconciled_with_residuals",
+  "external_record_ref": "task-store://workflowhub-complexity-governance-v3-20260802/evidence/repair/r001-reconciliation.json",
+  "external_record_sha256": "6141720c532d4a916f64776147c44fc9176fa19d57e174b76de7073cd2d0a6fe",
+  "material_digest": "66477f3e8844176132b5ea5c6fe58ffd22aa208d9b0b52de28322377db54e53b",
+  "source_digest": "6e1eaba4db1ef616c13aa8a19b8c3f25f43fe1e335fce5ad46bdf79e21cf1038"
+}

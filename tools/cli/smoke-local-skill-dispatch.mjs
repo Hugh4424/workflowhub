@@ -73,12 +73,10 @@ export async function smokeLocalSkillDispatch(packageRoot) {
     if (buildSpecNames.some(name => ["diagnosing-bugs", "test-routing-advisor", "review-response"].includes(name))) {
       throw new Error("build-spec preflight loaded build-code-only skills");
     }
-    const routing = await import(pathToFileURL(path.join(root, "skills/test-routing-advisor/scripts/route.mjs")));
-    const diagnosis = await import(pathToFileURL(path.join(root, "skills/diagnosing-bugs/scripts/validate-diagnosis.mjs")));
-    const response = await import(pathToFileURL(path.join(root, "skills/review-response/scripts/validate-response.mjs")));
-    if (routing.routeTests({ changed_files: ["docs/readme.md"] }, () => new Date("2026-01-01T00:00:00Z")).result !== "pass") throw new Error("test-routing executable contract failed");
-    if (!diagnosis.validateDiagnosis({ reproduction: "r", hypotheses: ["a", "b", "c"], confirmed_root_cause: "x", probe_evidence: "e" }).valid) throw new Error("diagnosis executable contract failed");
-    if (!response.validateReviewResponse({ finding_id: "f", decision: "reject", evidence: "e" }).valid) throw new Error("review-response executable contract failed");
+    const reviewResult = await import(pathToFileURL(path.join(root, "skills/wh-review/scripts/review-result.mjs")));
+    if (!reviewResult.validateReviewDisposition({ finding_id: "f", decision: "reject", evidence: "e" }).valid) {
+      throw new Error("wh-review disposition contract failed");
+    }
     return dispatched;
   } finally {
     process.chdir(previousCwd);

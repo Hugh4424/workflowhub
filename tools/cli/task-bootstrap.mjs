@@ -8,7 +8,8 @@ import { pathToFileURL } from "node:url";
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
-import { createTask, openTask } from "../../core/task-handle.mjs";
+import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
+import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home } = {}) {
@@ -40,6 +41,7 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
   const storageRoot = resolveStorageRoot({ env, home });
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
   const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
+  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch });
 }
 

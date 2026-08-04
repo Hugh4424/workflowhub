@@ -1,0 +1,232 @@
+{
+  "schema_version": "workflowhub-final-verification-summary.v1",
+  "status": "unknown_current_review_tree_drift",
+  "snapshot_tree": "5f343462dde5368b106df32f450591f9b6d4ab77b8b33dbb902a405b58503391",
+  "verified_at": "2026-08-04T09:44:49+08:00",
+  "behavior": {
+    "baseline_commit": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
+    "candidate_mode": "worktree",
+    "candidate_tree": "5f343462dde5368b106df32f450591f9b6d4ab77b8b33dbb902a405b58503391",
+    "all_seven_public_behaviors": "preserved_or_approved_change",
+    "differences": [
+      {
+        "probe": "doctor",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "status",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "run",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "review",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "verify",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "confirm",
+        "classification": "approved_internal_change",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_internal_change"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_internal_change"
+          }
+        ]
+      },
+      {
+        "probe": "authorize",
+        "classification": "approved_bug_fix",
+        "cases": [
+          {
+            "case_id": "default",
+            "classification": "approved_bug_fix"
+          },
+          {
+            "case_id": "alternate",
+            "classification": "approved_bug_fix"
+          }
+        ]
+      }
+    ],
+    "evidence_ref": "evidence/phase-9/public-behavior-baseline-r008.out"
+  },
+  "review": {
+    "status": "unavailable_current_snapshot",
+    "verdict": null,
+    "raw_ref": null,
+    "raw_sha256": null,
+    "historical_raw_ref": "evidence/phase-9/r008-3rd-review-raw.json",
+    "valid_provider_count": 0,
+    "unavailable_provider_count": 2,
+    "current_request_ref": "evidence/repair/r014-final-code-review-request.json",
+    "providers": [
+      {
+        "profile": "kimi/k3",
+        "status": "cancelled",
+        "error_code": "CANCELLED"
+      },
+      {
+        "profile": "cursor/grok",
+        "status": "failed",
+        "error_code": "PROVIDER_PERMISSION_DENIED"
+      }
+    ]
+  },
+  "history": {
+    "status": "passed",
+    "before_count": 449,
+    "after_count": 449,
+    "errors": []
+  },
+  "reference_audit": {
+    "status": "passed",
+    "allow_list_used": false,
+    "violations": [],
+    "allowed_violations": [],
+    "unexpected_violations": []
+  },
+  "focused_verification": {
+    "status": "passed",
+    "test_files": 58,
+    "tests": 191,
+    "passed": 191,
+    "failed": 0,
+    "execution_ref": "evidence/phase-9/final-targeted-matrix-r008.json"
+  },
+  "distribution": {
+    "status": "passed",
+    "clean_install": {
+      "status": "passed",
+      "ref": "evidence/phase-9/clean-install-r008-final.json",
+      "runner_files": 97,
+      "skill_bundle_files": 80,
+      "source_tree_unchanged": true,
+      "untracked_unchanged": true
+    },
+    "complexity_hard_gates": "passed",
+    "inventory": {
+      "status": "passed",
+      "delivery_files": 1047
+    }
+  },
+  "full_suite": {
+    "status": "passed",
+    "command": "npm test",
+    "exit_code": 0,
+    "execution_count": 3,
+    "safe": {
+      "test_files": 132,
+      "tests": 1166,
+      "failed": 0
+    },
+    "exclusive": {
+      "test_files": 2,
+      "tests": 31,
+      "failed": 0
+    },
+    "raw_output": "evidence/phase-9/npm-test-r008-final.out",
+    "diagnostic_failures": [
+      "npm-test-r008-diagnostic-failed.out",
+      "npm-test-r008-derived-failed.out"
+    ],
+    "note": "两次失败均为真实修复反馈：首次暴露 workflow skill contract 文字不一致，第二次暴露派生 inventory/complexity 报告过期；修复后最终通过。"
+  },
+  "verify_code": {
+    "status": "unknown_current_review",
+    "run_ref": "evidence/final/verify-code-run.json",
+    "command": "npm test",
+    "exit_code": 0,
+    "safe": {
+      "test_files": 132,
+      "tests": 1166,
+      "failed": 0
+    },
+    "exclusive": {
+      "test_files": 2,
+      "tests": 31,
+      "failed": 0
+    },
+    "ac_count": 43,
+    "ac_status": "43 focused_pass",
+    "coverage": "review_tree_drift",
+    "review": "current 3rd-review unavailable; historical R008 not reused",
+    "conclusion": "not_ready_for_confirmation",
+    "close_authorized": false
+  },
+  "check": {
+    "status": "passed",
+    "command": "npm run check",
+    "exit_code": 0,
+    "raw_output": "evidence/phase-9/npm-run-check-r008-final.out"
+  },
+  "completion": {
+    "formal_t017_completion": "incomplete_current_review",
+    "verify_code_ready": false,
+    "close_allowed": false,
+    "next": "等待当前快照独立语义 review；不使用旧 review，不 authorize/commit/push/merge/archive/cleanup"
+  },
+  "final_gates": {
+    "status": "passed",
+    "ref": "evidence/phase-9/final-gates.json"
+  }
+}

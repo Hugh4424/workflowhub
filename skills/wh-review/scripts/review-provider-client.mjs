@@ -19,11 +19,21 @@ function containsPrivatePath(value) {
   return Array.isArray(value) ? value.some(containsPrivatePath) : Object.values(value).some(containsPrivatePath);
 }
 
-function execute(command, args) {
+function execute(command, args, { timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); let stdout = "", stderr = "";
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); let stdout = "", stderr = ""; let settled = false;
+    const timer = timeoutMs === undefined ? null : setTimeout(() => {
+      if (settled) return;
+      child.kill("SIGTERM");
+      setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 250).unref?.();
+      const error = failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${timeoutMs}ms`);
+      error.stdout = stdout; error.stderr = stderr;
+      settled = true;
+      reject(error);
+    }, timeoutMs);
     child.stdout.on("data", (bytes) => { stdout += bytes; }); child.stderr.on("data", (bytes) => { stderr += bytes; });
-    child.once("error", reject); child.once("close", (exitCode) => resolve({ exitCode, stdout, stderr }));
+    child.once("error", (error) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); reject(error); });
+    child.once("close", (exitCode) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); resolve({ exitCode, stdout, stderr }); });
   });
 }
 
@@ -149,11 +159,12 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000 } = {}) {
+  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = 120000 } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 0) throw new TypeError("pollIntervalMs must be a non-negative safe integer");
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000) throw new TypeError("timeoutMs must be at least 1000ms");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
-    this.pollIntervalMs = pollIntervalMs;
+    this.pollIntervalMs = pollIntervalMs; this.timeoutMs = timeoutMs;
   }
 
   async runGroup({ hostProvider, providers, materials, prompt, continuationRuntimeId = null, requestId } = {}) {
@@ -167,11 +178,15 @@ export class ReviewProviderClient {
     // candidate profiles plus frozen material.
     const request = { version: 4, host_provider: hostProvider, required_result_protocol: protocol, provider_allowlist: [...providers], prompt, continuation: continuationRuntimeId ? { runtime_id: continuationRuntimeId } : null };
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
-    const start = validateManagedLifecycle(parseManagedWire(await this.invoke({ command: "start", request, requestId, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only" }), "start"), { requestId, materialId: materials.materialId });
+    const deadline = Date.now() + this.timeoutMs;
+    const invoke = (value) => this.invoke({ ...value, timeoutMs: Math.max(1, deadline - Date.now()) });
+    const start = validateManagedLifecycle(parseManagedWire(await invoke({ command: "start", request, requestId, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only" }), "start"), { requestId, materialId: materials.materialId });
     let lifecycle = start;
     while (lifecycle.state !== "terminal") {
-      if (this.pollIntervalMs > 0) await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
-      lifecycle = validateManagedLifecycle(parseManagedWire(await this.invoke({ command: "status", runtimeId: start.runtime_id }), "status"), {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${this.timeoutMs}ms`);
+      if (this.pollIntervalMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(this.pollIntervalMs, remaining)));
+      lifecycle = validateManagedLifecycle(parseManagedWire(await invoke({ command: "status", runtimeId: start.runtime_id }), "status"), {
         requestId, materialId: materials.materialId, runtimeId: start.runtime_id,
       });
     }
@@ -198,7 +213,7 @@ export class ReviewProviderClient {
     return { runtimeId: result.runtimeId, provider: result.providers[0] };
   }
 
-  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null }) {
+  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null, timeoutMs = this.timeoutMs }) {
     let temporary = null;
     try {
       temporary = mkdtempSync(join(tmpdir(), "wh-review-public-"));
@@ -210,10 +225,11 @@ export class ReviewProviderClient {
       } else if (command === "status") {
         args = [...this.command.slice(1), "status", `--config=${this.config}`, `--runtime-id=${runtimeId}`];
       } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported managed broker command: ${command}`);
-      return await execute(this.command[0], args);
-    } catch {
+      return await execute(this.command[0], args, { timeoutMs });
+    } catch (error) {
       // Local filesystem, spawn, and configuration failures can include host
       // paths. The caller only receives a public broker-protocol diagnostic.
+      if (error?.code === "PROVIDER_TIMEOUT") throw error;
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} did not return a valid public result`);
     } finally {
       if (temporary !== null) {
