@@ -76,9 +76,12 @@ current materials.
    hidden gate: unavailable or ordinary findings remain visible without
    blocking continued drafting or repair.
 4. After a material spec revision, update the material revision note and rerun
-   the ambiguity gate. Request another independent review only when the change
-   materially alters what the prior review covered; otherwise disclose the
-   review's remaining scope.
+   the ambiguity gate. When a prior review was `pass`, wh-review uses its
+   runner-generated delta to inspect only new or changed material and direct
+   impacts; it does not repeat a full review of unchanged content. If no safe
+   delta exists, request another full review only when the change materially
+   alters what the prior review covered; otherwise disclose the remaining
+   review scope and record the fallback decision explicitly.
 5. Never loop reviews to manufacture a pass or rewrite historical verdicts.
 
 ## User confirmation and handoff

@@ -78,8 +78,10 @@ current material if needed.
 7. Address valid findings in the same task. Repair them, reject invalid ones
    with evidence, or let the user explicitly accept a concrete risk. A finding
    never requires a new task or repeat review solely to manufacture a pass. If
-   the current material changes,
-   update it and run only the review or check genuinely affected by that change.
+   the current material changes, update it and, after an existing `pass`
+   baseline, let wh-review inspect only the runner-generated delta and its
+   direct impacts. Do not send unchanged material for a second full review. If
+   a safe delta cannot be derived, record the fallback full review explicitly.
 8. Publish the current decision receipt and facts using the runtime's declared
    schema. Publication must reject wrong task/workspace/runtime bindings,
    mismatched content, or false execution identity. Missing historical evidence

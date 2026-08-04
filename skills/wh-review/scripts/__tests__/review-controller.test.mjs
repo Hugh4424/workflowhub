@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClassificationManifest, deriveChangeClassification, selectReviewRound } from "../review-controller.mjs";
+import { buildClassificationManifest, buildIncrementalReviewDelta, deriveChangeClassification, selectReviewRound } from "../review-controller.mjs";
 
 const route = { mode: "full_on_structural_rework", initial: ["kimi/k3", "cursor/grok"] };
 const previous = {
@@ -20,6 +20,41 @@ describe("review round controller", () => {
     expect(selectReviewRound({ stage: "build-code", route, previousResult: previous, currentSnapshotTree: "b".repeat(40) })).toEqual({
       round: "initial", reason: "changed_snapshot",
     });
+  });
+
+  it("scopes a changed first-three-stage material set to a runner-generated delta after pass", () => {
+    const baselineMaterials = { approved_decision: "old decision", draft_spec: "old spec" };
+    const passed = {
+      ...previous,
+      verdict: "pass",
+      snapshot_tree: "a".repeat(40),
+      classification_manifest: buildClassificationManifest(baselineMaterials),
+    };
+    const currentMaterials = { approved_decision: "old decision", draft_spec: "new spec" };
+    const delta = buildIncrementalReviewDelta({
+      stage: "build-spec",
+      previousResult: passed,
+      currentSnapshotTree: "b".repeat(40),
+      currentMaterials,
+    });
+    expect(delta).toMatchObject({
+      schema_version: "wh-review-delta.v1",
+      scope: "changed_materials_and_direct_impacts",
+      changed_materials: [{ identity: "draft_spec", change: "changed", content: "new spec" }],
+    });
+    expect(selectReviewRound({
+      stage: "build-spec", route, previousResult: passed,
+      currentSnapshotTree: "b".repeat(40), incrementalAvailable: true,
+    })).toEqual({ round: "incremental", reason: "changed_material_incremental" });
+  });
+
+  it("does not invent an incremental scope without an authenticated prior manifest", () => {
+    expect(buildIncrementalReviewDelta({
+      stage: "build-plan",
+      previousResult: { ...previous, verdict: "pass" },
+      currentSnapshotTree: "b".repeat(40),
+      currentMaterials: { draft_plan: "new" },
+    })).toBeNull();
   });
 
   it("keeps pass and revise_required as immutable quality facts", () => {

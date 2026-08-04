@@ -12,6 +12,10 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与这些材料一致的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
+如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
+但 provider packet 只放 `review_delta`、审查指令和其中列出的变更内容；未变化
+材料已由基线覆盖，不重复放入或审查。
+
 缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 的已认证
 provider-attempt action 留在 review flow 中；它没有语义 verdict，也不能写成“审查通过”。
 补齐后可在同一 track 重新调用。direction/detail flow 必须绑定当前
@@ -72,5 +76,7 @@ map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；�
 
 `pass` 和 `revise_required` 都只是异源 provider 的质量事实，不是 WorkflowHub
 stage 的通过/不通过。make-decision 使用 `single_round`：初次语义结果后不再调用
-provider 追求 `pass`；finding 处理和最终快照变化属于业务材料变更。新 snapshot
-只允许一次新的初始审查，旧 verdict 不被改写，也不生成 resolution action。
+provider 追求 `pass`；finding 处理和最终快照变化属于业务材料变更。已有 `pass`
+基线后若只新增或修改当前材料，runner 生成 `review_delta`，只审查新增内容及其
+直接影响，不重新审查未变化内容。无法安全生成 delta 时才回退一次完整初始审查；
+旧 verdict 不被改写，也不生成 resolution action。
