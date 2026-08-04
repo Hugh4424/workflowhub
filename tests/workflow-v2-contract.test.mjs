@@ -48,15 +48,15 @@ describe("five-stage current-material contract", () => {
     const code = readStage("build-code");
     expect(code).toMatch(/Tasks\.md is the only Task completion authority/i);
     expect(code).toMatch(/focused test command/i);
-    expect(compact(code)).toMatch(/complete regression command only when the current plan requires it or once before final build publication/i);
+    expect(compact(code)).toMatch(/`build-code` does not require the complete regression command.*final `verify-code` boundary/i);
     expect(code).toMatch(/one independent `wh-review` for the completed Phase/i);
-    expect(code).toMatch(/one independent semantic integration review/i);
+    expect(compact(code)).toMatch(/does not stop the same task or the next Task/i);
     expect(compact(code)).toMatch(/Do not create a successor, rebind, continuation, recovery bridge, synthetic checkpoint, or replacement task/i);
   });
 
   it("keeps verification independent, per-AC, and separately authorized for close", () => {
     const verify = readStage("verify-code");
-    expect(verify).toMatch(/current complete test command/i);
+    expect(verify).toMatch(/complete-test fact/i);
     expect(verify).toMatch(/every applicable acceptance criterion/i);
     expect(verify).toMatch(/one independent `wh-review` semantic\/code review/i);
     expect(verify).toMatch(/normal verify-code confirmation/i);

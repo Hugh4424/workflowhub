@@ -2,14 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
-import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { assertCandidateWorkspace, assertWorkspace } from "../../../core/workspace.mjs";
-import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
+import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "../../../runtime/task/workspace.mjs";
+import { captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildIntegrationReviewSubject as buildIntegrationSubjectDefault } from "./integration-review-subject.mjs";
-import { buildReviewMaterials as buildMaterialsDefault, derivePhaseAcceptanceTrace, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
+import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
-import { buildClassificationManifest, validateResponseLedger } from "./review-controller.mjs";
+import { buildClassificationManifest } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../../../runtime/review/canonical-review-result.mjs";
 
@@ -21,10 +21,11 @@ const providerPrompt = "Read bundle/review-instructions.md and the complete froz
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const localReviewLocks = new Map();
 const subjectReviewFlights = new Map();
-const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
-const ATTEMPT_REF = /^reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
-const OID = /^[a-f0-9]{40,64}$/;
+const RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
+const reviewRootFor = () => "quality/reviews";
+const providerOutputPrefixFor = (task, attemptId) => `${reviewRootFor(task)}/attempts/${attemptId}/providers/`;
 
 function protocolFailure(message) {
   const error = new Error(`PROTOCOL_INCOMPATIBLE: ${message}`);
@@ -57,7 +58,6 @@ function reviewLockRef({
   reviewScope,
   snapshotTree,
   materialId,
-  reviewChain,
   policyFingerprint = null,
 }) {
   const identity = JSON.stringify([
@@ -66,7 +66,6 @@ function reviewLockRef({
     reviewScope,
     snapshotTree,
     materialId,
-    reviewChain ?? null,
     policyFingerprint,
   ]);
   return `locks/reviews/${createHash("sha256").update(identity).digest("hex")}.lock`;
@@ -79,7 +78,6 @@ function managedRequestId({
   subject,
   snapshotTree,
   materialId,
-  reviewChain,
   policyFingerprint,
   hostProvider,
   providers,
@@ -89,7 +87,7 @@ function managedRequestId({
   if (!Number.isSafeInteger(dispatchSequence) || dispatchSequence < 0) throw new TypeError("dispatchSequence must be a non-negative safe integer");
   const identity = canonicalJson({
     version: "wh-review-dispatch.v1", task_id: taskId, stage, review_track: reviewTrack,
-    subject, snapshot_tree: snapshotTree, material_id: materialId, review_chain: reviewChain ?? null,
+    subject, snapshot_tree: snapshotTree, material_id: materialId,
     policy_fingerprint: policyFingerprint ?? null,
     host_provider: hostProvider, provider_allowlist: providers, prompt_sha256: createHash("sha256").update(providerPrompt).digest("hex"),
     continuation_runtime_id: continuationRuntimeId ?? null, dispatch_sequence: dispatchSequence,
@@ -121,7 +119,6 @@ function subjectRecord(source, stage, phaseId, integrationSubject = null) {
     review_scope: reviewScopeFor(stage, phaseId),
     base_tree: integrationSubject?.base_tree ?? source.baseTree,
     candidate_tree: source.snapshotTree,
-    ...(phaseId && source.phaseEvidenceBinding ? { phase_evidence: source.phaseEvidenceBinding } : {}),
   };
 }
 
@@ -131,12 +128,14 @@ function integrationMaterialFacts(integrationSubject) {
       !integrationSubject.ac_trace || integrationSubject.ac_trace.schema_version !== "ac-change-test-trace.v1") {
     throw new TypeError("integration subject is invalid");
   }
-  if (integrationSubject.formal_record_status?.status === "unavailable") return {};
+  // Historical Phase/task audit gaps are disclosed in the subject, but they
+  // do not erase the independently authenticated current-snapshot facts.
+  // The integration material contract can validate the current-only packet
+  // with an unavailable historical coverage record and an explicit AC trace.
   return {
     phase_coverage: integrationSubject.phase_coverage,
     seam_index: integrationSubject.seam_index,
     ac_trace: integrationSubject.ac_trace,
-    ...(integrationSubject.material_revision ? { material_revision: integrationSubject.material_revision } : {}),
   };
 }
 
@@ -261,67 +260,6 @@ function verifiedPolicyForAttempt(attempt, providers, { allowUndispatchedMateria
   return policy;
 }
 
-function reviewChainRecord(value, { task, taskId, stage, reviewTrack, subject, source, reviewRound, controlLedger, policy, fixtureSourceToken }) {
-  // Phase reviews bind the complete file-backed diff. Integration and final
-  // identity checks intentionally omit a cumulative diff; hash that explicit
-  // absence rather than rebuilding source bytes in memory.
-  const sourceDiffHash = source.diffSha256 ?? createHash("sha256").update("").digest("hex");
-  if (value === null || value === undefined) {
-    if (policy?.source === "wh_review.v2" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
-      throw new TypeError("wh_review.v2 requires a controller-derived reviewChain");
-    }
-    if (policy?.source !== "wh_review.v2") return null;
-    return {
-      version: "wh-review-chain.v1", round: reviewRound,
-      parent_result_ref: null, root_result_ref: null, prior_snapshot_tree: null,
-      current_snapshot_tree: source.snapshotTree, response_ledger_sha256: null,
-      source_diff_sha256: sourceDiffHash,
-    };
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("reviewChain is invalid");
-  const allowed = new Set(["version", "round", "parent_result_ref", "root_result_ref", "prior_snapshot_tree", "current_snapshot_tree", "response_ledger_sha256"]);
-  for (const key of Object.keys(value)) if (!allowed.has(key)) throw new TypeError(`reviewChain.${key} is not supported`);
-  if (value.version !== "wh-review-chain.v1" || value.round !== reviewRound || !OID.test(value.current_snapshot_tree ?? "") ||
-      value.current_snapshot_tree !== source.snapshotTree) {
-    throw new TypeError("reviewChain does not bind the captured source snapshot");
-  }
-  const parentRef = value.parent_result_ref;
-  const rootRef = value.root_result_ref;
-  const priorSnapshot = value.prior_snapshot_tree;
-  const ledgerHash = value.response_ledger_sha256;
-  if (parentRef === null) {
-    if (rootRef !== null || priorSnapshot !== null || ledgerHash !== null || !["initial", "legacy"].includes(reviewRound)) {
-      throw new TypeError("root reviewChain cannot claim parent evidence");
-    }
-  } else {
-    if (!RESULT_REF.test(parentRef ?? "") || !RESULT_REF.test(rootRef ?? "") || !OID.test(priorSnapshot ?? "")) {
-      throw new TypeError("reviewChain parent provenance is invalid");
-    }
-    let parent;
-    try { parent = JSON.parse(task.readRecord(parentRef)); }
-    catch (error) { throw new Error(`reviewChain parent cannot be read: ${error.message}`); }
-    if (parent?.version !== "wh-review-result.v1" || parent.task_id !== taskId || parent.stage !== stage || parent.review_track !== reviewTrack ||
-        parent.subject_kind !== subject.subject_kind || parent.phase_id !== subject.phase_id ||
-        (parent.review_scope ?? null) !== subject.review_scope || parent.snapshot_tree !== priorSnapshot) {
-      throw new Error("reviewChain parent does not match the current review subject");
-    }
-    const expectedRoot = RESULT_REF.test(parent.review_chain?.root_result_ref ?? "") ? parent.review_chain.root_result_ref : parentRef;
-    if (rootRef !== expectedRoot) throw new Error("reviewChain root does not match its canonical parent");
-    if (typeof ledgerHash !== "string" || !/^[a-f0-9]{64}$/.test(ledgerHash)) throw new TypeError("follow-up reviewChain requires response ledger hash");
-    const ledger = validateResponseLedger(controlLedger);
-    if (hashCanonical(ledger) !== ledgerHash || ledger.previous_result_ref !== parentRef ||
-        ledger.previous_snapshot_tree !== priorSnapshot || ledger.current_snapshot_tree !== source.snapshotTree) {
-      throw new Error("reviewChain response ledger does not bind its parent and source snapshot");
-    }
-  }
-  return {
-    version: "wh-review-chain.v1", round: reviewRound,
-    parent_result_ref: parentRef, root_result_ref: rootRef, prior_snapshot_tree: priorSnapshot,
-    current_snapshot_tree: source.snapshotTree, response_ledger_sha256: ledgerHash,
-    source_diff_sha256: sourceDiffHash,
-  };
-}
-
 function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) {
   if (!policy) return null;
   const selectedProfiles = [...policy.eligible_profiles];
@@ -361,15 +299,12 @@ function matchesReviewIdentity(record, {
   subject,
   snapshotTree,
   materialId,
-  reviewChain = undefined,
 }) {
   return record?.task_id === taskId && record.stage === stage && record.review_track === reviewTrack &&
     record.snapshot_tree === snapshotTree && record.material_id === materialId &&
     record.subject_kind === subject.subject_kind && record.phase_id === subject.phase_id &&
     (record.review_scope ?? null) === subject.review_scope &&
-    record.base_tree === subject.base_tree && record.candidate_tree === subject.candidate_tree &&
-    isDeepStrictEqual(record.phase_evidence ?? null, subject.phase_evidence ?? null) &&
-    (reviewChain === undefined || isDeepStrictEqual(record.review_chain ?? null, reviewChain));
+    record.base_tree === subject.base_tree && record.candidate_tree === subject.candidate_tree;
 }
 
 function invalidEvidence(message) {
@@ -414,7 +349,7 @@ function storedSemanticOutcome(task, resultRef, result, identity) {
   }
   const storedPolicyFingerprint = attempt.review_policy === undefined ? null : hashCanonical(attempt.review_policy);
   if (storedPolicyFingerprint !== identity.policyFingerprint) return null;
-  const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const outputPrefix = providerOutputPrefixFor(task, attempt.attempt_id);
   const terminalAttempts = new Map();
   for (const providerAttempt of attempt.provider_attempts) terminalAttempts.set(providerAttempt.provider, providerAttempt);
   const providerOutputs = [];
@@ -463,27 +398,27 @@ function storedSemanticOutcome(task, resultRef, result, identity) {
 }
 
 function canonicalSubjectOutcome(task, identity) {
-  if ((identity.reviewChain?.round ?? "initial") !== "initial") return null;
   const matches = [];
   for (const ref of task.listCanonicalReviewResultRefs()) {
     let record;
     try { record = JSON.parse(task.readRecord(ref)); }
     catch (error) { throw invalidEvidence(`canonical review record cannot be read: ${ref}: ${error.message}`); }
-    const snapshotScopedPhase = identity.subject.subject_kind === "phase"
-      && identity.subject.review_scope === "phase";
-    // A Phase review is immutable evidence for one exact snapshot. A later
-    // snapshot is a new subject even when stage/phase labels match; never
-    // reuse an older semantic result across that boundary.
-    if (snapshotScopedPhase
-      ? !matchesReviewIdentity(record, identity)
-      : !sameReviewSubject(record, identity)) continue;
+    // Every semantic review is evidence for one exact frozen source. Normal
+    // worktree and Phase reviews also bind the exact material bundle. The
+    // build-code integration subject is the one exception: its canonical
+    // same-snapshot coverage may be regenerated without another provider
+    // call, but a changed snapshot is still a new review identity.
+    const buildCodeIntegration = identity.stage === "build-code"
+      && identity.subject.review_scope === "integration";
+    const identityMatches = buildCodeIntegration
+      ? matchesReviewIdentity(record, { ...identity, materialId: record.material_id })
+      : matchesReviewIdentity(record, identity);
+    if (!identityMatches) continue;
     matches.push({ ref, record });
   }
   if (matches.length === 0) return null;
-  const parentRefs = new Set(matches.map(({ record }) => record.review_chain?.parent_result_ref).filter(Boolean));
-  const heads = matches.filter(({ ref }) => !parentRefs.has(ref));
-  if (heads.length !== 1) return null;
-  const { ref, record } = heads[0];
+  if (matches.length !== 1) return null;
+  const { ref, record } = matches[0];
   try { validateSchema("result", record); }
   catch (error) { throw invalidEvidence(`result schema is invalid: ${error.message}`); }
   return storedSemanticOutcome(task, ref, record, identity);
@@ -492,7 +427,7 @@ function canonicalSubjectOutcome(task, identity) {
 function validateAttemptIdentity(attempt, attemptRef, identity) {
   try { validateSchema("attempt", attempt); }
   catch (error) { throw invalidEvidence(`attempt schema is invalid: ${error.message}`); }
-  const attemptMatch = attemptRef.match(/^reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
+  const attemptMatch = attemptRef.match(/^(?:quality\/reviews|reviews)\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
   if (!attemptMatch || attempt.attempt_id !== attemptMatch[1] || !matchesReviewIdentity(attempt, identity)) {
     throw invalidEvidence("attempt identity does not match its canonical ref or requested review identity");
   }
@@ -513,7 +448,7 @@ function validateUnavailableAttemptEvidence(task, attempt, bundle) {
     attempt.provider_attempts.map(({ provider }) => provider),
     { allowUndispatchedMaterialPreflight: isUndispatchedMaterialPreflightAttempt(attempt) },
   );
-  const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const outputPrefix = providerOutputPrefixFor(task, attempt.attempt_id);
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
     if (providerAttempt.output_ref === null) {
@@ -567,7 +502,7 @@ function publishRecoveredRecord(task, ref, raw, write, label) {
 }
 
 function semanticAttemptResult(task, attempt, attemptRef, bundle) {
-  const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+  const outputPrefix = providerOutputPrefixFor(task, attempt.attempt_id);
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
     let content = null;
@@ -617,11 +552,9 @@ function semanticAttemptResult(task, attempt, attemptRef, bundle) {
   const result = {
     version: "wh-review-result.v1", task_id: attempt.task_id, stage: attempt.stage, review_track: attempt.review_track,
     subject_kind: attempt.subject_kind, phase_id: attempt.phase_id, review_scope: attempt.review_scope ?? null, base_tree: attempt.base_tree, candidate_tree: attempt.candidate_tree,
-    ...(attempt.phase_evidence ? { phase_evidence: attempt.phase_evidence } : {}),
     source: attempt.source, snapshot_tree: attempt.snapshot_tree, material_id: attempt.material_id, attempt_ref: attemptRef,
     report_ref: attempt.report_ref, provider_results: providerResults, verdict: aggregation.verdict, findings,
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
-    ...(attempt.review_chain ? { review_chain: attempt.review_chain } : {}),
   };
   validateSchema("result", result);
   return result;
@@ -703,22 +636,20 @@ function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, cla
     if (attempt.terminal_status !== "semantic" || attempt.error !== null) {
       throw invalidEvidence("semantic result is not backed by exactly one matching semantic attempt");
     }
-    const attemptMatch = result.attempt_ref.match(/^reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
+    const attemptMatch = result.attempt_ref.match(/^(?:quality\/reviews|reviews)\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
     if (!attemptMatch || attempt.attempt_id !== attemptMatch[1] || attempt.task_id !== result.task_id ||
         attempt.stage !== result.stage || attempt.review_track !== result.review_track ||
         attempt.snapshot_tree !== result.snapshot_tree || attempt.material_id !== result.material_id ||
         attempt.subject_kind !== result.subject_kind || attempt.phase_id !== result.phase_id ||
         (attempt.review_scope ?? null) !== (result.review_scope ?? null) ||
         attempt.base_tree !== result.base_tree || attempt.candidate_tree !== result.candidate_tree ||
-        !isDeepStrictEqual(attempt.phase_evidence ?? null, result.phase_evidence ?? null) ||
-        !isDeepStrictEqual(attempt.review_chain ?? null, result.review_chain ?? null) ||
         !isDeepStrictEqual(attempt.classification_manifest ?? null, result.classification_manifest ?? null)) {
       throw invalidEvidence("attempt and result identities differ");
     }
     const providerOutputs = [];
     for (const providerAttempt of attempt.provider_attempts) {
       if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
-      const outputPrefix = `reviews/attempts/${attempt.attempt_id}/providers/`;
+      const outputPrefix = providerOutputPrefixFor(task, attempt.attempt_id);
       try {
         if (!providerAttempt.output_ref.startsWith(outputPrefix)
             || !/^[A-Za-z0-9._-]+\.output\.json$/.test(providerAttempt.output_ref.slice(outputPrefix.length))) {
@@ -745,7 +676,7 @@ function reusableOutcome(task, identity, bundle, { reuseUnavailable = false, cla
     } catch (error) {
       throw invalidEvidence(error.message);
     }
-    const refs = reviewRefs({ attemptId: attempt.attempt_id, stage: attempt.stage, reviewTrack: attempt.review_track, snapshotTree: attempt.snapshot_tree });
+    const refs = reviewRefs({ attemptId: attempt.attempt_id, stage: attempt.stage, reviewTrack: attempt.review_track, snapshotTree: attempt.snapshot_tree, root: reviewRootFor(task) });
     const hasResultReportRef = result.report_ref !== undefined;
     const hasAttemptReportRef = attempt.report_ref !== undefined;
     if (resultRef !== refs.resultRef || hasResultReportRef !== hasAttemptReportRef ||
@@ -818,7 +749,7 @@ function unavailableDispatchSequence(task, identity) {
 }
 
 function formatCorrectionSeedForAttempt(task, attemptRef, identity, bundle, policy, providers) {
-  if (typeof attemptRef !== "string" || !/^reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/.test(attemptRef)) {
+  if (typeof attemptRef !== "string" || !/^quality\/reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/.test(attemptRef)) {
     throw new TypeError("formatCorrectionAttemptRef must be a canonical unavailable review attempt ref");
   }
   let attempt;
@@ -903,7 +834,7 @@ function materialPreflightId({ stage, reviewTrack, subject, source, policy, diag
   });
 }
 
-async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, chain, policy, diagnostic, materialFingerprint = null }) {
+async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
   const materialId = materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const identity = {
@@ -913,7 +844,6 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
     subject,
     snapshotTree: source.snapshotTree,
     materialId,
-    reviewChain: chain,
     policyFingerprint,
   };
   const lockRef = reviewLockRef({
@@ -922,7 +852,6 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
     reviewScope: subject.review_scope,
     snapshotTree: source.snapshotTree,
     materialId,
-    reviewChain: chain,
     policyFingerprint,
   });
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
@@ -954,13 +883,12 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
       };
     }
     const attemptId = randomUUID();
-    const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
+    const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
     const attempt = {
       version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
       ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: materialId,
       report_ref: refs.reportRef, provider_attempts: [], terminal_status: "unavailable", error: diagnostic,
       ...(policy ? { review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"), coverage } : {}),
-      ...(chain ? { review_chain: chain } : {}),
     };
     validateSchema("attempt", attempt);
     writeAttempt(task, refs.attemptRef, attempt);
@@ -1161,7 +1089,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return correctGroupFormat({ providerClient, providers, hostProvider, materials, requestId, seed });
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, controlLedger = null, hostProvider, providers, reviewPolicy = null, reviewRound = null, reviewChain = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, hostProvider, providers, reviewPolicy = null, reviewRound = null, previousRuntimeIds = {}, formatCorrectionAttemptRef = null, reuseUnavailable = false, claimedUnavailableAttemptRefs = [], providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -1176,7 +1104,6 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   if (policy && effectiveReviewRound !== policy.round) throw new TypeError("reviewRound must equal reviewPolicy.round");
   if (policy && !isDeepStrictEqual(policy.requested_profiles, providers)) throw new TypeError("reviewPolicy requested_profiles must equal broker reviewer group");
   if (!previousRuntimeIds || typeof previousRuntimeIds !== "object" || Array.isArray(previousRuntimeIds)) throw new TypeError("previousRuntimeIds must be an object keyed by provider");
-  if (phaseId !== null && (stage !== "build-code" || typeof phaseId !== "string" || phaseId.length === 0)) throw new TypeError("phase_id is supported only for build-code and must be non-empty");
   if (stage === "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision review forbids naked source/target paths; use CandidateWorkspace");
     const candidate = assertCandidateWorkspace(candidateWorkspace);
@@ -1185,12 +1112,9 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   } else if (stage !== "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree review forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);
-    if (phaseId) sourceRoot = workspace.worktreeRoot;
   }
-  const source = phaseId
-    ? capturePhaseSource({ sourceRoot, task: taskHandle, phaseId, reviewDataRoot: attachmentRoot })
-    : captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: !(stage === "build-code") });
-  let integrationSubject; let subject; let chain; let bundle; let phaseAcceptanceTrace; let classificationManifest;
+  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" });
+  let integrationSubject; let subject; let bundle; let classificationManifest;
   try {
     const isIntegration = stage === "build-code" && phaseId === null;
     // A production final build-code review is an integration review, not a
@@ -1236,19 +1160,12 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       integrationSubject = null;
     }
     subject = subjectRecord(source, stage, phaseId, integrationSubject);
-    chain = reviewChainRecord(reviewChain, {
-      task: taskHandle, taskId, stage, reviewTrack, subject, source, reviewRound: effectiveReviewRound,
-      controlLedger, policy, fixtureSourceToken,
-    });
     const fixedMaterials = {
       ...materials,
       ...(integrationSubject ? integrationMaterialFacts(integrationSubject) : {}),
       review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveReviewRound, subject.review_scope),
     };
     classificationManifest = buildClassificationManifest(fixedMaterials);
-    phaseAcceptanceTrace = subject.review_scope === "phase"
-      ? derivePhaseAcceptanceTrace({ source, phaseId, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2" })
-      : null;
     bundle = buildMaterials({
       reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack,
       reviewScope: subject.review_scope, uiScope,
@@ -1258,12 +1175,8 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     if (!isMaterialPreflightFailure(error)) throw error;
     const diagnostic = materialPreflightDiagnostic(error);
     const preflightSubject = subject ?? subjectRecord(source, stage, phaseId);
-    const preflightChain = chain ?? reviewChainRecord(reviewChain, {
-      task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source, reviewRound: effectiveReviewRound,
-      controlLedger, policy, fixtureSourceToken,
-    });
     return recordMaterialPreflightUnavailable({
-      task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source, chain: preflightChain,
+      task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source,
       policy, diagnostic, materialFingerprint: hashCanonical(materials ?? null),
     });
   } finally {
@@ -1276,7 +1189,6 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     reviewScope: subject.review_scope,
     snapshotTree: source.snapshotTree,
     materialId: bundle.materialId,
-    reviewChain: chain,
     policyFingerprint,
   });
   const identity = {
@@ -1286,7 +1198,6 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     subject,
     snapshotTree: source.snapshotTree,
     materialId: bundle.materialId,
-    reviewChain: chain,
     policyFingerprint,
   };
   const reuseOptions = { reuseUnavailable, claimedUnavailableAttemptRefs };
@@ -1310,7 +1221,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
     const reused = reusableOutcome(taskHandle, identity, bundle, reuseOptions);
     if (reused) return reused;
-    const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
+    const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(taskHandle) });
     const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
     const providerAttempts = [];
     for (const item of reviewed) {
@@ -1331,9 +1242,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
       error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` },
       ...(policy ? { review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"), coverage } : {}),
-      ...(chain ? { review_chain: chain } : {}),
-      ...(classificationManifest ? { classification_manifest: classificationManifest } : {}),
-      ...(phaseAcceptanceTrace ? { phase_ac_trace: phaseAcceptanceTrace } : {})
+      ...(classificationManifest ? { classification_manifest: classificationManifest } : {})
     };
     validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
     if (aggregation.status !== "semantic") {
@@ -1347,7 +1256,6 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       material_id: bundle.materialId, attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
       verdict: aggregation.verdict, findings,
       adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
-      ...(chain ? { review_chain: chain } : {}),
       ...(classificationManifest ? { classification_manifest: classificationManifest } : {}),
     };
     validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
@@ -1401,7 +1309,8 @@ export function verifyFinalSubject({ result, current, integrationSubject = null 
 
 export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId = null, stage = null, reviewTrack = undefined, captureSource = captureSourceDefault } = {}) {
   const taskHandle = assertTaskHandle(task);
-  if (typeof resultRef !== "string" || !resultRef.startsWith("reviews/results/")) throw new Error("RESULT_REF_INVALID: canonical result ref required");
+  const resultRoot = "quality/reviews/results/";
+  if (typeof resultRef !== "string" || !resultRef.startsWith(resultRoot)) throw new Error("RESULT_REF_INVALID: canonical result ref required");
   let result;
   try { result = JSON.parse(taskHandle.readRecord(resultRef)); }
   catch { throw new Error("RESULT_REF_INVALID: result does not exist or is invalid"); }

@@ -33,7 +33,6 @@ describe("review layering", () => {
       "runtime/review/review-output.mjs",
       "runtime/review/review-policy.mjs",
       "runtime/review/review-controller.mjs",
-      "runtime/review/phase-review-subject.mjs",
       "runtime/review/integration-review-subject.mjs",
     ]) expect(readFileSync(resolve(root, path), "utf8")).not.toMatch(/skills\/wh-review/);
   });

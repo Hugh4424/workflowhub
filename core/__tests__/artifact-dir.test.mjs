@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ArtifactDir } from "../artifact-dir.mjs";
-import { createTask } from "../task-handle.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 
 const temporaryDirs = [];
 

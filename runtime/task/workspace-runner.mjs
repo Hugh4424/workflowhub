@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { assertCandidateWorkspace, assertWorkspace } from "../../core/workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "../../runtime/task/workspace.mjs";
 
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 

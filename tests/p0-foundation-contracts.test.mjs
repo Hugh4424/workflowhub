@@ -6,7 +6,7 @@ import { validateStepManifest } from "../runtime/stage/step-manifest.mjs";
 
 const repoRoot = new URL("..", import.meta.url).pathname;
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
-const skills = ["stage-step-receipts", "audit-summary-carrier", "requirement-lineage"];
+const skills = ["requirement-lineage"];
 
 async function text(relativePath) {
   return readFile(path.join(repoRoot, relativePath), "utf8");

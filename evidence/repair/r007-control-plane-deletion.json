@@ -1,0 +1,95 @@
+{
+  "schema_version": "workflowhub-repair-r007.v1",
+  "task_id": "workflowhub-complexity-governance-v3-20260802",
+  "stage": "build-code",
+  "repair_task": "R007",
+  "status": "completed",
+  "candidate": {
+    "worktree_root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v3-20260802",
+    "head": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
+    "working_tree_is_clean": false,
+    "note": "This evidence is scoped to the deletion slice below; it is not a final-tree verification package."
+  },
+  "deleted_paths": [
+    "tools/cli/migrate-task-v2.mjs",
+    "tools/cli/task-migrate-target-repo.mjs",
+    "scripts/__tests__/migrate-task-v2.test.mjs",
+    "runtime/evidence/receipt-writer.mjs",
+    "core/__tests__/receipt-writer.test.mjs",
+    "core/journal-appender.mjs"
+  ],
+  "replacements": [
+    "runtime/task/task-handle.mjs retains ordinary task identity and record APIs without target-repository rebind capability",
+    "runtime/evidence/audit-aggregator.mjs and tests/audit-aggregator.test.mjs remain the live audit-summary owner and focused coverage",
+    "runtime/evidence/canonical-receipt-writer.mjs owns canonical evidence and review writer behavior",
+    "runtime/evidence/receipt-schema.mjs and journal-schema.mjs own the receipt/journal contracts",
+    "runtime/task/git-worktree-snapshot.mjs owns source-tree and hydrated-content snapshot behavior",
+    "runtime/evidence/quality-store.mjs and runtime/stage/stage-runner.mjs own vNext quality facts and derived publication",
+    "tests/final-cutover-guards.red.test.mjs checks that removed migration and checkpoint entrypoints are absent",
+    ".github/workflows/ci.yml no longer invokes the deleted ci-chain-check command"
+  ],
+  "consumer_audit": {
+    "command": "rg -n 'migrate-task-v2|task-migrate-target-repo|migrateTaskTargetRepoRoot|target_repo_root_migration|runtime/evidence/receipt-writer' runtime core tools workflows skills tests scripts config package.json",
+    "production_matches": [],
+    "remaining_reference_audit_targets": "Historical target names remain in the architecture oracle and governance records only; no live production import points to the deleted migration, receipt-writer, journal-appender, checkpoint, material-revision, old flow, phase-evidence, or retired review-subject owners."
+  },
+  "commands": [
+    {
+      "label": "migration-and-task-handle-focused-tests",
+      "argv": ["npx", "vitest", "run", "tests/contract/task-handle.test.mjs", "tests/final-cutover-guards.red.test.mjs", "tests/contract/reference-audit.test.mjs"],
+      "exit_code": 0,
+      "tests": 103,
+      "files": 3
+    },
+    {
+      "label": "audit-and-publication-focused-tests",
+      "argv": ["npx", "vitest", "run", "tests/audit-aggregator.test.mjs", "tests/stage-content-publication.test.mjs", "tests/five-stage-audit-e2e.test.mjs", "tests/contract/task-handle.test.mjs", "tests/final-cutover-guards.red.test.mjs"],
+      "exit_code": 0,
+      "tests": 129,
+      "files": 5
+    },
+    {
+      "label": "syntax-and-diff-check",
+      "argv": ["node", "--check", "runtime/task/task-handle.mjs"],
+      "exit_code": 0
+    }
+  ],
+  "remaining_r007_scope": [
+    "runtime/task/task-kernel-implementation.mjs retains explicit fail-loud compatibility stubs for retired legacy APIs; these are not vNext consumers and are covered by negative tests",
+    "runtime/review/stage-review-disposition.mjs remains because current stage disposition tests still consume it; it is outside the deleted control-plane slice",
+    "R008 owns final review-tree, full coverage, provider raw/status/hash, and one-time independent 3rd-review evidence"
+  ],
+  "completion": {
+    "completed_at": "2026-08-04T03:40:00Z",
+    "actual_changes": [
+      "Deleted old migration CLIs, receipt writer facade, journal appender, checkpoint owner, material revision owner, retired flow/review subject modules, old schemas, shims, fixtures, and tests after consumer audit.",
+      "Removed vNext stage calls to legacy attempt/accepted/checkpoint writers and public routes for retired control-plane commands.",
+      "Fixed canonical evidence/confirmations path matching and human-confirmation.v2 material/snapshot provenance checks.",
+      "Kept quality facts, derived publication, current four-material input, snapshot binding, and fail-loud compatibility stubs as the single vNext path; added no new state machine, lease, accepted projection, or review loop."
+    ],
+    "verification": [
+      {"command": "npx vitest run tests/integration/verify-freshness-selection.test.mjs tests/integration/vnext-official-stage-run.test.mjs tests/integration/execution-snapshot-isolation.test.mjs tests/contract/confirmation-authorization.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs", "exit_code": 0, "tests": 85, "files": 5},
+      {"command": "node /private/tmp/workflowhub-v3-real-matrix.mjs evidence/phase-9/real-task-matrix-v1.json", "exit_code": 0, "assertions": "normal, repair, provider failures, concurrency, LFS, ignored cleanup all true"},
+      {"command": "node tools/architecture/reference-audit.mjs --check", "exit_code": 0, "violations": 0, "allowed_violations": 0},
+      {"command": "node tools/architecture/inventory.mjs --check", "exit_code": 0, "delivery_files": 1047},
+      {"command": "node tools/architecture/history-inventory.mjs verify-unchanged", "exit_code": 0, "before_count": 449, "after_count": 449},
+      {"command": "node tools/architecture/retention-audit.mjs --check", "exit_code": 0, "errors": 0},
+      {"command": "npm run check", "exit_code": 0}
+    ],
+    "evidence_refs": [
+      "evidence/phase-9/real-task-matrix-v1.json",
+      "docs/architecture/move-map.json",
+      "docs/architecture/retention-manifest.json",
+      "docs/architecture/repository-inventory.tsv",
+      "docs/architecture/final-complexity-report.json"
+    ],
+    "review_fact": "R007 is complete for the vertical deletion slice. It does not claim the numeric complexity budgets are all met, and it does not trigger wh-review; R008 owns the single current-tree 3rd-review."
+  },
+  "review_note": "R007 is a Repair Addendum task, not a new Phase; no new wh-review is started here. R008 owns the single final current-tree review.",
+  "corrections": [
+    {
+      "recorded_at": "2026-08-04T05:00:00Z",
+      "correction": "The earlier replacement phrase naming runtime/evidence/audit-aggregator.mjs and tests/audit-aggregator.test.mjs as remaining live owners is superseded: both files were deleted in the R007 deletion slice. The current vNext quality/publication owners are runtime/evidence/quality-store.mjs and runtime/stage/stage-runner.mjs. Historical command entries naming deleted tests remain historical execution records, not current coverage claims."
+    }
+  ]
+}

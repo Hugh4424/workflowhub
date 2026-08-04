@@ -39,7 +39,7 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       material_revision: "revision-a",
       snapshot_tree: "tree-a",
       kind: "test",
-      subject: "full_tests_fresh",
+      subject: "risk_tests_fresh",
       status: "passed",
     });
     const fact = {
@@ -48,7 +48,7 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       material_revision: "revision-a",
       snapshot_tree: "tree-a",
       kind: "test",
-      subject: "full_tests_fresh",
+      subject: "risk_tests_fresh",
       status: "passed",
       task_id: "task",
       stage: "build-code",

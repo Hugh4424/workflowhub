@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createTask } from "../core/task-handle.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
 
 const roots = [];
 

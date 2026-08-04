@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub/quality-verify.v1",
+  "title": "WorkflowHub quality verification fact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "task_id", "stage", "ac_id", "status", "method", "evidence_ref", "evidence_hash", "material_digest", "created_at"],
+  "properties": {
+    "schema_version": { "const": "quality-verify.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "ac_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["passed", "failed", "unknown", "unavailable", "incomplete", "missing"] },
+    "method": { "type": "string", "minLength": 1 },
+    "evidence_ref": { "type": "string", "minLength": 1 },
+    "evidence_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "material_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

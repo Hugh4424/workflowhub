@@ -1,0 +1,41 @@
+{
+  "schema_version": "workflowhub-public-behavior-baseline.v1",
+  "baseline_commit": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
+  "collector": {
+    "path": "tools/architecture/public-behavior-baseline.mjs",
+    "sha256": "6a78d901fe40fc2a3b5379126d1ad7eca69397519b25e0a8e4869a6e2319b122"
+  },
+  "runtime": {
+    "node": "v24.14.0",
+    "platform": "darwin",
+    "runner_contract": "local-stage-runtime"
+  },
+  "behaviors": [
+    "doctor",
+    "status",
+    "run",
+    "review",
+    "verify",
+    "confirm",
+    "authorize"
+  ],
+  "probes": [
+    "help",
+    "doctor",
+    "status",
+    "run",
+    "review",
+    "verify",
+    "confirm",
+    "authorize"
+  ],
+  "baseline": {
+    "path": "tests/fixtures/public-behavior-baseline/v1/baseline.json",
+    "sha256": "724ab945b6a98970ebd7144c3286cb7604b39f739a6b60ca04dd526c416c148b"
+  },
+  "candidate": {
+    "path": "tests/fixtures/public-behavior-baseline/v1/candidate.json",
+    "sha256": "125b4537e5d2706d40aa16d791b9a7f6708b3a860201539729e3dbb128d7198b"
+  },
+  "normalization": "ANSI, absolute paths, hashes, UUIDs, timestamps and durations are tokenized"
+}

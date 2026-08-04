@@ -1,0 +1,99 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { createTask } from "../../runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { runCapture as runBuildCapture } from "../../workflows/build-code/capture.mjs";
+import { runCapture as runVerifyCapture } from "../../workflows/verify-code/capture.mjs";
+import {
+  canonicalMaterialManifest,
+  validateBuildCodeAcceptanceMap,
+  validateDiffIndexBundle,
+} from "../../skills/wh-review/scripts/review-materials.mjs";
+
+const roots = [];
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function taskFixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-materials-")));
+  roots.push(root);
+  const repo = join(root, "repo");
+  mkdirSync(repo);
+  const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+  git(["init", "-q"]);
+  git(["config", "user.name", "WorkflowHub Tests"]);
+  git(["config", "user.email", "tests@workflowhub.local"]);
+  writeFileSync(join(repo, "README.md"), "base\n");
+  git(["add", "."]);
+  git(["commit", "-qm", "base"]);
+  const task = createTask({
+    storageRoot: root,
+    manifest: {
+      schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "review-materials-contract",
+      created_at: "2026-08-04T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {},
+      record_model: "vnext-single-write",
+    },
+  });
+  const candidate = prepareTaskWorkspace(task);
+  return { task, workspace: openCurrentTaskWorkspace(task) };
+}
+
+afterEach(() => {
+  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+});
+
+describe("current review material and capture contracts", () => {
+  it("keeps canonical manifests deterministic and rejects generic AC maps", () => {
+    expect(canonicalMaterialManifest([
+      { path: "b.json", bytes: 2, sha256: "b" },
+      { path: "a.json", bytes: 1, sha256: "a" },
+    ])).toBe(JSON.stringify([
+      { path: "a.json", bytes: 1, sha256: "a" },
+      { path: "b.json", bytes: 2, sha256: "b" },
+    ]));
+    const valid = {
+      acceptance_ids: ["AC-1", "AC-2"],
+      entries: [
+        { id: "AC-1", change_ids: ["C-1"], implementation: "implementation for AC-1", verification: "test for AC-1" },
+        { id: "AC-2", change_ids: ["C-2"], implementation: "implementation for AC-2", verification: "test for AC-2" },
+      ],
+    };
+    expect(() => validateBuildCodeAcceptanceMap(valid)).not.toThrow();
+    expect(() => validateBuildCodeAcceptanceMap({
+      ...valid,
+      entries: valid.entries.map((entry) => ({ ...entry, implementation: "same", verification: "same", change_ids: [] })),
+    })).toThrow(/generic mapping is not allowed/);
+  });
+
+  it("authenticates an included diff shard and rejects tampering", () => {
+    const bundleRoot = mkdtempSync(join(tmpdir(), "workflowhub-diff-index-"));
+    roots.push(bundleRoot);
+    mkdirSync(join(bundleRoot, "diff-shards"));
+    const shard = "diff --git a/src.mjs b/src.mjs\n+@@ -1 +1 @@\n+old\n+new\n";
+    writeFileSync(join(bundleRoot, "diff-shards", "shard-1.diff"), shard);
+    writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify({
+      schema_version: "wh-review-diff-index.v1", delivery_mode: "selected_context",
+      coverage: { change_ids_total: 1, change_ids_indexed: 1 },
+      changes: [{ change_id: "C-1", path: "src.mjs", shards: [{ delivery: "included", shard_id: "shard-1", bytes: Buffer.byteLength(shard), sha256: sha256(shard) }] }],
+    })}\n`);
+    expect(() => validateDiffIndexBundle(bundleRoot)).not.toThrow();
+    writeFileSync(join(bundleRoot, "diff-shards", "shard-1.diff"), `${shard}tampered`);
+    expect(() => validateDiffIndexBundle(bundleRoot)).toThrow(/missing or tampered/);
+  });
+
+  it("uses the current canonical receipt writer through both build and verify capture wrappers", async () => {
+    const { task, workspace } = taskFixture();
+    const build = await runBuildCapture("true", "quality/tests/build-capture.json", {
+      task, workspace, outputRef: "quality/tests/output/build-capture.output",
+    });
+    const verify = await runVerifyCapture("true", "quality/tests/verify-capture.json", {
+      task, workspace, outputRef: "quality/tests/output/verify-capture.output",
+    });
+    expect(build).toMatchObject({ exit_code: 0, stage: "build-code", source_digest: expect.any(String) });
+    expect(verify).toMatchObject({ exit_code: 0, stage: "verify-code", source_digest: expect.any(String) });
+  });
+});

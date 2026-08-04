@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../../../../core/task-handle.mjs";
+import { createTask } from "../../../../runtime/task/task-handle.mjs";
 import { writeAttempt, writeSemanticResult } from "../review-result.mjs";
 import { validateSchema } from "../schema-validator.mjs";
 
@@ -21,18 +21,18 @@ afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: 
 describe("review writer TaskHandle boundary", () => {
   it("rejects path strings and fake handles", () => {
     expect(() => writeAttempt("/tmp/review.json", {})).toThrow(/TaskHandle|capability/i);
-    expect(() => writeAttempt({}, "reviews/a.json", {})).toThrow(/TaskHandle|capability/i);
+    expect(() => writeAttempt({}, "quality/reviews/a.json", {})).toThrow(/TaskHandle|capability/i);
   });
   it("writes create-only review records through controlled TaskHandle I/O", () => {
     const task = fixture();
     const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
     const provenance={task_id:"review-task",stage:"build-code",review_track:null,source,snapshot_tree:"b".repeat(40),material_id:"c".repeat(64)};
     const attempt={version:"wh-review-attempt.v1",attempt_id:"a",...provenance,provider_attempts:[],terminal_status:"semantic",error:null};
-    const result={version:"wh-review-result.v1",...provenance,attempt_ref:"reviews/attempts/a/attempt.json",provider_results:[{provider:"fixture",output:{verdict:"pass",summary:"ok",findings:[]}}],verdict:"pass",findings:[]};
-    writeAttempt(task, "reviews/attempts/a/attempt.json", attempt);
-    writeSemanticResult(task, "reviews/results/a.json", result);
-    expect(JSON.parse(task.readRecord("reviews/attempts/a/attempt.json"))).toEqual(attempt);
-    expect(() => writeSemanticResult(task, "reviews/results/a.json", result)).toThrow(/exist|create-only/i);
+    const result={version:"wh-review-result.v1",...provenance,attempt_ref:"quality/reviews/attempts/a/attempt.json",provider_results:[{provider:"fixture",output:{verdict:"pass",summary:"ok",findings:[]}}],verdict:"pass",findings:[]};
+    writeAttempt(task, "quality/reviews/attempts/a/attempt.json", attempt);
+    writeSemanticResult(task, "quality/reviews/results/a.json", result);
+    expect(JSON.parse(task.readRecord("quality/reviews/attempts/a/attempt.json"))).toEqual(attempt);
+    expect(writeSemanticResult(task, "quality/reviews/results/a.json", result)).toBe("quality/reviews/results/a.json");
   });
 
   it("keeps legacy session-artifact attempts readable but rejects new writes", () => {
@@ -44,7 +44,7 @@ describe("review writer TaskHandle boundary", () => {
       provider_attempts:[{provider:"kimi",status:"failed",session_id:null,runtime_id:"runtime",session_artifact_path:"/legacy/broker/state.json",execution:null,unavailable_diagnostics:null,output_ref:null,error:{code:"PROVIDER_UNAVAILABLE",message:"old transport"}}],
     };
     expect(validateSchema("attempt", legacy)).toBe(legacy);
-    expect(() => writeAttempt(task, "reviews/attempts/legacy/attempt.json", legacy)).toThrow(/legacy-only/i);
+    expect(() => writeAttempt(task, "quality/reviews/attempts/legacy/attempt.json", legacy)).toThrow(/legacy-only/i);
   });
 
   it("rejects broker-private execution fields from new managed attempts", () => {
@@ -59,6 +59,6 @@ describe("review writer TaskHandle boundary", () => {
       },unavailable_diagnostics:{code:"PUBLIC_RESULT_INVALID",message:"provider exposed private state"},output_ref:null,error:{code:"PUBLIC_RESULT_INVALID",message:"provider exposed private state"}}],
     };
     expect(validateSchema("attempt", attempt)).toBe(attempt);
-    expect(() => writeAttempt(task, "reviews/attempts/private-execution/attempt.json", attempt)).toThrow(/private session\/output fields/i);
+    expect(() => writeAttempt(task, "quality/reviews/attempts/private-execution/attempt.json", attempt)).toThrow(/private session\/output fields/i);
   });
 });

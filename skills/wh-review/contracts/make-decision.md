@@ -72,8 +72,5 @@ map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；�
 
 `pass` 和 `revise_required` 都只是异源 provider 的质量事实，不是 WorkflowHub
 stage 的通过/不通过。make-decision 使用 `single_round`：初次语义结果后不再调用
-provider 追求 `pass`；对 finding 的处理，以及 direction 审查后 grill/decision 产生的
-最终快照 delta，都写入同一 track 的零-provider `wh-review-resolution.v1` action。
-该 action 对原 verdict 是 `pass` 或 `revise_required` 都适用，可绑定完整 response
-ledger，也可明确写成 `unverified`，但永远不改写原 verdict、不移动语义 head，也不声称
-二审通过。
+provider 追求 `pass`；finding 处理和最终快照变化属于业务材料变更。新 snapshot
+只允许一次新的初始审查，旧 verdict 不被改写，也不生成 resolution action。

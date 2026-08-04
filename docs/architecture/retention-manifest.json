@@ -1,0 +1,76 @@
+{
+  "schema_version": "workflowhub-retention-manifest.v1",
+  "phase": "Phase 0",
+  "owner": "T002",
+  "frozen_at": "2026-08-03T09:47:00+08:00",
+  "policy": "历史 task 只读；质量、审查、测试、确认、授权和治理学习资料保留，不控制普通推进",
+  "retain": [
+    "specs/archive/",
+    "docs/architecture/legacy-task-inventory.json",
+    "docs/architecture/legacy-import-proof.json",
+    "runtime/evidence/",
+    "runtime/review/",
+    "evidence/",
+    "reviews/",
+    "tests/"
+  ],
+  "disposition_source": "docs/architecture/deletion-plan.json",
+  "frozen_sources": {
+    "deletion_plan": {
+      "ref": "docs/architecture/deletion-plan.json",
+      "content_hash": "3f78b935884589e9d290b4166a5ce91ce0c10cdd376ab2a9df7710caf7f8188d"
+    },
+    "history_inventory": {
+      "ref": "docs/architecture/history-inventory.json",
+      "content_hash": "e036e8e31c646bb576824a06ec0e46f1f7c0de178bc875aca2546730cd966830"
+    },
+    "move_map": {
+      "ref": "docs/architecture/move-map.json",
+      "content_hash": "be816bba4b846b2c42add68bc2570ed635f25d980ac4f2c79028d024af23b0c6"
+    }
+  },
+  "history_verification": "tools/architecture/history-inventory.mjs verify-unchanged",
+  "keep_until_migration": [],
+  "dispositions": [
+    {
+      "path": "tools/architecture/inventory.mjs",
+      "disposition": "READ/KEEP",
+      "reason": "live inventory and deletion-proof oracle consumed by runtime checks and final verification"
+    },
+    {
+      "path": "tools/architecture/complexity-report.mjs",
+      "disposition": "READ/KEEP",
+      "reason": "reproducible complexity and hard-gate diagnostic consumed by Phase 0, Phase 6, and final verification"
+    },
+    {
+      "path": "tools/architecture/reference-audit.mjs",
+      "disposition": "READ/KEEP",
+      "reason": "permanent reference and closure oracle required by final verification"
+    },
+    {
+      "path": "tools/architecture/history-inventory.mjs",
+      "disposition": "READ/KEEP",
+      "reason": "permanent offline historical-bytes oracle required by final verification"
+    },
+    {
+      "path": "tools/architecture/phase0-deletion-disposition.mjs",
+      "disposition": "KEEP",
+      "reason": "live governance contract test consumes the frozen deletion-plan and slice checks"
+    },
+    {
+      "path": "tools/architecture/retention-audit.mjs",
+      "disposition": "KEEP",
+      "reason": "live governance-learning contract test consumes the non-gating retention and learning audit"
+    },
+    {
+      "path": "tools/cli/check-task-record-paths.mjs",
+      "disposition": "KEEP",
+      "reason": "live npm check contract keeps the stage path boundary fail-loud"
+    },
+    {
+      "path": "runtime/review/stage-review-disposition.mjs",
+      "disposition": "KEEP",
+      "reason": "vNext risk pause and acceptance API is a live production capability consumed by stage handlers and task kernel"
+    }
+  ]
+}

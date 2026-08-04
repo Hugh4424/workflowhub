@@ -6,11 +6,11 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { bootstrapStage } from "../stage-context.mjs";
-import { createTask } from "../task-handle.mjs";
+import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { assertTaskKernel } from "../../runtime/task/task-kernel.mjs";
-import { buildTaskKernel } from "../task-kernel-implementation.mjs";
+import { buildTaskKernel } from "../../runtime/task/task-kernel-implementation.mjs";
 
 const temporaryDirs = [];
 
@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe("TaskKernel trust boundary", () => {
   it("does not export any low-level canonical writer or authority installer", async () => {
-    const publicApi = await import("../task-handle.mjs");
+    const publicApi = await import("../../runtime/task/task-handle.mjs");
     expect(publicApi.installTaskKernelAuthority).toBeUndefined();
     expect(publicApi.requestTaskKernelRecordWriter).toBeUndefined();
     expect(Object.keys(publicApi).filter((name) => /authority|recordwriter/i.test(name))).toEqual([]);
@@ -61,7 +61,7 @@ describe("TaskKernel trust boundary", () => {
 
   it("cannot preinstall a forged authority from an independent process", () => {
     const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-forged-authority-")));temporaryDirs.push(root);
-    const module=pathToFileURL(join(process.cwd(),"core/task-handle.mjs")).href;
+    const module=pathToFileURL(join(process.cwd(),"runtime/task/task-handle.mjs")).href;
     const script=`import {installTaskKernelAuthority,requestTaskKernelRecordWriter,createTask} from ${JSON.stringify(module)};const issuer=()=>{};installTaskKernelAuthority(issuer);const task=createTask({storageRoot:${JSON.stringify(root)},manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"forged",created_at:new Date().toISOString(),target_repo_root:${JSON.stringify(join(root,"repo"))},issue_ids:[],inputs:{}}});const write=requestTaskKernelRecordWriter(task,issuer);write("results/make-decision/attempt-0001.json","{}\\n");write("receipts/forged.json","{}\\n");`;
     const child=spawnSync(process.execPath,["--input-type=module","-e",script],{encoding:"utf8"});
     expect(child.status,child.stdout+child.stderr).not.toBe(0);
@@ -123,8 +123,6 @@ describe("TaskKernel trust boundary", () => {
     if (variant === "integrity hash") accepted.integrity_hash = "bad";
     writeFileSync(join(task.taskPath, "results", "make-decision", "accepted.json"), `${JSON.stringify(accepted)}\n`);
     const kernel = createTaskKernel(task);
-    expect(() => kernel.readAccepted("make-decision")).toThrow(
-      /identity|task|stage|attempt|hash|integrity/i,
-    );
+    expect(() => kernel.readAccepted("make-decision")).toThrow(/retired|current four materials/i);
   });
 });

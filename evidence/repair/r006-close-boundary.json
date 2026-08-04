@@ -1,0 +1,54 @@
+{
+  "schema_version": "workflowhub-repair-r006.v1",
+  "task_id": "workflowhub-complexity-governance-v3-20260802",
+  "stage": "build-code",
+  "repair_task": "R006",
+  "status": "completed",
+  "candidate_tree": {
+    "worktree_root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v3-20260802",
+    "head": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
+    "tree": "01437fb004ec9f4255c7912a2fd6d4d8416de433",
+    "commit": null
+  },
+  "materials": {
+    "root": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-complexity-governance-v3-20260802/specs/workflowhub-complexity-governance-v3-20260802",
+    "material_digest": "0ad9630e0604f071d08959b1ea6e4520f084f2e8356a893f8cf684916c8166d9",
+    "tasks_bytes": 255250,
+    "tasks_sha256": "b4d736d4f34612a3856445d3d3b103c8f4571899c7fdbd593f5f8b8bed54cb9f"
+  },
+  "source_digest": "c7bf03c024d2fc15f375ab13fcaa7924929498fa41ad98817013afb77d2b3f07",
+  "boundary": {
+    "stage": "build-code",
+    "operation": "r006-close-boundary",
+    "cleanup": "tracked/untracked/ignored scan; unknown ignored blocks; known .vite paths are explicit and path-bound",
+    "manual_delivery": "append-only task fact with business delivered and formal blocked; no accepted or completed projection"
+  },
+  "implementation": {
+    "cleanup": "inspectWorktreeCleanup classifies .vite generated paths and unknown ignored paths; createTaskWorktreeRemoval refuses FORMAL_CLEANUP_UNSAFE and never invokes git clean -fdx",
+    "formal_close": "delivery status exposes formal_cleanup_safe and the cleanup scan; subsequent formal close remains available after the business-only fact",
+    "manual_close": "recordManualDeliveryClose writes one immutable close evidence payload and one idempotent facts.jsonl fact with source ref/hash",
+    "authorization": "stage-runtime authorize operation set remains decision/risk; no manual-close authorize route was added"
+  },
+  "commands": [
+    {
+      "label": "r006-focused-tests",
+      "argv": [
+        "npx", "vitest", "run",
+        "tests/task-close-delivery.test.mjs",
+        "tests/contract/confirmation-authorization.test.mjs",
+        "tests/integration/runner-clean-install.test.mjs"
+      ],
+      "exit_code": 0,
+      "tests": 44,
+      "files": 3
+    },
+    {
+      "label": "diff-check",
+      "argv": ["git", "diff", "--check"],
+      "exit_code": 0
+    }
+  ],
+  "covered_ac": ["AC-007", "AC-021", "AC-028", "AC-029", "AC-043"],
+  "review_note": "R006 is a Repair Addendum task, not a new Phase; final current-tree independent wh-review remains uniquely owned by R008.",
+  "created_at": "2026-08-03T14:28:00Z"
+}

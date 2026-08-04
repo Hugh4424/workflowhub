@@ -23,6 +23,9 @@ it("dispatches the canonical git archive under a clean HOME", async () => {
   const candidateTree = execFileSync("git", ["write-tree"], { cwd: repository, env, encoding: "utf8" }).trim();
   execFileSync("git", ["archive", "--format=tar", "-o", archive, candidateTree], { cwd: repository });
   execFileSync("tar", ["-xf", archive, "-C", artifact]);
+  // A canonical archive intentionally excludes node_modules. Install the
+  // declared production dependencies before exercising the extracted runtime.
+  execFileSync("npm", ["ci", "--ignore-scripts", "--offline"], { cwd: artifact, stdio: "ignore" });
   const result = await smokeLocalSkillDispatch(artifact);
   expect(result).toHaveLength(5);
   expect(result.every(item => item.dispatch_count > 0)).toBe(true);

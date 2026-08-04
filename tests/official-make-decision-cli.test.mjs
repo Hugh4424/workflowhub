@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const runtime = fileURLToPath(new URL("../scripts/stage-runtime.mjs", import.meta.url));
+const runtime = fileURLToPath(new URL("../tools/cli/stage-runtime.mjs", import.meta.url));
 
 function invoke(...args) {
   return spawnSync(process.execPath, [runtime, ...args], { encoding: "utf8" });
@@ -41,11 +41,10 @@ describe("make-decision public CLI cutover", () => {
   it.each([
     ["doctor", "workspace"],
     ["status", "begin"],
-    ["run", "research"],
-    ["run", "content"],
+    ["run", "execute"],
     ["review", "invoke"],
     ["confirm", "decision"],
-    ["authorize", "decision"],
+    ["authorize", "commit"],
   ])("recognizes public route %s:%s before task lookup", (behavior, action) => {
     const result = invoke(
       behavior,

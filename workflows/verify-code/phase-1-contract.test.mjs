@@ -13,20 +13,16 @@ function assertContains(haystack, needle, label) {
 }
 
 function runSkillContractAssertions() {
-  const skill = readFileSync('skills/test-strategy/SKILL.md', 'utf8');
+  const skill = readFileSync('workflows/verify-code/SKILL.md', 'utf8');
 
-  assertContains(skill, 'ui_change', 'input contract');
-  assertContains(skill, 'risk_level', 'input contract');
-  assertContains(skill, 'low | medium | high', 'risk_level values');
-  assertContains(skill, 'L2', 'input contract');
-  assertContains(skill, 'test-strategy.md', 'output contract');
-  assertContains(skill, 'YAML front-matter', 'output contract');
-  assertContains(skill, 'ac_routes', 'output contract');
-  assertContains(skill, '^AC-\\d+$', 'AC ID parser');
-  assertContains(skill, 'P0 | P1 | P2 | P3 | skip', 'route values');
-  assertContains(skill, 'MISSING_ROUTE: {AC_ID} has no route in test-strategy.md', 'missing route error');
-  assertContains(skill, 'UNKNOWN_AC: {AC_ID} not found in spec AC list', 'unknown AC error');
-  assertContains(skill, 'yellow', 'timeout behavior');
+  assertContains(skill, 'current complete test command', 'verification input contract');
+  assertContains(skill, 'current passing full-suite receipt', 'full-suite reuse contract');
+  assertContains(skill, 'Do not rerun the full suite', 'full-suite repetition guard');
+  assertContains(skill, 'Focused tests belong to build-code', 'focused-test ownership');
+  assertContains(skill, 'per-AC result', 'verification output contract');
+  assertContains(skill, 'Review is a quality fact, not a license', 'review boundary');
+  assertContains(skill, 'Pass candidate', 'verdict contract');
+  assertContains(skill, 'Do not create another task', 'handoff boundary');
 }
 
 function runFreshnessAssertions() {

@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../../../core/artifact-dir.mjs";
-import { createTask, openTask } from "../../../../core/task-handle.mjs";
+import { createTask, openTask } from "../../../../runtime/task/task-handle.mjs";
 import { buildIntegrationReviewSubject, inspectIntegrationReviewSubject } from "../integration-review-subject.mjs";
 
 const sha = (raw) => createHash("sha256").update(raw).digest("hex");
@@ -28,8 +28,8 @@ function fixture({ stale = false, missingAc = false } = {}) {
   const green = { snapshot_tree: tree, exit_code: 0 };
   const implementationRaw = JSON.stringify(implementation); const greenRaw = JSON.stringify(green);
   const refs = [
-    { ref: "receipts/revisions/implementation/current.json", sha256: sha(implementationRaw) },
-    { ref: "receipts/build-tests-current.json", sha256: sha(greenRaw) },
+    { ref: "quality/evidence/implementation.json", sha256: sha(implementationRaw) },
+    { ref: "quality/tests/build-code.json", sha256: sha(greenRaw) },
   ];
   files["tasks.md"] = taskBody.replace("PLACEHOLDER", `\`${JSON.stringify(refs)}\``);
   writeFileSync(join(dir, "tasks.md"), files["tasks.md"]);

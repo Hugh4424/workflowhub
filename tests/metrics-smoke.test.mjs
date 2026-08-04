@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../core/task-handle.mjs";
+import { createTask } from "../runtime/task/task-handle.mjs";
 import { runMetricsWriter } from "../workflows/verify-code/metrics-writer.mjs";
 import { createMetricsLauncherConfig } from "../metrics/collector.mjs";
 

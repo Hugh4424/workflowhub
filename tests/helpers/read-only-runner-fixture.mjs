@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildRunnerRelease, installRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
-import { createTask } from "../../core/task-handle.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "./human-confirmation.mjs";
@@ -77,7 +77,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
   });
 
   const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
-  const runtimePath = path.join(runnerRoot, "scripts/stage-runtime.mjs");
+  const runtimePath = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
   const taskPath = path.join(storage, "Projects", "E2E", "tasks", taskId);
   createTask({ storageRoot: storage, taskPath, manifest: {
     schema_version: "1.0.0", project_name: "E2E", task_id: taskId,
@@ -110,8 +110,8 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
   };
   const contextFor = async (stage) => {
     const [{ bootstrapStage, prepareMakeDecisionWorkspace }, runner] = await Promise.all([
-      load("core/stage-context.mjs"),
-      load("core/stage-runner.mjs"),
+      load("runtime/stage/stage-context.mjs"),
+      load("runtime/stage/stage-runner.mjs"),
     ]);
     let context = bootstrapStage(stage, {
       mode: "sidecar", taskPath, projectName: "E2E", taskId, runnerRoot,
@@ -168,7 +168,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
 /** Reattach CLI/module capabilities inside a child Node process. */
 export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, sourceHashBefore }) {
   const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
-  const runtimePath = path.join(runnerRoot, "scripts/stage-runtime.mjs");
+  const runtimePath = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
   const cli = (argv) => parseCli(spawnSync(process.execPath, [runtimePath, ...argv], { cwd: targetRepo, env, encoding: "utf8" }), argv.join(" "));
   const modules = {};
   const load = async (relative) => {
@@ -176,7 +176,7 @@ export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRo
     return modules[relative];
   };
   const contextFor = async (stage) => {
-    const [{ bootstrapStage, prepareMakeDecisionWorkspace }, runner] = await Promise.all([load("core/stage-context.mjs"), load("core/stage-runner.mjs")]);
+    const [{ bootstrapStage, prepareMakeDecisionWorkspace }, runner] = await Promise.all([load("runtime/stage/stage-context.mjs"), load("runtime/stage/stage-runner.mjs")]);
     let context = bootstrapStage(stage, { mode: "sidecar", taskPath, projectName: "E2E", taskId, runnerRoot });
     if (stage === "make-decision" && !context.candidateWorkspace) context = prepareMakeDecisionWorkspace(context);
     return { context, runner };
@@ -214,7 +214,7 @@ export async function runScenario(fixture, scenario) {
       if (scenario === "material-revision" && stage === "build-plan") {
         fs.writeFileSync(path.join(worktree, "specs", fixture.taskId, "spec.md"), "# revised spec\n");
         fs.writeFileSync(path.join(worktree, "specs", fixture.taskId, "plan.md"), "# revised plan\n");
-        const historicalTree = context.kernel.readAccepted("build-plan").accepted.checkpoint.tree_oid;
+        const historicalTree = context.kernel.currentVNextSnapshot().tree;
         const currentTree = captureGitWorktreeSnapshot(worktree).tree;
         const value = { task_id: fixture.taskId, stage: "build-code", material_revision: "revision-a", snapshot_tree: historicalTree, kind: "review", subject: "integration", status: "passed", evidence: [] };
         const raw = JSON.stringify(value);
@@ -325,12 +325,14 @@ export async function runFiveStageChain(fixture, { onStage } = {}) {
       }
       if (stage === "build-spec") {
         worker.artifacts.writeAtomic("spec.md", "# E2E spec\n");
-        return { facts: { spec_ref: `specs/${taskId}/spec.md`, checkpoint: worker.createCheckpoint(stage), ...publishAudit(context, stage, worktree) } };
+        const snapshot = worker.snapshotWorkspace();
+        return { facts: { spec_ref: `specs/${taskId}/spec.md`, snapshot_tree: snapshot.tree, source_digest: snapshot.source_digest, ...publishAudit(context, stage, worktree) } };
       }
       if (stage === "build-plan") {
         worker.artifacts.writeAtomic("plan.md", "# E2E plan\n");
         worker.artifacts.writeAtomic("tasks.md", "# E2E tasks\n");
-        return { facts: { plan_ref: `specs/${taskId}/plan.md`, tasks_ref: `specs/${taskId}/tasks.md`, checkpoint: worker.createCheckpoint(stage), ...publishAudit(context, stage, worktree) } };
+        const snapshot = worker.snapshotWorkspace();
+        return { facts: { plan_ref: `specs/${taskId}/plan.md`, tasks_ref: `specs/${taskId}/tasks.md`, snapshot_tree: snapshot.tree, source_digest: snapshot.source_digest, ...publishAudit(context, stage, worktree) } };
       }
       const tree = runGit(worktree, ["rev-parse", "HEAD^{tree}"]);
       const testHash = "a".repeat(64);

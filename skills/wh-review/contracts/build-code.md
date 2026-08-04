@@ -82,8 +82,8 @@ DRY/KISS/YAGNI/SoC、复杂度或可读性 finding 必须指出当前 diff 中�
 
 ## 最终 Integration 审查材料
 
-Integration 在调用 provider 前从 accepted build-plan checkpoint 汇总每个已完成
-implementation Phase 的正式 semantic-review trace，并单独绑定最终快照的当前
+Integration 在调用 provider 前直接绑定最终快照的当前
+implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
 implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
 提交；因此连续性以 Git commit ancestry 和每段自身的 tree/hash 绑定为准，不要求
 相邻 Phase 的 tree 字节相等。Phase 缺段、分叉、重复、哈希不连续、历史正式审查

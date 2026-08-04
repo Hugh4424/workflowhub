@@ -1,12 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { assertTaskHandle } from "./task-handle.mjs";
+import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
-import { createTaskWorktreeRemoval, openAcceptedWorkspace } from "./workspace.mjs";
+import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
+import { ArtifactDir } from "./artifact-dir.mjs";
+import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
+import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
+import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
@@ -35,6 +39,219 @@ function canonical(value, label = "close plan") {
 }
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+
+function currentQualityValue(task, ref) {
+  try {
+    const raw = task.readRecord(ref);
+    const value = JSON.parse(raw);
+    if (value?.schema_version !== "quality-fact.v1"
+        || value.task_id !== task.identity.taskId
+        || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+        || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")
+        || !["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(value.stage)
+        || !["test", "review", "acceptance_criterion", "confirmation"].includes(value.kind)
+        || !["passed", "failed", "unavailable", "missing"].includes(value.status)
+        || typeof value.subject !== "string" || value.subject.trim() === ""
+        || !Array.isArray(value.evidence) || value.evidence.length === 0
+        || !Number.isFinite(Date.parse(value.recorded_at))) return null;
+    const digest = qualityFactDigest(value);
+    if (ref !== `quality/facts/${digest}.json` || value.fact_id !== `quality-${digest}`) return null;
+    return value;
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function unavailableVerifySnapshotCommit(reason) {
+  const error = new Error(`verify-code test receipt snapshot_commit is unavailable${reason ? `: ${reason}` : ""}`);
+  error.code = "MATERIAL_INCOMPLETE";
+  return error;
+}
+
+function authenticatedTestSnapshotCommit(task, fact) {
+  const evidence = Array.isArray(fact?.evidence)
+    ? fact.evidence.find((entry) => entry?.evidence_type === "test_receipt")
+    : null;
+  if (!evidence || typeof evidence.ref !== "string" || !HASH.test(evidence.sha256 ?? "")) {
+    throw unavailableVerifySnapshotCommit("test receipt evidence is missing");
+  }
+  let raw;
+  try { raw = task.readRecord(evidence.ref); }
+  catch (error) {
+    if (error?.code === "ENOENT") throw unavailableVerifySnapshotCommit(`missing ${evidence.ref}`);
+    throw error;
+  }
+  if (sha256(raw) !== evidence.sha256) throw unavailableVerifySnapshotCommit(`hash mismatch for ${evidence.ref}`);
+  let receipt;
+  try { receipt = JSON.parse(raw); }
+  catch { throw unavailableVerifySnapshotCommit(`invalid JSON in ${evidence.ref}`); }
+  if (receipt?.schema_version !== "workflowhub-receipt.v1"
+      || receipt.task_id !== task.identity.taskId
+      || receipt.stage !== "verify-code"
+      || receipt.snapshot_tree !== fact.snapshot_tree
+      || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_head ?? "")
+      || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_tree ?? "")
+      || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_commit ?? "")) {
+    throw unavailableVerifySnapshotCommit(`provenance mismatch for ${evidence.ref}`);
+  }
+  const root = task.manifest.target_repo_root;
+  const tree = gitResult(root, ["rev-parse", `${receipt.snapshot_commit}^{tree}`]);
+  const commit = receipt.snapshot_commit.toLowerCase();
+  const head = receipt.snapshot_head.toLowerCase();
+  const parents = gitResult(root, ["rev-list", "--parents", "-n", "1", commit]);
+  const parentList = parents.ok ? parents.stdout.split(/\s+/).filter(Boolean).slice(1) : [];
+  const isSyntheticDirtySnapshot = commit !== head;
+  if (!tree.ok
+      || tree.stdout.toLowerCase() !== receipt.snapshot_tree.toLowerCase()
+      || !parents.ok
+      || (isSyntheticDirtySnapshot && (parentList.length !== 1 || parentList[0].toLowerCase() !== head))
+      || (!isSyntheticDirtySnapshot && parentList.length > 1)) {
+    throw unavailableVerifySnapshotCommit(`snapshot commit does not bind its tree and parent for ${evidence.ref}`);
+  }
+  return commit;
+}
+
+function currentVerifyFacts(task, expected = {}) {
+  const values = task.listCanonicalQualityFactRefs()
+    .map((ref) => ({ ref, value: currentQualityValue(task, ref) }))
+    .filter(({ value }) => value?.stage === "verify-code"
+      && (expected.snapshotTree === undefined || value.snapshot_tree === expected.snapshotTree)
+      && (expected.materialRevision === undefined || value.material_revision === expected.materialRevision));
+  const bySubject = new Map();
+  for (const item of values) {
+    if (bySubject.has(item.value.subject)) {
+      throw unavailableVerifySnapshotCommit(`ambiguous current verify-code quality facts for ${item.value.subject}`);
+    }
+    bySubject.set(item.value.subject, item);
+  }
+  const test = bySubject.get("full_tests_fresh")?.value ?? null;
+  const review = bySubject.get("same_build_integration_review")?.value ?? null;
+  const independentReview = bySubject.get("independent_review")?.value ?? null;
+  const snapshotCommit = test ? authenticatedTestSnapshotCommit(task, test) : null;
+  return Object.freeze({
+    vnext: true,
+    facts: {
+      tests: test ? { snapshot_tree: test.snapshot_tree, snapshot_commit: snapshotCommit, status: test.status } : null,
+      review: review ? { snapshot_tree: review.snapshot_tree, status: review.status } : null,
+      independent_review: independentReview ? { snapshot_tree: independentReview.snapshot_tree, status: independentReview.status } : null,
+    },
+  });
+}
+
+function currentMaterialRevision(task, worktreeRoot) {
+  const artifacts = ArtifactDir.open(worktreeRoot, task);
+  const values = CURRENT_MATERIAL_FILES.map((file) => [file, artifacts.read(file)]);
+  return `revision-${sha256(JSON.stringify(values))}`;
+}
+
+function currentWorkspaceBinding(task, kernel, delivery = null) {
+  if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
+  const expectedWorktree = resolve(dirname(task.manifest.target_repo_root), `${basename(task.manifest.target_repo_root)}-${task.identity.taskId}`);
+  try {
+    const workspace = openCurrentTaskWorkspace(task);
+    return Object.freeze({
+      taskId: task.identity.taskId,
+      stage: "make-decision",
+      worktreeRoot: workspace.worktreeRoot,
+      baselineCommit: workspace.baselineCommit,
+    });
+  } catch (error) {
+    if (existsSync(expectedWorktree)
+        || !delivery
+        || resolve(delivery.worktree_root ?? "") !== expectedWorktree
+        || !/^[a-f0-9]{40}$/i.test(delivery.task_commit ?? "")) throw error;
+    return Object.freeze({
+      taskId: task.identity.taskId,
+      stage: "make-decision",
+      worktreeRoot: delivery.worktree_root,
+      baselineCommit: delivery.task_commit,
+    });
+  }
+}
+
+function manualCleanupObservation(task, kernel) {
+  try {
+    const binding = currentWorkspaceBinding(task, kernel);
+    const worktreeRoot = binding.worktreeRoot;
+    if (typeof worktreeRoot === "string" && existsSync(worktreeRoot)) return inspectWorktreeCleanup(worktreeRoot);
+    return Object.freeze({
+      schema_version: "workflowhub-worktree-cleanup-scan.v1",
+      status: "unavailable",
+      worktree_root: worktreeRoot ?? null,
+      reason: "worktree-removed",
+    });
+  } catch (error) {
+    return Object.freeze({
+      schema_version: "workflowhub-worktree-cleanup-scan.v1",
+      status: "unavailable",
+      worktree_root: null,
+      reason: `cleanup-scan-unavailable:${error.message}`,
+    });
+  }
+}
+
+/** Record business delivery without claiming WorkflowHub formal acceptance. */
+export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel, sourceRef, sourceHash, now = () => new Date().toISOString() } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("manual delivery close TaskHandle/TaskKernel mismatch");
+  if (typeof sourceRef !== "string" || sourceRef.trim() === "") throw new TypeError("manual delivery close sourceRef is required");
+  if (typeof now !== "function") throw new TypeError("manual delivery close now must be a function");
+  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+  const sourceRaw = task.readRecord(sourceRef);
+  const actualSourceHash = sha256(sourceRaw);
+  if (sourceHash !== undefined && sourceHash !== actualSourceHash) throw new Error("manual delivery close source ref hash is stale");
+  const cleanup = manualCleanupObservation(task, kernel);
+  const invocationId = `manual-delivery-close:${sha256(canonical({ source_ref: sourceRef, source_hash: actualSourceHash }))}`;
+  const facts = readTaskFacts(task.taskPath);
+  const existingFactIndex = facts.findIndex((fact) => fact.invocation_id === invocationId);
+  const existingFact = existingFactIndex === -1 ? undefined : facts[existingFactIndex];
+  if (existingFact) {
+    const existing = JSON.parse(task.readRecord(existingFact.output_ref));
+    return Object.freeze({ ...existing, output_ref: existingFact.output_ref, fact_ref: `facts.jsonl#${existingFactIndex + 1}`, fact: existingFact });
+  }
+  const recordedAt = now();
+  const payload = {
+    schema_version: "manual-delivery-close.v1",
+    task_id: task.identity.taskId,
+    business_status: "delivered",
+    formal_status: "blocked",
+    source_ref: sourceRef,
+    source_hash: actualSourceHash,
+    source_digest: actualSourceHash,
+    source_digest_kind: "source_ref_sha256",
+    cleanup,
+    recorded_at: recordedAt,
+  };
+  const payloadRaw = `${JSON.stringify(payload, null, 2)}\n`;
+  const payloadHash = sha256(payloadRaw);
+  const outputRef = `evidence/manual-delivery-close/${payloadHash}.json`;
+  const existingOutput = readOptional(task, outputRef);
+  if (existingOutput !== undefined && existingOutput !== payloadRaw) {
+    throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);
+  }
+  if (existingOutput === undefined) {
+    try { kernel.publishCanonicalRecord(outputRef, payloadRaw); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (task.readRecord(outputRef) !== payloadRaw) throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);
+    }
+  }
+  const fact = appendTaskFact(task.taskPath, {
+    task_id: task.identity.taskId,
+    stage: "verify-code",
+    material_digest: inspectMaterialWorkspace(task.manifest.target_repo_root).material_digest,
+    source_digest: actualSourceHash,
+    invocation_id: invocationId,
+    source: "task-close/manual-delivery-close",
+    status: "manual_delivery_close",
+    content_hash: payloadHash,
+    created_at: recordedAt,
+    output_ref: outputRef,
+  });
+  return Object.freeze({ ...payload, output_ref: outputRef, fact_ref: fact.ref, fact: fact.value });
+}
 
 export function closePlanHash(plan) { return sha256(canonical(plain(plan, "close plan"))); }
 
@@ -78,22 +295,27 @@ function createOrVerify(task, path, record, label) {
 }
 
 function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
-  if (!existsSync(worktreeRoot)) return Object.freeze({ current: true, reason: "worktree-already-removed" });
-  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
-  const expectedTrees = [
-    acceptedVerify?.facts?.tests?.snapshot_tree,
-    acceptedVerify?.facts?.review?.snapshot_tree,
-  ].filter((value) => typeof value === "string" && value !== "");
-  if (expectedTrees.length === 0) {
-    return Object.freeze({ current: false, reason: "accepted verify-code facts have no snapshot binding", snapshot_tree: snapshot.tree });
+  if (acceptedVerify?.vnext !== true) {
+    return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
   }
-  if (expectedTrees.some((tree) => tree !== snapshot.tree)) {
-    return Object.freeze({
-      current: false,
-      reason: "accepted verify-code facts are stale relative to the current Workspace",
-      snapshot_tree: snapshot.tree,
-      expected_trees: [...new Set(expectedTrees)],
-    });
+  if (!existsSync(worktreeRoot)) {
+    const required = [acceptedVerify?.facts?.tests, acceptedVerify?.facts?.review, acceptedVerify?.facts?.independent_review];
+    const complete = acceptedVerify?.vnext === true
+      && required.every((fact) => fact?.status === "passed" && typeof fact.snapshot_tree === "string" && fact.snapshot_tree !== "");
+    if (!complete) return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete after worktree removal" });
+    const trees = new Set(required.map((fact) => fact.snapshot_tree));
+    if (trees.size !== 1) return Object.freeze({ current: false, reason: "current verify-code quality facts do not share one snapshot after worktree removal" });
+    return Object.freeze({ current: true, reason: "worktree-already-removed", snapshot_tree: required[0].snapshot_tree });
+  }
+  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const required = [acceptedVerify.facts.tests, acceptedVerify.facts.review, acceptedVerify.facts.independent_review];
+  const missing = required.some((fact) => !fact || fact.status !== "passed");
+  const trees = required.map((fact) => fact?.snapshot_tree).filter((tree) => typeof tree === "string" && tree !== "");
+  if (missing || trees.length !== required.length) {
+    return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete or not passed", snapshot_tree: snapshot.tree });
+  }
+  if (trees.some((tree) => tree !== snapshot.tree)) {
+    return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(trees)] });
   }
   return Object.freeze({ current: true, snapshot_tree: snapshot.tree });
 }
@@ -108,11 +330,17 @@ export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, o
   if (typeof now !== "function") throw new TypeError("close confirmation now must be a function");
   const planHash = closePlanHash(plan);
   const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
+  const human = kernel.publishHumanConfirmation("verify-code", {
+    decision: outcome === "confirmed" ? "accepted" : "rejected",
+    subject_ref: `operations/close/plans/${planHash}/plan.json`,
+  });
   const confirmation = {
     schema_version: "task-close-confirmation.v1",
     task_id: task.identity.taskId,
     plan_hash: planHash,
     outcome,
+    human_confirmation_ref: human.ref,
+    human_confirmation_hash: human.hash,
     confirmed_at: now(),
   };
   createOrVerify(task, ref, confirmation, "close confirmation");
@@ -262,16 +490,6 @@ function plannedMergePreflight(delivery) {
   throw new Error(`planned merge preflight failed: ${result.stderr || result.stdout || "git merge-tree failed"}`);
 }
 
-function effectiveAcceptedWorkspaceBinding(task, kernel) {
-  const accepted = kernel.readAccepted("make-decision");
-  return Object.freeze({
-    taskId: accepted.accepted.task_id,
-    stage: accepted.accepted.stage,
-    worktreeRoot: accepted.facts.worktree_root,
-    baselineCommit: accepted.facts.baseline_commit,
-  });
-}
-
 function validateDeliveryPlan(plan, task, kernel) {
   validatePlan(plan, task);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
@@ -279,7 +497,7 @@ function validateDeliveryPlan(plan, task, kernel) {
   const required = ["target_repo_root", "worktree_root", "task_branch", "target_branch", "remote", "task_commit", "spec_source_path", "spec_archive_path", "target_baseline", "remote_target_baseline", "merge_strategy"];
   if (required.some((key) => typeof delivery[key] !== "string" || delivery[key] === "")) throw new TypeError("delivery close plan is missing required fields");
   if (resolve(delivery.target_repo_root) !== task.manifest.target_repo_root) throw new Error("delivery close target repository mismatch");
-  const effective = effectiveAcceptedWorkspaceBinding(task, kernel);
+  const effective = currentWorkspaceBinding(task, kernel, delivery);
   if (resolve(delivery.worktree_root) !== resolve(effective.worktreeRoot)) throw new Error("delivery close worktree does not match the authenticated effective Workspace");
   oid(delivery.task_commit, "delivery task_commit");
   oid(delivery.target_baseline, "delivery target_baseline");
@@ -302,10 +520,16 @@ function closeConfirmation(task, planHash, ref) {
     throw new TypeError("canonical plan-bound closeConfirmationRef is required");
   }
   const confirmation = plain(JSON.parse(task.readRecord(ref)), "close confirmation");
-  const keys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "confirmed_at"]);
+  const keys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "human_confirmation_ref", "human_confirmation_hash", "confirmed_at"]);
   if (Object.keys(confirmation).some((key) => !keys.has(key))) throw new Error("close confirmation contains unknown fields");
   if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("close confirmation identity is invalid");
   if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) throw new Error("close confirmation plan hash mismatch");
+  if (typeof confirmation.human_confirmation_ref !== "string" || !HASH.test(confirmation.human_confirmation_hash ?? "")) throw new Error("close confirmation must bind a human confirmation");
+  const humanRaw = task.readRecord(confirmation.human_confirmation_ref);
+  if (sha256(humanRaw) !== confirmation.human_confirmation_hash) throw new Error("close confirmation human confirmation hash mismatch");
+  const human = JSON.parse(humanRaw);
+  if (human.schema_version !== "human-confirmation.v2" || human.task_id !== task.identity.taskId || human.subject_ref !== `operations/close/plans/${planHash}/plan.json`) throw new Error("close confirmation human confirmation is not bound to this plan");
+  if (human.decision !== (confirmation.outcome === "confirmed" ? "accepted" : "rejected")) throw new Error("close confirmation human decision does not match its outcome");
   return confirmation;
 }
 
@@ -323,15 +547,19 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
-  const accepted = kernel.readAccepted("make-decision");
-  const acceptedVerify = kernel.readAccepted("verify-code");
   const input = plain(requested, "delivery close input");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
-  const workspace = openAcceptedWorkspace(task, accepted);
+  if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
+  const workspace = openCurrentTaskWorkspace(task);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  const currentSnapshot = captureGitWorktreeSnapshot(worktree);
+  const acceptedVerify = currentVerifyFacts(task, {
+    snapshotTree: currentSnapshot.tree,
+    materialRevision: currentMaterialRevision(task, worktree),
+  });
   const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree);
   if (!verifyFreshness.current) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
@@ -399,7 +627,9 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   const root = delivery.target_repo_root;
-  const acceptedVerify = kernel.readAccepted("verify-code");
+  const taskSnapshotTree = gitResult(root, ["rev-parse", `${delivery.task_commit}^{tree}`]);
+  if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
+  const acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? { snapshotTree: taskSnapshotTree.stdout } : {});
   const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root);
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
@@ -412,6 +642,10 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const pushed = merged && localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
   const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
   const worktreeCleanup = !existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root));
+  const worktreeCleanupScan = worktreeCleanup
+    ? Object.freeze({ schema_version: "workflowhub-worktree-cleanup-scan.v1", status: "removed", worktree_root: resolve(delivery.worktree_root) })
+    : inspectWorktreeCleanup(delivery.worktree_root);
+  const formalCleanupSafe = worktreeCleanup || worktreeCleanupScan.safe === true;
   const branchCleanup = !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
   const facts = {
     delivery_committed: merged,
@@ -424,11 +658,13 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     local_target_oid: localTarget.ok ? localTarget.stdout.toLowerCase() : null,
     remote_target_oid: remoteTarget,
     worktree_cleanup: worktreeCleanup,
+    formal_cleanup_safe: formalCleanupSafe,
+    worktree_cleanup_scan: worktreeCleanupScan,
     branch_cleanup: branchCleanup,
   };
   facts.verify_facts_fresh = verifyFreshness.current;
   if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
-  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup], ["verify_facts_fresh", verifyFreshness.current]].filter(([, done]) => !done).map(([name]) => name);
+  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["formal_cleanup_safe", facts.formal_cleanup_safe], ["branch_cleanup", facts.branch_cleanup], ["verify_facts_fresh", verifyFreshness.current]].filter(([, done]) => !done).map(([name]) => name);
   return Object.freeze({ schema_version: "task-close-delivery-state.v1", status: missing.length === 0 ? "ready" : "incomplete", missing: Object.freeze(missing), facts: Object.freeze(facts) });
 }
 
@@ -444,6 +680,14 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
   if (typeof now !== "function") throw new TypeError("close now must be a function");
   return task.withRecordLock("locks/close.execution.lock", async () => {
+    for (const step of plan.steps) {
+      kernel.consumeIrreversibleAuthorization({
+        operation: step.operation,
+        confirmation_ref: confirmation.human_confirmation_ref,
+        plan_hash: planHash,
+        step_id: step.step_id,
+      });
+    }
     const existing = readOptional(task, "operations/close/completed.json");
     if (existing !== undefined) {
       const completed = JSON.parse(existing);
@@ -480,7 +724,7 @@ export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
       }
       if (step.operation === "remove-worktree") {
         if (Object.prototype.hasOwnProperty.call(step, "worktree_root")) throw new TypeError("remove-worktree path is selected only by the current accepted Workspace");
-        removal ??= createTaskWorktreeRemoval(safeTask, effectiveAcceptedWorkspaceBinding(safeTask, safeKernel));
+        removal ??= createTaskWorktreeRemoval(safeTask, currentWorkspaceBinding(safeTask, safeKernel));
         return removal;
       }
       throw new Error(`unsupported governed close operation: ${step.operation}`);
@@ -601,7 +845,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
         verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
       };
       if (step.operation === "remove-task-worktree") {
-        const effective = effectiveAcceptedWorkspaceBinding(task, kernel);
+        const effective = currentWorkspaceBinding(task, kernel, delivery);
         removal ??= createTaskWorktreeRemoval(task, {
           ...effective,
           worktreeRoot: delivery.worktree_root,
@@ -645,15 +889,7 @@ export async function executeClosePlan(options = {}) {
   if (typeof confirmationRef !== "string" || !confirmationRef.startsWith(confirmationPrefix) || !/^operations\/close\/confirmations\/[a-f0-9]{64}\/[a-f0-9-]{36}\.json$/.test(confirmationRef)) {
     throw new TypeError("canonical plan-bound closeConfirmationRef is required");
   }
-  const confirmation = plain(JSON.parse(task.readRecord(confirmationRef)), "close confirmation");
-  const confirmationKeys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "confirmed_at"]);
-  if (Object.keys(confirmation).some((key) => !confirmationKeys.has(key))) throw new Error("close confirmation contains unknown fields");
-  if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) {
-    throw new Error("close confirmation identity is invalid");
-  }
-  if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) {
-    throw new Error("close confirmation plan hash mismatch");
-  }
+  const confirmation = closeConfirmation(task, planHash, confirmationRef);
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
   const executors = options.executors;
   // Validate every executable boundary before creating a record or performing a
@@ -675,6 +911,8 @@ export async function executeClosePlan(options = {}) {
       task_id: task.identity.taskId,
       plan_hash: planHash,
       confirmation_ref: confirmationRef,
+      human_confirmation_ref: confirmation.human_confirmation_ref,
+      human_confirmation_hash: confirmation.human_confirmation_hash,
       outcome: "confirmed",
     }, "close confirmation");
 
@@ -690,6 +928,12 @@ export async function executeClosePlan(options = {}) {
     for (const step of plan.steps) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
+      kernel.consumeIrreversibleAuthorization({
+        operation: step.operation,
+        confirmation_ref: confirmation.human_confirmation_ref,
+        plan_hash: planHash,
+        step_id: step.step_id,
+      });
       const priorRaw = readOptional(task, recordPath);
       const before = await probeSatisfied(executor, step, priorRaw === undefined ? "initial" : "reconcile");
       if (priorRaw !== undefined) {

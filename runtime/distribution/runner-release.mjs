@@ -58,6 +58,16 @@ function addStaticDependencies(root, locators) {
   }
 }
 
+// The Runner release owns only the public runtime entrypoints and their
+// static import closure.  Skills are published by the separate Skill Bundle;
+// schemas and other import.meta.url data are listed explicitly below because
+// static import discovery cannot see them.
+const RUNNER_ENTRYPOINTS = Object.freeze([
+  "tools/cli/stage-runtime.mjs",
+  "tools/cli/task-bootstrap.mjs",
+  "tools/cli/task-close.mjs",
+]);
+
 export async function buildRunnerRelease({
   packageRoot,
   outputDir,
@@ -72,9 +82,7 @@ export async function buildRunnerRelease({
     "CONSTITUTION.md",
     "package.json",
     "package-lock.json",
-    ...filesUnder(root, "core", (locator) => /\.(?:mjs|json)$/.test(locator)),
-    ...filesUnder(root, "scripts", (locator) => locator.endsWith(".mjs") && !locator.includes("/__tests__/")),
-    ...filesUnder(root, "tools/cli", (locator) => locator.endsWith(".mjs") && !locator.includes("/__tests__/")),
+    ...RUNNER_ENTRYPOINTS,
     // Phase 8 moved the authoritative schema tree under runtime/.  Keep the
     // release self-contained: installed Runner validation must not reach back
     // into a source checkout or a now-empty legacy schemas/ directory.
@@ -84,13 +92,8 @@ export async function buildRunnerRelease({
     // import discovery cannot see them; include the declared runtime review
     // data explicitly in the Runner release.
     ...filesUnder(root, "runtime/review", (locator) => locator.endsWith(".json")),
-    ...filesUnder(root, "contracts", (locator) => /\.(?:json|contract)$/.test(locator) || locator.endsWith(".json")),
+    ...filesUnder(root, "contracts", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
-    ...filesUnder(root, "metrics", (locator) => /\.(?:mjs|json)$/.test(locator)),
-    ...filesUnder(root, "workflows", (locator) => locator.endsWith(".mjs") && !/\.test\.[^/]+$/.test(locator)),
-  ...filesUnder(root, "skills/wh-review", (locator) =>
-      !/(?:^|\/)__tests__(?:\/|$)|\.test\.[^/]+$/.test(locator)
-      && !locator.endsWith("/skill-bundle.json")),
   ]);
   addStaticDependencies(root, locators);
   const files = await Promise.all([...locators].sort().map((locator) => copy(root, destination, locator)));

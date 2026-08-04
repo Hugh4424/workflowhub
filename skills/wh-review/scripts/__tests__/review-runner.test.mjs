@@ -6,12 +6,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
-import { resolutionRef, writeReviewResolution } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject } from "../review-runner.mjs";
-import { buildNonGateReviewResponseRecord, buildReviewChain } from "../review-controller.mjs";
-import { createTask, createTaskKernel, openTask } from "../../../../core/task-handle.mjs";
-import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../core/workspace.mjs";
+import { createTask, createTaskKernel, openTask } from "../../../../runtime/task/task-handle.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
 import { execFileSync } from "node:child_process";
 
 const materialId = "a".repeat(64);
@@ -166,6 +164,18 @@ describe("public provider client", () => {
     await expect(client.run({ hostProvider: "codex", provider: "kimi", materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", requestId: "request" }))
       .rejects.toThrow(/PROTOCOL_INCOMPATIBLE/);
     expect(calls.map(({ command }) => command)).toEqual(["start"]);
+  });
+
+  it("turns a hanging managed broker into a provider timeout", async () => {
+    const client = new ReviewProviderClient({
+      command: [process.execPath, "-e", "setTimeout(() => {}, 10000)"],
+      config: "/tmp/workflowhub-timeout-config.json",
+      pollIntervalMs: 0,
+      timeoutMs: 1000,
+    });
+    await expect(client.run({
+      hostProvider: "codex", provider: "kimi", materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", requestId: "timeout-request",
+    })).rejects.toThrow(/PROVIDER_TIMEOUT/);
   });
 });
 
@@ -415,40 +425,6 @@ describe("aggregation and runner", () => {
     expect(report).toContain("PROFILE_MISMATCH");
   });
 
-  it("rejects direct non-gate audit writes outside TaskKernel flow authority without a second provider call", async () => {
-    const { attachmentRoot, task } = fixture("simple-review-resolution-");
-    const reviewPolicy = {
-      source: "wh_review.v2", mode: "full_on_structural_rework", minimum_heterologous: 1,
-      requested_profiles: ["kimi/coding"], eligible_profiles: ["kimi/coding"], same_source_exclusions: [],
-      effective_profiles: [{ provider: "kimi/coding", adapter: "kimi", model: "kimi-for-coding", effort: null, thinking: true }],
-      round: "initial",
-    };
-    let providerCalls = 0;
-    const first = await runReviewFixture({
-      task, attachmentRoot, taskId: "task", stage: "build-spec", materials: {}, hostProvider: "codex", providers: ["kimi/coding"], reviewPolicy,
-      providerClient: { runGroup: async () => {
-        providerCalls += 1;
-        return { runtimeId: "resolution-runtime", providers: [{ provider: "kimi/coding", status: "completed", session_id: "session", output: revise, error: null, execution: null }] };
-      } },
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
-    });
-    const prior = { ...JSON.parse(task.readRecord(first.resultRef)), result_ref: first.resultRef };
-    const repairedTree = "6".repeat(40);
-    const ledger = {
-      version: "wh-review-response-ledger.v1", previous_result_ref: first.resultRef,
-      previous_snapshot_tree: prior.snapshot_tree, current_snapshot_tree: repairedTree,
-      responses: [{ finding_id: prior.adjudication.clusters.find(({ disposition }) => disposition === "actionable").id, status: "fixed", rationale: "added the guard", changed_dimensions: [], evidence_refs: ["evidence/fix.json"] }],
-    };
-    const priorRaw = task.readRecord(first.resultRef);
-    const resolution = buildNonGateReviewResponseRecord({
-      taskId: "task", stage: "build-spec", previousResult: prior,
-      previousResultSha256: createHash("sha256").update(priorRaw).digest("hex"), ledger, currentSnapshotTree: repairedTree,
-    });
-    const ref = resolutionRef(resolution);
-    expect(() => writeReviewResolution(task, ref, resolution)).toThrow(/TaskKernel review-flow authority/i);
-    expect(providerCalls).toBe(1);
-  });
-
   it("runs a structural full follow-up with controller ledger only, never provider-visible ledger material", async () => {
     const { attachmentRoot, task } = fixture("structural-full-ledger-");
     const initialPolicy = {
@@ -476,7 +452,7 @@ describe("aggregation and runner", () => {
       task, attachmentRoot, taskId: "task", stage: "build-spec", materials: { draft_spec: "reworked" }, controlLedger: ledger,
       hostProvider: "codex", providers: ["kimi/coding"],
       reviewPolicy: { ...initialPolicy, round: "full" }, reviewRound: "full",
-      reviewChain: buildReviewChain({ previousResult: prior, ledger, currentSnapshotTree: currentTree, round: "full" }), providerClient,
+      providerClient,
       captureSource: () => ({ ...source, snapshotTree: currentTree }),
       buildMaterials: (input) => { visibleMaterials.push(input.materials); return { bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }; },
     });
@@ -484,7 +460,7 @@ describe("aggregation and runner", () => {
     expect(visibleMaterials).toHaveLength(1);
     expect(visibleMaterials[0]).toMatchObject({ draft_spec: "reworked" });
     expect(visibleMaterials[0]).not.toHaveProperty("response_ledger");
-    expect(JSON.parse(task.readRecord(full.resultRef)).review_chain).toMatchObject({ round: "full", response_ledger_sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(JSON.parse(task.readRecord(full.resultRef))).not.toHaveProperty("review_chain");
   });
 
   it("dispatches a production reviewer group once and records each provider result", async () => {
@@ -752,7 +728,7 @@ describe("aggregation and runner", () => {
     const first = await runReviewFixture(options);
     const attempt = JSON.parse(task.readRecord(first.attemptRef));
     const outputRef = attempt.provider_attempts[0].output_ref;
-    expect(outputRef).toMatch(/^reviews\/attempts\/[^/]+\/providers\/p-[A-Za-z0-9_-]+\.output\.json$/);
+    expect(outputRef).toMatch(/^quality\/reviews\/attempts\/[^/]+\/providers\/p-[A-Za-z0-9_-]+\.output\.json$/);
     expect(JSON.parse(task.readRecord(outputRef)).provider).toBe(provider);
     expect(JSON.parse(task.readRecord(first.resultRef)).provider_results).toEqual([{ provider, output: JSON.parse(pass) }]);
     const reused = await runReviewFixture(options);
@@ -1028,23 +1004,8 @@ describe("aggregation and runner", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("records phase subject identity in the attempt, result, and public response", async () => {
-    const { attachmentRoot, task } = fixture("simple-review-phase-");
-    const phaseSource = { ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) };
-    let materialInput;
-    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", phaseId: "phase-1", materials: {}, hostProvider: "codex", providers: ["kimi"],
-      providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }) },
-      capturePhaseSource: () => phaseSource, buildMaterials: (input) => { materialInput = input; return { bundleRoot: attachmentRoot, materialId, manifest: [] }; } });
-    expect(result).toMatchObject({ subjectKind: "phase", phaseId: "phase-1", baseTree: phaseSource.baseTree, candidateTree: phaseSource.snapshotTree });
-    expect(materialInput).toMatchObject({ reviewScope: "phase" });
-    expect(materialInput.materials.review_instructions).toContain("build-code/phase");
-    expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
-    expect(JSON.parse(task.readRecord(result.resultRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
-    expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
-  });
-
-  it("does not reuse a semantic Phase result across snapshot trees", async () => {
-    const { attachmentRoot, task } = fixture("simple-review-phase-snapshot-reuse-");
+  it("does not reuse a semantic worktree result across snapshot trees", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-worktree-snapshot-reuse-");
     const calls = [];
     const providerClient = {
       run: async () => {
@@ -1056,8 +1017,7 @@ describe("aggregation and runner", () => {
       task,
       attachmentRoot,
       taskId: "task",
-      stage: "build-code",
-      phaseId: "phase-1",
+      stage: "build-spec",
       materials: {},
       hostProvider: "codex",
       providers: ["kimi"],
@@ -1066,11 +1026,11 @@ describe("aggregation and runner", () => {
     };
     const first = await runReviewFixture({
       ...base,
-      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) }),
+      captureSource: () => ({ ...source, snapshotTree: "7".repeat(40) }),
     });
     const second = await runReviewFixture({
       ...base,
-      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "8".repeat(40) }),
+      captureSource: () => ({ ...source, snapshotTree: "8".repeat(40) }),
     });
     expect(calls).toHaveLength(2);
     expect(second.reused).not.toBe(true);
@@ -1296,11 +1256,11 @@ describe("verify final", () => {
 
   it("rejects a legacy build-code result without integration scope", () => {
     const { attachmentRoot, task } = fixture("simple-review-legacy-final-");
-    const resultRef = "reviews/results/legacy-worktree.json";
+    const resultRef = "quality/reviews/results/legacy-worktree.json";
     const legacy = {
       version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead },
-      snapshot_tree: source.snapshotTree, material_id: materialId, attempt_ref: "reviews/attempts/legacy/attempt.json",
+      snapshot_tree: source.snapshotTree, material_id: materialId, attempt_ref: "quality/reviews/attempts/legacy/attempt.json",
       provider_results: [{ provider: "kimi", output: JSON.parse(pass) }], verdict: "pass", findings: []
     };
     createTaskKernel(task).publishCanonicalRecord(resultRef, Buffer.from(`${JSON.stringify(legacy)}\n`));

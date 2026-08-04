@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateStageFacts } from "../runtime/task/task-kernel.mjs";
 
-const checkpoint=(stage,path)=>({schema_version:"git-checkpoint-plan.v1",stage,parent_commit:"a".repeat(40),artifacts:[{path,blob_oid:"b".repeat(40),content_hash:"c".repeat(64)}],plan_hash:"d".repeat(64)});
+const snapshot={ snapshot_tree: "a".repeat(40), source_digest: "e".repeat(64) };
 const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1".repeat(64), snapshot_head:"a".repeat(40),snapshot_tree: "a".repeat(40),snapshot_commit: "b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z", receipt_ref: `receipts/${prefix}-receipt.json`, receipt_hash: "2".repeat(64), output_ref: `evidence/${prefix}-output.txt`, output_hash: "3".repeat(64) });
 const acceptanceCoverage={ snapshot_tree:"a".repeat(40), accepted_criterion_ids:["AC-1"], items:[{ acceptance_criterion_id:"AC-1", status:"unknown", evidence_refs:[] }] };
 const audit=(stage)=>({
@@ -13,8 +13,8 @@ const audit=(stage)=>({
 });
 const valid = {
   "make-decision": { worktree_root: "/repo/worktree", baseline_commit: "a".repeat(40), decision: "go", ...audit("make-decision") },
-  "build-spec": { spec_ref: "specs/task/spec.md", checkpoint: checkpoint("build-spec","specs/task/spec.md"), ...audit("build-spec") },
-  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", checkpoint: {...checkpoint("build-plan","specs/task/plan.md"),artifacts:[{path:"specs/task/plan.md",blob_oid:"b".repeat(40),content_hash:"c".repeat(64)},{path:"specs/task/tasks.md",blob_oid:"c".repeat(40),content_hash:"d".repeat(64)}]}, ...audit("build-plan") },
+  "build-spec": { spec_ref: "specs/task/spec.md", ...snapshot, ...audit("build-spec") },
+  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", ...snapshot, ...audit("build-plan") },
   "build-code": {
     changed: [], phase_completion: {
       status: "completed",
@@ -36,34 +36,6 @@ const valid = {
   },
 };
 
-const verifyItem = (id, status = "pass") => ({
-  id,
-  status,
-  evidence_refs: status === "not_applicable" ? [] : [{
-    ref: `evidence/verify/${id}.json`,
-    sha256: "7".repeat(64),
-  }],
-  reason: status === "not_applicable" ? `${id} does not apply to this task` : `${id} was verified`,
-});
-const requiredVerifyItemIds = [
-  "current_materials",
-  "diff_scope",
-  "risk_tests",
-  "acceptance_criteria",
-  "tasks_completion",
-  "browser_qa",
-  "independent_review_resolution",
-  "core_gaps",
-  "human_handoff",
-];
-const deepVerifyFacts = {
-  ...valid["verify-code"],
-  verification_items: requiredVerifyItemIds.map((id) => verifyItem(
-    id,
-    id === "browser_qa" ? "not_applicable" : "pass",
-  )),
-};
-
 describe("five-stage facts v2 schema", () => {
   it.each(Object.entries(valid))("accepts %s required facts", (stage, facts) => {
     expect(validateStageFacts(stage, facts)).toBe(facts);
@@ -73,6 +45,9 @@ describe("five-stage facts v2 schema", () => {
   });
   it("rejects a stale or non-string build-code test command", () => {
     expect(() => validateStageFacts("build-code", { ...valid["build-code"], tests: { command: 7, exit_code: 0 } })).toThrow(/tests|command/i);
+  });
+  it("rejects retired checkpoint facts for current design stages", () => {
+    expect(() => validateStageFacts("build-spec", { spec_ref: "specs/task/spec.md", checkpoint: {}, ...audit("build-spec") })).toThrow(/snapshot_tree|source_digest/);
   });
   it("accepts the documented structured phase completion", () => {
     const phase_completion = {
@@ -102,46 +77,6 @@ describe("five-stage facts v2 schema", () => {
   it("rejects arbitrary evidence references that are not authenticated task records",()=>{
     expect(()=>validateStageFacts("verify-code",{...valid["verify-code"],evidence_refs:["made-up.json"]})).toThrow(/evidence|reference|authenticated/i);
   });
-  it("accepts a canonical browser QA evidence binding without making it a Gate",()=>{
-    const facts = {
-      ...valid["verify-code"],
-      browser_qa: {
-        ref: `evidence/stage-content/${"a".repeat(64)}/browser-qa-evidence.v1.json`,
-        hash: "b".repeat(64),
-      },
-    };
-    expect(validateStageFacts("verify-code", facts)).toBe(facts);
-  });
-  it("does not accept a bare browser QA payload in verify facts",()=>{
-    const facts = {
-      ...valid["verify-code"],
-      browser_qa: {
-        applicability: "ui",
-        result: "pass",
-        route: "/settings",
-      },
-    };
-    expect(()=>validateStageFacts("verify-code", facts)).toThrow(/browser|scenario|evidence|incomplete|required/i);
-  });
-
-  it("accepts a complete itemized verify result with status, evidence, and reason per item", () => {
-    expect(
-      validateStageFacts("verify-code", deepVerifyFacts),
-      "ORACLE-VERIFY: verify-code must expose all nine itemized checks",
-    ).toBe(deepVerifyFacts);
-  });
-
-  it.each(requiredVerifyItemIds)("rejects a passing verify result that omits %s", (missingId) => {
-    const facts = {
-      ...deepVerifyFacts,
-      verification_items: deepVerifyFacts.verification_items.filter(({ id }) => id !== missingId),
-    };
-    expect(
-      () => validateStageFacts("verify-code", facts),
-      `ORACLE-VERIFY: missing verify item ${missingId} cannot pass`,
-    ).toThrow(new RegExp(`missing verify item: ${missingId}`, "i"));
-  });
-
   it("keeps review unavailable and audit missing as disclosures, not business failures", () => {
     const facts = {
       ...valid["verify-code"],

@@ -30,4 +30,21 @@
 - `skills/`：可搬运技能；`workflows/`：五阶段入口；`config/`：配置；`tests/`：跨模块和集成测试。
 - `core/`、`scripts/`、顶层 `schemas/`：历史兼容区。未列入 move-map 的文件保持原位，未经证明不得新增能力。
 - `docs/architecture/move-map.json` 是本次目录迁移的唯一事实；新增文件必须先登记职责和消费者。
+- `tools/architecture/`：只读架构诊断与最终证据校验，不进入 Runner/Skill Bundle，也不作为普通推进许可证。
 - `node_modules/` 仅为本地/CI 安装产物，不提交、不作为运行时来源。
+
+## 当前治理边界
+
+- 当前工作真相只有 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四份材料；旧 task、旧 receipt、旧 review、历史 snapshot 只读保留。
+- 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
+- provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
+- 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
+
+## vNext 永久实施边界
+
+- `make-decision` 只创建并维护四份当前材料；`build-spec`、`build-plan` 只细化同一份材料；`build-code`、`verify-code` 只消费同一份材料和 task facts。
+- vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`quality/verify.json`、`index.json` 及必要的 `quality/evidence/`；不创建旧 accepted、run、receipt、review-flow 或 current projection。
+- 禁止 successor/predecessor、selector、snapshot lineage、phase trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。
+- review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。
+- public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
+- reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。

@@ -1,15 +1,45 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import { extractAcceptanceCriteria, validateCoverage, validateFinalGates } from "../../tools/architecture/verify-final-coverage.mjs";
 import { governanceTreeHash } from "../../tools/architecture/inventory.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
+const generatedExecutionRefs = [];
+let generatedExecutionId = 0;
+const DEFAULT_EXECUTION_ORACLES = [
+  "tests/contract/review-layering.test.mjs",
+  "tests/contract/repository-governance.test.mjs",
+];
 
-function boundCoverage({ status = "focused_pass", oracleRef = "tests/contract/review-layering.test.mjs", oracles = null, executionRef = "evidence/phase-9/final-targeted-matrix.json" } = {}) {
+afterEach(() => {
+  for (const ref of generatedExecutionRefs.splice(0)) fs.rmSync(path.join(ROOT, ref), { force: true });
+});
+
+function writeCurrentExecution(oracles) {
+  const ref = `evidence/phase-9/.final-coverage-test-${++generatedExecutionId}.json`;
+  const result = {
+    success: true,
+    numTotalTests: oracles.length,
+    numPassedTests: oracles.length,
+    numFailedTests: 0,
+    testResults: oracles.map((oracle) => ({
+      name: path.resolve(ROOT, oracle),
+      status: "passed",
+      assertionResults: [{ status: "passed" }],
+    })),
+  };
+  fs.writeFileSync(path.join(ROOT, ref), JSON.stringify(result));
+  generatedExecutionRefs.push(ref);
+  return ref;
+}
+
+function boundCoverage({ status = "focused_pass", oracleRef = "tests/contract/review-layering.test.mjs", oracles = null, executionRef = null } = {}) {
   const refHash = (ref) => crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, ref))).digest("hex");
+  const oracleRefs = oracles === null ? [oracleRef] : oracles;
+  const currentExecutionRef = executionRef ?? writeCurrentExecution(DEFAULT_EXECUTION_ORACLES);
   return {
     schema_version: "workflowhub-final-coverage.v2",
     snapshot_tree: "tree",
@@ -19,7 +49,7 @@ function boundCoverage({ status = "focused_pass", oracleRef = "tests/contract/re
       ...(oracles === null
         ? { oracle: { ref: oracleRef, sha256: refHash(oracleRef) } }
         : { oracles: oracles.map((ref) => ({ ref, sha256: refHash(ref) })) }),
-      execution: { ref: executionRef, sha256: refHash(executionRef) },
+      execution: { ref: currentExecutionRef, sha256: refHash(currentExecutionRef) },
     }],
   };
 }

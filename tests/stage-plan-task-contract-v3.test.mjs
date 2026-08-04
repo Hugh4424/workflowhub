@@ -7,7 +7,7 @@ import {
   validatePlanTaskContract,
   validatePlanTaskContractV2,
 } from "../runtime/stage/stage-content-contracts.mjs";
-import { certifyCurrentTaskCompletion } from "../core/stage-handlers.mjs";
+import { certifyCurrentTaskCompletion } from "../runtime/stage/stage-handlers.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -238,40 +238,6 @@ function validate(overrides = {}) {
 }
 
 describe("plan-task.v3 structural contract", () => {
-  it.each([
-    ["decision-log.md"],
-    ["spec.md"],
-    ["plan.md"],
-    ["tasks.md"],
-    ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
-  ])("uses the current material revision when %s changes without reopening accepted history", (...changedFiles) => {
-    const result = validate({
-      material_revision: {
-        schema_version: "task-material-revision.v1",
-        task_id: "task",
-        revision_id: `revision-${"a".repeat(64)}`,
-        parent_revision: `revision-${"d".repeat(64)}`,
-        previous_ref: `materials/revisions/${"e".repeat(64)}.json`,
-        previous_hash: "f".repeat(64),
-        changed_files: changedFiles,
-        change_summary: "authorized current material update",
-        source_refs: [{ ref: "results/build-plan/accepted.json", hash: "b".repeat(64) }],
-        hashes: Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"]
-          .map((file) => [file, sha256(`current:${file}`)])),
-      },
-      accepted_artifact_hashes: Object.fromEntries(changedFiles.map((file) => [file, "c".repeat(64)])),
-    });
-    expect(result.ok).toBe(true);
-    expect(
-      result.facts.current_material_revision,
-      "ORACLE-MAT: current materials continue while accepted hashes remain historical",
-    ).toMatchObject({
-      revision_id: `revision-${"a".repeat(64)}`,
-      changed_files: changedFiles,
-      accepted_history: "read_only",
-    });
-  });
-
   it("accepts one readable authority with eight-section phases and paired RED/GREEN", () => {
     expect(validate()).toMatchObject({
       ok: true,

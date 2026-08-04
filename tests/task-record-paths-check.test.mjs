@@ -29,7 +29,7 @@ function fixture() {
     mkdirSync(directory, { recursive: true });
     writeFileSync(
       join(directory, "SKILL.md"),
-      "Use StageContext from core/stage-context.mjs via bootstrapStage.\n",
+      "Use StageContext from runtime/stage/stage-context.mjs via bootstrapStage.\n",
     );
   }
   return root;
@@ -64,7 +64,7 @@ describe("TaskContext static guard", () => {
     const root = fixture();
     writeFileSync(
       join(root, "workflows", "verify-code", "SKILL.md"),
-      `Use StageContext from core/stage-context.mjs via bootstrapStage.\n${bad}\n`,
+      `Use StageContext from runtime/stage/stage-context.mjs via bootstrapStage.\n${bad}\n`,
     );
     const result = run(root);
     expect(result.status).toBe(1);
@@ -93,7 +93,7 @@ describe("TaskContext static guard", () => {
     expect(result.stderr).toContain("cwd identity discovery");
   });
 
-  it.each(["core/source-manifest.mjs", "runtime/evidence/requirement-ledger.mjs", "core/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
+  it.each(["core/source-manifest.mjs", "runtime/evidence/requirement-ledger.mjs", "runtime/task/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
     const root = fixture();
     const full = join(root, relativeFile); mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, "export const guessed = process.cwd();\n");

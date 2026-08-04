@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { canonical } from "./canonical-utils.mjs";
-import { assertTaskHandle } from "../../core/task-handle.mjs";
+import { assertTaskHandle } from "../../runtime/task/task-handle.mjs";
 import { inspectRunnerIdentity } from "./runner-identity.mjs";
 import { captureGitWorktreeSnapshot } from "../task/git-worktree-snapshot.mjs";
 

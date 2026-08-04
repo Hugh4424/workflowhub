@@ -24,7 +24,7 @@ The current four materials are the source of truth:
 
 Read the first two and author the latter two. Revise any current material in
 this same task when the work reveals a need. Old accepted records, receipts,
-reviews, checkpoints, snapshots, generations, and runner history are read-only
+reviews, snapshots, generations, and runner history are read-only
 audit records. They never license or block normal planning or implementation.
 
 Current materials decide whether work can continue. Formal publication still
@@ -43,8 +43,8 @@ paths from cwd, Git, branch, issue number, or scans. Do not call `prepare`, pass
 Use an OS temporary directory for caller-owned drafts and runtime inputs.
 Publish the current reviewed `plan.md` and `tasks.md` via the runtime's artifact,
 receipt, and run schemas. The normal formal sequence is `run`, `confirm`, then
-`accept`; confirmation must be a real human answer. A checkpoint produced by
-`accept` is an audit fact only, never a prerequisite for later work.
+`authorize`; confirmation must be a real human answer. The current source
+snapshot is a provenance fact only, never a prerequisite or work permit.
 
 ## Procedure
 
@@ -90,7 +90,7 @@ confirmation.
 
 Do not call build-plan complete until the declared planning work, checks,
 independent review fact, user confirmation, and handoff are real. Do not treat
-the confirmation or checkpoint as authorization to commit, push, merge,
+the confirmation or source snapshot as authorization to commit, push, merge,
 archive, or clean up; those actions require separate authorization.
 
 ## Communication and handoff

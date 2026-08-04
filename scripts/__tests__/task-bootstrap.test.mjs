@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
-import { createTask } from "../../core/task-handle.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });

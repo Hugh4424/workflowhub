@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "skill": "stage-step-receipts",
-  "files": [
-    "SKILL.md",
-    "agents/openai.yaml"
-  ]
-}

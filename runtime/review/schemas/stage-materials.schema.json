@@ -36,12 +36,11 @@
   "$defs": {
     "rule": {
       "type": "object",
-      "required": ["source_bundle", "required", "optional", "closure_optional", "generated", "forbidden", "minimum_reviewers", "v2_required_maps"],
+      "required": ["source_bundle", "required", "optional", "generated", "forbidden", "minimum_reviewers", "v2_required_maps"],
       "properties": {
         "source_bundle": { "enum": ["none", "diff"] },
         "required": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "optional": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "closure_optional": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "generated": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "forbidden": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "minimum_reviewers": { "type": "integer", "minimum": 1 },
@@ -58,9 +57,6 @@
               "contains": { "const": "draft_tasks" }
             },
             "optional": {
-              "not": { "contains": { "const": "draft_tasks" } }
-            },
-            "closure_optional": {
               "not": { "contains": { "const": "draft_tasks" } }
             },
             "generated": {

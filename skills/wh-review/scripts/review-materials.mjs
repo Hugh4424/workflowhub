@@ -3,7 +3,7 @@ import { closeSync, existsSync, lstatSync, mkdtempSync, mkdirSync, openSync, rea
 import { dirname, join, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
-import { assertTaskHandle } from "../../../core/task-handle.mjs";
+import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
 import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 
@@ -181,7 +181,7 @@ function validateAnchors(key, entryId, anchors) {
   }
 }
 
-function validateBuildCodeAcceptanceMap(value) {
+export function validateBuildCodeAcceptanceMap(value) {
   if (!Array.isArray(value.acceptance_ids) || value.acceptance_ids.length === 0 || value.acceptance_ids.some((id) => typeof id !== "string" || id.trim() === "") || new Set(value.acceptance_ids).size !== value.acceptance_ids.length) {
     throw new Error("MATERIAL_INCOMPLETE: acceptance_map.acceptance_ids must be a non-empty unique AC list");
   }
@@ -194,6 +194,25 @@ function validateBuildCodeAcceptanceMap(value) {
     }
   }
   if (entryIds.size !== value.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: acceptance_map must map every declared AC");
+  if (value.acceptance_ids.length > 1) {
+    const signatures = value.entries.map((entry) => JSON.stringify({
+      change_ids: entry.change_ids ?? [],
+      implementation: entry.implementation,
+      verification: entry.verification,
+      anchors: entry.anchors ?? [],
+    }));
+    if (new Set(signatures).size === 1) throw new Error("MATERIAL_INCOMPLETE: acceptance_map requires distinct evidence for each AC; generic mapping is not allowed");
+  }
+}
+
+export function validatePhaseTestManifest({ required, listed } = {}) {
+  if (!Array.isArray(required) || required.length === 0 || !Array.isArray(listed)) {
+    throw new TypeError("phase test manifest requires required and listed path arrays");
+  }
+  const declared = new Set(listed);
+  const missing = [...new Set(required)].filter((path) => !declared.has(path));
+  if (missing.length > 0) throw new Error(`MATERIAL_INCOMPLETE: Phase test manifest is missing ${missing.join(", ")}`);
+  return Object.freeze({ required: [...new Set(required)], listed: [...declared].sort() });
 }
 
 function hashValue(value, label) {
@@ -241,8 +260,11 @@ function validateIntegrationMaterials({ task, source, materials }) {
     if (!seams || typeof seams !== "object" || Array.isArray(seams)
         || seams.schema_version !== "cross-phase-seam-index.v1"
         || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)
-        || seams.entries.length !== 0) {
-      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires an empty seam index");
+        || seams.entries.some((seam) => !seam || typeof seam !== "object"
+          || typeof seam.seam_id !== "string"
+          || !["unknown", "not_applicable"].includes(seam.state ?? seam.status)
+          || (seam.state ?? seam.status) !== "not_applicable" && seam.reason_code !== "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS")) {
+      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires explicit unknown seam facts");
     }
     const trace = materials.ac_trace;
     if (!trace || typeof trace !== "object" || Array.isArray(trace)
@@ -265,7 +287,9 @@ function validateIntegrationMaterials({ task, source, materials }) {
       traced.add(entry.acceptance_criterion_id);
       validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
       for (const change of entry.change) {
-        if (change?.task_id !== null || typeof change.summary !== "string" || change.summary.trim() === "") {
+        const currentTask = change?.task_id === null
+          || coverage.completed_tasks.some((task) => task?.task_id === change?.task_id);
+        if (!currentTask || typeof change.summary !== "string" || change.summary.trim() === "") {
           throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} current change mapping is invalid`);
         }
       }
@@ -392,12 +416,8 @@ function validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap = null
 
 function validateMaterialAllowlist(rule, materials, reviewRound) {
   const allowed = new Set([...rule.required, ...rule.optional]);
-  if (reviewRound === "closure") for (const key of rule.closure_optional) allowed.add(key);
   for (const key of Object.keys(materials)) {
     if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for ${reviewRound} review`);
-  }
-  if (reviewRound !== "closure") {
-    for (const key of rule.closure_optional) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${key} is closure-only`);
   }
 }
 

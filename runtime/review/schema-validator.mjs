@@ -4,14 +4,13 @@ import Ajv2020 from "ajv/dist/2020.js";
 const SCHEMAS = {
   attempt: "attempt.schema.json",
   result: "result.schema.json",
-  resolution: "resolution.schema.json",
   ac_evidence_summary: "ac-evidence-summary.schema.json",
 };
 
 // Conditional `required` clauses intentionally target properties declared at
 // the schema root, so strictRequired is the one strict check that is not
 // applicable. Every other Ajv strict-mode compilation check remains enabled.
-const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
+const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false, formats: { "date-time": true } });
 const validators = new Map();
 
 for (const [name, filename] of Object.entries(SCHEMAS)) {

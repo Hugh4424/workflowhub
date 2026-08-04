@@ -1,65 +1,18 @@
 import { createHash } from "node:crypto";
-export { MATERIAL_FILES, createMaterialRevision } from "../task/material-revision.mjs";
+export { CURRENT_MATERIAL_FILES as MATERIAL_FILES } from "../task/material-workspace.mjs";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
 import decisionEntrySchema from "../schemas/decision-entry.v1.json" with { type: "json" };
 import ambiguityLedgerV2Schema from "../schemas/ambiguity-ledger.v2.json" with { type: "json" };
 import planTaskV2Schema from "../schemas/plan-task-contract.v2.json" with { type: "json" };
-import materialRevisionSchema from "../schemas/task-material-revision.v1.json" with { type: "json" };
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const HASH = /^[a-f0-9]{64}$/;
-const ajv = new Ajv2020({ allErrors: true, strict: false });
+const ajv = new Ajv2020({ allErrors: true, strict: false, formats: { "date-time": true } });
 const validateEntrySchema = ajv.compile(decisionEntrySchema);
 const validateAmbiguityLedgerV2Schema = ajv.compile(ambiguityLedgerV2Schema);
 const validatePlanTaskV2Schema = ajv.compile(planTaskV2Schema);
-const validateMaterialRevisionSchema = ajv.compile(materialRevisionSchema);
-
-export function validateTaskMaterialRevision(value) {
-  return result(validateMaterialRevisionSchema(value) ? [] : schemaErrors(validateMaterialRevisionSchema));
-}
-
-// Material revisions written by the short-lived Phase 2 writer may contain
-// a top-level `requirements` binding.  Keep those bytes readable, but mark the
-// shape as historical so callers can explicitly repair it into the current
-// canonical form instead of silently rewriting history.
-export function validateTaskMaterialRevisionVersionAware(value) {
-  const current = validateTaskMaterialRevision(value);
-  const legacy = Object.prototype.hasOwnProperty.call(value ?? {}, "requirements");
-  if (current.ok) return Object.freeze({
-    ok: true,
-    legacy,
-    format: legacy ? "task-material-revision.v1-top-level-requirements" : "current",
-    errors: Object.freeze([]),
-  });
-
-  // A clean runner may carry the older schema, which rejects the historical
-  // top-level `requirements` extension before the reader can classify it.
-  // Validate the material-revision core after removing only that extension;
-  // the original bytes remain untouched and are still returned as evidence.
-  if (legacy && value && typeof value === "object" && !Array.isArray(value)) {
-    const normalized = { ...value };
-    delete normalized.requirements;
-    if (Array.isArray(normalized.changed_files)) {
-      normalized.changed_files = normalized.changed_files.filter((file) => file !== "requirements");
-    }
-    const historical = validateTaskMaterialRevision(normalized);
-    if (historical.ok) return Object.freeze({
-      ok: true,
-      legacy: true,
-      format: "task-material-revision.v1-top-level-requirements",
-      errors: Object.freeze([]),
-    });
-  }
-
-  return Object.freeze({
-    ok: false,
-    legacy: false,
-    format: "current",
-    errors: current.errors,
-  });
-}
 
 const REQUIRED_MAIN_SECTIONS = Object.freeze([
   "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
@@ -1053,36 +1006,12 @@ export function validateTasksOnlyCompletionSeam({
 
 export function validatePlanTaskContract({
   spec, plan, tasks, completionEvidence,
-  material_revision: materialRevision,
-  accepted_artifact_hashes: acceptedArtifactHashes,
 } = {}) {
   const errors = [];
   for (const [name, value] of Object.entries({ spec, plan, tasks })) {
     if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
-  let currentMaterialRevision;
-  if (materialRevision !== undefined) {
-    if (!validateMaterialRevisionSchema(materialRevision)) {
-      errors.push(...schemaErrors(validateMaterialRevisionSchema).map((error) => `material_revision.${error}`));
-    } else {
-      if (acceptedArtifactHashes !== undefined && !object(acceptedArtifactHashes)) {
-        errors.push("accepted_artifact_hashes must be an object when supplied");
-      }
-      currentMaterialRevision = Object.freeze({
-        revision_id: materialRevision.revision_id,
-        parent_revision: materialRevision.parent_revision,
-        changed_files: Object.freeze([...materialRevision.changed_files]),
-        change_summary: materialRevision.change_summary,
-        source_refs: Object.freeze(materialRevision.source_refs.map((entry) => Object.freeze({ ...entry }))),
-        hashes: Object.freeze({ ...materialRevision.hashes }),
-        previous_ref: materialRevision.previous_ref,
-        previous_hash: materialRevision.previous_hash,
-        accepted_history: "read_only",
-      });
-    }
-  }
-
   const planVersion = templateVersion(plan);
   const tasksVersion = templateVersion(tasks);
   const isV3 = planVersion === PLAN_TASK_V3 || tasksVersion === PLAN_TASK_V3;
@@ -1366,9 +1295,6 @@ export function validatePlanTaskContract({
     }),
     source_coverage: sourceCoverageFacts({
       spec, plan, tasks, acceptedFrs, acceptedAcs, taskRows,
-    }),
-    ...(currentMaterialRevision === undefined ? {} : {
-      current_material_revision: currentMaterialRevision,
     }),
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { validateCanonicalTestReceipt, validateHumanConfirmation } from "../../core/canonical-evidence-validators.mjs";
+import { validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 
@@ -58,6 +58,11 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
     return;
   }
   try {
+    const reviewStage = fact.kind === "review"
+      && fact.stage === "verify-code"
+      && fact.subject === "same_build_integration_review"
+      ? "build-code"
+      : fact.stage;
     if (evidence.evidence_type === "test_receipt") {
       validateCanonicalTestReceipt(value, {
         taskId: fact.task_id, stage: fact.stage, snapshotTree: fact.snapshot_tree,
@@ -68,17 +73,22 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
       const outputRaw = readBound({ ref: value.output_ref, sha256: value.output_hash }, read, dependencies, outputKey);
       if (outputRaw !== undefined) dependencies[outputKey] = "current";
     } else if (evidence.evidence_type === "review_result") {
-      validateSchema("result", value);
-      if (value.task_id !== fact.task_id || value.stage !== fact.stage || value.snapshot_tree !== fact.snapshot_tree) {
-        throw new Error("review provenance mismatch");
+      if (value.version === "wh-review-attempt.v1") {
+        validateSchema("attempt", value);
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree || value.terminal_status !== "unavailable" || fact.status !== "unavailable") {
+          throw new Error("unavailable review provenance mismatch");
+        }
+      } else {
+        validateSchema("result", value);
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree) {
+          throw new Error("review provenance mismatch");
+        }
+        const subjectMatches = fact.subject === "integration_review"
+            ? value.subject_kind === "worktree" && value.review_scope === "integration"
+            : value.subject_kind === "worktree";
+        if (!subjectMatches) throw new Error("review subject mismatch");
+        if (!expectedPassed(fact.status, value.verdict === "pass", value.verdict === "revise_required")) throw new Error("review outcome mismatch");
       }
-      const subjectMatches = fact.subject === "phase_reviews"
-        ? value.subject_kind === "phase" && value.review_scope === "phase"
-        : fact.subject === "integration_review"
-          ? value.subject_kind === "worktree" && value.review_scope === "integration"
-          : value.subject_kind === "worktree";
-      if (!subjectMatches) throw new Error("review subject mismatch");
-      if (!expectedPassed(fact.status, value.verdict === "pass", value.verdict === "revise_required")) throw new Error("review outcome mismatch");
     } else if (evidence.evidence_type === "acceptance_evidence") {
       const acceptance = validateAcceptanceEvidence(value);
       if (acceptance.acceptance_criterion_id !== fact.subject) throw new Error("acceptance subject mismatch");
@@ -94,6 +104,10 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
         taskId: fact.task_id, stage: fact.stage, subject: value.attempt_ref, requireAccepted: false,
       });
       if (fact.subject !== "human_confirmation") throw new Error("confirmation subject mismatch");
+      if (value.schema_version === "human-confirmation.v2"
+        && (value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree)) {
+        throw new Error("confirmation provenance mismatch");
+      }
       if (!expectedPassed(fact.status, value.decision === "accepted", value.decision === "rejected")) throw new Error("confirmation outcome mismatch");
     } else {
       throw new Error(`unsupported canonical evidence_type: ${evidence.evidence_type}`);

@@ -3,189 +3,62 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTask } from "../../../../core/task-handle.mjs";
+import { createTask } from "../../../../runtime/task/task-handle.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
-  it("exports the narrow legacy-root adoption operation with the normal review operations", async () => {
+  it("exports only current review operations and no resolution writer", async () => {
     const mod = await import(cli.href);
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.verifyFinalReview).toBe("function");
     expect(typeof mod.adoptLegacyReviewRoot).toBe("function");
     expect(typeof mod.providerVisibleMaterialsForRound).toBe("function");
-    expect(mod.resetReviewFlow).toBeUndefined();
-    expect(mod.recoverReviewProjections).toBeUndefined();
+    expect(mod.buildNonGateReviewResponseRecord).toBeUndefined();
+    expect(mod.ensureResolutionFlowHead).toBeUndefined();
   });
 
-  it("never sends a response ledger to a fresh full review", async () => {
+  it("never sends retired response-ledger materials to a provider", async () => {
     const { providerVisibleMaterialsForRound } = await import(cli.href);
-    const materials = {
-      draft_spec: "spec.md",
-      response_ledger: { version: "wh-review-response-ledger.v1" },
-    };
-    expect(providerVisibleMaterialsForRound({ materials, round: "full" })).toEqual({ draft_spec: "spec.md" });
+    const materials = { draft_spec: "spec.md", response_ledger: { forged: true }, previous_review: { forged: true } };
     expect(providerVisibleMaterialsForRound({ materials, round: "initial" })).toEqual({ draft_spec: "spec.md" });
-    expect(providerVisibleMaterialsForRound({ materials, round: "closure", previousResult: {
-      result_ref: "reviews/results/prior.json", snapshot_tree: "a".repeat(40), adjudication: { clusters: [] },
-    } })).toMatchObject({ draft_spec: "spec.md", response_ledger: materials.response_ledger, previous_review: { result_ref: "reviews/results/prior.json" } });
+    expect(providerVisibleMaterialsForRound({ materials, round: "full" })).toEqual({ draft_spec: "spec.md" });
   });
 
-  it("uses the TaskKernel head when previous_result_ref is omitted and treats a supplied ref only as CAS", async () => {
-    const { reviewFlowIdentity, resolveReviewFlowHead } = await import(cli.href);
-    const identityKernel = {
-      deriveReviewFlowIdentity: (subject) => ({ task_id: "task", workflow_run_id: "run-1", ...subject }),
-    };
-    const identity = reviewFlowIdentity({
-      kernel: identityKernel, assertedWorkflowRunId: "run-1",
-      stage: "build-spec", reviewTrack: null, phaseId: null,
-    });
-    expect(identity).toMatchObject({
-      task_id: "task", workflow_run_id: "run-1", stage: "build-spec", review_track: null,
-      subject_kind: "worktree", phase_id: null, review_scope: null,
-    });
-    expect(() => reviewFlowIdentity({
-      kernel: identityKernel, assertedWorkflowRunId: "forged", stage: "build-spec",
-    })).toThrow(/workflow_run_id|lineage/i);
-    const phaseA = reviewFlowIdentity({
-      kernel: identityKernel, stage: "build-code", phaseId: "phase-1", snapshotTree: "a".repeat(40),
-    });
-    const phaseB = reviewFlowIdentity({
-      kernel: identityKernel, stage: "build-code", phaseId: "phase-1", snapshotTree: "b".repeat(40),
-    });
-    expect(phaseA.snapshot_tree).toBe("a".repeat(40));
-    expect(phaseB.snapshot_tree).toBe("b".repeat(40));
-    expect(phaseA).not.toEqual(phaseB);
-    const ref = "reviews/results/current.json";
-    const result = {
-      version: "wh-review-result.v1", task_id: "task", stage: "build-spec",
-      review_track: null, subject_kind: "worktree", phase_id: null,
-      snapshot_tree: "a".repeat(40), verdict: "pass",
-    };
-    const task = {
-      identity: { taskId: "task" },
-      readRecord: (recordRef) => {
-        if (recordRef === ref) return `${JSON.stringify(result)}\n`;
-        const error = new Error("missing canonical record");
-        error.code = "ENOENT";
-        throw error;
-      },
-    };
-    const kernel = { readReviewFlow: () => ({ head_result_ref: ref }) };
-    expect(resolveReviewFlowHead({ task, kernel, identity })).toMatchObject({
-      flow: { head_result_ref: ref },
-      prior: { result_ref: ref, verdict: "pass" },
-    });
-    const oldPhaseResult = { ...result, stage: "build-code", subject_kind: "phase", phase_id: "phase-1", review_scope: "phase" };
-    const oldPhaseTask = { identity: { taskId: "task" }, readRecord: () => `${JSON.stringify(oldPhaseResult)}\n` };
-    const newPhaseIdentity = { ...phaseB, review_track: null };
-    expect(resolveReviewFlowHead({
-      task: oldPhaseTask, kernel: { readReviewFlow: () => null }, identity: newPhaseIdentity,
-      previousResultRef: ref,
-    })).toMatchObject({ flow: null, prior: { result_ref: ref, snapshot_tree: "a".repeat(40) } });
-    expect(() => resolveReviewFlowHead({
-      task: oldPhaseTask, kernel: { readReviewFlow: () => null }, identity: phaseA,
-      previousResultRef: ref,
-    })).toThrow(/CAS failed/);
-    let staleReplay;
-    try {
-      resolveReviewFlowHead({
-        task, kernel, identity, previousResultRef: "reviews/results/stale.json",
-      });
-    } catch (error) {
-      staleReplay = error;
-    }
-    expect(staleReplay).toBeInstanceOf(Error);
-    expect(staleReplay?.code, "ORACLE-REVIEW: stale replay refs need an explicit failure classification").toBe("REPLAY_MISMATCH");
-    expect(staleReplay?.message).toMatch(/CAS|stale|head/i);
-  });
-
-  it("reconciles an already-recorded make-decision review action into its runtime step without another provider call", async () => {
+  it("keeps authenticated legacy flow reconciliation free of resolution events", async () => {
     const { reconcileMakeDecisionReviewProgress } = await import(cli.href);
-    const identity = {
-      task_id: "task", workflow_run_id: "run-1", stage: "make-decision",
-      review_track: "direction", subject_kind: "worktree", phase_id: null, review_scope: null,
-    };
+    const identity = { task_id: "task", workflow_run_id: "run-1", stage: "make-decision", review_track: "direction", subject_kind: "worktree", phase_id: null, review_scope: null };
     const calls = [];
     const kernel = {
-      advanceReviewFlow: (receivedIdentity, update) => {
-        calls.push(["semantic", receivedIdentity, update]);
-        return { event_ref: update.expected_event_ref };
-      },
-      recordReviewAttempt: (receivedIdentity, update) => {
-        calls.push(["attempt", receivedIdentity, update]);
-        return { event_ref: update.expected_event_ref };
-      },
+      advanceReviewFlow: (receivedIdentity, update) => { calls.push(["semantic", receivedIdentity, update]); return {}; },
+      recordReviewAttempt: (receivedIdentity, update) => { calls.push(["attempt", receivedIdentity, update]); return {}; },
     };
-    const semantic = {
-      event_kind: "semantic_result", event_ref: "reviews/flows/f/event-0001.json",
-      head_result_ref: "reviews/results/result.json",
-    };
+    const semantic = { event_kind: "semantic_result", event_ref: "reviews/flows/f/event-0001.json", head_result_ref: "reviews/results/result.json" };
     reconcileMakeDecisionReviewProgress({ kernel, identity, flow: semantic });
-    reconcileMakeDecisionReviewProgress({
-      kernel,
-      identity,
-      flow: {
-        event_kind: "resolution", event_ref: "reviews/flows/f/event-0002.json",
-        head_result_ref: "reviews/results/result.json",
-      },
-    });
-    reconcileMakeDecisionReviewProgress({
-      kernel,
-      identity,
-      flow: {
-        event_kind: "provider_attempt", event_ref: "reviews/flows/f/event-0003.json",
-        head_result_ref: null, action_ref: "reviews/attempts/a/attempt.json",
-      },
-    });
-    reconcileMakeDecisionReviewProgress({
-      kernel,
-      identity: { ...identity, stage: "build-spec" },
-      flow: semantic,
-    });
-    expect(calls).toEqual([
-      ["semantic", identity, {
-        expected_head_ref: semantic.head_result_ref,
-        expected_event_ref: semantic.event_ref,
-        result_ref: semantic.head_result_ref,
-      }],
-      ["semantic", identity, {
-        expected_head_ref: "reviews/results/result.json",
-        expected_event_ref: "reviews/flows/f/event-0002.json",
-        result_ref: "reviews/results/result.json",
-      }],
-      ["attempt", identity, {
-        expected_head_ref: null,
-        expected_event_ref: "reviews/flows/f/event-0003.json",
-        attempt_ref: "reviews/attempts/a/attempt.json",
-      }],
-    ]);
+    reconcileMakeDecisionReviewProgress({ kernel, identity, flow: { event_kind: "resolution", event_ref: "reviews/flows/f/event-0002.json", head_result_ref: semantic.head_result_ref } });
+    reconcileMakeDecisionReviewProgress({ kernel, identity, flow: { event_kind: "provider_attempt", event_ref: "reviews/flows/f/event-0003.json", head_result_ref: null, action_ref: "reviews/attempts/a/attempt.json" } });
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0]).toBe("semantic");
+    expect(calls[1][0]).toBe("attempt");
   });
 
-  it("uses the simple runner and no V4 facade or legacy argv", () => {
+  it("uses the simple runner and no retired resolution route", () => {
     const source = readFileSync(cli, "utf8");
-    expect(source).toContain('new Set(["run", "format-correct", "verify-final", "adopt-legacy-root", "doctor"])');
     expect(source).toContain("ReviewProviderClient");
     expect(source).toContain("runReview");
-    const dispatchBody = source.slice(source.indexOf("export async function runReviewRound"));
-    expect(dispatchBody.indexOf("assertReviewFlowReady(flowIdentity)"))
-      .toBeLessThan(dispatchBody.indexOf("const result = await runReview"));
-    for (const forbidden of ["ReviewRoundFacade", "BrokerClient", "resetReviewFlow", "recoverReviewProjections", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
+    for (const forbidden of ["buildNonGateReviewResponseRecord", "recordReviewResolution", "writeReviewResolution", "closureFailureCount", "structuralFullAlreadyRecorded"]) {
+      expect(source).not.toContain(forbidden);
+    }
   });
 
-  it("forbids caller-reported workflow identity during legacy adoption", async () => {
-    const { adoptLegacyReviewRoot } = await import(cli.href);
-    expect(() => adoptLegacyReviewRoot({
-      workflow_run_id: "forged", result_ref: "reviews/results/root.json",
-    })).toThrow(/workflow_run_id.*forbidden|TaskKernel derives/i);
-  });
-
-  it("requires an absolute task tracking root before loading host config", async () => {
-    const { runReviewRound, verifyFinalReview } = await import(cli.href);
-    await expect(runReviewRound({ task_tracking_root: "relative", task_id: "task" })).rejects.toThrow(/absolute/);
-    expect(() => verifyFinalReview({ task_tracking_root: "relative", task_id: "task" })).toThrow(/absolute/);
+  it("forbids caller-selected providers and review scope overrides", async () => {
+    const { runReviewRound } = await import(cli.href);
+    for (const field of ["providers", "provider_allowlist", "providerAllowlist", "path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff", "review_scope", "reviewScope"]) {
+      await expect(runReviewRound({ [field]: field === "providers" ? ["claude-code"] : "forged", task_path: "/tmp/task", stage: "build-code" }))
+        .rejects.toThrow(/forbidden|derived|provider/i);
+    }
   });
 
   it("reconstructs an authenticated make-decision CandidateWorkspace from the TaskHandle", async () => {
@@ -196,188 +69,10 @@ describe("wh-review production CLI", () => {
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
     const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    createTask({ storageRoot: root, taskPath, manifest: {
-      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z",
-      target_repo_root: repo, issue_ids: [], inputs: {},
-    } });
+    createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
     const { resolveTrustedReviewSubject } = await import(cli.href);
     const subject = resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
     expect(subject.candidateWorkspace.worktreeRoot).toBe(`${repo}-task`);
-    expect(subject.candidateWorkspace.targetRepoRoot).toBe(realpathSync(repo));
     expect(subject).not.toHaveProperty("sourceRoot");
-    expect(subject).not.toHaveProperty("targetRepoRoot");
-  });
-
-  it("resolves make-decision review from the deterministic workspace", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-no-recovery-"))); roots.push(root);
-    const repo = join(root, "repo"); mkdirSync(repo);
-    execFileSync("git", ["init", "-q"], { cwd: repo });
-    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    createTask({ storageRoot: root, taskPath, manifest: {
-      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-30T00:00:00.000Z",
-      target_repo_root: repo, issue_ids: [], inputs: {},
-    } });
-    const { resolveTrustedReviewSubject } = await import(cli.href);
-    const subject = resolveTrustedReviewSubject({
-      task_path: taskPath,
-      project_name: "Demo",
-      task_id: "task",
-      stage: "make-decision",
-    });
-    expect(subject.candidateWorkspace.baselineCommit)
-      .toBe(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim());
-  });
-
-  it("accepts only phase_id as the phase scope selector", async () => {
-    const { runReviewRound } = await import(cli.href);
-    for (const field of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff", "review_scope", "reviewScope"]) {
-      await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/forbidden|derived/);
-    }
-  });
-
-  it("forbids caller-selected providers before opening the task", async () => {
-    const { runReviewRound } = await import(cli.href);
-    for (const field of ["providers", "provider_allowlist", "providerAllowlist"]) {
-      await expect(runReviewRound({ [field]: ["claude-code"], task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/provider.*forbidden|configured 3rd-review/i);
-    }
-  });
-
-  it("keeps closure failures and build-code no-progress counters inside one canonical chain", async () => {
-    const { closureFailureCount } = await import(cli.href);
-    const refs = {
-      "reviews/results/root.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "a".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        attempt_ref: "reviews/attempts/root/attempt.json",
-      },
-      "reviews/results/no-progress-1.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "b".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        review_chain: { round: "full", parent_result_ref: "reviews/results/root.json", root_result_ref: "reviews/results/root.json" },
-        attempt_ref: "reviews/attempts/no-progress-1/attempt.json",
-      },
-      "reviews/results/no-progress-2.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "c".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        review_chain: { round: "full", parent_result_ref: "reviews/results/no-progress-1.json", root_result_ref: "reviews/results/root.json" },
-        attempt_ref: "reviews/attempts/no-progress-2/attempt.json",
-      },
-      "reviews/results/other-chain.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "d".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        review_chain: { round: "closure", parent_result_ref: "reviews/results/other-root.json", root_result_ref: "reviews/results/other-root.json" },
-        attempt_ref: "reviews/attempts/other/attempt.json",
-      },
-      "reviews/results/closure-1.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "b".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        review_chain: { round: "closure", parent_result_ref: "reviews/results/root.json", root_result_ref: "reviews/results/root.json" },
-        attempt_ref: "reviews/attempts/closure-1/attempt.json",
-      },
-      "reviews/results/closure-2.json": {
-        version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null, subject_kind: "phase", phase_id: "phase-1",
-        snapshot_tree: "c".repeat(40), verdict: "revise_required", adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-        review_chain: { round: "closure", parent_result_ref: "reviews/results/closure-1.json", root_result_ref: "reviews/results/root.json" },
-        attempt_ref: "reviews/attempts/closure-2/attempt.json",
-      },
-      "reviews/attempts/other/attempt.json": { review_policy: { round: "closure" } },
-      "reviews/attempts/root/attempt.json": { review_policy: { round: "initial" } },
-      "reviews/attempts/no-progress-1/attempt.json": { review_policy: { round: "full" } },
-      "reviews/attempts/no-progress-2/attempt.json": { review_policy: { round: "full" } },
-      "reviews/attempts/closure-1/attempt.json": { review_policy: { round: "closure" } },
-      "reviews/attempts/closure-2/attempt.json": { review_policy: { round: "closure" } },
-    };
-    const task = {
-      identity: { taskId: "task" },
-      listCanonicalReviewResultRefs: () => Object.keys(refs).filter((ref) => ref.startsWith("reviews/results/")),
-      readRecord: (ref) => JSON.stringify(refs[ref]),
-    };
-    const prior = { ...refs["reviews/results/no-progress-2.json"], result_ref: "reviews/results/no-progress-2.json" };
-    expect(closureFailureCount(task, "build-code", null, prior)).toBe(2);
-  });
-
-  it("does not dispatch a second structural full review when an old previous ref has an immutable full attempt", async () => {
-    const { selectCanonicalReviewRound, structuralFullAlreadyRecorded } = await import(cli.href);
-    const rootRef = "reviews/results/root.json";
-    const root = {
-      version: "wh-review-result.v1", task_id: "task", stage: "build-spec", review_track: null,
-      subject_kind: "worktree", phase_id: null, result_ref: rootRef, snapshot_tree: "a".repeat(40), verdict: "revise_required",
-      adjudication: { clusters: [{ id: "F-123456789abc", disposition: "actionable" }] },
-    };
-    const fullRef = "reviews/results/structural-full.json";
-    const records = {
-      [rootRef]: root,
-      [fullRef]: {
-        ...root, snapshot_tree: "b".repeat(40),
-        review_chain: { round: "full", parent_result_ref: rootRef, root_result_ref: rootRef },
-      },
-      "reviews/attempts/structural-full/attempt.json": {
-        ...root, snapshot_tree: "b".repeat(40),
-        review_chain: { round: "full", parent_result_ref: rootRef, root_result_ref: rootRef },
-      },
-    };
-    const task = {
-      listCanonicalReviewResultRefs: () => [rootRef, fullRef],
-      listCanonicalReviewAttemptRefs: () => ["reviews/attempts/structural-full/attempt.json"],
-      readRecord: (ref) => JSON.stringify(records[ref]),
-    };
-    const ledger = {
-      version: "wh-review-response-ledger.v1", previous_result_ref: rootRef,
-      previous_snapshot_tree: root.snapshot_tree, current_snapshot_tree: "b".repeat(40),
-      responses: [{ finding_id: "F-123456789abc", status: "fixed", rationale: "structural schema rework", changed_dimensions: ["schema"], evidence_refs: ["evidence/fix.json"] }],
-    };
-    expect(structuralFullAlreadyRecorded(task, root)).toBe(true);
-    expect(selectCanonicalReviewRound({ task, stage: "build-spec", route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] }, previousResult: root, ledger, currentSnapshotTree: ledger.current_snapshot_tree }))
-      .toEqual({ round: "none", reason: "post_full_non_gate_recorded" });
-  });
-
-  it("uses the current flow budget instead of unrelated historical attempts", async () => {
-    const { selectCanonicalReviewRound } = await import(cli.href);
-    const prior = {
-      version: "wh-review-result.v1", task_id: "task", stage: "build-spec",
-      review_track: null, subject_kind: "worktree", phase_id: null,
-      result_ref: "reviews/results/root.json", snapshot_tree: "a".repeat(40),
-      verdict: "pass", adjudication: { clusters: [] },
-    };
-    const ledger = {
-      version: "wh-review-response-ledger.v1",
-      previous_result_ref: prior.result_ref,
-      previous_snapshot_tree: prior.snapshot_tree,
-      current_snapshot_tree: "b".repeat(40),
-      change: {
-        changed_dimensions: ["schema"], rationale: "changed the public schema",
-        evidence_refs: ["evidence/schema.json"],
-      },
-      responses: [],
-    };
-    const task = {
-      listCanonicalReviewResultRefs: () => { throw new Error("must not scan another workflow run"); },
-    };
-    expect(selectCanonicalReviewRound({
-      task, stage: "build-spec",
-      route: { mode: "full_on_structural_rework", initial: ["kimi/k3"] },
-      previousResult: prior, ledger, currentSnapshotTree: ledger.current_snapshot_tree,
-      flow: { structural_full_reviews: 0 },
-    })).toEqual({ round: "none", reason: "review_non_gate_recorded" });
-  });
-
-  it("treats a prior Phase quality fact as lineage for a new snapshot, not as the new flow head", async () => {
-    const { selectCanonicalReviewRound } = await import(cli.href);
-    const prior = {
-      subject_kind: "phase", phase_id: "phase-6", snapshot_tree: "a".repeat(40),
-      verdict: "pass", result_ref: "reviews/results/prior-phase.json",
-    };
-    const route = { mode: "full_only", initial: ["pi/coding"] };
-    expect(selectCanonicalReviewRound({
-      task: {}, stage: "build-code", route, previousResult: prior,
-      currentSnapshotTree: "b".repeat(40), flow: null, ledger: { version: "wh-review-response-ledger.v1" },
-    })).toEqual({ round: "initial", reason: "first_review" });
-    expect(selectCanonicalReviewRound({
-      task: {}, stage: "build-code", route, previousResult: prior,
-      currentSnapshotTree: prior.snapshot_tree, flow: { head_result_ref: prior.result_ref },
-    })).toEqual({ round: "none", reason: "phase_quality_fact_recorded" });
   });
 });

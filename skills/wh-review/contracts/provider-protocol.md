@@ -132,17 +132,12 @@ profile，只取配置优先级最高的一条作为该 adapter 的代表；优�
 这使具体、可复核证据可以由一个异源 reviewer 报告，同时不会把 transient model
 质量波动、品牌或成本当作裁决依据。
 
-对于 legacy `adaptive` stage 的 closure round，材料必须含上一轮 canonical
-result 和 `response_ledger`；provider 只验证 actionable finding 是否修复或有合理
-理由，不得借 closure 重新做完整审查。配置为
-`full_on_structural_rework` 的 build-spec、build-plan、显式 verify-code 诊断不调用
-closure provider：普通修复不再二审，只写外置 `wh-review-resolution.v1` 审计记录；
-缺少或无法绑定 ledger 时标记 `unverified`，不得伪造 `fixed` 或 `pass`，也不得自动
-升级完整审查。只有完整且可绑定 ledger 显式声明结构性改变时，才最多重新调用一次首轮
-高强度 group 做完整审查，第二轮 finding 也不成为 stage pass gate。
-`response_ledger` 只属于 controller/audit；完整审查材料禁止携带它。`accepted_risk`
-只记录，并在 build-plan、verify-code 的人类确认边界显式展示。build-code 永远是完整
-phase 审查，不进入上述任何捷径。
+每个冻结 snapshot 只允许一次语义审查。`revise_required` 必须原样保留，不能
+通过 response ledger、risk acceptance、零 provider action 或同一 snapshot 的再次
+调用改成 `pass`。修改后生成新 snapshot 时，才开始一次新的初始审查；旧结果只
+作为历史质量事实。`build-code` 永远是完整 phase/integration 审查，`verify-code`
+还要绑定新鲜测试和独立审查。response ledger、resolution record 和旧 namespace
+不属于当前生产审查输入。
 
 不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误时只能请求同一冻结材料的协议恢复；公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都不得提升为 pass；后续正式调用可在同一公共合同下再次尝试，不能因为次数耗尽而伪造或阻断语义审查。
 

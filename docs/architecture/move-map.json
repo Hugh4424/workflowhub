@@ -1,9 +1,9 @@
 {
   "schema_version": "repository-move-map.v1",
-  "task_id": "workflowhub-complexity-governance-v2",
-  "phase": "phase-8",
-  "source_boundary": "T052 exact files; Phase 7 KEEP tests excluded from move",
-  "generated_from": "T052 exact file boundary; Phase 7 KEEP tests remain in place; extras are explicit exclusions",
+  "task_id": "workflowhub-complexity-governance-v3-20260802",
+  "phase": "Phase 0",
+  "source_boundary": "T002 frozen V3 inventory; Phase 6 MOVE entries require current consumer proof",
+  "generated_from": "T002 current repository inventory and V3 owner/disposition boundary; historical entries remain evidence only",
   "entries": [
     {
       "source": "core/audit-summary-carrier.mjs",
@@ -147,24 +147,6 @@
       "sha256_before": "68c7c2c81b7d4fb110792ebb0fce3cfd698f00bd0284cb15d2e8c35b663e89ae",
       "bytes": 558,
       "sha256_after": "68c7c2c81b7d4fb110792ebb0fce3cfd698f00bd0284cb15d2e8c35b663e89ae",
-      "content_change": "import/path-only"
-    },
-    {
-      "source": "core/review-flow-authority.mjs",
-      "destination": "runtime/review/review-flow-authority.mjs",
-      "status": "move",
-      "sha256_before": "5dbbc9e99193fe0e7b29bafc3d4ef32fc5a9f84cb324fc14590e9af19dcb60b0",
-      "bytes": 15302,
-      "sha256_after": "5dbbc9e99193fe0e7b29bafc3d4ef32fc5a9f84cb324fc14590e9af19dcb60b0",
-      "content_change": "import/path-only"
-    },
-    {
-      "source": "core/review-result-consumer.mjs",
-      "destination": "runtime/review/review-result-consumer.mjs",
-      "status": "move",
-      "sha256_before": "cc27d68beb9479e69f4cb3b9a107c8bf09e631f0ef1136b65da0c109d5a0f3ff",
-      "bytes": 2352,
-      "sha256_after": "cc27d68beb9479e69f4cb3b9a107c8bf09e631f0ef1136b65da0c109d5a0f3ff",
       "content_change": "import/path-only"
     },
     {
@@ -573,24 +555,6 @@
       "content_change": "import/path-only"
     },
     {
-      "source": "schemas/task-accepted.v2.schema.json",
-      "destination": "runtime/schemas/task-accepted.v2.schema.json",
-      "status": "move",
-      "sha256_before": "69337dda28b8200a359fa51b73b597774800f8857be98798ebf23a12a31abcb5",
-      "bytes": 3966,
-      "sha256_after": "69337dda28b8200a359fa51b73b597774800f8857be98798ebf23a12a31abcb5",
-      "content_change": "import/path-only"
-    },
-    {
-      "source": "schemas/task-attempt.v2.schema.json",
-      "destination": "runtime/schemas/task-attempt.v2.schema.json",
-      "status": "move",
-      "sha256_before": "7ddc4f75ace496bc47a185e91559b98c0768bdb47d2430e88fea3f23f00ca203",
-      "bytes": 6874,
-      "sha256_after": "7ddc4f75ace496bc47a185e91559b98c0768bdb47d2430e88fea3f23f00ca203",
-      "content_change": "import/path-only"
-    },
-    {
       "source": "scripts/audit-aggregate.mjs",
       "destination": "tools/cli/audit-aggregate.mjs",
       "status": "move",
@@ -696,15 +660,6 @@
       "sha256_before": "058636fea8f83e9e1ad07ca69c963ab68a60e60ab43a473ad5f81a0dd1a764cc",
       "bytes": 13093,
       "sha256_after": "69497a0f8fded971d65a82a536c28bc6ebe7430f7626c19698806611d3618462",
-      "content_change": "import/path-only"
-    },
-    {
-      "source": "scripts/requirements-ledger.mjs",
-      "destination": "tools/cli/requirements-ledger.mjs",
-      "status": "move",
-      "sha256_before": "8df65771507facafd52eef8ba6fd59608ea3455649e6187a9812fc26487780a5",
-      "bytes": 2244,
-      "sha256_after": "ef5119477bd86e677d2dec3eeac11f3096258a1997f2dfc0f3d49d42e81cf520",
       "content_change": "import/path-only"
     },
     {
@@ -1201,9 +1156,12 @@
     },
     {
       "source": "core/audit-aggregator.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/audit-aggregator.mjs",
+      "status": "moved-R007",
+      "sha256_before": "c1da3c4c392db226881656f20112201ee6642360962d833dd1e823893ce68c74",
+      "sha256_after": "d4ed79e9211864a44e3213a112373eb12854cc5dcde96328763e0f175c9156d6",
+      "bytes": 20148,
+      "content_change": "import/path-only"
     },
     {
       "source": "core/build-spec-receipt-recovery.mjs",
@@ -1214,15 +1172,21 @@
     },
     {
       "source": "core/canonical-evidence-validators.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/canonical-evidence-validators.mjs",
+      "status": "moved-R007",
+      "sha256_before": "3e937a7aae9667bdc5eff2e9e76c8f847a0a8aa182f6a2be26c796e9493ed887",
+      "sha256_after": "3e937a7aae9667bdc5eff2e9e76c8f847a0a8aa182f6a2be26c796e9493ed887",
+      "bytes": 2069,
+      "content_change": "path-only move"
     },
     {
       "source": "core/canonical-receipt-writer.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/canonical-receipt-writer.mjs",
+      "status": "moved-R007",
+      "sha256_before": "5012f3a45ce60baa6b3c30d9a9cadbe2fea1ed7287a7dd0dd3ad3acba44d83cb",
+      "sha256_after": "2a09125ba69fa786d01794d1e38625fb1cddab90447de631ed943efdf6c5cabc",
+      "bytes": 30918,
+      "content_change": "import/path-only"
     },
     {
       "source": "core/chain-topology.mjs",
@@ -1243,22 +1207,20 @@
       "reason": "existing source outside T052 exact file boundary; left in place"
     },
     {
-      "source": "core/git-checkpoint.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
-    },
-    {
       "source": "core/journal-appender.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "deleted-final-cleanup",
+      "reason": "no current production or test consumer after the journal writer removal",
+      "content_change": "removed in R007 after consumer audit"
     },
     {
       "source": "core/journal-schema.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/journal-schema.mjs",
+      "status": "moved-R007",
+      "sha256_before": "740afaf88d49a1bc4cb069138c550c8ee035ba4607ec17db16bf78474e7a350e",
+      "sha256_after": "740afaf88d49a1bc4cb069138c550c8ee035ba4607ec17db16bf78474e7a350e",
+      "bytes": 1307,
+      "content_change": "path-only move"
     },
     {
       "source": "core/load-config.mjs",
@@ -1274,9 +1236,12 @@
     },
     {
       "source": "core/receipt-schema.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/receipt-schema.mjs",
+      "status": "moved-R007",
+      "sha256_before": "91ccee76180622c949497fa76d4ea0d9bdd8a43137833a112131790ffb9046d6",
+      "sha256_after": "cd6fea83c4dc09762ca5d0a7d31b589e121b3625cfaaf414b520dd2059d54805",
+      "bytes": 5479,
+      "content_change": "import/path-only"
     },
     {
       "source": "core/resolve-component.mjs",
@@ -1292,9 +1257,11 @@
     },
     {
       "source": "core/schemas/interaction-completion.v1.json",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/schemas/interaction-completion.v1.json",
+      "status": "moved-T012",
+      "sha256_before": "337d8c3daec0748a138a593ab66d9be6154ce428cd6d40c89f33b79bee1d4f91",
+      "sha256_after": "337d8c3daec0748a138a593ab66d9be6154ce428cd6d40c89f33b79bee1d4f91",
+      "content_change": "path-only move"
     },
     {
       "source": "core/schemas/workflowhub-recovery-credential.v1.json",
@@ -1312,33 +1279,43 @@
     },
     {
       "source": "core/stage-completion-facts.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/stage-completion-facts.mjs",
+      "status": "moved-T012",
+      "sha256_before": "6e58902e01e0f7198db67e52351e8702b4215940886056ba0f243e7bbb9c6d0c",
+      "sha256_after": "74e64bbb73baf5f9bc59631be870ce58fb06cdcda4b6f65bd46fb07d87c0a947",
+      "content_change": "path-only move"
     },
     {
       "source": "core/stage-content-evidence.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/evidence/stage-content-evidence.mjs",
+      "status": "moved-T012",
+      "sha256_before": "d1aedc00be973fce5feccf317ae1efd3041a3e2c5ac20e752064da07d47898d8",
+      "sha256_after": "ff8c59cfa14237495bb8d6a6a75eb91c5634d759a5065961dff521a20e9ba6ce",
+      "content_change": "path-only move"
     },
     {
       "source": "core/stage-context.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/stage/stage-context.mjs",
+      "status": "moved-T012",
+      "sha256_before": "32f4a45de1445be43ec8c1c8184afcb03f9fe8f579a4618c647e9dcfb4dbba83",
+      "sha256_after": "6302d379c49f6e3c75872717b49094c168d1aa194ab83e57f962e91c33b6dab5",
+      "content_change": "path-only move"
     },
     {
       "source": "core/stage-handlers.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/stage/stage-handlers.mjs",
+      "status": "moved-T012",
+      "sha256_before": "a828ccbbd72409cf0c914bdf0186afe2e969766ae162a8e552aeefe85f8ce33a",
+      "sha256_after": "af62070319d537012efc18435bfe7b78a19f365402c2fa547231cb5c2bbc4c15",
+      "content_change": "path-only move"
     },
     {
       "source": "core/stage-runner.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/stage/stage-runner.mjs",
+      "status": "moved-T012",
+      "sha256_before": "c11f82565b0997498897d1d2681fff1fe371785062abd14ffa302ba6349d92df",
+      "sha256_after": "d034e5f7950821f7fb60790f86a993163097abe0ae4eca156d899bd9db4721ff",
+      "content_change": "path-only move"
     },
     {
       "source": "core/stage-skill-invocation.mjs",
@@ -1354,21 +1331,27 @@
     },
     {
       "source": "core/task-handle.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/task/task-handle.mjs",
+      "status": "moved-T012",
+      "sha256_before": "e237055160096341ca899046fc73c40a16c12c929e1ff6f114edd36b122bac6a",
+      "sha256_after": "a166fd05bcec7aa0ecc2b04e9190d4323914de1ef229e2d54a551e391e4a6406",
+      "content_change": "path-only move"
     },
     {
       "source": "core/task-index.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/task/task-index.mjs",
+      "status": "moved-T012",
+      "sha256_before": "906e6b4299ad8ee22db0e166975f6e10e21608e2e4a65d9e137cda27f16a2016",
+      "sha256_after": "906e6b4299ad8ee22db0e166975f6e10e21608e2e4a65d9e137cda27f16a2016",
+      "content_change": "path-only move"
     },
     {
       "source": "core/task-kernel-implementation.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/task/task-kernel-implementation.mjs",
+      "status": "moved-T012",
+      "sha256_before": "ee3aaba2b97690fc8f6a440138e48b10830d9edfe22d21bc115d4f75bc25c211",
+      "sha256_after": "796f60d7251b2befb5d221f97f5661e15d205db29eeee55f750d711461638cf1",
+      "content_change": "path-only move"
     },
     {
       "source": "core/task-recovery.mjs",
@@ -1379,9 +1362,11 @@
     },
     {
       "source": "core/workspace.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "runtime/task/workspace.mjs",
+      "status": "moved-T012",
+      "sha256_before": "95d69f2b39f482e5c2feee617b39feafc8fc21f274f5485b49bab98ee8f33801",
+      "sha256_after": "836ad1d90d5bbd4f7ee596bef619a5779904ced75ba7be4d3409d869e36f5993",
+      "content_change": "path-only move"
     },
     {
       "source": "scripts/__tests__/stage-runtime-recover-run.test.mjs",
@@ -1412,15 +1397,19 @@
     },
     {
       "source": "scripts/stage-runtime.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "tools/cli/stage-runtime.mjs",
+      "status": "moved-T012",
+      "sha256_before": "b2f8475cbe599bb32d314b58035387967e5742a5e2962d6eb4ee25a20a361f5b",
+      "sha256_after": "ebd3f6201fa5736c85d9979055170b0bc46496f035a3eb30aeec30ea19e62410",
+      "content_change": "path-only move"
     },
     {
       "source": "scripts/task-close.mjs",
-      "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "destination": "tools/cli/task-close.mjs",
+      "status": "moved-T012",
+      "sha256_before": "1db55fa4884298094e11e0f58fc351f63a82b0a85f957b122972c7a8b0c75ad8",
+      "sha256_after": "fb9900b9fab9cab204bc1085f5a9cdfec963f99584f06c80a89b03f15aad84ed8",
+      "content_change": "path-only move"
     },
     {
       "source": "runtime/schemas/bootstrap-review.v1.json",
@@ -1465,14 +1454,6 @@
       "sha256_before": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
       "sha256_after": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
       "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
-    },
-    {
-      "source": "skills/wh-review/scripts/phase-review-subject.mjs",
-      "destination": "runtime/review/phase-review-subject.mjs",
-      "status": "move",
-      "sha256_before": "63e57699a7b7eb7da9d523cad1a01e0d0c6dc764daf4c16afa03f1270270f85e",
-      "sha256_after": "aa1d316d2d3fb7b56e9c0122dd94bd1933036547b2439fe4690f129c358d5ac4",
-      "content_change": "moved runtime logic; post-move implementation change; skill compatibility shim re-exports destination"
     },
     {
       "source": "skills/wh-review/scripts/review-controller.mjs",
@@ -1545,6 +1526,41 @@
       "sha256_before": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
       "sha256_after": "fc5ceaccbc7b3aeb58fa5cce203512f0c78f75e5257e95cdfb89a1f79c6c562b",
       "content_change": "moved runtime stage-material matrix"
+    },
+    {
+      "source": "tools/cli/migrate-task-v2.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "one-shot migration CLI had no current production consumer; history remains read-only",
+      "content_change": "removed in R007; negative public-route coverage retained"
+    },
+    {
+      "source": "tools/cli/task-migrate-target-repo.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "target repository rebind CLI had no current production consumer",
+      "content_change": "removed in R007; new tasks keep immutable repository identity"
+    },
+    {
+      "source": "runtime/evidence/receipt-writer.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "only dedicated test consumer was obsolete; canonical audit owner remains core/audit-aggregator.mjs",
+      "content_change": "removed in R007; audit aggregation tests remain on the canonical owner"
+    },
+    {
+      "source": "scripts/__tests__/migrate-task-v2.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested deleted one-shot migration CLI and had no current runtime consumer",
+      "content_change": "removed in R007 with the obsolete CLI"
+    },
+    {
+      "source": "core/__tests__/receipt-writer.test.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "reason": "tested deleted receipt-writer facade; audit aggregator has independent focused coverage",
+      "content_change": "removed in R007; retained audit-aggregator tests cover the live owner"
     }
   ]
 }

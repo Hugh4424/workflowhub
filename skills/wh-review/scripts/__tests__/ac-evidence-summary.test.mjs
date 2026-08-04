@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
+import { createTask, createTaskKernel } from "../../../../runtime/task/task-handle.mjs";
 import { buildAcEvidenceSummary } from "../ac-evidence-summary.mjs";
 
 function digest(raw) { return createHash("sha256").update(raw).digest("hex"); }
@@ -17,13 +17,14 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false } = {}) {
   } });
   const kernel = createTaskKernel(task);
   const snapshotTree = "a".repeat(40);
+  const sourceDigest = "b".repeat(64);
   const publish = (ref, value) => {
     const raw = typeof value === "string" ? value : json(value);
     kernel.publishCanonicalRecord(ref, raw);
     return { ref, sha256: digest(raw) };
   };
-  const testReceipt = publish("receipts/verify-tests.json", {
-    schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", snapshot_tree: snapshotTree,
+  const testReceipt = publish("quality/tests/verify-tests.json", {
+    schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", snapshot_tree: snapshotTree, source_digest: sourceDigest,
   });
   const observation = publish("evidence/ac-1-observation.json", {
     schema_version: "acceptance-observation.v1", acceptance_criterion_id: "AC-1", snapshot_tree: snapshotTree,
@@ -34,11 +35,11 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false } = {}) {
   });
   const rawProof = publish("evidence/ac-2-proof.txt", "provider raw output must never enter summary\n");
   const ac1 = publish("evidence/ac-1.json", {
-    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", snapshot_tree: snapshotTree,
+    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", snapshot_tree: snapshotTree, source_digest: sourceDigest,
     refs: [observation],
   });
   const ac2 = publish("evidence/ac-2.json", {
-    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-2", result: "pass",
+    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-2", result: "pass", source_digest: sourceDigest,
     snapshot_tree: mismatchLeafSnapshot ? "b".repeat(40) : snapshotTree, refs: [rawProof],
   });
   const aggregate = publish("evidence/verify-aggregate.json", {
@@ -51,6 +52,7 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false } = {}) {
     acceptanceEvidence: {
       test_receipt_ref: testReceipt.ref, test_receipt_hash: testReceipt.sha256,
       evidence_ref: aggregate.ref, evidence_hash: aggregate.sha256,
+      source_digest: sourceDigest,
     },
   };
 }
