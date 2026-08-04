@@ -626,6 +626,38 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
   return { verified: true, evidence: accepted.map(({ ref, sha256 }) => ({ ref, sha256 })) };
 }
 
+function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage) {
+  if (review?.facts?.status === "unavailable") return [];
+  const clusters = Array.isArray(review.value?.adjudication?.clusters)
+    ? review.value.adjudication.clusters
+    : [];
+  if (clusters.length === 0) return [];
+
+  const findingIds = clusters.map((cluster) => cluster.id).filter(Boolean);
+  const warnings = [
+    `review findings require per-finding analysis and disposition before handoff: ${findingIds.join(", ") || "unresolved findings"}`,
+  ];
+  const pause = deriveSeriousReviewPause({
+    taskId: worker.identity.taskId,
+    stage: producerStage,
+    reviewRef: review.ref,
+    reviewHash: review.evidence.sha256,
+    result: review.value,
+    workflowRunId: typeof worker.deriveStageWorkflowRunId === "function"
+      ? worker.deriveStageWorkflowRunId(producerStage)
+      : worker.workflowRunId,
+  });
+  if (pause.status === "paused") {
+    const seriousIds = pause.findings.map(({ finding_id }) => finding_id);
+    warnings.push(riskAcceptance.verified
+      ? `serious review findings remain revise_required; explicit risk acceptance is recorded but does not make the review pass: ${seriousIds.join(", ")}`
+      : `serious review findings require repair or explicit risk acceptance before formal completion: ${seriousIds.join(", ")}`);
+  } else if (review.value.verdict === "revise_required" && !riskAcceptance.verified) {
+    warnings.push("review findings recorded; response evidence: unknown/unverified");
+  }
+  return warnings;
+}
+
 function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
   const item = receipt(worker, invocation, name, producerStage);
   if (expectedTrack !== undefined && item.value.review_track !== expectedTrack) throw new Error(`${name} must use wh-review ${expectedTrack} track`);
@@ -657,6 +689,12 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     ? riskAcceptanceForReview(worker, invocation, { ref: item.ref, evidence: item.evidence, value: item.value }, expectedTrack, riskAcceptanceName, producerStage)
     : { verified: false, evidence: [] };
   const riskEvidence = riskAcceptance.evidence;
+  const dispositionWarnings = reviewDispositionWarnings(
+    worker,
+    { ref: item.ref, evidence: item.evidence, value: item.value },
+    riskAcceptance,
+    producerStage,
+  );
   return {
     facts: { verdict: item.value.verdict, result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
     ref: item.ref,
@@ -664,9 +702,7 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     value: item.value,
     scope,
     risk_evidence: riskEvidence,
-    missing_items: item.value.verdict === "revise_required"
-      ? [riskAcceptance.verified ? "review findings remain revise_required; explicit risk acceptance is recorded but does not make the review pass" : "review findings recorded; response evidence: unknown/unverified"]
-      : [],
+    missing_items: dispositionWarnings,
   };
 }
 
@@ -1077,7 +1113,12 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const result = addCompletion("verify-code", {
     facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}) },
     evidence_refs: [tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(qualityReview.evidence ? [qualityReview.evidence] : []), ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
-    missing_items: [...mismatches, ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : [])],
+    missing_items: [
+      ...mismatches,
+      ...review.missing_items,
+      ...qualityReview.missing_items,
+      ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []),
+    ],
   }, {
     worker,
     artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256, publication_lookup: "publications/verify-code/" }],

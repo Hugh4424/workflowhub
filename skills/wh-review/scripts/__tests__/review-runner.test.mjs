@@ -33,6 +33,21 @@ describe("review result classification", () => {
       finding: { invalid_anchor: 1 },
     });
   });
+
+  it("reports public protocol failures explicitly", () => {
+    const attempt = { provider_attempts: [
+      { provider: "cursor/grok", status: "failed", error: { code: "PUBLIC_RESULT_INVALID" }, execution: { timing: { duration_ms: 7 } } },
+      { provider: "kimi/k3", status: "failed", error: { code: "PROTOCOL_INCOMPATIBLE" }, execution: { timing: { duration_ms: 8 } } },
+      { provider: "opencode/v4flash", status: "failed", error: { code: "MATERIAL_INCOMPLETE" }, execution: { timing: { duration_ms: 9 } } },
+    ] };
+
+    expect(classifyAttempt(attempt.provider_attempts[0])).toBe("PUBLIC_RESULT_INVALID");
+    expect(classificationSummary(attempt)).toMatchObject({
+      attempt: { PUBLIC_RESULT_INVALID: 1, PROTOCOL_INCOMPATIBLE: 1, MATERIAL_INCOMPLETE: 1, UNKNOWN: 0 },
+      failed_duration_ms: 24,
+      quality_denominator: 0,
+    });
+  });
 });
 function publicProvider(provider, { status = "completed", material = materialId, sessionId = "s", output = pass, error = null } = {}) {
   return {

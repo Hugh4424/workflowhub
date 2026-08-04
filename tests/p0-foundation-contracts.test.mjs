@@ -52,8 +52,8 @@ describe("P0 foundation contracts", () => {
       manifest.steps.forEach(({ order, step_slug }) => actual.add(`${stage}:${order}:${step_slug}`));
     }
 
-    expect(documented.size).toBe(44);
-    expect(actual.size).toBe(44);
+    expect(documented.size).toBe(46);
+    expect(actual.size).toBe(46);
     expect([...documented].sort()).toEqual([...actual].sort());
   });
 });

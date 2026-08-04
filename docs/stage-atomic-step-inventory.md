@@ -38,19 +38,21 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 4 | run-tests | target tests | record exit/output/freshness; test failure is a visible fact |
 | build-code | 5 | scan-diff | diff scan | record scope violations; requested scope expansion escalates, accidental drift is repaired |
 | build-code | 6 | review-change | independent review | actionable findings return to implementation; unavailable/unresolved review remains visible |
-| build-code | 7 | capture-implementation | immutable snapshot | capture evidence without moving a Git ref or requiring phase confirmation |
-| build-code | 8 | authenticate-current-task-completion | task completion audit | authenticate current materials without turning audit gaps into a Gate |
-| build-code | 9 | publish-code-result | current implementation result | publish implementation, test, AC, and review facts; unavailable or failed review stays visible and never creates a reopen or recovery permit |
+| build-code | 7 | analyze-review-findings | finding disposition | inspect every finding; repair the current Task or record an explicit unresolved risk |
+| build-code | 8 | capture-implementation | immutable snapshot | capture evidence without moving a Git ref or requiring phase confirmation |
+| build-code | 9 | authenticate-current-task-completion | task completion audit | authenticate current materials without turning audit gaps into a Gate |
+| build-code | 10 | publish-code-result | current implementation result | publish implementation, test, AC, and review facts; unavailable or failed review stays visible and never creates a reopen or recovery permit |
 | verify-code | 1 | read-current-task-documents | §2 pre-read | read the four current task materials before verification |
 | verify-code | 2 | verify-receipts | §5 freshness + §7 trace | stale SHA is info; receipt/trace issue follows D7; intentional no-browser-test is the only L3 skip trace |
 | verify-code | 3 | run-verification-tests | §4 fresh tests + §6 strategy + §8 browser | run fresh; required L3 missing/mismatch is D7 red; no UI skips with record |
 | verify-code | 4 | assemble-facts | AC coverage + human brief | record every AC result; quality anomalies remain visible for the verify conclusion |
 | verify-code | 5 | authenticate-current-task-completion | current task completion audit | authenticate current code, tests, and AC completion without turning audit gaps into a Gate |
 | verify-code | 6 | run-verify-quality-review | non-gate quality review | record configured external review after fresh verification evidence; it cannot replace build-code review lineage or authorize close |
-| verify-code | 7 | publish-verification-attempt | verification facts | publish all facts, including failures and unknowns, for the verification-stage decision without replacing build-code review lineage |
-| verify-code | 8 | approve-verification | human confirmation | records the user's verification conclusion; failed or unknown ACs remain visible facts and do not create a recovery or reopen permit |
-| verify-code | 9 | publish-verification-result | current verification result | publish the current verification facts; close is separately authorized and uses current materials and facts, not a plan-hash gate |
+| verify-code | 7 | analyze-review-findings | finding disposition | inspect every finding; repair routes to the same current Task and unresolved risk stays visible |
+| verify-code | 8 | publish-verification-attempt | verification facts | publish all facts, including failures and unknowns, for the verification-stage decision without replacing build-code review lineage |
+| verify-code | 9 | approve-verification | human confirmation | records the user's verification conclusion; failed or unknown ACs remain visible facts and do not create a recovery or reopen permit |
+| verify-code | 10 | publish-verification-result | current verification result | publish the current verification facts; close is separately authorized and uses current materials and facts, not a plan-hash gate |
 
 ## P0 boundary
 
-P1 may wire these IDs into workflow instructions and receipts. P2 may implement summary carrying and validation. P3 may reconcile requirement lineage and verify the evidence matrix. Any runtime claim requires its own implementation evidence and tests.
+P1 may wire these IDs into workflow instructions and receipts. P2 may implement summary carrying and validation. P3 may reconcile requirement lineage and verify the evidence matrix. The finding-disposition step is a quality fact and handoff record, not a quality gate or permission object. Any runtime claim requires its own implementation evidence and tests.

@@ -39,15 +39,29 @@ ordinary implementation, material revision, repair, or the next Task.
    and any directly affected regression.
 4. Obtain one independent `wh-review` for the completed Phase. Preserve its actual
    result: unavailable is never pass.
-5. Update only the Task completion area with the facts actually produced.
-6. Start the next Task from current tasks.md. Do not replay prior Phases or
+5. Before any handoff, the main agent must inspect every review finding and
+   record a plain disposition: `fixed`, `rejected_invalid`, `accepted_risk`,
+   or `needs_human`. For a valid finding, repair the current Task and rerun its
+   affected checks; for an invalid finding, record the evidence; for a serious
+   unresolved finding, obtain the exact risk acceptance while preserving the
+   original review verdict. Do not silently skip this analysis or start the
+   next Task with findings still unexplained.
+6. Update only the Task completion area with the facts actually produced,
+   including the finding analysis, disposition, repair evidence, or explicit
+   unresolved risk.
+7. Start the next Task from current tasks.md only after that disposition summary
+   is recorded. Do not replay prior Phases or
    rebuild historical evidence.
 
 An authenticated actionable major or blocking review finding remains a visible
 quality fact. It may affect the later formal acceptance conclusion, but it does
-not stop the same task or the next Task. Keep its canonical `wh-review` attempt
-as the quality fact. Do not create a fallback record, bridge, or substitute
-completion state from old provider output, tests, or AC evidence.
+not become a quality gate on same-task repair or ordinary progression. The
+finding itself does not stop the same task or the next Task once its disposition
+summary is recorded. Keep its canonical `wh-review` attempt as the quality fact,
+and require the disposition
+summary before handoff so the finding cannot disappear between stages. Do not
+create a fallback record, bridge, or substitute completion state from old
+provider output, tests, or AC evidence.
 
 ## Quality and publication
 
@@ -66,6 +80,11 @@ incomplete; it is never an accepted record. Formal acceptance remains a
 separate conclusion and may not be inferred from stage progression. Do not
 create a successor, rebind, continuation, recovery bridge, synthetic
 checkpoint, or replacement task.
+
+Formal build-code completion also requires the same current snapshot, current
+test evidence, and final integration review. Stale, missing, or mismatched
+evidence means publish no completion; material makes old quality facts stale but
+never becomes a work permit check.
 
 ## Runtime boundary
 

@@ -212,7 +212,19 @@ function latestAttempts(attempt) {
   return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
-const ATTEMPT_CLASS_CODES = new Set(["OUTPUT_INVALID", "PROVIDER_UNAVAILABLE", "TIMEOUT", "SAME_SOURCE"]);
+// These are transport/protocol facts, not semantic review findings. Keep them
+// distinct so a public-result safety failure is diagnosable instead of being
+// collapsed into UNKNOWN in the report.
+const ATTEMPT_CLASS_CODES = new Set([
+  "OUTPUT_INVALID",
+  "PROVIDER_UNAVAILABLE",
+  "TIMEOUT",
+  "SAME_SOURCE",
+  "PUBLIC_RESULT_INVALID",
+  "PROTOCOL_INCOMPATIBLE",
+  "MATERIAL_INCOMPLETE",
+  "PROFILE_MISMATCH",
+]);
 
 export function classifyAttempt(providerAttempt) {
   const code = providerAttempt?.error?.code ?? (providerAttempt?.status === "completed" ? "completed" : null);
@@ -230,7 +242,7 @@ export function classifyFinding(cluster) {
 
 export function classificationSummary(attempt, result = null) {
   const providerAttempts = latestAttempts(attempt);
-  const attemptBuckets = Object.fromEntries(["completed", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE", "TIMEOUT", "SAME_SOURCE", "UNKNOWN"].map((key) => [key, 0]));
+  const attemptBuckets = Object.fromEntries(["completed", ...ATTEMPT_CLASS_CODES, "UNKNOWN"].map((key) => [key, 0]));
   let failedDurationMs = 0;
   for (const providerAttempt of providerAttempts) {
     const bucket = classifyAttempt(providerAttempt);
