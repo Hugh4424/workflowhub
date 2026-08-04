@@ -10,7 +10,8 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { createStageContentEvidenceWriter } from "../../runtime/evidence/stage-content-evidence.mjs";
+import { createStageContentEvidenceWriter, readLatestStageContentEvidence } from "../../runtime/evidence/stage-content-evidence.mjs";
+import { buildDecisionCoverageAudit } from "../../runtime/stage/stage-content-contracts.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
@@ -445,6 +446,42 @@ describe("current vNext five-stage runtime", () => {
     expect(revalidated.ref).toMatch(/interaction-completion\.grill-revalidation-0001\.json$/);
     expect(revalidated.value.payload.previous_grill).toEqual({ ref: initial.ref, hash: initial.hash });
     expect(revalidated.value.payload.material_revision.ref).toBe("current-four-materials");
+  });
+
+  it("advances an immutable stage-content revision through the CAS latest pointer", () => {
+    const state = fixture("public-stage-content-revision", { materialFiles: ["decision-log.md"] });
+    const writer = createStageContentEvidenceWriter({
+      task: state.task,
+      workspace: state.candidate,
+      stage: "make-decision",
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+    });
+    const audit = buildDecisionCoverageAudit({
+      decisionLogRef: "quality/evidence/decision.md",
+      decisionLogHash: "a".repeat(64),
+      sourceItems: [{ source_item_ref: "quality/evidence/source.md", source_item_hash: "b".repeat(64) }],
+      mappings: [{
+        source_item_ref: "quality/evidence/source.md",
+        source_item_hash: "b".repeat(64),
+        coverage_status: "covered",
+        decision_location: { kind: "main", ref: "quality/evidence/decision.md", entry_index: 0 },
+      }],
+    });
+    const first = writer.publish({ kind: "decision-coverage-audit.v1", payload: audit });
+    const second = writer.publish({ kind: "decision-coverage-audit.v1", revision: 2, payload: audit });
+    const latest = readLatestStageContentEvidence({
+      task: state.task,
+      stage: "make-decision",
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+      kind: "decision-coverage-audit.v1",
+    });
+    expect(first.ref).toMatch(/decision-coverage-audit\.v1\.json$/);
+    expect(second.ref).toMatch(/decision-coverage-audit\.v1\.revision-0002\.json$/);
+    expect(latest.ref).toBe(second.ref);
+    expect(latest.hash).toBe(second.hash);
+    const retry = writer.publish({ kind: "decision-coverage-audit.v1", revision: 2, payload: audit });
+    expect(retry.ref).toBe(second.ref);
+    expect(retry.hash).toBe(second.hash);
   });
 
   it("keeps the vNext risk pause and explicit acceptance route usable", () => {

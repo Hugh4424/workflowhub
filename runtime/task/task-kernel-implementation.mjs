@@ -416,9 +416,9 @@ export function buildTaskKernel(taskHandle, {
       }
       return Object.freeze({ ref: consumptionRef, hash: hash(raw), value: consumed });
     },
-    replaceStageContentLatestPointer() {
-      if (replacePointer) throw new Error("mutable stage-content latest pointers are retired");
-      throw new Error("mutable stage-content latest pointers are retired");
+    replaceStageContentLatestPointer(relativePath, raw, options = {}) {
+      if (!replacePointer) throw new Error("stage-content latest pointer replacement capability is unavailable");
+      return replacePointer(relativePath, raw, options);
     },
     prepareMakeDecisionInteractionPublication: unsupported("make-decision interaction publication preparation"),
     completeMakeDecisionInteractionPublication: unsupported("make-decision interaction publication completion"),
