@@ -111,13 +111,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       catch { materials[file] = null; }
     }
     if (context.workspace) {
-      try {
-        current = context.kernel.currentVNextSnapshot();
-        const materialValues = CURRENT_MATERIAL_FILES.map((file) => [file, context.artifacts.read(file)]);
-        materialRevision = `revision-${sha256(JSON.stringify(materialValues))}`;
-      } catch {
-        current = null;
-      }
+      current = context.kernel.currentVNextSnapshot();
+      const materialValues = CURRENT_MATERIAL_FILES.map((file) => {
+        try { return [file, context.artifacts.read(file)]; }
+        catch (error) {
+          if (error?.code === "ENOENT") return [file, null];
+          throw error;
+        }
+      });
+      materialRevision = `revision-${sha256(JSON.stringify(materialValues))}`;
     }
     const observations = [];
     for (const ref of context.task.listCanonicalQualityFactRefs()) {
