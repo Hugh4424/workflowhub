@@ -133,17 +133,27 @@ and duplicate adapters are returned as public `SAME_SOURCE` records without a
 CLI call. WorkflowHub records the eligible unique-adapter quorum from that
 attested group. Changing routing belongs to trusted configuration, never to a
 Stage prompt or review request.
-Required `materials` keys come directly from `runtime/review/stage-materials.json`:
+Required `materials` keys come directly from `runtime/review/stage-materials.json`.
+The listed structured maps are required for `wh_review.v2`; they are not optional
+just because the matrix also records the v2 rule separately. Build them from
+the current frozen materials before calling `run`. If a required map is absent,
+the runner must record `MATERIAL_INCOMPLETE` and must not call a provider.
 
 - make-decision/direction: `raw_requirement`, `objective_facts`;
 - make-decision/detail: `raw_requirement`, `approved_direction`,
-  `draft_spec_or_acceptance`;
-- build-spec: `raw_requirement`, `approved_decision`, `draft_spec`;
-- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`, `draft_tasks`;
-- build-code/phase: `approved_spec`, `acceptance_criteria`, `test_evidence`;
+  `draft_spec_or_acceptance`, `context_map`, `evidence_map`;
+- build-spec: `raw_requirement`, `approved_decision`, `draft_spec`,
+  `context_map`, `evidence_map`;
+- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`,
+  `draft_tasks`, `context_map`, `evidence_map`;
+- build-code/phase: `approved_spec`, `acceptance_criteria`, `test_evidence`,
+  `phase_map`, `impact_map`, `reuse_map`, `acceptance_map`;
 - build-code/integration: `approved_spec`, `acceptance_criteria`,
   `test_evidence`, `phase_coverage`, `seam_index`, `ac_trace`;
-- verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
+- verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`,
+  `context_map`, `evidence_map`.
+
+The direction and integration tracks intentionally have no v2 authority maps.
 
 `runtime/review/stage-materials.json` is a strict allowlist: each stage exposes only required
 and declared optional material. `review_instructions` and packet metadata are
