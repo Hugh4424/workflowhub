@@ -40,7 +40,7 @@ function record(state, ref, value) {
   return { ref: finalRef, sha256: sha256(raw) };
 }
 
-function fixture(taskId) {
+function fixture(taskId, { materialFiles = materials } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-current-five-stage-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -65,7 +65,7 @@ function fixture(taskId) {
   });
   const candidate = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
-  for (const file of materials) artifacts.writeAtomic(file, `# ${file}\n`);
+  for (const file of materialFiles) artifacts.writeAtomic(file, `# ${file}\n`);
   return { root, home, repo, task, candidate, artifacts, kernel: createTaskKernel(task, { candidateWorkspace: candidate }) };
 }
 
@@ -404,6 +404,14 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = JSON.parse(result.stdout);
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ kind: "confirmation", subject: "human_confirmation", status: "failed" });
+    expect(publicStatus(state, "make-decision").status).toBe("in_progress");
+  });
+
+  it("confirms make-decision before future-stage materials exist", () => {
+    const state = fixture("public-make-decision-without-future-materials", { materialFiles: ["decision-log.md"] });
+    const confirmation = publicConfirm(state, "make-decision");
+    const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
+    expect(fact).toMatchObject({ stage: "make-decision", subject: "human_confirmation", status: "passed" });
     expect(publicStatus(state, "make-decision").status).toBe("in_progress");
   });
 
