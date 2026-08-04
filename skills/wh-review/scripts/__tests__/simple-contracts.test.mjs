@@ -72,7 +72,7 @@ describe("simple wh-review contracts", () => {
     for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
-    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "test_evidence", "acceptance_evidence", "open_exceptions"]) {
+    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "test_evidence", "acceptance_evidence", "open_exceptions", "context_map", "evidence_map", "phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
       expect(skill, material).toContain(material);
     }
     expect(skill).toMatch(/3rd-review config/i);
@@ -151,7 +151,7 @@ describe("simple wh-review contracts", () => {
     const qualityReview = steps.find(({ step_slug }) => step_slug === "run-verify-quality-review");
     const publish = steps.find(({ step_slug }) => step_slug === "publish-verification-attempt");
     expect(qualityReview).toMatchObject({ order: 6, depends_on: [5], completion_evidence: [{ kind: "review", uri_or_path: "review://verify-code-quality" }] });
-    expect(publish).toMatchObject({ order: 7, depends_on: [6] });
+    expect(publish).toMatchObject({ order: 8, depends_on: [7] });
     const contract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
     expect(contract).toMatch(/标准 verify-code[\s\S]*新鲜测试[\s\S]*acceptance-evidence[\s\S]*wh-review/);
     expect(contract).toMatch(/非 gate[\s\S]*不能自动接受[\s\S]*receipts\.review/);
@@ -214,10 +214,20 @@ describe("simple wh-review contracts", () => {
     expect(matrix.stages["build-code"].profiles.phase.source_bundle).toBe("diff");
     expect(matrix.stages["build-code"].profiles.integration.source_bundle).toBe("none");
     expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "ac_trace"]));
-    for (const stage of ["build-spec", "build-plan", "verify-code"])
-      expect(matrix.stages[stage].v2_required_maps).toEqual(["context_map", "evidence_map"]);
+    for (const stage of ["build-spec", "build-plan", "verify-code"]) {
+      const rule = matrix.stages[stage];
+      expect(rule.v2_required_maps).toEqual(["context_map", "evidence_map"]);
+      expect(rule.required).toEqual(expect.arrayContaining(rule.v2_required_maps));
+      expect(rule.optional).not.toEqual(expect.arrayContaining(rule.v2_required_maps));
+    }
     expect(matrix.stages["make-decision"].tracks.direction.v2_required_maps).toEqual([]);
-    expect(matrix.stages["make-decision"].tracks.detail.v2_required_maps).toEqual(["context_map", "evidence_map"]);
+    const detail = matrix.stages["make-decision"].tracks.detail;
+    expect(detail.v2_required_maps).toEqual(["context_map", "evidence_map"]);
+    expect(detail.required).toEqual(expect.arrayContaining(detail.v2_required_maps));
+    expect(detail.optional).not.toEqual(expect.arrayContaining(detail.v2_required_maps));
+    const phase = matrix.stages["build-code"].profiles.phase;
+    expect(phase.required).toEqual(expect.arrayContaining(phase.v2_required_maps));
+    expect(phase.optional).not.toEqual(expect.arrayContaining(phase.v2_required_maps));
     const missingIntegrationTrace = structuredClone(matrix);
     missingIntegrationTrace.stages["build-code"].profiles.integration.required = missingIntegrationTrace.stages["build-code"].profiles.integration.required.filter((key) => key !== "ac_trace");
     expect(validate(missingIntegrationTrace)).toBe(false);
