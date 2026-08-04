@@ -19,6 +19,13 @@ const CATEGORY_DIMENSIONS = Object.freeze({
   acceptance: ["acceptance_criteria"], structured_context: ["interface", "state"],
   evidence: ["test_strategy"], unknown: ["direction"], explanation: [],
 });
+const DIRECT_IMPACT_IDENTITIES = Object.freeze({
+  raw_requirement: ["approved_decision", "draft_spec", "context_map", "evidence_map"],
+  approved_decision: ["draft_spec", "context_map", "evidence_map"],
+  draft_spec: ["context_map", "evidence_map"],
+  context_map: ["draft_spec", "evidence_map"],
+  evidence_map: ["draft_spec", "context_map"],
+});
 
 function oid(value, label) {
   if (typeof value !== "string" || !OID.test(value)) throw new TypeError(`${label} must be a Git tree OID`);
@@ -151,6 +158,24 @@ export function buildIncrementalReviewDelta({ stage, previousResult = null, curr
   }
   if (changedMaterials.length === 0) return null;
   const changedDimensions = [...new Set(changedMaterials.flatMap((entry) => CATEGORY_DIMENSIONS[entry.current_category ?? entry.previous_category] ?? CATEGORY_DIMENSIONS.unknown))].sort();
+  const directImpacts = changedDimensions.map((dimension) => {
+    const changedForDimension = changedMaterials
+      .filter((entry) => (CATEGORY_DIMENSIONS[entry.current_category ?? entry.previous_category] ?? CATEGORY_DIMENSIONS.unknown).includes(dimension))
+      .map((entry) => entry.identity);
+    const affected = new Set(changedForDimension);
+    for (const identity of changedForDimension) {
+      for (const candidate of DIRECT_IMPACT_IDENTITIES[identity] ?? []) {
+        if (currentByIdentity.has(candidate)) affected.add(candidate);
+      }
+    }
+    return {
+      dimension,
+      changed_materials: changedForDimension,
+      direct_impact_materials: [...affected].sort(),
+      basis: "runner_material_identity_mapping",
+      instruction: "Assess each changed material against the named direct-impact materials and the authenticated prior-pass baseline; unchanged bytes remain intentionally omitted.",
+    };
+  });
   return Object.freeze({
     schema_version: "wh-review-delta.v1",
     scope: "changed_materials_and_direct_impacts",
@@ -159,6 +184,7 @@ export function buildIncrementalReviewDelta({ stage, previousResult = null, curr
     current_snapshot_tree: currentSnapshotTree,
     changed_dimensions: Object.freeze(changedDimensions),
     changed_materials: Object.freeze(changedMaterials),
+    direct_impacts: Object.freeze(directImpacts),
     instruction: "Review only changed_materials and their direct impacts. Treat unchanged prior material as already reviewed; do not seek a new pass for unchanged content.",
   });
 }
