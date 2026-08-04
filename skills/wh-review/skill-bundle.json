@@ -56,7 +56,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "cec9221f17cc20f6e5d92b96a418fb5bb51db1dc03c05c29ff984a794f4735d4"
+      "sha256": "e7812d698163d23a6d207363ac732e0c250cacbad3880bf4a8a555214e998ef3"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",

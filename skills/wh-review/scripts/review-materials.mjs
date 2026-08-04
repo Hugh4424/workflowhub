@@ -436,6 +436,13 @@ export function canonicalMaterialManifest(entries) {
   return JSON.stringify(sorted.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest })));
 }
 
+export function reviewMaterialBytes(key, value) {
+  if (key === "review_delta" && value && typeof value === "object" && !Array.isArray(value)) {
+    return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+  }
+  return materialBytes(value);
+}
+
 const ruleFor = reviewRuleFor;
 
 function stagePlanFor(stage, track) {
@@ -456,7 +463,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const roundInstruction = reviewRound === "incremental"
-    ? "This is a bounded incremental review. The prior pass is an immutable baseline. Review only requirements/review_delta.json and its direct impacts; unchanged baseline material is intentionally omitted from the provider packet. Do not reopen unchanged sections and do not seek a new pass for unchanged content."
+    ? "This is a bounded incremental review. The prior pass is an immutable baseline. Review only requirements/review_delta.json and its direct impacts; unchanged baseline material is intentionally omitted from the provider packet. Do not reopen unchanged sections and do not seek a new pass for unchanged content. For make-decision, build-spec, and build-plan, canonical-evidence.json is intentionally empty: these stages review decision/spec/plan materials, not implementation execution receipts."
     : reviewRound === "closure"
     ? "This is a bounded closure review. Review only the prior actionable findings and response ledger, whether each claimed repair is complete, and whether a non-fix has a stated reason. Do not reopen a full design/code review unless the supplied delta proves a material change."
     : "This is a full review of the supplied stage subject.";
@@ -1118,7 +1125,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
 
   for (const [key, value] of Object.entries(providerMaterials)) {
     const path = key === "review_instructions" ? "review-instructions.md" : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
-    write(bundleRoot, path, materialBytes(value));
+    write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
   freezeCanonicalEvidence({ bundleRoot, task, stage, materials });
   writeTestSummary({ bundleRoot, task, materials });

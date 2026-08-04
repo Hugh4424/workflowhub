@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildClassificationManifest, buildIncrementalReviewDelta, deriveChangeClassification, selectReviewRound } from "../review-controller.mjs";
+import { reviewInstructionsFor, reviewMaterialBytes } from "../review-materials.mjs";
 
 const route = { mode: "full_on_structural_rework", initial: ["kimi/k3", "cursor/grok"] };
 const previous = {
@@ -41,6 +42,12 @@ describe("review round controller", () => {
       schema_version: "wh-review-delta.v1",
       scope: "changed_materials_and_direct_impacts",
       changed_materials: [{ identity: "draft_spec", change: "changed", content: "new spec" }],
+      direct_impacts: [{
+        dimension: "interface",
+        changed_materials: ["draft_spec"],
+        direct_impact_materials: ["draft_spec"],
+        basis: "runner_material_identity_mapping",
+      }],
     });
     expect(selectReviewRound({
       stage: "build-spec", route, previousResult: passed,
@@ -88,5 +95,14 @@ describe("review round controller", () => {
   it("does not include controller ledgers in the provider classification manifest", () => {
     const manifest = buildClassificationManifest({ approved_spec: { ok: true }, response_ledger: { forged: true } });
     expect(manifest.entries.map(({ identity }) => identity)).toEqual(["approved_spec"]);
+  });
+
+  it("keeps the incremental delta readable and explains empty early-stage evidence", () => {
+    const bytes = reviewMaterialBytes("review_delta", {
+      schema_version: "wh-review-delta.v1",
+      changed_materials: [{ identity: "draft_spec", content: "new spec" }],
+    });
+    expect(bytes.toString("utf8").split("\n").length).toBeGreaterThan(3);
+    expect(reviewInstructionsFor("build-spec", null, false, "incremental")).toMatch(/canonical-evidence\.json is intentionally empty/i);
   });
 });
