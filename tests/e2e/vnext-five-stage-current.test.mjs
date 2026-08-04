@@ -412,7 +412,11 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = publicConfirm(state, "make-decision");
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ stage: "make-decision", subject: "human_confirmation", status: "passed" });
-    expect(publicStatus(state, "make-decision").status).toBe("in_progress");
+    expect(publicStatus(state, "make-decision")).toMatchObject({
+      status: "in_progress",
+      quality_status: "in_progress",
+      quality_predicates: { human_confirmation: { status: "satisfied" } },
+    });
   });
 
   it("revalidates grill with only current make-decision material", () => {
