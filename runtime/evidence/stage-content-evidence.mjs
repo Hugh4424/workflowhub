@@ -694,8 +694,20 @@ export function createStageContentEvidenceWriter(options = {}) {
       let previous;
       let evidenceRef = baseRef;
       if (input.revision !== undefined) {
+        evidenceRef = revisionRef(input.kind, input.revision);
         const latest = parseLatest(input.kind);
         if (latest) {
+          if (latest.value.revision === input.revision && latest.value.ref === evidenceRef) {
+            const current = verifyStageContentEvidence({
+              task, ref: latest.value.ref, hash: latest.value.hash,
+              expectedStage: stage, expectedRunId: workflowRunId, expectedKind: input.kind,
+            });
+            if (current.snapshot_tree !== snapshot.tree
+                || JSON.stringify(current.payload) !== JSON.stringify(payload)) {
+              throw new Error(`stage content revision already exists with conflicting content: ${evidenceRef}`);
+            }
+            return Object.freeze({ ref: latest.value.ref, hash: latest.value.hash, value: Object.freeze(current) });
+          }
           if (latest.value.revision !== input.revision - 1) throw new Error("stage content revision CAS is stale");
           previous = { ref: latest.value.ref, hash: latest.value.hash, pointer: latest };
         } else {
@@ -707,7 +719,6 @@ export function createStageContentEvidenceWriter(options = {}) {
             expectedRunId: workflowRunId, expectedKind: input.kind,
           });
         }
-        evidenceRef = revisionRef(input.kind, input.revision);
       }
       const value = {
         schema_version: "stage-content-evidence.v1",
@@ -733,10 +744,10 @@ export function createStageContentEvidenceWriter(options = {}) {
       const raw = `${JSON.stringify(value, null, 2)}\n`;
       const existing = readOptional(task, evidenceRef);
       if (existing !== undefined) {
-        if (existing === raw) return Object.freeze({ ref: evidenceRef, hash: sha256(raw), value: Object.freeze(value) });
-        throw new Error(`create-only stage content evidence already exists with conflicting content: ${evidenceRef}`);
+        if (existing !== raw) throw new Error(`create-only stage content evidence already exists with conflicting content: ${evidenceRef}`);
+      } else {
+        kernel.publishCanonicalRecord(evidenceRef, raw);
       }
-      kernel.publishCanonicalRecord(evidenceRef, raw);
       if (revisionable(input.kind, payload)) {
         const recordHash = sha256(raw);
         const pointerValue = {
