@@ -2,7 +2,7 @@
 
 这是本任务的第一份当前材料。它只记录：原始需求、需求/决策关系、分析来源、取舍、风险和延期交接。具体 FR、页面细节、任务拆分、测试步骤和证据格式留给后续 stage；后续 stage 不得借此重新猜需求。
 
-状态：`make-decision / scope revision pending user confirmation`；原 D1-D14 确认仍保留为历史事实，但 R15-R16 改变了当前交付范围，之前的阶段交接结论暂不能直接沿用；未创建 `spec.md`、`plan.md`、`tasks.md`。
+状态：`make-decision / confirmed; handoff to build-spec pending`；D15-D16 已获得本轮用户确认，旧 D1-D14 确认仍保留为历史事实。当前 worktree 已有上一轮遗留的 `spec.md`、`plan.md`、`tasks.md`，但它们未被本轮 D15-D16 确认，不得自动视为当前 handoff；下一步由 `build-spec` 在同一任务中重审并修订。
 
 ## 原始需求
 
@@ -102,7 +102,7 @@
 - 本任务的材料审查只记录真实结果，不把失败/unavailable 改成 pass，也不把审查结果冒充用户确认。
 - 不新增 selector、lineage、recovery、continuation、replacement review、双写或永久平行控制面。
 - 不删除或覆盖历史 receipt、review、snapshot、失败和 unavailable 记录。
-- 当前阶段不创建 `spec.md`、`plan.md`、`tasks.md`。
+- 本次确认动作不新建 `spec.md`、`plan.md`、`tasks.md`；worktree 中已有的上一轮文件只作为当前材料/审计事实读取，必须经过 `build-spec` 重审后才能作为新的下游输入。
 
 ## 决定
 
@@ -286,7 +286,7 @@
 - **决定/影响**：已给支持 continuation 的 cursor/kimi/opencode/grok/claude-code adapter 统一安全重写契约；不改 `/Users/Hugh/.config/3rd-review/config.json` 或 WorkflowHub provider 配置，不加自动重试。
 - **后果/风险**：provider 仍可能输出无法公开的内容，届时审查仍不可用；这比泄露私有路径或伪造语义结果安全，需在后续阶段如实显示 unavailable。
 - **拒绝/延期**：拒绝原始文本清洗、改配置、换 provider、把 group-level failure 拆成假的 provider pass；本任务只收口公开协议，provider 质量和审查聚合继续按独立事实记录。
-- **supersedes/批准**：`supersedes=把全部 provider 失败归因于 provider 不可用`；代码修复已获用户“按推荐修复并继续”的授权，当前 D15 的阶段材料交接仍需用户确认。
+- **supersedes/批准**：`supersedes=把全部 provider 失败归因于 provider 不可用`；代码修复已获用户“按推荐修复并继续”的授权；本轮用户已确认 D15。
 
 ### D16：审查后必须完成逐条分析—处置—交接闭环
 
@@ -299,7 +299,7 @@
 - **后果/风险**：主代理需要多做一次分析，避免把 provider 意见机械当命令；当前运行时还不能从自由文本 Task completion 自动验证每个 disposition 的证据绑定，因此本轮先保证流程不再静默跳过，正式的最小证据字段在本任务后续 build-spec/build-plan 设计中补齐。
 - **宪法边界**：处置 step 是质量/交接事实，不是质量 Gate；`revise_required`、`unavailable`、timeout、invalid 永不变成 pass；不新增 public command、successor、re-review flow、response ledger、selector、rebind 或第二套 completion 状态机。
 - **拒绝/延期**：拒绝“review receipt 存在即视为已分析”、拒绝自动把 minor/major 统一卡死、拒绝创建新的 review resolution 控制面；逐条处置证据的最终结构、消费者和删除/保留条件交给当前任务后续 spec/plan，不能在 build-code 临时猜。
-- **supersedes/批准**：`supersedes=review 完成即可直接进入下一步的隐含流程`；当前是新增范围决策，待用户确认后才能重新确认 make-decision 并进入后续 stage。
+- **supersedes/批准**：`supersedes=review 完成即可直接进入下一步的隐含流程`；本轮用户已确认 D16，下一步进入 `build-spec` 细化处置证据和验收边界。
 
 ## 三轮 talk
 
@@ -350,7 +350,9 @@ R12-R14 是本轮复审之后新增的用户要求；本次只做了本地结构
 
 当前推荐方向：采用 D1-D16；当前材料只做决策索引，不复制 spec；后续 stage 只能展开已有 `R* / F*-* → D*` 关系。主要风险是下游不遵守关系链、用户未看交接摘要、旧确认 stale、provider 仍可能返回无法公开的输出、review finding 处置证据还未完成机器化绑定。
 
-历史用户正式确认：`accepted`。原始回答：`确认，继续吧`。TaskKernel canonical confirmation：`quality/confirmations/b2689b333a7def3ca8f699026c7640d28a6c6372533515140c29bd443dbb3d87.json`；sha256 `b2689b333a7def3ca8f699026c7640d28a6c6372533515140c29bd443dbb3d87`；material revision `revision-5c35208cab42144c512787fd9efae720a3fd9d2621d59f80435d318ecd9d4171`；snapshot tree `0804d1c7de01e6f9b6b2beb770616144d0f8ea3b`。该确认只覆盖 D1-D14；R15-R16 已改变当前范围，不能拿旧确认自动覆盖。需用户确认 D15-D16 后，才能重新声明 make-decision 已确认并 handoff 到 `build-spec`；后续 `build-spec`、`build-plan` 仍须完成各自的大白话摘要交接。
+历史用户正式确认：`accepted`。原始回答：`确认，继续吧`。TaskKernel canonical confirmation：`quality/confirmations/b2689b333a7def3ca8f699026c7640d28a6c6372533515140c29bd443dbb3d87.json`；sha256 `b2689b333a7def3ca8f699026c7640d28a6c6372533515140c29bd443dbb3d87`；material revision `revision-5c35208cab42144c512787fd9efae720a3fd9d2621d59f80435d318ecd9d4171`；snapshot tree `0804d1c7de01e6f9b6b2beb770616144d0f8ea3b`。该确认覆盖 D1-D14。
+
+本轮确认：`accepted`。原始回答：`好的，可以继续了`。覆盖 D15-D16；这是用户对已修复公开审查协议和逐条 finding 处置闭环的真实确认。当前 make-decision 结论已确认，下一步进入 `build-spec`；此前遗留的 spec/plan/tasks 不能绕过本轮 build-spec 重审。后续 `build-spec`、`build-plan` 仍须完成各自的大白话摘要交接。
 
 ## 拒绝方案
 
@@ -373,7 +375,8 @@ R12-R14 是本轮复审之后新增的用户要求；本次只做了本地结构
 
 ## 未决项
 
-- 用户是否正式接受 D1-D14、补回的阶段链/边界/证据锚点、跨项目最低结构和人工交接/质量边界：`accepted`，见上述 TaskKernel confirmation。
+- 用户是否正式接受 D1-D14、补回的阶段链/边界/证据锚点、跨项目最低结构和人工交接/质量边界：`accepted`，见历史 TaskKernel confirmation。
+- 用户是否正式接受 D15-D16：`accepted`，见本轮真实用户回复 `好的，可以继续了`。
 - 后续 build-spec 如何把每个 `R*/F*` 展开成 FR/AC：build-spec 负责，但不得新增需求。
 - stale confirmation/quality projection 的机器化诊断：隔离 runtime 任务。
 - review aggregation、snapshot freeze、results publication、close preflight：隔离 review/runtime 任务。
@@ -384,7 +387,7 @@ R12-R14 是本轮复审之后新增的用户要求；本次只做了本地结构
 
 - 本版（V3，当前精简候选）supersedes V2（V1 的 1,182 行详细候选压缩版）；原因是 V2 未记录最新公开审查协议事故和 finding 处置闭环。
 - V3 保留 V2 的精简索引结构，同时追加 D15-D16；不把修复代码细节复制成 spec，不把历史 confirm 扩大解释为当前范围确认。
-- V0（约 302 行初始摘要）和 V1 都只作为只读审计对照；canonical ref/hash 未提供，不能把其中“已确认”状态带入 V2。
+- V0（约 302 行初始摘要）和 V1 都只作为只读审计对照；canonical ref/hash 未提供，不能把其中“已确认”状态带入 V3。
 - `decision-correction-appendix.v1`：原始 canonical decision ref/hash 未提供，不能伪造；本版以 `supersedes` 和 D1-D14 的明确关系记录修正，`does_not_rewrite_upstream=true`。
 
 ## 文档结果
@@ -399,5 +402,5 @@ R12-R14 是本轮复审之后新增的用户要求；本次只做了本地结构
 - F15/F4F7/KnowledgeDigest/F8/M0.8 需求点均已映射：pass。
 - Talk、Grill、调研、审查事实均已记录，缺失项标为 unknown/unavailable，并保留路径/hash：pass。
 - 决策级阶段链、成功边界、失败边界和跨项目最低结构已记录：pass。
-- `spec.md`、`plan.md`、`tasks.md` 未创建：pass。
-- 历史用户正式确认 D1-D14：pass；D15-D16 的范围确认：pending。三个阶段的人工摘要交接规则已记录。阶段 handoff：当前 make-decision 尚未因 R15-R16 重新确认，不得进入 `build-spec`；确认后仍需按规则生成 `build-spec` 当前材料并展示其阶段摘要。
+- 本次 make-decision 未新建未来材料；已有 spec/plan/tasks 已明确标记为上一轮遗留，不能自动作为本轮 handoff：pass。
+- 历史用户正式确认 D1-D14：pass；本轮用户确认 D15-D16：pass。三个阶段的人工摘要交接规则已记录。阶段 handoff：make-decision 已确认，进入 `build-spec`；build-spec 必须先重审并修订受 D15-D16 影响的当前材料，再展示大白话摘要后交接。
