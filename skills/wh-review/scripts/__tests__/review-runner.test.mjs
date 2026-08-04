@@ -120,6 +120,27 @@ describe("public provider client", () => {
     expect(result.providers.map(({ provider }) => provider)).toEqual(["claude-code/opus", "kimi/k3"]);
   });
 
+  it("lets the managed broker own the default lifecycle deadline", async () => {
+    const calls = [];
+    const client = new ReviewProviderClient({
+      pollIntervalMs: 0,
+      invoke: async (value) => {
+        calls.push(value);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        const base = { version: "workflowhub-run.v1", request_id: "default-deadline", runtime_id: "run", material_id: materialId };
+        if (value.command === "start") return { exitCode: 0, stdout: JSON.stringify({ ...base, state: "starting" }), stderr: "" };
+        return { exitCode: 0, stdout: JSON.stringify({ ...base, state: "terminal", group: publicGroup([publicProvider("kimi/k3")]) }), stderr: "" };
+      },
+    });
+    await expect(client.run({
+      hostProvider: "codex", provider: "kimi/k3",
+      materials: { bundleRoot: "/attachments/.wh-review-packets/bundle", attachmentRoot: "/attachments", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] },
+      prompt: "review", requestId: "default-deadline",
+    })).resolves.toMatchObject({ provider: { provider: "kimi/k3", status: "completed" } });
+    expect(calls).toHaveLength(2);
+    expect(calls.every((call) => !Object.hasOwn(call, "timeoutMs"))).toBe(true);
+  });
+
   it("rejects a group that omits a configured candidate", async () => {
     const client = new ReviewProviderClient({ pollIntervalMs: 0, invoke: managedInvoke(publicGroup([publicProvider("kimi/k3")])) });
     await expect(client.runGroup({
