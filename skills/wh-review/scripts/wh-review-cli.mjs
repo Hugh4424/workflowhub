@@ -6,7 +6,7 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
-import { selectReviewRound } from "./review-controller.mjs";
+import { buildIncrementalReviewDelta, selectReviewRound } from "./review-controller.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
@@ -91,8 +91,8 @@ export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } =
   return flow;
 }
 
-export function selectCanonicalReviewRound({ stage, route, previousResult = null, currentSnapshotTree = null } = {}) {
-  return selectReviewRound({ stage, route, previousResult, currentSnapshotTree });
+export function selectCanonicalReviewRound({ stage, route, previousResult = null, currentSnapshotTree = null, incrementalAvailable = false } = {}) {
+  return selectReviewRound({ stage, route, previousResult, currentSnapshotTree, incrementalAvailable });
 }
 
 export function providerVisibleMaterialsForRound({ materials = {}, round, previousResult = null } = {}) {
@@ -176,6 +176,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   }
   if (input.review_round !== undefined || input.reviewRound !== undefined) throw new TypeError("review_round is derived from canonical prior review evidence");
   if (input.review_scope !== undefined || input.reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
+  if (input.materials?.review_delta !== undefined) throw new TypeError("materials.review_delta is runner-generated");
   const formatCorrectionAttemptRef = input.format_correction_attempt_ref ?? input.formatCorrectionAttemptRef ?? null;
   if (formatCorrection && typeof formatCorrectionAttemptRef !== "string") throw new TypeError("format-correct requires format_correction_attempt_ref");
   if (!formatCorrection && formatCorrectionAttemptRef !== null) throw new TypeError("format_correction_attempt_ref is only valid for format-correct");
@@ -216,8 +217,18 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   });
   const flowHistory = qualityOnly ? { provider_attempt_refs: [] } : trusted.kernel.readReviewFlowHistory(flowIdentity);
   if (formatCorrection && flow?.head_result_ref) throw new Error("REVIEW_CLOSED: format correction cannot replace a semantic review-flow head");
+  const incrementalDelta = buildIncrementalReviewDelta({
+    stage,
+    previousResult: prior,
+    currentSnapshotTree,
+    currentMaterials: input.materials ?? {},
+  });
   const control = selectCanonicalReviewRound({
-    stage, route, previousResult: prior, currentSnapshotTree,
+    stage,
+    route,
+    previousResult: prior,
+    currentSnapshotTree,
+    incrementalAvailable: incrementalDelta !== null,
   });
   if (control.round === "none") {
     throw new Error("REVIEW_CLOSED: current quality fact already recorded; use a changed snapshot");
@@ -239,7 +250,11 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
     stage, phaseId, reviewTrack, uiScope: input.ui_scope === true,
     materials: providerVisibleMaterialsForRound({
-      materials: input.materials ?? {}, round: control.round, previousResult: prior,
+      materials: {
+        ...(input.materials ?? {}),
+        ...(control.round === "incremental" ? { review_delta: incrementalDelta } : {}),
+      },
+      round: control.round, previousResult: prior,
     }),
     current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
     hostProvider,

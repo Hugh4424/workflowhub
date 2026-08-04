@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "20ba59bc2890f1b851978224a88c5b10fdd2f8e3f2ebd948974de3ef8f9891a8"
+      "sha256": "b26fcb288521d9392eda6300ebf5486a112b1eb69e0403e1ddacc8df58c431b8"
     },
     {
       "path": "contracts/build-code.md",
@@ -12,15 +12,15 @@
     },
     {
       "path": "contracts/build-plan.md",
-      "sha256": "b6f6d2e0e68296118e00f7534c8582a2da168a0e28f64f5b7a85b603a212be4e"
+      "sha256": "636e4835b160ca083912588399d7d09aca45c385f1a40cfe8de7cd1795f9b6f8"
     },
     {
       "path": "contracts/build-spec.md",
-      "sha256": "ab47854a7d5e2ad2ee5d47b60967c61b0f1dd301209d19f62aaff2e78f109c4e"
+      "sha256": "6db02a7766ed4380b34636060511879651dcae17e34ce63c1ec646c35a8cf051"
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "711a39c794b6ff4642af8881a8ee66228fa656d31e3868b5059685122a5d5e20"
+      "sha256": "e088b68722bb453425df68c211946ea298ec9e73b141789277ca4e9d1f61ad67"
     },
     {
       "path": "contracts/provider-protocol.md",
@@ -56,7 +56,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "efd8949fd0f6462e3bd20301c783587b8d8d169f453b0302afd3eb2de203228b"
+      "sha256": "cec9221f17cc20f6e5d92b96a418fb5bb51db1dc03c05c29ff984a794f4735d4"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "f23f693189c61513b82b97a5d651de0dd68f627e45c581401ec4456631626970"
+      "sha256": "5a4c1e7c0c08b7aa6f3c24846557707a2247290b8edf2f6407ee544c3709531d"
     },
     {
       "path": "scripts/review-source.mjs",
@@ -92,7 +92,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "faed796caa756a279d27942da63bfe854d934f3b2d9a49973a2609c71fa2fe48"
+      "sha256": "5f29fc25bd85ec88a201d8b2ef2db3b1c2801d96ecdea387fadd22108d814279"
     },
     {
       "path": "stage-skill-plan.json",

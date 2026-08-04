@@ -69,9 +69,12 @@ snapshot is a provenance fact only, never a prerequisite or work permit.
    unavailable or failed as pass.
 7. Address valid review findings in the same task. Repair, reject invalid
    findings with evidence, or let the user accept a specific risk. Do not add
-   process machinery or repeat an unchanged review. After a material change,
-   rerun only affected
-   checks and the review needed to assess that change.
+   process machinery or repeat an unchanged review. When a prior review was
+   `pass`, wh-review uses a runner-generated delta for new or changed plan
+   material and its direct impacts, rather than repeating a full review of
+   unchanged content. If no safe delta exists, record the fallback full review
+   explicitly. Rerun only affected checks and the review needed to assess that
+   change.
 8. Before handoff, the main agent must inspect every finding and record its
    disposition, evidence, and next action. A finding cannot be silently carried
    into implementation. This disposition is a quality fact, not a hidden gate:

@@ -12,6 +12,10 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与本次审查有关的 reviewer 技能文件；UI scope 才包含 UI reviewer 技能。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
+如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
+但 provider packet 只放 `review_delta`、审查指令和其中列出的变更内容；未变化
+材料已由基线覆盖，不重复放入或审查。
+
 `wh_review.v2` 路由还必须给出 `context_map` 和 `evidence_map`。每张 map 都有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
 `rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能
@@ -26,8 +30,10 @@ flow 重跑。可选材料不存在时，`review-instructions.md` 必须说明�
 
 首轮 `revise_required` 是质量事实，不是 stage pass gate。主 agent 应直接修复；普通
 修复不做二审。可选 response ledger 仅写外置审计记录，缺失或不能验证时明确为
-`unverified`，不得声称已修复或通过。若修改方向、验收、接口、schema、状态、安全、
-并发、拓扑、phase 顺序或测试策略时，才最多再做一次首轮高强度完整审查；第二轮 finding
+`unverified`，不得声称已修复或通过。已有 `pass` 基线后若新增或修改材料，runner
+生成 `review_delta`，只审查新增内容及其直接影响，不重新审查未变化内容。无法安全
+生成 delta 时才回退一次完整初始审查。若修改方向、验收、接口、schema、状态、安全、
+并发、拓扑、phase 顺序或测试策略，增量审查仍须覆盖受影响的直接关系；第二轮 finding
 同样只供改进，不循环也不阻断 stage 推进。
 
 人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
