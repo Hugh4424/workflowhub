@@ -11,7 +11,7 @@
     "outcome": { "const": "recorded_non_gate_response" },
     "previous_verdict": { "enum": ["pass", "revise_required"] },
     "provider_calls": { "const": 0 },
-    "previous_result_ref": { "type": "string", "pattern": "^reviews/results/[A-Za-z0-9._-]+\\.json$" },
+    "previous_result_ref": { "type": "string", "pattern": "^(?:quality/reviews|reviews)/results/[A-Za-z0-9._-]+\\.json$" },
     "previous_result_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "previous_snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
