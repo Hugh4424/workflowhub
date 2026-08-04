@@ -211,7 +211,7 @@
 - **推荐/大白话**：`recommended-and-user-directed`。本任务自己出现的假绿、过期确认和错误材料也不能丢。
 - **来源**：U8/U10；本次事实：曾误建 `spec/plan/tasks`，随后删除；旧确认和质量 projection 需要重新判断 freshness。
 - **事实/推理**：过程事故会污染后续状态；不记录就会重用 stale evidence，正好复现本任务要解决的问题。
-- **决定/影响**：INC-001 provider failure、INC-002 future read、INC-003 CAS、INC-004 误建未来文件、INC-005 stale confirm、INC-006 quality projection、INC-007 文档计数、INC-008 review packet 映射层级错误、INC-009 占位材料诊断、INC-010 公开审查结果含私有路径、INC-011 审查 finding 未分析即 handoff 均进入交接。
+- **决定/影响**：INC-001 provider failure、INC-002 future read、INC-003 CAS、INC-004 误建未来文件、INC-005 stale confirm、INC-006 quality projection、INC-007 文档计数、INC-008 review packet 映射层级错误、INC-009 占位材料诊断、INC-010 公开审查结果含私有路径、INC-011 审查 finding 未分析即 handoff、INC-012 本地 Git object database 缺失历史对象均进入交接。
 - **后果/风险**：当前不能沿用旧 completed 结论；历史记录保留但只读。
 - **拒绝/未决**：拒绝删除事故记录、继续使用旧 confirm；stale projection 的机器化显示延期。
 - **supersedes/批准**：`supersedes=旧日志“最终确认已足够”`；正式确认 accepted。
@@ -343,6 +343,8 @@ R12-R14 是本轮复审之后新增的用户要求；本次只做了本地结构
 本轮新增事故与修复：最新 build-plan final review attempt `e3c40da8-bd0d-448f-9927-8b3904dc92ec` 中，`cursor/grok`、`kimi/k3`、`opencode/v4flash` 均因 provider 最终公开输出含私有绝对路径而返回 `PUBLIC_RESULT_INVALID`；`codex/terra` 为 `SAME_SOURCE`，因此有效 reviewer 为 `0/1`。这不是三个 provider 同时不可用，也不是语义审查 pass，而是公开协议的 fail-closed 结果。已在独立 3rd-review worktree 修复同会话安全输出重写并合并 3rd-review main（commit `6335345`，main merge `4210810`），完整顺序回归 `257 passed / 0 failed`；WorkflowHub 同步把公开协议错误按真实码分类，未改共享配置。
 
 本轮还确认了流程事故：build-code/verify-code 原 review step 后直接 capture/publish，技能没有要求主代理逐条分析 finding；运行时只留下粗粒度 review verdict/missing item，导致“审查完成”被误当成“问题已处理”。已加入 `analyze-review-findings` 明确 step、build-spec/build-plan handoff 规则，并让运行时列出 finding ID 和 serious repair-or-risk 缺口；这些提醒不会变成阻塞普通修复的质量 Gate。逐条处置的最小证据绑定仍是当前任务后续 spec/plan 的设计项，不能在当前 decision-log 中假装已经实现。
+
+执行环境事实：本轮 WorkflowHub/3rd-review 的 commit 和 merge 均成功，但 Git 自动 repack 报告缺失对象 `d4a931b5d44e5401702ee81135512075eb5c5c63`；`git fsck --full` 还发现大量历史 broken link/missing tree。当前 main、修复 commit 和工作区文件可正常读取；未运行 `reset`、`prune`、强制 `gc` 或删除日志。INC-012 只记录并延期给仓库维护，不把 Git 历史损坏误归因于本次代码修复。
 
 ## 最终确认
 
