@@ -404,7 +404,7 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = JSON.parse(result.stdout);
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ kind: "confirmation", subject: "human_confirmation", status: "failed" });
-    expect(publicStatus(state, "make-decision").status).toBe("in_progress");
+    expect(publicStatus(state, "make-decision")).toMatchObject({ status: "completed", quality_status: "in_progress" });
   });
 
   it("confirms make-decision before future-stage materials exist", () => {
@@ -413,6 +413,34 @@ describe("current vNext five-stage runtime", () => {
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ stage: "make-decision", subject: "human_confirmation", status: "passed" });
     expect(publicStatus(state, "make-decision").status).toBe("in_progress");
+  });
+
+  it("revalidates grill with only current make-decision material", () => {
+    const state = fixture("public-grill-revalidation-without-future-materials", { materialFiles: ["decision-log.md"] });
+    const writer = createStageContentEvidenceWriter({
+      task: state.task,
+      workspace: state.candidate,
+      stage: "make-decision",
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+    });
+    const grill = {
+      context: { status: "no-change", reason: "fixture has no context contradiction" },
+      adr: { status: "not-needed", reason: "fixture has no architecture decision" },
+      conflicts: { status: "none", reason: "fixture has no conflicts" },
+      file_references: [],
+      no_file_reason: "fixture uses no file references",
+      exit_checks: { context_checked: true, adr_checked: true, conflicts_checked: true, file_references_checked: true },
+    };
+    const initial = writer.publish({ kind: "interaction-completion.v1", payload: {
+      interaction_type: "grill", rounds: [], grill,
+    } });
+    state.artifacts.writeAtomic("decision-log.md", "# decision revision\n");
+    const revalidated = writer.publish({ kind: "interaction-completion.v1", payload: {
+      interaction_type: "grill-revalidation", rounds: [], grill,
+    } });
+    expect(revalidated.ref).toMatch(/interaction-completion\.grill-revalidation-0001\.json$/);
+    expect(revalidated.value.payload.previous_grill).toEqual({ ref: initial.ref, hash: initial.hash });
+    expect(revalidated.value.payload.material_revision.ref).toBe("current-four-materials");
   });
 
   it("keeps the vNext risk pause and explicit acceptance route usable", () => {
