@@ -68,7 +68,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "b56e6aa3e5b8e6aae960625067810e91c1c5f3dd7e02e83c4e252ce6a5b9f98d"
+      "sha256": "c9d6aaa5efd338825fb823e10fe25a3c94148e47a8ef8e0f28fc1410760f9c7c"
     },
     {
       "path": "scripts/review-result.mjs",

@@ -180,7 +180,13 @@ export function buildTaskKernel(taskHandle, {
     const active = activeWorkspace();
     if (!active) throw new Error("vNext current material context requires an authenticated Workspace");
     const dir = artifactDir();
-    const values = MATERIAL_FILES.map((file) => [file, dir.read(file)]);
+    const values = MATERIAL_FILES.map((file) => {
+      try { return [file, dir.read(file)]; }
+      catch (error) {
+        if (error?.code === "ENOENT") return [file, null];
+        throw error;
+      }
+    });
     const materialDigest = hash(JSON.stringify(values));
     const revision = {
       schema_version: "vnext-material-context.v1",

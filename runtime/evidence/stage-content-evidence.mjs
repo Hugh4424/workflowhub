@@ -401,9 +401,15 @@ export function createStageContentEvidenceWriter(options = {}) {
 
   function trustedCurrentMaterialBinding() {
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-    const hashes = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, sha256(artifacts.read(file))]));
+    const hashes = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => {
+      try { return [file, sha256(artifacts.read(file))]; }
+      catch (error) {
+        if (error?.code === "ENOENT") return [file, null];
+        throw error;
+      }
+    }));
     const materialDigest = sha256(JSON.stringify(CURRENT_MATERIAL_FILES.map((file) => [file, hashes[file]])));
-    return { ref: "current-four-materials", hash: materialDigest, value: { hashes } };
+    return { ref: "current-four-materials", hash: materialDigest };
   }
 
   function trustedPreviousGrill() {

@@ -22,7 +22,7 @@ function containsPrivatePath(value) {
 function execute(command, args, { timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); let stdout = "", stderr = ""; let settled = false;
-    const timer = timeoutMs === undefined ? null : setTimeout(() => {
+    const timer = timeoutMs === undefined || timeoutMs === null ? null : setTimeout(() => {
       if (settled) return;
       child.kill("SIGTERM");
       setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 250).unref?.();
@@ -159,10 +159,10 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = 120000 } = {}) {
+  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = null } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 0) throw new TypeError("pollIntervalMs must be a non-negative safe integer");
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000) throw new TypeError("timeoutMs must be at least 1000ms");
+    if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000)) throw new TypeError("timeoutMs must be null or at least 1000ms");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
     this.pollIntervalMs = pollIntervalMs; this.timeoutMs = timeoutMs;
   }
@@ -178,14 +178,17 @@ export class ReviewProviderClient {
     // candidate profiles plus frozen material.
     const request = { version: 4, host_provider: hostProvider, required_result_protocol: protocol, provider_allowlist: [...providers], prompt, continuation: continuationRuntimeId ? { runtime_id: continuationRuntimeId } : null };
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
-    const deadline = Date.now() + this.timeoutMs;
-    const invoke = (value) => this.invoke({ ...value, timeoutMs: Math.max(1, deadline - Date.now()) });
+    const deadline = this.timeoutMs === null ? null : Date.now() + this.timeoutMs;
+    const invoke = (value) => this.invoke({
+      ...value,
+      ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) }),
+    });
     const start = validateManagedLifecycle(parseManagedWire(await invoke({ command: "start", request, requestId, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only" }), "start"), { requestId, materialId: materials.materialId });
     let lifecycle = start;
     while (lifecycle.state !== "terminal") {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${this.timeoutMs}ms`);
-      if (this.pollIntervalMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(this.pollIntervalMs, remaining)));
+      const remaining = deadline === null ? null : deadline - Date.now();
+      if (remaining !== null && remaining <= 0) throw failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${this.timeoutMs}ms`);
+      if (this.pollIntervalMs > 0) await new Promise((resolve) => setTimeout(resolve, remaining === null ? this.pollIntervalMs : Math.min(this.pollIntervalMs, remaining)));
       lifecycle = validateManagedLifecycle(parseManagedWire(await invoke({ command: "status", runtimeId: start.runtime_id }), "status"), {
         requestId, materialId: materials.materialId, runtimeId: start.runtime_id,
       });
