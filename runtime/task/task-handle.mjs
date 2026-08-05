@@ -152,9 +152,11 @@ function assertInside(basePath, candidatePath, label = "path") {
 function assertTaskPathShape(taskPath, projectName, taskId) {
   if (typeof taskPath !== "string" || !isAbsolute(taskPath)) throw new TypeError("taskPath must be absolute");
   const path = resolve(taskPath);
-  if (basename(path) !== taskId || basename(dirname(path)) !== "tasks" ||
-      basename(dirname(dirname(path))) !== projectName ||
-      basename(dirname(dirname(dirname(path)))) !== "Projects") {
+  const projectPath = basename(dirname(dirname(path)));
+  const pathSegmentMatches = (actual, expected) => actual === expected
+    || (process.platform === "darwin" && actual.toLowerCase() === expected.toLowerCase());
+  if (!pathSegmentMatches(basename(path), taskId) || !pathSegmentMatches(basename(dirname(path)), "tasks") ||
+      !pathSegmentMatches(projectPath, projectName) || !pathSegmentMatches(basename(dirname(dirname(dirname(path)))), "Projects")) {
     throw new Error(`taskPath does not match Projects/${projectName}/tasks/${taskId}: ${path}`);
   }
   return path;
@@ -581,6 +583,33 @@ function makeTaskHandle(taskPath, manifest) {
         .sort((left, right) => left.localeCompare(right));
       verifyDirectorySnapshot(resultsIdentity);
       verifyDirectorySnapshot(reviewsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate canonical test receipts so a later stage can reuse a valid full run. */
+    listCanonicalTestReceiptRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const qualityRoot = resolve(realTaskPath, "quality");
+      const testsRoot = resolve(qualityRoot, "tests");
+      assertInside(realTaskPath, qualityRoot, "quality directory");
+      assertInside(realTaskPath, testsRoot, "quality tests directory");
+      if (!existsSync(testsRoot)) return Object.freeze([]);
+      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
+      const testsIdentity = directorySnapshot(realTaskPath, testsRoot);
+      const refs = readdirSync(testsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(testsRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (stat.isSymbolicLink() || !stat.isFile()) {
+            throw new Error(`canonical test receipt must be a regular non-symlink JSON file: ${entry.name}`);
+          }
+          return `quality/tests/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(testsIdentity);
+      verifyDirectorySnapshot(qualityIdentity);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },

@@ -41,7 +41,10 @@ function currentFacts({ io, stage, revision, tree = "b".repeat(40) }) {
     } : kind === "test" ? {
       schema_version: "workflowhub-receipt.v1", task_id: "task", stage,
       producer: { stage, component: subject, version: "1" }, exit_code: 0,
-      snapshot_tree: tree, output_ref: `evidence/${subject}.output`, output_hash: sha256("output"),
+      command: "npm test", command_hash: sha256("npm test"),
+      snapshot_head: tree, snapshot_tree: tree, snapshot_commit: tree,
+      started_at: "2026-07-31T00:00:00.000Z", completed_at: "2026-07-31T00:00:01.000Z",
+      output_ref: `evidence/${subject}.output`, output_hash: sha256("output"),
     } : kind === "acceptance_criterion" ? {
       schema_version: "acceptance-evidence.v1", acceptance_criterion_id: subject,
       result: "pass", snapshot_tree: tree,

@@ -1,18 +1,18 @@
 {
   "schema_version": "workflowhub-final-complexity-report.v2",
-  "snapshot_tracked_tree_sha256": "b812e9ad2ed1a2551d686300baa0ae8ab2d7ddb0fd4a0c38d013699788eaf3b3",
+  "snapshot_tracked_tree_sha256": "78b29a3a392f43ddffe021347a4794341457b6ff76b0bd70aaab584b09756781",
   "build_report": {
     "schema_version": "workflowhub-complexity-report.v1",
     "source": {
-      "git_head": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
-      "tracked_tree_sha256": "b812e9ad2ed1a2551d686300baa0ae8ab2d7ddb0fd4a0c38d013699788eaf3b3",
-      "tracked_files": 1125,
-      "delivery_files": 1046,
-      "source_files": 255
+      "git_head": "e1d539904e2f802fb08020ee79947a98cb9b7781",
+      "tracked_tree_sha256": "78b29a3a392f43ddffe021347a4794341457b6ff76b0bd70aaab584b09756781",
+      "tracked_files": 1137,
+      "delivery_files": 1137,
+      "source_files": 286
     },
     "measurements": {
       "formal_test_files": {
-        "actual": 113,
+        "actual": 136,
         "definition": "*.test.* and */__tests__/*"
       },
       "test_support_lines": {
@@ -22,7 +22,7 @@
       },
       "persistent_object_families": {
         "source": "runtime/task/task-handle.mjs",
-        "source_sha256": "8e9b3f6f0c982a403ae78582a0f29c0f4f6253c988be22d7223dde4b8205e451",
+        "source_sha256": "44ac0f3085926201d12e0982f5d464f06d985b79e20a7f6c78211358466cf01b",
         "names": [
           "evidence",
           "publications",
@@ -60,17 +60,17 @@
     },
     "budgets": {
       "formal_test_lines": {
-        "actual": 16386,
+        "actual": 19462,
         "target": 10000,
         "limit": 12000,
-        "delta_from_target": 6386,
+        "delta_from_target": 9462,
         "within_limit": false
       },
       "production_lines": {
-        "actual": 26146,
+        "actual": 29026,
         "target": 12000,
         "limit": 15000,
-        "delta_from_target": 14146,
+        "delta_from_target": 17026,
         "within_limit": false
       },
       "public_runner_behaviors": {
@@ -81,10 +81,10 @@
         "within_limit": true
       },
       "schemas": {
-        "actual": 37,
+        "actual": 41,
         "target": 8,
         "limit": 10,
-        "delta_from_target": 29,
+        "delta_from_target": 33,
         "within_limit": false
       },
       "persistent_object_families": {
@@ -95,10 +95,10 @@
         "within_limit": false
       },
       "largest_core_file_lines": {
-        "actual": 970,
+        "actual": 984,
         "target": 800,
         "limit": 1000,
-        "delta_from_target": 170,
+        "delta_from_target": 184,
         "within_limit": true
       },
       "focused_test_seconds": {
@@ -167,23 +167,23 @@
     "hotspots": [
       {
         "path": "runtime/stage/stage-content-contracts.mjs",
-        "lines": 1549
+        "lines": 1586
       },
       {
-        "path": "skills/wh-review/scripts/review-runner.mjs",
-        "lines": 1350
-      },
-      {
-        "path": "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
-        "lines": 1317
+        "path": "runtime/stage/stage-handlers.mjs",
+        "lines": 1425
       },
       {
         "path": "tests/final-cutover-guards.red.test.mjs",
-        "lines": 1266
+        "lines": 1373
       },
       {
-        "path": "skills/wh-review/scripts/review-materials.mjs",
-        "lines": 1133
+        "path": "skills/wh-review/scripts/review-runner.mjs",
+        "lines": 1360
+      },
+      {
+        "path": "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
+        "lines": 1353
       }
     ],
     "follow_up": [

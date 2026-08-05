@@ -35,13 +35,13 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 1 | read-current-task-documents | §0 path + §1 pre-read | four current task documents must be readable |
 | build-code | 2 | write-red-tests | TDD RED | record RED evidence or its absence as a quality fact |
 | build-code | 3 | implement-change | §2 implement | minimal implementation; missing P-risk is P2 warning |
-| build-code | 4 | run-tests | target tests | record exit/output/freshness; test failure is a visible fact |
+| build-code | 4 | run-tests | recorded task/phase test strategy in tasks.md | execute the predesigned commands, scenarios and oracle; record exit/output/freshness, coverage limits and snapshot; test failure is a visible fact |
 | build-code | 5 | scan-diff | diff scan | record scope violations; requested scope expansion escalates, accidental drift is repaired |
 | build-code | 6 | review-change | independent review | actionable findings return to implementation; unavailable/unresolved review remains visible |
 | build-code | 7 | analyze-review-findings | finding disposition | inspect every finding; repair the current Task or record an explicit unresolved risk |
 | build-code | 8 | capture-implementation | immutable snapshot | capture evidence without moving a Git ref or requiring phase confirmation |
 | build-code | 9 | authenticate-current-task-completion | task completion audit | authenticate current materials without turning audit gaps into a Gate |
-| build-code | 10 | publish-code-result | current implementation result | publish implementation, test, AC, and review facts; unavailable or failed review stays visible and never creates a reopen or recovery permit |
+| build-code | 10 | publish-code-result | current implementation result + final task strategy + test summary | execute the dedicated final strategy card authored in tasks.md on the current snapshot; publish per-Phase summaries, aggregate test result, AC, and review facts; unavailable or failed review stays visible and never creates a reopen or recovery permit |
 | verify-code | 1 | read-current-task-documents | §2 pre-read | read the four current task materials before verification |
 | verify-code | 2 | verify-receipts | §5 freshness + §7 trace | stale SHA is info; receipt/trace issue follows D7; intentional no-browser-test is the only L3 skip trace |
 | verify-code | 3 | run-verification-tests | §4 fresh tests + §6 strategy + §8 browser | run fresh; required L3 missing/mismatch is D7 red; no UI skips with record |

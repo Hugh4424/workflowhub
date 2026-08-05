@@ -18,7 +18,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid" } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHumanConfirmation = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -80,9 +80,20 @@ function fixture({ testVariant = "valid" } = {}) {
     const raw = "{}\n";
     kernel.publishCanonicalRecord(ref, raw);
     kernel.publishVNextQualityFact("verify-code", {
-      kind: "review", status: "passed", subject,
+      kind: "review", status: reviewStatus, subject,
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
+  }
+  if (duplicateHumanConfirmation) {
+    for (const suffix of ["old", "new"]) {
+      const ref = `quality/confirmations/${suffix}.json`;
+      const raw = `${suffix}\n`;
+      kernel.publishCanonicalRecord(ref, raw);
+      kernel.publishVNextQualityFact("verify-code", {
+        kind: "confirmation", status: suffix === "old" ? "missing" : "passed", subject: "human_confirmation",
+        evidence: [{ ref, sha256: sha256(raw), evidence_type: "human_confirmation" }],
+      });
+    }
   }
   return { task, kernel, repo, taskId, candidate, snapshot: { ...snapshot, commit: testValue.snapshot_commit } };
 }
@@ -117,6 +128,32 @@ describe("vNext formal delivery close", () => {
       },
     });
     expect(result.plan.delivery.task_commit).toBe(state.snapshot.head);
+  });
+
+  it("selects the newest duplicate current quality fact", () => {
+    const state = fixture({ duplicateHumanConfirmation: true });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
+  });
+
+  it("does not treat a non-pass review verdict as a close gate", () => {
+    const state = fixture({ reviewStatus: "failed" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
   });
 
   it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent"])("rejects an unauthenticated test snapshot: %s", (testVariant) => {

@@ -22,6 +22,33 @@ Historical results, reviews, run history, branch history, and runner history
 are read-only audit context. They never block a new verification attempt and
 never prove the current implementation correct.
 
+## 原始需求回放
+
+先做一张精简的反向回放表，再做 AC 判断。至少覆盖：
+
+- 原始 `R*/F*/D*` 关系、五份报告需求点和 `INC-001` 到 `INC-015`；
+- 每项对应的当前 Design（FR/AC）、plan/task、证据引用、当前 snapshot 和
+  provenance；
+- 完整用户流程：入口、关键页面/操作、数据与状态变化、成功结果、失败/恢复
+  结果，以及用户最终能看到什么；
+- 每项的真实状态：`pass`、`fail`、`unknown`、`deferred` 或 `unavailable`。
+
+回放必须反向从原始需求开始核对 Design、实现、测试和用户结果，不能只从
+spec/AC 往回推。原始需求没有对应 Design、任务、证据、用户流程或 provenance
+时，保留具体缺口并记为 `unknown`/`deferred`；证据缺失不能算 pass。把“未实现”、
+“延期”和“暂时无法验证”分开，不得用聚合测试绿替代逐项回放。
+
+R3 的研究事实还必须绑定 `quality/tests/research.json` 及其期望 sha256
+`422f4044bfc68952c8ca917057e6930e51f7825943b49a0727e1b2936457ffe0`；文件缺失、
+哈希不匹配或 receipt 不可读时，只能记录 `unknown/incomplete`，不能把研究完成
+或测试通过当成替代证据。
+
+正式 verification receipt 的 `requirement_replay` 必须按上述原始来源逐项
+记录 `source_id`、真实状态、当前 `snapshot_tree`、关联的 `linked_ids`（Design/任务 ID）、
+canonical `evidence_refs` 和简短理由。`pass` 必须有证据；`fail`、`unknown`、
+`unavailable` 必须继续显示为未解决，`deferred` 只能用于明确的非目标/延期项。
+这份回放是当前 verify-code 的事实，不另造需求台账或推进门槛。
+
 ## Independent verification
 
 1. Read the four current materials and identify the planned work, acceptance
@@ -45,6 +72,14 @@ never prove the current implementation correct.
 4. Check every applicable acceptance criterion against observed evidence.
    State `pass`, `fail`, or `unknown` for each one; do not infer coverage from
    an aggregate green test run.
+   Every AC must have its own observable scenario, oracle, actual outcome, named
+   implementation/test anchor, and stated coverage limit. Repeating only
+   “npm test passed” or one shared implementation receipt is not AC evidence;
+   if the result is not specific, keep it `unknown/incomplete`.
+   `context_map` and `evidence_map` marked `complete` must cover every AC they
+   claim to support with complete, readable anchors. If this is a CLI/runtime
+   task with no browser surface, record `browser_qa=not_applicable` and why;
+   UI-scope work must include real isolated browser evidence.
 5. Run one independent `wh-review` semantic/code review over the frozen current packet:
    four materials, current diff, test results, AC evidence, and open risks.
    Record the returned verdict and findings exactly. If the provider is
@@ -74,6 +109,35 @@ terminal reason. It remains a visible incomplete quality fact, never a pass and
 never a reason to replay build-code, invent a fallback record, or block normal
 repair. Historical provider output may be cited only as audit context.
 
+## Lightweight scope revision from verify-code
+
+If verification shows that the original requirement, user flow/result, FR/AC,
+data/state boundary, success/failure boundary, non-goal, or delivery plan is
+wrong or incomplete, do not silently patch the implementation or start the full
+five-stage scope-revision loop. The main agent must Talk/Clarify/Grill with the
+user directly; these communication skills must never be delegated to a child
+agent.
+
+Keep the same task and update the four current materials together:
+
+1. `decision-log.md` records the temporary request, choice, core-goal relation,
+   affected IDs, risks and deferred handoff;
+2. `spec.md` records affected flow, data/state, success/failure, FR/AC and
+   non-goals;
+3. `plan.md` records implementation, dependency, test, review and delivery
+   impact;
+4. `tasks.md` records the bounded same-task change and its checks.
+
+Then run one wh-review `scope_revision` packet. Its dedicated prompt/contract
+reviews the temporary change in the context of the whole task: goal alignment,
+four-material consistency, affected implementation/test/review/delivery scope,
+risk, deferral and Constitution compliance. It does not decide whether code
+already passes. `pass`, `revise_required`, `unavailable`, timeout and protocol
+failure remain facts; do not repeat the review until `pass`. The main agent
+analyzes each finding once and records its disposition, then returns to the
+affected build-code or verify-code work. No successor, reopen, new ledger,
+provider configuration or public stage is created.
+
 ## Verdict and handoff
 
 - **Pass candidate**: the current implementation matches the four materials,
@@ -83,6 +147,10 @@ repair. Historical provider output may be cited only as audit context.
   warning. Continue the same task according to the current `plan.md` and
   `tasks.md`; only an explicit user decision about formal acceptance changes
   the final conclusion.
+
+Before asking for the verify-code conclusion, explain in plain language what
+was checked, what passed, what did not, and what remains unknown. The user must
+see this handoff summary before any later confirmation or close action.
 
 Do not create another task or any historical-evidence progression mechanism.
 Historical evidence remains audit-only. A failure never authorizes close

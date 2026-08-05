@@ -60,6 +60,15 @@
           "forbidden": ["changes_diff", "cumulative_diff", "phase_diff", "raw_log", "integration_map"],
           "minimum_reviewers": 1,
           "v2_required_maps": []
+        },
+        "scope_revision": {
+          "source_bundle": "none",
+          "required": ["scope_revision", "review_instructions"],
+          "optional": [],
+          "generated": ["review_instructions"],
+          "forbidden": [],
+          "minimum_reviewers": 1,
+          "v2_required_maps": []
         }
       }
     },
@@ -70,7 +79,16 @@
       "generated": ["review_instructions", "ac_evidence_summary"],
       "forbidden": [],
       "minimum_reviewers": 1,
-      "v2_required_maps": ["context_map", "evidence_map"]
+      "v2_required_maps": ["context_map", "evidence_map"],
+      "scope_revision": {
+        "source_bundle": "none",
+        "required": ["scope_revision", "review_instructions"],
+        "optional": [],
+        "generated": ["review_instructions"],
+        "forbidden": [],
+        "minimum_reviewers": 1,
+        "v2_required_maps": []
+      }
     }
   }
 }

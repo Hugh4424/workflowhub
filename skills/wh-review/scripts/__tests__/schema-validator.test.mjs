@@ -93,7 +93,7 @@ describe("schema-validator", () => {
       schema_version: "ac-evidence-summary.v1", snapshot_tree: oid, source_digest: hash,
       test_receipt: { ref: "receipts/tests.json", sha256: hash },
       criteria: [{
-        acceptance_criterion_id: "AC-1", result: "pass", status: "passed", source_digest: hash, acceptance_leaf: { ref: "evidence/ac-1.json", sha256: hash },
+        acceptance_criterion_id: "AC-1", result: "pass", leaf_result: "pass", status: "passed", source_digest: hash, acceptance_leaf: { ref: "evidence/ac-1.json", sha256: hash },
         nested_evidence: [{ ref: "evidence/ac-1-proof.json", sha256: hash }], scenario: "scenario", oracle: "oracle",
         actual_outcome: "pass", evidence_type: "acceptance_leaf", coverage_limits: ["unknown"], exceptions: ["unknown"],
       }],

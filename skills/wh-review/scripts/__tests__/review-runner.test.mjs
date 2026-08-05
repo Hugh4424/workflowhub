@@ -335,7 +335,7 @@ describe("aggregation and runner", () => {
       task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"],
       materials: { phase_coverage: { forged: true }, seam_index: { forged: true }, ac_trace: { forged: true } },
       providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null } }) },
-      captureSource: (input) => { expect(input.includeDiff).toBe(false); return source; },
+      captureSource: (input) => { expect(input.includeDiff).toBe(true); return source; },
       buildIntegrationSubject: (input) => { expect(input).toMatchObject({ task, finalTree: source.snapshotTree }); return integration; },
       buildMaterials: (input) => { materialInput = input; return { bundleRoot: attachmentRoot, materialId, manifest: [] }; },
     });

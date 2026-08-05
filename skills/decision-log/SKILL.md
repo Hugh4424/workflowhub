@@ -16,6 +16,38 @@ The main document and every accepted omission use the same
 Return the content to the parent, which records it through TaskHandle/TaskKernel.
 Missing load-bearing reasoning is reported rather than invented.
 
+## Minimum content contract
+
+Keep the log as a decision index: one compact row per original requirement,
+research point, Talk/Grill conclusion, review finding, and load-bearing decision.
+Do not copy the spec, page flow, API fields, task steps, or test procedure into
+the log; link them by ID and source instead.
+
+The document must contain `原始需求`, `调研重点`, `Talk`, `Grill`, `D*` reasoning,
+success/failure boundaries, review disposition, risks, deferred handoff, and
+stage-end plain-language summaries. Each source row records `source_id`, exact
+source reference or an explicit missing-reference fact, and its consequence.
+
+Each `decision-entry.v1` must keep the following compact fields: question and
+final option, recommendation, plain-language meaning, decision, source type
+and exact excerpt, `Approval binding`, 事实与约束, `Logic`, choice
+reason, impact, consequences and risks, rejected alternatives, unresolved
+items, and `Supersedes`. The coverage audit must show every original source
+exactly once, or use `decision-omission-acceptance.v1`; missing reasoning stays
+unknown and is shown to the user.
+
+When a review finding is handed off, keep its disposition as a compact derived
+fact with `finding_id`, `original_fact`, `source`, `consequence`, `status`,
+`next_action`, `evidence_ref`, `owner`, `consumer`, and `retain_or_delete`.
+`status` is `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`.
+This preserves lineage without making a second ledger or a hidden progression
+gate. 这套最低结构不是 spec 副本；不要复制 spec 的
+页面、接口、任务和测试细节。`后果和风险`必须保留在每个 D* 条目中。
+
+Talk rows must also preserve the queue change or explicitly say `not supplied`.
+The log must index the boundary between `质量事实`、`推进资格`、`完成判据` and
+`不可逆授权边界`; these are separate facts, not a gate or a second ledger.
+
 Record every load-bearing decision separately. Each entry must state:
 
 - **Question and final option**: the plain-language question and the option

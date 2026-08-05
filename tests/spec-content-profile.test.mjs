@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-import { validateSpecContentProfile } from "../runtime/stage/stage-content-contracts.mjs";
+import { validateAcceptanceDesignMinimum, validateSpecContentProfile } from "../runtime/stage/stage-content-contracts.mjs";
 
 describe("current specification contract", () => {
   it("requires a readable current spec, a revision note, and real independent review", () => {
@@ -116,5 +116,17 @@ describe("generated spec Markdown profile", () => {
     ["missing AC card", cleanSpec.replace("**AC-01**", "**验收**")],
   ])("rejects %s residue", (_name, markdown) => {
     expect(validateSpecContentProfile(markdown)).toMatchObject({ ok: false });
+  });
+});
+
+describe("acceptance design minimum", () => {
+  it("requires an observable scenario and oracle before build-plan", () => {
+    const spec = `### AC-001：完成路径\n\n场景：用户提交表单。\n验证：结果可见。\n`;
+    expect(validateAcceptanceDesignMinimum(spec)).toMatchObject({ ok: true, errors: [] });
+  });
+
+  it("rejects an AC that only has a title and a vague outcome", () => {
+    const spec = `### AC-001：完成路径\n\n结果应该正确。\n`;
+    expect(validateAcceptanceDesignMinimum(spec)).toMatchObject({ ok: false });
   });
 });

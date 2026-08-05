@@ -7,12 +7,13 @@ import { createTaskKernel } from "../task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "../task/task-kernel-implementation.mjs";
 import { assertWorkspace } from "../task/workspace.mjs";
 import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
-import { captureExecutionSnapshot } from "../task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const FULL_TEST_COMMAND = "npm test";
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = Number.MAX_SAFE_INTEGER;
 const OFFICIAL_COMPONENTS = Object.freeze({
@@ -28,18 +29,6 @@ function registrationFor(_task, component) { return OFFICIAL_COMPONENTS[componen
 
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-function receiptProvenance(value, { taskId, stage, component }) {
-  if (!value || typeof value !== "object" || Array.isArray(value)
-    || value.schema_version !== "workflowhub-receipt.v1"
-    || value.task_id !== taskId
-    || value.stage !== stage
-    || !value.producer || typeof value.producer !== "object"
-    || value.producer.stage !== stage
-    || value.producer.component !== component) {
-    throw new Error("source receipt provenance mismatch");
-  }
 }
 
 function readCanonicalRecord(task, ref) {
@@ -69,29 +58,58 @@ function publishIdempotently({ task, write, ref, raw, label }) {
 }
 
 function reusableTestCapture({ task, workspace, stage, component, command, receiptRef, outputRef }) {
-  const raw = readCanonicalRecord(task, receiptRef);
-  if (raw === undefined) return undefined;
-  let receipt;
-  try { receipt = JSON.parse(raw); } catch { throw new Error("existing test receipt is invalid"); }
-  receiptProvenance(receipt, { taskId: task.identity.taskId, stage, component });
-  if (receipt.command !== command || receipt.output_ref !== outputRef) {
-    throw new Error("existing test receipt conflicts with requested capture");
-  }
-  if (typeof receipt.output_hash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.output_hash)) {
-    throw new Error("existing test receipt output hash is invalid");
-  }
-  const output = readCanonicalRecord(task, outputRef);
-  if (output === undefined || sha256(output) !== receipt.output_hash) {
-    throw new Error("existing test output is missing or tampered");
-  }
   const snapshot = captureWorkspaceSnapshot(workspace);
-  if (receipt.snapshot_head !== snapshot.head || receipt.snapshot_tree !== snapshot.tree) {
-    throw new Error("existing test receipt does not match current workspace; use a new receipt ref");
+  const candidateRefs = [
+    receiptRef,
+    ...(stage === "verify-code" && command.trim() === FULL_TEST_COMMAND && typeof task.listCanonicalTestReceiptRefs === "function"
+      ? task.listCanonicalTestReceiptRefs()
+      : []),
+  ].filter((ref, index, refs) => refs.indexOf(ref) === index);
+  for (const candidateRef of candidateRefs) {
+    const raw = readCanonicalRecord(task, candidateRef);
+    if (raw === undefined) continue;
+    let receipt;
+    try { receipt = JSON.parse(raw); } catch {
+      // A malformed historical/foreign test receipt is a quality fact, not a
+      // reason to block a new authenticated capture.  Fail loudly only when
+      // the caller explicitly asked to reuse that exact receipt ref.
+      if (candidateRef === receiptRef) throw new Error("existing test receipt is invalid");
+      continue;
+    }
+    const producerStage = receipt.producer?.stage;
+    const stageAllowed = producerStage === stage || (stage === "verify-code" && producerStage === "build-code");
+    if (receipt.schema_version !== "workflowhub-receipt.v1"
+        || receipt.task_id !== task.identity.taskId
+        || receipt.stage !== producerStage
+        || !stageAllowed
+        || typeof receipt.producer?.component !== "string"
+        || receipt.command !== command
+        || receipt.output_ref !== (candidateRef === receiptRef ? outputRef : receipt.output_ref)) {
+      if (candidateRef === receiptRef) throw new Error("existing test receipt conflicts with requested capture");
+      continue;
+    }
+    if (receipt.exit_code !== 0 || typeof receipt.output_ref !== "string"
+        || !/^quality\/tests\/output\//.test(receipt.output_ref)
+        || typeof receipt.output_hash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.output_hash)
+        || typeof receipt.command_hash !== "string" || receipt.command_hash !== sha256(command)) {
+      if (candidateRef === receiptRef) throw new Error("existing test receipt is invalid");
+      continue;
+    }
+    const output = readCanonicalRecord(task, receipt.output_ref);
+    if (output === undefined || sha256(output) !== receipt.output_hash) {
+      if (candidateRef === receiptRef) throw new Error("existing test output is missing or tampered");
+      continue;
+    }
+    const snapshotMatches = receipt.snapshot_tree === snapshot.tree
+      || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, receipt.snapshot_tree, snapshot.tree);
+    if (receipt.snapshot_head !== snapshot.head || !snapshotMatches
+        || (snapshot.source_digest !== undefined && receipt.source_digest !== snapshot.source_digest)) {
+      if (candidateRef === receiptRef) throw new Error("existing test receipt does not match current workspace; use a new receipt ref");
+      continue;
+    }
+    return Object.freeze({ ...receipt, receipt_ref: candidateRef, receipt_hash: sha256(raw) });
   }
-  if (receipt.source_digest !== undefined && receipt.source_digest !== snapshot.source_digest) {
-    throw new Error("existing test receipt does not match current source digest; use a new receipt ref");
-  }
-  return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
+  return undefined;
 }
 
 function revisionRefFor(ref, component, contentHash) {
@@ -111,6 +129,22 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
   return workspaceCommand(workspace, "git", args, label).trim();
 }
 
+function currentImplementationReceipt({ task, workspace, version }) {
+  const safeWorkspace = assertWorkspace(workspace);
+  const snapshot = captureWorkspaceSnapshot(safeWorkspace);
+  const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
+  const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
+  const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
+  const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
+  const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
+  const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
+  publishIdempotently({ task, write: createTaskKernel(task).publishCanonicalRecord, ref: diffRef, raw: diff, label: "implementation diff evidence" });
+  return {
+    value: { schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "build-code", producer: { stage: "build-code", component: "implementation", version }, changed, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash },
+    diffHash,
+  };
+}
+
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
   const root = assertWorkspace(workspace).worktreeRoot;
@@ -118,7 +152,7 @@ export function captureWorkspaceSnapshot(workspace) {
 }
 
 /** Fixed registry for official non-test component receipts. */
-export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf } = {}) {
+export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf, targetRef } = {}) {
   const safeTask = assertTaskHandle(task);
   const registration = registrationFor(safeTask, component);
   if (!registration || registration.stage !== stage) throw new Error("component is not allowlisted for this stage");
@@ -158,25 +192,13 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     if (Object.keys(payload).some((key) => key !== "content") || typeof payload.content !== "string" || payload.content.trim() === "") throw new TypeError(`${component} content payload required`);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
   } else if (registration.kind === "implementation") {
-    const safeWorkspace = assertWorkspace(workspace);
     if (Object.keys(payload).length !== 0) {
       throw new TypeError("implementation payload must be empty; phase_completion is derived by the official build-code handler");
     }
-    const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
-    const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
-    const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
-    const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
-    const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
-    const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
-    const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
-    // The diff is content-addressed by its hash. Reusing the same snapshot
-    // during a controlled reopen must be safe; a different payload is still
-    // rejected by the idempotent writer.
-    publishIdempotently({ task: safeTask, write, ref: diffRef, raw: diff, label: "implementation diff evidence" });
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
+    value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
   } else if (registration.kind === "verification-items") {
-    if (Object.keys(payload).some((key) => key !== "items") || !Array.isArray(payload.items)) {
-      throw new TypeError("verification payload requires items only");
+    if (Object.keys(payload).some((key) => !new Set(["items", "requirement_replay"]).has(key)) || !Array.isArray(payload.items)) {
+      throw new TypeError("verification payload requires items and optional requirement_replay");
     }
     const required = [
       "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
@@ -215,7 +237,66 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
       return { id: entry.id, status: entry.status, evidence_refs: evidenceRefs, reason: entry.reason };
     });
     for (const id of required) if (!seen.has(id)) throw new Error(`missing verify item: ${id}`);
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, items };
+    let requirementReplay;
+    if (payload.requirement_replay !== undefined) {
+      if (!Array.isArray(payload.requirement_replay)) throw new TypeError("requirement_replay must be an array");
+      const replayIds = new Set();
+      requirementReplay = payload.requirement_replay.map((entry, index) => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)
+            || Object.keys(entry).some((key) => !new Set(["source_id", "status", "snapshot_tree", "linked_ids", "evidence_refs", "reason", "scenario", "oracle", "actual_outcome", "coverage_limits", "implementation_anchor", "verification_anchor"]).has(key))
+            || typeof entry.source_id !== "string" || entry.source_id.trim() === ""
+            || replayIds.has(entry.source_id)
+            || !new Set(["pass", "fail", "unknown", "deferred", "unavailable"]).has(entry.status)
+            || !/^[a-f0-9]{40,64}$/.test(entry.snapshot_tree ?? "")
+            || !Array.isArray(entry.linked_ids) || entry.linked_ids.some((id) => typeof id !== "string" || id.trim() === "")
+            || !Array.isArray(entry.evidence_refs)
+            || typeof entry.reason !== "string" || entry.reason.trim() === "") {
+          throw new TypeError(`requirement replay item ${index} is invalid or duplicate`);
+        }
+        replayIds.add(entry.source_id);
+        if (entry.status === "pass" && entry.evidence_refs.length === 0) {
+          throw new TypeError(`requirement replay item ${entry.source_id} pass requires evidence_refs`);
+        }
+        const evidenceRefs = entry.evidence_refs.map((binding, bindingIndex) => {
+          if (!binding || typeof binding !== "object" || Array.isArray(binding)
+              || Object.keys(binding).some((key) => key !== "ref" && key !== "sha256")
+              || typeof binding.ref !== "string" || binding.ref.trim() === ""
+              || !/^[a-f0-9]{64}$/.test(binding.sha256 ?? "")) {
+            throw new TypeError(`requirement replay item ${entry.source_id} evidence_refs[${bindingIndex}] is invalid`);
+          }
+          const nested = safeTask.readRecord(binding.ref);
+          if (sha256(nested) !== binding.sha256) throw new Error(`requirement replay item ${entry.source_id} evidence hash mismatch: ${binding.ref}`);
+          return { ref: binding.ref, sha256: binding.sha256 };
+        });
+        const semantic = {};
+        for (const key of ["scenario", "oracle", "actual_outcome"]) {
+          if (entry[key] !== undefined) {
+            if (typeof entry[key] !== "string" || entry[key].trim() === "") throw new TypeError(`requirement replay item ${entry.source_id}.${key} must be non-empty text`);
+            semantic[key] = entry[key];
+          }
+        }
+        for (const key of ["coverage_limits"]) {
+          if (entry[key] !== undefined) {
+            if (typeof entry[key] === "string") {
+              if (entry[key].trim() === "") throw new TypeError(`requirement replay item ${entry.source_id}.${key} must be non-empty text`);
+              semantic[key] = entry[key];
+            } else if (Array.isArray(entry[key]) && entry[key].length > 0 && entry[key].every((item) => typeof item === "string" && item.trim() !== "")) {
+              semantic[key] = [...entry[key]];
+            } else {
+              throw new TypeError(`requirement replay item ${entry.source_id}.${key} must be non-empty text or text array`);
+            }
+          }
+        }
+        for (const key of ["implementation_anchor", "verification_anchor"]) {
+          if (entry[key] !== undefined) {
+            if (!entry[key] || typeof entry[key] !== "object" || Array.isArray(entry[key])) throw new TypeError(`requirement replay item ${entry.source_id}.${key} must be an object`);
+            semantic[key] = structuredClone(entry[key]);
+          }
+        }
+        return { source_id: entry.source_id, status: entry.status, snapshot_tree: entry.snapshot_tree, linked_ids: [...entry.linked_ids], evidence_refs: evidenceRefs, reason: entry.reason, ...semantic };
+      });
+    }
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, items, ...(requirementReplay === undefined ? {} : { requirement_replay: requirementReplay }) };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();
@@ -236,29 +317,47 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   }
   const raw = canonicalJson(value);
   if (revisionOf !== undefined) throw new Error("REPLACEMENT_RETIRED: official records are create-only; publish a new task material instead");
-  if (revisionOf === undefined) {
-    publishIdempotently({ task: safeTask, write, ref: registration.ref, raw, label: "official component receipt" });
-    return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
+  if (targetRef !== undefined) {
+    if (typeof targetRef !== "string" || !new RegExp(`^quality/evidence/${component}/[a-f0-9]{64}\\.json$`).test(targetRef)) {
+      throw new TypeError("current official component receipt ref must be content-addressed under its component namespace");
+    }
+    publishIdempotently({ task: safeTask, write, ref: targetRef, raw, label: "current official component receipt" });
+    return Object.freeze({ ref: targetRef, sha256: sha256(raw), value: Object.freeze(value), revision: false, current: true });
   }
-  if (typeof revisionOf !== "string" || revisionOf.trim() === "") throw new TypeError("revision source receipt ref required");
-  const previousRaw = readCanonicalRecord(safeTask, revisionOf);
-  if (previousRaw === undefined) throw new Error(`revision source receipt does not exist: ${revisionOf}`);
-  let previous;
-  try { previous = JSON.parse(previousRaw); } catch { throw new Error("revision source receipt must be JSON"); }
-  receiptProvenance(previous, { taskId: safeTask.identity.taskId, stage, component });
-  const contentHash = sha256(raw);
-  const ref = revisionRefFor(registration.ref, component, contentHash);
-  const revision = Object.freeze({ previous_ref: revisionOf, previous_hash: sha256(previousRaw), content_hash: contentHash });
-  const revised = { ...value, revision };
-  const revisedRaw = canonicalJson(revised);
-  const existing = readCanonicalRecord(safeTask, ref);
-  if (existing !== undefined && existing !== revisedRaw) {
-    let existingRevision;
-    try { existingRevision = JSON.parse(existing).revision; } catch { /* publishIdempotently reports malformed conflicts below */ }
-    if (existingRevision?.content_hash === contentHash) throw new Error("revision source mismatch");
+  publishIdempotently({ task: safeTask, write, ref: registration.ref, raw, label: "official component receipt" });
+  return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
+}
+
+/**
+ * Capture a new immutable implementation fact for a repaired current snapshot.
+ * This never overwrites the fixed historical component receipt and does not
+ * create a replacement/latest control plane; integration review consumes the
+ * returned content-addressed fact explicitly.
+ */
+export function writeCurrentImplementationReceipt({ task, workspace, version = "1.0.0" } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
+  const raw = canonicalJson(value);
+  const ref = `quality/evidence/implementation/${sha256(raw)}.json`;
+  const write = createTaskKernel(safeTask).publishCanonicalRecord;
+  publishIdempotently({ task: safeTask, write, ref, raw, label: "current implementation receipt" });
+  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
+}
+
+/**
+ * Publish a current material/evidence/verification fact without replacing the
+ * fixed historical receipt. The explicit content-addressed ref is the only
+ * current binding; no latest/replacement selector is introduced.
+ */
+export function writeCurrentOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0" } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const registration = registrationFor(safeTask, component);
+  if (!registration || registration.stage !== stage || component === "implementation") {
+    throw new Error("current official component is not allowlisted for this stage");
   }
-  publishIdempotently({ task: safeTask, write, ref, raw: revisedRaw, label: "official component receipt revision" });
-  return Object.freeze({ ref, sha256: sha256(revisedRaw), value: Object.freeze(revised), revision: true, previous_ref: revisionOf, previous_hash: revision.previous_hash, content_hash: contentHash });
+  const inputHash = sha256(canonicalJson({ stage, component, payload }));
+  const targetRef = `quality/evidence/${component}/${inputHash}.json`;
+  return writeOfficialComponentReceipt({ task: safeTask, workspace, stage, component, payload, version, targetRef });
 }
 
 export { validateAcceptanceEvidence };

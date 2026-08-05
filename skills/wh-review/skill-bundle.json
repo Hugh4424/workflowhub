@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "b26fcb288521d9392eda6300ebf5486a112b1eb69e0403e1ddacc8df58c431b8"
+      "sha256": "a85ab7eb29e42e11284871f8e5ccc3a8f29288fe9871f9000934c56a0d43be13"
     },
     {
       "path": "contracts/build-code.md",
-      "sha256": "fc41fd375853062bbf9ca2cfa0750a164db33d4effe53c2dabd5ccc965a80ff3"
+      "sha256": "6f9302aca5f4c85a6d51c2f2a5b9a4795c71ed6e32bdead17296f5ef69880075"
     },
     {
       "path": "contracts/build-plan.md",
@@ -27,8 +27,12 @@
       "sha256": "d4841c4abca9b074161329a4a1c82d8a21f8f7ef3a74dff0309babe93250331b"
     },
     {
+      "path": "contracts/scope-revision.md",
+      "sha256": "4dcf7e33c5967bf69c79168ec5062e0e153f0852c24c41152e81e71f991e85f4"
+    },
+    {
       "path": "contracts/verify-code.md",
-      "sha256": "f09204e5364a45deb191b056d74f6d38fbd00adca7e9a9c21214ccbefe459881"
+      "sha256": "cc5b873ba156ca6d056dfc9f3460dfec65997f35c06209644476a4e8120d32c2"
     },
     {
       "path": "contracts/workflowhub-result.v1.json",
@@ -40,7 +44,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "35b6101517122949195ef469eb66d2c686fbb97c81d298f9649e9fe2f69767d5"
+      "sha256": "c7c0e2913104de8da14f14b8c2fe13af5481c60bfcba26b0122130cc18ebbc64"
     },
     {
       "path": "scripts/lib/safe-id.mjs",
@@ -56,11 +60,11 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "e7812d698163d23a6d207363ac732e0c250cacbad3880bf4a8a555214e998ef3"
+      "sha256": "9a585c56a9befb97ffc8a90bee936692a96d1d5fb4c31fa42c013882e7fd9a3e"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
-      "sha256": "f058e740d2919cf6dac3e4c5175e72256692503d0bfd694e0c52f92b510f35bd"
+      "sha256": "0036844e74d461a9487dafffb476124ee5fd8dc0825e75f85a7060c0beed17eb"
     },
     {
       "path": "scripts/review-output.mjs",
@@ -76,7 +80,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "5a4c1e7c0c08b7aa6f3c24846557707a2247290b8edf2f6407ee544c3709531d"
+      "sha256": "940b9c35b3926af93a579a8380a66ff8c04e1c5444d756ad0cfbdec461571885"
     },
     {
       "path": "scripts/review-source.mjs",

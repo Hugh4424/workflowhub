@@ -1,0 +1,1 @@
+{"schema_version":1,"skill":"fullstack-slice-testing","files":[{"path":"SKILL.md","sha256":"648eff0c0a7dcd594d668c472bfdc38875e1e3d66a2dce385235ac684858f2c5"}],"sources":[{"url":"https://github.com/Hugh4424/AgentHub","commit":"258f5a2548fa8cc15325c6aa18dd107c1fc497b9","path":"packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md","license":"MIT"}]}

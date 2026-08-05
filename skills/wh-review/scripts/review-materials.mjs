@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
 import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { validateScopeRevisionMaterial } from "../../../runtime/review/scope-revision-contract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skillPlan = JSON.parse(readFileSync(resolve(here, "..", "stage-skill-plan.json"), "utf8"));
@@ -91,6 +92,23 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
+const LOCAL_HOST_PATH = /(^|[\s("'`=,:;])\/(?:Users|home|private|tmp)\/[^\s"'`<>()[\]{}]+/g;
+
+function redactHostPathText(value) {
+  return value.replace(LOCAL_HOST_PATH, (_match, prefix) => `${prefix}<host-path-redacted>`);
+}
+
+/**
+ * Canonical source materials keep their original bytes for audit. The
+ * provider packet is a derived view and must not expose local host paths.
+ */
+export function redactProviderHostPaths(value) {
+  if (typeof value === "string") return redactHostPathText(value);
+  if (Array.isArray(value)) return value.map((item) => redactProviderHostPaths(item));
+  if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, redactProviderHostPaths(child)]));
+}
+
 function validateVerifyEvidenceRoots(stage, materials) {
   if (stage !== "verify-code") return;
   const evidence = materials.acceptance_evidence;
@@ -137,7 +155,7 @@ function rejectDirectRawEvidence(value, path = "materials") {
   }
 }
 
-function validateAuthorityMap(key, value) {
+export function validateAuthorityMap(key, value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`MATERIAL_INCOMPLETE: ${key} requires a structured map`);
   if (!["complete", "unknown"].includes(value.state)) throw new Error(`MATERIAL_INCOMPLETE: ${key}.state must be complete or unknown`);
   if (typeof value.summary !== "string" || value.summary.trim() === "") throw new Error(`MATERIAL_INCOMPLETE: ${key}.summary is required`);
@@ -160,8 +178,23 @@ function validateAuthorityMap(key, value) {
       }
     }
   }
+  if (key === "evidence_map") validateDistinctAcceptanceEvidenceAnchors(value);
   if (value.state === "unknown" && (typeof value.unknown_reason !== "string" || value.unknown_reason.trim() === "")) {
     throw new Error(`MATERIAL_INCOMPLETE: ${key}.unknown_reason is required when state is unknown`);
+  }
+}
+
+function validateDistinctAcceptanceEvidenceAnchors(value) {
+  const owners = new Map();
+  for (const entry of value.entries.filter(({ id, disposition }) => disposition === "complete" && /^AC-/.test(id))) {
+    for (const anchor of entry.anchors ?? []) {
+      const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
+      const previous = owners.get(signature);
+      if (previous !== undefined && previous !== entry.id) {
+        throw new Error(`MATERIAL_INCOMPLETE: evidence_map ${previous} and ${entry.id} share one proving anchor; each AC needs a distinct implementation/test block`);
+      }
+      owners.set(signature, entry.id);
+    }
   }
 }
 
@@ -255,6 +288,11 @@ function validateIntegrationMaterials({ task, source, materials }) {
       throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt is not a passing final-snapshot fact`);
     }
   }
+  if (!Array.isArray(coverage.implementation_anchors)
+      || (coverage.implementation_anchors.length === 0 && coverage.implementation_excerpt_status !== "not_applicable")) {
+    throw new Error("MATERIAL_INCOMPLETE: integration requires current final-snapshot implementation excerpts or an explicit not_applicable fact");
+  }
+  if (coverage.implementation_anchors.length > 0) validateAnchors("phase_coverage", "implementation", coverage.implementation_anchors);
   if (historicalCoverageUnavailable) {
     const seams = materials.seam_index;
     if (!seams || typeof seams !== "object" || Array.isArray(seams)
@@ -399,6 +437,7 @@ function validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap = null
   for (const key of rule.v2_required_maps ?? []) {
     if (!(key in materials)) throw new Error(`MATERIAL_INCOMPLETE: wh_review.v2 requires ${key}`);
     validateAuthorityMap(key, materials[key]);
+    if (key === "evidence_map") validateDistinctAcceptanceEvidenceAnchors(materials[key]);
     if (key === "acceptance_map") validateBuildCodeAcceptanceMap(materials[key]);
   }
   if (rule.v2_required_maps?.includes("impact_map")) {
@@ -445,12 +484,35 @@ export function reviewMaterialBytes(key, value) {
 
 const ruleFor = reviewRuleFor;
 
+function scopeRevisionRule(stage) {
+  if (!new Set(["build-code", "verify-code"]).has(stage)) {
+    throw new Error("MATERIAL_INCOMPLETE: scope_revision is only valid for build-code or verify-code");
+  }
+  return Object.freeze({
+    source_bundle: "none",
+    required: ["scope_revision", "review_instructions"],
+    optional: [],
+    generated: ["review_instructions"],
+    forbidden: [],
+    minimum_reviewers: 1,
+    v2_required_maps: [],
+  });
+}
+
+function scopeRevisionInstructions(stage) {
+  return `Review stage ${stage}/scope_revision. This is a single, bounded design review for a temporary mid-task requirement change. Read bundle/review-instructions.md, contracts/scope-revision.md, and only the files in bundle/. Judge whether the temporary request is legitimate, aligned with the task core goal, consistently reflected across decision-log.md/spec.md/plan.md/tasks.md, and complete across user flow, data/state, success/failure boundaries, implementation, tests, review, delivery, risks, deferrals, and Constitution constraints. Do not judge whether code already passes, do not turn this review into a full stage review, do not demand provider pass, and do not reopen unchanged history. Return one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+}
+
 function stagePlanFor(stage, track) {
   const stagePlan = skillPlan.stages[stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
-export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewRound = "initial", reviewScope = null) {
+export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewRound = "initial", reviewScope = null, reviewKind = null) {
+  if (reviewKind === "scope_revision") {
+    if (reviewRound !== "initial") throw new Error("MATERIAL_INCOMPLETE: scope_revision review cannot use incremental or closure round");
+    return scopeRevisionInstructions(stage);
+  }
   const rule = ruleFor(stage, track, reviewScope);
   if (!new Set(["initial", "incremental", "closure", "full", "legacy"]).has(reviewRound)) throw new TypeError("reviewRound is invalid");
   const plan = stagePlanFor(stage, track);
@@ -834,6 +896,9 @@ function packetAuthority(path, rule) {
   if (path.startsWith("skills/")) return { authority: "review_lens", inclusion_reason: "declared_reviewer_lens" };
   if (path === "review-instructions.md") return { authority: "required", inclusion_reason: "fixed_stage_instructions" };
   if (path.startsWith("requirements/")) {
+    if (path === "requirements/scope-revision.json" || path.startsWith("requirements/scope-revision/")) {
+      return { authority: "required", inclusion_reason: "scope_revision_current_materials" };
+    }
     const key = path.slice("requirements/".length).replace(/\.(?:md|json)$/, "");
     if (key === "ac_evidence_summary") return { authority: "evidence", inclusion_reason: "generated_per_ac_evidence_summary" };
     return rule.required.includes(key)
@@ -904,7 +969,9 @@ function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, rule }) 
   const payload = packetEntries(bundleRoot, rule);
   const excluded = excludedPacketMaterial(rule, stage);
   const included = [...payload, { path: "packet-plan.json", authority: "metadata" }, { path: "manifest.json", authority: "metadata" }];
-  const deliveryMode = filesUnder(bundleRoot).includes("diff-index.json") ? "selected_context" : "inline_complete";
+  const deliveryMode = reviewScope === "integration" || filesUnder(bundleRoot).includes("diff-index.json")
+    ? "selected_context"
+    : "inline_complete";
   const planBytes = packetPlanBytes({ stage, reviewTrack, reviewScope, included, excluded, deliveryMode });
   write(bundleRoot, "packet-plan.json", planBytes);
   return JSON.parse(planBytes.toString("utf8"));
@@ -922,6 +989,12 @@ function selectedAnchors(materials) {
     if (!record || !Array.isArray(record.entries)) continue;
     for (const entry of record.entries) {
       for (const anchor of entry.anchors ?? []) anchors.push({ ...anchor, map: key, entry_id: entry[idKey], change_ids: [] });
+    }
+  }
+  const implementationAnchors = materials.phase_coverage?.implementation_anchors;
+  if (Array.isArray(implementationAnchors)) {
+    for (const anchor of implementationAnchors) {
+      anchors.push({ ...anchor, map: "phase_coverage", entry_id: "implementation", change_ids: [] });
     }
   }
   const ids = new Set();
@@ -966,7 +1039,7 @@ function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, c
     for (const anchor of selectedAnchors(materials)) {
       const changed = source.changedFiles.some((item) => item.path === anchor.path);
       const snapshot = snapshotContext({ source, anchor, temporaryRoot });
-      const header = { schema_version: "wh-review-context.v1", id: anchor.id, path: anchor.path, start_line: anchor.start_line, end_line: anchor.end_line, role: anchor.role, reason: anchor.reason, outside_diff_reason: anchor.outside_diff_reason ?? null, map: anchor.map, entry_id: anchor.entry_id, change_ids: anchor.change_ids, changed_file: changed, snapshot_sha256: snapshot.sha256 };
+      const header = { schema_version: "wh-review-context.v1", id: anchor.id, path: anchor.path, provider_path: `context/${anchor.id}.txt`, start_line: anchor.start_line, end_line: anchor.end_line, role: anchor.role, reason: anchor.reason, outside_diff_reason: anchor.outside_diff_reason ?? null, map: anchor.map, entry_id: anchor.entry_id, change_ids: anchor.change_ids, changed_file: changed, snapshot_sha256: snapshot.sha256 };
       const bytes = Buffer.from(`${JSON.stringify(header)}\n${snapshot.content}\n`, "utf8");
       if (canonicalOnly) canonicalMaterialArchive({ reviewDataRoot, label: `context-${sha256(anchor.id).slice(0, 16)}`, bytes });
       else write(bundleRoot, `context/${anchor.id}.txt`, bytes);
@@ -1002,8 +1075,10 @@ function writeTestSummary({ bundleRoot, task, materials }) {
 
 export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, uiScope = false, materials = {}, strictV2Maps = false, reviewRound = "initial" } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
-  const effectiveScope = stage === "build-code" ? (reviewScope ?? "phase") : null;
-  const rule = ruleFor(stage, reviewTrack, effectiveScope);
+  const isScopeRevision = Object.prototype.hasOwnProperty.call(materials, "scope_revision");
+  const effectiveScope = isScopeRevision ? null : stage === "build-code" ? (reviewScope ?? "phase") : null;
+  const rule = isScopeRevision ? scopeRevisionRule(stage) : ruleFor(stage, reviewTrack, effectiveScope);
+  if (isScopeRevision) validateScopeRevisionMaterial(materials.scope_revision, { stage });
   for (const key of rule.required) if (!(key in materials) || !materialPresent(materials[key])) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${key}`);
   validateMaterialAllowlist(rule, materials, reviewRound);
   if (stage === "make-decision" && reviewTrack === "direction") {
@@ -1011,19 +1086,19 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     for (const key of Object.keys(materials)) if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
   }
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
-  const diffIndex = stage === "build-code" && effectiveScope === "phase" ? diffIndexFor(source) : null;
-  const changeMap = stage === "build-code" && effectiveScope === "phase" ? changeMapFor({ source, phaseId, diffIndex }) : null;
+  const diffIndex = !isScopeRevision && stage === "build-code" && effectiveScope === "phase" ? diffIndexFor(source) : null;
+  const changeMap = !isScopeRevision && stage === "build-code" && effectiveScope === "phase" ? changeMapFor({ source, phaseId, diffIndex }) : null;
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
-  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, reviewRound, effectiveScope);
+  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, reviewRound, effectiveScope, isScopeRevision ? "scope_revision" : null);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
-  validateVerifyEvidenceRoots(stage, materials);
-  if (stage === "build-code") validateBuildCodeTestEvidence(materials, strictV2Maps);
+  if (!isScopeRevision) validateVerifyEvidenceRoots(stage, materials);
+  if (!isScopeRevision && stage === "build-code") validateBuildCodeTestEvidence(materials, strictV2Maps);
   rejectDirectRawEvidence(materials);
-  if (stage === "build-code" && effectiveScope === "integration") {
+  if (!isScopeRevision && stage === "build-code" && effectiveScope === "integration") {
     validateIntegrationFreshTests({ task, source, materials });
     validateIntegrationMaterials({ task, source, materials });
   }
-  if (stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
+  if (!isScopeRevision && stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
   const acEvidenceSummary = stage === "verify-code"
     ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
     : null;
@@ -1035,7 +1110,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       review_delta: materials.review_delta,
     };
   }
-  const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
+  const selectedContextDelivery = !isScopeRevision && rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
   if (selectedContextDelivery) {
     const compacted = { ...providerMaterials };
     for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
@@ -1064,6 +1139,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     providerMaterials = compacted;
   }
   if (acEvidenceSummary !== null) providerMaterials.ac_evidence_summary = acEvidenceSummary;
+  providerMaterials = redactProviderHostPaths(providerMaterials);
 
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
@@ -1114,7 +1190,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
 
   const stagePlan = stagePlanFor(stage, reviewTrack);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${reviewTrack ?? "default"}`);
-  const contractName = stage === "make-decision" ? "make-decision" : stage;
+  const contractName = isScopeRevision ? "scope-revision" : stage === "make-decision" ? "make-decision" : stage;
   write(bundleRoot, `contracts/${contractName}.md`, readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`));
   write(bundleRoot, "contracts/provider-protocol.md", readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol"));
   const selectedSkills = [...(stagePlan?.required_skills ?? []), ...(uiScope === true ? (stagePlan?.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])];
@@ -1124,6 +1200,23 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
 
   for (const [key, value] of Object.entries(providerMaterials)) {
+    if (key === "scope_revision") {
+      const current = value.current_materials;
+      const metadata = {
+        ...value,
+        current_materials: Object.fromEntries(Object.entries(current).map(([name, material]) => [name, {
+          path: `requirements/scope-revision/${name}.md`,
+          bytes: Buffer.byteLength(material.excerpt, "utf8"),
+          sha256: sha256(Buffer.from(material.excerpt, "utf8")),
+          source_path: material.path,
+          source_bytes: material.source_bytes,
+          source_sha256: material.source_sha256,
+        }]))
+      };
+      write(bundleRoot, "requirements/scope-revision.json", reviewMaterialBytes(key, metadata));
+      for (const [name, material] of Object.entries(current)) write(bundleRoot, `requirements/scope-revision/${name}.md`, Buffer.from(material.excerpt, "utf8"));
+      continue;
+    }
     const path = key === "review_instructions" ? "review-instructions.md" : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
     write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
@@ -1142,13 +1235,48 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
+  if (isScopeRevision && deliveryBytes > 330 * 1024) {
+    throw new Error("MATERIAL_INCOMPLETE: scope_revision packet exceeds 330 KiB; provide bounded affected excerpts");
+  }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
   return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
 }
 
-function freezeCanonicalEvidence({ bundleRoot }) {
-  // The runner authenticates every evidence receipt before producing its
-  // stage-specific summary. Canonical records remain task-local audit data,
-  // rather than duplicated into a provider bundle.
-  write(bundleRoot, "canonical-evidence.json", Buffer.from("[]\n"));
+function freezeCanonicalEvidence({ bundleRoot, task, stage, materials }) {
+  const entries = [];
+  if (stage === "build-code" && materials.phase_coverage) {
+    for (const [kind, binding] of [
+      ["implementation", materials.phase_coverage.implementation_receipt],
+      ["tests", materials.phase_coverage.green_test_receipt],
+    ]) {
+      if (!binding?.ref || !binding?.sha256) continue;
+      const raw = assertTaskHandle(task).readRecord(binding.ref);
+      const digest = sha256(raw);
+      if (digest !== binding.sha256.replace(/^sha256:/, "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: canonical ${kind} evidence hash mismatch`);
+      }
+      let receipt;
+      try { receipt = JSON.parse(raw); } catch { throw new Error(`MATERIAL_INCOMPLETE: canonical ${kind} evidence must be JSON`); }
+      entries.push({
+        kind,
+        ref: binding.ref,
+        sha256: digest,
+        snapshot_tree: receipt.snapshot_tree ?? null,
+        source_digest: receipt.source_digest ?? null,
+        ...(kind === "implementation" ? {
+          changed: receipt.changed ?? [],
+          diff_ref: receipt.diff_ref ?? null,
+          diff_hash: receipt.diff_hash ?? null,
+        } : {
+          command: receipt.command ?? null,
+          exit_code: receipt.exit_code ?? null,
+          output_ref: receipt.output_ref ?? null,
+          output_hash: receipt.output_hash ?? null,
+        }),
+      });
+    }
+  }
+  // These are bounded, hash-bound summaries rather than raw logs or provider
+  // output. The canonical task records remain the audit authority.
+  write(bundleRoot, "canonical-evidence.json", Buffer.from(`${JSON.stringify(entries, null, 2)}\n`, "utf8"));
 }

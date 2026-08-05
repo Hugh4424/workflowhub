@@ -86,9 +86,12 @@ Integration 在调用 provider 前直接绑定最终快照的当前
 implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
 implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
 提交；因此连续性以 Git commit ancestry 和每段自身的 tree/hash 绑定为准，不要求
-相邻 Phase 的 tree 字节相等。Phase 缺段、分叉、重复、哈希不连续、历史正式审查
-没有 trace、或 legacy 无 scope result 都是 `MATERIAL_INCOMPLETE`；不能回退为累计
-diff、全项目包或“空链”。
+相邻 Phase 的 tree 字节相等。若已声明的 Phase lineage 存在缺段、分叉、重复、哈希
+不连续、历史正式审查没有 trace 或 legacy 无 scope result，本身要作为
+`unavailable/unknown` 质量事实保留；不能伪造补链，也不能回退为累计 diff、全项目包。
+在历史 lineage 从未提供或无法认证时，允许明确标记 `phase_coverage.status=unavailable`
+并用当前 implementation/GREEN、显式 AC trace 和当前快照完成 current-only integration
+审查；这不是历史审查通过，也不是阶段 Gate。
 
 Phase coverage 只传最小身份、review result、phase-map trace 和 GREEN receipt；
 历史 Phase 的 raw evidence、review attempt、provider output_ref、逐 AC anchor 不

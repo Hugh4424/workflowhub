@@ -53,6 +53,10 @@
       "path": "contracts/build-code.md",
       "required_skills": ["simplicity-guard", "review"]
     },
+    "scope-revision": {
+      "path": "contracts/scope-revision.md",
+      "required_skills": ["review"]
+    },
     "verify-code": {
       "path": "contracts/verify-code.md",
       "required_skills": ["qa-only", "verify-change"]

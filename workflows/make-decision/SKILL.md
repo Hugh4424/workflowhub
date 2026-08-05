@@ -58,9 +58,13 @@ current material if needed.
 
 1. Read the original requirement and current facts. Run the stage preflight and
    publish only the current decision facts and quality facts.
-2. Run real `talk-with-zhipeng` conversation(s). Ask only questions whose
-   answers could change direction. Do not invent user answers. Finish when
-   direction-changing ambiguity is resolved or explicitly recorded.
+2. Only the main agent may execute user-facing Talk, Grill, or Clarify. Run a
+   real `talk-with-zhipeng` conversation in the user's visible context (repeat
+   only when the user adds a new direction-changing question). Talk must
+   cover both architecture direction and product journey or user outcome. Ask
+   only questions whose answers could change direction. Do not invent user
+   answers. Finish when direction-changing ambiguity is resolved or explicitly
+   recorded.
 3. Research only when it can materially change the direction and is authorized.
    Use a frozen, non-sensitive request. Otherwise record a clear skip reason.
    Report the few findings that changed scope, constraints, or risk.
@@ -90,6 +94,12 @@ current material if needed.
    main risks, review facts, and unresolved items. Ask for explicit accept or
    reject and record the real answer with `confirm`; use `authorize` only for
    a separately authorized irreversible operation.
+
+Before handoff to `build-spec`, present a short plain-language summary of what
+was done, the artifacts produced, scope and non-goals, risks, deferred items,
+and what the next stage must not guess. Wait for the user's actual reply before
+handoff; without that reply keep the stage `in_progress`/`pending` and do not
+claim completion.
 
 ## Review and quality
 

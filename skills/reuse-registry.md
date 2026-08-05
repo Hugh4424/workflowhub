@@ -62,7 +62,11 @@
 - `debate` — adopted；make-decision 条件增强。来源 [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md)，MIT。仓内路径；失败记录 diagnostic 后继续。
 - `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。
 - `review-response` — adapted；build-code revise_required。来源 Superpowers [`receiving-code-review`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review)，MIT。适配 wh-review continuation flow。
-- `test-routing-advisor` — adapted；build-code。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON。
+- `test-routing-advisor` — adapted；build-plan 设计、build-code 执行。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON 并写入 tasks.md。
+- `testing-system-blueprint` — adapted；build-plan 设计、build-code 执行。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。只保留风险维度、测试层级和证据计划，不恢复 release gate。
+- `backend-testing` — adapted；build-plan 设计、build-code 执行。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing)，MIT。保留真实后端边界测试和报告字段，不新增执行器控制面。
+- `frontend-testing` — adapted；build-plan 设计、build-code 执行。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，不把 browser pass 当推进 gate。
+- `fullstack-slice-testing` — adapted；build-plan 设计、build-code 执行。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing)，MIT。保留真实 seam slice 和报告，不恢复强制 worktree/commit/release gate。
 - `isolated-browser-qa` — adopted；verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。搬完整资产、去绝对路径；有公开上游后补固定 URL/commit。
 
 ## 已吸收
@@ -109,11 +113,13 @@
 - `gstack-canary`
 
 - rejected：`intake-review-orchestrator`。上游已删除；由 `intake-decision-review + wh-review` 承接。
-- rejected：AgentHub `testing-system-blueprint`、backend/frontend/full-chain 执行器。只保留纯路由 advisor。
+- rejected：AgentHub 的跨仓执行器控制面、强制 gate 和宿主编排。风险维度与 backend/frontend/fullstack 方法已吸收为 build-plan 设计技能，build-code 只执行 tasks.md 策略。
 - rejected：Superpowers `using-superpowers`。全局发现/bootstrap 与 repo-relative 按需加载冲突。
 - rejected：gstack runtime。Bun、browser daemon、gbrain、telemetry、自动更新均不进入闭包；只人工吸收局部 review/QA 方法。
 - absorbed：Matt `code-review` 双轴进入 `review`；`research` primary-source/citation 进入 `spec-research`；`to-tickets` 阻塞边/tracer bullet 进入 `spec-tasks`。
 - watch：Matt `domain-modeling`、`codebase-design`、`prototype`。没有独立 stage 触发、消费点、验证合同前不进入运行闭包。
+
+测试策略设计边界：`test-routing-advisor`、`testing-system-blueprint`、`backend-testing`、`frontend-testing`、`fullstack-slice-testing` 在 `build-plan` 设计并写入 `tasks.md`；`build-code` 只执行已记录策略，不在每个 Phase 重新设计。
 - rejected：Matt `implement`、setup、deprecated、in-progress、personal skills。与现有 stage 编排重复或不稳定。
 - absorbed：gstack review 证据可见性进入 `review`；state/data-flow 进入 `spec-plan`；Ship release discipline 进入 verify-code。
 - watch：gstack Canary。等待独立 deploy-observe workflow。

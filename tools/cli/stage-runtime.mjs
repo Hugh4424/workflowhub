@@ -108,7 +108,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     const materials = {};
     for (const file of CURRENT_MATERIAL_FILES) {
       try { materials[file] = context.artifacts.read(file); }
-      catch { materials[file] = null; }
+      catch (error) {
+        if (error?.code === "ENOENT") materials[file] = null;
+        else throw error;
+      }
     }
     if (context.workspace) {
       current = context.kernel.currentVNextSnapshot();
@@ -254,7 +257,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
         || !input.receipts || typeof input.receipts !== "object" || Array.isArray(input.receipts)) {
       throw new TypeError("run input requires a receipts object");
     }
-    const allowedRunFields = new Set(values.stage === "build-code" ? ["receipts", "acceptance_coverage"] : ["receipts"]);
+    const allowedRunFields = new Set(values.stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]);
     const unknownRunFields = Object.keys(input).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(input?.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
