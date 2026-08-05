@@ -12,6 +12,7 @@ const KNOWN_IGNORED_GENERATED = Object.freeze([
   ".venv",
   ".pytest_cache",
   "test-results",
+  "node_modules",
   "frontend/node_modules",
   "frontend/dist",
   "data/local-qa-m08",
