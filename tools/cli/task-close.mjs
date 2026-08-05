@@ -73,7 +73,9 @@ function usage() {
 async function main() {
   const { command, values } = args(process.argv.slice(2));
   if (!new Set(["prepare", "confirm", "execute", "complete", "status", "manual-close"]).has(command)) throw new TypeError(usage());
-  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "manual-close", "complete"]).has(command) });
+  // A retry after governed worktree removal must be able to reconcile the
+  // remaining branch-cleanup step without reopening the deleted Workspace.
+  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "manual-close", "complete", "execute"]).has(command) });
   const boundary = command === "status" ? null : authenticateWriteBoundary({
     task,
     stage: "verify-code",

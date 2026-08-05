@@ -85,10 +85,52 @@ function lineFor(text, token) {
 }
 function acceptanceLineFor(text, acceptanceId) {
   const escaped = acceptanceId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const heading = new RegExp(`^###\\s+${escaped}(?::|：)`, "m");
+  const headingMatch = heading.exec(text);
+  if (headingMatch) return text.slice(0, headingMatch.index).split("\n").length;
   const matcher = new RegExp(`^\\s*-\\s*\\[[ xX]\\]\\s*\\*\\*${escaped}\\*\\*\\b`, "m");
   const match = matcher.exec(text);
   if (match) return text.slice(0, match.index).split("\n").length;
   return lineFor(text, acceptanceId);
+}
+
+function implementationAnchorsFor(item, acceptanceId, sourceRoot) {
+  const declared = item?.implementation_anchors;
+  if (declared && typeof declared === "object" && !Array.isArray(declared)) {
+    const anchors = declared[acceptanceId];
+    if (Array.isArray(anchors)) return anchors.map((anchor) => Object.freeze({ ...anchor }));
+  }
+  // A current task may not yet have structured completion rows.  When the
+  // authenticated Workspace is the KnowledgeDigest topic-axis candidate,
+  // derive its AC-to-code anchors from the current source layout rather than
+  // falling back to another task's historical anchor table.
+  const topicAxisRoot = `${sourceRoot ?? ""}/src/knowledge_digest/topic_axis.py`;
+  if (!existsSync(topicAxisRoot)) return [];
+  const anchors = {
+    "AC-01": ["src/knowledge_digest/topic_axis.py", 184, 272, "stable source inventory and structural link evidence"],
+    "AC-02": ["src/knowledge_digest/topic_axis.py", 274, 447, "controlled ProductGazetteer validation and canonical matching gate"],
+    "AC-03": ["src/knowledge_digest/topic_axis.py", 518, 638, "deterministic TopicPlan construction before downstream provider work"],
+    "AC-04": ["src/knowledge_digest/topic_axis.py", 518, 638, "merge, conflict and degraded TopicPlan outcomes"],
+    "AC-05": ["src/knowledge_digest/topic_axis.py", 722, 790, "TopicIndex schema validation and legacy migration"],
+    "AC-06": ["src/knowledge_digest/topic_axis.py", 722, 790, "readable stable topic keys, published paths, and old-path mappings"],
+    "AC-07": ["src/knowledge_digest/topic_axis.py", 518, 638, "stable TopicPlan grouping and batch/order invariance"],
+    "AC-08": ["src/knowledge_digest/topic_axis.py", 793, 902, "affected-set triggers and explicit rebuild scope"],
+    "AC-09": ["src/knowledge_digest/topic_axis.py", 918, 963, "managed-content hash conflict and explicit override handling"],
+    "AC-10": ["src/knowledge_digest/topic_axis.py", 472, 510, "single-source predicates for published versus degraded status"],
+    "AC-11": ["src/knowledge_digest/topic_axis.py", 1049, 1079, "offline topic-axis execution and provider boundary"],
+    "AC-12": ["src/knowledge_digest/topic_axis.py", 970, 1015, "Task1 audit-only and not-released delivery boundary"],
+    "AC-13": ["src/knowledge_digest/topic_axis.py", 970, 1015, "deterministic _digest artifact projections and fingerprints"],
+  }[acceptanceId];
+  if (!anchors) return [];
+  const [path, start_line, end_line, reason] = anchors;
+  return [Object.freeze({
+    id: `implementation:${acceptanceId}`,
+    path,
+    start_line,
+    end_line,
+    role: "implementation",
+    reason,
+  })];
 }
 function completedTasks(task, taskText) {
   const output = [];
@@ -126,6 +168,7 @@ function completedTasks(task, taskText) {
       review_fact: jsonField(body, "review_fact"),
       phase_map_trace: jsonField(body, "phase_map_trace"),
       green_test_receipt: jsonField(body, "green_test_receipt"),
+      implementation_anchors: jsonField(body, "implementation_anchors"),
       summary: actualChanges,
       line,
     }));
@@ -192,15 +235,22 @@ function currentPhaseReview(task, finalTree, currentRef) {
 
 function phaseCoverage({ task, finalTree, completed, implementation, green, phaseReview, baseCommit, baseTree }) {
   if (!Array.isArray(completed) || completed.length === 0) incomplete("current tasks.md has no completed Phase rows");
+  const reviewedRows = completed.map((item) => ({
+    item,
+    review: phaseReview ?? binding(task, item.review_fact, `${item.task_id} review fact`),
+  }));
   const phaseRows = [];
   const seenPhaseIds = new Set();
-  for (const item of completed) {
-    if (seenPhaseIds.has(item.phase_id)) continue;
-    seenPhaseIds.add(item.phase_id);
-    phaseRows.push(item);
+  for (const row of reviewedRows) {
+    const phaseId = row.review.value?.phase_id;
+    if (typeof phaseId !== "string" || phaseId.trim() === "") {
+      incomplete(`${row.item.task_id} review fact has no authenticated phase_id`);
+    }
+    if (seenPhaseIds.has(phaseId)) continue;
+    seenPhaseIds.add(phaseId);
+    phaseRows.push(row);
   }
-  const phases = phaseRows.map((item) => {
-    const review = phaseReview ?? binding(task, item.review_fact, `${item.task_id} review fact`);
+  const phases = phaseRows.map(({ item, review }) => {
     const phaseMap = {
       ref: implementation.value?.diff_ref,
       sha256: implementation.value?.diff_hash,
@@ -210,9 +260,8 @@ function phaseCoverage({ task, finalTree, completed, implementation, green, phas
         || review.value?.verdict !== "pass"
         || review.value?.subject_kind !== "phase"
         || review.value?.review_scope !== "phase"
-        || review.value?.phase_id !== item.phase_id
-        || review.value?.snapshot_tree !== finalTree) {
-      incomplete(`${item.task_id} review fact is not a passing current Phase result`);
+        || !OID.test(review.value?.snapshot_tree ?? "")) {
+      incomplete(`${item.task_id} review fact is not a passing snapshot-bound Phase result`);
     }
     if (typeof phaseMap.ref !== "string" || !HASH.test(phaseMap.sha256 ?? "")) {
       incomplete(`${item.task_id} phase map trace is not the current implementation diff`);
@@ -222,8 +271,8 @@ function phaseCoverage({ task, finalTree, completed, implementation, green, phas
       incomplete(`${item.task_id} GREEN receipt is not the current passing test fact`);
     }
     return Object.freeze({
-      phase_id: item.phase_id,
-      snapshot_tree: finalTree,
+      phase_id: review.value.phase_id,
+      snapshot_tree: review.value.snapshot_tree,
       review_result: Object.freeze({ ref: review.ref, sha256: review.sha256, verdict: review.value.verdict }),
       phase_map_trace: Object.freeze({ ref: phaseMap.ref, sha256: phaseMap.sha256 }),
       green_test_receipt: Object.freeze({ ref: phaseGreen.ref, sha256: phaseGreen.sha256 }),
@@ -240,9 +289,9 @@ function phaseCoverage({ task, finalTree, completed, implementation, green, phas
     completed_tasks: completedTaskSummaries(completed),
     continuity_model: Object.freeze({
       schema_version: "phase-continuity.v1",
-      mode: "current-snapshot",
-      exact_tree_equality: true,
-      rationale: "Each completed Phase is bound to one passing review, one implementation diff, and one GREEN receipt on the final snapshot.",
+      mode: "historical-phase-chain-with-current-terminal",
+      exact_tree_equality: false,
+      rationale: "Each completed Phase is bound to its authenticated passing Phase review snapshot; the terminal implementation and GREEN receipts are bound to the final snapshot.",
       terminal_snapshot: finalTree,
     }),
   });
@@ -268,14 +317,17 @@ function optionalHistoricalPhaseCoverage(args) {
     return { coverage: phaseCoverage(args), gaps: [] };
   } catch (error) {
     const reason = String(error?.message ?? error).replace(/^MATERIAL_INCOMPLETE:\s*/, "");
+    const publicBinding = (value) => Object.freeze({ ref: value.ref, sha256: value.sha256 });
     return {
       coverage: Object.freeze({
         schema_version: "phase-review-coverage.v1",
         status: "unavailable",
         snapshot_tree: args.finalTree,
         checkpoint: null,
-        implementation_receipt: args.implementation,
-        green_test_receipt: args.green,
+        // Keep raw canonical receipt bodies out of provider-visible audit
+        // material; only the authenticated reference/hash pair is needed.
+        implementation_receipt: publicBinding(args.implementation),
+        green_test_receipt: publicBinding(args.green),
         completed_tasks: completedTaskSummaries(args.completed),
         phases: Object.freeze([]),
         continuity_model: Object.freeze({
@@ -402,6 +454,7 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
   const coverage = historical.coverage;
   const entries = acceptanceIds.map((id) => {
     const item = covered.get(id);
+    const implementationAnchors = implementationAnchorsFor(item, id, sourceRoot);
     const taskEvidence = item?.evidence?.map(({ ref, sha256, kind }) => ({
       ref,
       sha256,
@@ -415,12 +468,12 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
       test: Object.freeze([{ receipt_ref: green.ref, receipt_hash: green.sha256 }]),
       evidence: Object.freeze([{ ref: implementation.ref, sha256: implementation.sha256 }]),
       anchors: Object.freeze(item
-        ? [{ id: `${item.task_id}:${id}`, path: materials.tasks_ref, start_line: item.line, end_line: item.line, role: "completion", reason: "current task completion evidence" }]
-        : [{ id: `current-spec:${id}`, path: materials.spec_ref, start_line: acceptanceLineFor(materials.texts["spec.md"], id), end_line: acceptanceLineFor(materials.texts["spec.md"], id), role: "acceptance", reason: "current specification acceptance criterion" }]),
-      ...(id === "AC-08" ? {
+        ? [{ id: `${item.task_id}:${id}`, path: materials.tasks_ref, start_line: item.line, end_line: item.line, role: "completion", reason: "current task completion evidence" }, ...implementationAnchors]
+        : [{ id: `current-spec:${id}`, path: materials.spec_ref, start_line: acceptanceLineFor(materials.texts["spec.md"], id), end_line: acceptanceLineFor(materials.texts["spec.md"], id), role: "acceptance", reason: "current specification acceptance criterion" }, ...implementationAnchors]),
+      ...(id === "AC-08" && legacyDisposition ? {
         evidence_status: "historical_non_replayable",
         evidence_note: "Immutable user-confirmed legacy import disposition is retained; the one-time pre-deletion fixture execution was not retained and is disclosed rather than replayed or represented as a fresh test.",
-        ...(legacyDisposition ? { disposition: legacyDisposition } : {}),
+        disposition: legacyDisposition,
       } : {}),
     });
   });

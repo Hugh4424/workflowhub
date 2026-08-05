@@ -344,9 +344,14 @@ function authenticatedImplementationChanged(worker, implementation) {
       || record.snapshot_tree !== implementation.snapshot_tree) {
     throw new Error("implementation diff evidence does not bind the current execution baseline and snapshot");
   }
+  // The canonical implementation writer records tracked changes from the
+  // live worktree against the execution baseline. Do the same here. Comparing
+  // the baseline with the synthetic snapshot commit can re-introduce hydrated
+  // Git LFS payloads as source changes even though Git correctly reports them
+  // clean in the worktree and the receipt deliberately excludes them.
   const tracked = execFileSync(
     "git",
-    ["diff", "--no-renames", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
+    ["diff", "--no-renames", "--name-only", record.baseline_commit, "--"],
     { cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   ).trim().split("\n").filter(Boolean);
   const untracked = (Array.isArray(record.untracked) ? record.untracked : []).map((entry) => {
@@ -628,6 +633,11 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
 
 function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage) {
   if (review?.facts?.status === "unavailable") return [];
+  // A passing review has already classified every reported cluster in its
+  // authenticated adjudication. Only a revise_required result needs a
+  // separate handoff disposition; otherwise nonblocking/invalid evidence
+  // clusters incorrectly make an otherwise passing stage incomplete.
+  if (review?.value?.verdict === "pass") return [];
   const clusters = Array.isArray(review.value?.adjudication?.clusters)
     ? review.value.adjudication.clusters
     : [];

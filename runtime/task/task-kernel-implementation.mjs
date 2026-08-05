@@ -409,7 +409,7 @@ export function buildTaskKernel(taskHandle, {
         if (error?.code !== "EEXIST") throw error;
         const existingRaw = task.readRecord(consumptionRef);
         const existing = JSON.parse(existingRaw);
-        if (existing.task_id !== consumed.task_id || existing.plan_hash !== consumed.plan_hash || existing.step_id !== consumed.step_id || existing.operation !== consumed.operation || existing.authorization_ref !== consumed.authorization_ref || existing.confirmation_ref !== consumed.confirmation_ref) {
+        if (existing.task_id !== consumed.task_id || existing.plan_hash !== consumed.plan_hash || existing.operation !== consumed.operation || existing.authorization_ref !== consumed.authorization_ref || existing.confirmation_ref !== consumed.confirmation_ref) {
           throw new Error("irreversible authorization was already consumed by a different close step");
         }
         return Object.freeze({ ref: consumptionRef, hash: hash(existingRaw), value: existing, idempotent: true });

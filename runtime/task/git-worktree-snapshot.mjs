@@ -95,6 +95,10 @@ function parseLfsPointer(body) {
   return { oid, size: Number(size) };
 }
 
+function lfsPointerBody(body) {
+  return Buffer.from(`${LFS_POINTER_VERSION}\noid sha256:${sha256(body)}\nsize ${body.length}\n`);
+}
+
 function lfsFilterMap(root, paths) {
   if (paths.length === 0) return new Map();
   const input = Buffer.from(`${paths.join("\0")}\0`);
@@ -177,7 +181,15 @@ function fileEntry(root, path, format, objectDir) {
     throw error;
   }
   if (stat.isSymbolicLink()) return { mode: "120000", oid: writeLooseObject(objectDir, format, "blob", Buffer.from(readlinkSync(absolute))), tree: false };
-  if (stat.isFile()) return { mode: (stat.mode & 0o111) === 0 ? "100644" : "100755", oid: writeLooseObject(objectDir, format, "blob", readFileSync(absolute)), tree: false };
+  if (stat.isFile()) {
+    const body = readFileSync(absolute);
+    const filter = lfsFilterMap(root, [path]).get(path) ?? null;
+    // A hydrated LFS file is real source content in the manifest, but its
+    // publishable Git tree must retain the pointer blob.  Otherwise a close
+    // reset turns a clean worktree into a permanent LFS-only diff.
+    const treeBody = filter === "lfs" && parseLfsPointer(body) === null ? lfsPointerBody(body) : body;
+    return { mode: (stat.mode & 0o111) === 0 ? "100644" : "100755", oid: writeLooseObject(objectDir, format, "blob", treeBody), tree: false };
+  }
   if (stat.isDirectory()) {
     const oid = gitText(absolute, ["rev-parse", "HEAD"]);
     if (!/^[a-f0-9]{40,64}$/.test(oid)) throw new Error(`nested Git workspace has an invalid HEAD: ${path}`);
