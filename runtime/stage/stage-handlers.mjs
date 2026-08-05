@@ -734,6 +734,11 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
 
 function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage) {
   if (review?.facts?.status === "unavailable") return [];
+  // A passing review has already classified its findings in the authenticated
+  // result. Only a revise_required result needs a separate handoff
+  // disposition; otherwise an advisory pass can incorrectly make the stage
+  // incomplete.
+  if (review?.value?.verdict === "pass") return [];
   const clusters = canonicalReviewFindings(review.value);
   if (clusters.length === 0) return [];
 

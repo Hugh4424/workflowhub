@@ -556,6 +556,15 @@ const DELIVERY_STEPS = Object.freeze([
   ["remove-task-branch", "remove-task-branch"],
 ]);
 
+const DELIVERY_AUTHORIZATIONS = Object.freeze({
+  "commit-delivery": "commit",
+  "archive-spec": "archive",
+  "merge-task-branch": "merge",
+  "push-target-branch": "push",
+  "remove-task-worktree": "cleanup",
+  "remove-task-branch": "cleanup",
+});
+
 /** Freeze the concrete close actions before asking for their independent authorization. */
 export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, delivery: requested } = {}) {
   const task = assertTaskHandle(taskHandle);
@@ -696,7 +705,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   return task.withRecordLock("locks/close.execution.lock", async () => {
     for (const step of plan.steps) {
       kernel.consumeIrreversibleAuthorization({
-        operation: step.operation,
+        operation: DELIVERY_AUTHORIZATIONS[step.operation],
         confirmation_ref: confirmation.human_confirmation_ref,
         plan_hash: planHash,
         step_id: step.step_id,
@@ -943,7 +952,7 @@ export async function executeClosePlan(options = {}) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
       kernel.consumeIrreversibleAuthorization({
-        operation: step.operation,
+        operation: DELIVERY_AUTHORIZATIONS[step.operation],
         confirmation_ref: confirmation.human_confirmation_ref,
         plan_hash: planHash,
         step_id: step.step_id,

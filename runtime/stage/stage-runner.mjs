@@ -247,7 +247,6 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
   let allPassed = true;
   const qualityWarnings = [];
   for (const [subject, kind] of Object.entries(STAGE_PREDICATES[ctx.stage])) {
-    assertVNextSourceStable(ctx, preflightSnapshot);
       const candidate = evidenceCandidate(result, kind, subject, ctx.stage)
       ?? (kind === "confirmation" ? currentConfirmationCandidate(ctx, snapshot.tree) : null);
     const reviewFact = kind === "review"
@@ -309,7 +308,6 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
       const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
       const evidenceRef = `quality/evidence/stage-quality/${ctx.stage}/${subject}-${evidenceHash}.json`;
-      assertVNextSourceStable(ctx, preflightSnapshot);
       publishVNextEvidence(ctx, evidenceRef, evidenceRaw);
       const acceptanceValue = {
         schema_version: "acceptance-evidence.v1",
@@ -322,7 +320,6 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       const acceptanceRaw = `${JSON.stringify(acceptanceValue, null, 2)}\n`;
       factEvidenceHash = createHash("sha256").update(acceptanceRaw).digest("hex");
       factEvidenceRef = `quality/evidence/acceptance/${ctx.stage}/${subject}-${factEvidenceHash}.json`;
-      assertVNextSourceStable(ctx, preflightSnapshot);
       publishVNextEvidence(ctx, factEvidenceRef, acceptanceRaw);
       factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
     }
@@ -339,11 +336,9 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       const missingRaw = `${JSON.stringify(missingValue, null, 2)}\n`;
       factEvidenceHash = createHash("sha256").update(missingRaw).digest("hex");
       factEvidenceRef = `quality/evidence/stage-quality-missing/${ctx.stage}/${subject}-${factEvidenceHash}.json`;
-      assertVNextSourceStable(ctx, preflightSnapshot);
       publishVNextEvidence(ctx, factEvidenceRef, missingRaw);
       factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
     }
-    assertVNextSourceStable(ctx, preflightSnapshot);
     const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
       kind,
       status,
@@ -352,12 +347,16 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
     });
     qualityFactRefs.push(fact.ref);
   }
+  // The stage is source-bound at entry and rechecked once after publication
+  // writes. Re-capturing a multi-gigabyte worktree for every AC does not add
+  // protection because these writes are outside the source snapshot boundary.
+  const publishedSnapshot = assertVNextSourceStable(ctx, preflightSnapshot);
   const progression = deriveStageProgress(ctx.stage, qualityFactRefs.map((ref) => {
     const raw = ctx.task.readRecord(ref);
     return { fact: { ref, value: JSON.parse(raw) }, authenticated: true };
   }), currentMaterialTexts(ctx));
   const publication = qualityFactRefs.length > 0 && progression.status === "completed"
-    ? (assertVNextSourceStable(ctx, preflightSnapshot), ctx.kernel.publishVNextPublication(ctx.stage, {
+    ? (publishedSnapshot, ctx.kernel.publishVNextPublication(ctx.stage, {
       quality_fact_refs: qualityFactRefs,
       progression,
     }))

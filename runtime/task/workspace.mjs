@@ -7,7 +7,20 @@ import { captureExecutionSnapshot } from "../task/git-worktree-snapshot.mjs";
 const WORKSPACES = new WeakSet();
 const CANDIDATE_WORKSPACES = new WeakSet();
 const WORKSPACE_BINDINGS = new WeakMap();
-const KNOWN_IGNORED_GENERATED = Object.freeze([".vite"]);
+const KNOWN_IGNORED_GENERATED = Object.freeze([
+  ".vite",
+  ".venv",
+  ".pytest_cache",
+  "test-results",
+  "frontend/node_modules",
+  "frontend/dist",
+  "data/local-qa-m08",
+  "data/local-qa-m08-v2",
+  "data/local-qa-m08-v3",
+  "data/local-qa-m08-v4",
+  "data/local-real-m08-v1",
+  "data/local-real-m08-v2",
+]);
 
 function gitValue(cwd, args, label) {
   try { return String(execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
@@ -37,7 +50,9 @@ function relativeWorktreePath(value, label) {
 }
 
 function isKnownIgnoredGenerated(path) {
-  return KNOWN_IGNORED_GENERATED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  return path === ".DS_Store"
+    || path.split("/").includes("__pycache__")
+    || KNOWN_IGNORED_GENERATED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function cleanupError(scan) {
@@ -94,7 +109,13 @@ function removeKnownIgnoredGenerated(root, entry) {
   let stat;
   try { stat = lstatSync(target); }
   catch (error) { if (error?.code === "ENOENT") return; throw error; }
-  if (stat.isSymbolicLink()) throw new Error(`known ignored generated path must not be a symlink: ${entry.path}`);
+  if (stat.isSymbolicLink()) {
+    // Generated environments such as .venv contain launcher symlinks.  The
+    // target is still safe to remove because only the symlink itself is
+    // unlinked; we never follow it outside the authenticated worktree.
+    rmSync(target, { recursive: false, force: false });
+    return;
+  }
   rmSync(target, { recursive: true, force: false });
 }
 

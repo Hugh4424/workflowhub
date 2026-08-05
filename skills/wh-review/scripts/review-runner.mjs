@@ -410,6 +410,12 @@ function canonicalSubjectOutcome(task, identity) {
     // call, but a changed snapshot is still a new review identity.
     const buildCodeIntegration = identity.stage === "build-code"
       && identity.subject.review_scope === "integration";
+    // An integration packet is derived from current authenticated evidence.
+    // If the packet itself changes on the same source snapshot (for example,
+    // after repairing phase coverage or AC implementation anchors), the old
+    // semantic result is not evidence for the new packet and must not be
+    // returned as though the review were unchanged.
+    if (buildCodeIntegration && record.material_id !== identity.materialId) continue;
     const identityMatches = buildCodeIntegration
       ? matchesReviewIdentity(record, { ...identity, materialId: record.material_id })
       : matchesReviewIdentity(record, identity);

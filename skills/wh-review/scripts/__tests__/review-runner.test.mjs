@@ -996,14 +996,14 @@ describe("aggregation and runner", () => {
     expect(dispatches.size).toBe(1);
   });
 
-  it("reuses same-snapshot results but re-reviews a changed build-code integration snapshot", async () => {
+  it("reuses unchanged integration packets but re-reviews changed material or snapshot", async () => {
     const { attachmentRoot, task } = fixture("simple-review-reuse-change-"); const calls = [];
     const providerClient = { run: async () => { calls.push(true); return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
     const base = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient };
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId: "b".repeat(64), manifest: [] }) });
     await runReviewFixture({ ...base, captureSource: () => ({ ...source, snapshotTree: "6".repeat(40) }), buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
-    expect(calls, "same-snapshot retries reuse; a changed integration snapshot requires a fresh review").toHaveLength(2);
+    expect(calls, "unchanged packets reuse; changed integration material or snapshot requires a fresh review").toHaveLength(3);
   });
 
   it("fails loudly without a provider call when canonical aggregation was changed", async () => {
