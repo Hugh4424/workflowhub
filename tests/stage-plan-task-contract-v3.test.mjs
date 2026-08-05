@@ -336,7 +336,7 @@ describe("plan-task.v3 structural contract", () => {
       artifactRef: (name) => `specs/demo/${name}`,
     };
     const evidenceHash = sha256(evidenceRaw);
-    expect(certifyCurrentTaskCompletion(worker, {
+    const result = certifyCurrentTaskCompletion(worker, {
       changedFiles: ["core/outside.mjs"],
       tests: {
         command: "npx vitest run tests/demo.test.mjs",
@@ -353,10 +353,9 @@ describe("plan-task.v3 structural contract", () => {
           evidence_refs: [{ ref: evidenceRef, sha256: evidenceHash }],
         }],
       },
-    })).toMatchObject({
-      status: "completed",
-      audit_gaps: ["current diff includes files outside historical task boundaries: core/outside.mjs"],
     });
+    expect(result).toMatchObject({ status: "completed" });
+    expect(result.audit_gaps).toEqual(["current diff includes files outside historical task boundaries: core/outside.mjs"]);
   });
 
   it("permits prose actual_changes and historical task audit references", () => {

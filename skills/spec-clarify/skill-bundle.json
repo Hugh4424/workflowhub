@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "skill": "spec-clarify",
+  "files": [
+    { "path": "SKILL.md", "sha256": "5fd4f2bf225d925822310a0f041f8ab9c9788448dc5cf2a4869334e4c6037cce" }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/github/spec-kit",
+      "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+      "path": "templates/commands/clarify.md",
+      "license": "MIT"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "skill": "spec-specify",
+  "files": [
+    { "path": "SKILL.md", "sha256": "7092928f99b245a478ef4a1c8e980ec53dd5b8fa4c12a097c50175509dc2652b" },
+    { "path": "templates/spec-template.md", "sha256": "1d0e4ad7019d56f54e7c4b90755d7cc692d47ee3da54719894c8e456b40e0c3f" }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/github/spec-kit",
+      "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+      "path": "templates/commands/specify.md",
+      "license": "MIT"
+    }
+  ]
+}

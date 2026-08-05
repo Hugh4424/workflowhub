@@ -125,9 +125,9 @@ function currentVerifyFacts(task, expected = {}) {
       bySubject.set(item.value.subject, item);
       continue;
     }
-    // A retry after an incomplete run publishes a new immutable fact for the
-    // same subject/material/snapshot. Keep the newest authenticated outcome;
-    // historical facts remain preserved and readable for audit.
+    // A stage retry or a later human confirmation can publish another
+    // immutable fact for the same subject/material/snapshot. Historical
+    // facts remain readable; close consumes the newest authenticated fact.
     const previousAt = Date.parse(previous.value.recorded_at);
     const currentAt = Date.parse(item.value.recorded_at);
     if (currentAt > previousAt || (currentAt === previousAt && item.ref > previous.ref)) {

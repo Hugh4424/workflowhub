@@ -6,7 +6,7 @@ import { validateSchema } from "./schema-validator.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
-const EVIDENCE_REF = /^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+const EVIDENCE_REF = /^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const RECEIPT_REF = /^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const CRITERION_ID = /\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g;
 
@@ -103,6 +103,7 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
   }
   const sourceDigest = normalizedHash(acceptanceEvidence.source_digest ?? test.value.source_digest, "source digest");
   if (test.value.source_digest !== undefined && test.value.source_digest !== sourceDigest) throw new Error("MATERIAL_INCOMPLETE: test receipt source digest mismatch");
+  const testExitCode = test.value.exit_code;
   const aggregate = authenticatedRecord(handle, acceptanceEvidence.evidence_ref, acceptanceEvidence.evidence_hash, "acceptance evidence aggregate", EVIDENCE_REF);
   if (aggregate.value?.schema_version !== "workflowhub-receipt.v1" || aggregate.value.task_id !== handle.identity.taskId || aggregate.value.stage !== "verify-code" || aggregate.value.producer?.component !== "evidence" || !Array.isArray(aggregate.value.refs)) {
     throw new Error("MATERIAL_INCOMPLETE: acceptance evidence aggregate provenance is invalid");
@@ -128,10 +129,16 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
     criteria: criterionIds.map((id) => {
       const item = leaves.get(id);
       const metadata = mergeMetadata(item.metadata, item.evidence.result);
-      const incomplete = Object.values(metadata).some((value) => Array.isArray(value) ? value.includes("unknown") : value === "unknown");
+      const metadataIncomplete = Object.values(metadata).some((value) => Array.isArray(value) ? value.includes("unknown") : value === "unknown");
+      const testIncomplete = !Number.isInteger(testExitCode) || testExitCode !== 0;
+      const incomplete = metadataIncomplete || testIncomplete;
       return {
         acceptance_criterion_id: id,
-        result: item.evidence.result,
+        // A leaf claim is not a verified pass when structured evidence or the
+        // authenticated test receipt is incomplete. Preserve the claim for
+        // provenance instead of silently presenting it as final proof.
+        result: item.evidence.result === "fail" ? "fail" : incomplete ? "unknown" : "pass",
+        leaf_result: item.evidence.result,
         status: item.evidence.result === "fail" ? "failed" : incomplete ? "incomplete" : "passed",
         source_digest: sourceDigest,
         acceptance_leaf: { ref: item.leaf.ref, sha256: item.leaf.sha256 },
@@ -140,5 +147,34 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
       };
     }),
   };
+  // A distinct leaf hash is not enough when every criterion carries the same
+  // generic prose and the same nested evidence.  Keep the leaf claim for
+  // provenance, but downgrade the provider-facing result so verify-code
+  // cannot present one shared proof as criterion-specific verification.
+  if (summary.criteria.length > 1) {
+    const normalizeCriterion = (value) => String(value ?? "").replace(/\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g, "AC-*");
+    const prose = summary.criteria.map((item) => JSON.stringify([
+      normalizeCriterion(item.scenario),
+      normalizeCriterion(item.oracle),
+      normalizeCriterion(item.actual_outcome),
+    ]));
+    const actualOutcomes = summary.criteria.map((item) => normalizeCriterion(item.actual_outcome));
+    const nested = summary.criteria.map((item) => JSON.stringify(item.nested_evidence));
+    const genericProse = new Set(prose).size === 1;
+    const genericActualOutcome = new Set(actualOutcomes).size === 1;
+    const sharedNestedEvidence = new Set(nested).size === 1;
+    if (genericProse || genericActualOutcome || sharedNestedEvidence) {
+      for (const item of summary.criteria) {
+        item.result = item.leaf_result === "fail" ? "fail" : "unknown";
+        item.status = item.leaf_result === "fail" ? "failed" : "incomplete";
+        item.exceptions = [
+          ...item.exceptions,
+          ...(genericProse ? ["per-AC verification prose is generic"] : []),
+          ...(genericActualOutcome ? ["per-AC actual outcomes are generic"] : []),
+          ...(sharedNestedEvidence ? ["nested evidence is shared across ACs"] : []),
+        ];
+      }
+    }
+  }
   return validateSchema("ac_evidence_summary", summary);
 }

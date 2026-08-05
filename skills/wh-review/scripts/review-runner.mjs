@@ -1119,7 +1119,10 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree review forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);
   }
-  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" });
+  // Integration does not deliver a cumulative diff, but it still needs the
+  // frozen changed-file index so the subject can select bounded final-snapshot
+  // implementation excerpts for the provider packet.
+  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || (stage === "build-code" && phaseId === null) });
   let integrationSubject; let subject; let bundle; let classificationManifest;
   try {
     const isIntegration = stage === "build-code" && phaseId === null;
@@ -1169,7 +1172,14 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const fixedMaterials = {
       ...materials,
       ...(integrationSubject ? integrationMaterialFacts(integrationSubject) : {}),
-      review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveReviewRound, subject.review_scope),
+      review_instructions: reviewInstructionsFor(
+        stage,
+        reviewTrack,
+        uiScope,
+        effectiveReviewRound,
+        subject.review_scope,
+        materials?.scope_revision ? "scope_revision" : null,
+      ),
     };
     classificationManifest = buildClassificationManifest(fixedMaterials);
     bundle = buildMaterials({

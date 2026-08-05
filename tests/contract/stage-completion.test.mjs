@@ -87,4 +87,22 @@ describe("five-stage completion predicates derive only from quality facts", () =
       "tasks.md": "tasks",
     })).toMatchObject({ status: "completed", missing: [], fact_refs: [] });
   });
+
+  it("does not make early stages depend on files created later", () => {
+    expect(deriveStageProgress("make-decision", [], {
+      "decision-log.md": "decision",
+    })).toMatchObject({
+      status: "completed",
+      required_materials: ["decision-log.md"],
+      missing: [],
+    });
+    expect(deriveStageProgress("build-spec", [], {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+    })).toMatchObject({
+      status: "completed",
+      required_materials: ["decision-log.md", "spec.md"],
+      missing: [],
+    });
+  });
 });

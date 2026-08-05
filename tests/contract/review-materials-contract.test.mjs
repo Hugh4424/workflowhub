@@ -11,6 +11,8 @@ import { runCapture as runBuildCapture } from "../../workflows/build-code/captur
 import { runCapture as runVerifyCapture } from "../../workflows/verify-code/capture.mjs";
 import {
   canonicalMaterialManifest,
+  redactProviderHostPaths,
+  validateAuthorityMap,
   validateBuildCodeAcceptanceMap,
   validateDiffIndexBundle,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
@@ -47,6 +49,15 @@ afterEach(() => {
 });
 
 describe("current review material and capture contracts", () => {
+  it("redacts local host paths only in the provider-derived view", () => {
+    const source = { approved_direction: "See /Users/Hugh/Downloads/report.md and /tmp/private.json", refs: ["repo/spec.md"] };
+    expect(redactProviderHostPaths(source)).toEqual({
+      approved_direction: "See <host-path-redacted> and <host-path-redacted>",
+      refs: ["repo/spec.md"],
+    });
+    expect(source.approved_direction).toContain("/Users/Hugh/Downloads/report.md");
+  });
+
   it("keeps canonical manifests deterministic and rejects generic AC maps", () => {
     expect(canonicalMaterialManifest([
       { path: "b.json", bytes: 2, sha256: "b" },
@@ -67,6 +78,19 @@ describe("current review material and capture contracts", () => {
       ...valid,
       entries: valid.entries.map((entry) => ({ ...entry, implementation: "same", verification: "same", change_ids: [] })),
     })).toThrow(/generic mapping is not allowed/);
+  });
+
+  it("rejects one shared proving anchor across multiple AC evidence entries", () => {
+    const anchor = { id: "shared", path: "runtime/stage/stage-handlers.mjs", start_line: 220, end_line: 235, role: "implementation", reason: "shared fixture anchor" };
+    const map = {
+      state: "complete",
+      summary: "fixture evidence map",
+      entries: [
+        { id: "AC-002", subject: "first", rationale: "first", disposition: "complete", anchors: [anchor] },
+        { id: "AC-009", subject: "second", rationale: "second", disposition: "complete", anchors: [{ ...anchor, id: "shared-again" }] },
+      ],
+    };
+    expect(() => validateAuthorityMap("evidence_map", map)).toThrow(/share one proving anchor/i);
   });
 
   it("authenticates an included diff shard and rejects tampering", () => {

@@ -2250,7 +2250,27 @@
       "path": "specs/archive/worktree-unification/test/final-test-report.md",
       "bytes": 5428,
       "sha256": "3e29f0d7bb70849bb063ef2fbcffaa111e3c11f645c9af2e27dc531ac07f5322"
+    },
+    {
+      "path": "specs/archive/workflowhub-complexity-governance-v3-20260802/decision-log.md",
+      "bytes": 16523,
+      "sha256": "cba9c22d776a030b24e8fb4578e6e2a7df96bfe1ce236b06f5401d522168a36f"
+    },
+    {
+      "path": "specs/archive/workflowhub-complexity-governance-v3-20260802/plan.md",
+      "bytes": 125692,
+      "sha256": "f7e490ee02c243ee87d9bb8e5744873b584f73014f9e322f227e7f27532e9344"
+    },
+    {
+      "path": "specs/archive/workflowhub-complexity-governance-v3-20260802/spec.md",
+      "bytes": 40945,
+      "sha256": "8a1541217c2343b2580bc555113368f93038d5fbc6c971683a772bf1f9e56d40"
+    },
+    {
+      "path": "specs/archive/workflowhub-complexity-governance-v3-20260802/tasks.md",
+      "bytes": 268858,
+      "sha256": "b1fb169b98df9ccc07926062d45346d4dcd9350803c02eca8de27ce90cc75555"
     }
   ],
-  "file_count": 449
+  "file_count": 453
 }

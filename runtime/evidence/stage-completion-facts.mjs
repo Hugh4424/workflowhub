@@ -88,13 +88,17 @@ function sourceCoverage(value) {
 function confirmationSummary(value) {
   const item = object(value, "confirmation_summary");
   return {
+    completed: text(item.completed, "confirmation_summary.completed"),
     specification: text(item.specification, "confirmation_summary.specification"),
+    scope: stringList(item.scope, "confirmation_summary.scope"),
     non_goals: stringList(item.non_goals, "confirmation_summary.non_goals"),
     phases: stringList(item.phases, "confirmation_summary.phases"),
     dependencies: stringList(item.dependencies, "confirmation_summary.dependencies"),
     tests: stringList(item.tests, "confirmation_summary.tests"),
     review_advice: text(item.review_advice, "confirmation_summary.review_advice"),
     risks: stringList(item.risks, "confirmation_summary.risks"),
+    deferred: stringList(item.deferred, "confirmation_summary.deferred"),
+    next_stage_boundary: text(item.next_stage_boundary, "confirmation_summary.next_stage_boundary"),
     expected_impact: text(item.expected_impact, "confirmation_summary.expected_impact"),
   };
 }
@@ -302,6 +306,15 @@ export function renderUserCompletion(value) {
       "耗时": facts.review.duration_ms === null ? "未提供" : `${facts.review.duration_ms} ms`,
       "用量": facts.review.tokens === null ? "未提供" : String(facts.review.tokens),
     },
+    stage_summary: {
+      completed: facts.confirmation_summary.completed,
+      artifacts: facts.artifacts.map(({ label }) => label),
+      scope: structuredClone(facts.confirmation_summary.scope),
+      non_goals: structuredClone(facts.confirmation_summary.non_goals),
+      risks: structuredClone(facts.confirmation_summary.risks),
+      deferred: structuredClone(facts.confirmation_summary.deferred),
+      next_stage_boundary: facts.confirmation_summary.next_stage_boundary,
+    },
     risks: structuredClone(facts.risks),
     next_owner: facts.next_owner,
     user_action: facts.user_action,
@@ -331,6 +344,18 @@ export function assertCompletionViewsConsistent(value, userView, systemView) {
   if (!isDeepStrictEqual(user.artifacts?.map(({ label }) => label), labels)
       || !isDeepStrictEqual(system.artifacts?.map(({ label }) => label), labels)) {
     throw new Error("completion view drift: artifact labels");
+  }
+  const summary = facts.confirmation_summary;
+  if (!summary
+      || !isDeepStrictEqual(user.stage_summary?.completed, summary.completed)
+      || !isDeepStrictEqual(user.stage_summary?.artifacts, facts.artifacts.map(({ label }) => label))
+      || !isDeepStrictEqual(user.stage_summary?.scope, summary.scope)
+      || !isDeepStrictEqual(user.stage_summary?.non_goals, summary.non_goals)
+      || !isDeepStrictEqual(user.stage_summary?.risks, summary.risks)
+      || !isDeepStrictEqual(user.stage_summary?.deferred, summary.deferred)
+      || !isDeepStrictEqual(user.stage_summary?.next_stage_boundary, summary.next_stage_boundary)
+      || !isDeepStrictEqual(system.confirmation_summary, summary)) {
+    throw new Error("completion view drift: stage summary");
   }
   return true;
 }

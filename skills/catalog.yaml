@@ -28,7 +28,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 68c3f3a6be4c2953dfc58b62492c5a8b026c9943613c3bde4ef9e7b558a3ea98
+    local_bundle_hash: abc4e8b9680aeec2000298178b135aaf02bcc088b2de121b8ed0e29f225903d4
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
@@ -108,62 +108,62 @@ skills:
     update_policy: 随内存研究接口变更审查
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
-    local_version: 1.1.0
-    local_bundle_hash: e9db2e05b56c7e92409f0160a25144c82a16d0f919a43a74715da999397977c5
+    local_version: 1.2.0
+    local_bundle_hash: eac4b5a8cbb3a70ec7c6db1924fa3f96b2121766bab91447f9791fc1b699ac59
     last_reviewed_at: "2026-07-14"
-    status: absorbed
+    status: adapted
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
-    local_changes: 已吸收到 build-spec 当前四材料流程；保留上游 provenance，不保留独立 runtime skill
+    local_changes: 恢复为可搬运的内容合同和模板；编排仍由 build-spec 负责，不新增第二 runtime
     dependency_closure: []
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 9843b71859ade20a93af39e31525d4542489bf46bb6114e01048614ba5899b1d
+    local_version: 1.1.0
+    local_bundle_hash: 406404dfbe179aabd897554d320e3eb9c7168d472209090cb2bacb3ca28e8bae
     last_reviewed_at: "2026-07-14"
-    status: absorbed
+    status: adapted
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
-    local_changes: 已吸收到 build-spec 当前歧义处理；保留上游 provenance，不保留独立 runtime skill
+    local_changes: 恢复十维歧义扫描和主代理逐题沟通合同；编排仍由 build-spec 负责
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
-    local_version: 1.1.0
-    local_bundle_hash: b72c58da84645ccdf0b1a10b1bee4ab1a082daf9ad48b124b57f95e44385be06
+    local_version: 1.2.0
+    local_bundle_hash: 93248b201e781b68dfbd6dbbe151373fc765591bfa31086357ea577236d5f032
     last_reviewed_at: "2026-07-14"
-    status: absorbed
+    status: adapted
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 已吸收到 build-plan 当前唯一 plan 合同；保留上游 provenance，不保留独立 runtime skill
+    local_changes: 恢复 plan 内容合同和模板；唯一 plan 真相仍由 build-plan 当前材料承载
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
-    local_version: 1.1.0
-    local_bundle_hash: 37c6ca828d9c5bead7e890dd4cc66ef7fbe90219abf67f4f8f6036a083fa958b
+    local_version: 2.1.0
+    local_bundle_hash: f0fd50000e3de4ebd6564f85c7b0fbc8430d1f1e961e123726be7b9ce4051d87
     last_reviewed_at: "2026-07-14"
-    status: absorbed
+    status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream:
       - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 已吸收到 build-plan 当前唯一 tasks 合同；保留上游 provenance，不保留独立 runtime skill
+    local_changes: 恢复任务粒度、RED/GREEN、oracle 和追溯模板；不新增 issue tracker 或状态机
     dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 263b11a5fa3febc67912da4f007992010accb40e02c6cca4cb56a04a3e2f049f
+    local_bundle_hash: c9176c251af0dda88e9e4ce5458498c289e37aeab32c74ec4a05e31cfe7a8ff4
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -418,17 +418,73 @@ skills:
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f792706199c272d26d2db36cd7036ebf59dcd4993c6d8139b18346f9dbeb8639
+    local_bundle_hash: 1467cc3c80ee43c02130c03f060e3351cfd507f7345a64c8026a483fe77800be
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-code 判定 simple/feature/fullstack 测试层级
+    purpose: 为 build-plan 的每个 Task/Phase 判定 simple/feature/fullstack 测试层级
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
-    local_changes: 保留仓内 provenance；测试层级由 build-code 当前流程决定，不进入核心 Bundle 或生产扫描
+    local_changes: 保留三档路由判断；由 build-plan 写入 tasks.md，build-code 只执行记录，不引入跨仓执行器
     dependency_closure: []
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
+  - name: testing-system-blueprint
+    path: skills/testing-system-blueprint/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 507bf3ba5b31cd98ed7c0a506ebdcfab6f54b9b476bf9ba94e52af822099d364
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: 为 build-plan 的每个 Task/Phase 生成风险维度和证据计划
+    design_idea: blueprint 先于执行器，覆盖行为、状态、错误、seam 和交付限制
+    standalone: true
+    used_by_stages: [build-plan]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md" }]
+    local_changes: 适配为 report-only 设计技能；不新增 AgentHub release gate 或执行器控制面
+    dependency_closure: []
+    update_policy: 随测试证据合同和 build-code 阶段边界人工比较
+  - name: backend-testing
+    path: skills/backend-testing/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 9d35a272e88e67d66253260ceec7e95d1f7c90aa46b97bc3320b14ed1a99e7e2
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: 为 build-plan 的后端改动设计风险导向测试策略，供 build-code 执行并保存报告
+    design_idea: 真实接口、数据、错误、权限和并发边界优先
+    standalone: true
+    used_by_stages: [build-plan]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/backend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing/SKILL.md" }]
+    local_changes: 只保留测试方法和证据字段；失败是质量事实，不是推进 gate
+    dependency_closure: []
+    update_policy: 随后端测试和证据 schema 人工比较
+  - name: frontend-testing
+    path: skills/frontend-testing/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 10bc4cbd7b88426621f0f094236a768b220db6aac1c798cac7696d91c690d05c
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: 为 build-plan 的前端改动设计状态、交互和 UI 测试策略，供 build-code 执行
+    design_idea: 真实用户状态覆盖，适用时接 isolated browser QA
+    standalone: true
+    used_by_stages: [build-plan]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/frontend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md" }]
+    local_changes: 保留状态/交互维度；不把截图或 browser pass 变成普遍 gate
+    dependency_closure: []
+    update_policy: 随前端测试和 browser 证据合同人工比较
+  - name: fullstack-slice-testing
+    path: skills/fullstack-slice-testing/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 0d0f974b22a61d8601d9dbab97619bb40611d91c4195e6210c11c69e3f4919a4
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: 为 build-plan 的跨边界改动设计最小真实链路策略，供 build-code 执行
+    design_idea: 从用户输入贯通服务、数据、返回和呈现的 slice
+    standalone: true
+    used_by_stages: [build-plan]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md" }]
+    local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate
+    dependency_closure: []
+    update_policy: 随跨端 seam 和全链路证据合同人工比较
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0

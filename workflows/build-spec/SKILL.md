@@ -23,6 +23,12 @@ or recovery machinery to revise a current specification.
 
 ## Working rules
 
+The content work is carried by the bundled `spec-specify` and `spec-clarify`
+skills. Read `skills/spec-specify/SKILL.md` and use its
+`skills/spec-specify/templates/spec-template.md` structure when drafting; run
+the ten-dimension ambiguity scan from `skills/spec-clarify/SKILL.md`. These are
+portable content contracts, not a second stage or a second source of truth.
+
 1. Read the current decision log and any current plan or tasks before editing.
    Preserve locked product decisions. If a current plan or task conflicts with
    the direction, record the mismatch and revise the current materials; do not
@@ -31,6 +37,9 @@ or recovery machinery to revise a current specification.
    State goal, scope, non-goals, functional requirements, acceptance criteria,
    interfaces/data/operational boundaries, risks, and assumptions in plain
    language. Each requirement and acceptance criterion needs a stable ID.
+   Every scenario must expose an observable outcome, and every AC must expose
+   both a pass oracle and a failure condition before the spec is ready for
+   planning.
 3. Keep a short current-material revision note whenever the spec changes: what
    changed, why, and which current materials it affects. Prior revisions remain
    readable audit history. A missing old revision record is disclosed, not a
@@ -75,6 +84,13 @@ current materials.
    unexplained review result. This is a quality fact and handoff record, not a
    hidden gate: unavailable or ordinary findings remain visible without
    blocking continued drafting or repair.
+   Before handoff, the main agent must present a plain-language disposition
+   summary for every finding. Each row names `finding_id`, original fact,
+   consequence, `status`, `next_action`, `evidence_ref`, `owner`, `consumer`,
+   and `retain_or_delete`; the summary is shown to the user and is not replaced
+   by a provider verdict. Record the same rows in the existing Task completion
+   area for risk-acceptance/missing-items consumers; do not add a resolution
+   ledger.
 4. After a material spec revision, update the material revision note and rerun
    the ambiguity gate. When a prior review was `pass`, wh-review uses its
    runner-generated delta to inspect only new or changed material and direct
@@ -97,6 +113,11 @@ When the spec is clear, hand off the current materials and the actual review
 outcome to `build-plan`. A later material change is handled by revising the
 same current materials and repeating only the affected clarification, review,
 or handoff work.
+
+At the end of this stage, tell the user in plain language what was done, what
+the spec contains, what is out of scope, the main risks and deferred items, and
+what `build-plan` must not guess. Wait for the user's actual reply before
+handoff; without that reply the stage remains `in_progress`/`pending`.
 
 ## Formal-record boundary
 

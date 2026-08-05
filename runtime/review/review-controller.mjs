@@ -38,6 +38,12 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+function materialBytes(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (typeof value === "string") return Buffer.from(value, "utf8");
+  return Buffer.from(canonicalJson(value), "utf8");
+}
+
 export function deriveChangeClassification({ previousSnapshotTree, currentSnapshotTree, previousManifest = null, currentManifest } = {}) {
   oid(previousSnapshotTree, "change classification previousSnapshotTree");
   oid(currentSnapshotTree, "change classification currentSnapshotTree");
@@ -92,7 +98,7 @@ export function buildClassificationManifest(materials = {}) {
     .map(([identity, value]) => ({
       identity,
       category: MATERIAL_CATEGORY[identity] ?? "unknown",
-      sha256: createHash("sha256").update(canonicalJson(value)).digest("hex"),
+      sha256: createHash("sha256").update(materialBytes(value)).digest("hex"),
     }))
     .sort((left, right) => left.identity.localeCompare(right.identity));
   return Object.freeze({ version: "wh-review-classification-manifest.v1", entries: Object.freeze(entries) });

@@ -46,13 +46,17 @@ function fixture(overrides = {}) {
       { name: "wh-review", status: "executed", reason: "canonical review result is bound" },
     ],
     confirmation_summary: {
+      completed: "已完成阶段范围内的实现和验证",
       specification: "目标、范围和验收条件",
+      scope: ["当前阶段声明边界"],
       non_goals: ["不扩大实现范围"],
       phases: ["Phase 1"],
       dependencies: ["当前规格"],
       tests: ["聚焦 RED/GREEN"],
       review_advice: "审查是建议事实，不等于 accepted",
       risks: ["错误复用 stale evidence"],
+      deferred: ["无关全量测试留给 verify-code"],
+      next_stage_boundary: "下一阶段只能读取当前正式事实，不能猜测缺失需求",
       expected_impact: "只影响声明边界",
     },
     source_coverage: {
@@ -234,6 +238,27 @@ describe("stage completion facts", () => {
     expect(assertCompletionViewsConsistent(facts, user, system)).toBe(true);
   });
 
+  it("projects a plain-language stage handoff summary into the user view", () => {
+    const facts = fixture();
+    const user = renderUserCompletion(facts);
+    const system = renderSystemCompletion(facts);
+    expect(user.stage_summary).toEqual({
+      completed: "已完成阶段范围内的实现和验证",
+      artifacts: ["实现结果"],
+      scope: ["当前阶段声明边界"],
+      non_goals: ["不扩大实现范围"],
+      risks: ["错误复用 stale evidence"],
+      deferred: ["无关全量测试留给 verify-code"],
+      next_stage_boundary: "下一阶段只能读取当前正式事实，不能猜测缺失需求",
+    });
+    expect(system.confirmation_summary).toMatchObject({
+      completed: "已完成阶段范围内的实现和验证",
+      scope: ["当前阶段声明边界"],
+      deferred: ["无关全量测试留给 verify-code"],
+      next_stage_boundary: "下一阶段只能读取当前正式事实，不能猜测缺失需求",
+    });
+  });
+
   it.each(["result", "risks", "next_owner", "user_action"])(
     "rejects drift in shared field %s",
     (field) => {
@@ -255,6 +280,17 @@ describe("stage completion facts", () => {
     for (const forbidden of ["receipts/", "reviews/", HASH, "provider", "token", "attempt", "runner"]) {
       expect(serialized).not.toContain(forbidden);
     }
+  });
+
+  it("rejects stage summary artifact drift", () => {
+    const facts = fixture();
+    const user = renderUserCompletion(facts);
+    const system = renderSystemCompletion(facts);
+    expect(() => assertCompletionViewsConsistent(
+      facts,
+      { ...user, stage_summary: { ...user.stage_summary, artifacts: ["另一产物"] } },
+      system,
+    )).toThrow(/completion view drift/);
   });
 
   it("keeps complete formal handoff data in the system view", () => {

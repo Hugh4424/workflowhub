@@ -22,6 +22,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
   acceptance leaf、嵌套证据和测试 receipt 的 canonical ref/SHA-256。生成器逐条验证这些
   ref、hash、snapshot 和 AC 一对一覆盖；无法从已认证证据推导的字段必须标为 `unknown`，不发送
   aggregate、leaf、原始日志或完整证据树。
+  场景、oracle 和 actual outcome 必须能区分每个 AC，并指向具体实现/测试事实；只把 AC ID
+  插进同一段模板或只引用同一份 umbrella implementation receipt 不算完成证据，必须降为
+  `unknown/incomplete`。
 - 尚未关闭的问题和例外；没有时也要明确写明“无”。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
@@ -30,6 +33,8 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
 `rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。
 `complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
+标记为 `complete` 的 map 必须覆盖它声明支持的全部 AC，且每个 anchor 必须包含完整可读的
+语句/测试块，不能在半条表达式处截断；
 `not_applicable` 或 `unknown` 条目必须给出受限 `reason_code` 和理由，不能用自由文本
 `not_needed_reason` 绕过锚点。
 
@@ -44,7 +49,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
 provider verdict 转成“审查通过”。
 
-UI scope 还必须包含真实浏览器证据，包括被验证流程、关键状态、结果、是否复用登录态和清理结果。缺少任一必需材料时，本次 attempt 返回 `unavailable`，并以已认证
+UI scope 还必须包含真实浏览器证据，包括被验证流程、关键状态、结果、是否复用登录态和清理结果；纯 CLI/runtime 任务必须明确记录 `browser_qa=not_applicable` 及理由。缺少任一必需材料时，本次 attempt 返回 `unavailable`，并以已认证
 attempt action 留在当前 review flow；它没有语义 verdict，也不能写成“审查通过”。
 补齐后可在同一 flow 重跑。
 

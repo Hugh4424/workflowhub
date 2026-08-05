@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
+
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
+const hashText = (value) => createHash("sha256").update(value).digest("hex");
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -15,6 +18,8 @@ export function validateCanonicalTestReceipt(value, {
       || value.producer?.stage !== stage
       || typeof value.producer?.component !== "string" || value.producer.component.trim() === ""
       || value.snapshot_tree !== snapshotTree || !OID.test(value.snapshot_tree ?? "")
+      || !HASH.test(value.command_hash ?? "")
+      || hashText(value.command ?? "") !== value.command_hash
       || !Number.isInteger(value.exit_code)
       || !HASH.test(value.output_hash ?? "") || typeof value.output_ref !== "string") {
     throw new Error("canonical test receipt provenance is invalid");

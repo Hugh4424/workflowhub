@@ -9,8 +9,30 @@ const talk = read("skills", "talk-with-zhipeng", "SKILL.md");
 const grill = read("skills", "grill-with-docs", "SKILL.md");
 const makeDecision = read("workflows", "make-decision", "SKILL.md");
 const buildSpec = read("workflows", "build-spec", "SKILL.md");
+const buildPlan = read("workflows", "build-plan", "SKILL.md");
 
 describe("current interaction boundary", () => {
+  it("keeps user-facing communication in the main agent and requires a real reply before handoff", () => {
+    expect(read("workflows", "make-decision", "skill-deps.yaml")).toMatch(
+      /name: grill-with-docs, path: skills\/grill-with-docs\/SKILL\.md, execution: inline/i,
+    );
+    expect(makeDecision).toMatch(/Only the main agent may execute user-facing Talk, Grill, or Clarify/i);
+    expect(makeDecision).toMatch(/Talk must cover both architecture direction and product journey or user outcome/i);
+    for (const skill of [makeDecision, buildSpec, buildPlan]) {
+      expect(skill).toMatch(/wait for the user's actual reply before handoff/i);
+      expect(skill).toMatch(/without that reply/i);
+      expect(skill).toMatch(/in_progress.*pending/i);
+    }
+  });
+
+  it("requires a finding-by-finding handoff summary in the two downstream design stages", () => {
+    for (const skill of [buildSpec, buildPlan]) {
+      expect(skill).toMatch(/Before handoff, the main agent must present a plain-language disposition summary for every finding/i);
+      expect(skill).toMatch(/finding_id.*original fact.*consequence.*status.*next_action.*evidence_ref.*owner.*consumer.*retain_or_delete/i);
+      expect(skill).toMatch(/record the same rows in the existing Task completion area.*risk-acceptance\/missing-items consumers/i);
+    }
+  });
+
   it("asks only direction-changing questions and never invents user decisions", () => {
     expect(makeDecision).toMatch(/Ask only questions whose answers could change direction/i);
     expect(makeDecision).toMatch(/Do not invent user answers/i);

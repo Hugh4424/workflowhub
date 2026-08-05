@@ -107,7 +107,10 @@ function currentMaterialTexts(ctx) {
   if (!reader) return null;
   return Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => {
     try { return [name, reader(name)]; }
-    catch { return [name, null]; }
+    catch (error) {
+      if (error?.code === "ENOENT") return [name, null];
+      throw error;
+    }
   }));
 }
 
@@ -260,19 +263,28 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
     const review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate) : null;
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate) : null;
     const confirmation = kind === "confirmation" ? confirmationEvidenceStatus(ctx.task, candidate) : null;
-    const status = result.verification_failure
-      ? "failed"
-      : kind === "acceptance_criterion"
-        ? (missing.length > 0 ? "missing" : "passed")
+    // buildStageCompletion returns the canonical completion wrapper as
+    // { facts, user, system }. Read business facts from the authenticated
+    // canonical facts; treating the wrapper as the facts object silently
+    // downgraded acceptance/test predicates to `missing`.
+    const businessAcceptance = result.completion?.facts?.business_facts?.acceptance_criteria;
+    const status = kind === "acceptance_criterion"
+      ? businessAcceptance === "covered"
+        ? "passed"
+        : businessAcceptance === "failed"
+          ? "failed"
+          : businessAcceptance === "missing"
+            ? "missing"
+            : candidate === null ? "missing" : "passed"
       : kind === "review"
-        ? (missing.length > 0 && review.status === "passed" ? "missing" : review.status)
+        ? review.status
       : kind === "test"
-        ? (missing.length > 0 && test.status === "passed" ? "missing" : test.status)
+        ? test.status
       : kind === "confirmation"
-        ? (missing.length > 0 && confirmation.status === "passed" ? "missing" : confirmation.status)
-        : candidate === null || missing.length > 0
-          ? "missing"
-          : "passed";
+        ? confirmation.status
+      : candidate === null
+        ? "missing"
+        : "passed";
     if (status !== "passed") {
       allPassed = false;
       qualityWarnings.push(`${subject}:${status}`);

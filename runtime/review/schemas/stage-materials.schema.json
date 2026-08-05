@@ -44,7 +44,8 @@
         "generated": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "forbidden": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "minimum_reviewers": { "type": "integer", "minimum": 1 },
-        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "scope_revision": { "$ref": "#/$defs/rule" }
       },
       "additionalProperties": false
     },
@@ -78,7 +79,8 @@
           "required": ["phase", "integration"],
           "properties": {
             "phase": { "$ref": "#/$defs/phaseRule" },
-            "integration": { "$ref": "#/$defs/integrationRule" }
+            "integration": { "$ref": "#/$defs/integrationRule" },
+            "scope_revision": { "$ref": "#/$defs/rule" }
           },
           "additionalProperties": false
         }

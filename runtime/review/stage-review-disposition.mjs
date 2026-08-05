@@ -32,6 +32,20 @@ function serious(cluster) {
     && new Set(["direct", "corroborated_inference"]).has(cluster.evidence_status);
 }
 
+/**
+ * The result's reportable findings are the active semantic review facts.
+ * `adjudication.clusters` is retained provenance and may contain provider
+ * disagreements that were not adopted into the canonical result.  Fall back
+ * to clusters for legacy fixtures that predate the reportable `findings` field.
+ */
+export function canonicalReviewFindings(result) {
+  const findings = Array.isArray(result?.findings)
+    ? result.findings.filter((finding) => finding && typeof finding.id === "string")
+    : [];
+  if (findings.length > 0) return findings;
+  return Array.isArray(result?.adjudication?.clusters) ? result.adjudication.clusters : [];
+}
+
 function cardFor(cluster, reviewRef, reviewHash, snapshotTree) {
   const clusterFingerprint = {
     id: cluster.id,
@@ -98,7 +112,7 @@ export function deriveSeriousReviewPause({
   }
   text(reviewRef, "reviewRef");
   if (!HASH.test(reviewHash ?? "")) throw new TypeError("reviewHash must be sha256");
-  const clusters = Array.isArray(review.adjudication?.clusters) ? review.adjudication.clusters : [];
+  const clusters = canonicalReviewFindings(review);
   const findings = clusters.filter(serious).map((cluster) => cardFor(
     cluster,
     reviewRef,

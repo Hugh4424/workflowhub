@@ -7,11 +7,11 @@ import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { aggregateCanonicalProviderResults } from "../review/canonical-review-result.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { equivalentWorkspaceTrees } from "../task/git-worktree-snapshot.mjs";
+import { equivalentWorkspaceTrees, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
-import { validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../stage/stage-content-contracts.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
+import { validateAcceptanceDesignMinimum, validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../stage/stage-content-contracts.mjs";
+import { canonicalReviewFindings, deriveSeriousReviewPause, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -52,6 +52,14 @@ const RECEIPT_KEYS = Object.freeze({
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
+function semanticAnchor(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && typeof value.id === "string" && value.id.trim() !== ""
+    && typeof value.path === "string" && value.path.trim() !== "" && !value.path.includes("..") && !value.path.startsWith("/")
+    && Number.isSafeInteger(value.start_line) && value.start_line >= 1
+    && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
+    && typeof value.role === "string" && value.role.trim() !== "";
+}
 function completionReview(records) {
   const reviews = records.filter(Boolean);
   const statuses = reviews.map((entry) => entry.facts.verdict ?? entry.facts.status);
@@ -97,6 +105,20 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
     verification: { conclusion: verification, limits: missing.length ? ["仍有未完成项，不能当作无条件通过"] : [] },
     artifacts,
     review: completionReview(reviews),
+    confirmation_summary: {
+      completed: `${copy.objective}；${copy.effect}`,
+      specification: `${copy.objective}；${copy.effect}`,
+      scope: [`当前 ${stage} 的已声明范围`],
+      non_goals: ["不扩大当前阶段范围，也不把质量事实当成交付许可"],
+      phases: [stage],
+      dependencies: stage === "make-decision" ? [] : ["读取上一阶段的正式事实"],
+      tests: [verification],
+      review_advice: "异源 review 是建议事实；真实 unavailable、revise_required 或 finding 必须继续保留",
+      risks: userSafeMissing.length ? userSafeMissing : ["当前验证只覆盖已声明范围"],
+      deferred: missing.length ? userSafeMissing : ["未在本阶段声明的工作留给后续阶段"],
+      next_stage_boundary: `下一阶段 ${copy.next_owner} 只能读取当前正式事实，不能猜测缺失需求`,
+      expected_impact: copy.effect,
+    },
     business_facts: businessFacts,
     declared_components: declaredComponents,
     invocation_facts: invocationFacts,
@@ -214,6 +236,7 @@ function receipt(worker, invocation, name, producerStage = worker.stage) {
     throw error;
   }
   const value = object(record.value, `${name} receipt`);
+  const allowedProducerStages = new Set(Array.isArray(producerStage) ? producerStage : [producerStage]);
   text(record.sha256, `${name} receipt hash`);
   if (reviewName(name)) {
     validateSchema(REVIEW_ATTEMPT_REF.test(ref) ? "attempt" : "result", value);
@@ -222,14 +245,41 @@ function receipt(worker, invocation, name, producerStage = worker.stage) {
     const producer = object(value.producer, `${name} receipt producer provenance`);
     text(producer.component, `${name} receipt producer.component`);
     text(producer.version, `${name} receipt producer.version`);
-    if (producer.stage !== producerStage) throw new Error(`${name} receipt producer stage mismatch`);
+    if (!allowedProducerStages.has(producer.stage)) throw new Error(`${name} receipt producer stage mismatch`);
     if (producer.component !== EXPECTED_COMPONENT[name] && !new Set(["tests", "research", "grill"]).has(name)) throw new Error(`${name} receipt producer component is not official`);
   }
   if (value.task_id !== worker.identity.taskId) throw new Error(`${name} receipt task mismatch`);
-  if (value.stage !== producerStage) throw new Error(`${name} receipt stage mismatch`);
+  if (!allowedProducerStages.has(value.stage)) throw new Error(`${name} receipt stage mismatch`);
   return { ref, value, evidence: { ref, sha256: record.sha256 } };
 }
-function testFacts(worker, invocation, name = "tests") { const item = receipt(worker, invocation, name); text(item.value.command, `${name}.command`); if (!Number.isInteger(item.value.exit_code)) throw new TypeError(`${name}.exit_code must be integer`); for (const key of ["command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"]) text(item.value[key], `${name}.${key}`); if (!/^quality\/tests\/output\//.test(item.value.output_ref) || item.value.output_ref.includes("..")) throw new Error(`${name}.output_ref must use canonical test-output namespace`); return { facts: { command: item.value.command, exit_code: item.value.exit_code, command_hash: item.value.command_hash, snapshot_head: item.value.snapshot_head, snapshot_commit: item.value.snapshot_commit, snapshot_tree: item.value.snapshot_tree, started_at: item.value.started_at, completed_at: item.value.completed_at, receipt_ref: item.ref, receipt_hash: item.evidence.sha256, output_ref: item.value.output_ref, output_hash: item.value.output_hash }, evidence: item.evidence }; }
+function testFacts(worker, invocation, name = "tests", producerStage = worker.stage) {
+  const item = receipt(worker, invocation, name, producerStage);
+  text(item.value.command, `${name}.command`);
+  if (!Number.isInteger(item.value.exit_code)) throw new TypeError(`${name}.exit_code must be integer`);
+  for (const key of ["command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"]) text(item.value[key], `${name}.${key}`);
+  if (item.value.command_hash !== hashText(item.value.command)) throw new Error(`${name}.command_hash does not match command`);
+  if (item.value.source_digest !== undefined && !SHA256.test(item.value.source_digest)) throw new Error(`${name}.source_digest must be sha256`);
+  if (!/^quality\/tests\/output\//.test(item.value.output_ref) || item.value.output_ref.includes("..")) throw new Error(`${name}.output_ref must use canonical test-output namespace`);
+  return {
+    facts: {
+      command: item.value.command,
+      exit_code: item.value.exit_code,
+      command_hash: item.value.command_hash,
+      snapshot_head: item.value.snapshot_head,
+      snapshot_commit: item.value.snapshot_commit,
+      snapshot_tree: item.value.snapshot_tree,
+      ...(item.value.source_digest === undefined ? {} : { source_digest: item.value.source_digest }),
+      test_scope: item.value.command.trim() === "npm test" ? "full" : "focused",
+      started_at: item.value.started_at,
+      completed_at: item.value.completed_at,
+      receipt_ref: item.ref,
+      receipt_hash: item.evidence.sha256,
+      output_ref: item.value.output_ref,
+      output_hash: item.value.output_hash,
+    },
+    evidence: item.evidence,
+  };
+}
 
 function confirmationFacts(worker, invocation) {
   const ref = text(object(invocation.receipts, "receipts").confirmation, "confirmation receipt ref");
@@ -266,10 +316,54 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       if (record.sha256 !== ref.sha256) throw new Error(`acceptance_coverage ${id} evidence hash mismatch`);
       return { ref: ref.ref, sha256: ref.sha256 };
     });
-    return { acceptance_criterion_id: id, status: value.status, evidence_refs: refs };
+    const semanticFields = ["scenario", "oracle", "actual_outcome", "coverage_limits"];
+    const semanticMissing = semanticFields.filter((field) => typeof value[field] !== "string" || value[field].trim() === "");
+    const anchorsValid = semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor);
+    if (value.status === "covered" && (semanticMissing.length > 0 || !anchorsValid)) {
+      // Do not let a caller's covered label become a green quality fact. Keep
+      // the run inspectable, but downgrade the row until it has a concrete
+      // scenario/oracle/outcome and two independent proof anchors.
+      return {
+        acceptance_criterion_id: id,
+        status: "unknown",
+        evidence_refs: [],
+        semantic_gap: `covered claim lacks semantic proof: ${[...semanticMissing, ...(anchorsValid ? [] : ["implementation_anchor/verification_anchor"])].join(", ")}`,
+      };
+    }
+    return {
+      acceptance_criterion_id: id,
+      status: value.status,
+      evidence_refs: refs,
+      ...(value.status === "covered" ? {
+        scenario: value.scenario,
+        oracle: value.oracle,
+        actual_outcome: value.actual_outcome,
+        coverage_limits: value.coverage_limits,
+        implementation_anchor: value.implementation_anchor,
+        verification_anchor: value.verification_anchor,
+      } : {}),
+    };
   });
   if (declared.size) throw new Error("acceptance_coverage is missing an accepted criterion");
-  return { snapshot_tree: snapshotTree, accepted_criterion_ids: coverage.accepted_criterion_ids, items };
+  const proofOwners = new Map();
+  const normalizedItems = items.map((item) => {
+    if (item.status !== "covered") return item;
+    for (const anchor of [item.implementation_anchor, item.verification_anchor]) {
+      const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
+      const previous = proofOwners.get(signature);
+      if (previous !== undefined && previous !== item.acceptance_criterion_id) {
+        return {
+          acceptance_criterion_id: item.acceptance_criterion_id,
+          status: "unknown",
+          evidence_refs: [],
+          semantic_gap: `covered claim shares proving anchor with ${previous}`,
+        };
+      }
+      proofOwners.set(signature, item.acceptance_criterion_id);
+    }
+    return item;
+  });
+  return { snapshot_tree: snapshotTree, accepted_criterion_ids: coverage.accepted_criterion_ids, items: normalizedItems };
 }
 
 function sameStringSet(left, right) {
@@ -280,14 +374,26 @@ function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
   if (expectedTree === actualTree) return true;
   const root = worker.workspace?.worktreeRoot;
   if (!root) return false;
-  const changed = execFileSync("git", ["diff", "--name-only", expectedTree, actualTree, "--"], {
-    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim().split("\n").filter(Boolean);
-  return changed.length === 1 && changed[0] === `specs/${worker.identity.taskId}/tasks.md`;
+  return isMaterialOnlySnapshotDelta(root, expectedTree, actualTree);
 }
 
 function unavailableFormalRecordStatus(reason = "canonical Phase history is unavailable; current quality facts remain authoritative") {
   return Object.freeze({ status: "unavailable", reason });
+}
+
+function authenticateTaskCompletionEvidence(worker, entry) {
+  if (entry?.kind === "git_commit") {
+    return { ok: false, reason: "git_commit completion evidence needs an authenticated task record" };
+  }
+  try {
+    const evidence = worker.readEvidence(entry.ref);
+    return { ok: true, sha256: evidence.sha256 ?? hashText(evidence.bytes) };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { ok: false, reason: "historical evidence unavailable" };
+    }
+    throw error;
+  }
 }
 
 export function certifyBuildCodeQualityBasis({
@@ -344,14 +450,9 @@ function authenticatedImplementationChanged(worker, implementation) {
       || record.snapshot_tree !== implementation.snapshot_tree) {
     throw new Error("implementation diff evidence does not bind the current execution baseline and snapshot");
   }
-  // The canonical implementation writer records tracked changes from the
-  // live worktree against the execution baseline. Do the same here. Comparing
-  // the baseline with the synthetic snapshot commit can re-introduce hydrated
-  // Git LFS payloads as source changes even though Git correctly reports them
-  // clean in the worktree and the receipt deliberately excludes them.
   const tracked = execFileSync(
     "git",
-    ["diff", "--no-renames", "--name-only", record.baseline_commit, "--"],
+    ["diff", "--no-renames", "--name-only", record.baseline_commit, implementation.snapshot_commit, "--"],
     { cwd: worker.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   ).trim().split("\n").filter(Boolean);
   const untracked = (Array.isArray(record.untracked) ? record.untracked : []).map((entry) => {
@@ -385,7 +486,7 @@ export function certifyCurrentTaskCompletion(worker, {
     // Task completion fields are a human-readable historical audit. Their
     // current reachability is not a permit to progress or finish; global
     // implementation, test, AC and review facts are authenticated below.
-    completionEvidence: (entry) => ({ ok: true, sha256: entry.sha256 }),
+    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
   });
   const taskCompletion = validation.facts?.task_completion;
   const taskRows = new Map((validation.facts?.task_rows ?? []).map((row) => [row.id, row]));
@@ -633,14 +734,12 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
 
 function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage) {
   if (review?.facts?.status === "unavailable") return [];
-  // A passing review has already classified every reported cluster in its
-  // authenticated adjudication. Only a revise_required result needs a
-  // separate handoff disposition; otherwise nonblocking/invalid evidence
-  // clusters incorrectly make an otherwise passing stage incomplete.
+  // A passing review has already classified its findings in the authenticated
+  // result. Only a revise_required result needs a separate handoff
+  // disposition; otherwise an advisory pass can incorrectly make the stage
+  // incomplete.
   if (review?.value?.verdict === "pass") return [];
-  const clusters = Array.isArray(review.value?.adjudication?.clusters)
-    ? review.value.adjudication.clusters
-    : [];
+  const clusters = canonicalReviewFindings(review.value);
   if (clusters.length === 0) return [];
 
   const findingIds = clusters.map((cluster) => cluster.id).filter(Boolean);
@@ -666,6 +765,138 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
     warnings.push("review findings recorded; response evidence: unknown/unverified");
   }
   return warnings;
+}
+
+const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
+const FINDING_DISPOSITION_FIELDS = new Set([
+  "finding_id", "original_fact", "source", "consequence", "status", "next_action",
+  "evidence_ref", "owner", "consumer", "retain_or_delete",
+]);
+
+function findingDispositions(reviews, invocation) {
+  const findings = reviews.flatMap((review) => review?.value?.findings ?? [])
+    .filter((finding) => typeof finding?.id === "string");
+  const ids = [...new Set(findings.map(({ id }) => id))];
+  if (ids.length === 0) {
+    return { facts: { status: "not_applicable", items: [] }, missing_items: [] };
+  }
+  const supplied = invocation.finding_dispositions;
+  if (supplied === undefined) {
+    return {
+      facts: { status: "incomplete", items: [] },
+      missing_items: [`finding disposition is missing for: ${ids.join(", ")}`],
+    };
+  }
+  if (!Array.isArray(supplied)) throw new TypeError("finding_dispositions must be an array");
+  const seen = new Set();
+  const items = supplied.map((entry, index) => {
+    const value = object(entry, `finding_dispositions[${index}]`);
+    for (const key of Object.keys(value)) {
+      if (!FINDING_DISPOSITION_FIELDS.has(key)) throw new Error(`finding_dispositions[${index}] has unknown field ${key}`);
+    }
+    for (const key of FINDING_DISPOSITION_FIELDS) text(value[key], `finding_dispositions[${index}].${key}`);
+    if (!FINDING_DISPOSITION_STATUSES.has(value.status)) throw new Error(`finding_dispositions[${index}].status is invalid`);
+    if (seen.has(value.finding_id)) throw new Error(`duplicate finding disposition: ${value.finding_id}`);
+    seen.add(value.finding_id);
+    return Object.freeze({ ...value });
+  });
+  const missing = ids.filter((id) => !seen.has(id));
+  const extra = [...seen].filter((id) => !ids.includes(id));
+  if (extra.length) throw new Error(`finding_dispositions contains unknown finding: ${extra.join(", ")}`);
+  return {
+    facts: { status: missing.length ? "incomplete" : "recorded", items },
+    missing_items: missing.length ? [`finding disposition is missing for: ${missing.join(", ")}`] : [],
+  };
+}
+
+function requirementReplayFacts(worker, verification, currentTree) {
+  const decisionLog = worker.readArtifact("decision-log.md");
+  const expected = [...new Set([
+    ...[...String(decisionLog).matchAll(/\bR\d+\b/g)].map(([id]) => id),
+    ...[...String(decisionLog).matchAll(/\b(?:F15|F47|KD|F8|M08)-\d+\b/g)].map(([id]) => id),
+    ...[...String(decisionLog).matchAll(/\bINC-\d+\b/g)].map(([id]) => id),
+    ...[...String(decisionLog).matchAll(/\bD\d+\b/g)].map(([id]) => id),
+  ])];
+  if (expected.length === 0) return { facts: { status: "not_applicable", items: [] }, missing_items: [] };
+  const replay = verification?.value?.requirement_replay;
+  if (!Array.isArray(replay)) {
+    return {
+      facts: { status: "incomplete", items: [] },
+      missing_items: ["verify-code requirement replay is missing for the current decision-log sources"],
+    };
+  }
+  const seen = new Set();
+  const replayProofOwners = new Map();
+  const items = replay.map((entry, index) => {
+    const value = object(entry, `requirement_replay[${index}]`);
+    const allowed = new Set(["source_id", "status", "snapshot_tree", "linked_ids", "evidence_refs", "reason", "scenario", "oracle", "actual_outcome", "coverage_limits", "implementation_anchor", "verification_anchor"]);
+    if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error(`requirement_replay[${index}] has unknown field`);
+    text(value.source_id, `requirement_replay[${index}].source_id`);
+    if (seen.has(value.source_id)) throw new Error(`duplicate requirement replay source: ${value.source_id}`);
+    if (!new Set(["pass", "fail", "unknown", "deferred", "unavailable"]).has(value.status)) throw new Error(`requirement_replay[${index}].status is invalid`);
+    const replaySnapshotMatches = value.snapshot_tree === currentTree
+      || (worker.workspace?.worktreeRoot
+        && isMaterialOnlySnapshotDelta(worker.workspace.worktreeRoot, value.snapshot_tree, currentTree));
+    if (!replaySnapshotMatches) throw new Error(`requirement_replay ${value.source_id} does not bind the current snapshot`);
+    if (!Array.isArray(value.linked_ids) || value.linked_ids.length === 0 || value.linked_ids.some((id) => typeof id !== "string" || id.trim() === "")) throw new Error(`requirement_replay ${value.source_id}.linked_ids is invalid`);
+    if (!Array.isArray(value.evidence_refs)) throw new Error(`requirement_replay ${value.source_id}.evidence_refs is invalid`);
+    if (value.status === "pass" && value.evidence_refs.length === 0) throw new Error(`requirement_replay ${value.source_id} pass requires evidence`);
+    const evidenceRefs = value.evidence_refs.map((binding, bindingIndex) => {
+      const ref = object(binding, `requirement_replay ${value.source_id}.evidence_refs[${bindingIndex}]`);
+      if (typeof ref.ref !== "string" || !/^(?:evidence|quality\/evidence|quality\/tests)\//.test(ref.ref) || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) throw new Error(`requirement_replay ${value.source_id} evidence reference is invalid`);
+      const record = worker.readReceipt(ref.ref);
+      if (record.sha256 !== ref.sha256) throw new Error(`requirement_replay ${value.source_id} evidence hash mismatch`);
+      return { ref: ref.ref, sha256: ref.sha256 };
+    });
+    const reason = text(value.reason, `requirement_replay[${index}].reason`);
+    const semanticFields = ["scenario", "oracle", "actual_outcome", "coverage_limits"];
+    const semanticMissing = value.status === "pass"
+      ? semanticFields.filter((field) => typeof value[field] !== "string" || value[field].trim() === "")
+      : [];
+    let anchorCollision = null;
+    if (value.status === "pass" && semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor)) {
+      for (const anchor of [value.implementation_anchor, value.verification_anchor]) {
+        const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
+        const previous = replayProofOwners.get(signature);
+        if (previous !== undefined && previous !== value.source_id) anchorCollision = previous;
+        replayProofOwners.set(signature, value.source_id);
+      }
+    }
+    const anchorsValid = value.status !== "pass"
+      || (semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor) && anchorCollision === null);
+    const status = semanticMissing.length || !anchorsValid ? "unknown" : value.status;
+    const semanticReason = semanticMissing.length || !anchorsValid
+      ? `${reason}; semantic proof is incomplete: ${[...semanticMissing, ...(anchorsValid ? [] : [anchorCollision ? `shared proving anchor with ${anchorCollision}` : "implementation_anchor/verification_anchor"])].join(", ")}`
+      : reason;
+    seen.add(value.source_id);
+    return {
+      source_id: value.source_id,
+      status,
+      snapshot_tree: value.snapshot_tree,
+      linked_ids: [...value.linked_ids],
+      evidence_refs: evidenceRefs,
+      reason: semanticReason,
+      ...(status === "pass" ? {
+        scenario: value.scenario,
+        oracle: value.oracle,
+        actual_outcome: value.actual_outcome,
+        coverage_limits: value.coverage_limits,
+        implementation_anchor: value.implementation_anchor,
+        verification_anchor: value.verification_anchor,
+      } : {}),
+    };
+  });
+  const missing = expected.filter((id) => !seen.has(id));
+  const extra = [...seen].filter((id) => !expected.includes(id));
+  if (extra.length) throw new Error(`requirement_replay contains unknown source: ${extra.join(", ")}`);
+  const unresolved = items.filter((item) => ["fail", "unknown", "unavailable"].includes(item.status));
+  return {
+    facts: { status: missing.length || unresolved.length ? "incomplete" : "recorded", items },
+    missing_items: [
+      ...(missing.length ? [`verify-code requirement replay is missing: ${missing.join(", ")}`] : []),
+      ...(unresolved.length ? [`verify-code requirement replay remains unresolved: ${unresolved.map(({ source_id, status }) => `${source_id}=${status}`).join(", ")}`] : []),
+    ],
+  };
 }
 
 function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
@@ -738,7 +969,14 @@ function unavailableReviewFacts(worker, invocation, name, expectedTrack, produce
 
 function safeReviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
   try { return reviewFacts(worker, invocation, name, expectedTrack, producerStage); }
-  catch (error) { return unavailableReviewFacts(worker, invocation, name, expectedTrack, producerStage, error); }
+  catch (error) {
+    // A missing/material-incomplete review is an honest quality fact and may
+    // be disclosed without becoming a progression gate.  A malformed,
+    // detached, or semantically contradictory review is an integrity failure:
+    // converting it into "unavailable" would hide forged evidence.
+    if (error?.code !== "MATERIAL_INCOMPLETE" && error?.code !== "ENOENT") throw error;
+    return unavailableReviewFacts(worker, invocation, name, expectedTrack, producerStage, error);
+  }
 }
 
 function authenticateReviewHead(review, expected) {
@@ -789,6 +1027,10 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const research = input.receipts.research === undefined ? null : testFacts(worker, input, "research");
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
+  const dispositions = findingDispositions([direction, detail], input);
+  const auditMissingItems = audit
+    ? []
+    : ["audit unavailable/unverified/mismatch: decision coverage audit is missing", "support:audit"];
   const decisionRefPattern = /^quality\/evidence\/[a-f0-9]{64}\.md$/;
   if (typeof item.value.decision_ref !== "string" || !decisionRefPattern.test(item.value.decision_ref)
       || typeof item.value.decision_hash !== "string" || item.value.content_hash !== item.value.decision_hash) {
@@ -814,6 +1056,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       ...(research ? { research: research.facts } : {}),
       ...(grill ? { grill: grill.facts } : {}),
       ...(confirmation ? { human_confirmation: confirmation.facts } : {}),
+      finding_dispositions: dispositions.facts,
       ...(audit?.facts ?? {}),
     },
     evidence_refs: [
@@ -823,7 +1066,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
       { ref: interactionAggregate.ref, sha256: interactionAggregate.hash },
       direction.evidence, detail.evidence, ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
     ],
-    missing_items: [...direction.missing_items, ...detail.missing_items],
+    missing_items: [...auditMissingItems, ...direction.missing_items, ...detail.missing_items, ...dispositions.missing_items],
   }, {
     worker,
     artifacts: [{ label: "最终决策文档", ref: item.value.decision_ref, hash: item.value.decision_hash, publication_lookup: "publications/make-decision/" }],
@@ -843,6 +1086,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
     auditUnavailableReason = error.message;
   }
   const item = receipt(worker, input, "spec"), review = reviewFacts(worker, input);
+  const dispositions = findingDispositions([review], input);
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
   if (worker.readArtifact("spec.md") !== item.value.content) throw new Error("spec artifact differs from final receipt");
@@ -851,11 +1095,14 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const bindingEvidence = bindBuildSpecReview(worker, input, review, before.tree);
   const after = object(worker.snapshotWorkspace(), "build-spec post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
+  const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
   return addCompletion("build-spec", {
-    facts: { spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest, review: review.facts, ...(audit?.facts ?? {}) },
+    facts: { spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest, review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}) },
     evidence_refs: [item.evidence, review.evidence, ...(audit ? [audit.evidence] : []), ...review.risk_evidence, ...bindingEvidence],
     missing_items: [
       ...review.missing_items,
+      ...dispositions.missing_items,
+      ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
       ...(audit ? [] : [`audit unavailable/unverified/mismatch: ${auditUnavailableReason}`, "support:audit"]),
     ],
   }, {
@@ -880,9 +1127,17 @@ HANDLERS.set("build-plan", async (worker, input) => {
   if (!executable.ok) {
     throw new Error(`build-plan minimum executable contract failed: ${executable.errors.join("; ")}`);
   }
+  const structural = validatePlanTaskContract({
+    spec: materials["spec.md"],
+    plan: materials["plan.md"],
+    tasks: materials["tasks.md"],
+    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
+  });
   if (typeof worker.snapshotWorkspace !== "function") throw new Error("build-plan Workspace snapshot capability required");
   const before = object(worker.snapshotWorkspace(), "build-plan current Workspace snapshot");
-  const missingItems = [];
+  const missingItems = structural.ok
+    ? []
+    : structural.errors.map((error) => `plan-task contract incomplete: ${error}`);
   const evidenceRefs = [];
   const optional = (label, operation) => {
     try { return operation(); }
@@ -922,6 +1177,8 @@ HANDLERS.set("build-plan", async (worker, input) => {
     missingItems.push(...candidate.missing_items);
     return result;
   });
+  const dispositions = findingDispositions(review ? [review] : [], input);
+  missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final plan review");
   const planRef = worker.artifactRef("plan.md");
@@ -933,6 +1190,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
       snapshot_tree: before.tree,
       source_digest: before.source_digest,
       ...(review ? { review: review.facts } : {}),
+      finding_dispositions: dispositions.facts,
       ...(audit ? audit.facts : {}),
     },
     evidence_refs: evidenceRefs,
@@ -969,9 +1227,12 @@ HANDLERS.set("build-code", async (worker, input) => {
   }
   const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
   if (reviewWarning) missingItems.push(reviewWarning);
+  const dispositions = findingDispositions([review], input);
+  missingItems.push(...dispositions.missing_items);
   let coverage;
   try { coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree); }
   catch (error) {
+    if (error.message !== "build-code acceptance_coverage must be an object") throw error;
     missingItems.push(`acceptance coverage unavailable: ${error.message}`);
     coverage = { snapshot_tree: tests.facts.snapshot_tree, accepted_criterion_ids: [], items: [] };
   }
@@ -992,13 +1253,14 @@ HANDLERS.set("build-code", async (worker, input) => {
   });
   const current = worker.snapshotWorkspace();
   if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
-    missingItems.push("current Workspace differs from the reviewed implementation; quality warning only");
+    missingItems.push("current Workspace snapshot differs from the reviewed implementation; quality warning only");
   }
   return addCompletion("build-code", {
     facts: {
       changed: actualChangedFiles,
       tests: tests.facts,
       review: review.facts,
+      finding_dispositions: dispositions.facts,
       phase_completion: phase,
       task_boundary_audit_gaps: phase.audit_gaps ?? [],
       acceptance_coverage: coverage,
@@ -1013,7 +1275,12 @@ HANDLERS.set("build-code", async (worker, input) => {
     worker,
     artifacts: [{ label: "实现结果", ref: impl.ref, hash: impl.evidence.sha256, publication_lookup: "publications/build-code/" }],
     reviews: [review],
-    businessFacts: { content: "present", code: "complete", tests: tests.facts.exit_code === 0 ? "passed" : "failed", acceptance_criteria: "covered" },
+    businessFacts: {
+      content: "present",
+      code: "complete",
+      tests: tests.facts.exit_code === 0 ? "passed" : "failed",
+      acceptance_criteria: coverage.items.every((item) => item.status === "covered") ? "covered" : "unknown",
+    },
     audit,
     verification: review.facts.status === "unavailable"
       ? "正式测试通过；独立审查暂不可用，已保留为质量事实，verify-code 必须如实显示不完整"
@@ -1032,9 +1299,12 @@ HANDLERS.set("verify-code", async (worker, input) => {
     catch { return null; }
   })();
   const auditMissingItems = audit ? [] : ["audit summary unavailable/unverified; disclosed as audit-only"];
-  const tests = testFacts(worker, input);
+  // A complete same-snapshot suite is reusable across build-code and
+  // verify-code. The verify-only focused check remains a separate receipt.
+  const tests = testFacts(worker, input, "tests", ["build-code", "verify-code"]);
   const review = safeReviewFacts(worker, input, "review", undefined, "build-code");
   const qualityReview = safeReviewFacts(worker, input, "quality_review", undefined, "verify-code");
+  const dispositions = findingDispositions([review, qualityReview], input);
   // The build-code integration review is historical audit context for verify-code.
   // It must not be re-authenticated as the current verify review flow: doing so
   // turns a missing/stale flow record into an unnecessary ordinary-work blocker.
@@ -1042,6 +1312,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const verification = input.receipts.verification === undefined ? null : receipt(worker, input, "verification");
   if (verification !== null && !Array.isArray(verification.value.items)) throw new TypeError("verification.items must be array");
   const current = worker.snapshotWorkspace();
+  const replay = requirementReplayFacts(worker, verification, current.tree);
   const reviewBindingWarnings = [];
   let qualityReviewBinding = { evidence: [] };
   try { qualityReviewBinding = bindFinalReview(worker, input, qualityReview, current.tree, { stage: "verify-code" }); }
@@ -1073,41 +1344,43 @@ HANDLERS.set("verify-code", async (worker, input) => {
     spec: worker.readArtifact("spec.md"),
     plan: worker.readArtifact("plan.md"),
     tasks: worker.readArtifact("tasks.md"),
-    completionEvidence: (entry) => ({ ok: true, sha256: entry.sha256 }),
+    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
   });
   const completion = taskContract.facts?.task_completion;
   const auditGaps = [...auditMissingItems, ...reviewBindingWarnings];
+  if (review.facts.status === "unavailable") auditGaps.push("build-code integration review is unavailable; verification remains quality-incomplete");
+  if (qualityReview.facts.status === "unavailable") auditGaps.push("verify-code independent review is unavailable; verification remains quality-incomplete");
   if (!completion || completion.total_count === 0 || completion.completed_count !== completion.total_count) {
     auditGaps.push("tasks.md completion history is incomplete; current implementation, tests, and AC facts remain authoritative");
   }
   if (tests.facts.exit_code !== 0) mismatches.push("verify-code tests must pass");
+  mismatches.push(...replay.missing_items);
   const expectedCriterionIds = taskContract.facts?.ac_coverage?.accepted_ids;
   if (!Array.isArray(expectedCriterionIds) || expectedCriterionIds.length === 0) {
     mismatches.push("verify-code current spec acceptance criteria are unavailable");
   } else if (!sameStringSet([...criterionIds], expectedCriterionIds)) {
     mismatches.push("verify-code acceptance evidence criterion set differs from the current spec AC set");
   }
-  if (review.facts.status === "unavailable") {
-    mismatches.push("build-code integration review is unavailable; verification remains incomplete");
+  if (tests.facts.test_scope !== "full") mismatches.push("verify-code requires a complete npm test receipt");
+  if (review.facts.status !== "unavailable"
+      && (review.facts.review_scope !== "integration" || review.facts.subject_kind !== "worktree" || review.facts.phase_id !== null)) {
+    mismatches.push("verify-code requires the accepted build-code final full-worktree review");
   }
-  if (qualityReview.facts.status === "unavailable") {
-    mismatches.push("verify-code independent review is unavailable; verification remains incomplete");
-  }
-  if (qualityReview.facts.status !== "unavailable" && qualityReview.facts.verdict !== "pass") {
-    mismatches.push(`verify-code independent review remains ${qualityReview.facts.verdict ?? "missing"}; risk acceptance does not make it pass`);
-  }
-  if (review.facts.review_scope !== "integration" || review.facts.subject_kind !== "worktree" || review.facts.phase_id !== null) mismatches.push("verify-code requires the accepted build-code final full-worktree review");
   const workspaceRoot = worker.workspace?.worktreeRoot;
   const qualitySnapshotTree = qualityReview.facts.snapshot_tree;
   const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"
     || equivalentWorkspaceTrees(workspaceRoot, qualitySnapshotTree, current.tree);
-  const snapshotsMatch = workspaceRoot
-    && equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
-    // build-code review is carried into verify-code as historical audit
-    // context. Its old snapshot remains useful for provenance, but it is not
-    // a current-work permission and must not block a fresh verification run.
-    && qualitySnapshotMatches;
-  if (!snapshotsMatch) mismatches.push("tests, review, and current Workspace snapshot must match");
+  const testSnapshotMatches = workspaceRoot
+    && (equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
+      || isMaterialOnlySnapshotDelta(workspaceRoot, tests.facts.snapshot_tree, current.tree))
+    && (tests.facts.source_digest === undefined
+      || current.source_digest === undefined
+      || tests.facts.source_digest === current.source_digest);
+  // Reviews are quality facts, not delivery gates. A historical or unavailable
+  // review remains visible in audit_gaps; only the current full test receipt
+  // must bind the current implementation snapshot for verification.
+  if (!qualitySnapshotMatches) auditGaps.push("verify-code independent review is historical/stale; retained as audit-only quality fact");
+  if (!testSnapshotMatches) mismatches.push("tests and current Workspace snapshot must match");
   const verificationItems = verification?.value.items ?? [];
   if (verification === null) mismatches.push("canonical verification receipt is missing");
   const businessCriticalVerification = new Set([
@@ -1121,19 +1394,29 @@ HANDLERS.set("verify-code", async (worker, input) => {
     }
   }
   const result = addCompletion("verify-code", {
-    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}) },
+    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, finding_dispositions: dispositions.facts, requirement_replay: replay.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}) },
     evidence_refs: [tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(qualityReview.evidence ? [qualityReview.evidence] : []), ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
     missing_items: [
       ...mismatches,
       ...review.missing_items,
       ...qualityReview.missing_items,
+      ...(review.facts.status === "unavailable" ? ["build-code integration review is unavailable; verification remains quality-incomplete"] : []),
+      ...(qualityReview.facts.status === "unavailable" ? ["verify-code independent review is unavailable; verification remains quality-incomplete"] : []),
+      ...dispositions.missing_items,
       ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []),
     ],
   }, {
     worker,
     artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256, publication_lookup: "publications/verify-code/" }],
     reviews: [review, qualityReview],
-    businessFacts: { content: "present", code: "complete", tests: tests.facts.exit_code === 0 ? "passed" : "failed", acceptance_criteria: failedEvidence.length ? "missing" : "covered" },
+    businessFacts: {
+      content: "present",
+      code: "complete",
+      tests: tests.facts.exit_code === 0 ? "passed" : "failed",
+      acceptance_criteria: failedEvidence.length
+        ? "missing"
+        : (verificationItems.find((item) => item.id === "acceptance_criteria")?.status === "pass" ? "covered" : "unknown"),
+    },
     audit,
     verification: `${mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试已完成"}；已绑定审查质量事实：${boundReviewQualityFacts([["build-code final", review], ["verify-code independent", qualityReview]])}`,
   });
@@ -1143,4 +1426,4 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage"] : ["receipts"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, value); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, value); }; }

@@ -181,6 +181,19 @@ describe("TaskHandle", () => {
     expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
   });
 
+  it("opens a case-preserving task path after macOS realpath canonicalizes directory case", () => {
+    if (process.platform !== "darwin") return;
+    const { storageRoot, taskPath } = fixture();
+    createTask({ storageRoot, taskPath, manifest: manifest() });
+    const projectRoot = join(storageRoot, "Projects", "PaperBuilder");
+    const caseSwap = `${projectRoot}-case-swap`;
+    const lowerProjectRoot = join(storageRoot, "Projects", "paperbuilder");
+    renameSync(projectRoot, caseSwap);
+    renameSync(caseSwap, lowerProjectRoot);
+
+    expect(() => openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation")).not.toThrow();
+  });
+
   it.each([
     ["OtherProject", "paperbuilder-phase-foundation"],
     ["PaperBuilder", "other-task"],

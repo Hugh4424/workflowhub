@@ -130,7 +130,8 @@ describe("simple wh-review contracts", () => {
     const stageDependencies = (stage) => yaml.load(
       readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
     ).skills;
-    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify")).toBeUndefined();
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
+      .toMatchObject({ execution: "inline", invocation: "always", trigger: "ambiguity_scan" });
     expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze")).toBeUndefined();
     expect(stageDependencies("build-code").find(({ name }) => name === "review")).toBeUndefined();
     expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { createCanonicalReceiptWriter, writeCurrentImplementationReceipt, writeCurrentOfficialComponentReceipt, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validatePhaseCompletion } from "../runtime/task/task-kernel-implementation.mjs";
@@ -89,6 +90,76 @@ describe("official component receipt authority", () => {
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 
+  it("publishes a current immutable implementation fact without replacing the historical receipt", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "tracked.txt"), "current repair\n");
+    const current = writeCurrentImplementationReceipt({ task, workspace });
+    expect(current.ref).toMatch(/^quality\/evidence\/implementation\/[a-f0-9]{64}\.json$/);
+    expect(JSON.parse(task.readRecord(current.ref))).toMatchObject({
+      stage: "build-code",
+      producer: { component: "implementation" },
+      snapshot_tree: current.value.snapshot_tree,
+    });
+    expect(() => task.readRecord("quality/evidence/implementation.json")).toThrow(/ENOENT|record/i);
+  });
+
+  it("reuses a same-snapshot build-code full test receipt during verify capture", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
+    const build = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "build-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-full.json", outputRef: "quality/tests/output/build-code-full" });
+    const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-full.json", outputRef: "quality/tests/output/verify-code-full" });
+    expect(verify.receipt_ref).toBe(build.receipt_ref);
+    expect(() => task.readRecord("quality/tests/verify-code-full.json")).toThrow(/ENOENT|record/i);
+  });
+
+  it("reuses a full receipt after current-material-only edits without rerunning npm test", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
+    mkdirSync(join(worktree, "specs", "receipt-task"), { recursive: true });
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "# tasks v1\n");
+    const build = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "build-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-material.json", outputRef: "quality/tests/output/build-code-material" });
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "# tasks v2\n");
+    const current = captureExecutionSnapshot(worktree);
+    const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-material.json", outputRef: "quality/tests/output/verify-code-material" });
+    expect(verify.receipt_ref).toBe(build.receipt_ref);
+    expect(current.tree).not.toBe(build.snapshot_tree);
+    expect(verify.snapshot_tree).toBe(build.snapshot_tree);
+    expect(verify.source_digest).toBe(build.source_digest);
+    expect(() => task.readRecord("quality/tests/verify-code-material.json")).toThrow(/ENOENT|record/i);
+  });
+
+  it("publishes current evidence and verification facts without replacing fixed history", () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task), proof = "proof\n", proofRef = "evidence/proof.txt";
+    kernel.publishCanonicalRecord(proofRef, proof);
+    const proofHash = createHash("sha256").update(proof).digest("hex");
+    const leafRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: proofRef, sha256: proofHash }] }, null, 2)}\n`;
+    const leafRef = "evidence/ac-1.json";
+    kernel.publishCanonicalRecord(leafRef, leafRaw);
+    const leaf = { ref: leafRef, sha256: createHash("sha256").update(leafRaw).digest("hex") };
+    const evidence = writeCurrentOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [leaf] } });
+    expect(evidence.ref).toMatch(/^quality\/evidence\/evidence\/[a-f0-9]{64}\.json$/);
+    expect(JSON.parse(task.readRecord(evidence.ref))).toMatchObject({ producer: { component: "evidence" }, refs: [leaf] });
+    const proofBinding = { ref: proofRef, sha256: proofHash };
+    const verification = writeCurrentOfficialComponentReceipt({
+      task, stage: "verify-code", component: "verification",
+      payload: {
+        items: [
+          "current_materials", "diff_scope", "risk_tests", "acceptance_criteria", "tasks_completion",
+          "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+        ].map((id) => ({ id, status: id === "browser_qa" ? "not_applicable" : "pass", evidence_refs: id === "browser_qa" ? [] : [proofBinding], reason: "fixture fact" })),
+      },
+    });
+    expect(verification.ref).toMatch(/^quality\/evidence\/verification\/[a-f0-9]{64}\.json$/);
+    expect(JSON.parse(task.readRecord(verification.ref))).toMatchObject({ producer: { component: "verification" }, items: expect.any(Array) });
+    expect(() => task.readRecord("quality/evidence/evidence.json")).toThrow(/ENOENT|record/i);
+    expect(() => task.readRecord("quality/evidence/verification.json")).toThrow(/ENOENT|record/i);
+  });
+
   it("retires component replacement and requires a new current material", () => {
     const { task } = fixture();
     const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v1\n" } });
@@ -165,5 +236,37 @@ describe("official component receipt authority", () => {
       ref: "quality/evidence/verification.json",
       value: { items: expect.arrayContaining([expect.objectContaining({ id: "human_handoff" })]) },
     });
+  });
+
+  it("preserves semantic requirement-replay evidence for the current verification receipt", () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task), proof = "semantic proof\n", proofRef = "evidence/semantic-proof.txt";
+    kernel.publishCanonicalRecord(proofRef, proof);
+    const proofBinding = { ref: proofRef, sha256: createHash("sha256").update(proof).digest("hex") };
+    const replay = {
+      source_id: "R-SEMANTIC-001",
+      status: "pass",
+      snapshot_tree: "a".repeat(40),
+      linked_ids: ["AC-001"],
+      evidence_refs: [proofBinding],
+      reason: "current semantic proof is bound to the task evidence",
+      scenario: "用户提交当前任务的材料并触发验证回放",
+      oracle: "场景结果、判定规则和实际结果必须分别可读",
+      actual_outcome: "当前收据保留了场景、判定、结果和证据锚点",
+      coverage_limits: ["fixture does not exercise provider transport"],
+      implementation_anchor: { id: "impl-1", path: "runtime/evidence/canonical-receipt-writer.mjs", start_line: 1, end_line: 2, role: "implementation" },
+      verification_anchor: { id: "test-1", path: "tests/official-component-receipts.test.mjs", start_line: 1, end_line: 2, role: "verification" },
+    };
+    const verification = writeCurrentOfficialComponentReceipt({
+      task, stage: "verify-code", component: "verification",
+      payload: {
+        items: [
+          "current_materials", "diff_scope", "risk_tests", "acceptance_criteria", "tasks_completion",
+          "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+        ].map((id) => ({ id, status: id === "browser_qa" ? "not_applicable" : "pass", evidence_refs: id === "browser_qa" ? [] : [proofBinding], reason: "fixture fact" })),
+        requirement_replay: [replay],
+      },
+    });
+    expect(JSON.parse(task.readRecord(verification.ref)).requirement_replay[0]).toMatchObject(replay);
   });
 });

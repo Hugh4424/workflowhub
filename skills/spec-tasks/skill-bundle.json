@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "skill": "spec-tasks",
+  "files": [
+    { "path": "SKILL.md", "sha256": "1bc12440b39ea3ea085b67da769b5755810f6eb35b9f4b8a3b794a1856f3b6d0" },
+    { "path": "templates/tasks-template.md", "sha256": "d9ea5626f607a588ddd46d11c793b1ca2e8e670793595a0e47fd9e3be8dcda8b" }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/github/spec-kit",
+      "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+      "path": "templates/commands/tasks.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/obra/superpowers",
+      "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "path": "skills/writing-plans/SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

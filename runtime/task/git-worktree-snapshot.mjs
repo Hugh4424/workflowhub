@@ -12,6 +12,7 @@ const HASH = /^[a-f0-9]{64}$/;
 
 /** Files written while recording execution facts are not source material. */
 export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/"]);
+const CURRENT_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
 
 function git(root, args, options = {}) {
   return execFileSync("git", args, {
@@ -122,7 +123,10 @@ function formalLfsUnavailable(path, pointer) {
 }
 
 function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree } = {}) {
-  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes));
+  // Current WorkflowHub materials are handoff records, not implementation or
+  // test-contract inputs. Their edits must not invalidate a reusable full-test
+  // receipt; the workspace tree still records them for material freshness.
+  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !CURRENT_MATERIAL_PATH.test(path));
   const filters = lfsFilterMap(root, filePaths);
   const entries = [];
   for (const path of filePaths.sort()) {
@@ -253,7 +257,7 @@ function parseHeadEntries(output) {
   });
 }
 
-function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserveExcludedHead = true) {
+function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserveExcludedHead = true, includePath = () => true) {
   assertExcludedPrefixes(excludedPrefixes);
   const paths = new Set([
     ...gitPaths(root, ["ls-files", "-z"]),
@@ -261,12 +265,14 @@ function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserve
   ]);
   const tree = new Map();
   for (const path of [...paths].sort()) {
-    if (excluded(path, excludedPrefixes)) continue;
+    if (excluded(path, excludedPrefixes) || !includePath(path)) continue;
     const entry = fileEntry(root, path, format, objectDir);
     if (entry !== null) addPath(tree, path, entry);
   }
   if (preserveExcludedHead) {
-    for (const { path, entry } of headEntries(root, head, excludedPrefixes)) addPath(tree, path, entry);
+    for (const { path, entry } of headEntries(root, head, excludedPrefixes)) {
+      if (includePath(path)) addPath(tree, path, entry);
+    }
   }
   return writeTree(tree, format, objectDir);
 }
@@ -292,7 +298,15 @@ function captureSnapshot(root, excludedPrefixes = []) {
   // worktree snapshot used by review.
   const sourceHeadEntries = allHeadEntries(root, head).filter(({ path }) => !excluded(path, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES));
   const sourceHeadEntriesByPath = new Map(sourceHeadEntries.map((entry) => [entry.path, entry]));
-  const contentTree = workspaceTree(root, head, format, objectDir, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, false);
+  const contentTree = workspaceTree(
+    root,
+    head,
+    format,
+    objectDir,
+    EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
+    false,
+    (path) => !CURRENT_MATERIAL_PATH.test(path),
+  );
   const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree });
   const tree = workspaceTree(root, head, format, objectDir, excludedPrefixes);
   return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir), source_digest: manifest.source_digest, source_manifest: manifest });
@@ -303,6 +317,24 @@ export function captureGitWorktreeSnapshot(root) { return captureSnapshot(root);
 
 /** Capture a snapshot while preserving HEAD bytes for execution-record files. */
 export function captureExecutionSnapshot(root) { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES); }
+
+/**
+ * A material-only edit changes the handoff documents while leaving the
+ * implementation/test candidate untouched. It is safe to reuse a full-test
+ * receipt for this delta; callers still bind the current four materials
+ * separately and keep the changed tree visible in the audit facts.
+ */
+export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree) {
+  if (expectedTree === actualTree) return true;
+  ensureGitSnapshotObjectStore(root);
+  let changed;
+  try {
+    changed = gitText(root, ["diff", "--name-only", expectedTree, actualTree, "--"]).split("\n").filter(Boolean);
+  } catch {
+    return false;
+  }
+  return changed.length > 0 && changed.every((path) => CURRENT_MATERIAL_PATH.test(path));
+}
 
 /** Re-read the current source manifest and require the caller's digest to be current. */
 export function assertCurrentSourceDigest(root, expectedDigest) {
@@ -335,10 +367,23 @@ function withoutRuntimeBlock(text) {
 export function equivalentWorkspaceTrees(root, expectedTree, actualTree) {
   ensureGitSnapshotObjectStore(root);
   if (expectedTree === actualTree) return true;
-  const changed = gitText(root, ["diff-tree", "--no-commit-id", "--name-status", "-r", expectedTree, actualTree]).split("\n").filter(Boolean);
+  let changed;
+  try {
+    changed = gitText(root, ["diff-tree", "--no-commit-id", "--name-status", "-r", expectedTree, actualTree]).split("\n").filter(Boolean);
+  } catch {
+    // A receipt may point at an expired or synthetic tree.  Verification must
+    // report snapshot mismatch, not leak a raw git "bad object" failure.
+    return false;
+  }
   if (changed.length !== 1 || !/^M\s+AGENTS\.md$/.test(changed[0])) return false;
-  const before = treeFile(root, expectedTree, "AGENTS.md");
-  const after = treeFile(root, actualTree, "AGENTS.md");
+  let before;
+  let after;
+  try {
+    before = treeFile(root, expectedTree, "AGENTS.md");
+    after = treeFile(root, actualTree, "AGENTS.md");
+  } catch {
+    return false;
+  }
   if (!before || !after || before.mode !== after.mode || before.text === after.text) return false;
   const normalizedBefore = withoutRuntimeBlock(before.text);
   const normalizedAfter = withoutRuntimeBlock(after.text);

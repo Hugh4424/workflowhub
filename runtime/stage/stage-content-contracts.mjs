@@ -529,6 +529,43 @@ export function validateSpecContentProfile(markdown) {
   return result(errors);
 }
 
+/**
+ * A specification may be structurally valid while leaving the acceptance
+ * meaning implicit.  Catch that at build-spec: implementation results and
+ * evidence anchors belong to build-code/verify-code, but every AC must already
+ * say what is being exercised and how the result will be judged.
+ */
+export function validateAcceptanceDesignMinimum(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") {
+    return result(["spec acceptance design requires readable markdown"]);
+  }
+  const lines = markdown.split(/\r?\n/);
+  const starts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^###\s+AC-[A-Za-z0-9_-]+\b/i.test(lines[index])
+        || /^\s*[-*]\s+\[[ xX]\]\s+\*\*AC-[A-Za-z0-9_-]+\*\*/i.test(lines[index])) {
+      starts.push(index);
+    }
+  }
+  if (starts.length === 0) return result([]);
+  const errors = [];
+  for (const [position, start] of starts.entries()) {
+    const end = starts[position + 1] ?? lines.length;
+    const block = lines.slice(start, end).join("\n");
+    const id = lines[start].match(/\bAC-[A-Za-z0-9_-]+\b/i)?.[0] ?? `AC-${position + 1}`;
+    const body = block.replace(/^[^\n]*\n?/, "").trim();
+    const verificationIndex = body.search(/(?:^|\n)\s*(?:验证|验收|判定|oracle|verification|assertion|test\s+oracle)\s*[:：]/im);
+    const scenarioText = (verificationIndex >= 0 ? body.slice(0, verificationIndex) : body).trim();
+    if (scenarioText.length < 8) {
+      errors.push(`${id} acceptance design is missing an observable scenario`);
+    }
+    if (!/(?:^|\n)\s*(?:验证|验收|判定|oracle|verification|assertion|test\s+oracle)\s*[:：]/im.test(block)) {
+      errors.push(`${id} acceptance design is missing an oracle/verification rule`);
+    }
+  }
+  return result(errors);
+}
+
 const PLAN_SECTIONS = Object.freeze([
   "Technical Context",
   "Global Constraints",

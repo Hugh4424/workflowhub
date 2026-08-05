@@ -137,7 +137,7 @@ function publicTestReceipt(state, stage, snapshot, suffix = "") {
   });
 }
 
-function publicPlanFixture() {
+function publicPlanFixture(taskProofHash = "a".repeat(64)) {
   const plan = `# Plan
 
 ## Technical Context
@@ -199,7 +199,7 @@ Stop on a route or snapshot mismatch.
 - **paired_task**：${role === "RED" ? "T002" : "T001"}
 - **actual_changes**：public route fixture implementation
 - **executed_commands**：public stage runtime
-- **evidence_refs**：\`[{"ref":"evidence/public-task-proof.json","sha256":"${"a".repeat(64)}"}]\`
+- **evidence_refs**：\`[{"ref":"evidence/public-task-proof.json","sha256":"${taskProofHash}"}]\`
 - **covered_ac**：AC-1
 - **review_fact**：public route review fact
 - **completed_at**：2026-08-04T00:00:01.000Z
@@ -414,10 +414,40 @@ describe("current vNext five-stage runtime", () => {
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ stage: "make-decision", subject: "human_confirmation", status: "passed" });
     expect(publicStatus(state, "make-decision")).toMatchObject({
-      status: "in_progress",
+      status: "completed",
       quality_status: "in_progress",
       quality_predicates: { human_confirmation: { status: "satisfied" } },
     });
+  });
+
+  it("fails loudly on non-ENOENT current-material reads and does not create future materials", async () => {
+    const state = fixture("public-current-material-read-errors");
+    const reader = {
+      read(name) {
+        if (name === "decision-log.md") return "# decision\n";
+        if (name === "spec.md") {
+          const error = new Error("fixture permission denied");
+          error.code = "EACCES";
+          throw error;
+        }
+        const error = new Error(`missing ${name}`);
+        error.code = "ENOENT";
+        throw error;
+      },
+    };
+
+    await expect(runStage(
+      "make-decision",
+      { ...context("make-decision", state), artifacts: reader },
+      async () => ({ facts: { source: "current-material-read-errors" }, ...evidence(state, "make-decision") }),
+    )).rejects.toMatchObject({ code: "EACCES" });
+
+    const missing = fixture("public-current-material-future-files-missing", { materialFiles: ["decision-log.md"] });
+    const confirmation = publicConfirm(missing, "make-decision");
+    expect(JSON.parse(missing.task.readRecord(confirmation.quality_fact_ref)).status).toBe("passed");
+    expect(() => missing.artifacts.read("spec.md")).toThrow(/ENOENT/);
+    expect(() => missing.artifacts.read("plan.md")).toThrow(/ENOENT/);
+    expect(() => missing.artifacts.read("tasks.md")).toThrow(/ENOENT/);
   });
 
   it("revalidates grill with only current make-decision material", () => {
@@ -566,7 +596,8 @@ describe("current vNext five-stage runtime", () => {
     expect(specRun.status).toBe("completed");
     expect(publicStatus(state, "build-spec").status).toBe("completed");
 
-    const planFixture = publicPlanFixture();
+    const planProof = record(state, "evidence/public-task-proof.json", { verified: true, scope: "public plan fixture" });
+    const planFixture = publicPlanFixture(planProof.sha256);
     state.artifacts.writeAtomic("plan.md", planFixture.plan);
     state.artifacts.writeAtomic("tasks.md", planFixture.tasks);
     const plan = writeOfficialComponentReceipt({

@@ -83,6 +83,10 @@ describe("integration review subject history is non-blocking", () => {
     expect(subject.ac_trace.entries[0].acceptance_criterion_id).toBe("AC-01");
     expect(subject.ac_trace.entries[0].change[0].task_id).toBeNull();
     expect(subject.phase_coverage.status).toBe("unavailable");
+    expect(subject.phase_coverage.implementation_receipt).toEqual({ ref: "receipts/implementation.json", sha256: expect.any(String) });
+    expect(subject.phase_coverage.green_test_receipt).toEqual({ ref: "receipts/green.json", sha256: expect.any(String) });
+    expect(subject.phase_coverage.implementation_receipt).not.toHaveProperty("value");
+    expect(subject.phase_coverage.green_test_receipt).not.toHaveProperty("value");
   });
 
   it("keeps current implementation evidence fail-closed", () => {

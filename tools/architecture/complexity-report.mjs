@@ -73,7 +73,10 @@ const RETIRED_PROGRESS_PATTERN = new RegExp(`\\b(?:${RETIRED_PROGRESSION_SYMBOLS
 const DUAL_MATERIAL_WRITE_MARKERS = /\b(?:dual.?write|legacy.?writer|writeBoth)\b/i;
 
 function retiredProgressionAudit(productionFiles) {
-  const auditedFiles = productionFiles.filter((path) => path !== "tools/architecture/complexity-report.mjs");
+  const auditedFiles = productionFiles.filter((path) => ![
+    "tools/architecture/complexity-report.mjs",
+    "tools/architecture/reference-audit.mjs",
+  ].includes(path));
   const paths = auditedFiles.filter((path) => RETIRED_PROGRESSION_PATHS.has(path));
   const symbol_hits = [];
   for (const path of auditedFiles) {
@@ -91,7 +94,10 @@ function retiredProgressionAudit(productionFiles) {
 }
 
 function hardGateAudits(productionFiles) {
-  const auditedFiles = productionFiles.filter((path) => path !== "tools/architecture/complexity-report.mjs");
+  const auditedFiles = productionFiles.filter((path) => ![
+    "tools/architecture/complexity-report.mjs",
+    "tools/architecture/reference-audit.mjs",
+  ].includes(path));
   return {
     retiredProgression: retiredProgressionAudit(auditedFiles),
     // A narrow writer rule avoids treating generic observability fan-out as a

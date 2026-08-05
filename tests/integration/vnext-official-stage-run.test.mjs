@@ -10,6 +10,7 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { createStageContentEvidenceWriter } from "../../runtime/evidence/stage-content-evidence.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
 
@@ -247,5 +248,39 @@ describe("vNext official stage publication", () => {
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("publishes acceptance predicates from canonical completion facts even when another quality item is open", async () => {
+    const state = fixture("vnext-predicate-isolation");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    const completion = buildStageCompletion("verify-code", {
+      result: "completed_with_open_items",
+      objective: "核对当前交付",
+      approach: "使用当前材料和当前测试事实",
+      effect: "逐项发布质量事实",
+      verification: { conclusion: "测试与 AC 已覆盖", limits: ["独立审查仍有开放 finding"] },
+      artifacts: [{ label: "当前实现", ref: "quality/evidence/implementation/a.json", hash: "a".repeat(64), publication_lookup: "publications/verify-code/" }],
+      review: { conclusion: "独立审查仍有开放 finding", status: "revise_required", providers: ["fixture"], findings: [], refs: [] },
+      business_facts: { content: "present", code: "complete", tests: "passed", acceptance_criteria: "covered" },
+      declared_components: [], invocation_facts: [], audit_gaps: [], missing_items: ["independent review remains open"],
+      confirmation_summary: {
+        completed: "已核对当前交付", specification: "当前材料已读取", scope: ["当前 verify-code"],
+        non_goals: ["不把审查意见改写成通过"], phases: ["verify-code"], dependencies: [],
+        tests: ["定向事实"], review_advice: "保留原始 finding", risks: ["独立审查仍有开放 finding"],
+        deferred: ["finding 处置保留为质量事实"], next_stage_boundary: "不执行 close", expected_impact: "事实可回放",
+      },
+      risks: ["独立审查仍有开放 finding"], dependencies: [], recovery_conditions: ["返回 verify-code 修复"],
+      downstream_read_rule: "只读当前正式事实", next_owner: "task owner", user_action: "需要处理未完成项",
+    });
+    const result = await runStage("verify-code", {
+      stage: "verify-code", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
+      workspace, artifacts,
+    }, async () => ({ facts: { marker: "predicate-isolation" }, evidence_refs: [], missing_items: ["independent review remains open"], completion }));
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find((fact) => fact.subject === "acceptance_criteria")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
+    expect(facts.find((fact) => fact.subject === "exceptions")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
   });
 });

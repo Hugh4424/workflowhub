@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRiskAcceptance,
+  canonicalReviewFindings,
   deriveSeriousReviewPause,
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
@@ -84,6 +85,44 @@ function section(document, id, nextId) {
 }
 
 describe("current quality boundary", () => {
+  it("uses canonical reportable findings instead of non-adopted adjudication clusters", () => {
+    const result = {
+      task_id: "demo",
+      stage: "build-code",
+      snapshot_tree: SNAPSHOT_TREE,
+      verdict: "pass",
+      findings: [{
+        id: "F-123456789abc",
+        severity: "minor",
+        path: "core/demo.mjs",
+        issue: "reportable minor",
+        root_cause: "canonical result",
+        recommendation: "retain",
+        disposition: "nonblocking_minor",
+        evidence_status: "minor",
+      }],
+      adjudication: { clusters: [{
+        id: "F-def012345678",
+        severity: "blocking",
+        path: "core/old.mjs",
+        issue: "non-adopted provider disagreement",
+        root_cause: "provider disagreement",
+        recommendation: "do not adopt",
+        disposition: "actionable",
+        evidence_status: "direct",
+      }] },
+    };
+    expect(canonicalReviewFindings(result).map(({ id }) => id)).toEqual(["F-123456789abc"]);
+    expect(deriveSeriousReviewPause({
+      taskId: "demo",
+      stage: "build-code",
+      reviewRef: "quality/reviews/results/demo.json",
+      reviewHash: REVIEW_HASH,
+      result,
+      workflowRunId: "run-0001",
+    }).status).toBe("continue");
+  });
+
   it("keeps the 21-clause constitution and its checklist synchronized", () => {
     expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.5\.0\b/);
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(21);
@@ -111,8 +150,8 @@ describe("current quality boundary", () => {
     }
     const buildCode = read("workflows/build-code/SKILL.md");
     const verifyCode = read("workflows/verify-code/SKILL.md");
-    expect(buildCode).toMatch(/passing current test evidence/i);
-    expect(buildCode).toMatch(/If any fact is stale, missing, or mismatched, publish no completion/i);
+    expect(buildCode).toMatch(/current\s+test evidence/i);
+    expect(buildCode).toMatch(/stale,\s+missing,\s+or mismatched\s+evidence means publish no completion/i);
     expect(verifyCode).toMatch(/current complete test suite is green/i);
     expect(verifyCode).toMatch(/every applicable AC is `pass`/i);
   });

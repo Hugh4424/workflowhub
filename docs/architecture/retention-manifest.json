@@ -22,7 +22,7 @@
     },
     "history_inventory": {
       "ref": "docs/architecture/history-inventory.json",
-      "content_hash": "e036e8e31c646bb576824a06ec0e46f1f7c0de178bc875aca2546730cd966830"
+      "content_hash": "d553760ab6f45a94922076f098338871cc950730bf2ed8042c585d19d888bcfb"
     },
     "move_map": {
       "ref": "docs/architecture/move-map.json",

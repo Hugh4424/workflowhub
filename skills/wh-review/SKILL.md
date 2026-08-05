@@ -18,11 +18,18 @@ The formal provider/runtime result reports duration and token usage, or says
 `not provided` when those facts are unavailable.
 Never estimate or rerun an unchanged review.
 
-After a finding is consumed, the only small standalone disposition fact is
-`finding_id` plus `decision` (`accept`, `partial`, `reject`, or `needs_human`)
-and the evidence fields required by that decision. Replay binding, repair flow,
-and re-review orchestration stay inside this skill's controller; they are not a
-second response skill or a second completion authority.
+After a finding is consumed, the current stage invocation records one structured
+disposition row for every finding. The row keeps the original fact and its
+lineage together:
+`finding_id`, `original_fact`, `source`, `consequence`, `status`, `next_action`,
+`evidence_ref`, `owner`, `consumer`, and `retain_or_delete`. `status` is one of
+`fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`. The evidence
+reference must point to current canonical evidence when the disposition claims
+a repair; an honest risk or human follow-up remains explicit when it cannot.
+This is a derived quality/handoff fact, not a second ledger, completion
+authority, or progression gate. The immutable review result keeps the original
+finding and verdict; replay binding, repair flow, and re-review orchestration
+stay inside the controller.
 
 ## Commands
 
@@ -193,7 +200,7 @@ it may be rerun only when the same-snapshot canonical coverage, trace, AC, and
 test facts are complete. Runtime files are written outside the source
 repository.
 
-The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
+The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Canonical source materials may retain exact local paths for audit, but the provider-derived view must replace local host paths with a logical redaction; a packet that leaks `/Users/...`, `/home/...`, `/private/...`, or `/tmp/...` is invalid. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
 
 Each bundle also contains `packet-plan.json`: a compact material-category plan
 with selected context and exclusion reasons. `manifest.json` is the only
@@ -275,6 +282,25 @@ runner-generated `review_delta`: providers inspect only the added or changed
 material and its direct impacts. This is an evidence-scope optimization, not a
 new gate or a request to manufacture `pass`; if the delta cannot be safely
 derived, the runner records the fallback full review explicitly.
+
+### Mid-task scope revision review
+
+`build-code` and `verify-code` may submit the internal `scope_revision` review
+mode when a user changes a requirement or its design during implementation or
+verification. This mode stays on the existing wh-review route and current task;
+it does not add a public stage, successor, reopen, ledger, provider, or gate.
+The packet must contain the four current materials and a structured request
+covering the original temporary request, core-goal relation, affected IDs,
+user-flow/data-state/success-failure impacts, implementation/test/review/
+delivery impacts, risks, deferrals and Constitution checks.
+
+The dedicated `scope-revision` contract asks only whether the temporary change
+is reasonable in the whole-task context and whether its impact analysis is
+complete. It is not a code correctness review and not a “get pass” loop. One
+revision has one semantic review identity; `pass`, `revise_required`,
+`unavailable`, timeout and protocol failures remain immutable quality facts.
+The parent agent, never a child agent, communicates with the user and records
+the disposition for each finding before resuming the affected normal stage.
 
 ### Finding aggregation
 
