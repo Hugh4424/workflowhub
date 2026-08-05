@@ -790,16 +790,30 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     const archive = findArchive();
     const target = branchOid(root, delivery.target_branch);
     const parents = target ? gitResult(root, ["rev-list", "--parents", "-n", "1", target]).stdout.split(" ").slice(1) : [];
+    const mergeCommits = target
+      ? gitResult(root, ["rev-list", "--first-parent", "--merges", target]).stdout.split(/\s+/).filter(Boolean).map((commit) => ({
+        commit,
+        parents: gitResult(root, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(/\s+/).slice(1),
+      }))
+      : [];
     const branchTip = branchOid(root, delivery.task_branch);
     // Once close removes the task branch, the immutable second parent of the
     // planned no-ff merge remains the authoritative published task tip.
-    const taskTip = branchTip ?? (parents.length === 2 && parents[0] === delivery.target_baseline ? parents[1] : null);
+    const taskTip = branchTip ?? mergeCommits.find(({ parents: mergeParents }) => {
+      if (mergeParents.length !== 2 || mergeParents[0] !== delivery.target_baseline || !archive.commit) return false;
+      if (mergeParents[1] === archive.commit) return true;
+      const taskParents = gitResult(root, ["rev-list", "--parents", "-n", "1", mergeParents[1]]).stdout.split(/\s+/).slice(1);
+      return taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;
+    })?.parents[1] ?? null;
     const taskParents = taskTip ? gitResult(root, ["rev-list", "--parents", "-n", "1", taskTip]).stdout.split(" ").slice(1) : [];
     const taskTipIsArchived = taskTip === archive.commit;
     const taskTipIsResolved = taskParents.length === 2 && taskParents[0] === archive.commit && taskParents[1] === delivery.target_baseline;
+    const plannedMerge = mergeCommits.find(({ parents: mergeParents }) => mergeParents.length === 2
+      && mergeParents[0] === delivery.target_baseline
+      && mergeParents[1] === taskTip)?.commit ?? null;
     const satisfied = Boolean(archive.commit && taskTip && (taskTipIsArchived || taskTipIsResolved))
-      && parents.length === 2 && parents[0] === delivery.target_baseline && parents[1] === taskTip;
-    return { satisfied, target_oid: target, task_tip: taskTip, archive_commit: archive.commit, resolved: taskTipIsResolved };
+      && plannedMerge !== null;
+    return { satisfied, target_oid: target, task_tip: taskTip, archive_commit: archive.commit, planned_merge_oid: plannedMerge, resolved: taskTipIsResolved };
   };
   let removal;
   const registry = {
