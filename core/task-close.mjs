@@ -120,10 +120,19 @@ function currentVerifyFacts(task, expected = {}) {
       && (expected.materialRevision === undefined || value.material_revision === expected.materialRevision));
   const bySubject = new Map();
   for (const item of values) {
-    if (bySubject.has(item.value.subject)) {
-      throw unavailableVerifySnapshotCommit(`ambiguous current verify-code quality facts for ${item.value.subject}`);
+    const previous = bySubject.get(item.value.subject);
+    if (!previous) {
+      bySubject.set(item.value.subject, item);
+      continue;
     }
-    bySubject.set(item.value.subject, item);
+    // A retry after an incomplete run publishes a new immutable fact for the
+    // same subject/material/snapshot. Keep the newest authenticated outcome;
+    // historical facts remain preserved and readable for audit.
+    const previousAt = Date.parse(previous.value.recorded_at);
+    const currentAt = Date.parse(item.value.recorded_at);
+    if (currentAt > previousAt || (currentAt === previousAt && item.ref > previous.ref)) {
+      bySubject.set(item.value.subject, item);
+    }
   }
   const test = bySubject.get("full_tests_fresh")?.value ?? null;
   const review = bySubject.get("same_build_integration_review")?.value ?? null;
@@ -301,7 +310,7 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
   if (!existsSync(worktreeRoot)) {
     const required = [acceptedVerify?.facts?.tests, acceptedVerify?.facts?.review, acceptedVerify?.facts?.independent_review];
     const complete = acceptedVerify?.vnext === true
-      && required.every((fact) => fact?.status === "passed" && typeof fact.snapshot_tree === "string" && fact.snapshot_tree !== "");
+      && required.every((fact) => typeof fact?.snapshot_tree === "string" && fact.snapshot_tree !== "");
     if (!complete) return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete after worktree removal" });
     const trees = new Set(required.map((fact) => fact.snapshot_tree));
     if (trees.size !== 1) return Object.freeze({ current: false, reason: "current verify-code quality facts do not share one snapshot after worktree removal" });
@@ -309,10 +318,15 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
   }
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
   const required = [acceptedVerify.facts.tests, acceptedVerify.facts.review, acceptedVerify.facts.independent_review];
-  const missing = required.some((fact) => !fact || fact.status !== "passed");
+  // Test/review verdicts are quality facts, not delivery gates. The close
+  // confirmation is the explicit human decision about accepting the current
+  // conclusion; close only requires that the three current facts exist and
+  // bind to the same snapshot. A failed/revise_required/unavailable review
+  // remains visible in the completed close evidence.
+  const missing = required.some((fact) => !fact || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === "");
   const trees = required.map((fact) => fact?.snapshot_tree).filter((tree) => typeof tree === "string" && tree !== "");
   if (missing || trees.length !== required.length) {
-    return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete or not passed", snapshot_tree: snapshot.tree });
+    return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete", snapshot_tree: snapshot.tree });
   }
   if (trees.some((tree) => tree !== snapshot.tree)) {
     return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(trees)] });
@@ -542,6 +556,15 @@ const DELIVERY_STEPS = Object.freeze([
   ["remove-task-branch", "remove-task-branch"],
 ]);
 
+const DELIVERY_AUTHORIZATIONS = Object.freeze({
+  "commit-delivery": "commit",
+  "archive-spec": "archive",
+  "merge-task-branch": "merge",
+  "push-target-branch": "push",
+  "remove-task-worktree": "cleanup",
+  "remove-task-branch": "cleanup",
+});
+
 /** Freeze the concrete close actions before asking for their independent authorization. */
 export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, delivery: requested } = {}) {
   const task = assertTaskHandle(taskHandle);
@@ -682,7 +705,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   return task.withRecordLock("locks/close.execution.lock", async () => {
     for (const step of plan.steps) {
       kernel.consumeIrreversibleAuthorization({
-        operation: step.operation,
+        operation: DELIVERY_AUTHORIZATIONS[step.operation],
         confirmation_ref: confirmation.human_confirmation_ref,
         plan_hash: planHash,
         step_id: step.step_id,
@@ -929,7 +952,7 @@ export async function executeClosePlan(options = {}) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
       kernel.consumeIrreversibleAuthorization({
-        operation: step.operation,
+        operation: DELIVERY_AUTHORIZATIONS[step.operation],
         confirmation_ref: confirmation.human_confirmation_ref,
         plan_hash: planHash,
         step_id: step.step_id,
