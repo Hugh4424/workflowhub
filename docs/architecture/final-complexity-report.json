@@ -1,18 +1,18 @@
 {
   "schema_version": "workflowhub-final-complexity-report.v2",
-  "snapshot_tracked_tree_sha256": "78b29a3a392f43ddffe021347a4794341457b6ff76b0bd70aaab584b09756781",
+  "snapshot_tracked_tree_sha256": "41b8eabac6b346c8faaf0c93bc0bfb1030183c609ebee03c5c0b746278748619",
   "build_report": {
     "schema_version": "workflowhub-complexity-report.v1",
     "source": {
-      "git_head": "e1d539904e2f802fb08020ee79947a98cb9b7781",
-      "tracked_tree_sha256": "78b29a3a392f43ddffe021347a4794341457b6ff76b0bd70aaab584b09756781",
-      "tracked_files": 1137,
-      "delivery_files": 1137,
-      "source_files": 286
+      "git_head": "bfa2ab57f5b373c6da9aa37a3f96240d23f6587d",
+      "tracked_tree_sha256": "41b8eabac6b346c8faaf0c93bc0bfb1030183c609ebee03c5c0b746278748619",
+      "tracked_files": 1169,
+      "delivery_files": 1169,
+      "source_files": 295
     },
     "measurements": {
       "formal_test_files": {
-        "actual": 136,
+        "actual": 144,
         "definition": "*.test.* and */__tests__/*"
       },
       "test_support_lines": {
@@ -34,7 +34,7 @@
         ]
       },
       "bundle_content_audit": {
-        "manifests": 23,
+        "manifests": 31,
         "violations": []
       }
     },
@@ -60,17 +60,17 @@
     },
     "budgets": {
       "formal_test_lines": {
-        "actual": 19462,
+        "actual": 20020,
         "target": 10000,
         "limit": 12000,
-        "delta_from_target": 9462,
+        "delta_from_target": 10020,
         "within_limit": false
       },
       "production_lines": {
-        "actual": 29026,
+        "actual": 29234,
         "target": 12000,
         "limit": 15000,
-        "delta_from_target": 17026,
+        "delta_from_target": 17234,
         "within_limit": false
       },
       "public_runner_behaviors": {
@@ -95,10 +95,10 @@
         "within_limit": false
       },
       "largest_core_file_lines": {
-        "actual": 984,
+        "actual": 993,
         "target": 800,
         "limit": 1000,
-        "delta_from_target": 184,
+        "delta_from_target": 193,
         "within_limit": true
       },
       "focused_test_seconds": {
@@ -171,7 +171,7 @@
       },
       {
         "path": "runtime/stage/stage-handlers.mjs",
-        "lines": 1425
+        "lines": 1430
       },
       {
         "path": "tests/final-cutover-guards.red.test.mjs",
@@ -179,7 +179,7 @@
       },
       {
         "path": "skills/wh-review/scripts/review-runner.mjs",
-        "lines": 1360
+        "lines": 1366
       },
       {
         "path": "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
