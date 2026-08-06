@@ -16,31 +16,29 @@ describe("workflowhub-multica-sync", () => {
     expect(promptIssues(CURRENT_PROMPT_BLOCK)).toEqual({ legacy: [], missing_current: [] });
   });
 
-  it("keeps A and B action plans separate", () => {
+  it("builds one canonical reconciliation plan", () => {
     const report = {
       skills: [{
         name: "managed",
         path: "skills/managed/SKILL.md",
         status: "needs_update",
         primary_mismatch: true,
-        files: { missing: [], mismatched: [], extra: ["stale.md"] },
+        files: { missing: ["skill-bundle.json"], mismatched: [], extra: ["stale.md"], protected_extra: [] },
       }, {
         name: "external",
         status: "external_unmanaged",
         primary_mismatch: true,
-        files: { missing: [], mismatched: [], extra: ["keep.md"] },
+        files: { missing: [], mismatched: [], extra: ["keep.md"], protected_extra: [] },
       }],
       retired_bindings: [{ agent_name: "Coder", skill_name: "old-skill" }],
       retired_online_skills: ["old-skill"],
       agents: [{ name: "Coder", prompt: { legacy: [], missing_current: [] }, binding: { missing: ["build-code"] } }],
     };
 
-    const planA = buildActionPlan(report, false);
-    const planB = buildActionPlan(report, true);
-    expect(planA.map((item) => item.action)).toEqual(["update_skill", "bind_skill"]);
-    expect(planB.map((item) => item.action)).toEqual([
+    expect(buildActionPlan(report).map((item) => item.action)).toEqual([
       "update_skill",
-      "delete_extra_file",
+      "upsert_file",
+      "delete_unreferenced_extra_file",
       "unbind_retired_skill",
       "delete_retired_skill",
       "bind_skill",

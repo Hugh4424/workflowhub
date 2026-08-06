@@ -237,16 +237,16 @@ skills:
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
-    local_version: 1.2.0
-    local_bundle_hash: 9108e1446d0d85042cd02821b63eed2ca0fd0f4246eb5a03c722976d5f20d06c
+    local_version: 1.3.0
+    local_bundle_hash: 6cbd0e21fb33857b4ad01d343075946cbef923a43d347247a6e0701191f0797f
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
     purpose: 审计本机 WorkflowHub 技能与 Multica 技能和 agent 提示词的一致性
-    design_idea: 固定 main 快照，先生成差异报告，用户确认后才同步
+    design_idea: 按发布闭包同步阶段三件套、托管技能和 agent；先生成唯一差异计划，用户确认后才同步
     used_by_stages: []
     upstream: []
-    local_changes: 只读审计和显式确认后的 Multica CLI 同步；不改运行时
+    local_changes: 只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时
     dependency_closure: [skills/workflowhub-multica-sync]
     update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
   - name: wh-review

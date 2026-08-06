@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const STAGE_SUPPORT_FILES = ["skill-deps.yaml", "steps.json"];
 const CORE_AGENTS = {
   "工头": { stage: null },
   "Decision Maker": { stage: "make-decision" },
@@ -171,16 +172,25 @@ function supportPaths(bundle) {
 function localSkillSnapshot(repo, name, timeoutMs) {
   const relativePath = `skills/${name}/SKILL.md`;
   const localPathExists = mainPaths(repo, relativePath, timeoutMs).includes(relativePath);
-  if (!localPathExists) return { name, path: relativePath, local_status: "missing_main", primary_sha256: null, bundle: null, files: {} };
+  if (!localPathExists) return { kind: "skill", name, path: relativePath, local_status: "missing_main", primary_sha256: null, bundle: null, files: {} };
   const bundle = bundleFor(repo, name, timeoutMs);
   const files = {};
   for (const file of supportPaths(bundle)) files[file] = sha(mainBytes(repo, `skills/${name}/${file}`, timeoutMs));
-  return { name, path: relativePath, local_status: "present", catalog_status: catalogEntry(repo, name, timeoutMs)?.status ?? null, primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), bundle, files };
+  return { kind: "skill", name, path: relativePath, local_status: "present", catalog_status: catalogEntry(repo, name, timeoutMs)?.status ?? null, primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), bundle, files };
 }
 
 function stageSnapshot(repo, stage, timeoutMs) {
   const relativePath = `workflows/${stage}/SKILL.md`;
-  return { name: stage, path: relativePath, local_status: "present", primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), files: {}, bundle: null };
+  const files = Object.fromEntries(STAGE_SUPPORT_FILES.map(file => [file, sha(mainBytes(repo, `workflows/${stage}/${file}`, timeoutMs))]));
+  return { kind: "stage", name: stage, path: relativePath, local_status: "present", primary_sha256: sha(mainBytes(repo, relativePath, timeoutMs)), files, bundle: null };
+}
+
+function localFilePath(item, file) {
+  return item.kind === "stage" ? `workflows/${item.name}/${file}` : `skills/${item.name}/${file}`;
+}
+
+function desiredSupportFiles(item) {
+  return item.kind === "stage" ? Object.keys(item.files) : [...supportPaths(item.bundle)];
 }
 
 function stageDependencies(repo, stage, timeoutMs) {
@@ -272,7 +282,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   let originMain = null;
   try { originMain = git(repo, ["rev-parse", "origin/main"], timeoutMs).trim(); } catch {}
   const closure = closureCheck(repo, statusText, mainCommit, timeoutMs);
-  const scopeFiles = ["skills/catalog.yaml", ...STAGES.map(stage => `workflows/${stage}/skill-deps.yaml`)]
+  const scopeFiles = ["skills/catalog.yaml", ...STAGES.flatMap(stage => STAGE_SUPPORT_FILES.map(file => `workflows/${stage}/${file}`))]
     .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs)) }));
   const externalNames = externalSkillNames(repo, timeoutMs);
   const retiredNames = retiredSkillNames(repo, timeoutMs);
@@ -284,7 +294,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     const local = STAGES.includes(name) ? stageSnapshot(repo, name, timeoutMs) : localSkillSnapshot(repo, name, timeoutMs);
     const listed = onlineSkills.get(name);
     if (!listed) {
-      skillReports.push({ ...local, status: externalNames.has(name) ? "external_unmanaged" : "missing_online", online_id: null, files: { missing: Object.keys(local.files), mismatched: [], extra: [] }, online_files: [] });
+      skillReports.push({ ...local, status: externalNames.has(name) ? "external_unmanaged" : "missing_online", online_id: null, files: { missing: Object.keys(local.files), mismatched: [], extra: [], protected_extra: [] }, online_files: [] });
       continue;
     }
     const online = onlineSkillDetail(profile, workspace, listed, timeoutMs);
@@ -292,12 +302,14 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     const missing = Object.keys(local.files).filter(file => !onlineFiles.has(file));
     const unreadable = Object.keys(local.files).filter(file => onlineFiles.has(file) && typeof onlineFiles.get(file).content !== "string");
     const mismatched = Object.keys(local.files).filter(file => onlineFiles.has(file) && typeof onlineFiles.get(file).content === "string" && sha(Buffer.from(onlineFiles.get(file).content, "utf8")) !== local.files[file]);
-    const extra = [...onlineFiles.keys()].filter(file => !Object.prototype.hasOwnProperty.call(local.files, file));
+    const protectedExtra = [...onlineFiles.keys()].filter(file => !Object.prototype.hasOwnProperty.call(local.files, file) && typeof online.content === "string" && online.content.includes(file));
+    const extra = [...onlineFiles.keys()].filter(file => !Object.prototype.hasOwnProperty.call(local.files, file) && !protectedExtra.includes(file));
     const primaryAvailable = typeof online.content === "string";
     const primaryMismatch = primaryAvailable && sha(Buffer.from(online.content, "utf8")) !== local.primary_sha256;
     const cannotConfirm = local.local_status !== "present" || !primaryAvailable || unreadable.length > 0;
     const actionable = primaryMismatch || missing.length || mismatched.length || extra.length;
-    const status = externalNames.has(name) ? "external_unmanaged" : (cannotConfirm ? "cannot_confirm" : (actionable ? "needs_update" : "match"));
+    const warning = protectedExtra.length > 0;
+    const status = externalNames.has(name) ? "external_unmanaged" : (cannotConfirm ? "cannot_confirm" : (actionable ? "needs_update" : (warning ? "needs_review" : "match")));
     skillReports.push({
       ...local,
       online_id: listed.id,
@@ -306,7 +318,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
       online_files: online.files.map(file => ({ path: file.path, id: file.id ?? null, sha256: typeof file.content === "string" ? sha(Buffer.from(file.content, "utf8")) : null })),
       status,
       primary_mismatch: primaryMismatch,
-      files: { missing, unreadable, mismatched, extra },
+      files: { missing, unreadable, mismatched, extra, protected_extra: protectedExtra },
     });
   }
 
@@ -341,6 +353,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     external_differences: skillReports.filter(item => item.status === "external_unmanaged").length,
     agent_changes: agentReports.filter(item => item.status === "needs_update").length,
     agent_warnings: agentReports.filter(item => item.status === "needs_review").length,
+    skill_warnings: skillReports.filter(item => item.status === "needs_review").length,
     unmanaged_online_skills: unmanagedOnline,
     retired_online_skills: retiredOnline,
     external_online_skills: externalOnline,
@@ -354,10 +367,9 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     closure_reason: closure.reason ?? null,
     sync_blockers: syncBlockers,
   };
-  const report = { version: "workflowhub-multica-sync.v4", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
+  const report = { version: "workflowhub-multica-sync.v5", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
   report.snapshot.main_tree = mainSnapshot.main_tree;
-  report.plans = { A: buildActionPlan(report, false), B: buildActionPlan(report, true) };
-  report.plan = report.plans.B;
+  report.plan = buildActionPlan(report);
   report.snapshot_hash = snapshotHash(report);
   return report;
 }
@@ -366,7 +378,7 @@ function auditExitCode(summary) {
   return summary.skill_changes || summary.agent_changes || summary.unconfirmed || summary.sync_blockers.length ? 2 : 0;
 }
 
-function buildActionPlan(report, cleanupExtra) {
+function buildActionPlan(report) {
   const plan = [];
   for (const item of report.skills) {
     if (item.status === "external_unmanaged") continue;
@@ -374,12 +386,10 @@ function buildActionPlan(report, cleanupExtra) {
     else if (item.primary_mismatch) plan.push({ action: "update_skill", name: item.name, path: item.path });
     for (const file of item.files.missing ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
     for (const file of item.files.mismatched ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
-    if (cleanupExtra) for (const file of item.files.extra ?? []) plan.push({ action: "delete_extra_file", name: item.name, path: file });
+    for (const file of item.files.extra ?? []) plan.push({ action: "delete_unreferenced_extra_file", name: item.name, path: file });
   }
-  if (cleanupExtra) {
-    for (const binding of report.retired_bindings ?? []) plan.push({ action: "unbind_retired_skill", agent: binding.agent_name, skill: binding.skill_name });
-    for (const name of report.retired_online_skills ?? []) plan.push({ action: "delete_retired_skill", name });
-  }
+  for (const binding of report.retired_bindings ?? []) plan.push({ action: "unbind_retired_skill", agent: binding.agent_name, skill: binding.skill_name });
+  for (const name of report.retired_online_skills ?? []) plan.push({ action: "delete_retired_skill", name });
   for (const item of report.agents) {
     if (item.prompt?.legacy?.length || item.prompt?.missing_current?.length) plan.push({ action: "update_agent_prompt", agent: item.name });
     for (const name of item.binding?.missing ?? []) plan.push({ action: "bind_skill", agent: item.name, skill: name });
@@ -392,13 +402,12 @@ function printAudit(report) {
   console.log(`main=${summary.main_commit} tree=${summary.main_tree} origin/main=${summary.origin_main ?? "not-found"} branch=${summary.branch} dirty=${summary.dirty_worktree} snapshot=${report.snapshot_hash}`);
   console.log(`技能：本地闭包 ${summary.local_skill_count}，需处理 ${summary.skill_changes}，无法确认 ${summary.unconfirmed}，外部差异 ${summary.external_differences}`);
   console.log(`Multica 旧技能：${summary.retired_online_skills.join(", ") || "无"}；外部保留：${summary.external_online_skills.join(", ") || "无"}`);
-  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；闭包=${summary.closure_status}`);
-  console.log(`A 执行计划：${report.plans.A.length} 项；只同步本地托管内容并保留额外文件/旧绑定`);
-  console.log(`B 执行计划：${report.plans.B.length} 项；另清理计划内已吸收技能、旧绑定和多余配套文件；外部技能不变`);
+  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；技能附件警告 ${summary.skill_warnings ?? 0}；闭包=${summary.closure_status}`);
+  console.log(`唯一执行计划：${report.plan.length} 项；同步当前闭包，删除无引用旧附件和已吸收技能；外部技能不变`);
   if (summary.sync_blockers.length) console.log(`同步阻塞：${summary.sync_blockers.join(", ")}`);
-  for (const item of report.skills.filter(value => value.status !== "match" || value.files.extra.length)) console.log(`- 技能 ${item.name}: ${item.status}; primary=${item.primary_mismatch ? "不一致" : "一致"}; missing=${item.files.missing.join(",") || "无"}; unreadable=${item.files.unreadable?.join(",") || "无"}; mismatched=${item.files.mismatched.join(",") || "无"}; extra=${item.files.extra.join(",") || "无"}`);
+  for (const item of report.skills.filter(value => value.status !== "match" || value.files.extra.length || value.files.protected_extra?.length)) console.log(`- 技能 ${item.name}: ${item.status}; primary=${item.primary_mismatch ? "不一致" : "一致"}; missing=${item.files.missing.join(",") || "无"}; unreadable=${item.files.unreadable?.join(",") || "无"}; mismatched=${item.files.mismatched.join(",") || "无"}; 删除=${item.files.extra.join(",") || "无"}; 保留=${item.files.protected_extra?.join(",") || "无"}`);
   for (const item of report.agents.filter(value => value.status !== "match")) console.log(`- Agent ${item.name}: ${item.status}; 缺技能=${item.binding?.missing?.join(",") || "无"}; 额外技能=${item.binding?.unexpected?.join(",") || "无"}; 重复=${item.binding?.duplicates?.join(",") || "无"}; 旧提示词=${item.prompt?.legacy?.join(",") || "无"}; 当前规则缺失=${item.prompt?.missing_current?.join(",") || "无"}`);
-  if (!summary.skill_changes && !summary.agent_changes && !summary.unconfirmed && !summary.agent_warnings) console.log("未发现需要同步的问题。");
+  if (!summary.skill_changes && !summary.agent_changes && !summary.unconfirmed && !summary.agent_warnings && !summary.skill_warnings) console.log("未发现需要同步的问题。");
 }
 
 function assertSkillReadback(profile, workspace, online, item, expectedFiles, timeoutMs) {
@@ -425,7 +434,7 @@ function readbackAgent(profile, workspace, id, timeoutMs) {
   return agent;
 }
 
-function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
+function apply({ report, expectedSnapshot, timeoutMs }) {
   if (!expectedSnapshot) throw new SyncError("CONFIRMATION_REQUIRED", "apply 必须带 --audit-snapshot=<审计报告中的 snapshot>");
   if (report.snapshot_hash !== expectedSnapshot) throw new SyncError("SNAPSHOT_CHANGED", `用户确认后的审计快照已变化：expected=${expectedSnapshot} actual=${report.snapshot_hash}`);
   if (report.summary.sync_blockers.length || report.summary.unconfirmed) throw new SyncError("SYNC_BLOCKED", `同步被阻止：${[...report.summary.sync_blockers, report.summary.unconfirmed ? "unconfirmed" : ""].filter(Boolean).join(",")}`);
@@ -439,7 +448,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
     if (externalNames.has(item.name)) continue;
     const content = mainBytes(report.repo, item.path, timeoutMs);
     let online = byName.get(item.name);
-    const desiredFiles = Object.fromEntries([...supportPaths(item.bundle)].map(file => [file, true]));
+    const desiredFiles = Object.fromEntries(desiredSupportFiles(item).map(file => [file, true]));
     if (!online) {
       const created = unwrap(multica(report.profile, report.workspace, ["skill", "create", "--name", item.name, "--content-stdin", "--output", "json"], { input: content, timeoutMs }), "skill");
       if (!created?.id) throw new SyncError("MUTATION_UNCONFIRMED", `创建技能 ${item.name} 未返回可信 ID`);
@@ -453,13 +462,13 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
     const needsAllFiles = !item.online_id;
     const filesToUpsert = needsAllFiles ? Object.keys(desiredFiles) : [...new Set([...item.files.missing, ...item.files.mismatched])];
     for (const file of filesToUpsert) {
-      const bytes = mainBytes(report.repo, `skills/${item.name}/${file}`, timeoutMs);
+      const bytes = mainBytes(report.repo, localFilePath(item, file), timeoutMs);
       const expected = sha(bytes);
       multicaMutation(report.profile, report.workspace, ["skill", "files", "upsert", online.id, "--path", file, "--content-stdin", "--output", "json"], { input: bytes, timeoutMs });
       assertSkillReadback(report.profile, report.workspace, online, item, { [file]: expected }, timeoutMs);
       actions.push(`upsert ${item.name}/${file}`);
     }
-    if (cleanupExtra && item.files.extra.length) {
+    if (item.files.extra.length) {
       const detail = onlineSkillDetail(report.profile, report.workspace, online, timeoutMs);
       const files = new Map(detail.files.map(file => [file.path, file]));
       for (const filePath of item.files.extra) {
@@ -473,7 +482,7 @@ function apply({ report, cleanupExtra, expectedSnapshot, timeoutMs }) {
     }
   }
 
-  if (cleanupExtra && retiredNames.size) {
+  if (retiredNames.size) {
     const currentAgents = listAgents(report.profile, report.workspace, timeoutMs);
     for (const agent of currentAgents) {
       const removed = (agent.skills ?? []).filter(skill => retiredNames.has(skill.name));
@@ -548,7 +557,7 @@ function main() {
   if (command === "apply") {
     if (input.confirm !== "I_CONFIRM") throw new SyncError("CONFIRMATION_REQUIRED", "apply 必须带 --confirm=I_CONFIRM；先完成审计并取得用户确认");
     const before = audit({ repo, profile, workspace, timeoutMs });
-    const actions = apply({ report: before, cleanupExtra: input["cleanup-extra"] === "true" || input["cleanup-extra"] === true, expectedSnapshot: input["audit-snapshot"], timeoutMs });
+    const actions = apply({ report: before, expectedSnapshot: input["audit-snapshot"], timeoutMs });
     const after = audit({ repo, profile, workspace, timeoutMs });
     console.log(JSON.stringify({ actions, before: before.summary, after: after.summary, before_snapshot: before.snapshot_hash, after_snapshot: after.snapshot_hash }, null, 2));
     process.exitCode = auditExitCode(after.summary);
