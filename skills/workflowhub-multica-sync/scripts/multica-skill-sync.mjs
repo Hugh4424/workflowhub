@@ -232,8 +232,9 @@ function onlineSkillDetail(profile, workspace, skill, timeoutMs) {
 }
 
 function onlineSkillFiles(profile, workspace, skill, timeoutMs) {
-  const detail = onlineSkillDetail(profile, workspace, skill, timeoutMs);
-  return new Map(detail.files.map(file => [file.path, file]));
+  const files = unwrap(multica(profile, workspace, ["skill", "files", "list", skill.id, "--output", "json"], { timeoutMs }), "files");
+  if (!Array.isArray(files)) throw new SyncError("MULTICA_OUTPUT_INVALID", `技能 ${skill.name ?? skill.id} 的附件列表无法确认`);
+  return new Map(files.map(file => [file.path, file]));
 }
 
 function assertSkillFileReadback(profile, workspace, online, item, file, expected, timeoutMs) {
