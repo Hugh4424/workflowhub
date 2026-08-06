@@ -31,6 +31,14 @@ node skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs audit \
 审计输出中的 `snapshot` 是用户确认的唯一版本；同步时必须原样传入
 `--audit-snapshot=<snapshot>`。命令还支持 `--timeout-ms=<正整数>`，默认 30 秒；大技能同步可使用 120 秒，但必须仍有明确超时。
 
+审计开始前还会验证本地 `main` 的当前 tree 可以完整读取：递归读取 `main` 的
+文件树并做当前可达历史的 Git connectivity 检查。发现缺失 tree/blob/commit、当前
+`main` 不可读或工作区不是干净的 `main` 快照时，只能报告“无法确认”，不能同步。
+
+JSON 报告中的 `plans.A` 是只同步计划，`plans.B` 是同步加清理计划；用户确认的
+选项必须和实际传给 `apply` 的 `--cleanup-extra` 一致。旧字段 `plan` 仅为兼容，
+不作为新的确认依据。
+
 ## 审计范围
 
 脚本必须从 `main` 读取以下内容：
@@ -42,7 +50,7 @@ node skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs audit \
 
 外部技能（例如 `anysearch`、`caveman`）只检查是否被使用或绑定，不从网络或不固定的 `main/latest` 自动覆盖；默认保留，不因 B 被删除。目录中标为 `adopted` 的技能只报告差异，不能由本技能写入或删除。
 
-提示词检查边界：本机没有七个核心 agent 的独立 canonical 提示词文件，因此不能把 Multica 提示词声称为“逐字一致”。脚本只检查角色是否存在、阶段技能绑定是否完整、旧 runner 门禁是否残留、当前按次执行规则是否出现；语义质量和角色职责变化要列为“无法由本机基准确认”，交给用户决定。
+提示词检查边界：本机没有七个核心 agent 的独立 canonical 提示词文件，因此不能把 Multica 提示词声称为“逐字一致”。脚本检查角色是否存在、阶段技能绑定是否完整、旧 runner 门禁是否残留、当前按次执行规则、七个公共入口和路径猜测禁令是否出现；语义质量和角色职责变化仍要列为“无法由本机基准确认”，交给用户决定。
 
 ## 必须列出的差异
 
@@ -58,6 +66,8 @@ node skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs audit \
 - B 模式将清理的已吸收旧技能、旧 agent 绑定和托管技能额外文件；外部技能保留清单。
 
 每条差异都要带：名称、路径或 agent、期望值、实际值、影响、建议动作。没有差异时明确写“未发现问题”。
+
+仅有额外技能、重复绑定或外部技能差异时，保留警告但不把它们冒充为同步阻塞；只有真实变更、无法确认或同步阻塞才返回非零。
 
 Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读取不完整时，状态必须是“无法确认”，立即停止；不能把未读取到的数据当成一致，也不能自动换 workspace、profile 或 provider。CLI 错误必须保留结构化错误码。
 
@@ -84,7 +94,7 @@ Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读�
 5. A 不删除额外配套文件；B 删除动作计划中明确列出的额外配套文件。
 6. B 只清理目录中标记为 `absorbed` 且当前没有需要保留理由的远程技能；先从所有 agent 解绑，再删除技能并回读。外部技能（包括 `caveman`）不删除。
 7. 为七个核心 agent 添加缺失的阶段依赖技能；A 不替换已有绑定，B 只移除动作计划列出的已吸收旧绑定，不修改外部绑定。
-8. 更新提示词时保留角色职责，只替换已确认的旧 runner 门禁为：`execution_mode=per_invocation`、`launcher-owned runtime`、执行身份只作审计记录，不决定业务结果。
+8. 更新提示词时保留角色职责；有旧 runner 门禁就替换，没有可识别旧块但缺新版协议时才在前面补入当前协议块。新版协议必须包含 `execution_mode=per_invocation`、`launcher-owned runtime`、七个公共入口、路径不猜测和执行身份只作审计记录，不决定业务结果。
 9. 每次 mutation 后立即回读；每次 CLI 调用必须有超时；删除命令即使返回纯文本，也以退出码加回读确认，不把纯文本误报成失败。失败立即停止并保留已完成动作，不自动换 profile、workspace、runtime 或 provider。
 10. 最后重新运行 audit，必须报告：主文件 hash、配套文件、agent 提示词、技能绑定、已吸收旧技能和清理结果。
 
@@ -93,6 +103,7 @@ Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读�
 只有同时满足以下条件才报告同步完成：
 
 - 审计快照和更新后快照对应同一个 `main` commit。
+- `main` 的递归 tree 和当前可达 Git 历史能完整读取；不能只凭 `rev-parse` 成功就认为快照可用。
 - 所有本地托管技能正文 hash 与 Multica 一致。
 - bundle 声明的配套文件全部存在且内容一致。
 - 七个核心 agent 的必需绑定齐全。

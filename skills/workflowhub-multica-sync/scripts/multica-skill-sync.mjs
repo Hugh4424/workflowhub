@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -24,8 +25,15 @@ const LEGACY_PROMPT_MARKERS = [
   /必须验证[^\n]*runner_root/i,
   /把已验证的 `runner_root` 设为/i,
 ];
-const CURRENT_PROMPT_MARKERS = [/execution_mode=per_invocation/i, /launcher-owned runtime/i, /执行身份.*记录/i];
-const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。新任务按 `execution_mode=per_invocation` 运行：不要求 `runner_root`、`runner_oid` 或 `migration_ref`，也不把 task 绑定本机目录、固定 commit 或 replacement。每次官方入口由 launcher-owned runtime 独立认证当前代码，并把 commit/tree、合同版本和能力写入审计；执行身份只记录，不决定需求、质量、阶段结果或放行。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。旧 `legacy_pinned` 字段只读兼容，不能作为新业务门禁。";
+const CURRENT_PROMPT_MARKERS = [
+  /execution_mode=per_invocation/i,
+  /launcher-owned runtime/i,
+  /执行身份.{0,12}只记录/i,
+  /doctor[\s\S]*status[\s\S]*run[\s\S]*review[\s\S]*verify[\s\S]*confirm[\s\S]*authorize/i,
+  /不要从 root、task_path、cwd 或业务仓猜执行环境/i,
+  /不得用[\s\S]{0,24}task-bootstrap\.mjs --runner-root/i,
+];
+const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。新任务按 `execution_mode=per_invocation` 运行：不要求 `runner_root`、`runner_oid` 或 `migration_ref`，也不把 task 绑定本机目录、固定 commit 或 replacement。每次官方入口由 launcher-owned runtime 独立认证当前代码，并把 commit/tree、合同版本和能力写入审计；执行身份只记录，不决定需求、质量、阶段结果或放行。只允许使用公共入口 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize`；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能由运行时内部使用。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task。旧 `legacy_pinned` 字段只读兼容，不能作为新业务门禁。";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 class SyncError extends Error {
@@ -81,6 +89,16 @@ function jsonRun(command, argv, options) {
 }
 
 function git(repo, argv, timeoutMs) { return run("git", argv, { cwd: repo, timeoutMs }); }
+function verifyMainSnapshot(repo, mainCommit, timeoutMs) {
+  try {
+    const mainTree = git(repo, ["rev-parse", "main^{tree}"], timeoutMs).trim();
+    git(repo, ["ls-tree", "-r", "--full-tree", "main"], timeoutMs);
+    git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling", "main"], timeoutMs);
+    return { main_commit: mainCommit, main_tree: mainTree };
+  } catch (error) {
+    throw new SyncError("GIT_MAIN_UNREADABLE", `main 快照无法完整读取：${error.message}`, error);
+  }
+}
 function sha(value) { return crypto.createHash("sha256").update(value).digest("hex"); }
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -219,6 +237,7 @@ function closureCheck(repo, statusText, mainCommit, timeoutMs) {
 function snapshotHash(report) {
   const value = {
     main_commit: report.summary.main_commit,
+    main_tree: report.summary.main_tree,
     origin_main: report.summary.origin_main,
     scope_files: report.scope_files,
     skills: report.skills.map(item => ({
@@ -249,6 +268,7 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   const statusText = git(repo, ["status", "--porcelain"], timeoutMs);
   const branch = git(repo, ["branch", "--show-current"], timeoutMs).trim();
   const mainCommit = git(repo, ["rev-parse", "main"], timeoutMs).trim();
+  const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs);
   let originMain = null;
   try { originMain = git(repo, ["rev-parse", "origin/main"], timeoutMs).trim(); } catch {}
   const closure = closureCheck(repo, statusText, mainCommit, timeoutMs);
@@ -328,15 +348,22 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     dirty_worktree: Boolean(statusText),
     branch,
     main_commit: mainCommit,
+    main_tree: mainSnapshot.main_tree,
     origin_main: originMain,
     closure_status: closure.status,
     closure_reason: closure.reason ?? null,
     sync_blockers: syncBlockers,
   };
-  const report = { version: "workflowhub-multica-sync.v3", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
-  report.plan = buildActionPlan(report, true);
+  const report = { version: "workflowhub-multica-sync.v4", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
+  report.snapshot.main_tree = mainSnapshot.main_tree;
+  report.plans = { A: buildActionPlan(report, false), B: buildActionPlan(report, true) };
+  report.plan = report.plans.B;
   report.snapshot_hash = snapshotHash(report);
   return report;
+}
+
+function auditExitCode(summary) {
+  return summary.skill_changes || summary.agent_changes || summary.unconfirmed || summary.sync_blockers.length ? 2 : 0;
 }
 
 function buildActionPlan(report, cleanupExtra) {
@@ -362,11 +389,12 @@ function buildActionPlan(report, cleanupExtra) {
 
 function printAudit(report) {
   const { summary } = report;
-  console.log(`main=${summary.main_commit} origin/main=${summary.origin_main ?? "not-found"} branch=${summary.branch} dirty=${summary.dirty_worktree} snapshot=${report.snapshot_hash}`);
+  console.log(`main=${summary.main_commit} tree=${summary.main_tree} origin/main=${summary.origin_main ?? "not-found"} branch=${summary.branch} dirty=${summary.dirty_worktree} snapshot=${report.snapshot_hash}`);
   console.log(`技能：本地闭包 ${summary.local_skill_count}，需处理 ${summary.skill_changes}，无法确认 ${summary.unconfirmed}，外部差异 ${summary.external_differences}`);
   console.log(`Multica 旧技能：${summary.retired_online_skills.join(", ") || "无"}；外部保留：${summary.external_online_skills.join(", ") || "无"}`);
   console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；闭包=${summary.closure_status}`);
-  console.log(`B 执行计划：${report.plan.length} 项；包含本地同步、旧技能解绑/删除和托管技能多余文件清理；外部技能不变`);
+  console.log(`A 执行计划：${report.plans.A.length} 项；只同步本地托管内容并保留额外文件/旧绑定`);
+  console.log(`B 执行计划：${report.plans.B.length} 项；另清理计划内已吸收技能、旧绑定和多余配套文件；外部技能不变`);
   if (summary.sync_blockers.length) console.log(`同步阻塞：${summary.sync_blockers.join(", ")}`);
   for (const item of report.skills.filter(value => value.status !== "match" || value.files.extra.length)) console.log(`- 技能 ${item.name}: ${item.status}; primary=${item.primary_mismatch ? "不一致" : "一致"}; missing=${item.files.missing.join(",") || "无"}; unreadable=${item.files.unreadable?.join(",") || "无"}; mismatched=${item.files.mismatched.join(",") || "无"}; extra=${item.files.extra.join(",") || "无"}`);
   for (const item of report.agents.filter(value => value.status !== "match")) console.log(`- Agent ${item.name}: ${item.status}; 缺技能=${item.binding?.missing?.join(",") || "无"}; 额外技能=${item.binding?.unexpected?.join(",") || "无"}; 重复=${item.binding?.duplicates?.join(",") || "无"}; 旧提示词=${item.prompt?.legacy?.join(",") || "无"}; 当前规则缺失=${item.prompt?.missing_current?.join(",") || "无"}`);
@@ -514,8 +542,7 @@ function main() {
   if (command === "audit") {
     const report = audit({ repo, profile, workspace, timeoutMs });
     if (input.format === "json") console.log(JSON.stringify(report, null, 2)); else printAudit(report);
-    const exit = report.summary.skill_changes || report.summary.agent_changes || report.summary.unconfirmed || report.summary.agent_warnings || report.summary.sync_blockers.length ? 2 : 0;
-    process.exitCode = exit;
+    process.exitCode = auditExitCode(report.summary);
     return;
   }
   if (command === "apply") {
@@ -524,14 +551,18 @@ function main() {
     const actions = apply({ report: before, cleanupExtra: input["cleanup-extra"] === "true" || input["cleanup-extra"] === true, expectedSnapshot: input["audit-snapshot"], timeoutMs });
     const after = audit({ repo, profile, workspace, timeoutMs });
     console.log(JSON.stringify({ actions, before: before.summary, after: after.summary, before_snapshot: before.snapshot_hash, after_snapshot: after.snapshot_hash }, null, 2));
-    process.exitCode = after.summary.skill_changes || after.summary.agent_changes || after.summary.unconfirmed || after.summary.agent_warnings || after.summary.sync_blockers.length ? 2 : 0;
+    process.exitCode = auditExitCode(after.summary);
     return;
   }
   throw new SyncError("REQUEST_INVALID", "用法：multica-skill-sync.mjs audit|apply --repo=... --profile=... --workspace-id=...");
 }
 
-try { main(); }
-catch (error) {
-  console.error(JSON.stringify({ status: "cannot_confirm", error: { code: error.code ?? "UNAVAILABLE", message: error.message } }, null, 2));
-  process.exitCode = 3;
+export { auditExitCode, buildActionPlan, promptIssues, verifyMainSnapshot, CURRENT_PROMPT_BLOCK };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try { main(); }
+  catch (error) {
+    console.error(JSON.stringify({ status: "cannot_confirm", error: { code: error.code ?? "UNAVAILABLE", message: error.message } }, null, 2));
+    process.exitCode = 3;
+  }
 }

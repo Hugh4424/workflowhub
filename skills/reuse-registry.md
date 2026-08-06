@@ -31,7 +31,7 @@
 | stage-step-receipts | 自研 | skills/stage-step-receipts/SKILL.md | P0 canonical receipt contract；审计任务保留 |
 | audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract；审计任务保留 |
 | requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract；审计任务保留 |
-| workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
+| workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照并做 Git 连通性预检，审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
 
 ## 仓内运行技能
 
@@ -120,6 +120,7 @@
 - watch：Matt `domain-modeling`、`codebase-design`、`prototype`。没有独立 stage 触发、消费点、验证合同前不进入运行闭包。
 
 测试策略边界：`test-routing-advisor` 在 `build-plan` 为每个 Phase 和最终完整测试预判 tier/skill；`build-code` 检查真实 changed files，必要时重判，再调用 `backend-testing`、`frontend-testing` 或 `fullstack-slice-testing`。`testing-system-blueprint` 不在本标准链中。
+
 - rejected：Matt `implement`、setup、deprecated、in-progress、personal skills。与现有 stage 编排重复或不稳定。
 - absorbed：gstack review 证据可见性进入 `review`；state/data-flow 进入 `spec-plan`；Ship release discipline 进入 verify-code。
 - watch：gstack Canary。等待独立 deploy-observe workflow。
