@@ -83,6 +83,9 @@ export function checkSkillClosure(packageRoot) {
       const pathName = dep.path?.split("/").at(-2);
       if (pathName !== dep.name) pushError(errors, `${stage}: dependency name/path mismatch for ${dep.name}`);
       declared.add(dep.name);
+      if (dep.owner !== "stage" || dep.dispatch !== "stage") {
+        pushError(errors, `${stage}: stage manifest skill must declare owner=stage and dispatch=stage: ${dep.name}`);
+      }
       const catalogEntry = byName.get(dep.name);
       if (!catalogEntry) pushError(errors, `${stage}: undeclared catalog skill ${dep.name}`);
       if (catalogEntry?.path !== dep.path) pushError(errors, `${stage}: catalog path mismatch for ${dep.name}`);
@@ -104,8 +107,14 @@ export function checkSkillClosure(packageRoot) {
           pushError(errors, `${stage}: wh-review stage plan must declare lens-only delivery`);
           continue;
         }
+        if (variant.lens_owner !== "wh-review" || variant.lens_dispatch !== "delegated") {
+          pushError(errors, `${stage}: wh-review stage plan must declare lens_owner=wh-review and lens_dispatch=delegated`);
+        }
         const lensNames = [...(variant.required_skills || []), ...(variant.optional_skills || []).map(item => typeof item === "string" ? item : item.name)];
         for (const name of lensNames) reviewPlanNames.add(name);
+      }
+      for (const name of [...reviewPlanNames].filter(name => manifestNames.has(name))) {
+        pushError(errors, `${stage}: delegated wh-review lens must not appear in stage manifest: ${name}`);
       }
       for (const name of reviewPlanNames) {
         declared.add(name);

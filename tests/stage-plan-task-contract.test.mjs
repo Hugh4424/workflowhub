@@ -418,10 +418,8 @@ describe("build-plan minimum executable gate", () => {
 describe("FR-PLN-005/006 engineering lens stays complete and lens-only", () => {
   it("requires full spec, plan, tasks, and deterministic contract facts", () => {
     const manifest = JSON.parse(readFileSync(new URL("../skills/wh-review/manifest.json", import.meta.url), "utf8"));
-    expect(manifest.contracts["build-plan"].required_skills).toContain("plan-eng-review");
-    expect(manifest.contracts["build-plan"].required_materials_by_skill["plan-eng-review"]).toEqual([
-      "approved_spec", "draft_plan", "draft_tasks", "plan_task_contract",
-    ]);
+    expect(manifest.contracts["build-plan"].required_skills).toEqual(["review"]);
+    expect(manifest.contracts["build-plan"]).not.toHaveProperty("required_materials_by_skill");
   });
 
   it("checks engineering effects without becoming a second runner or verdict", () => {
@@ -431,6 +429,6 @@ describe("FR-PLN-005/006 engineering lens stays complete and lens-only", () => {
       "parallel", "exact executable command", "rollback", "implementation effect",
     ]) expect(skill).toContain(term);
     expect(skill).toMatch(/lens-only/i);
-    expect(skill).toMatch(/no runner[\s\S]*no verdict|no runner[\s\S]*verdict/i);
+    expect(skill).toMatch(/no stage result and no provider verdict/i);
   });
 });

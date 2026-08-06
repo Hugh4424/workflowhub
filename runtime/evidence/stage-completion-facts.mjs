@@ -186,7 +186,16 @@ export function reconcileStageCompletion({
       || (invocation === "conditional"
         && new Set(["not_invoked", "trigger=false"]).has(observed?.status)
         && typeof observed.reason === "string" && observed.reason.trim() !== "");
-    if (!satisfied) derivedMissing.push(`${name} invocation is missing`);
+    if (satisfied) continue;
+    if (!observed) {
+      derivedMissing.push(`${name} invocation is missing`);
+      continue;
+    }
+    if (observed.status === "unavailable" && typeof observed.reason === "string" && observed.reason.trim() !== "") {
+      derivedMissing.push(`${name} invocation is unavailable: ${observed.reason}`);
+      continue;
+    }
+    derivedMissing.push(`${name} invocation is incomplete`);
   }
   const gaps = auditGaps;
   if (!Array.isArray(gaps)) throw new TypeError("audit_gaps must be an array");

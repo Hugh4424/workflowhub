@@ -979,6 +979,13 @@ function safeReviewFacts(worker, invocation, name = "review", expectedTrack, pro
   }
 }
 
+function declaredFinalTestScope(tasks) {
+  const section = String(tasks ?? "").match(/## 4\. Final current-snapshot aggregate strategy([\s\S]*?)(?=\n##\s|$)/i)?.[1] ?? "";
+  const command = section.match(/\*\*command\*\*:\s*`([^`]+)`/i)?.[1]?.trim();
+  if (!command) return { status: "unknown", reason: "tasks.md does not declare the final test command" };
+  return { status: "declared", command, scope: command === "npm test" ? "full" : "focused" };
+}
+
 function authenticateReviewHead(review, expected) {
   if (review.facts?.status === "unavailable") return review;
   if (expected?.snapshot_tree !== undefined && review.value.snapshot_tree !== expected.snapshot_tree) {
@@ -1038,6 +1045,21 @@ HANDLERS.set("make-decision", async (worker, input) => {
   }
   const decisionLog = worker.readEvidence(item.value.decision_ref);
   if (decisionLog.sha256 !== item.value.decision_hash || decisionLog.bytes.trim() === "") throw new Error("decision-log content hash mismatch");
+  if (typeof worker.readArtifact !== "function" || typeof worker.artifactRef !== "function") {
+    throw materialIncomplete("make-decision requires an authenticated current ArtifactDir");
+  }
+  let currentDecisionLog;
+  try {
+    currentDecisionLog = worker.readArtifact("decision-log.md");
+  } catch (error) {
+    if (error?.code === "ENOENT") throw materialIncomplete("make-decision current decision-log.md artifact is missing");
+    throw error;
+  }
+  if (currentDecisionLog !== decisionLog.bytes) {
+    throw new Error("make-decision current decision-log artifact differs from quality evidence");
+  }
+  const decisionArtifactRef = worker.artifactRef("decision-log.md");
+  const decisionArtifactHash = hashText(currentDecisionLog);
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
@@ -1052,6 +1074,8 @@ HANDLERS.set("make-decision", async (worker, input) => {
       snapshot_tree: snapshot.tree,
       decision_ref: item.value.decision_ref,
       decision_hash: item.value.decision_hash,
+      decision_artifact_ref: decisionArtifactRef,
+      decision_artifact_hash: decisionArtifactHash,
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
       ...(grill ? { grill: grill.facts } : {}),
@@ -1069,7 +1093,10 @@ HANDLERS.set("make-decision", async (worker, input) => {
     missing_items: [...auditMissingItems, ...direction.missing_items, ...detail.missing_items, ...dispositions.missing_items],
   }, {
     worker,
-    artifacts: [{ label: "最终决策文档", ref: item.value.decision_ref, hash: item.value.decision_hash, publication_lookup: "publications/make-decision/" }],
+    artifacts: [
+      { label: "当前决策材料", ref: decisionArtifactRef, hash: decisionArtifactHash, publication_lookup: "publications/make-decision/" },
+      { label: "决策质量证据", ref: item.value.decision_ref, hash: item.value.decision_hash, publication_lookup: "publications/make-decision/" },
+    ],
     reviews: [direction, detail],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
@@ -1354,18 +1381,19 @@ HANDLERS.set("verify-code", async (worker, input) => {
     auditGaps.push("tasks.md completion history is incomplete; current implementation, tests, and AC facts remain authoritative");
   }
   if (tests.facts.exit_code !== 0) mismatches.push("verify-code tests must pass");
-  mismatches.push(...replay.missing_items);
+  // Requirement replay is an audit of the raw decision chain. Keep missing
+  // rows visible and let the core_gaps verification item prevent a green
+  // conclusion, but do not turn the row itself into a review/retry loop.
+  auditGaps.push(...replay.missing_items);
   const expectedCriterionIds = taskContract.facts?.ac_coverage?.accepted_ids;
   if (!Array.isArray(expectedCriterionIds) || expectedCriterionIds.length === 0) {
     mismatches.push("verify-code current spec acceptance criteria are unavailable");
   } else if (!sameStringSet([...criterionIds], expectedCriterionIds)) {
     mismatches.push("verify-code acceptance evidence criterion set differs from the current spec AC set");
   }
-  if (tests.facts.test_scope !== "full") mismatches.push("verify-code requires a complete npm test receipt");
-  if (review.facts.status !== "unavailable"
-      && (review.facts.review_scope !== "integration" || review.facts.subject_kind !== "worktree" || review.facts.phase_id !== null)) {
-    mismatches.push("verify-code requires the accepted build-code final full-worktree review");
-  }
+  const finalTestRoute = declaredFinalTestScope(worker.readArtifact("tasks.md"));
+  if (finalTestRoute.status !== "declared") auditGaps.push(finalTestRoute.reason);
+  else if (tests.facts.test_scope !== finalTestRoute.scope) mismatches.push(`verify-code test scope differs from plan (${finalTestRoute.scope})`);
   const workspaceRoot = worker.workspace?.worktreeRoot;
   const qualitySnapshotTree = qualityReview.facts.snapshot_tree;
   const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"

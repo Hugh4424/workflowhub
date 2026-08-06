@@ -1,22 +1,22 @@
 {
   "schema_version": "workflowhub-final-complexity-report.v2",
-  "snapshot_tracked_tree_sha256": "41b8eabac6b346c8faaf0c93bc0bfb1030183c609ebee03c5c0b746278748619",
+  "snapshot_tracked_tree_sha256": "a5870f6f72fbee3a6ec6976f0ccaf3016d4627e2c20b6ab69387c01ce13b5b8a",
   "build_report": {
     "schema_version": "workflowhub-complexity-report.v1",
     "source": {
-      "git_head": "bfa2ab57f5b373c6da9aa37a3f96240d23f6587d",
-      "tracked_tree_sha256": "41b8eabac6b346c8faaf0c93bc0bfb1030183c609ebee03c5c0b746278748619",
-      "tracked_files": 1169,
-      "delivery_files": 1169,
-      "source_files": 295
+      "git_head": "87ab12a634ea27a3666ff05cb3daf588793b5879",
+      "tracked_tree_sha256": "a5870f6f72fbee3a6ec6976f0ccaf3016d4627e2c20b6ab69387c01ce13b5b8a",
+      "tracked_files": 1170,
+      "delivery_files": 1170,
+      "source_files": 296
     },
     "measurements": {
       "formal_test_files": {
-        "actual": 144,
+        "actual": 145,
         "definition": "*.test.* and */__tests__/*"
       },
       "test_support_lines": {
-        "actual": 505,
+        "actual": 514,
         "files": 15,
         "definition": "non-test files under tests, fixtures, or helpers"
       },
@@ -60,17 +60,17 @@
     },
     "budgets": {
       "formal_test_lines": {
-        "actual": 20020,
+        "actual": 20385,
         "target": 10000,
         "limit": 12000,
-        "delta_from_target": 10020,
+        "delta_from_target": 10385,
         "within_limit": false
       },
       "production_lines": {
-        "actual": 29234,
+        "actual": 30383,
         "target": 12000,
         "limit": 15000,
-        "delta_from_target": 17234,
+        "delta_from_target": 18383,
         "within_limit": false
       },
       "public_runner_behaviors": {
@@ -95,11 +95,11 @@
         "within_limit": false
       },
       "largest_core_file_lines": {
-        "actual": 993,
+        "actual": 1005,
         "target": 800,
         "limit": 1000,
-        "delta_from_target": 193,
-        "within_limit": true
+        "delta_from_target": 205,
+        "within_limit": false
       },
       "focused_test_seconds": {
         "actual": null,
@@ -167,23 +167,23 @@
     "hotspots": [
       {
         "path": "runtime/stage/stage-content-contracts.mjs",
-        "lines": 1586
+        "lines": 2098
       },
       {
         "path": "runtime/stage/stage-handlers.mjs",
-        "lines": 1430
-      },
-      {
-        "path": "tests/final-cutover-guards.red.test.mjs",
-        "lines": 1373
+        "lines": 1458
       },
       {
         "path": "skills/wh-review/scripts/review-runner.mjs",
-        "lines": 1366
+        "lines": 1416
       },
       {
-        "path": "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
-        "lines": 1353
+        "path": "tests/final-cutover-guards.red.test.mjs",
+        "lines": 1386
+      },
+      {
+        "path": "skills/wh-review/scripts/review-materials.mjs",
+        "lines": 1368
       }
     ],
     "follow_up": [

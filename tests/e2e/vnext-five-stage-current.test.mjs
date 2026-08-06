@@ -19,6 +19,15 @@ const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const reviewLineage = (requestId) => ({
+  request_id: requestId,
+  prompt_hash: "b".repeat(64),
+  round: "initial",
+  prior_attempt_refs: [],
+  prior_runtime_ids: {},
+  correction_ref: null,
+  dispatch_sequence: 0,
+});
 function currentRef(value) {
   return typeof value === "string"
     ? value.replace(/^receipts\/tests\//, "quality/tests/").replace(/^evidence\/test-output\//, "quality/tests\/output\/").replace(/^receipts\/(decision|spec|plan|tasks|implementation|verification)\.json$/, "quality/evidence/$1.json").replace(/^reviews\//, "quality/reviews/").replace(/^evidence\/confirmations\//, "quality/confirmations/")
@@ -258,7 +267,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
         version: "wh-review-attempt.v1", attempt_id: `${stage}-unavailable${suffix}`,
         task_id: state.task.identity.taskId, stage, review_track: stage === "make-decision" ? "direction" : null,
         subject_kind: "worktree", phase_id: null, review_scope: stage === "build-code" ? "integration" : null, snapshot_tree: snapshot.tree,
-        material_id: "b".repeat(64), provider_attempts: [], terminal_status: "unavailable",
+        material_id: "b".repeat(64), lineage: reviewLineage(`${stage}-unavailable-request${suffix}`), provider_attempts: [], terminal_status: "unavailable",
         error: { code: "PROVIDER_UNAVAILABLE", message: "fixture provider unavailable" },
       }
     : {
@@ -266,7 +275,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
         review_track: stage === "make-decision" ? "direction" : null, subject_kind: "worktree",
         phase_id: null, review_scope: stage === "build-code" ? "integration" : null,
         source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
-        snapshot_tree: snapshot.tree, material_id: "b".repeat(64), attempt_ref: `reviews/attempts/${stage}-pass${suffix}/attempt.json`,
+        snapshot_tree: snapshot.tree, material_id: "b".repeat(64), attempt_ref: `reviews/attempts/${stage}-pass${suffix}/attempt.json`, lineage: reviewLineage(`${stage}-pass-request${suffix}`),
         provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "current fixture review", findings: [] } }],
         verdict: review === "pass" ? "pass" : "invalid", findings: [],
       };
@@ -579,7 +588,7 @@ describe("current vNext five-stage runtime", () => {
       ...evidence(state, "verify-code"),
     }));
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(facts.find((fact) => fact.subject === "same_build_integration_review")?.evidence[0]?.ref).toBe(buildReview.resultRef);
+    expect(facts.find((fact) => fact.subject === "same_build_integration_review")).toBeUndefined();
     expect(facts.find((fact) => fact.subject === "independent_review")?.evidence[0]?.ref).toBe(qualityReview.resultRef);
   });
 

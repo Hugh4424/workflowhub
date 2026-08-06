@@ -144,13 +144,16 @@ codes, evidence refs, actual outcome, and coverage limits are written in the
 single completion area; missing canonical evidence remains `unknown` or
 `incomplete`.
 
-The high-intelligence `build-plan` model designs each task/phase/final test
-strategy using `test-routing-advisor`, `testing-system-blueprint`, and the
-applicable `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`
-skills.
-`build-code` only executes that recorded strategy and appends facts. It does not
-redesign routing per phase and does not use review, commit, or full-suite status
-as a hidden progression gate. `verify-code` independently replays the same
+The high-intelligence `build-plan` model uses `test-routing-advisor` to choose
+`simple|feature|fullstack` and the expected concrete testing skill for every
+Phase and the final aggregate. It records scenarios, commands, oracles,
+evidence paths and limits in the task cards; it does not invoke the concrete
+testing skills or `testing-system-blueprint`.
+`build-code` checks the real changed-file range, reroutes when that range
+differs, then invokes the applicable `backend-testing`, `frontend-testing`, or
+`fullstack-slice-testing` skill and appends facts. It does not invent product
+requirements or acceptance oracles, and review/commit/full-suite status is not
+a hidden progression gate. `verify-code` independently replays the same
 task/AC paths and reports the semantic result.
 
 Every task also carries compact `source_refs` / `decision_refs` inherited from

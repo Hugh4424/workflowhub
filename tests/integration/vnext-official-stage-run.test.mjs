@@ -16,6 +16,15 @@ import { sha256 } from "../../runtime/evidence/freshness.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
+const reviewLineage = (requestId) => ({
+  request_id: requestId,
+  prompt_hash: "0".repeat(64),
+  round: "initial",
+  prior_attempt_refs: [],
+  prior_runtime_ids: {},
+  correction_ref: null,
+  dispatch_sequence: 0,
+});
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
@@ -79,6 +88,7 @@ function publishReviewFixture(state) {
     snapshot_tree: snapshot.tree,
     material_id: "0".repeat(64),
     attempt_ref: "quality/reviews/attempts/vnext-build-spec/attempt.json",
+    lineage: reviewLineage("vnext-build-spec-request"),
     provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "fixture review passed", findings: [] } }],
     verdict: "pass",
     findings: [],
@@ -153,6 +163,7 @@ describe("vNext official stage publication", () => {
       subject_kind: "worktree", phase_id: null, review_scope: null,
       source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
       snapshot_tree: snapshot.tree, material_id: "0".repeat(64), attempt_ref: "quality/reviews/attempts/vnext-build-plan/attempt.json",
+      lineage: reviewLineage("vnext-build-plan-request"),
       provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "fixture review passed", findings: [] } }],
       verdict: "pass", findings: [],
     })}\n`;
@@ -229,6 +240,7 @@ describe("vNext official stage publication", () => {
       subject_kind: "worktree",
       phase_id: null,
       review_scope: null,
+      lineage: reviewLineage("vnext-official-build-spec-request"),
       provider_attempts: [],
       terminal_status: "unavailable",
       error: { code: "MATERIAL_INCOMPLETE", message: "fixture review unavailable" },

@@ -56,6 +56,11 @@ function inside(parent, child) {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+function safeRelative(path) {
+  return path !== "" && !path.startsWith("/") && !path.includes("\\")
+    && !path.split("/").some((part) => part === "" || part === "." || part === "..");
+}
+
 function commonDir(root) {
   const value = text(root, ["rev-parse", "--git-common-dir"]);
   return realpathSync(isAbsolute(value) ? value : resolve(root, value));
@@ -94,9 +99,10 @@ function forEachNulRecord(path, onRecord) {
   }
 }
 
-function parseChangedFiles(root, baseTree, snapshotTree, captureRoot) {
+function parseChangedFiles(root, baseTree, snapshotTree, captureRoot, phasePaths = null) {
   const nameStatus = resolve(captureRoot, "name-status.z");
-  runGitToFile(root, ["diff", "--name-status", "-z", "-M", baseTree, snapshotTree], nameStatus);
+  const pathspec = Array.isArray(phasePaths) && phasePaths.length > 0 ? ["--", ...phasePaths] : [];
+  runGitToFile(root, ["diff", "--name-status", "-z", "-M", baseTree, snapshotTree, ...pathspec], nameStatus);
   const fields = [];
   forEachNulRecord(nameStatus, (record) => fields.push(record));
   const changed = [];
@@ -197,8 +203,12 @@ function assertReviewDataRoot({ sourceRoot, targetRepoRoot, reviewDataRoot }) {
   return realpathSync(requestedData);
 }
 
-export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, baselineCommit, reviewDataRoot, betweenCaptures, includeDiff = true } = {}) {
+export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, baselineCommit, reviewDataRoot, betweenCaptures, includeDiff = true, phasePaths = undefined } = {}) {
   if (typeof includeDiff !== "boolean") throw new TypeError("includeDiff must be boolean");
+  if (phasePaths !== undefined && (!Array.isArray(phasePaths) || phasePaths.length === 0
+      || phasePaths.some((path) => typeof path !== "string" || !safeRelative(path)))) {
+    throw new TypeError("phasePaths must be a non-empty array of safe repository-relative paths");
+  }
   if (workspace !== undefined) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined || baselineCommit !== undefined) {
       throw new TypeError("Workspace review forbids sourceRoot, targetRepoRoot, and baselineCommit overrides");
@@ -237,8 +247,13 @@ export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, bas
     const secondSnapshot = captureExecutionSnapshot(source);
     if (secondSnapshot.head !== capturedHead || secondSnapshot.tree !== first) fail("SOURCE_CHANGED_DURING_CAPTURE", "HEAD or working tree changed during capture");
     const diffPath = includeDiff ? resolve(captureRoot, "changes.diff") : null;
-    if (diffPath) runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first, "--", ".", ":(exclude)node_modules"], diffPath);
-    const changedFiles = includeDiff ? parseChangedFiles(source, baseTree, first, captureRoot) : [];
+    if (diffPath) {
+      const pathspec = phasePaths === undefined
+        ? ["--", ".", ":(exclude)node_modules"]
+        : ["--", ...phasePaths];
+      runGitToFile(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", baseTree, first, ...pathspec], diffPath);
+    }
+    const changedFiles = includeDiff ? parseChangedFiles(source, baseTree, first, captureRoot, phasePaths) : [];
     return sourceRecord({ source, targetCommit, capturedHead, baseCommit, baseTree, snapshotTree: first, diffPath, changedFiles, captureRoot });
   } catch (error) {
     rmSync(captureRoot, { recursive: true, force: true });

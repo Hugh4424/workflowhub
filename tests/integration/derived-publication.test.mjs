@@ -32,6 +32,7 @@ function currentFacts({ io, stage, revision, tree = "b".repeat(40) }) {
       version: "wh-review-result.v1", task_id: "task", stage: evidenceStage, review_track: evidenceStage === "make-decision" ? "detail" : null,
       source: { target_commit: "a".repeat(40), base_commit: "a".repeat(40), base_tree: "a".repeat(40), captured_head: "a".repeat(40) },
       snapshot_tree: tree, material_id: "a".repeat(64), attempt_ref: "reviews/attempts/a/attempt.json",
+      lineage: { request_id: `${stage}-${subject}`, prompt_hash: "a".repeat(64), round: "initial", prior_attempt_refs: [], prior_runtime_ids: {}, correction_ref: null, dispatch_sequence: 0 },
       subject_kind: subject === "phase_reviews" ? "phase" : "worktree",
       phase_id: subject === "phase_reviews" ? "phase-1" : null,
       review_scope: subject === "phase_reviews" ? "phase" : evidenceStage === "build-code" ? "integration" : null,

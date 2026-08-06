@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { fileURLToPath } from "node:url";
-import { loadStageSkillManifest } from "../stage/stage-skill-runtime.mjs";
+import { dispatchOrderedStageSkills, loadStageSkillManifest } from "../stage/stage-skill-runtime.mjs";
 import { deriveStageProgress, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { readLatestStageContentEvidence } from "../evidence/stage-content-evidence.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
@@ -382,9 +382,11 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
 }
 
 /**
- * Execute the shared publication boundary for every workflow stage.
+ * Execute the low-level publication helper for a workflow stage.
  * The handler receives capabilities and already verified upstream data; it does
- * not discover task identity or publish records itself.
+ * not discover task identity or publish records itself. This helper is not the
+ * authoritative skill-dispatch boundary; only runOfficialStage dispatches the
+ * declared stage skills and publishes their invocation facts.
  */
 export async function runStage(stage, context, handler, publication = {}) {
   if (!Object.prototype.hasOwnProperty.call(UPSTREAM_STAGE, stage)) {
@@ -399,6 +401,25 @@ export async function runStage(stage, context, handler, publication = {}) {
 
   if (!publication || typeof publication !== "object" || Array.isArray(publication)) throw new TypeError("stage publication options must be an object");
   return publishVNextStage(ctx, result, vNextPreflightSnapshot);
+}
+
+async function dispatchPublicationStageSkills(ctx, publication = {}) {
+  const dispatchConfig = publication?.stageSkillDispatch ?? publication?.stage_skill_dispatch;
+  if (!dispatchConfig) return Object.freeze([]);
+  if (typeof dispatchConfig !== "object" || Array.isArray(dispatchConfig)) {
+    throw new TypeError("stage skill dispatch configuration must be an object");
+  }
+  return dispatchOrderedStageSkills({
+    packageRoot: dispatchConfig.packageRoot ?? dispatchConfig.package_root ?? RUNNER_ROOT,
+    stage: ctx.stage,
+    controls: dispatchConfig.controls ?? {},
+    hostInvoke: dispatchConfig.hostInvoke ?? dispatchConfig.host_invoke,
+    activeConditions: dispatchConfig.activeConditions ?? dispatchConfig.active_conditions ?? [],
+    probes: dispatchConfig.probes ?? {},
+    commands: dispatchConfig.commands ?? {},
+    run: dispatchConfig.run,
+    kernel: ctx.kernel,
+  });
 }
 
 function officialWorkerContext(ctx, publication = {}) {
@@ -521,7 +542,10 @@ export function runOfficialStage(stage, context, invocation, publication) {
   return runStage(
     stage,
     ctx,
-    async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input)),
+    async () => {
+      await dispatchPublicationStageSkills(ctx, publication);
+      return verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input));
+    },
     publication,
   );
 }

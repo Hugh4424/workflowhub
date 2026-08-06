@@ -44,6 +44,68 @@ function object(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+const GIT_OID = /^[a-f0-9]{40,64}$/i;
+
+/**
+ * Validate the small, append-only evidence carrier used by a build-code
+ * phase.  Implementation and integration baselines are deliberately typed
+ * separately: equal commit values in a fixture do not make them the same
+ * fact.  The carrier is bound to one candidate snapshot and never acts as a
+ * completion permit by itself.
+ */
+export function validateBuildCodePhaseEvidence(value, { snapshotTree } = {}) {
+  if (!object(value)) throw new TypeError("build-code phase evidence must be an object");
+  const allowed = new Set(["schema_version", "phase_id", "phase_order", "snapshot_tree", "baseline", "evidence", "failure_attribution"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`build-code phase evidence contains unsupported fields: ${unknown.join(", ")}`);
+  if (value.schema_version !== "build-code-phase-evidence.v1") throw new Error("build-code phase evidence schema_version is invalid");
+  if (typeof value.phase_id !== "string" || value.phase_id.trim() === "") throw new TypeError("build-code phase evidence phase_id is required");
+  if (!Array.isArray(value.phase_order) || value.phase_order.length === 0
+      || value.phase_order.some((entry) => typeof entry !== "string" || entry.trim() === "")
+      || new Set(value.phase_order).size !== value.phase_order.length) {
+    throw new TypeError("build-code phase evidence phase_order must contain unique non-empty task ids");
+  }
+  if (!GIT_OID.test(value.snapshot_tree ?? "")) throw new TypeError("build-code phase evidence snapshot_tree must be a Git object id");
+  if (snapshotTree !== undefined && value.snapshot_tree !== snapshotTree) throw new Error("build-code phase evidence snapshot_tree drift");
+  if (!object(value.baseline)) throw new TypeError("build-code phase evidence baseline is required");
+  const baselines = {};
+  for (const role of ["implementation", "integration"]) {
+    const baseline = value.baseline[role];
+    if (!object(baseline) || Object.keys(baseline).some((key) => !new Set(["kind", "commit"]).has(key))
+        || baseline.kind !== role || !GIT_OID.test(baseline.commit ?? "")) {
+      throw new TypeError(`build-code phase evidence ${role} baseline is invalid`);
+    }
+    baselines[role] = { kind: role, commit: baseline.commit };
+  }
+  if (!Array.isArray(value.evidence) || value.evidence.length === 0) throw new TypeError("build-code phase evidence requires evidence");
+  const evidence = value.evidence.map((entry, index) => {
+    if (!object(entry) || Object.keys(entry).some((key) => !new Set(["ref", "sha256", "snapshot_tree"]).has(key))
+        || typeof entry.ref !== "string" || entry.ref.trim() === "" || !HASH.test(entry.sha256 ?? "")
+        || !GIT_OID.test(entry.snapshot_tree ?? value.snapshot_tree) || (entry.snapshot_tree ?? value.snapshot_tree) !== value.snapshot_tree) {
+      throw new TypeError(`build-code phase evidence evidence[${index}] is invalid or stale`);
+    }
+    return { ref: entry.ref, sha256: entry.sha256, snapshot_tree: entry.snapshot_tree ?? value.snapshot_tree };
+  });
+  if (!object(value.failure_attribution)
+      || Object.keys(value.failure_attribution).some((key) => !new Set(["status", "category", "code", "reason", "exit_code"]).has(key))
+      || !new Set(["passed", "failed", "unknown", "incomplete"]).has(value.failure_attribution.status)
+      || typeof value.failure_attribution.category !== "string" || value.failure_attribution.category.trim() === ""
+      || typeof value.failure_attribution.code !== "string" || value.failure_attribution.code.trim() === ""
+      || typeof value.failure_attribution.reason !== "string" || value.failure_attribution.reason.trim() === ""
+      || (value.failure_attribution.exit_code !== undefined && !Number.isInteger(value.failure_attribution.exit_code))) {
+    throw new TypeError("build-code phase evidence failure_attribution is invalid");
+  }
+  return Object.freeze({
+    schema_version: value.schema_version,
+    phase_id: value.phase_id,
+    phase_order: Object.freeze([...value.phase_order]),
+    snapshot_tree: value.snapshot_tree,
+    baseline: Object.freeze(baselines),
+    evidence: Object.freeze(evidence),
+    failure_attribution: Object.freeze({ ...value.failure_attribution }),
+  });
+}
+
 export function validateInteractionQuestionProgress(value) {
   const errors = [];
   if (!object(value)) return Object.freeze({
@@ -654,7 +716,7 @@ function taskBlocks(document) {
   for (let index = 0; index < lines.length; index += 1) {
     const phaseMatch = lines[index].match(/^##\s+(Phase\s+.+?)\s*$/);
     if (phaseMatch) phase = phaseMatch[1];
-    const taskMatch = lines[index].match(/^####\s+(T\d+\b.*?)\s*$/);
+    const taskMatch = lines[index].match(/^#{3,4}\s+(T\d+\b.*?)\s*$/);
     if (taskMatch) starts.push({ index, heading: taskMatch[1], phase });
   }
   return starts.map((entry) => {
@@ -925,6 +987,456 @@ function sourceCoverageFacts({ spec, plan, tasks, acceptedFrs, acceptedAcs, task
     missing_sources: Object.freeze(missing),
     orphan_sources: Object.freeze([...new Set(invalidRows.map(({ source }) => source))]),
     reverse_missing: Object.freeze([...new Set(reverseInvalid.map(({ source }) => source))]),
+  });
+}
+
+const SPEC_ANALYZE_SOURCE_ID = /\bR-[0-9]{3}\b/g;
+const SPEC_ANALYZE_DECISION_ID = /\bD-[0-9]{3}\b/g;
+const SPEC_ANALYZE_FR_ID = /\bFR-[A-Z0-9]+(?:-[0-9]{3})?\b/g;
+const SPEC_ANALYZE_AC_ID = /\bAC(?:-[A-Z0-9]+(?:-[0-9]{2,3})?|[0-9]+)\b/g;
+const SPEC_ANALYZE_TASK_ID = /\bT[0-9]{3}\b/g;
+
+function analyzeIds(value, pattern) {
+  return [...new Set(String(value ?? "").match(pattern) ?? [])];
+}
+
+function containsAnalyzedId(value, id) {
+  const text = String(value ?? "");
+  if (text.includes(id)) return true;
+  const match = /^(.*-)(\d+)$/.exec(id);
+  if (!match) return false;
+  const [, prefix, numberText] = match;
+  const target = Number(numberText);
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const range = new RegExp(`${escapedPrefix}(\\d+)\\s*[—-]{1,2}\\s*(\\d+)`, "g");
+  return [...text.matchAll(range)].some(([, start, end]) => {
+    const low = Math.min(Number(start), Number(end));
+    const high = Math.max(Number(start), Number(end));
+    return target >= low && target <= high;
+  });
+}
+
+function analyzeField(body, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(body ?? "").match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+}
+
+function hasAnalyzeField(body, ...labels) {
+  return labels.some((label) => {
+    const value = analyzeField(body, label);
+    return typeof value === "string" && value.trim() !== "";
+  });
+}
+
+function analyzeFinding({ type, sourceArtifact, targetArtifact, id, anchor, impact, correction }) {
+  return Object.freeze({
+    type,
+    source_artifact: sourceArtifact,
+    target_artifact: targetArtifact,
+    fr_or_task_id: id,
+    line_or_anchor: anchor,
+    impact,
+    suggested_correction: correction,
+    disposition: "pending_main_agent_review",
+  });
+}
+
+function addAnalyzeFinding(findings, errors, finding, error) {
+  findings.push(finding);
+  errors.push(error);
+}
+
+function addConsistencyFinding(findings, errors, { type, sourceArtifact, targetArtifact, id, anchor, impact, correction }, message) {
+  addAnalyzeFinding(findings, errors, analyzeFinding({
+    type,
+    sourceArtifact,
+    targetArtifact,
+    id,
+    anchor,
+    impact,
+    correction,
+  }), message);
+}
+
+function analyzeCrossMaterialPlanningGaps({ specText, decisionText, planText, tasksText, taskRows, findings, errors }) {
+  const specFrs = analyzeIds(specText, SPEC_ANALYZE_FR_ID);
+  const specAcs = analyzeIds(specText, SPEC_ANALYZE_AC_ID);
+  const planSections = markdownSections(planText, 2);
+  const traceability = planSections.find(({ heading }) => /Requirement and Verification Traceability/i.test(heading));
+  if (traceability) {
+    for (const id of [...specFrs, ...specAcs]) {
+      if (!containsAnalyzedId(traceability.body, id)) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_plan_trace",
+          sourceArtifact: "spec",
+          targetArtifact: "plan.traceability",
+          id,
+          anchor: `plan:Requirement and Verification Traceability:${id}`,
+          impact: "需求虽可能落到 task，但 plan 的汇总追踪表没有声明它，人工和普通执行模型会看到不完整的交接地图",
+          correction: `在 plan 的 Requirement and Verification Traceability 表补齐 ${id}、Task、AC、Phase 和 gate/evidence 行`,
+        }, `plan trace gap: ${id}`);
+      }
+    }
+  }
+
+  const implementationOrder = planSections.find(({ heading }) => /Implementation Order/i.test(heading));
+  if (implementationOrder) {
+    const phaseIds = [...new Set(markdownSections(planText, 2, "Phase ")
+      .flatMap(({ heading }) => heading.match(/\bP\d+\b/g) ?? []))];
+    for (const phaseId of phaseIds) {
+      if (!containsAnalyzedId(implementationOrder.body, phaseId)) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_phase_order_trace",
+          sourceArtifact: "plan",
+          targetArtifact: "plan.Implementation Order",
+          id: phaseId,
+          anchor: `plan:Implementation Order:${phaseId}`,
+          impact: "Phase 已定义但执行顺序汇总没有包含它，可能导致 producer/consumer 反转",
+          correction: `把 ${phaseId} 加入 Implementation Order，并与 Dependencies and Parallelism 保持一致`,
+        }, `implementation order gap: ${phaseId}`);
+      }
+    }
+  }
+
+  const phaseSections = markdownSections(planText, 2, "Phase ");
+  const hasAnyVerifySection = phaseSections.some((phase) =>
+    markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+      .some(({ heading }) => /^Verify$/i.test(heading)));
+  if (hasAnyVerifySection) {
+    for (const phase of phaseSections) {
+      const verify = markdownSections(`## ${phase.heading}\n${phase.body}`, 3)
+        .find(({ heading }) => /^Verify$/i.test(heading));
+      const phaseTaskRows = taskRows.filter((task) => task.phase === phase.heading);
+      const taskOracles = new Set(phaseTaskRows.map((task) => oracleIdentity(task.fields.oracle)).filter(Boolean));
+      const verifyOracle = oracleIdentity(verify?.body);
+      if (!verify) {
+        addConsistencyFinding(findings, errors, {
+          type: "missing_phase_verification",
+          sourceArtifact: "plan",
+          targetArtifact: "tasks",
+          id: phase.heading,
+          anchor: `plan:${phase.heading}:Verify`,
+          impact: "Phase 没有独立验证合同，执行模型无法判断何时可以交接",
+          correction: "补齐与该 Phase task oracle、命令和 evidence path 对齐的 Verify 小节",
+        }, `phase verification gap: ${phase.heading}`);
+      } else if (taskOracles.size > 0 && (!verifyOracle || !taskOracles.has(verifyOracle))) {
+        addConsistencyFinding(findings, errors, {
+          type: "phase_verification_mismatch",
+          sourceArtifact: "plan",
+          targetArtifact: "tasks",
+          id: phase.heading,
+          anchor: `plan:${phase.heading}:Verify:oracle`,
+          impact: "Phase Verify 使用了另一套 oracle，可能把错误的测试结果当成当前 Phase 交接依据",
+          correction: `让 Verify oracle 与该 Phase task oracle 对齐；当前 task oracles=${[...taskOracles].join(", ")}`,
+        }, `phase verification mismatch: ${phase.heading}`);
+      }
+    }
+  }
+
+  const t004 = taskRows.find((task) => task.heading_id === "T004");
+  if (t004 && /build-plan[^\n]*(?:blueprint|concrete testing)/i.test(t004.body)
+      && !/(?:supersede|已废止|历史)/i.test(t004.body)) {
+    addConsistencyFinding(findings, errors, {
+      type: "stale_task_contract",
+      sourceArtifact: "tasks:T004",
+      targetArtifact: "build-code",
+      id: "T004",
+      anchor: "tasks:T004:输出",
+      impact: "普通执行模型可能把已废止的 blueprint/concrete testing 调用当成当前 build-plan 合同",
+      correction: "标记旧文本已被 D-015/P5 supersede，并指向当前 T013/T014 顺序",
+    }, "stale task contract: T004 retains superseded build-plan testing order");
+  }
+
+  const hashFromHeader = (document, label) => {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+    return document.match(new RegExp("^\\s*-\\s+\\*\\*" + escapedLabel + " SHA-256\\*\\*\\s*[:：]\\s*`?([a-f0-9]{64})`?\\s*$", "mi"))?.[1] ?? null;
+  };
+  const planSpecHash = hashFromHeader(planText, "Spec");
+  const planDecisionHash = hashFromHeader(planText, "Decision-log");
+  const tasksSpecHash = hashFromHeader(tasksText, "Spec");
+  const tasksPlanHash = hashFromHeader(tasksText, "Plan");
+  const expectedSpecHash = sha256(specText);
+  const expectedPlanHash = sha256(planText);
+  const expectedDecisionHash = decisionText ? sha256(decisionText) : null;
+  const hashChecks = [
+    ["plan Spec SHA-256", planSpecHash, expectedSpecHash, "plan"],
+    ["plan Decision-log SHA-256", planDecisionHash, expectedDecisionHash, "decision-log"],
+    ["tasks Spec SHA-256", tasksSpecHash, expectedSpecHash, "tasks"],
+    ["tasks Plan SHA-256", tasksPlanHash, expectedPlanHash, "tasks"],
+  ];
+  for (const [label, actual, expected, target] of hashChecks) {
+    if (actual && expected && actual !== expected) {
+      addConsistencyFinding(findings, errors, {
+        type: "material_hash_binding_gap",
+        sourceArtifact: target === "decision-log" ? "decision-log" : target,
+        targetArtifact: target,
+        id: label,
+        anchor: `${target}:${label}`,
+        impact: "材料身份绑定到旧快照，普通执行模型无法确定它读的是哪一版 spec/plan",
+        correction: `重算 ${label} 并与当前材料正文 SHA-256 一致；不要保留两个确定 hash`,
+      }, `${label} does not match the supplied current material`);
+    }
+  }
+  const bindingHash = planText.match(/\*\*Spec binding\*\*[^\n]*\"hash\"\s*:\s*\"([a-f0-9]{64})\"/i)?.[1] ?? null;
+  if (bindingHash && bindingHash !== expectedSpecHash) {
+    addConsistencyFinding(findings, errors, {
+      type: "material_hash_binding_gap",
+      sourceArtifact: "plan",
+      targetArtifact: "spec",
+      id: "Spec binding",
+      anchor: "plan:Spec binding",
+      impact: "plan §11 与 plan 头部可能绑定不同 spec 快照",
+      correction: "让 §11 Spec binding 使用当前 spec.md 的 SHA-256",
+    }, "plan Spec binding does not match the supplied current spec");
+  }
+}
+
+function analyzeStrategyGaps(body, subject, { aggregate = false } = {}) {
+  const gaps = [];
+  if (aggregate) {
+    const required = [
+      ["tier / method", /\b(?:tier|test tier)\s*\/\s*(?:method|test method)\b/i],
+      ["scenarios", /\bscenarios\b|场景/i],
+      ["command", /\bcommand\b|命令/i],
+      ["expected exit", /\bexpected[_ ]exit\b|预期退出/i],
+      ["oracle", /\boracle\b/i],
+      ["fixtures_services", /\bfixtures_services\b/i],
+      ["evidence_path", /\bevidence_path\b/i],
+      ["coverage limits", /\bcoverage limits\b/i],
+      ["STOP", /\bSTOP\b/i],
+    ];
+    for (const [field, pattern] of required) {
+      if (!pattern.test(String(body ?? ""))) gaps.push(field);
+    }
+    return gaps.map((field) => `${subject} missing ${field}`);
+  }
+
+  // Task cards intentionally keep executable fields separate so a normal
+  // build-code model can read and execute them without decoding a long
+  // combined sentence. Keep the legacy combined field valid for old cards and
+  // fixtures, but accept the canonical split form as the current contract.
+  const combined = hasAnalyzeField(body, "scenarios / commands / expected exit / oracle");
+  const required = [
+    ["test tier / test method", ["test tier / test method"]],
+    ["scenarios", ["scenarios", "scenarios / commands / expected exit / oracle"]],
+    ["command", ["gate_cmd", "command", "scenarios / commands / expected exit / oracle"]],
+    ["expected exit", ["expected_exit", "expected exit", "scenarios / commands / expected exit / oracle"]],
+    ["oracle", ["oracle", "scenarios / commands / expected exit / oracle"]],
+    ["fixtures_services", ["fixtures_services"]],
+    ["evidence_path", ["evidence_path"]],
+    ["coverage limits", ["coverage limits"]],
+    ["STOP", ["STOP"]],
+  ];
+  for (const [field, labels] of required) {
+    if (field === "scenarios" || field === "command" || field === "expected exit" || field === "oracle") {
+      if (combined) continue;
+    }
+    if (!hasAnalyzeField(body, ...labels)) gaps.push(field);
+  }
+  return gaps.map((field) => `${subject} missing ${field}`);
+}
+
+/**
+ * Report-only consistency facts for spec-analyze. The raw requirement index is
+ * a derived view of decision-log, never a fifth current material or a writer.
+ * Findings deliberately remain pending until the main agent reviews them.
+ */
+export function validateSpecAnalyzeCompleteness({
+  planningArtifacts,
+  rawRequirementIndex,
+  decisionLog,
+  spec,
+  plan,
+  tasks,
+} = {}) {
+  const source = planningArtifacts && object(planningArtifacts) ? planningArtifacts : {};
+  const raw = rawRequirementIndex ?? source.raw_requirement_index;
+  const decision = decisionLog ?? source.decision_log ?? source.decision_log_index;
+  const decisionText = typeof decision === "string" ? decision : "";
+  const specText = spec ?? source.approved_spec ?? source.spec;
+  const planText = plan ?? source.draft_plan ?? source.plan;
+  const tasksText = tasks ?? source.draft_tasks ?? source.tasks;
+  const errors = [];
+  const findings = [];
+
+  if (!object(raw) || raw.schema_version !== "raw-requirement-index.v1" || !Array.isArray(raw.entries) || raw.entries.length === 0) {
+    errors.push("MATERIAL_INCOMPLETE: raw requirement index from decision-log is required");
+  }
+  for (const [name, value] of [["spec", specText], ["plan", planText], ["tasks", tasksText]]) {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`MATERIAL_INCOMPLETE: ${name} excerpt is required`);
+  }
+  if (errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:")) && (!specText || !planText || !tasksText)) {
+    return Object.freeze({ ok: false, errors: Object.freeze(errors), findings: Object.freeze(findings), facts: Object.freeze({}) });
+  }
+
+  const sourceEntries = Array.isArray(raw?.entries) ? raw.entries : [];
+  const sourceIds = sourceEntries.map((entry) => entry?.id).filter((id) => typeof id === "string" && /^R-[0-9]{3}$/.test(id));
+  if (sourceIds.length !== sourceEntries.length || new Set(sourceIds).size !== sourceIds.length) {
+    errors.push("MATERIAL_INCOMPLETE: raw requirement index entries need unique R-NNN ids");
+  }
+  for (const entry of sourceEntries) {
+    const id = entry?.id;
+    if (typeof id !== "string" || !/^R-[0-9]{3}$/.test(id)) continue;
+    if (decisionText && !decisionText.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "source_gap",
+        sourceArtifact: "decision-log",
+        targetArtifact: "planning_artifacts",
+        id,
+        anchor: `decision-log:${id}`,
+        impact: "原始需求没有进入当前分析输入",
+        correction: "补回 decision-log 的 source index 绑定，不能由 spec-analyze 猜测",
+      }), `source gap: ${id} is absent from decision-log`);
+    }
+    for (const decisionId of entry.decision_ids ?? []) {
+      if (typeof decisionId === "string" && decisionText && !decisionText.includes(decisionId)) {
+        addAnalyzeFinding(findings, errors, analyzeFinding({
+          type: "source_gap",
+          sourceArtifact: "decision-log",
+          targetArtifact: "planning_artifacts",
+          id,
+          anchor: `decision-log:${decisionId}`,
+          impact: "原始需求的关键决定无法回放",
+          correction: `补回 ${decisionId} 的 decision-log 绑定或标记真实延期原因`,
+        }), `source gap: ${id} references missing ${decisionId}`);
+      }
+    }
+  }
+
+  const specFrs = analyzeIds(specText, SPEC_ANALYZE_FR_ID);
+  const specAcs = analyzeIds(specText, SPEC_ANALYZE_AC_ID);
+  for (const id of specFrs) {
+    if (!containsAnalyzedId(planText, id) || !containsAnalyzedId(tasksText, id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "uncovered_functional_requirement",
+        sourceArtifact: "spec",
+        targetArtifact: !containsAnalyzedId(planText, id) ? "plan" : "tasks",
+        id,
+        anchor: id,
+        impact: "功能要求没有完整落到实施和执行任务",
+        correction: "补齐 plan/task 映射，不在 build-code 临时补需求",
+      }), `FR coverage gap: ${id}`);
+    }
+  }
+  for (const id of specAcs) {
+    if (!containsAnalyzedId(planText, id) || !containsAnalyzedId(tasksText, id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "uncovered_acceptance_criterion",
+        sourceArtifact: "spec",
+        targetArtifact: !containsAnalyzedId(planText, id) ? "plan" : "tasks",
+        id,
+        anchor: id,
+        impact: "验收点没有完整落到任务和测试策略",
+        correction: "补齐对应 task、命令、oracle 和 evidence path",
+      }), `AC coverage gap: ${id}`);
+    }
+  }
+
+  const taskRows = taskBlocks(String(tasksText));
+  const taskIds = taskRows.map(({ heading_id }) => heading_id).filter(Boolean);
+  const planTaskIds = analyzeIds(planText, SPEC_ANALYZE_TASK_ID);
+  for (const id of taskIds) {
+    if (!planTaskIds.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "orphan_task",
+        sourceArtifact: "tasks",
+        targetArtifact: "plan",
+        id,
+        anchor: `tasks:${id}`,
+        impact: "任务没有计划来源，普通执行模型无法判断它是否在范围内",
+        correction: "把任务挂回 plan 的 Phase/traceability，或按主 agent 评审结果删除",
+      }), `orphan task: ${id} is absent from plan`);
+    }
+  }
+  for (const id of planTaskIds) {
+    if (!taskIds.includes(id)) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "orphan_task",
+        sourceArtifact: "plan",
+        targetArtifact: "tasks",
+        id,
+        anchor: `plan:${id}`,
+        impact: "计划声明了没有执行卡的任务",
+        correction: "补齐 tasks 执行卡，或移除无来源的计划任务",
+      }), `orphan task: ${id} is absent from tasks`);
+    }
+  }
+  for (const task of taskRows) {
+    const referenceLine = task.body.match(/source_refs\s*\/\s*decision_refs[^\n]*/i)?.[0] ?? "";
+    if (!analyzeIds(referenceLine, SPEC_ANALYZE_SOURCE_ID).length && !analyzeIds(referenceLine, SPEC_ANALYZE_DECISION_ID).length) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_source_reference",
+        sourceArtifact: "tasks",
+        targetArtifact: "decision-log",
+        id: task.heading_id ?? "TASK-UNKNOWN",
+        anchor: `${task.heading_id ?? "task"}:source_refs / decision_refs`,
+        impact: "任务无法回放到已确认需求和决定",
+        correction: "补回 inherited source_refs / decision_refs",
+      }), `${task.heading_id ?? "task"} missing source_refs / decision_refs`);
+    }
+    for (const gap of analyzeStrategyGaps(task.body, task.heading_id ?? "task")) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_test_strategy",
+        sourceArtifact: "tasks",
+        targetArtifact: "build-code",
+        id: task.heading_id ?? "TASK-UNKNOWN",
+        anchor: `${task.heading_id ?? "task"}:test_strategy`,
+        impact: "普通 build-code 模型缺少可直接执行的测试合同",
+        correction: `补齐 ${gap.replace(`${task.heading_id ?? "task"} missing `, "")}`,
+      }), gap);
+    }
+  }
+
+  analyzeCrossMaterialPlanningGaps({
+    specText,
+    decisionText,
+    planText,
+    tasksText,
+    taskRows,
+    findings,
+    errors,
+  });
+
+  const aggregateStart = String(tasksText).search(/^##\s+(?:4\.\s+)?Final current-snapshot aggregate strategy\b/im);
+  if (aggregateStart < 0) {
+    addAnalyzeFinding(findings, errors, analyzeFinding({
+      type: "missing_test_strategy",
+      sourceArtifact: "tasks",
+      targetArtifact: "final-aggregate",
+      id: "FINAL",
+      anchor: "Final current-snapshot aggregate strategy",
+      impact: "最终完整测试没有预先设计，build-code 可能临场重选路线",
+      correction: "在 tasks 中固定最终 tier、具体 testing skill、命令、oracle、evidence 和 STOP",
+    }), "missing test strategy: final current-snapshot aggregate strategy");
+  } else {
+    for (const gap of analyzeStrategyGaps(String(tasksText).slice(aggregateStart), "FINAL", { aggregate: true })) {
+      addAnalyzeFinding(findings, errors, analyzeFinding({
+        type: "missing_test_strategy",
+        sourceArtifact: "tasks",
+        targetArtifact: "final-aggregate",
+        id: "FINAL",
+        anchor: "Final current-snapshot aggregate strategy",
+        impact: "最终完整测试合同不完整",
+        correction: `补齐 ${gap}`,
+      }), `FINAL missing ${gap}`);
+    }
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    findings: Object.freeze(findings),
+    facts: Object.freeze({
+      source_ids: Object.freeze(sourceIds),
+      spec_fr_ids: Object.freeze(specFrs),
+      spec_ac_ids: Object.freeze(specAcs),
+      task_ids: Object.freeze(taskIds),
+      plan_task_ids: Object.freeze(planTaskIds),
+      strategy: Object.freeze({
+        task_count: taskRows.length,
+        final_aggregate_present: aggregateStart >= 0,
+      }),
+    }),
   });
 }
 

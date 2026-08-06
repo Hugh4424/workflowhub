@@ -1222,6 +1222,26 @@
       "sha256": "35760d71b917a36efc7738d00e17dddc26676bfd37e6742cf346dde769c2b45c"
     },
     {
+      "path": "specs/archive/requirements-completeness-audit-20260804/decision-log.md",
+      "bytes": 166051,
+      "sha256": "b99ddeeb78a4b2a62c8a8078a2cac1c76491045f07c69f10781182d3fec7f6d6"
+    },
+    {
+      "path": "specs/archive/requirements-completeness-audit-20260804/plan.md",
+      "bytes": 60130,
+      "sha256": "9aa53259366f151bcf80044d45540869ad74bf5e62bd14530429f7433afad48a"
+    },
+    {
+      "path": "specs/archive/requirements-completeness-audit-20260804/spec.md",
+      "bytes": 53884,
+      "sha256": "a887a44d769b9c798f0b7c61a4fdc34110bc66920a56b8df563202c6865234d9"
+    },
+    {
+      "path": "specs/archive/requirements-completeness-audit-20260804/tasks.md",
+      "bytes": 185916,
+      "sha256": "74986efb28ed218803bf7580f4726e02e8faa4c99be9703e0bdc4e68697df3f0"
+    },
+    {
       "path": "specs/archive/worktree-unification/baseline-report.md",
       "bytes": 3744,
       "sha256": "a630e79d80c730914a54751120228fa5e84c06d1a6b009bcafd73bf67756fae4"
@@ -2272,5 +2292,5 @@
       "sha256": "b1fb169b98df9ccc07926062d45346d4dcd9350803c02eca8de27ce90cc75555"
     }
   ],
-  "file_count": 453
+  "file_count": 457
 }

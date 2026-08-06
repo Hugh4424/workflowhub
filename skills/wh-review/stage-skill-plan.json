@@ -7,40 +7,51 @@
           "logical_skill_id": "wh-review/make-decision-direction",
           "required_skills": ["intake-decision-review", "plan-ceo-review", "review"],
           "review_mode": "lens-only",
+          "lens_owner": "wh-review",
+          "lens_dispatch": "delegated",
           "delivery_mode": "file_only"
         },
         "detail": {
           "logical_skill_id": "wh-review/make-decision-detail",
           "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
           "review_mode": "lens-only",
+          "lens_owner": "wh-review",
+          "lens_dispatch": "delegated",
           "delivery_mode": "file_only"
         }
       }
     },
     "build-spec": {
       "logical_skill_id": "wh-review/build-spec",
-      "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
-      "optional_skills": [{ "name": "plan-design-review", "when": "ui" }],
+      "required_skills": ["review"],
       "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     },
     "build-plan": {
       "logical_skill_id": "wh-review/build-plan",
-      "required_skills": ["simplicity-guard", "spec-analyze", "plan-eng-review", "review"],
+      "required_skills": ["review"],
       "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     },
     "build-code": {
       "logical_skill_id": "wh-review/build-code",
       "required_skills": ["simplicity-guard", "review"],
       "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     },
     "verify-code": {
       "logical_skill_id": "wh-review/verify-code",
-      "required_skills": ["qa-only", "verify-change"],
+      "required_skills": ["review"],
       "review_mode": "lens-only",
-      "invocation": "post-evidence-non-gate",
+      "invocation": "post-first-repair-non-gate",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     }
   }

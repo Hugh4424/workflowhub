@@ -6,16 +6,20 @@ kind: sub-skill
 
 # plan-eng-review
 
-Source: adapted from the project engineering review baseline. Mode: `lens-only`.
-It has no runner and no verdict; it also has no provider route. `wh-review`
-loads this lens and remains the only review authority.
+Source: adapted from the project engineering review baseline. Mode:
+`advisory`, file-only, no stage result and no provider verdict. build-plan calls
+it directly after the plan draft and before test routing; wh-review only reads
+the resulting fact and remains the sole independent provider review authority.
+It remains a lens-only observation source, not a runner or progression gate.
 
 ## Required material
 
-Review the complete accepted specification, complete draft plan, complete draft
-tasks, and the deterministic `plan-task-contract.v1` facts for the same frozen
-snapshot. Missing or mismatched material is a material-contract failure; do not
-infer structure from a summary or accept a provider pass as a replacement.
+Review the accepted specification, the complete draft plan, and any available
+early task outline for the same frozen snapshot. At this point `tasks.md` may
+not exist yet because this skill intentionally runs before `test-routing-advisor`
+and `spec-tasks`; missing tasks are therefore an expected stage-order fact, not
+a reason to invent task details. Do not accept a provider pass as a replacement
+for missing plan evidence.
 
 ## Check
 

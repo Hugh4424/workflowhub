@@ -23,6 +23,7 @@ import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
+  "make-decision": new Set(["decision-log.md"]),
   "build-spec": new Set(["spec.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
@@ -30,6 +31,65 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
+
+function assertObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(label + " must be an object");
+  return value;
+}
+
+/**
+ * Bind serialized host outcomes to the private ordered stage-skill dispatcher.
+ * The host must have produced each outcome through invoke-stage-skill; this
+ * adapter only authenticates immutable outcome references while the official
+ * stage runs.
+ */
+export function createStageSkillDispatchPublication(value, stage) {
+  const input = assertObject(value, "stage_skill_dispatch");
+  const unknown = Object.keys(input).filter((key) => !new Set(["controls", "outcomes"]).has(key));
+  if (unknown.length) throw new TypeError("stage_skill_dispatch has unknown fields: " + unknown.join(", "));
+  const controls = assertObject(input.controls ?? {}, "stage_skill_dispatch.controls");
+  const outcomes = assertObject(input.outcomes ?? {}, "stage_skill_dispatch.outcomes");
+  const scalarControlKeys = new Set([
+    "selectedTestingSkill", "selected_testing_skill",
+    "testingNotApplicable", "testing_not_applicable",
+    "testingNotApplicableReason", "testing_not_applicable_reason",
+  ]);
+  const perSkillKeys = new Set([
+    "triggered", "notInvokedReason", "not_invoked_reason",
+    "invocationKey", "invocation_key",
+  ]);
+  for (const [name, control] of Object.entries(controls)) {
+    if (scalarControlKeys.has(name)) continue;
+    assertObject(control, "stage_skill_dispatch.controls." + name);
+    const invalid = Object.keys(control).filter((key) => !perSkillKeys.has(key));
+    if (invalid.length) throw new TypeError("stage_skill_dispatch.controls." + name + " has unknown fields: " + invalid.join(", "));
+  }
+  for (const [key, response] of Object.entries(outcomes)) {
+    assertObject(response, "stage_skill_dispatch.outcomes." + key);
+    const invalid = Object.keys(response).filter((field) => !new Set(["outcome_ref", "outcome_hash", "snapshot_tree"]).has(field));
+    if (invalid.length) throw new TypeError("stage_skill_dispatch.outcomes." + key + " has unknown fields: " + invalid.join(", "));
+    if (typeof response.outcome_ref !== "string"
+        || (!response.outcome_ref.startsWith("quality/") && !response.outcome_ref.startsWith("evidence/"))) {
+      throw new TypeError("stage_skill_dispatch.outcomes." + key + ".outcome_ref must use a canonical namespace");
+    }
+    if (!SHA256.test(response.outcome_hash ?? "") || !GIT_OID.test(response.snapshot_tree ?? "")) {
+      throw new TypeError("stage_skill_dispatch.outcomes." + key + " must contain authenticated hash and snapshot");
+    }
+  }
+  return Object.freeze({
+    stageSkillDispatch: Object.freeze({
+      packageRoot: RUNNER_ROOT,
+      controls: Object.freeze({ ...controls }),
+      hostInvoke: async ({ name, invocationKey }) => {
+        const key = name + "/" + invocationKey;
+        const response = outcomes[key] ?? outcomes[name];
+        if (!response) throw new Error("MATERIAL_INCOMPLETE: missing stage skill outcome for " + stage + "/" + key);
+        return Object.freeze({ ...response });
+      },
+    }),
+  });
+}
+
 export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
   if (!input || typeof input !== "object" || Array.isArray(input)
       || typeof input.acceptance_criterion_id !== "string"
@@ -257,16 +317,22 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
         || !input.receipts || typeof input.receipts !== "object" || Array.isArray(input.receipts)) {
       throw new TypeError("run input requires a receipts object");
     }
-    const allowedRunFields = new Set(values.stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]);
+    const allowedRunFields = new Set(values.stage === "build-code"
+      ? ["receipts", "acceptance_coverage", "finding_dispositions", "stage_skill_dispatch"]
+      : ["receipts", "finding_dispositions", "stage_skill_dispatch"]);
     const unknownRunFields = Object.keys(input).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(input?.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
     const audit = undefined;
+    const { stage_skill_dispatch: dispatchInput, ...officialInput } = input;
     const controlledInput = {
-      ...input,
-      receipts: { ...input.receipts },
+      ...officialInput,
+      receipts: { ...officialInput.receipts },
     };
-    const attempt = await runOfficialStage(values.stage, context, controlledInput);
+    const publication = dispatchInput === undefined
+      ? undefined
+      : createStageSkillDispatchPublication(dispatchInput, values.stage);
+    const attempt = await runOfficialStage(values.stage, context, controlledInput, publication);
     return attempt;
   }
   if (command === "confirm") {

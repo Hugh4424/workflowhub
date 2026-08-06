@@ -26,7 +26,7 @@ function fixture({ prompt = "Use `skills/demo/SKILL.md`.", manifestSkill = true,
   fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md"] }));
   fs.writeFileSync(path.join(root, "workflows/stage/SKILL.md"), prompt);
   fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), manifestSkill
-    ? "stage: stage\nskills:\n  - { name: demo, path: skills/demo/SKILL.md, execution: inline, invocation: always, trigger: always, bundle: skills/demo/skill-bundle.json }\nruntime_capabilities: []\nexternal_capabilities: []\n"
+    ? "stage: stage\nskills:\n  - { name: demo, path: skills/demo/SKILL.md, execution: inline, invocation: always, trigger: always, bundle: skills/demo/skill-bundle.json, owner: stage, dispatch: stage }\nruntime_capabilities: []\nexternal_capabilities: []\n"
     : "stage: stage\nskills: []\nruntime_capabilities: []\nexternal_capabilities: []\n");
   if (indirectLens) {
     fs.rmSync(path.join(root, "skills/demo"), { recursive: true, force: true });
@@ -36,13 +36,13 @@ function fixture({ prompt = "Use `skills/demo/SKILL.md`.", manifestSkill = true,
       fs.writeFileSync(path.join(root, `skills/${name}/skill-bundle.json`), JSON.stringify({ schema_version: 1, skill: name, files: ["SKILL.md", ...(name === "lens" ? ["review-bundle.json"] : [])] }));
     }
     fs.writeFileSync(path.join(root, "skills/lens/review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "lens", mode: "lens-only", delivery_mode: "file_only", entrypoint: "SKILL.md", files: ["SKILL.md"] }));
-    fs.writeFileSync(path.join(root, "skills/wh-review/stage-skill-plan.json"), JSON.stringify({ version: 1, stages: { stage: { required_skills: ["lens"], review_mode: "lens-only", delivery_mode: "file_only" } } }));
+    fs.writeFileSync(path.join(root, "skills/wh-review/stage-skill-plan.json"), JSON.stringify({ version: 1, stages: { stage: { required_skills: ["lens"], review_mode: "lens-only", lens_owner: "wh-review", lens_dispatch: "delegated", delivery_mode: "file_only" } } }));
     const { bundleHash: whHash } = validateSkillBundle(root, "skills/wh-review/skill-bundle.json", "skills/wh-review/SKILL.md");
     const { bundleHash: lensHash } = validateSkillBundle(root, "skills/lens/skill-bundle.json", "skills/lens/SKILL.md");
     fs.writeFileSync(path.join(root, "skills/catalog.yaml"), `schema_version: 2\nlast_reviewed_at: '2026-07-14'\nprojects: {}\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, local_version: 1.0.0, local_bundle_hash: ${whHash}, last_reviewed_at: '2026-07-14', status: native, purpose: review, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/wh-review], update_policy: manual }\n  - { name: lens, path: skills/lens/SKILL.md, local_version: 1.0.0, local_bundle_hash: ${lensHash}, last_reviewed_at: '2026-07-14', status: native, purpose: lens, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/lens], update_policy: manual }\ncapability_decisions:\n  - { name: fixture, status: rejected, purpose: fixture, design_idea: fixture, used_by_stages: [], local_path: null, upstream: [], local_changes: rejected, dependency_closure: [], update_policy: none }\n`);
     fs.writeFileSync(path.join(root, "skills/reuse-registry.md"), "- `wh-review`\n- `lens`\n- `fixture`\n");
     fs.writeFileSync(path.join(root, "workflows/stage/SKILL.md"), "Use wh-review.\n");
-    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }\nruntime_capabilities: []\nexternal_capabilities: []\n");
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\nskills:\n  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }\nruntime_capabilities: []\nexternal_capabilities: []\n");
   }
   return root;
 }
@@ -74,4 +74,16 @@ it("rejects a wh-review stage plan that is not lens-only", () => {
     stages: { stage: { required_skills: ["lens"], review_mode: "execution", delivery_mode: "file_only" } },
   }));
   expect(checkSkillClosure(root).errors.join("\n")).toMatch(/must declare lens-only delivery/);
+});
+
+it("rejects delegated wh-review lenses duplicated as stage-owned manifest skills", () => {
+  const root = fixture({ indirectLens: true });
+  fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), `stage: stage
+skills:
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: lens, path: skills/lens/SKILL.md, execution: inline, invocation: always, trigger: duplicate_lens, bundle: skills/lens/skill-bundle.json }
+runtime_capabilities: []
+external_capabilities: []
+`);
+  expect(checkSkillClosure(root).errors.join("\n")).toMatch(/delegated wh-review lens must not appear in stage manifest: lens/);
 });

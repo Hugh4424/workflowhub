@@ -8,7 +8,7 @@ import { captureReviewSource as captureSourceDefault } from "./review-source.mjs
 import { buildIntegrationReviewSubject as buildIntegrationSubjectDefault } from "./integration-review-subject.mjs";
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
-import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
+import { aggregateProviderResults, createReviewLineage, renderReviewReport, reviewRefs, validateReviewLineage, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
 import { buildClassificationManifest } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../../../runtime/review/canonical-review-result.mjs";
@@ -106,6 +106,30 @@ function sourceRecord(source, integrationSubject = null) {
     base_tree: integrationSubject?.base_tree ?? source.baseTree,
     captured_head: source.capturedHead,
   };
+}
+
+function phaseExecutionPaths(task, workspace, phaseId) {
+  const artifacts = ArtifactDir.open(assertWorkspace(workspace).worktreeRoot, task);
+  const raw = artifacts.read("tasks.md");
+  if (!/^[A-Za-z0-9_-]+$/.test(String(phaseId))) throw new Error(`MATERIAL_INCOMPLETE: invalid Phase id ${phaseId}`);
+  const phaseHeader = new RegExp(`^## Phase ${String(phaseId)}[^\\n]*$`, "m");
+  const match = phaseHeader.exec(raw);
+  if (!match) throw new Error(`MATERIAL_INCOMPLETE: tasks.md has no Phase ${phaseId} section`);
+  const start = match.index + match[0].length;
+  const next = /^## Phase /m.exec(raw.slice(start));
+  const section = raw.slice(start, next ? start + next.index : raw.length);
+  const paths = [];
+  for (const entry of section.matchAll(/\*\*execution_file_paths\*\*[^`]*`([^`]+)`/g)) {
+    let parsed;
+    try { parsed = JSON.parse(entry[1]); } catch { throw new Error(`MATERIAL_INCOMPLETE: Phase ${phaseId} execution_file_paths is invalid JSON`); }
+    if (!Array.isArray(parsed) || parsed.some((path) => typeof path !== "string" || path.trim() === "")) {
+      throw new Error(`MATERIAL_INCOMPLETE: Phase ${phaseId} execution_file_paths must be a string array`);
+    }
+    paths.push(...parsed);
+  }
+  const unique = [...new Set(paths)];
+  if (unique.length === 0) throw new Error(`MATERIAL_INCOMPLETE: Phase ${phaseId} has no execution_file_paths`);
+  return unique;
 }
 
 function reviewScopeFor(stage, phaseId) {
@@ -344,7 +368,8 @@ function storedSemanticOutcome(task, resultRef, result, identity) {
       || attempt.review_track !== result.review_track || attempt.subject_kind !== result.subject_kind
       || attempt.phase_id !== result.phase_id || (attempt.review_scope ?? null) !== (result.review_scope ?? null)
       || attempt.snapshot_tree !== result.snapshot_tree || attempt.material_id !== result.material_id
-      || attempt.terminal_status !== "semantic" || attempt.error !== null) {
+      || attempt.terminal_status !== "semantic" || attempt.error !== null
+      || !isDeepStrictEqual(attempt.lineage ?? null, result.lineage ?? null)) {
     throw invalidEvidence("canonical subject head is not bound to its semantic attempt");
   }
   const storedPolicyFingerprint = attempt.review_policy === undefined ? null : hashCanonical(attempt.review_policy);
@@ -433,6 +458,8 @@ function canonicalSubjectOutcome(task, identity) {
 function validateAttemptIdentity(attempt, attemptRef, identity) {
   try { validateSchema("attempt", attempt); }
   catch (error) { throw invalidEvidence(`attempt schema is invalid: ${error.message}`); }
+  try { validateReviewLineage(attempt.lineage); }
+  catch (error) { throw invalidEvidence(`attempt lineage is invalid: ${error.message}`); }
   const attemptMatch = attemptRef.match(/^(?:quality\/reviews|reviews)\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/);
   if (!attemptMatch || attempt.attempt_id !== attemptMatch[1] || !matchesReviewIdentity(attempt, identity)) {
     throw invalidEvidence("attempt identity does not match its canonical ref or requested review identity");
@@ -559,7 +586,8 @@ function semanticAttemptResult(task, attempt, attemptRef, bundle) {
     version: "wh-review-result.v1", task_id: attempt.task_id, stage: attempt.stage, review_track: attempt.review_track,
     subject_kind: attempt.subject_kind, phase_id: attempt.phase_id, review_scope: attempt.review_scope ?? null, base_tree: attempt.base_tree, candidate_tree: attempt.candidate_tree,
     source: attempt.source, snapshot_tree: attempt.snapshot_tree, material_id: attempt.material_id, attempt_ref: attemptRef,
-    report_ref: attempt.report_ref, provider_results: providerResults, verdict: aggregation.verdict, findings,
+    report_ref: attempt.report_ref, ...(attempt.lineage === undefined ? {} : { lineage: attempt.lineage }),
+    provider_results: providerResults, verdict: aggregation.verdict, findings,
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
   validateSchema("result", result);
@@ -890,9 +918,19 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
     }
     const attemptId = randomUUID();
     const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
+    const lineage = createReviewLineage({
+      requestId: materialId,
+      promptHash: hashCanonical("material-preflight"),
+      round: policy?.round ?? "initial",
+      priorAttemptRefs: [],
+      priorRuntimeIds: {},
+      correctionRef: null,
+      dispatchSequence: 0,
+    });
     const attempt = {
       version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
       ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: materialId,
+      lineage,
       report_ref: refs.reportRef, provider_attempts: [], terminal_status: "unavailable", error: diagnostic,
       ...(policy ? { review_policy: policy, policy_snapshot_hash: createHash("sha256").update(canonicalJson(policy)).digest("hex"), coverage } : {}),
     };
@@ -1122,7 +1160,10 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   // Integration does not deliver a cumulative diff, but it still needs the
   // frozen changed-file index so the subject can select bounded final-snapshot
   // implementation excerpts for the provider packet.
-  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || (stage === "build-code" && phaseId === null) });
+  const phasePaths = phaseId !== null && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN
+    ? phaseExecutionPaths(taskHandle, workspace, phaseId)
+    : undefined;
+  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || (stage === "build-code" && phaseId === null), ...(phasePaths === undefined ? {} : { phasePaths }) });
   let integrationSubject; let subject; let bundle; let classificationManifest;
   try {
     const isIntegration = stage === "build-code" && phaseId === null;
@@ -1225,6 +1266,15 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const continuationRuntimeId = groupContinuationRuntime(providers, previousRuntimeIds);
   const dispatchSequence = unavailableDispatchSequence(taskHandle, identity);
   const requestId = managedRequestId({ ...identity, hostProvider, providers, continuationRuntimeId, dispatchSequence });
+  const lineage = createReviewLineage({
+    requestId,
+    promptHash: hashCanonical(providerPrompt),
+    round: effectiveReviewRound,
+    priorAttemptRefs: formatCorrectionAttemptRef === null ? [] : [formatCorrectionAttemptRef],
+    priorRuntimeIds: previousRuntimeIds,
+    correctionRef: formatCorrectionAttemptRef,
+    dispatchSequence,
+  });
   const formatCorrectionSeed = formatCorrectionAttemptRef === null
     ? null
     : formatCorrectionSeedForAttempt(taskHandle, formatCorrectionAttemptRef, identity, bundle, policy, providers);
@@ -1253,7 +1303,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const unavailableError = primaryError(reviewed);
     const attempt = {
       version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
-      ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+      ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId, lineage,
       report_ref: refs.reportRef,
       provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
       error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` },
@@ -1269,7 +1319,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const findings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
     const result = {
       version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree,
-      material_id: bundle.materialId, attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
+      material_id: bundle.materialId, attempt_ref: refs.attemptRef, report_ref: refs.reportRef, lineage, provider_results: providerResults,
       verdict: aggregation.verdict, findings,
       adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
       ...(classificationManifest ? { classification_manifest: classificationManifest } : {}),

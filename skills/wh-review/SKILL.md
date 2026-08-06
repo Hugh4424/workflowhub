@@ -157,8 +157,8 @@ the runner must record `MATERIAL_INCOMPLETE` and must not call a provider.
   `phase_map`, `impact_map`, `reuse_map`, `acceptance_map`;
 - build-code/integration: `approved_spec`, `acceptance_criteria`,
   `test_evidence`, `phase_coverage`, `seam_index`, `ac_trace`;
-- verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`,
-  `context_map`, `evidence_map`.
+- verify-code: `acceptance_criteria`, `architect_assessment`,
+  `final_test_summary`, `open_risks`.
 
 The direction and integration tracks intentionally have no v2 authority maps.
 
@@ -171,9 +171,10 @@ fail before any provider call.
 Each snapshot gets at most one semantic review. A `revise_required` result stays
 `revise_required`; it is not cleared by evidence, risk acceptance, a zero-provider
 action, or another same-snapshot review. A changed snapshot starts one fresh review.
-`verify-code` performs its independent review only after fresh tests and acceptance
-evidence are available and never replaces the build-code integration fact. Callers
-cannot select a round or provider; host configuration remains authoritative.
+`verify-code` performs one bounded post-repair architect review from the compact
+acceptance summary. It does not require a fresh evidence tree, requirement replay,
+or a provider `pass`, and it never replaces the build-code integration fact.
+Callers cannot select a round or provider; host configuration remains authoritative.
 
 The runner supplies `review_instructions`; callers must not add it. A
 `build-code` phase review also adds `phase_id`. `verify-final` replaces

@@ -34,9 +34,9 @@
     },
     "build-plan": {
       "source_bundle": "none",
-      "required": ["approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "context_map", "evidence_map", "review_instructions"],
+      "required": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "context_map", "evidence_map", "review_instructions"],
       "optional": ["review_delta"],
-      "generated": ["review_instructions"],
+      "generated": ["review_instructions", "planning_artifacts"],
       "forbidden": [],
       "minimum_reviewers": 1,
       "v2_required_maps": ["context_map", "evidence_map"]
@@ -74,12 +74,12 @@
     },
     "verify-code": {
       "source_bundle": "none",
-      "required": ["acceptance_criteria", "acceptance_evidence", "open_exceptions", "context_map", "evidence_map", "review_instructions"],
-      "optional": [],
-      "generated": ["review_instructions", "ac_evidence_summary"],
+      "required": ["acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "review_instructions"],
+      "optional": ["acceptance_evidence", "context_map", "evidence_map", "review_delta"],
+      "generated": ["review_instructions"],
       "forbidden": [],
       "minimum_reviewers": 1,
-      "v2_required_maps": ["context_map", "evidence_map"],
+      "v2_required_maps": [],
       "scope_revision": {
         "source_bundle": "none",
         "required": ["scope_revision", "review_instructions"],

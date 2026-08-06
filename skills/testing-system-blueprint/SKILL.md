@@ -6,9 +6,11 @@ version: 1.0.0
 
 # Testing System Blueprint
 
-这是测试设计和缺口扫描技能，不是测试通过门。它读取当前 Task、实际 changed
-files、FR/AC、Phase Card 和已核实接口，输出要写入 tasks.md 的测试策略。build-code
-只执行该策略并记录真实结果，不在每个 Phase 重新调用本技能。
+这是一个可复用的测试设计和缺口扫描技能，不是测试通过门；它不属于本任务
+标准 build-plan/build-code 调用链。当前标准链由 build-plan 的
+`test-routing-advisor` 预判、tasks 记录合同，再由 build-code 按真实 changed
+files 调用具体 testing skill。只有未来明确把 blueprint 纳入阶段依赖时，才可
+另行使用，不得把它偷偷当成当前阶段事实。
 
 至少检查：行为结果、状态/数据流、错误/取消/恢复、权限/安全、并发/原子性、
 跨模块 seam、可观测性/来源，以及 UI 适用时的加载/空/错误/边界和可访问性。

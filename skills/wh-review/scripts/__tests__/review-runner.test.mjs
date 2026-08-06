@@ -1297,6 +1297,7 @@ describe("verify final", () => {
       version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead },
       snapshot_tree: source.snapshotTree, material_id: materialId, attempt_ref: "quality/reviews/attempts/legacy/attempt.json",
+      lineage: { request_id: "legacy-request", prompt_hash: materialId, round: "legacy", prior_attempt_refs: [], prior_runtime_ids: {}, correction_ref: null, dispatch_sequence: 0 },
       provider_results: [{ provider: "kimi", output: JSON.parse(pass) }], verdict: "pass", findings: []
     };
     createTaskKernel(task).publishCanonicalRecord(resultRef, Buffer.from(`${JSON.stringify(legacy)}\n`));

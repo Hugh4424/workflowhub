@@ -9,14 +9,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "path", "execution", "invocation", "trigger", "bundle"],
+        "required": ["name", "path", "execution", "invocation", "trigger", "bundle", "owner", "dispatch"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "path": { "type": "string", "pattern": "^skills/[^/]+/SKILL\\.md$" },
           "execution": { "enum": ["inline", "independent"] },
           "invocation": { "enum": ["always", "conditional"] },
           "trigger": { "type": "string", "minLength": 1 },
-          "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" }
+          "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" },
+          "owner": { "const": "stage" },
+          "dispatch": { "const": "stage" }
         },
         "additionalProperties": false
       }

@@ -21,7 +21,7 @@ function fixture({ invocation = "conditional" } = {}) {
   fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md"] }));
   fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), `stage: stage
 skills:
-  - { name: demo, path: skills/demo/SKILL.md, bundle: skills/demo/skill-bundle.json, execution: independent, invocation: ${invocation}, trigger: test }
+  - { name: demo, path: skills/demo/SKILL.md, bundle: skills/demo/skill-bundle.json, execution: independent, invocation: ${invocation}, trigger: test, owner: stage, dispatch: stage }
 runtime_capabilities: []
 external_capabilities: []
 `);
@@ -189,4 +189,5 @@ describe("stage skill runtime", () => {
       enforcement: "advisory",
     }));
   });
+
 });

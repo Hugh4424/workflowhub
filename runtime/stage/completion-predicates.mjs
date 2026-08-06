@@ -35,7 +35,7 @@ export const STAGE_PREDICATES = Object.freeze({
     acceptance_criteria: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
-    full_tests_fresh: "test", same_build_integration_review: "review",
+    full_tests_fresh: "test",
     independent_review: "review", acceptance_criteria: "acceptance_criterion",
     exceptions: "acceptance_criterion", human_confirmation: "confirmation",
   }),
@@ -119,7 +119,7 @@ export function deriveStageProgress(stage, observations = [], materials = null) 
   });
 }
 
-const PROGRESS_STATUSES = new Set(["ready", "in_progress", "completed", "blocked", "unknown", "pending"]);
+const PROGRESS_STATUSES = new Set(["ready", "in_progress", "incomplete", "completed", "blocked", "unknown", "pending"]);
 
 function parseDeclaredStageProgress(stage, materials) {
   if (!materials || typeof materials !== "object") return null;

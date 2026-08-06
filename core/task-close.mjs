@@ -135,14 +135,12 @@ function currentVerifyFacts(task, expected = {}) {
     }
   }
   const test = bySubject.get("full_tests_fresh")?.value ?? null;
-  const review = bySubject.get("same_build_integration_review")?.value ?? null;
   const independentReview = bySubject.get("independent_review")?.value ?? null;
   const snapshotCommit = test ? authenticatedTestSnapshotCommit(task, test) : null;
   return Object.freeze({
     vnext: true,
     facts: {
       tests: test ? { snapshot_tree: test.snapshot_tree, snapshot_commit: snapshotCommit, status: test.status } : null,
-      review: review ? { snapshot_tree: review.snapshot_tree, status: review.status } : null,
       independent_review: independentReview ? { snapshot_tree: independentReview.snapshot_tree, status: independentReview.status } : null,
     },
   });
@@ -308,7 +306,7 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
     return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
   }
   if (!existsSync(worktreeRoot)) {
-    const required = [acceptedVerify?.facts?.tests, acceptedVerify?.facts?.review, acceptedVerify?.facts?.independent_review];
+    const required = [acceptedVerify?.facts?.tests, acceptedVerify?.facts?.independent_review];
     const complete = acceptedVerify?.vnext === true
       && required.every((fact) => typeof fact?.snapshot_tree === "string" && fact.snapshot_tree !== "");
     if (!complete) return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete after worktree removal" });
@@ -317,12 +315,12 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
     return Object.freeze({ current: true, reason: "worktree-already-removed", snapshot_tree: required[0].snapshot_tree });
   }
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
-  const required = [acceptedVerify.facts.tests, acceptedVerify.facts.review, acceptedVerify.facts.independent_review];
-  // Test/review verdicts are quality facts, not delivery gates. The close
-  // confirmation is the explicit human decision about accepting the current
-  // conclusion; close only requires that the three current facts exist and
-  // bind to the same snapshot. A failed/revise_required/unavailable review
-  // remains visible in the completed close evidence.
+  const required = [acceptedVerify.facts.tests, acceptedVerify.facts.independent_review];
+  // The verify-code quality review is the single independent review for the
+  // final snapshot. Phase reviews remain immutable audit facts; requiring a
+  // second build-code integration review here duplicated work without adding
+  // a new acceptance question. The explicit close confirmation decides what
+  // to do with the current verification conclusion.
   const missing = required.some((fact) => !fact || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === "");
   const trees = required.map((fact) => fact?.snapshot_tree).filter((tree) => typeof tree === "string" && tree !== "");
   if (missing || trees.length !== required.length) {

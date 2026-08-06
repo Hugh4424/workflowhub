@@ -1,6 +1,10 @@
 stage: build-code
 skills:
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, invocation: conditional, trigger: actual_scope_reroute, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: backend-testing, path: skills/backend-testing/SKILL.md, execution: independent, invocation: conditional, trigger: actual_backend_test, bundle: skills/backend-testing/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: frontend-testing, path: skills/frontend-testing/SKILL.md, execution: independent, invocation: conditional, trigger: actual_frontend_test, bundle: skills/frontend-testing/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: fullstack-slice-testing, path: skills/fullstack-slice-testing/SKILL.md, execution: independent, invocation: conditional, trigger: actual_fullstack_test, bundle: skills/fullstack-slice-testing/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }

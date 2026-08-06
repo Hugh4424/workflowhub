@@ -212,6 +212,20 @@ function latestAttempts(attempt) {
   return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
+const REVIEW_ROUNDS = new Set(["initial", "incremental", "closure", "full", "legacy"]);
+const FAILURE_CATEGORIES = Object.freeze({
+  completed: "completed",
+  OUTPUT_INVALID: "output_invalid",
+  PROVIDER_UNAVAILABLE: "provider_unavailable",
+  TIMEOUT: "timeout",
+  SAME_SOURCE: "same_source",
+  PUBLIC_RESULT_INVALID: "public_result_invalid",
+  PROTOCOL_INCOMPATIBLE: "protocol_incompatible",
+  MATERIAL_INCOMPLETE: "material_incomplete",
+  PROFILE_MISMATCH: "profile_mismatch",
+  UNKNOWN: "unknown",
+});
+
 // These are transport/protocol facts, not semantic review findings. Keep them
 // distinct so a public-result safety failure is diagnosable instead of being
 // collapsed into UNKNOWN in the report.
@@ -227,10 +241,14 @@ const ATTEMPT_CLASS_CODES = new Set([
 ]);
 
 export function classifyAttempt(providerAttempt) {
-  const code = providerAttempt?.error?.code ?? (providerAttempt?.status === "completed" ? "completed" : null);
-  if (code === "completed") return "completed";
-  if (ATTEMPT_CLASS_CODES.has(code)) return code;
-  return "UNKNOWN";
+  const taxonomy = classifyAttemptTaxonomy(providerAttempt);
+  return taxonomy.category === "unknown" ? "UNKNOWN" : taxonomy.code;
+}
+
+export function classifyAttemptTaxonomy(providerAttempt) {
+  const rawCode = providerAttempt?.error?.code ?? (providerAttempt?.status === "completed" ? "completed" : null);
+  const code = typeof rawCode === "string" && rawCode.length > 0 ? rawCode : "UNKNOWN";
+  return Object.freeze({ code, category: FAILURE_CATEGORIES[code] ?? "unknown" });
 }
 
 export function classifyFinding(cluster) {
@@ -241,22 +259,98 @@ export function classifyFinding(cluster) {
 }
 
 export function classificationSummary(attempt, result = null) {
-  const providerAttempts = latestAttempts(attempt);
+  const providerAttempts = Array.isArray(attempt?.provider_attempts) ? attempt.provider_attempts : [];
   const attemptBuckets = Object.fromEntries(["completed", ...ATTEMPT_CLASS_CODES, "UNKNOWN"].map((key) => [key, 0]));
+  const failureTaxonomy = {};
   let failedDurationMs = 0;
   for (const providerAttempt of providerAttempts) {
+    const taxonomy = classifyAttemptTaxonomy(providerAttempt);
     const bucket = classifyAttempt(providerAttempt);
     attemptBuckets[bucket] += 1;
+    failureTaxonomy[bucket] = { code: taxonomy.code, category: taxonomy.category, count: (failureTaxonomy[bucket]?.count ?? 0) + 1 };
     const duration = providerAttempt.execution?.timing?.duration_ms;
     if (bucket !== "completed" && Number.isFinite(duration)) failedDurationMs += duration;
   }
+  const providerCounts = new Map();
+  for (const providerAttempt of providerAttempts) providerCounts.set(providerAttempt.provider, (providerCounts.get(providerAttempt.provider) ?? 0) + 1);
   const findingBuckets = Object.fromEntries(["valid", "invalid_anchor", "minor", "not_adopted"].map((key) => [key, 0]));
   for (const cluster of result?.adjudication?.clusters ?? []) findingBuckets[classifyFinding(cluster)] += 1;
   return {
     attempt: attemptBuckets,
+    provider_attempt_count: providerAttempts.length,
+    retry_count: [...providerCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0),
+    failure_taxonomy: failureTaxonomy,
     finding: findingBuckets,
     failed_duration_ms: failedDurationMs,
     quality_denominator: providerAttempts.filter((entry) => classifyAttempt(entry) === "completed" && entry.error == null).length,
+  };
+}
+
+export function validateReviewLineage(value, label = "review lineage") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
+  const allowed = new Set(["request_id", "prompt_hash", "round", "prior_attempt_refs", "prior_runtime_ids", "correction_ref", "dispatch_sequence"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`${label} contains unsupported fields: ${unknown.join(", ")}`);
+  if (typeof value.request_id !== "string" || value.request_id.trim() === "") throw new TypeError(`${label}.request_id is required`);
+  if (!/^[a-f0-9]{64}$/.test(value.prompt_hash ?? "")) throw new TypeError(`${label}.prompt_hash must be sha256`);
+  if (!REVIEW_ROUNDS.has(value.round)) throw new TypeError(`${label}.round is invalid`);
+  const refPattern = /^(?:quality\/reviews|reviews)\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/;
+  if (!Array.isArray(value.prior_attempt_refs) || value.prior_attempt_refs.some((ref) => typeof ref !== "string" || !refPattern.test(ref))) {
+    throw new TypeError(`${label}.prior_attempt_refs must contain canonical attempt refs`);
+  }
+  if (!value.prior_runtime_ids || typeof value.prior_runtime_ids !== "object" || Array.isArray(value.prior_runtime_ids)
+      || Object.values(value.prior_runtime_ids).some((runtimeId) => runtimeId !== null && (typeof runtimeId !== "string" || runtimeId.trim() === ""))) {
+    throw new TypeError(`${label}.prior_runtime_ids must be a provider-to-runtime map`);
+  }
+  if (value.correction_ref !== null && !refPattern.test(value.correction_ref ?? "")) throw new TypeError(`${label}.correction_ref must be null or a canonical attempt ref`);
+  if (!Number.isSafeInteger(value.dispatch_sequence) || value.dispatch_sequence < 0) throw new TypeError(`${label}.dispatch_sequence must be a non-negative integer`);
+  return Object.freeze({
+    request_id: value.request_id,
+    prompt_hash: value.prompt_hash,
+    round: value.round,
+    prior_attempt_refs: Object.freeze([...value.prior_attempt_refs]),
+    prior_runtime_ids: Object.freeze({ ...value.prior_runtime_ids }),
+    correction_ref: value.correction_ref,
+    dispatch_sequence: value.dispatch_sequence,
+  });
+}
+
+export function createReviewLineage({ requestId, promptHash, round, priorAttemptRefs = [], priorRuntimeIds = {}, correctionRef = null, dispatchSequence = 0 } = {}) {
+  return validateReviewLineage({
+    request_id: requestId,
+    prompt_hash: promptHash,
+    round,
+    prior_attempt_refs: priorAttemptRefs,
+    prior_runtime_ids: priorRuntimeIds,
+    correction_ref: correctionRef,
+    dispatch_sequence: dispatchSequence,
+  });
+}
+
+export function aggregateReviewMetrics(attempts = []) {
+  const records = Array.isArray(attempts) ? attempts : [attempts];
+  const failureTaxonomy = {};
+  let providerAttemptCount = 0;
+  let retryCount = 0;
+  let correctionCount = 0;
+  let failedDurationMs = 0;
+  for (const record of records) {
+    const summary = classificationSummary(record);
+    providerAttemptCount += summary.provider_attempt_count;
+    retryCount += summary.retry_count;
+    if (record?.lineage?.correction_ref !== null && record?.lineage?.correction_ref !== undefined) correctionCount += 1;
+    failedDurationMs += summary.failed_duration_ms;
+    for (const [code, entry] of Object.entries(summary.failure_taxonomy)) {
+      failureTaxonomy[code] = { code: entry.code, category: entry.category, count: (failureTaxonomy[code]?.count ?? 0) + entry.count };
+    }
+  }
+  return {
+    attempt_count: records.length,
+    provider_attempt_count: providerAttemptCount,
+    retry_count: retryCount,
+    correction_count: correctionCount,
+    failed_duration_ms: failedDurationMs,
+    failure_taxonomy: failureTaxonomy,
   };
 }
 

@@ -17,6 +17,15 @@ function workspace() {
 }
 
 describe("material workspace contract", () => {
+  it("keeps the decision log in the same four current material names", () => {
+    expect(CURRENT_MATERIAL_FILES).toEqual([
+      "decision-log.md",
+      "spec.md",
+      "plan.md",
+      "tasks.md",
+    ]);
+  });
+
   it("derives not_ready from missing or empty current materials", () => {
     const root = workspace();
     writeFileSync(join(root, "decision-log.md"), "direction\n");

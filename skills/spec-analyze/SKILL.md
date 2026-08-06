@@ -9,15 +9,16 @@ Mode: `lens-only`. Delivery: `file_only`.
 
 ## Input boundary
 
-Read only `review-packet.v1` and the frozen bundle. Use `planning_artifacts` in the packet for specification, plan, and task excerpts. Do not request additional files or infer material that is absent from the packet.
+Read only `review-packet.v1` and the frozen bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet.
 
 ## Check
 
-1. Map each supplied requirement to an implementation task and objective verification evidence.
-2. Find inconsistency, duplication, ambiguity, and under-definition across supplied excerpts.
-3. Distinguish packet evidence from reviewer inference.
-4. Mark missing source material as `material_incomplete`, not as a semantic finding.
-5. Return every finding with supplied artifact anchor, rule, evidence, impact, and focused correction.
+1. Map every raw requirement/source ID from decision-log to the decision, spec, plan, task, FR/AC, and objective verification evidence that claims it.
+2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, plan, and tasks.
+3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
+4. Check every Phase, task, and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule.
+5. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
+6. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent must decide whether the finding is reasonable before any material is changed or work proceeds.
 
 ## Result
 
@@ -27,7 +28,7 @@ Return a concise `lens-only` result for `skillResults`. This lens evaluates only
 
 This report-only lens is read-only and 不阻断. Scan categories: inconsistency, duplicate, ambiguity, underdefined, and constitution-alignment. Constitution alignment is record-only, 不阻断.
 
-Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, and `line_or_anchor`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
+Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, `line_or_anchor`, `impact`, `suggested_correction`, and `disposition`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 
 The frozen packet identifies `spec.md`, `plan.md`, and `tasks.md` by logical name. This lens never locates, creates, or updates an artifact.
 

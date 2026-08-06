@@ -4,9 +4,11 @@ import { join } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
+import { buildPlanningArtifacts } from "../../skills/wh-review/scripts/review-materials.mjs";
+
 const root = process.cwd();
 const read = (file) => readFileSync(join(root, file), "utf8");
-const taskCards = (markdown) => markdown.split(/^#### /m).slice(1).map((part) => {
+const taskCards = (markdown) => markdown.split(/^#{3,4} /m).slice(1).map((part) => {
   const [heading, ...lines] = part.split("\n");
   return { id: heading.slice(0, 4), body: lines.join("\n") };
 });
@@ -16,6 +18,27 @@ const backtickValues = (body, label) => {
 };
 
 describe("spec and plan content artifact closure", () => {
+  it("puts the decision-log source index into the derived build-plan packet", () => {
+    const matrix = JSON.parse(read("runtime/review/stage-materials.json"));
+    expect(matrix.stages["build-plan"].generated).toContain("planning_artifacts");
+    expect(matrix.stages["build-plan"].required).toContain("raw_requirement");
+    const packet = buildPlanningArtifacts({
+      rawRequirementIndex: {
+        schema_version: "raw-requirement-index.v1",
+        source_artifact: "decision-log",
+        entries: [{ id: "R-001", decision_ids: ["D-001"], summary: "原始要求" }],
+      },
+      approvedSpec: "spec",
+      acceptanceCriteria: "acceptance",
+      draftPlan: "plan",
+      draftTasks: "tasks",
+    });
+    expect(packet.schema_version).toBe("spec-analyze-planning-artifacts.v1");
+    expect(packet.raw_requirement_index.source_artifact).toBe("decision-log");
+    expect(packet).not.toHaveProperty("decision_log_index");
+    expect(packet.draft_tasks).toBe("tasks");
+  });
+
   it("keeps the recovered content skills declared by their owning stage", () => {
     const buildSpec = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
@@ -59,40 +82,33 @@ describe("spec and plan content artifact closure", () => {
       expect(text).toMatch(/Dependency Graph|DAG/);
     }
     expect(tasksSkill).toMatch(/test-routing-advisor/);
-    expect(tasksSkill).toMatch(/testing-system-blueprint/);
+    expect(tasksSkill).toMatch(/does not invoke the concrete[\s\S]*testing-system-blueprint/);
     expect(tasksTemplate).toMatch(/test_strategy_owner/);
     expect(tasksTemplate).toMatch(/scenarios \/ commands \/ expected exit \/ oracle/);
     expect(tasksTemplate).toMatch(/test method/);
-    expect(tasksTemplate).toMatch(/build-code.*只执行/s);
+    expect(tasksTemplate).toMatch(/build-code.*真实 changed files.*重路由/s);
     expect(tasksTemplate).toMatch(/coverage limits/);
     expect(tasksTemplate).toMatch(/final current-snapshot aggregate strategy/);
     expect(tasksTemplate).toMatch(/evidence_refs.*TaskKernel|TaskKernel.*evidence_refs/s);
     expect(tasksTemplate).toMatch(/evidence_note/);
     const buildPlanNames = buildPlan.skills.map((item) => item.name);
-    expect(buildPlanNames).toEqual(expect.arrayContaining([
-      "test-routing-advisor",
-      "testing-system-blueprint",
-      "backend-testing",
-      "frontend-testing",
-      "fullstack-slice-testing",
+    expect(buildPlanNames).toContain("test-routing-advisor");
+    expect(buildPlanNames).not.toEqual(expect.arrayContaining([
+      "testing-system-blueprint", "backend-testing", "frontend-testing", "fullstack-slice-testing",
     ]));
   });
 
-  it("requires every current task card to carry an executable, source-bound strategy", () => {
-    const markdown = read("specs/requirements-completeness-audit-20260804/tasks.md");
-    const cards = taskCards(markdown).filter(({ id }) => /^T[0-9]{3}$/.test(id) && Number(id.slice(1)) <= 28);
-    expect(cards).toHaveLength(28);
+  it("keeps the current P3 task cards source-bound and executable", () => {
+    const markdown = read("specs/multica-issues-monitoring-g6-g7-20260805/tasks.md");
+    const cards = taskCards(markdown).filter(({ id }) => ["T005", "T006"].includes(id));
+    expect(cards).toHaveLength(2);
     const requiredLabels = [
-      "Workflow stage",
       "source_refs / decision_refs",
       "execution_file_paths",
       "test_strategy_owner",
       "test tier / test method",
-      "scenarios / commands / expected exit / oracle",
       "fixtures_services",
-      "browser_route",
-      "execution_contract",
-      "final current-snapshot aggregate strategy",
+      "evidence_path",
       "coverage limits",
     ];
     for (const { id, body } of cards) {
@@ -100,9 +116,10 @@ describe("spec and plan content artifact closure", () => {
         const hasLabel = body.split("\n").some((line) => line.startsWith("- **" + label + "**：") || (label === "coverage limits" && line.startsWith("- **coverage_limits**：")));
         expect(hasLabel, id + " missing " + label).toBe(true);
       }
-      expect(body, id + " must retain one completion area").toContain("执行状态填写区（唯一完成权威）");
       const exact = backtickValues(body, "精确文件");
-      const execution = backtickValues(body, "execution_file_paths");
+      const execution = backtickValues(body, "execution_file_paths").flatMap((value) => {
+        try { return JSON.parse(value); } catch { return [value]; }
+      });
       expect(exact.length, id + " has no exact file boundary").toBeGreaterThan(0);
       expect(execution.length, id + " has no execution file paths").toBeGreaterThan(0);
       expect(new Set(exact)).toEqual(new Set(execution));
@@ -111,8 +128,9 @@ describe("spec and plan content artifact closure", () => {
         expect(statSync(join(root, file)).isFile(), id + " path is not a file: " + file).toBe(true);
       }
       expect(body).toMatch(/- \*\*test_strategy_owner\*\*：`?build-plan\/high-intelligence-model/);
-      expect(body).toMatch(/source_refs \/ decision_refs.*(?:R[0-9]+|D[0-9]+)/);
-      expect(body).toMatch(/execution_contract.*build-code.*(?:消费|执行)/s);
+      expect(body).toMatch(/source_refs \/ decision_refs.*(?:R-[0-9]+|D-[0-9]+)/);
     }
+    expect(markdown).toMatch(/## 4\. Final current-snapshot aggregate strategy/);
+    expect(markdown).toMatch(/\*\*execution_contract\*\*：当前快照运行一次/s);
   });
 });
