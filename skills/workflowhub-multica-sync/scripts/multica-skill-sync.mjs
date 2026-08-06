@@ -226,8 +226,22 @@ function bindingIssues(expected, skills) {
 
 function onlineSkillDetail(profile, workspace, skill, timeoutMs) {
   const primary = unwrap(multica(profile, workspace, ["skill", "get", skill.id, "--output", "json"], { timeoutMs }));
-  const files = unwrap(multica(profile, workspace, ["skill", "files", "list", skill.id, "--output", "json"], { timeoutMs }), "files");
-  return { ...primary, content: primary?.content, files: Array.isArray(files) ? files : [] };
+  // `skill get` already returns the complete file list. Avoid a second network
+  // round trip per skill; an absent/non-array list remains an unconfirmed read.
+  return { ...primary, content: primary?.content, files: Array.isArray(primary?.files) ? primary.files : [] };
+}
+
+function onlineSkillFiles(profile, workspace, skill, timeoutMs) {
+  const detail = onlineSkillDetail(profile, workspace, skill, timeoutMs);
+  return new Map(detail.files.map(file => [file.path, file]));
+}
+
+function assertSkillFileReadback(profile, workspace, online, item, file, expected, timeoutMs) {
+  const files = onlineSkillFiles(profile, workspace, online, timeoutMs);
+  const actual = files.get(file);
+  if (!actual || typeof actual.content !== "string" || sha(Buffer.from(actual.content, "utf8")) !== expected) {
+    throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${file} 回读不一致`);
+  }
 }
 
 function listAgents(profile, workspace, timeoutMs) { return unwrap(multica(profile, workspace, ["agent", "list", "--output", "json"], { timeoutMs }), "agents"); }
@@ -465,18 +479,17 @@ function apply({ report, expectedSnapshot, timeoutMs }) {
       const bytes = mainBytes(report.repo, localFilePath(item, file), timeoutMs);
       const expected = sha(bytes);
       multicaMutation(report.profile, report.workspace, ["skill", "files", "upsert", online.id, "--path", file, "--content-stdin", "--output", "json"], { input: bytes, timeoutMs });
-      assertSkillReadback(report.profile, report.workspace, online, item, { [file]: expected }, timeoutMs);
+      assertSkillFileReadback(report.profile, report.workspace, online, item, file, expected, timeoutMs);
       actions.push(`upsert ${item.name}/${file}`);
     }
     if (item.files.extra.length) {
-      const detail = onlineSkillDetail(report.profile, report.workspace, online, timeoutMs);
-      const files = new Map(detail.files.map(file => [file.path, file]));
+      const files = onlineSkillFiles(report.profile, report.workspace, online, timeoutMs);
       for (const filePath of item.files.extra) {
         const file = files.get(filePath);
         if (!file?.id) throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${filePath} 缺少删除 ID`);
         multicaMutation(report.profile, report.workspace, ["skill", "files", "delete", online.id, file.id], { timeoutMs });
-        const after = onlineSkillDetail(report.profile, report.workspace, online, timeoutMs);
-        if (after.files.some(value => value.path === filePath)) throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${filePath} 删除后仍存在`);
+        const after = onlineSkillFiles(report.profile, report.workspace, online, timeoutMs);
+        if (after.has(filePath)) throw new SyncError("READBACK_MISMATCH", `技能 ${item.name}/${filePath} 删除后仍存在`);
         actions.push(`delete ${item.name}/${filePath}`);
       }
     }
