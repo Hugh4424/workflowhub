@@ -99,7 +99,7 @@ describe("spec and plan content artifact closure", () => {
   });
 
   it("keeps the current P3 task cards source-bound and executable", () => {
-    const markdown = read("specs/multica-issues-monitoring-g6-g7-20260805/tasks.md");
+    const markdown = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md");
     const cards = taskCards(markdown).filter(({ id }) => ["T005", "T006"].includes(id));
     expect(cards).toHaveLength(2);
     const requiredLabels = [

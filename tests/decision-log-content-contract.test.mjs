@@ -7,7 +7,7 @@ describe("decision-log minimum content contract", () => {
   it("keeps the decision index complete without turning it into a spec copy", () => {
     const skill = read("skills/decision-log/SKILL.md");
     const template = read("skills/decision-log/templates/decision-log-template.md");
-    const currentLog = read("specs/multica-issues-monitoring-g6-g7-20260805/decision-log.md");
+    const currentLog = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/decision-log.md");
     for (const term of [
       "decision-entry.v1",
       "原始需求",

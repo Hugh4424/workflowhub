@@ -6,8 +6,8 @@ const read = (path) => readFileSync(path, "utf8");
 
 describe("WorkflowHub stage progress contract", () => {
   it("requires plan and tasks to expose their own stage progress rows", () => {
-    const plan = read("specs/multica-issues-monitoring-g6-g7-20260805/plan.md");
-    const tasks = read("specs/multica-issues-monitoring-g6-g7-20260805/tasks.md");
+    const plan = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/plan.md");
+    const tasks = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md");
     expect(validateWorkflowHubStageProgress({ plan, tasks })).toMatchObject({ ok: true, errors: [] });
   });
 

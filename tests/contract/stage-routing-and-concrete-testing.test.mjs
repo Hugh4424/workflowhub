@@ -18,10 +18,10 @@ const skillSteps = (stage) => json(`workflows/${stage}/steps.json`).steps.flatMa
 
 describe("D-015 stage routing and concrete testing contract", () => {
   it("records the user requirement and current material handoff", () => {
-    const log = read("specs/multica-issues-monitoring-g6-g7-20260805/decision-log.md");
-    const spec = read("specs/multica-issues-monitoring-g6-g7-20260805/spec.md");
-    const plan = read("specs/multica-issues-monitoring-g6-g7-20260805/plan.md");
-    const tasks = read("specs/multica-issues-monitoring-g6-g7-20260805/tasks.md");
+    const log = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/decision-log.md");
+    const spec = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/spec.md");
+    const plan = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/plan.md");
+    const tasks = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md");
     expect(log).toMatch(/R-011/);
     expect(log).toMatch(/D-015/);
     expect(spec).toMatch(/FR-WH-009/);
