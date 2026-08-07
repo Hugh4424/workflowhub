@@ -100,6 +100,45 @@ describe("trusted third-review host configuration", () => {
     });
   });
 
+  it("resolves the private scope_revision route without adding a public stage", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["pi/coding"] = { enabled: true, model: "kimi-coding/kimi-for-coding", thinking: true };
+    broker.providers["opencode/v4flash"] = { enabled: true, model: "opencode/deepseek-v4-flash", effort: "max" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = {
+      version: 2,
+      profiles: {
+        "pi/coding": { model: "kimi-coding/kimi-for-coding", effort: null, thinking: true, priority: 11 },
+        "opencode/v4flash": { model: "opencode/deepseek-v4-flash", effort: "max", thinking: null, priority: 18 },
+      },
+      stages: {},
+      review_kinds: {
+        scope_revision: { initial: ["pi/coding", "opencode/v4flash"], mode: "single_round", minimum_heterologous: 1 },
+      },
+    };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code", requestedReviewKind: "scope_revision" });
+    const route = resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "scope_revision");
+    expect(route).toMatchObject({
+      initial: ["pi/coding", "opencode/v4flash"], mode: "single_round", minimum_heterologous: 1,
+      profile_specs: {
+        "pi/coding": { model: "kimi-coding/kimi-for-coding" },
+        "opencode/v4flash": { model: "opencode/deepseek-v4-flash" },
+      },
+    });
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", route)).toMatchObject({
+      requestedProfiles: ["pi/coding", "opencode/v4flash"],
+      eligibleProfiles: ["pi/coding", "opencode/v4flash"],
+      effectiveProfiles: [
+        { provider: "pi/coding", adapter: "pi", model: "kimi-coding/kimi-for-coding", effort: null, thinking: true },
+        { provider: "opencode/v4flash", adapter: "opencode", model: "opencode/deepseek-v4-flash", effort: "max", thinking: null },
+      ],
+    });
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "scope_revision")).not.toThrow();
+  });
+
   it("preserves make-decision single_round routes without widening provider dispatch", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));

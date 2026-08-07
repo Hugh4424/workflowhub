@@ -91,8 +91,8 @@ export function reconcileMakeDecisionReviewProgress({ kernel, identity, flow } =
   return flow;
 }
 
-export function selectCanonicalReviewRound({ stage, route, previousResult = null, currentSnapshotTree = null, incrementalAvailable = false } = {}) {
-  return selectReviewRound({ stage, route, previousResult, currentSnapshotTree, incrementalAvailable });
+export function selectCanonicalReviewRound({ stage, route, reviewKind = null, previousResult = null, currentSnapshotTree = null, incrementalAvailable = false } = {}) {
+  return selectReviewRound({ stage, route, reviewKind, previousResult, currentSnapshotTree, incrementalAvailable });
 }
 
 export function providerVisibleMaterialsForRound({ materials = {}, round, previousResult = null } = {}) {
@@ -162,8 +162,8 @@ export function adoptLegacyReviewRoot(input) {
   });
 }
 
-function providerClient(stage = null, reviewTrack = null) {
-  const thirdReview = loadTrustedThirdReviewConfig({ requestedStage: stage, requestedTrack: reviewTrack });
+function providerClient(stage = null, reviewTrack = null, reviewKind = null) {
+  const thirdReview = loadTrustedThirdReviewConfig({ requestedStage: stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
   return { thirdReview, client: new ReviewProviderClient({ command: thirdReview.command, config: thirdReview.config }) };
 }
 
@@ -183,10 +183,11 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
   if (formatCorrection && (input.previous_result_ref !== undefined || input.previousResultRef !== undefined || input.materials?.response_ledger !== undefined)) {
     throw new TypeError("format-correct cannot select a follow-up review chain");
   }
-  const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null);
+  const reviewKind = Object.prototype.hasOwnProperty.call(input.materials ?? {}, "scope_revision") ? "scope_revision" : null;
+  const trusted = resolveTrustedReviewSubject(input); const { thirdReview, client } = providerClient(input.stage, input.review_track ?? input.reviewTrack ?? null, reviewKind);
   const hostProvider = input.host_provider ?? input.hostProvider;
   const stage = input.stage; const phaseId = input.phase_id ?? input.phaseId ?? null; const reviewTrack = input.review_track ?? input.reviewTrack ?? null;
-  const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack);
+  const route = resolveTrustedReviewRoute(thirdReview.whReview, stage, reviewTrack, reviewKind);
   const workflowRunId = input.workflow_run_id ?? input.workflowRunId;
   const currentSnapshotTree = frozenSnapshotTree(trusted, phaseId);
   const qualityOnly = trusted.task.manifest.record_model === "vnext-single-write";
@@ -224,7 +225,7 @@ export async function runReviewRound(input, { formatCorrection = false } = {}) {
     currentMaterials: input.materials ?? {},
   });
   const control = selectCanonicalReviewRound({
-    stage,
+    stage, reviewKind,
     route,
     previousResult: prior,
     currentSnapshotTree,

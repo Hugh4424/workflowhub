@@ -112,11 +112,18 @@ export function buildClassificationManifest(materials = {}) {
  */
 const INCREMENTAL_STAGES = new Set(["make-decision", "build-spec", "build-plan"]);
 
-export function selectReviewRound({ stage, route, previousResult = null, currentSnapshotTree = null, incrementalAvailable = false } = {}) {
+export function selectReviewRound({ stage, route, reviewKind = null, previousResult = null, currentSnapshotTree = null, incrementalAvailable = false } = {}) {
   if (!["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(stage)) throw new TypeError("stage is invalid");
-  if (!route || typeof route !== "object") return { round: "legacy", reason: "legacy_3rd_review" };
   if (previousResult === null) return { round: "initial", reason: "first_review" };
   if (!['pass', 'revise_required'].includes(previousResult.verdict)) throw new TypeError("previous result must be semantic");
+  if (reviewKind === "scope_revision") {
+    const priorWasScopeRevision = previousResult.classification_manifest?.entries?.some((entry) => entry.identity === "scope_revision") === true;
+    if (priorWasScopeRevision && currentSnapshotTree !== null && previousResult.snapshot_tree === currentSnapshotTree) {
+      return { round: "none", reason: "current_quality_fact_recorded" };
+    }
+    return { round: "initial", reason: "scope_revision_single_round" };
+  }
+  if (!route || typeof route !== "object") return { round: "legacy", reason: "legacy_3rd_review" };
   if (currentSnapshotTree !== null && previousResult.snapshot_tree !== currentSnapshotTree) {
     if (INCREMENTAL_STAGES.has(stage) && previousResult.verdict === "pass" && incrementalAvailable === true) {
       return { round: "incremental", reason: "changed_material_incremental" };

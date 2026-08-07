@@ -149,6 +149,13 @@ Example host configuration:
         "mode": "full_only",
         "minimum_heterologous": 1
       }
+    },
+    "review_kinds": {
+      "scope_revision": {
+        "initial": ["claude-code/opus", "kimi/coding"],
+        "mode": "single_round",
+        "minimum_heterologous": 1
+      }
     }
   }
 }
@@ -159,6 +166,12 @@ and duplicate adapters are returned as public `SAME_SOURCE` records without a
 CLI call. WorkflowHub records the eligible unique-adapter quorum from that
 attested group. Changing routing belongs to trusted configuration, never to a
 Stage prompt or review request.
+`scope_revision` is an internal review kind, not a public stage. When the
+materials contain `scope_revision`, `wh-review` selects
+`wh_review.review_kinds.scope_revision`; the route must use `single_round` and
+the review still records `build-code` or `verify-code` as its actual stage.
+This keeps the temporary review on the current task and prevents an
+incremental or closure loop.
 Required `materials` keys come directly from `runtime/review/stage-materials.json`.
 The listed structured maps are required for `wh_review.v2`; they are not optional
 just because the matrix also records the v2 rule separately. Build them from

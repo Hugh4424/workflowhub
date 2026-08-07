@@ -23,6 +23,22 @@ describe("review round controller", () => {
     });
   });
 
+  it("forces scope_revision to one initial review instead of an incremental round", () => {
+    const passed = {
+      ...previous,
+      verdict: "pass",
+      classification_manifest: buildClassificationManifest({ approved_spec: "old", scope_revision: "old" }),
+    };
+    expect(selectReviewRound({
+      stage: "build-code", route, reviewKind: "scope_revision", previousResult: passed,
+      currentSnapshotTree: "b".repeat(40), incrementalAvailable: true,
+    })).toEqual({ round: "initial", reason: "scope_revision_single_round" });
+    expect(selectReviewRound({
+      stage: "build-code", route, reviewKind: "scope_revision", previousResult: passed,
+      currentSnapshotTree: passed.snapshot_tree, incrementalAvailable: true,
+    })).toEqual({ round: "none", reason: "current_quality_fact_recorded" });
+  });
+
   it("scopes a changed first-three-stage material set to a runner-generated delta after pass", () => {
     const baselineMaterials = { approved_decision: "old decision", draft_spec: "old spec" };
     const passed = {

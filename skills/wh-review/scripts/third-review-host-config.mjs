@@ -31,6 +31,7 @@ function command(value) {
 }
 
 const REVIEW_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const REVIEW_KINDS = new Set(["scope_revision"]);
 const DECISION_TRACKS = new Set(["direction", "detail"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework"]);
 
@@ -110,14 +111,33 @@ function requireStageReviewMode(stage, configuredRoute, label) {
   if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
 }
 
-function routeEntries(stages) {
-  return Object.entries(stages).flatMap(([stage, configured]) => stage === "make-decision"
-    ? Object.entries(configured).map(([track, route]) => ({ stage, track, route }))
-    : [{ stage, track: null, route: configured }]);
+function requireReviewKindMode(reviewKind, configuredRoute, label) {
+  if (reviewKind === "scope_revision" && configuredRoute.mode !== "single_round") {
+    throw new Error(`${label}.mode must be single_round`);
+  }
 }
 
-export function validateWhReviewRoute(whReview, stage, reviewTrack = null) {
+function routeEntries(stages, reviewKinds = {}) {
+  return [
+    ...Object.entries(stages).flatMap(([stage, configured]) => stage === "make-decision"
+      ? Object.entries(configured).map(([track, route]) => ({ stage, track, reviewKind: null, route }))
+      : [{ stage, track: null, reviewKind: null, route: configured }]),
+    ...Object.entries(reviewKinds).map(([reviewKind, route]) => ({ stage: null, track: null, reviewKind, route })),
+  ];
+}
+
+export function validateWhReviewRoute(whReview, stage, reviewTrack = null, reviewKind = null) {
   if (!whReview) return null;
+  if (reviewKind !== null) {
+    if (!REVIEW_KINDS.has(reviewKind)) throw new Error(`wh_review review kind ${reviewKind} is unsupported`);
+    if (!new Set(["build-code", "verify-code"]).has(stage)) throw new Error("scope_revision review kind is only valid for build-code or verify-code");
+    const configured = whReview.review_kinds?.[reviewKind];
+    if (!configured) return null;
+    const label = `workflowhub host wh_review.review_kinds.${reviewKind}`;
+    requireReviewKindMode(reviewKind, configured, label);
+    validateRouteProfiles(configured, whReview.profiles, label);
+    return configured;
+  }
   const configured = whReview.stages[stage];
   if (!configured) return null;
   const route = stage === "make-decision" ? configured[reviewTrack] : configured;
@@ -130,18 +150,21 @@ export function validateWhReviewRoute(whReview, stage, reviewTrack = null) {
 
 export function validateAllWhReviewRoutes(whReview) {
   if (!whReview) return [];
-  for (const { stage, track, route } of routeEntries(whReview.stages)) {
-    const label = `workflowhub host wh_review.stages.${stage}${track ? `.${track}` : ""}`;
-    requireStageReviewMode(stage, route, label);
+  for (const { stage, track, reviewKind, route } of routeEntries(whReview.stages, whReview.review_kinds)) {
+    const label = reviewKind
+      ? `workflowhub host wh_review.review_kinds.${reviewKind}`
+      : `workflowhub host wh_review.stages.${stage}${track ? `.${track}` : ""}`;
+    if (reviewKind) requireReviewKindMode(reviewKind, route, label);
+    else requireStageReviewMode(stage, route, label);
     validateRouteProfiles(route, whReview.profiles, label);
   }
   return [];
 }
 
-function whReviewPolicy(value, { requestedStage = null, requestedTrack = null } = {}) {
+function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
-  for (const key of Object.keys(value)) if (!["version", "profiles", "stages"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
+  for (const key of Object.keys(value)) if (!["version", "profiles", "stages", "review_kinds"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
   const profiles = profileDeclarations(value.profiles, "workflowhub host wh_review.profiles");
   const stages = {};
   for (const [stage, configured] of Object.entries(value.stages)) {
@@ -175,8 +198,21 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null } 
       }
     }
   }
-  const policy = { version: 2, profiles, stages };
-  if (requestedStage === null) validateAllWhReviewRoutes(policy);
+  const reviewKinds = {};
+  for (const [reviewKind, configured] of Object.entries(value.review_kinds ?? {})) {
+    if (!REVIEW_KINDS.has(reviewKind)) throw new Error("workflowhub host wh_review.review_kinds." + reviewKind + " is unsupported");
+    const label = "workflowhub host wh_review.review_kinds." + reviewKind;
+    try {
+      reviewKinds[reviewKind] = route(configured, label);
+      requireReviewKindMode(reviewKind, reviewKinds[reviewKind], label);
+    } catch (error) {
+      if (requestedReviewKind === null || requestedReviewKind === reviewKind) throw error;
+      reviewKinds[reviewKind] = { __invalid_route: error.message };
+    }
+  }
+  const policy = { version: 2, profiles, stages, ...(Object.keys(reviewKinds).length ? { review_kinds: reviewKinds } : {}) };
+  if (requestedReviewKind !== null) validateWhReviewRoute(policy, requestedStage, requestedTrack, requestedReviewKind);
+  else if (requestedStage === null) validateAllWhReviewRoutes(policy);
   else validateWhReviewRoute(policy, requestedStage, requestedTrack);
   return policy;
 }
@@ -200,12 +236,12 @@ function validateProfileDeclaration(provider, declaration, config) {
   }
 }
 
-function validateWhReviewProfileDeclarations(whReview, config, { requestedStage = null, requestedTrack = null } = {}) {
+function validateWhReviewProfileDeclarations(whReview, config, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
   if (!whReview) return;
-  const providers = requestedStage === null
+  const providers = requestedStage === null && requestedReviewKind === null
     ? Object.keys(whReview.profiles)
-    : [...new Set(routeEntries(whReview.stages)
-      .filter(({ stage, track }) => stage === requestedStage && track === requestedTrack)
+    : [...new Set(routeEntries(whReview.stages, whReview.review_kinds)
+      .filter(({ stage, track, reviewKind }) => reviewKind === requestedReviewKind && (reviewKind !== null || (stage === requestedStage && track === requestedTrack)))
       .flatMap(({ route }) => [...(route.initial ?? []), ...(route.closure ?? [])]))];
   for (const provider of providers) validateProfileDeclaration(provider, whReview.profiles[provider], config);
 }
@@ -215,7 +251,7 @@ function validateWhReviewProfileDeclarations(whReview, config, { requestedStage 
  * CLI/workflow input has no authority to replace command, broker config, or
  * the fixed packet root.
  */
-export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = hostConfigPath(), requestedStage = null, requestedTrack = null } = {}) {
+export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = hostConfigPath(), requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
   const path = regularFile(configuredPath, "workflowhub host config");
   const config = readJson(path, "workflowhub host config");
   const thirdReview = config?.third_review;
@@ -224,13 +260,13 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   const attachmentRoot = realDirectory(thirdReview.attachment_root, "workflowhub host third_review.attachment_root");
   verifyPacketAllowlist(configPath, attachmentRoot);
   const broker = brokerConfig(configPath);
-  const whReview = whReviewPolicy(config.wh_review, { requestedStage, requestedTrack });
-  validateWhReviewProfileDeclarations(whReview, broker, { requestedStage, requestedTrack });
+  const whReview = whReviewPolicy(config.wh_review, { requestedStage, requestedTrack, requestedReviewKind });
+  validateWhReviewProfileDeclarations(whReview, broker, { requestedStage, requestedTrack, requestedReviewKind });
   const routeWarnings = whReview && requestedStage !== null
-    ? routeEntries(whReview.stages).flatMap(({ stage, track }) => {
-      if (stage === requestedStage && track === requestedTrack) return [];
-      try { validateWhReviewRoute(whReview, stage, track); return []; }
-      catch (error) { return [{ stage, ...(track ? { track } : {}), message: error.message }]; }
+    ? routeEntries(whReview.stages, whReview.review_kinds).flatMap(({ stage, track, reviewKind }) => {
+      if (reviewKind === requestedReviewKind && (reviewKind !== null || (stage === requestedStage && track === requestedTrack))) return [];
+      try { validateWhReviewRoute(whReview, stage, track, reviewKind); return []; }
+      catch (error) { return [{ ...(stage ? { stage } : {}), ...(track ? { track } : {}), ...(reviewKind ? { review_kind: reviewKind } : {}), message: error.message }]; }
     })
     : [];
   return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, ...(whReview ? { whReview } : {}), ...(requestedStage !== null ? { routeWarnings } : {}) };
@@ -244,8 +280,14 @@ function routeWithProfilePriorities(route, profiles) {
   return Object.keys(profileSpecs).length === 0 ? route : { ...route, profile_priorities: priorities, profile_specs: profileSpecs };
 }
 
-export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null) {
+export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null, reviewKind = null) {
   if (!whReview) return null;
+  if (reviewKind !== null) {
+    const configured = whReview.review_kinds?.[reviewKind];
+    if (!configured) return null;
+    validateWhReviewRoute(whReview, stage, reviewTrack, reviewKind);
+    return routeWithProfilePriorities(configured, whReview.profiles);
+  }
   const configured = whReview.stages[stage];
   if (!configured) return null;
   if (stage !== "make-decision") {
