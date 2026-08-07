@@ -25,7 +25,17 @@ function git(root, args, options = {}) {
 }
 
 function gitText(root, args) { return String(git(root, args)).trim(); }
-function gitPaths(root, args) { return Buffer.from(git(root, args, { encoding: "buffer" })).toString("utf8").split("\0").filter(Boolean); }
+// `git ls-files --others` can represent an untracked nested repository as a
+// directory entry with a trailing slash (for example `workflowhub/`). A
+// snapshot contains files, not directory placeholders; retaining that entry
+// makes addPath receive an empty basename and fail before the real files are
+// considered. Filter only those placeholders here; ordinary untracked files
+// remain part of the snapshot.
+function gitPaths(root, args) {
+  return Buffer.from(git(root, args, { encoding: "buffer" })).toString("utf8")
+    .split("\0")
+    .filter((path) => path !== "" && !path.endsWith("/"));
+}
 
 function gitCommonDir(root) {
   const value = gitText(root, ["rev-parse", "--git-common-dir"]);

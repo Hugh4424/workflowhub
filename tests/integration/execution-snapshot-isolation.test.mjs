@@ -65,6 +65,31 @@ describe("execution snapshot evidence isolation", () => {
     }
   });
 
+  it("ignores directory placeholders from an untracked nested runner checkout", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "workflowhub-nested-runner-snapshot-"));
+    try {
+      git(root, ["init", "-q"]);
+      git(root, ["config", "user.name", "WorkflowHub Test"]);
+      git(root, ["config", "user.email", "workflowhub-test@local"]);
+      writeFileSync(resolve(root, "source.txt"), "initial\n");
+      git(root, ["add", "source.txt"]);
+      git(root, ["commit", "-qm", "fixture"]);
+
+      const nested = resolve(root, "workflowhub");
+      mkdirSync(nested, { recursive: true });
+      git(nested, ["init", "-q"]);
+      writeFileSync(resolve(nested, "runner.mjs"), "export {};\n");
+
+      expect(git(root, ["ls-files", "--others", "--exclude-standard"])).toContain("workflowhub/");
+      const snapshot = captureGitWorktreeSnapshot(root);
+      expect(snapshot.tree).toMatch(/^[a-f0-9]{40}$/);
+      expect(snapshot.source_manifest.entries.map(({ path }) => path)).not.toContain("workflowhub/");
+      expect(String(execFileSync("git", ["show", `${snapshot.commit}:source.txt`], { cwd: root, encoding: "utf8" }))).toBe("initial\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("resolves Git attributes once for both snapshot trees", () => {
     const root = mkdtempSync(resolve(tmpdir(), "workflowhub-batched-attributes-snapshot-"));
     const traceRoot = mkdtempSync(resolve(tmpdir(), "workflowhub-snapshot-trace-"));
