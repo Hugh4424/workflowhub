@@ -76,6 +76,8 @@ describe("simple wh-review contracts", () => {
       expect(skill, material).toContain(material);
     }
     expect(skill).toMatch(/3rd-review config/i);
+    expect(skill).toMatch(/Runner-owned Skill entrypoint/);
+    expect(skill).toMatch(/codex-home\/skills/);
     expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);

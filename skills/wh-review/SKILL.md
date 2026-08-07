@@ -33,7 +33,9 @@ stay inside the controller.
 
 ## Commands
 
-Production callers use only:
+Production callers use only the existing Runner-owned Skill entrypoint below.
+Run it from the launcher-owned WorkflowHub Runner root, where `core/`,
+`runtime/`, and `skills/` are siblings:
 
 ```bash
 node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
@@ -42,6 +44,13 @@ node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs adopt-legacy-root < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs doctor
 ```
+
+`codex-home/skills/` is only the portable Skill Bundle and is not a Runner
+root. Never execute `skills/wh-review/scripts/wh-review-cli.mjs` from that
+directory or by its absolute Skill Bundle path: its relative imports require
+the authenticated Runner's `core/` and `runtime/`. If the launcher has not
+provided the Runner root, stop with a host-bundle error; do not copy runtime
+files into the target repository or guess a local path.
 
 `doctor` 只读扫描宿主 `wh_review` 的全部 stage/track 路由；任一 profile、
 priority、重复项或模式错误都以非零退出。正常 review 热路径只严格校验当前

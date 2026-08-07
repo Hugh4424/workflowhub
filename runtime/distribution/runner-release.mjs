@@ -66,6 +66,10 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
   "tools/cli/stage-runtime.mjs",
   "tools/cli/task-bootstrap.mjs",
   "tools/cli/task-close.mjs",
+  // wh-review imports the authenticated TaskHandle/Workspace runtime. Keep
+  // the existing Skill entrypoint in the Runner release so callers execute it
+  // from the Runner root rather than an isolated agent home.
+  "skills/wh-review/scripts/wh-review-cli.mjs",
 ]);
 
 export async function buildRunnerRelease({

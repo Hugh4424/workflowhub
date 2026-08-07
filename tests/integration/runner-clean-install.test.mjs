@@ -104,6 +104,7 @@ describe("runner release", () => {
     // invisible to JavaScript static-import discovery.  A clean Runner must
     // still carry them rather than reaching back to the Hub checkout.
     expect(release.files.some(({ path: locator }) => locator === "runtime/review/schemas/attempt.schema.json")).toBe(true);
+    expect(release.files.some(({ path: locator }) => locator === "skills/wh-review/scripts/wh-review-cli.mjs")).toBe(true);
     fs.rmSync(path.join(outputDir, "node_modules"), { recursive: true, force: true });
     const installed = installRunnerRelease({ releaseRoot: outputDir, skillBundleRoot: bundleDir });
     expect(installed.status).toBe(0);
@@ -132,6 +133,13 @@ describe("runner release", () => {
       cwd: prepared.worktree_root,
       encoding: "utf8",
     }).trim()).toMatch(/^[a-f0-9]{40}$/);
+    const reviewEntrypoint = spawnSync(process.execPath, [path.join(outputDir, "skills/wh-review/scripts/wh-review-cli.mjs")], {
+      cwd: outputDir,
+      env,
+      encoding: "utf8",
+    });
+    expect(reviewEntrypoint.status).not.toBe(0);
+    expect(reviewEntrypoint.stderr).not.toMatch(/ERR_MODULE_NOT_FOUND/);
     const taskRoot = bootstrap.task_path;
     expect(fs.existsSync(path.join(taskRoot, "task.json"))).toBe(true);
     const executions = fs.readdirSync(path.join(taskRoot, "identity/executions"))
