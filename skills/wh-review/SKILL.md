@@ -48,16 +48,19 @@ node skills/wh-review/scripts/wh-review-cli.mjs doctor
 `codex-home/skills/` is only the portable Skill Bundle and is not a Runner
 root. Never execute `skills/wh-review/scripts/wh-review-cli.mjs` from that
 directory or by its absolute Skill Bundle path: its relative imports require
-the authenticated Runner's `core/` and `runtime/`. In a Multica run where the
-launcher did not inject the Runner root, provision the canonical host checkout
-with `multica repo checkout https://github.com/Hugh4424/workflowhub --ref main`,
-use only the absolute path printed by that command, and verify the checkout
-before invoking this entrypoint. If it contains `package-lock.json` but no
-usable `node_modules/`, run `npm ci --ignore-scripts` from that Runner root
-first; a non-zero install or doctor exit is a host-bundle error. Do not use
-`npm install` because it may rewrite the lock file. If checkout or
-verification fails, stop with a host-bundle error; do not copy runtime files
-into the target repository or guess a local path.
+the authenticated Runner's `core/` and `runtime/`. In a Multica run, use an
+already injected Runner root exclusively when one is provided; do not run a
+second checkout or fall back to cwd, the local canonical WorkflowHub repo,
+remote, or a task-record path. If no Runner root was injected, provision the
+canonical host checkout with `multica repo checkout
+https://github.com/Hugh4424/workflowhub --ref main`, use only the absolute path
+printed by that command, and stop with a host-bundle error if checkout fails.
+Verify the selected checkout before invoking this entrypoint. If it contains
+`package-lock.json` but no usable `node_modules/`, run `npm ci --ignore-scripts`
+from that Runner root first; a non-zero install or doctor exit is a
+host-bundle error. Do not use `npm install` because it may rewrite the lock
+file. If verification fails, stop with a host-bundle error; do not copy runtime
+files into the target repository or guess a local path.
 
 `doctor` 只读扫描宿主 `wh_review` 的全部 stage/track 路由；任一 profile、
 priority、重复项或模式错误都以非零退出。正常 review 热路径只严格校验当前

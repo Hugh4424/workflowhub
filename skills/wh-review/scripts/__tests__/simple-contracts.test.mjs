@@ -78,9 +78,11 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/3rd-review config/i);
     expect(skill).toMatch(/Runner-owned Skill entrypoint/);
     expect(skill).toMatch(/codex-home\/skills/);
-    expect(skill).toMatch(/multica repo checkout https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
+    expect(skill).toMatch(/multica repo checkout\s+https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
     expect(skill).toMatch(/npm ci --ignore-scripts/);
     expect(skill).toMatch(/Do not use\s+`npm install`/);
+    expect(skill).toMatch(/already injected Runner root exclusively/);
+    expect(skill).toMatch(/never[\s\S]*fall back to cwd, the local canonical WorkflowHub repo/i);
     expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
@@ -95,7 +97,9 @@ describe("simple wh-review contracts", () => {
     expect(protocol).toMatch(/multica repo checkout https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
     expect(protocol).toMatch(/npm ci --ignore-scripts/);
     expect(protocol).toMatch(/不得用会改写锁文件的 `npm install` 代替/);
-    expect(protocol).toMatch(/不得从本机扫描、cwd、业务仓、remote 或 task 记录猜路径/);
+    expect(protocol).toMatch(/若 Multica run 已注入 Runner root，必须只使用该注入的绝对路径/);
+    expect(protocol).toMatch(/checkout 非零就立即 fail-closed，绝不 fallback/);
+    expect(protocol).toMatch(/不能扫描本机目录、猜路径/);
   });
 
   it("keeps the stage skill plan limited to provider-visible lenses", () => {
