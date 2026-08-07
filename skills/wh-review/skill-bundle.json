@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "ca8413f1b5a4c846e4cbd705a124de47d797ea40641b660074ab9a625428e345"
+      "sha256": "397f0c2bf10a28988e014bcaf62271ff180812560b04458711659e985e3a3ed7"
     },
     {
       "path": "contracts/build-code.md",
@@ -92,11 +92,11 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "da483bf6b3ed585019fe07bd1e2a6dc18b6d69a66038d250e90168bc41d6aaba"
+      "sha256": "049f7841a20325732b5a9cda15c7823da0effb40d6697817bf3a14d4183e011f"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "5f29fc25bd85ec88a201d8b2ef2db3b1c2801d96ecdea387fadd22108d814279"
+      "sha256": "d114da451b57b58d8ba4a5b53253b73a92fa25f5936e430fe71463f24774904d"
     },
     {
       "path": "stage-skill-plan.json",
