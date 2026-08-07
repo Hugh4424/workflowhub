@@ -2290,7 +2290,27 @@
       "path": "specs/archive/workflowhub-complexity-governance-v3-20260802/tasks.md",
       "bytes": 268858,
       "sha256": "b1fb169b98df9ccc07926062d45346d4dcd9350803c02eca8de27ce90cc75555"
+    },
+    {
+      "path": "specs/archive/multica-issues-monitoring-g6-g7-20260805/decision-log.md",
+      "bytes": 40461,
+      "sha256": "26b303b1170c062b5be34c8efb87bbe4e8131b28529abf79a64992162aba6c9c"
+    },
+    {
+      "path": "specs/archive/multica-issues-monitoring-g6-g7-20260805/plan.md",
+      "bytes": 58430,
+      "sha256": "4e08fbe4a4043a2571c669f95039904b6685dfe14e54ec91599a277a69a07d16"
+    },
+    {
+      "path": "specs/archive/multica-issues-monitoring-g6-g7-20260805/spec.md",
+      "bytes": 17172,
+      "sha256": "21563eaef286bb1ebe07a7610f004a1a63e1c118ddb44f653caaee96ef311d3b"
+    },
+    {
+      "path": "specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md",
+      "bytes": 105374,
+      "sha256": "b33a6e8313cf1bcb4c22aeb8ace4f499b3dd1e53aef3361e6747b3c3e4867d30"
     }
   ],
-  "file_count": 457
+  "file_count": 461
 }

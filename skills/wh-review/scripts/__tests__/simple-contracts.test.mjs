@@ -78,11 +78,11 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/3rd-review config/i);
     expect(skill).toMatch(/Runner-owned Skill entrypoint/);
     expect(skill).toMatch(/codex-home\/skills/);
-    expect(skill).toMatch(/multica repo checkout\s+https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
     expect(skill).toMatch(/npm ci --ignore-scripts/);
     expect(skill).toMatch(/Do not use\s+`npm install`/);
-    expect(skill).toMatch(/already injected Runner root exclusively/);
-    expect(skill).toMatch(/never[\s\S]*fall back to cwd, the local canonical WorkflowHub repo/i);
+    expect(skill).toMatch(/injected root exclusively/);
+    expect(skill).toMatch(/do not run a second checkout or fall back to cwd, a local\s+canonical repository/i);
+    expect(skill).toMatch(/host adapter.*provisioning protocol/i);
     expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);

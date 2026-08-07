@@ -48,14 +48,12 @@ node skills/wh-review/scripts/wh-review-cli.mjs doctor
 `codex-home/skills/` is only the portable Skill Bundle and is not a Runner
 root. Never execute `skills/wh-review/scripts/wh-review-cli.mjs` from that
 directory or by its absolute Skill Bundle path: its relative imports require
-the authenticated Runner's `core/` and `runtime/`. In a Multica run, use an
-already injected Runner root exclusively when one is provided; do not run a
-second checkout or fall back to cwd, the local canonical WorkflowHub repo,
-remote, or a task-record path. If no Runner root was injected, provision the
-canonical host checkout with `multica repo checkout
-https://github.com/Hugh4424/workflowhub --ref main`, use only the absolute path
-printed by that command, and stop with a host-bundle error if checkout fails.
-Verify the selected checkout before invoking this entrypoint. If it contains
+the authenticated Runner's `core/` and `runtime/`. The host adapter must
+provide an absolute Runner root; use an injected root exclusively when one is
+provided, and do not run a second checkout or fall back to cwd, a local
+canonical repository, a remote, or a task-record path. If no Runner root is
+provided, follow the host adapter's documented provisioning protocol and stop
+with a host-bundle error if provisioning fails. Verify the selected checkout before invoking this entrypoint. If it contains
 `package-lock.json` but no usable `node_modules/`, run `npm ci --ignore-scripts`
 from that Runner root first; a non-zero install or doctor exit is a
 host-bundle error. Do not use `npm install` because it may rewrite the lock
