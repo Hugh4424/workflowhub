@@ -94,6 +94,28 @@ current materials.
 
 ## Independent review and revision
 
+### v2 review packet assembly
+
+`build-spec` uses the `wh_review.v2` contract. The caller must assemble one
+current review packet with `raw_requirement`, `approved_decision`, `draft_spec`,
+`context_map`, and `evidence_map` before every `wh-review` call. The two maps
+are required caller/runner review material, not optional metadata or runner
+state. Initial/full packets deliver them to the provider; an incremental
+packet intentionally delivers only the runner-generated `review_delta` after
+the current maps pass validation.
+
+- `context_map` selects the current interfaces, constraints, and reuse points
+  that the frozen spec depends on.
+- `evidence_map` maps each applicable acceptance criterion to its own current
+  evidence anchors; do not reuse one generic anchor for multiple criteria.
+- After a spec or material revision, rebuild both maps from that same current
+  frozen snapshot and resend them. Do not retry with only the three text
+  fields from the previous call.
+- If a map cannot be completed, send the valid `state: unknown` structure with
+  `unknown_reason`; never omit it, send `{}`, or invent anchors to get a review.
+  A missing or malformed map must remain the runner's
+  `MATERIAL_INCOMPLETE`/`unavailable` fact.
+
 1. Once the ambiguity gate is clear, send the exact current `spec.md`, relevant
    current materials, and the ambiguity summary to one independent `wh-review`.
    The review must be genuinely run. If the provider is unavailable, timed out,

@@ -84,8 +84,17 @@ current material if needed.
    genuinely needed.
 6. Run independent review through `wh-review`. The direction track receives a
    blind packet: requirement, objective facts, constraints, and non-goals only.
-   The detail track reviews the current decision material. Record the actual
-   result as returned: `unavailable`, failure, or a finding is never `pass`.
+   The detail track reviews the current decision material. For that detail
+   track, the caller must include `context_map` and `evidence_map` with the
+   current `raw_requirement`, `approved_direction`, and
+   `draft_spec_or_acceptance` before every call. Rebuild and resend both maps
+   after a material revision; do not retry with only the text fields. If a map
+   is incomplete, use the valid `state: unknown` form with `unknown_reason`,
+   never omit it, send `{}`, or invent anchors. Record the actual result as
+   returned: `MATERIAL_INCOMPLETE`/`unavailable`, failure, or a finding is
+   never `pass`. Initial/full detail packets deliver both maps; an incremental
+   packet intentionally delivers only the runner-generated `review_delta` after
+   the current maps pass validation.
 7. Address valid findings in the same task. Repair them, reject invalid ones
    with evidence, or let the user explicitly accept a concrete risk. A finding
    never requires a new task or repeat review solely to manufacture a pass. If

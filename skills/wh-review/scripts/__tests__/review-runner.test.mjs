@@ -1104,6 +1104,37 @@ describe("aggregation and runner", () => {
     });
   });
 
+  it.each([
+    ["build-spec", undefined, { raw_requirement: "need", approved_decision: "decided", draft_spec: "draft" }],
+    ["build-plan", undefined, { raw_requirement: "need", approved_spec: "spec", acceptance_criteria: "criteria", draft_plan: "plan", draft_tasks: "tasks" }],
+    ["make-decision", "detail", { raw_requirement: "need", approved_direction: "decided", draft_spec_or_acceptance: "draft" }],
+  ])("rejects a %s packet without v2 authority maps before provider dispatch", async (stage, reviewTrack, materials) => {
+    const { attachmentRoot, task } = fixture(`simple-review-${stage}-v2-material-incomplete-`);
+    const calls = [];
+    const policy = dualV2Policy();
+    const result = await runReviewFixture({
+      task,
+      attachmentRoot,
+      taskId: "task",
+      stage,
+      reviewTrack,
+      materials,
+      hostProvider: "codex",
+      providers: policy.requested_profiles,
+      reviewPolicy: policy,
+      providerClient: { runGroup: async () => { calls.push(true); throw new Error("provider must not run"); } },
+      captureSource: () => source,
+    });
+    expect(calls).toHaveLength(0);
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null, runtimeIds: {} });
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt).toMatchObject({
+      provider_attempts: [],
+      terminal_status: "unavailable",
+      error: { code: "MATERIAL_INCOMPLETE", message: expect.stringContaining("context_map") },
+    });
+  });
+
   it("guards an empty code-stage skill plan before the provider fan-out", () => {
     const materialsSource = readFileSync(join(import.meta.dirname, "..", "review-materials.mjs"), "utf8");
     expect(materialsSource).toMatch(/\["build-code",\s*"verify-code"\][\s\S]*required_skills[\s\S]*length === 0[\s\S]*MATERIAL_INCOMPLETE/);

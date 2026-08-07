@@ -48,9 +48,13 @@ node skills/wh-review/scripts/wh-review-cli.mjs doctor
 `codex-home/skills/` is only the portable Skill Bundle and is not a Runner
 root. Never execute `skills/wh-review/scripts/wh-review-cli.mjs` from that
 directory or by its absolute Skill Bundle path: its relative imports require
-the authenticated Runner's `core/` and `runtime/`. If the launcher has not
-provided the Runner root, stop with a host-bundle error; do not copy runtime
-files into the target repository or guess a local path.
+the authenticated Runner's `core/` and `runtime/`. In a Multica run where the
+launcher did not inject the Runner root, provision the canonical host checkout
+with `multica repo checkout https://github.com/Hugh4424/workflowhub --ref main`,
+use only the absolute path printed by that command, and verify the checkout
+before invoking this entrypoint. If checkout or verification fails, stop with
+a host-bundle error; do not copy runtime files into the target repository or
+guess a local path.
 
 `doctor` 只读扫描宿主 `wh_review` 的全部 stage/track 路由；任一 profile、
 priority、重复项或模式错误都以非零退出。正常 review 热路径只严格校验当前
@@ -160,8 +164,8 @@ the runner must record `MATERIAL_INCOMPLETE` and must not call a provider.
   `draft_spec_or_acceptance`, `context_map`, `evidence_map`;
 - build-spec: `raw_requirement`, `approved_decision`, `draft_spec`,
   `context_map`, `evidence_map`;
-- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`,
-  `draft_tasks`, `context_map`, `evidence_map`;
+- build-plan: `raw_requirement`, `approved_spec`, `acceptance_criteria`,
+  `draft_plan`, `draft_tasks`, `context_map`, `evidence_map`;
 - build-code/phase: `approved_spec`, `acceptance_criteria`, `test_evidence`,
   `phase_map`, `impact_map`, `reuse_map`, `acceptance_map`;
 - build-code/integration: `approved_spec`, `acceptance_criteria`,

@@ -17,12 +17,12 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 - **执行仓与业务仓分开**：按项目配置取得 WorkflowHub launcher-owned runtime 和业务目标仓。不能扫描本机目录、猜路径，或因为业务仓恰好也有脚本就把它当宿主运行环境。
 - 工头每次准备或恢复都重写根 Issue description 末尾的隐藏 `workflowhub-context`：格式必须是 `<!-- workflowhub-context: root=<当前根 UUID>; project=<项目>; task=<任务>; task_path=<TaskHandle 路径> -->`，只包含这四项。`project`、`task`、`task_path` 必须从 bootstrap JSON **原样复制**，不得手工改写或凭记忆重填；更新后重新读取根 Issue，把这三项与 bootstrap 输出逐字比对。不要把这份上下文写进 Issue metadata；`task_path` 只供正式审查读取 TaskHandle，绝不写进公开评论。
-- 从 launcher-owned runtime 执行正式 `task-bootstrap`。这一步只创建或读取 TaskHandle，不要求 `runner_root`、`runner_oid` 或 `migration_ref`，也不代表质量结果。`execution_mode=per_invocation` 时，每次正式入口独立认证当前运行代码，并把 commit/tree、合同版本和能力写入审计事实。
+- 从 launcher-owned runtime 执行正式 `task-bootstrap`。这一步只创建或读取 TaskHandle，不把 `runner_root`、`runner_oid` 或 `migration_ref` 写入新的 `per_invocation` task，也不代表质量结果。若 Multica run 没有注入 Runner root，先用工作区已登记的 canonical WorkflowHub repo 执行 `multica repo checkout https://github.com/Hugh4424/workflowhub --ref main`，只使用 CLI 返回的绝对 checkout 路径作为本次 launcher-owned runtime；立即验证它是干净 Git worktree 且含 `core/`、`runtime/`、`skills/`、`CONSTITUTION.md`，失败就 fail-closed。不得从本机扫描、cwd、业务仓、remote 或 task 记录猜路径，也不得把该路径写进 task manifest。
 - `legacy_pinned` 仅用于读取旧任务的历史证据。旧 runner 字段、分支、脏状态和迁移历史不能决定当前阶段业务结果；不得为日常升级创建 replacement，也不得把旧字段伪装成新执行身份。无法安全读取旧记录时，报告具体存储错误并停止。
 - bootstrap 或 launcher 不可用时，不创建或唤醒 Stage Issue；按准备失败处理。runner 元数据缺失、分支变化或旧 replacement 记录本身不是业务阻塞。
 - task 准备好后才创建或复用五个 Stage Issue；新建时把同一份隐藏注释写入 description，复用时覆盖旧注释。注释只供 Agent 读取，公开评论不展示路径、哈希或内部编号。
 - Stage Agent 先确认隐藏注释的根 Issue 与自己的当前根一致、并能打开对应的正式 WorkflowHub task，才使用它做审查或交接；不一致时不得使用旧上下文，要在上游 Issue @工头 请求覆盖修复，不从 cwd、Issue 编号或目录扫描猜身份，也不在业务仓复制宿主文件。
-- **Stage 运行入口**：Stage Agent 只能执行已绑定 Stage Skill 写出的公共命令。launcher-owned runtime 负责解析 `scripts/`、`core/`、`runtime/` 和 `metrics/`；`wh-review` 必须从 Runner root 通过 `node skills/wh-review/scripts/wh-review-cli.mjs ...` 入口执行，不能直接从 `codex-home/skills/wh-review` 启动脚本。审查路由始终由受信配置决定，Agent 不选 provider。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task，不得手工拼 task 路径或借用其他 Agent 的工作目录。每次入口都记录执行身份，但该身份只用于审计和可追溯，不参与需求、质量或阶段放行裁决。
+- **Stage 运行入口**：Stage Agent 只能执行已绑定 Stage Skill 写出的公共命令。launcher-owned runtime 负责解析 `scripts/`、`core/`、`runtime/` 和 `metrics/`；`wh-review` 必须从上述 Runner root 通过 `node skills/wh-review/scripts/wh-review-cli.mjs ...` 入口执行，不能直接从 `codex-home/skills/wh-review` 启动脚本。审查路由始终由受信配置决定，Agent 不选 provider。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task，不得手工拼 task 路径或借用其他 Agent 的工作目录。每次入口都记录执行身份，但该身份只用于审计和可追溯，不参与需求、质量或阶段放行裁决。
 
 ## 谁负责什么
 

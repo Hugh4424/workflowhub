@@ -45,6 +45,16 @@ describe("non-code review policy", () => {
     expect(skill).toMatch(/(?:never|not)[\s\S]{0,120}(?:block|license|permission|proceed)/i);
   });
 
+  it.each(["make-decision", "build-spec", "build-plan"])("%s keeps v2 authority maps in every planning review retry", (stage) => {
+    const skill = readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
+    expect(skill).toContain("raw_requirement");
+    expect(skill).toContain("context_map");
+    expect(skill).toContain("evidence_map");
+    expect(skill).toMatch(/before every[\s\S]{0,260}(?:call|review)/i);
+    expect(skill).toMatch(/rebuild[\s\S]{0,220}(?:maps|both)/i);
+    expect(skill).toMatch(/MATERIAL_INCOMPLETE[\s\S]{0,120}unavailable/i);
+  });
+
   it.each(["build-spec", "build-plan", "verify-code"])("%s does not review the same snapshot twice", (stage) => {
     expect(selectReviewRound({
       stage,

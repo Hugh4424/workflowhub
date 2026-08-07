@@ -78,6 +78,7 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/3rd-review config/i);
     expect(skill).toMatch(/Runner-owned Skill entrypoint/);
     expect(skill).toMatch(/codex-home\/skills/);
+    expect(skill).toMatch(/multica repo checkout https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
     expect(skill).toMatch(/must not select providers/i);
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
@@ -85,6 +86,12 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/Send the input JSON over stdin/);
     expect(skill).toMatch(/Never place a transient review-input file in/);
     for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
+  });
+
+  it("requires the host protocol to provision the canonical Runner when Multica did not inject one", () => {
+    const protocol = readFileSync(join(root, "workflowhub-host-protocol", "SKILL.md"), "utf8");
+    expect(protocol).toMatch(/multica repo checkout https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
+    expect(protocol).toMatch(/不得从本机扫描、cwd、业务仓、remote 或 task 记录猜路径/);
   });
 
   it("keeps the stage skill plan limited to provider-visible lenses", () => {

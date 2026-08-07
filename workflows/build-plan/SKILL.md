@@ -88,6 +88,29 @@ does not invent product or test intent.
 
 ## Procedure
 
+### v2 review packet assembly
+
+`build-plan` uses the `wh_review.v2` contract. The caller must assemble one
+current review packet with `raw_requirement`, `approved_spec`,
+`acceptance_criteria`, `draft_plan`, `draft_tasks`, `context_map`, and
+`evidence_map` before every `wh-review` call.
+The two maps are required caller/runner review material, not optional metadata
+or runner state. Initial/full packets deliver them to the provider; an
+incremental packet intentionally delivers only the runner-generated
+`review_delta` after the current maps pass validation.
+
+- `context_map` selects the current module boundaries, dependencies,
+  interfaces, and test conventions that the plan relies on.
+- `evidence_map` maps each applicable acceptance criterion to its own current
+  evidence anchors; do not reuse one generic anchor for multiple criteria.
+- After a plan, task, or upstream material revision, rebuild both maps from the
+  same current frozen snapshot and resend them. Do not retry with only the
+  planning text fields from the previous call.
+- If a map cannot be completed, send the valid `state: unknown` structure with
+  `unknown_reason`; never omit it, send `{}`, or invent anchors to get a review.
+  A missing or malformed map remains the runner's
+  `MATERIAL_INCOMPLETE`/`unavailable` fact.
+
 1. Read current `decision-log.md` and `spec.md`; identify the FRs, ACs,
    constraints, non-goals, risks, and open decisions that affect the plan.
 2. Do proportionate `spec-research` only when it can materially change the
