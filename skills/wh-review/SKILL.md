@@ -176,6 +176,44 @@ just because the matrix also records the v2 rule separately. Build them from
 the current frozen materials before calling `run`. If a required map is absent,
 the runner must record `MATERIAL_INCOMPLETE` and must not call a provider.
 
+For `wh_review.v2`, every required authority map uses this exact shape; do not
+invent aliases such as `known` or `anchors` at the map root:
+
+```json
+{
+  "state": "complete",
+  "summary": "what this map establishes and where it is grounded",
+  "entries": [
+    {
+      "id": "scope",
+      "subject": "the requirement, boundary, or acceptance fact",
+      "rationale": "why the cited material is authoritative",
+      "disposition": "complete",
+      "anchors": [
+        {
+          "id": "scope-anchor",
+          "path": "specs/EXAMPLE/spec.md",
+          "start_line": 1,
+          "end_line": 5,
+          "role": "context",
+          "reason": "what this exact range proves"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`state` is only `complete` or `unknown`; `summary` and `entries` are always
+required. For `unknown`, add a non-empty `unknown_reason`. Each entry requires
+`id`, `subject`, `rationale`, and `disposition`; `disposition` is only
+`complete`, `not_applicable`, or `unknown`. A `complete` entry requires a
+non-empty `anchors` array with unique anchor IDs, safe snapshot-relative
+`path`, 1-based `start_line`/`end_line`, `role`, and `reason`. A
+`not_applicable` or `unknown` entry must omit `anchors` and provide non-empty
+`reason_code` and `reason`. For `evidence_map`, `AC-*` entries must use distinct
+proving anchors. The runner validates this shape before any provider call.
+
 - make-decision/direction: `raw_requirement`, `objective_facts`;
 - make-decision/detail: `raw_requirement`, `approved_direction`,
   `draft_spec_or_acceptance`, `context_map`, `evidence_map`;
