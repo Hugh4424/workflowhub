@@ -122,12 +122,12 @@ function formalLfsUnavailable(path, pointer) {
   return error;
 }
 
-function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree } = {}) {
+function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree, filters: providedFilters } = {}) {
   // Current WorkflowHub materials are handoff records, not implementation or
   // test-contract inputs. Their edits must not invalidate a reusable full-test
   // receipt; the workspace tree still records them for material freshness.
   const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !CURRENT_MATERIAL_PATH.test(path));
-  const filters = lfsFilterMap(root, filePaths);
+  const filters = providedFilters ?? lfsFilterMap(root, filePaths);
   const entries = [];
   for (const path of filePaths.sort()) {
     const absolute = workspacePath(root, path);
@@ -176,7 +176,7 @@ function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes
   return Object.freeze({ ...unsigned, source_digest: sha256(JSON.stringify(unsigned)) });
 }
 
-function fileEntry(root, path, format, objectDir) {
+function fileEntry(root, path, format, objectDir, filters) {
   const absolute = workspacePath(root, path);
   let stat;
   try { stat = lstatSync(absolute); }
@@ -187,7 +187,7 @@ function fileEntry(root, path, format, objectDir) {
   if (stat.isSymbolicLink()) return { mode: "120000", oid: writeLooseObject(objectDir, format, "blob", Buffer.from(readlinkSync(absolute))), tree: false };
   if (stat.isFile()) {
     const body = readFileSync(absolute);
-    const filter = lfsFilterMap(root, [path]).get(path) ?? null;
+    const filter = filters.get(path) ?? null;
     // A hydrated LFS file is real source content in the manifest, but its
     // publishable Git tree must retain the pointer blob.  Otherwise a close
     // reset turns a clean worktree into a permanent LFS-only diff.
@@ -257,7 +257,7 @@ function parseHeadEntries(output) {
   });
 }
 
-function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserveExcludedHead = true, includePath = () => true) {
+function workspaceTree(root, head, format, objectDir, filters, excludedPrefixes, preserveExcludedHead = true, includePath = () => true) {
   assertExcludedPrefixes(excludedPrefixes);
   const paths = new Set([
     ...gitPaths(root, ["ls-files", "-z"]),
@@ -266,7 +266,7 @@ function workspaceTree(root, head, format, objectDir, excludedPrefixes, preserve
   const tree = new Map();
   for (const path of [...paths].sort()) {
     if (excluded(path, excludedPrefixes) || !includePath(path)) continue;
-    const entry = fileEntry(root, path, format, objectDir);
+    const entry = fileEntry(root, path, format, objectDir, filters);
     if (entry !== null) addPath(tree, path, entry);
   }
   if (preserveExcludedHead) {
@@ -293,6 +293,11 @@ function captureSnapshot(root, excludedPrefixes = []) {
     ...gitPaths(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
     ...excludedHeadEntries.map(({ path }) => path),
   ]);
+  // Attribute lookup is repository-wide and independent of which of the two
+  // trees below is being written. Resolve it once, then reuse the result for
+  // the source manifest and both tree passes; per-file Git processes make
+  // status scans effectively quadratic in wall-clock overhead on large repos.
+  const filters = lfsFilterMap(root, [...paths]);
   // Evidence is a publication product, not source. Keep its writes from
   // changing the source digest even when the caller requests the full
   // worktree snapshot used by review.
@@ -303,12 +308,13 @@ function captureSnapshot(root, excludedPrefixes = []) {
     head,
     format,
     objectDir,
+    filters,
     EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
     false,
     (path) => !CURRENT_MATERIAL_PATH.test(path),
   );
-  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree });
-  const tree = workspaceTree(root, head, format, objectDir, excludedPrefixes);
+  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree, filters });
+  const tree = workspaceTree(root, head, format, objectDir, filters, excludedPrefixes);
   return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir), source_digest: manifest.source_digest, source_manifest: manifest });
 }
 

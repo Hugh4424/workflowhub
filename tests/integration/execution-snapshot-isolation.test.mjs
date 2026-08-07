@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdtempSync, mkdirSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -62,6 +62,40 @@ describe("execution snapshot evidence isolation", () => {
       expect(captureExecutionSnapshot(root).tree).not.toBe(before.tree);
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves Git attributes once for both snapshot trees", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "workflowhub-batched-attributes-snapshot-"));
+    const traceRoot = mkdtempSync(resolve(tmpdir(), "workflowhub-snapshot-trace-"));
+    const tracePath = resolve(traceRoot, "git-trace.jsonl");
+    const previousTrace = process.env.GIT_TRACE2_EVENT;
+    try {
+      git(root, ["init", "-q"]);
+      git(root, ["config", "user.name", "WorkflowHub Test"]);
+      git(root, ["config", "user.email", "workflowhub-test@local"]);
+      for (const name of ["one.txt", "two.txt", "three.txt"]) writeFileSync(resolve(root, name), `${name}\n`);
+      git(root, ["add", "."]);
+      git(root, ["commit", "-qm", "fixture"]);
+
+      process.env.GIT_TRACE2_EVENT = tracePath;
+      const snapshot = captureGitWorktreeSnapshot(root);
+      expect(snapshot.tree).toMatch(/^[a-f0-9]{40}$/);
+      expect(snapshot.source_manifest.entries.map(({ path }) => path)).toEqual(expect.arrayContaining([
+        "one.txt", "two.txt", "three.txt",
+      ]));
+
+      const commands = readFileSync(tracePath, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .filter((event) => event.event === "start" && Array.isArray(event.argv));
+      expect(commands.filter((event) => event.argv[1] === "check-attr")).toHaveLength(1);
+    } finally {
+      if (previousTrace === undefined) delete process.env.GIT_TRACE2_EVENT;
+      else process.env.GIT_TRACE2_EVENT = previousTrace;
+      rmSync(root, { recursive: true, force: true });
+      rmSync(traceRoot, { recursive: true, force: true });
     }
   });
 
