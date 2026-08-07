@@ -52,9 +52,12 @@ the authenticated Runner's `core/` and `runtime/`. In a Multica run where the
 launcher did not inject the Runner root, provision the canonical host checkout
 with `multica repo checkout https://github.com/Hugh4424/workflowhub --ref main`,
 use only the absolute path printed by that command, and verify the checkout
-before invoking this entrypoint. If checkout or verification fails, stop with
-a host-bundle error; do not copy runtime files into the target repository or
-guess a local path.
+before invoking this entrypoint. If it contains `package-lock.json` but no
+usable `node_modules/`, run `npm ci --ignore-scripts` from that Runner root
+first; a non-zero install or doctor exit is a host-bundle error. Do not use
+`npm install` because it may rewrite the lock file. If checkout or
+verification fails, stop with a host-bundle error; do not copy runtime files
+into the target repository or guess a local path.
 
 `doctor` 只读扫描宿主 `wh_review` 的全部 stage/track 路由；任一 profile、
 priority、重复项或模式错误都以非零退出。正常 review 热路径只严格校验当前
