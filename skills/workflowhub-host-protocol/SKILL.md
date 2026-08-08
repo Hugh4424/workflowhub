@@ -41,6 +41,19 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 
+  build-plan 的官方 producer 必须在第 3 步前把当前 `plan.md` 和 `tasks.md`
+  分别发布为 `quality/evidence/plan.json`、`quality/evidence/tasks.json`，并
+  以当前 TaskHandle、内容 hash、`build-plan` producer 身份和当前 snapshot
+  逐项回读后再传入 `receipts.plan` / `receipts.tasks`。评论、附件、provider
+  输出和历史 receipt 都不是替代品。若 producer 或 audit carrier 不能生成，
+  保留真实 `unavailable`/`incomplete`，只在同一任务内修复；不得手写伪造、把
+  provider pass 当 accepted，或启动下游阶段。
+
+  Host bridge 只把 bootstrap 已认证的 `task_path` 当作只读 TaskHandle 定位；
+  业务材料只从认证的 `worktree_root` 读取。不得拼接、规范化、替换单/双
+  `Hugh` 路径，也不得在 ENOENT 后猜测 fallback；路径不一致必须保留精确
+  错误并停止当前事实发布。
+
   如果某个声明 skill 的旧 invocation 已存在、但它绑定的 `snapshot_tree` 与本轮稳定的当前 snapshot 不同，旧事实必须只读保留，不能覆盖、删除或把它当当前结果。此时在同一个 TaskHandle 和同一个阶段内，按下面唯一公式生成新的、确定性的 invocation key：
 
   `retry-${sha256("workflowhub-stage-skill-retry\\0" + declared_key + "\\0" + current_snapshot_tree).slice(0, 56)}`
