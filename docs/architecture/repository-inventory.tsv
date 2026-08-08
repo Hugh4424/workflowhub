@@ -77,10 +77,10 @@ docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md	keep	no 
 docs/adr/0009-stage-content-authority.md	keep	no approved deletion or move proof in Phase 0	ca1b9398747e32f7cc465496a289583aff32aa30392dfe099c37536bd408b960
 docs/adr/0010-serious-review-disposition.md	keep	no approved deletion or move proof in Phase 0	b734500c0f9184b8e3b53c04089ef0610eabf275eb4109e8d4bec678c5f7b8d2
 docs/adr/0011-authenticated-review-flow-generations.md	keep	no approved deletion or move proof in Phase 0	b85dd7f1e6c1eed9194d8e300047da06e86ecb5ed37eba76b5b135cbd97a453d
-docs/architecture/complexity-baseline.json	keep	no approved deletion or move proof in Phase 0	f1b12043febb93690c88805f20e6c66b0adacc49ba48605bd924a31026372769
+docs/architecture/complexity-baseline.json	keep	no approved deletion or move proof in Phase 0	492323fe416bc76d9f1c609a70800d61467968146afd1e34f7f367ba20cf552a
 docs/architecture/deletion-plan.json	keep	no approved deletion or move proof in Phase 0	3f78b935884589e9d290b4166a5ce91ce0c10cdd376ab2a9df7710caf7f8188d
 docs/architecture/deletions-proof.json	keep	no approved deletion or move proof in Phase 0	0db3b179a3e0dfbe7b3cc85f8c9c15795903c18f1c931225ff6e251e44598920
-docs/architecture/final-complexity-report.json	keep	no approved deletion or move proof in Phase 0	e089fd3fe33930ae57795fdaac6151502a32dc118e84c14c0216ef14a1ddd60f
+docs/architecture/final-complexity-report.json	keep	no approved deletion or move proof in Phase 0	4bc19d880f4bf33f149153a1ed519b1da672d5c0bd49d5f6fc177b265b01f2d3
 docs/architecture/final-coverage-audit.md	keep	no approved deletion or move proof in Phase 0	615488184adc9d368f61b5576c803d992694b911e23c8fea6b5071c84f7399c9
 docs/architecture/history-inventory.json	keep	no approved deletion or move proof in Phase 0	f8c514a8a4f4fb52306f9a859930dd2b8a819af07030d241a420658546ca8788
 docs/architecture/legacy-import-proof.json	archive	immutable migration audit evidence	b7dd7aa44571becae4eb1207269a3e28b9b3461abfc8c76a5dff39d48bfa447e
