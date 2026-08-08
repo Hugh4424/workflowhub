@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { PACKET_SOURCE_PREFIX, loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, selectTrustedReviewProviders, validateAllWhReviewRoutes } from "../third-review-host-config.mjs";
 
 const roots = [];
@@ -45,6 +45,41 @@ describe("trusted third-review host configuration", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     writeFileSync(brokerConfig, JSON.stringify({ version: 4, attachment_roots: [{ root: join(brokerConfig, "..", "packets"), sources: ["skills"] }] }));
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/packet source.*allowlisted/i);
+  });
+
+  it("rejects final and parent symlinks in trusted review roots", () => {
+    const { packetRoot, hostConfig, brokerConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    const fixtureRoot = join(dirname(hostConfig), "..", "..", "..");
+    const finalLink = join(fixtureRoot, "packet-link");
+    symlinkSync(packetRoot, finalLink, "dir");
+    roots.push(finalLink);
+    host.third_review.attachment_root = finalLink;
+    broker.attachment_roots[0].root = finalLink;
+    writeFileSync(hostConfig, JSON.stringify(host));
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/contains a symlink/i);
+
+    const targetParent = join(fixtureRoot, "packet-parent-target");
+    const parentLink = join(fixtureRoot, "packet-parent-link");
+    mkdirSync(targetParent);
+    mkdirSync(join(targetParent, "packets"));
+    symlinkSync(targetParent, parentLink, "dir");
+    roots.push(parentLink, targetParent);
+    const parentRoot = join(parentLink, "packets");
+    host.third_review.attachment_root = parentRoot;
+    broker.attachment_roots[0].root = parentRoot;
+    writeFileSync(hostConfig, JSON.stringify(host));
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/contains a symlink/i);
+
+    const bypassPath = `${parentLink}/../${basename(targetParent)}/packets`;
+    host.third_review.attachment_root = bypassPath;
+    broker.attachment_roots[0].root = bypassPath;
+    writeFileSync(hostConfig, JSON.stringify(host));
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/contains a symlink/i);
   });
 
   it("returns the complete first candidate tier while separately deriving the heterologous quorum", () => {

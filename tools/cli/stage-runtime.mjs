@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
@@ -24,6 +24,7 @@ import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtim
 import { deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -34,6 +35,51 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
+
+function pathOverlaps(left, right) {
+  const contains = (outer, inner) => {
+    const relation = relative(resolve(outer), resolve(inner));
+    return relation === "" || (!relation.startsWith("..") && !isAbsolute(relation));
+  };
+  return contains(left, right) || contains(right, left);
+}
+
+function canonicalExistingPath(value, label) {
+  if (typeof value !== "string" || !isAbsolute(value)) throw new TypeError(`${label} must be absolute`);
+  const normalized = resolve(value);
+  let canonical;
+  try { canonical = realpathSync(normalized); }
+  catch (error) { throw new Error(`${label} must exist and be canonical: ${error.message}`); }
+  if (canonical !== normalized) throw new Error(`${label} must not contain a symlink: ${value}`);
+  return canonical;
+}
+
+function hostBridgeWritableDirs({ trustedThirdReview, protectedPaths = [] } = {}) {
+  const attachmentRoot = canonicalExistingPath(trustedThirdReview?.attachmentRoot, "authenticated review packet directory");
+  for (const protectedPath of protectedPaths) {
+    const canonicalProtectedPath = canonicalExistingPath(protectedPath, "Codex host bridge protected path");
+    if (pathOverlaps(attachmentRoot, canonicalProtectedPath)) {
+      throw new Error("Codex host bridge review packet directory overlaps a protected WorkflowHub path");
+    }
+  }
+  return Object.freeze({ attachmentRoot });
+}
+
+export function buildCodexHostArgs({ trustedThirdReview, taskPath, worktreeRoot, schemaPath, outputPath, prompt } = {}) {
+  const { attachmentRoot } = hostBridgeWritableDirs({
+    trustedThirdReview,
+    protectedPaths: [taskPath, worktreeRoot],
+  });
+  const canonicalWorktreeRoot = canonicalExistingPath(worktreeRoot, "Codex host bridge worktree");
+  return [
+    "exec", "--ephemeral", "--json", "--sandbox=workspace-write",
+    "--add-dir", attachmentRoot,
+    "--output-schema", schemaPath,
+    "--output-last-message", outputPath,
+    "-C", canonicalWorktreeRoot,
+    prompt,
+  ];
+}
 
 export const HOST_BRIDGE_OUTCOME_SCHEMA = Object.freeze({
   type: "object",
@@ -205,6 +251,7 @@ async function invokeCodexHost({ request, context, prepared }) {
   if (INTERACTIVE_HOST_STAGES.has(request.stage)) {
     throw new Error(`Codex host bridge refuses interactive stage ${request.stage}; preserve the real user conversation`);
   }
+  const trustedThirdReview = loadTrustedThirdReviewConfig({ requestedStage: request.stage });
   const bridgeDir = mkdtempSync(join(tmpdir(), "workflowhub-host-bridge-"));
   const schemaPath = join(bridgeDir, "outcome.schema.json");
   const outputPath = join(bridgeDir, "outcome.json");
@@ -232,6 +279,7 @@ async function invokeCodexHost({ request, context, prepared }) {
     "Do not invoke stage-runtime review, this host bridge, or any replacement workflow.",
     "Do not fabricate receipts, hashes, reviews, user confirmations, or completion facts.",
     "Do not change provider/model, commit, push, merge, or change task status.",
+    "WorkflowHub-owned review packet writes are allowed only through the configured attachment root; do not write other home paths.",
     "Perform the skill's actual work; if it is advisory, perform the analysis and preserve its evidence.",
     "At the end, return only JSON matching the supplied output schema with status=completed, a plain-language summary, actual evidence refs, changed files, findings, and next_step.",
     "",
@@ -239,7 +287,7 @@ async function invokeCodexHost({ request, context, prepared }) {
     `skill=${request.name}`,
     `invocation_key=${request.invocation_key}`,
     `task_id=${request.task_id}`,
-    `task_path=${context.task.taskPath} (read-only; do not write this directory)`,
+    `task_path=${context.task.taskPath} (authenticated TaskHandle records are read-only; do not write this directory)`,
     `worktree_root=${worktreeRoot}`,
     `runner_root=${RUNNER_ROOT}`,
     `skill_path=${skillPath}`,
@@ -249,13 +297,14 @@ async function invokeCodexHost({ request, context, prepared }) {
   try {
     const codex = process.env.WORKFLOWHUB_CODEX_BIN || "codex";
     const executorIdentity = inspectCodexExecutor(codex, worktreeRoot, process.env);
-    const result = await runChild(codex, [
-      "exec", "--ephemeral", "--json", "--sandbox=workspace-write",
-      "--output-schema", schemaPath,
-      "--output-last-message", outputPath,
-      "-C", worktreeRoot,
+    const result = await runChild(codex, buildCodexHostArgs({
+      trustedThirdReview,
+      taskPath: context.task.taskPath,
+      worktreeRoot,
+      schemaPath,
+      outputPath,
       prompt,
-    ], {
+    }), {
       cwd: worktreeRoot,
       env: { ...process.env, WORKFLOWHUB_HOST_BRIDGE_ACTIVE: "1" },
       timeoutMs: Number.parseInt(process.env.WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS ?? "900000", 10),

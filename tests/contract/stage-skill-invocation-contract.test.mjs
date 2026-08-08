@@ -9,6 +9,7 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import {
   assertHostBridgeResponse,
   assertHostOutcome,
+  buildCodexHostArgs,
   createStageSkillDispatchPublication,
   HOST_BRIDGE_OUTCOME_SCHEMA,
 } from "../../tools/cli/stage-runtime.mjs";
@@ -295,6 +296,68 @@ describe("stage skill invocation contract", () => {
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.next_step.minLength).toBe(1);
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.evidence_refs.items.minLength).toBe(1);
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it("builds host bridge argv with only the trusted review packet root", () => {
+    const taskPath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-host-task-")));
+    const attachmentRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-host-attachments-")));
+    const worktreeRoot = path.join(taskPath, "business-worktree");
+    const isolatedWorktreeParent = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-host-worktree-")));
+    const isolatedWorktreeRoot = path.join(isolatedWorktreeParent, "business-worktree");
+    fs.mkdirSync(worktreeRoot);
+    fs.mkdirSync(isolatedWorktreeRoot);
+    roots.push(taskPath, attachmentRoot, isolatedWorktreeParent);
+    const args = buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot },
+      taskPath,
+      worktreeRoot,
+      schemaPath: path.join(taskPath, "schema.json"),
+      outputPath: path.join(taskPath, "outcome.json"),
+      prompt: "prompt",
+    });
+    expect(args).toContain("--add-dir");
+    expect(args.filter((value, index) => args[index - 1] === "--add-dir")).toEqual([attachmentRoot]);
+    fs.mkdirSync(path.join(taskPath, "packets"));
+    expect(() => buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot: path.join(taskPath, "packets") },
+      taskPath,
+      worktreeRoot,
+      schemaPath: "schema.json",
+      outputPath: "outcome.json",
+      prompt: "prompt",
+    })).toThrow(/overlaps a protected/);
+    expect(() => buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot: path.dirname(taskPath) },
+      taskPath,
+      worktreeRoot,
+      schemaPath: "schema.json",
+      outputPath: "outcome.json",
+      prompt: "prompt",
+    })).toThrow(/overlaps a protected/);
+    expect(() => buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot: isolatedWorktreeRoot },
+      taskPath,
+      worktreeRoot: isolatedWorktreeRoot,
+      schemaPath: path.join(taskPath, "schema.json"),
+      outputPath: path.join(taskPath, "outcome.json"),
+      prompt: "prompt",
+    })).toThrow(/overlaps a protected/);
+    expect(() => buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot: isolatedWorktreeParent },
+      taskPath,
+      worktreeRoot: isolatedWorktreeRoot,
+      schemaPath: path.join(taskPath, "schema.json"),
+      outputPath: path.join(taskPath, "outcome.json"),
+      prompt: "prompt",
+    })).toThrow(/overlaps a protected/);
+    expect(() => buildCodexHostArgs({
+      trustedThirdReview: { attachmentRoot: "relative/packets" },
+      taskPath,
+      worktreeRoot,
+      schemaPath: "schema.json",
+      outputPath: "outcome.json",
+      prompt: "prompt",
+    })).toThrow(/authenticated review packet/);
   });
 
   it("rejects non-canonical or weak host bridge response references", () => {

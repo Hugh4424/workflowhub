@@ -1,11 +1,36 @@
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 export const PACKET_SOURCE_PREFIX = ".wh-review-packets";
 
+const FIXED_SYSTEM_ALIASES = new Map([
+  ["/tmp", "/private/tmp"],
+  ["/var", "/private/var"],
+  ["/etc", "/private/etc"],
+]);
+
+function assertNoSymlinkChain(path, label) {
+  const parts = path.split("/").filter(Boolean);
+  let cursor = "/";
+  for (const part of parts) {
+    if (part === ".") continue;
+    if (part === "..") {
+      cursor = dirname(cursor);
+      continue;
+    }
+    cursor = join(cursor, part);
+    const stat = lstatSync(cursor);
+    if (stat.isSymbolicLink()) {
+      if (FIXED_SYSTEM_ALIASES.get(cursor) === realpathSync(cursor)) continue;
+      throw new Error(`${label} contains a symlink: ${cursor}`);
+    }
+  }
+}
+
 function regularFile(path, label) {
   if (!isAbsolute(path)) throw new Error(`${label} must be an absolute path`);
+  assertNoSymlinkChain(path, label);
   const stat = lstatSync(path);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${label} must be a real regular file`);
   return realpathSync(path);
@@ -13,6 +38,7 @@ function regularFile(path, label) {
 
 function realDirectory(path, label) {
   if (!isAbsolute(path)) throw new Error(`${label} must be an absolute path`);
+  assertNoSymlinkChain(path, label);
   const stat = lstatSync(path);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${label} must be a real directory`);
   return realpathSync(path);

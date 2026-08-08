@@ -92,7 +92,7 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "049f7841a20325732b5a9cda15c7823da0effb40d6697817bf3a14d4183e011f"
+      "sha256": "6282f715ab4b94d524aeb5bab5d83d2e31d1ef0a7cda0c85771859248ce61ca1"
     },
     {
       "path": "scripts/wh-review-cli.mjs",

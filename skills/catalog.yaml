@@ -229,7 +229,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 459d62a7e5bf6f734b1adff4916d63965fa6524b6643ead59b957eb428da5045
+    local_bundle_hash: 66f4356cd089e54a6adfdc7b0dff9cc275c2622bf0428e52d17ceec42d705ea3
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -257,7 +257,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 87e673c18620b7b1aaf09fb1fb06af00b53540c2e23c16ee368b0de9610e44b3
+    local_bundle_hash: 9c656544141acf6083d09b289d279359e1b9368b4e1871ab172c90c97b7abc62
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
