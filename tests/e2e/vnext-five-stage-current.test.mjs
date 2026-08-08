@@ -396,7 +396,10 @@ describe("current vNext five-stage runtime", () => {
     expect(publicFacts.find((fact) => fact.subject === "grill")?.evidence[0]?.ref).toBe(testReceipts.grill.ref);
     expect(publicRun, `${result.stdout}\n${result.stderr}\n${JSON.stringify(publicFacts)}`).toMatchObject({ stage: "make-decision", status: "completed" });
     expect(() => state.task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT/);
-    expect(publicStatus(state, "make-decision").status).toBe("completed");
+    expect(publicStatus(state, "make-decision")).toMatchObject({
+      status: "completed",
+      quality_fact_refs: expect.arrayContaining(publicRun.quality_fact_refs),
+    });
   });
 
   it("records a rejected public confirmation as a failed current fact", () => {
@@ -414,7 +417,11 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = JSON.parse(result.stdout);
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ kind: "confirmation", subject: "human_confirmation", status: "failed" });
-    expect(publicStatus(state, "make-decision")).toMatchObject({ status: "completed", quality_status: "in_progress" });
+    expect(publicStatus(state, "make-decision")).toMatchObject({
+      status: "completed",
+      quality_status: "in_progress",
+      quality_fact_refs: expect.arrayContaining([confirmation.quality_fact_ref]),
+    });
   });
 
   it("confirms make-decision before future-stage materials exist", () => {
@@ -425,6 +432,7 @@ describe("current vNext five-stage runtime", () => {
     expect(publicStatus(state, "make-decision")).toMatchObject({
       status: "completed",
       quality_status: "in_progress",
+      quality_fact_refs: expect.arrayContaining([confirmation.quality_fact_ref]),
       quality_predicates: { human_confirmation: { status: "satisfied" } },
     });
   });

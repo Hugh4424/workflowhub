@@ -207,6 +207,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       ...progression,
       quality_status: quality.status,
       quality_missing: quality.missing,
+      quality_fact_refs: Object.freeze(observations.map(({ fact }) => fact.ref).sort()),
       quality_predicates: quality.predicates,
     });
   }

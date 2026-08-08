@@ -24,6 +24,14 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 - Stage Agent 先确认隐藏注释的根 Issue 与自己的当前根一致、并能打开对应的正式 WorkflowHub task，才使用它做审查或交接；不一致时不得使用旧上下文，要在上游 Issue @工头 请求覆盖修复，不从 cwd、Issue 编号或目录扫描猜身份，也不在业务仓复制宿主文件。
 - **Stage 运行入口**：Stage Agent 只能执行已绑定 Stage Skill 写出的公共命令。launcher-owned runtime 负责解析 `scripts/`、`core/`、`runtime/` 和 `metrics/`；`wh-review` 必须从上述 Runner root 通过 `node skills/wh-review/scripts/wh-review-cli.mjs ...` 入口执行，不能直接从 `codex-home/skills/wh-review` 启动脚本。审查路由始终由受信配置决定，Agent 不选 provider。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task，不得手工拼 task 路径或借用其他 Agent 的工作目录。每次入口都记录执行身份，但该身份只用于审计和可追溯，不参与需求、质量或阶段放行裁决。
 
+- **正式阶段收口的唯一可执行顺序**：评论、工作树文件、provider `pass` 或单独的 `wh-review` 结果都不是阶段完成。当前 Stage Agent 必须在注入的 Runner root 使用同一 TaskHandle 完成以下公共链路，并逐步回读：
+  1. `node tools/cli/stage-runtime.mjs doctor --action=workspace --stage=<stage> --project=<project> --task=<task>`；
+  2. 对 `workflows/<stage>/steps.json` 中每个声明的 skill，使用 `node tools/cli/stage-runtime.mjs review --action=invoke --stage=<stage> --project=<project> --task=<task> --name=<skill> --invocation-key=<key>`。需要执行的 skill 必须由 launcher/host bridge 返回一行真实的 `outcome_ref`、`outcome_hash`、`snapshot_tree` JSON；条件 skill 若不触发，则仍用同一公共入口传 `--triggered=false --reason=<具体原因>`，不得把它伪装成 executed。不能手写、猜测或复制旧 outcome；
+  3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
+  4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
+
+  如果第 2 步没有可验证的 host bridge，或第 3 步缺少官方 receipts/audit/invocation producer，只停止**正式 publication 和 handoff**，不停止同一任务继续修复、补材料或补测试；发问题卡并按上游/用户规则真实 @ 人。不得退回“直接跑 skill + 手工写文件/评论/状态”的旁路，也不得把 `in_review` 改成 `done`。这类缺口要明确标成 `unavailable`/`incomplete`；它是完成/交接事实缺失，不是阻止同一任务推进的质量 gate。
+
 ## 谁负责什么
 
 - **工头**：唯一的阶段推进者。只在当前任务根 Issue 和它的五个直接阶段子 Issue 工作；创建或复用一条标准五阶段链，按顺序接力。五个标题必须精确为 `make-decision｜<根任务标题>`、`build-spec｜<根任务标题>`、`build-plan｜<根任务标题>`、`build-code｜<根任务标题>`、`verify-code｜<根任务标题>`，不能写成 `Stage 1`、内部编号或空泛标题。每个新建 Stage Issue 的 description 必须用大白话按六个短项写清：**背景**、**当前阶段目标**、**已知输入**、**预期产物**、**完成标准**、**交接对象**；没有已知输入时明确写“等待上游产物”，不得留空。阶段交接顺序固定：先在下游 Issue 写交接卡（上游 accepted 结论、产物、证据、依赖和下一步），再 `backlog → todo` 并回读；`todo` 是正常的自动唤醒，不要在尚未启动的下游 Issue 用 @ Agent 抢跑。工头不代替用户做需求决定，不直接让 Coder 绕过阶段。
