@@ -54,9 +54,14 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
   不得把它扩大成同任务修复或普通 progression 的总闸门。
 
   Host bridge 只把 bootstrap 已认证的 `task_path` 当作只读 TaskHandle 定位；
-  业务材料只从认证的 `worktree_root` 读取。不得拼接、规范化、替换单/双
-  `Hugh` 路径，也不得在 ENOENT 后猜测 fallback；路径不一致必须保留精确
-  错误并停止当前事实发布。
+  业务材料、hash 和 diff 只从认证的 `worktree_root` 读取。任何 shell 命令的
+  当前 cwd 都不是业务路径依据：读取 TaskHandle 记录时使用认证的 `task_path`，
+  读取业务材料时使用认证的 `worktree_root`，或在同一命令中显式切换到该绝对
+  `worktree_root`；Runner 的相对路径只允许用于 WorkflowHub 自身文件。不得拼接、
+  规范化、替换单/双 `Hugh` 路径，也
+  不得在认证目标 ENOENT 后猜测 fallback；必须保留精确错误、停止当前事实
+  发布，再按认证路径重新采样。确认认证路径正确后，真实材料缺失仍按
+  `missing`/`unavailable` 记录，不能把路径错误改写成材料事实。
 
   如果某个声明 skill 的旧 invocation 已存在、但它绑定的 `snapshot_tree` 与本轮稳定的当前 snapshot 不同，旧事实必须只读保留，不能覆盖、删除或把它当当前结果。此时在同一个 TaskHandle 和同一个阶段内，按下面唯一公式生成新的、确定性的 invocation key：
 
