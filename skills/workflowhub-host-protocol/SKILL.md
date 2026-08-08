@@ -41,6 +41,8 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 
+  如果某个声明 skill 的旧 invocation 已存在、但它绑定的 `snapshot_tree` 与本轮稳定的当前 snapshot 不同，旧事实必须只读保留，不能覆盖、删除或把它当当前结果。此时在同一个 TaskHandle 和同一个阶段内，以“声明的 invocation key + 当前 snapshot 前缀”生成一个新的、确定性的 invocation key（只用合法 key 字符），在每个该 skill 的 `review --action=invoke` 和官方 `stage_skill_dispatch.controls.<skill>.invocation_key` / `outcomes[<skill>/<key>]` 中使用同一个新 key；不要建新 task、generation、replacement 或旁路记录。若当前 snapshot 在这一轮再次变化，停止并重新冻结材料，不要继续堆叠 key。
+
   如果第 2 步没有可验证的 host bridge，或第 3 步缺少官方 receipts/audit/invocation producer，只停止**正式 publication 和 handoff**，不停止同一任务继续修复、补材料或补测试；发问题卡并按上游/用户规则真实 @ 人。不得退回“直接跑 skill + 手工写文件/评论/状态”的旁路，也不得把 `in_review` 改成 `done`。这类缺口要明确标成 `unavailable`/`incomplete`；它是完成/交接事实缺失，不是阻止同一任务推进的质量 gate。
 
 ## 谁负责什么
