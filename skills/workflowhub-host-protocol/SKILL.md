@@ -41,7 +41,13 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 
-  如果某个声明 skill 的旧 invocation 已存在、但它绑定的 `snapshot_tree` 与本轮稳定的当前 snapshot 不同，旧事实必须只读保留，不能覆盖、删除或把它当当前结果。此时在同一个 TaskHandle 和同一个阶段内，以“声明的 invocation key + 当前 snapshot 前缀”生成一个新的、确定性的 invocation key（只用合法 key 字符），在每个该 skill 的 `review --action=invoke` 和官方 `stage_skill_dispatch.controls.<skill>.invocation_key` / `outcomes[<skill>/<key>]` 中使用同一个新 key；不要建新 task、generation、replacement 或旁路记录。若当前 snapshot 在这一轮再次变化，停止并重新冻结材料，不要继续堆叠 key。
+  如果某个声明 skill 的旧 invocation 已存在、但它绑定的 `snapshot_tree` 与本轮稳定的当前 snapshot 不同，旧事实必须只读保留，不能覆盖、删除或把它当当前结果。此时在同一个 TaskHandle 和同一个阶段内，按下面唯一公式生成新的、确定性的 invocation key：
+
+  `retry-${sha256("workflowhub-stage-skill-retry\\0" + declared_key + "\\0" + current_snapshot_tree).slice(0, 56)}`
+
+  其中 `declared_key` 是原声明 key，`current_snapshot_tree` 是本轮冻结的完整 snapshot tree，`sha256` 输出小写十六进制；不得加入日期、UUID、attempt number 或人工随机串。该公式固定且长度小于 128，完整输入包含原 key 和完整快照，生成结果只含合法 key 字符。把这个新 key 同时用于该 skill 的每个 `review --action=invoke`、官方 `stage_skill_dispatch.controls.<skill>.invocation_key` 和 `outcomes[<skill>/<key>]`；三处不一致就 fail-closed。不得建新 task、generation、replacement 或旁路记录。若当前 snapshot 在 key 生成后再次变化，停止并重新冻结材料，不要继续堆叠 key。
+
+  这条规则的 owner 是 `workflowhub-host-protocol` 的 Stage Agent 约定，唯一 consumer 是当前 TaskHandle 的当前阶段调用方；WorkflowHub runtime 不自动创建 retry lineage，也不改变 TaskKernel identity。维护时必须验证：同一 key+snapshot 可重算且幂等、不同 snapshot 产生不同 key、旧事实不可变、新 key 三处一致、快照再次变化时 fail-closed；正式测试应使用隔离 TaskHandle，不得用真实生产 task 做 smoke。只有 WorkflowHub/launcher 提供正式 retry identity contract 并完成迁移审查后，才删除这条提示级规则和对应合同测试。
 
   如果第 2 步没有可验证的 host bridge，或第 3 步缺少官方 receipts/audit/invocation producer，只停止**正式 publication 和 handoff**，不停止同一任务继续修复、补材料或补测试；发问题卡并按上游/用户规则真实 @ 人。不得退回“直接跑 skill + 手工写文件/评论/状态”的旁路，也不得把 `in_review` 改成 `done`。这类缺口要明确标成 `unavailable`/`incomplete`；它是完成/交接事实缺失，不是阻止同一任务推进的质量 gate。
 
