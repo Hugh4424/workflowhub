@@ -1,6 +1,6 @@
 import { afterEach } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -216,6 +216,18 @@ describe("public provider client", () => {
 });
 
 describe("aggregation and runner", () => {
+  it("keeps review coordination locks outside the read-only TaskHandle", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-ephemeral-lock-");
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { runGroup: async () => ({ runtimeId: "runtime", providers: [{ provider: "kimi", status: "completed", session_id: "session", output: pass, error: null, execution: null }] }) },
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
+    });
+    expect(result.status).toBe("semantic");
+    expect(existsSync(join(task.taskPath, "locks"))).toBe(false);
+    expect(existsSync(join(attachmentRoot, ".workflowhub-review-locks"))).toBe(false);
+  });
+
   it("records a generic protocol failure without leaking managed stderr", async () => {
     const { attachmentRoot, task } = fixture("simple-review-managed-stderr-");
     const providerClient = new ReviewProviderClient({ invoke: async () => ({

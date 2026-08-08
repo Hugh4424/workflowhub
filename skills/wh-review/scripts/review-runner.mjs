@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
+import { hostname } from "node:os";
+import { resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
@@ -24,6 +26,8 @@ const subjectReviewFlights = new Map();
 const RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
 const ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
+const REVIEW_LOCK_WAIT_MS = 10_000;
+const EPHEMERAL_LOCK_DIRECTORY = ".workflowhub-review-locks";
 const reviewRootFor = () => "quality/reviews";
 const providerOutputPrefixFor = (task, attemptId) => `${reviewRootFor(task)}/attempts/${attemptId}/providers/`;
 
@@ -52,7 +56,93 @@ async function withLocalReviewLock(task, lockRef, operation) {
   }
 }
 
+function waitBriefly(milliseconds = 10) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function processAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error?.code === "EPERM"; }
+}
+
+function ephemeralLockDirectory(attachmentRoot) {
+  if (typeof attachmentRoot !== "string" || attachmentRoot.trim() === "") throw new TypeError("attachmentRoot is required for review locking");
+  const root = realpathSync(attachmentRoot);
+  const rootStat = lstatSync(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("review attachment root must be a real directory");
+  const directory = resolve(root, EPHEMERAL_LOCK_DIRECTORY);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(directory) !== directory) {
+    throw new Error("review ephemeral lock directory must be a real child directory");
+  }
+  return directory;
+}
+
+function ephemeralLockOwnerDead(lockPath) {
+  let owner;
+  try { owner = JSON.parse(readFileSync(lockPath, "utf8")); }
+  catch { return false; }
+  // Never steal a lock from another host without a lease service. A local
+  // crashed process is recoverable because its PID is no longer alive.
+  return owner?.host === hostname() && !processAlive(owner?.pid);
+}
+
+function withEphemeralReviewLock(attachmentRoot, lockRef, operation) {
+  if (typeof operation !== "function") throw new TypeError("review lock operation must be a function");
+  const directory = ephemeralLockDirectory(attachmentRoot);
+  const candidate = resolve(directory, `${createHash("sha256").update(lockRef).digest("hex")}.lock`);
+  const nonce = randomUUID();
+  const started = Date.now();
+  let fd;
+  let owned = false;
+  while (!owned) {
+    try {
+      fd = openSync(candidate, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
+      writeSync(fd, `${JSON.stringify({ pid: process.pid, host: hostname(), started_at: new Date().toISOString(), nonce })}\n`, null, "utf8");
+      closeSync(fd); fd = undefined;
+      owned = true;
+    } catch (error) {
+      if (fd !== undefined) { closeSync(fd); fd = undefined; }
+      if (error?.code !== "EEXIST") {
+        try { unlinkSync(candidate); } catch (unlinkError) { if (unlinkError?.code !== "ENOENT") throw unlinkError; }
+        throw error;
+      }
+      if (ephemeralLockOwnerDead(candidate)) {
+        try { unlinkSync(candidate); } catch (unlinkError) { if (unlinkError?.code !== "ENOENT") throw unlinkError; }
+        continue;
+      }
+      const elapsed = Date.now() - started;
+      if (elapsed >= REVIEW_LOCK_WAIT_MS) throw new Error(`timed out waiting for review lock: ${lockRef}`);
+      waitBriefly(Math.min(10, REVIEW_LOCK_WAIT_MS - elapsed));
+    }
+  }
+  const release = () => {
+    let owner;
+    try { owner = JSON.parse(readFileSync(candidate, "utf8")); } catch {}
+    if (owner?.nonce !== nonce) throw new Error(`review lock ownership changed: ${lockRef}`);
+    unlinkSync(candidate);
+    try { rmdirSync(directory); } catch (error) { if (!['ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error; }
+  };
+  try {
+    const result = operation();
+    if (result && typeof result.then === "function") return Promise.resolve(result).finally(release);
+    release();
+    return result;
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+function withReviewLock(task, attachmentRoot, lockRef, operation) {
+  return withLocalReviewLock(task, lockRef, () => withEphemeralReviewLock(attachmentRoot, lockRef, operation));
+}
+
 function reviewLockRef({
+  projectName,
+  taskId,
   stage,
   reviewTrack,
   reviewScope,
@@ -61,6 +151,8 @@ function reviewLockRef({
   policyFingerprint = null,
 }) {
   const identity = JSON.stringify([
+    projectName,
+    taskId,
     stage,
     reviewTrack,
     reviewScope,
@@ -868,7 +960,7 @@ function materialPreflightId({ stage, reviewTrack, subject, source, policy, diag
   });
 }
 
-async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
+async function recordMaterialPreflightUnavailable({ task, attachmentRoot, taskId, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
   const materialId = materialPreflightId({ stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const identity = {
@@ -881,6 +973,8 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
     policyFingerprint,
   };
   const lockRef = reviewLockRef({
+    projectName: task.identity.projectName,
+    taskId: task.identity.taskId,
     stage,
     reviewTrack,
     reviewScope: subject.review_scope,
@@ -891,7 +985,7 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
   const aggregation = aggregateProviderResults([], minimumReviewers, { profilePriority: policy?.requested_profiles ?? [] });
   const coverage = reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation });
-  const unavailable = () => withLocalReviewLock(task, lockRef, () => task.withRecordLock(lockRef, () => {
+  const unavailable = () => withReviewLock(task, attachmentRoot, lockRef, () => {
     const allMatches = readMatchingRecords(task, task.listCanonicalReviewAttemptRefs(), identity);
     for (const item of allMatches) {
       validateAttemptIdentity(item.record, item.ref, identity);
@@ -943,7 +1037,7 @@ async function recordMaterialPreflightUnavailable({ task, taskId, stage, reviewT
       phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree,
       candidateTree: subject.candidate_tree,
     };
-  }));
+  });
   return unavailable();
 }
 
@@ -1233,7 +1327,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const diagnostic = materialPreflightDiagnostic(error);
     const preflightSubject = subject ?? subjectRecord(source, stage, phaseId);
     return recordMaterialPreflightUnavailable({
-      task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source,
+      task: taskHandle, attachmentRoot, taskId, stage, reviewTrack, subject: preflightSubject, source,
       policy, diagnostic, materialFingerprint: hashCanonical(materials ?? null),
     });
   } finally {
@@ -1241,6 +1335,8 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   }
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const lockRef = reviewLockRef({
+    projectName: taskHandle.identity.projectName,
+    taskId: taskHandle.identity.taskId,
     stage,
     reviewTrack,
     reviewScope: subject.review_scope,
@@ -1258,7 +1354,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     policyFingerprint,
   };
   const reuseOptions = { reuseUnavailable, claimedUnavailableAttemptRefs };
-  const reusable = () => withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, () => reusableOutcome(taskHandle, identity, bundle, reuseOptions)));
+  const reusable = () => withReviewLock(taskHandle, attachmentRoot, lockRef, () => reusableOutcome(taskHandle, identity, bundle, reuseOptions));
   const existing = await reusable();
   if (existing) return existing;
   const subjectHead = canonicalSubjectOutcome(taskHandle, identity);
@@ -1284,7 +1380,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     providerClient, providers, hostProvider, materials: bundle, previousRuntimeIds, requestId, formatCorrectionSeed,
     allowLegacyFixtureClient: fixtureSourceToken === FIXTURE_SOURCE_TOKEN,
   }), policy);
-  return withLocalReviewLock(taskHandle, lockRef, () => taskHandle.withRecordLock(lockRef, async () => {
+  return withReviewLock(taskHandle, attachmentRoot, lockRef, async () => {
     const reused = reusableOutcome(taskHandle, identity, bundle, reuseOptions);
     if (reused) return reused;
     const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(taskHandle) });
@@ -1326,7 +1422,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     };
     validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result); writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
     return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
-  }));
+  });
 }
 
 export async function runReview(options = {}) {

@@ -100,6 +100,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["runtime/task/workspace.mjs", "authenticated worktree cleanup authority"],
   ["metrics/collector.mjs", "launcher-branded global metrics authority"],
   ["skills/wh-review/scripts/review-materials.mjs", "trusted attachment packet authority"],
+  ["skills/wh-review/scripts/review-runner.mjs", "trusted attachment ephemeral review coordination lock"],
   ["skills/wh-review/scripts/review-provider-client.mjs", "private provider transport temp files"],
   ["skills/wh-review/scripts/review-source.mjs", "private Git snapshot temp index"],
   ["tools/cli/check-extensibility.mjs", "development checker fixture"],

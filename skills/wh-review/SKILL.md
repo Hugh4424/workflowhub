@@ -271,6 +271,12 @@ repository.
 
 The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Canonical source materials may retain exact local paths for audit, but the provider-derived view must replace local host paths with a logical redaction; a packet that leaks `/Users/...`, `/home/...`, `/private/...`, or `/tmp/...` is invalid. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
 
+Review coordination uses only a short-lived lock under the trusted attachment
+root. It is an implementation detail for same-subject concurrent invocations,
+is never a canonical record or progression fact, and is removed after the
+critical section; the TaskHandle record directory remains read-only to the
+host bridge and is written only by the official canonical writer.
+
 Each bundle also contains `packet-plan.json`: a compact material-category plan
 with selected context and exclusion reasons. `manifest.json` is the only
 complete provider-visible file byte/hash list. A Phase diff up to 320 KiB keeps
