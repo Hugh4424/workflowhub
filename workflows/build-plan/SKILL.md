@@ -176,16 +176,20 @@ incremental packet intentionally delivers only the runner-generated
    audit gaps remain visible but do not block work.
 
    The two official component receipts are mandatory current-stage inputs, not
-   optional commentary: `quality/evidence/plan.json` must contain the exact
-   current `plan.md`, and `quality/evidence/tasks.json` must contain the exact
-   current `tasks.md`, each with its authenticated hash and `build-plan`
-   producer identity. Pass both canonical refs to the official `run` together
-   with the current review/disposition and `stage_skill_dispatch` facts. Do not
-   substitute attachments, comments, provider output, or an old receipt. If the
-   repository-owned producer cannot publish either receipt or the audit carrier,
+   optional commentary: the current receipt returned by the repository-owned
+   producer must contain the exact current `plan.md` and `tasks.md`, each with
+   its authenticated hash and `build-plan` producer identity. Initial receipts
+   may use `quality/evidence/plan.json` and `quality/evidence/tasks.json`; after
+   a current-material revision, use the producer's content-addressed current
+   refs and never overwrite an older fixed receipt. Pass both current refs to
+   the official `run` together with the current review/disposition and
+   `stage_skill_dispatch` facts. Do not substitute attachments, comments,
+   provider output, or an old receipt. If a receipt producer cannot publish,
    record the precise `unavailable`/`incomplete` fact and keep the same task in
-   review for repair; do not handwrite a receipt, claim completion, or start the
-   next stage.
+   repair; do not handwrite a receipt or claim completion. An audit-carrier
+   gap is disclosed as audit debt and is not by itself a work or progression
+   gate; only missing formal completion/handoff facts may keep the next stage
+   asleep.
 14. Present a short plan summary: scope and non-goals, phases/dependencies,
    FR/AC and check coverage, review facts, risks, and delivery boundary. Reuse
    the user's existing explicit instruction to continue without per-stage

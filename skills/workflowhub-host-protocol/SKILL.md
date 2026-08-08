@@ -41,13 +41,17 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 
-  build-plan 的官方 producer 必须在第 3 步前把当前 `plan.md` 和 `tasks.md`
-  分别发布为 `quality/evidence/plan.json`、`quality/evidence/tasks.json`，并
-  以当前 TaskHandle、内容 hash、`build-plan` producer 身份和当前 snapshot
-  逐项回读后再传入 `receipts.plan` / `receipts.tasks`。评论、附件、provider
-  输出和历史 receipt 都不是替代品。若 producer 或 audit carrier 不能生成，
-  保留真实 `unavailable`/`incomplete`，只在同一任务内修复；不得手写伪造、把
-  provider pass 当 accepted，或启动下游阶段。
+  build-plan 的官方 producer 必须在第 3 步前发布当前 `plan.md` 和
+  `tasks.md` 的两个 current receipt，并以当前 TaskHandle、内容 hash、
+  `build-plan` producer 身份和当前 snapshot 逐项回读后传入
+  `receipts.plan` / `receipts.tasks`。初次发布通常使用
+  `quality/evidence/plan.json`、`quality/evidence/tasks.json`；当前材料修订
+  后必须使用 producer 返回的 content-addressed current refs，不能覆盖旧
+  receipt。评论、附件、provider 输出和历史 receipt 都不是替代品。若
+  receipt producer 不能生成，保留真实 `unavailable`/`incomplete`，只在同一
+  任务内修复；不得手写伪造、把 provider pass 当 accepted，或在正式完成/
+  handoff 事实缺失时唤醒下游。audit carrier 缺失单独记录为 audit debt，
+  不得把它扩大成同任务修复或普通 progression 的总闸门。
 
   Host bridge 只把 bootstrap 已认证的 `task_path` 当作只读 TaskHandle 定位；
   业务材料只从认证的 `worktree_root` 读取。不得拼接、规范化、替换单/双
