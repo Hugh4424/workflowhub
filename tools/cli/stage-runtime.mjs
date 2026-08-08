@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
@@ -31,6 +34,275 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
+
+export const HOST_BRIDGE_OUTCOME_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "summary", "evidence_refs", "changed_files", "findings", "next_step"],
+  properties: {
+    status: { type: "string", enum: ["completed"] },
+    summary: { type: "string", minLength: 1, pattern: "\\S" },
+    evidence_refs: { type: "array", items: { type: "string", minLength: 1, pattern: "\\S" } },
+    changed_files: { type: "array", items: { type: "string", minLength: 1, pattern: "\\S" } },
+    findings: { type: "array", items: { type: "string", minLength: 1, pattern: "\\S" } },
+    next_step: { type: "string", minLength: 1, pattern: "\\S" },
+  },
+});
+
+const HOST_RESPONSE_KEYS = new Set(["outcome_ref", "outcome_hash", "snapshot_tree"]);
+
+export function assertHostBridgeResponse(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).some((key) => !HOST_RESPONSE_KEYS.has(key))
+      || typeof value.outcome_ref !== "string"
+      || !/^(?:quality|evidence)\/.+/.test(value.outcome_ref)
+      || !SHA256.test(value.outcome_hash ?? "")
+      || !GIT_OID.test(value.snapshot_tree ?? "")) {
+    throw new TypeError("host response must contain a canonical outcome_ref, outcome_hash, and snapshot_tree");
+  }
+  return Object.freeze({ ...value });
+}
+
+function runChild(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    const timeoutMs = Number.isInteger(options.timeoutMs) && options.timeoutMs > 0
+      ? options.timeoutMs : 15 * 60 * 1000;
+    const terminate = (signal) => {
+      try {
+        if (child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch {
+        try { child.kill(signal); } catch { /* process already exited */ }
+      }
+    };
+    let settled = false;
+    const timer = setTimeout(() => {
+      terminate("SIGTERM");
+      const killTimer = setTimeout(() => {
+        if (!settled) terminate("SIGKILL");
+      }, 5000);
+      child.once("close", () => clearTimeout(killTimer));
+      if (!settled) {
+        settled = true;
+        reject(new Error(`${options.label ?? command} timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timer);
+      if (!settled) {
+        settled = true;
+        resolve({ code, signal, stdout, stderr });
+      }
+    });
+  });
+}
+
+export function assertHostOutcome(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.status !== "completed" || typeof value.summary !== "string"
+      || value.summary.trim() === "") {
+    throw new Error("Codex host bridge returned an incomplete skill outcome");
+  }
+  const allowed = new Set(Object.keys(HOST_BRIDGE_OUTCOME_SCHEMA.properties));
+  const required = Object.keys(HOST_BRIDGE_OUTCOME_SCHEMA.properties);
+  const missing = required.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  if (missing.length) throw new Error(`Codex host bridge outcome is missing fields: ${missing.join(", ")}`);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`Codex host bridge outcome has unknown fields: ${unknown.join(", ")}`);
+  for (const key of ["evidence_refs", "changed_files", "findings"]) {
+    if (!Array.isArray(value[key]) || value[key].some((item) => typeof item !== "string" || item.trim() === "")) {
+      throw new Error(`Codex host bridge outcome ${key} must be an array of non-empty strings`);
+    }
+  }
+  if (typeof value.next_step !== "string" || value.next_step.trim() === "") {
+    throw new Error("Codex host bridge outcome next_step must be a non-empty string");
+  }
+  return Object.freeze({ ...value });
+}
+
+function assertCodexHostOutcomeRecord(value, request, ref) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.schema_version !== "workflowhub-host-invocation-outcome.v1"
+      || value.task_id !== request.task_id
+      || value.stage !== request.stage
+      || value.workflow_run_id !== request.workflow_run_id
+      || value.name !== request.name
+      || value.invocation_key !== request.invocation_key
+      || value.declared_trigger !== request.declared_trigger
+      || value.bundle_hash !== request.bundle_hash
+      || value.request_snapshot_tree !== request.snapshot_tree
+      || value.executor !== "codex"
+      || !value.executor_identity
+      || typeof value.executor_identity.command !== "string"
+      || value.executor_identity.command.trim() === ""
+      || typeof value.executor_identity.resolved_path !== "string"
+      || value.executor_identity.resolved_path.trim() === ""
+      || typeof value.executor_identity.version !== "string"
+      || value.executor_identity.version.trim() === ""
+      || !GIT_OID.test(value.snapshot_tree ?? "")
+      || !Number.isFinite(Date.parse(value.recorded_at ?? ""))) {
+    throw new Error(`existing Codex host outcome ${ref} failed identity validation`);
+  }
+  assertHostOutcome(value.outcome);
+  return value;
+}
+
+function inspectCodexExecutor(command, cwd, env) {
+  let resolvedPath;
+  try {
+    resolvedPath = String(execFileSync("which", [command], {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "pipe"],
+    })).trim();
+  } catch (error) {
+    throw new Error(`Codex host bridge cannot resolve executable ${command}: ${error.message}`);
+  }
+  let version;
+  try {
+    version = String(execFileSync(command, ["--version"], {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "pipe"],
+    })).trim();
+  } catch (error) {
+    throw new Error(`Codex host bridge cannot read ${command} --version: ${error.message}`);
+  }
+  if (!version) throw new Error(`Codex host bridge executable ${command} returned an empty version`);
+  return Object.freeze({ command, resolved_path: resolvedPath, version });
+}
+
+const INTERACTIVE_HOST_STAGES = new Set(["make-decision", "build-spec"]);
+
+async function invokeCodexHost({ request, context, prepared }) {
+  const worktreeRoot = context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot;
+  if (typeof worktreeRoot !== "string") throw new Error("Codex host bridge requires an authenticated task worktree");
+  const skillPath = prepared.payloads.get(request.name)?.resolved_skill_path;
+  if (typeof skillPath !== "string") throw new Error(`Codex host bridge cannot resolve skill ${request.name}`);
+  if (INTERACTIVE_HOST_STAGES.has(request.stage)) {
+    throw new Error(`Codex host bridge refuses interactive stage ${request.stage}; preserve the real user conversation`);
+  }
+  const bridgeDir = mkdtempSync(join(tmpdir(), "workflowhub-host-bridge-"));
+  const schemaPath = join(bridgeDir, "outcome.schema.json");
+  const outputPath = join(bridgeDir, "outcome.json");
+  const outcomeIdentity = sha256([
+    request.task_id,
+    request.stage,
+    request.workflow_run_id,
+    request.name,
+    request.invocation_key,
+  ].join("\0"));
+  const outcomeRef = `quality/evidence/host-invocations/${outcomeIdentity}.json`;
+  try {
+    const existingRaw = context.task.readRecord(outcomeRef);
+    const existing = JSON.parse(existingRaw);
+    assertCodexHostOutcomeRecord(existing, request, outcomeRef);
+    return assertHostBridgeResponse({ outcome_ref: outcomeRef, outcome_hash: sha256(existingRaw), snapshot_tree: existing.snapshot_tree });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  writeFileSync(schemaPath, `${JSON.stringify(HOST_BRIDGE_OUTCOME_SCHEMA, null, 2)}\n`, { mode: 0o600 });
+  const prompt = [
+    "You are the WorkflowHub Codex host bridge for one real stage-skill invocation.",
+    "Execute the named skill now against the authenticated current task and worktree.",
+    "Read the skill file and its bundled supporting files before acting.",
+    "Do not invoke stage-runtime review, this host bridge, or any replacement workflow.",
+    "Do not fabricate receipts, hashes, reviews, user confirmations, or completion facts.",
+    "Do not change provider/model, commit, push, merge, or change task status.",
+    "Perform the skill's actual work; if it is advisory, perform the analysis and preserve its evidence.",
+    "At the end, return only JSON matching the supplied output schema with status=completed, a plain-language summary, actual evidence refs, changed files, findings, and next_step.",
+    "",
+    `stage=${request.stage}`,
+    `skill=${request.name}`,
+    `invocation_key=${request.invocation_key}`,
+    `task_id=${request.task_id}`,
+    `task_path=${context.task.taskPath} (read-only; do not write this directory)`,
+    `worktree_root=${worktreeRoot}`,
+    `runner_root=${RUNNER_ROOT}`,
+    `skill_path=${skillPath}`,
+    `bundle_hash=${request.bundle_hash}`,
+    `request_snapshot_tree=${request.snapshot_tree}`,
+  ].join("\n");
+  try {
+    const codex = process.env.WORKFLOWHUB_CODEX_BIN || "codex";
+    const executorIdentity = inspectCodexExecutor(codex, worktreeRoot, process.env);
+    const result = await runChild(codex, [
+      "exec", "--ephemeral", "--json", "--sandbox=workspace-write",
+      "--output-schema", schemaPath,
+      "--output-last-message", outputPath,
+      "-C", worktreeRoot,
+      prompt,
+    ], {
+      cwd: worktreeRoot,
+      env: { ...process.env, WORKFLOWHUB_HOST_BRIDGE_ACTIVE: "1" },
+      timeoutMs: Number.parseInt(process.env.WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS ?? "900000", 10),
+      label: `Codex skill ${request.stage}/${request.name}`,
+    });
+    if (result.code !== 0) {
+      const diagnostics = [result.stderr.trim().slice(-2000), result.stdout.trim().slice(-4000)].filter(Boolean).join("\n");
+      throw new Error(`Codex skill ${request.stage}/${request.name} exited ${result.code ?? "null"}${result.signal ? ` (${result.signal})` : ""}: ${diagnostics}`);
+    }
+    const outcome = assertHostOutcome(JSON.parse(readFileSync(outputPath, "utf8")));
+    const outcomeRecord = {
+      schema_version: "workflowhub-host-invocation-outcome.v1",
+      task_id: request.task_id,
+      stage: request.stage,
+      workflow_run_id: request.workflow_run_id,
+      name: request.name,
+      invocation_key: request.invocation_key,
+      declared_trigger: request.declared_trigger,
+      bundle_hash: request.bundle_hash,
+      executor: "codex",
+      executor_identity: executorIdentity,
+      request_snapshot_tree: request.snapshot_tree,
+      outcome,
+      recorded_at: new Date().toISOString(),
+    };
+    authenticateStageWriteBoundary(context, {
+      runnerRoot: RUNNER_ROOT,
+      operation: "host-invocation-result",
+    });
+    const snapshotTree = captureGitWorktreeSnapshot(worktreeRoot).tree;
+    outcomeRecord.snapshot_tree = snapshotTree;
+    const raw = `${JSON.stringify(outcomeRecord, null, 2)}\n`;
+    try {
+      const published = context.kernel.publishCanonicalRecord(outcomeRef, raw);
+      return assertHostBridgeResponse({ outcome_ref: published.ref, outcome_hash: published.sha256, snapshot_tree: snapshotTree });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const existingRaw = context.task.readRecord(outcomeRef);
+      const existing = JSON.parse(existingRaw);
+      assertCodexHostOutcomeRecord(existing, request, outcomeRef);
+      if (existing.snapshot_tree !== snapshotTree) throw new Error(`Codex host outcome ${outcomeRef} was concurrently published with a different snapshot`);
+      return assertHostBridgeResponse({ outcome_ref: outcomeRef, outcome_hash: sha256(existingRaw), snapshot_tree: existing.snapshot_tree });
+    }
+  } finally {
+    rmSync(bridgeDir, { recursive: true, force: true });
+  }
+}
 
 function assertObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(label + " must be an object");
@@ -246,6 +518,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       throw new TypeError("invoke-stage-skill triggered=false requires a concrete reason");
     }
     if (!triggered) {
+      const existing = context.kernel.readStageSkillInvocation(values.stage, values.name, values["invocation-key"]);
+      if (existing) return { status: "existing", invocation: existing.fact, ref: existing.ref, outcome_hash: existing.hash };
       const fact = await dispatchStageSkill({
         packageRoot: RUNNER_ROOT,
         stage: values.stage,
@@ -269,22 +543,37 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       declared_trigger: dependency.trigger,
       snapshot_tree: captureGitWorktreeSnapshot(invocationWorkspace.worktreeRoot).tree,
     };
+    const existing = context.kernel.readStageSkillInvocation(values.stage, values.name, values["invocation-key"]);
+    if (existing) {
+      const response = assertHostBridgeResponse({
+        outcome_ref: existing.fact.outcome_ref,
+        outcome_hash: existing.fact.outcome_hash,
+        snapshot_tree: existing.fact.snapshot_tree,
+      });
+      if (response.snapshot_tree !== request.snapshot_tree) {
+        throw new Error(`${values.stage}/${values.name}: existing invocation is bound to a different workspace snapshot`);
+      }
+      return { status: "existing", invocation: existing.fact, ref: response.outcome_ref, outcome_hash: response.outcome_hash };
+    }
     process.stdout.write(`${JSON.stringify(request)}\n`);
-    const responseRaw = await new Promise((resolve, reject) => {
-      let body = "";
-      process.stdin.setEncoding("utf8");
-      process.stdin.on("data", (chunk) => { body += chunk; });
-      process.stdin.on("end", () => resolve(body));
-      process.stdin.on("error", reject);
-    });
-    const lines = responseRaw.split("\n").filter((line) => line.trim() !== "");
-    if (lines.length !== 1) throw new Error("host bridge requires exactly one response after request");
     let response;
-    try { response = JSON.parse(lines[0]); } catch { throw new Error("host bridge response must be one JSON line"); }
-    const allowedResponse = new Set(["outcome_ref", "outcome_hash", "snapshot_tree"]);
-    if (!response || typeof response !== "object" || Array.isArray(response)
-        || Object.keys(response).some((key) => !allowedResponse.has(key))) {
-      throw new TypeError("host response must contain only outcome_ref, outcome_hash, and snapshot_tree");
+    if (process.env.WORKFLOWHUB_HOST_BRIDGE === "codex") {
+      if (process.env.WORKFLOWHUB_HOST_BRIDGE_ACTIVE === "1") {
+        throw new Error("nested WorkflowHub host bridge invocation is forbidden");
+      }
+      response = await invokeCodexHost({ request, context, prepared });
+    } else {
+      const responseRaw = await new Promise((resolve, reject) => {
+        let body = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", (chunk) => { body += chunk; });
+        process.stdin.on("end", () => resolve(body));
+        process.stdin.on("error", reject);
+      });
+      const lines = responseRaw.split("\n").filter((line) => line.trim() !== "");
+      if (lines.length !== 1) throw new Error("host bridge requires exactly one response after request");
+      try { response = JSON.parse(lines[0]); } catch { throw new Error("host bridge response must be one JSON line"); }
+      response = assertHostBridgeResponse(response);
     }
     const fact = await dispatchStageSkill({
       packageRoot: RUNNER_ROOT,

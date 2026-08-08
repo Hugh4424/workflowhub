@@ -223,8 +223,8 @@ skills:
     update_policy: 随 requirement ledger/coverage schema 变更审查
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
-    local_version: 0.1.0
-    local_bundle_hash: 5b6b17e235965dc137701718a42a1119828ca0d7474776d8fa9af71625210d15
+    local_version: 0.1.1
+    local_bundle_hash: 7e592a0243f9fcf47020f6882704d82cbb87b9a8a93707ecf49eeb9b035ff28a
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -232,7 +232,7 @@ skills:
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
     used_by_stages: []
     upstream: []
-    local_changes: 保留仓内 provenance；排除核心 Bundle 和生产扫描，未接入五个阶段依赖
+    local_changes: 保留仓内 provenance；增加显式 Codex-only host bridge 规则与删除条件，排除核心 Bundle 和生产扫描，未接入五个阶段依赖
     dependency_closure: []
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync

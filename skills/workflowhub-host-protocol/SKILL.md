@@ -11,6 +11,17 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 完成阶段并且正式 accepted 后，把当前 Issue 设为 `done`，再回读确认。不要把父目录 Issue、其他任务或未轮到的阶段改成完成。
 
+## Codex host bridge 的边界
+
+这是一个受限的 Codex 能力适配，不是新的通用 runtime 控制面：
+
+- 唯一 consumer：当前 Codex Stage Agent 在正式 `stage-runtime review --action=invoke` 中显式设置 `WORKFLOWHUB_HOST_BRIDGE=codex`；其他 provider 仍必须使用真实外部 bridge。
+- owner：`tools/cli/stage-runtime.mjs` 负责请求、子执行和 TaskKernel canonical write；本技能只负责告诉 Stage Agent 何时可以使用它。
+- 替代关系：一旦 Multica launcher 为 Codex 提供真实 `host-invocation-request.v1` 响应通道，Stage Agent 应移除该环境变量，回到外部 bridge；不保留双写或永久兼容分支。
+- 删除条件：连续真实验证 Codex launcher 已能完成 request → outcome → hash/snapshot 回读后，删除该 Codex 分支、这段提示和对应合同测试。
+
+它不接管 talk/grill/clarify 或用户确认，也不发布阶段完成；只有官方 producer 才能继续执行后面的 `run` 和 `status`。
+
 ## 启动前的 WorkflowHub 任务
 
 工头在创建或恢复五阶段链前，先为**当前任务根**确认一份可用的 WorkflowHub task。task 只保存任务事实、阶段记录和每次执行的代码身份；不长期绑定本机目录、固定 commit 或 runner replacement。
@@ -26,7 +37,7 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 - **正式阶段收口的唯一可执行顺序**：评论、工作树文件、provider `pass` 或单独的 `wh-review` 结果都不是阶段完成。当前 Stage Agent 必须在注入的 Runner root 使用同一 TaskHandle 完成以下公共链路，并逐步回读：
   1. `node tools/cli/stage-runtime.mjs doctor --action=workspace --stage=<stage> --project=<project> --task=<task>`；
-  2. 对 `workflows/<stage>/steps.json` 中每个声明的 skill，使用 `node tools/cli/stage-runtime.mjs review --action=invoke --stage=<stage> --project=<project> --task=<task> --name=<skill> --invocation-key=<key>`。需要执行的 skill 必须由 launcher/host bridge 返回一行真实的 `outcome_ref`、`outcome_hash`、`snapshot_tree` JSON；条件 skill 若不触发，则仍用同一公共入口传 `--triggered=false --reason=<具体原因>`，不得把它伪装成 executed。不能手写、猜测或复制旧 outcome；
+  2. 对 `workflows/<stage>/steps.json` 中每个声明的 skill，使用同一公共入口 `node tools/cli/stage-runtime.mjs review --action=invoke --stage=<stage> --project=<project> --task=<task> --name=<skill> --invocation-key=<key>`。在 Codex runtime 中，宿主必须显式使用 `WORKFLOWHUB_HOST_BRIDGE=codex` 启用内置 Codex host bridge；它只服务非交互阶段技能，拒绝静默替代 `talk/grill/clarify` 或用户确认。桥接会实际启动一个受当前 Codex 配置约束的子执行，子执行只能写认证的任务 worktree，任务记录目录只读；父 Runner 在接收结果后重新认证 worktree，再由 TaskKernel 写入 canonical outcome，最后返回真实的 `outcome_ref`、`outcome_hash`、`snapshot_tree` JSON。其他 runtime 未声明支持时继续使用外部 host bridge；不能把 Codex capability 宣称为所有 provider 已支持。条件 skill 若不触发，则仍用同一公共入口传 `--triggered=false --reason=<具体原因>`，不得把它伪装成 executed。不能手写、猜测或复制旧 outcome；
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 

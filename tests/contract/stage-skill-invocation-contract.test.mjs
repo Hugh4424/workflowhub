@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { dispatchOrderedStageSkills } from "../../runtime/stage/stage-skill-runtime.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { createStageSkillDispatchPublication } from "../../tools/cli/stage-runtime.mjs";
+import {
+  assertHostBridgeResponse,
+  assertHostOutcome,
+  createStageSkillDispatchPublication,
+  HOST_BRIDGE_OUTCOME_SCHEMA,
+} from "../../tools/cli/stage-runtime.mjs";
 
 const roots = [];
 afterEach(() => {
@@ -267,5 +272,40 @@ describe("stage skill invocation contract", () => {
       { name: "backend-testing", invocation_key: "step-2" },
       { name: "wh-review", invocation_key: "step-3" },
     ]);
+  });
+
+  it("requires a complete structured Codex host outcome before canonical publication", () => {
+    const valid = {
+      status: "completed",
+      summary: "real advisory result",
+      evidence_refs: ["plan.md:1-2"],
+      changed_files: [],
+      findings: [],
+      next_step: "continue",
+    };
+    expect(assertHostOutcome(valid)).toEqual(valid);
+    expect(() => assertHostOutcome({ ...valid, next_step: "" })).toThrow(/next_step/);
+    expect(() => assertHostOutcome({ ...valid, findings: undefined })).toThrow(/findings/);
+    expect(() => assertHostOutcome({ ...valid, fabricated: true })).toThrow(/unknown fields/);
+  });
+
+  it("keeps the Codex response schema strict and self-consistent", () => {
+    expect(HOST_BRIDGE_OUTCOME_SCHEMA.required).toEqual(Object.keys(HOST_BRIDGE_OUTCOME_SCHEMA.properties));
+    expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.status).toEqual({ type: "string", enum: ["completed"] });
+    expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.next_step.minLength).toBe(1);
+    expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.evidence_refs.items.minLength).toBe(1);
+    expect(HOST_BRIDGE_OUTCOME_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it("rejects non-canonical or weak host bridge response references", () => {
+    const valid = {
+      outcome_ref: "quality/evidence/host-invocations/result.json",
+      outcome_hash: "a".repeat(64),
+      snapshot_tree: "b".repeat(40),
+    };
+    expect(assertHostBridgeResponse(valid)).toEqual(valid);
+    expect(() => assertHostBridgeResponse({ ...valid, outcome_ref: "tmp/result.json" })).toThrow(/canonical/);
+    expect(() => assertHostBridgeResponse({ ...valid, outcome_hash: "bad" })).toThrow(/canonical/);
+    expect(() => assertHostBridgeResponse({ ...valid, fabricated: true })).toThrow(/canonical/);
   });
 });
