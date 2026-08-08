@@ -137,7 +137,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: 93248b201e781b68dfbd6dbbe151373fc765591bfa31086357ea577236d5f032
+    local_bundle_hash: fc56691d20b70a4168062a7bfd15b1e2d46c8560882d30e437a8e8653e2f7df1
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -147,7 +147,12 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 恢复 plan 内容合同和模板；唯一 plan 真相仍由 build-plan 当前材料承载
+    local_changes: 恢复 plan 内容合同和模板；同一 TaskHandle 重试按允许输入幂等复用 plan；唯一 plan 真相仍由 build-plan 当前材料承载
+    retry_contract:
+      owner: spec-plan Stage Agent
+      consumer: same TaskHandle current build-plan stage
+      contract_test: tests/contract/spec-plan-retry-contract.test.mjs
+      retain_or_delete: retain until a formal stage-runtime plan writer owns byte-idempotence; then migrate the contract and remove this prompt rule plus its test in the same reviewed change
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks

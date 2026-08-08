@@ -110,6 +110,21 @@ function fsyncDirectory(path) {
   try { fsyncSync(fd); } finally { closeSync(fd); }
 }
 
+function writeBytes(data, encoding) {
+  return typeof data === "string" ? Buffer.from(data, encoding) : Buffer.from(data);
+}
+
+function readDestinationBytes(path, trustedRoot) {
+  const fd = openSync(path, constants.O_RDONLY | NOFOLLOW);
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error(`artifact destination must be a regular file: ${path}`);
+    assertOpenedPath(fd, path, trustedRoot, "artifact destination");
+    return readFileSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function snapshotDirectory(path) {
   const stat = lstatSync(path);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`artifact ancestor must be a real directory: ${path}`);
@@ -217,6 +232,7 @@ export class ArtifactDir {
   writeAtomic(relativeName, data, { encoding = "utf8", mode = 0o600, testHooks } = {}) {
     const state = this.verifyIdentity();
     const segments = artifactSegments(relativeName);
+    const desiredBytes = writeBytes(data, encoding);
     const specsRoot = resolve(this.worktreeRoot, "specs");
     if (!existsSync(specsRoot)) mkdirSync(specsRoot);
     else ensureRealDirectory(specsRoot, "specs directory");
@@ -243,9 +259,16 @@ export class ArtifactDir {
       verifyDirectory(parentSnapshot);
       this.verifyIdentity();
       testHooks?.afterVerifyBeforeOpen?.();
+      if (existsSync(destination)) {
+        const existingBytes = readDestinationBytes(destination, rootSnapshot.real);
+        verifyDirectory(rootSnapshot);
+        verifyDirectory(parentSnapshot);
+        this.verifyIdentity();
+        if (Buffer.compare(existingBytes, desiredBytes) === 0) return destination;
+      }
       fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, mode);
       assertOpenedPath(fd, temporary, rootSnapshot.real, "artifact temporary");
-      writeFileSync(fd, data, { encoding });
+      writeFileSync(fd, desiredBytes);
       fsyncSync(fd);
       closeSync(fd);
       fd = undefined;

@@ -37,6 +37,41 @@ empty tables, or filler such as “待补充”. Use `N/A — {factual reason}` 
 conditional section does not apply. Keep prose short; use tables only for
 comparison or repeated mappings, never for long paragraphs.
 
+## Retry and artifact idempotence
+
+The owner is the `spec-plan` Stage Agent and the only consumer is the same
+TaskHandle's current `build-plan` stage. On a retry, first compare the existing
+`plan.md`'s stable input/reference bindings against these allowed current-input
+facts only: the accepted `decision-log.md` decisions and source entries,
+`spec.md` and its accepted ref, named `spec-research` facts, the applicable
+`CONSTITUTION.md` rules, and the repository facts explicitly referenced by the
+plan's inputs or anchors. A plan-affecting formal review finding must be current
+in this snapshot and valid, carry its formal `id`, be an actionable finding
+with direct or corroborated evidence, and have a matching current
+`finding_dispositions` row whose `finding_id` is the same and whose `status` is
+`needs_human`; its `next_action` must map the finding to the affected plan row
+or binding. The stage owner may provide that mapping; the provider's original
+finding text does not have to name the plan row. A `fixed` row means the plan
+repair is already recorded; `accepted_risk`, `rejected_invalid`, or an
+unrelated finding is not a plan input.
+
+If none of those allowed facts changed, and there is no qualifying finding,
+treat the existing plan as the current artifact: do not regenerate, reformat,
+reorder, refresh timestamps, or absorb the same facts a second time. Return its
+existing hash and no changed file. A `tasks.md` completion or stale plan-hash
+binding is a downstream task-projection change, not a reason to rewrite
+`plan.md`.
+
+Only an allowed current-input change or a qualifying review finding may change
+`plan.md`. Before writing, compare candidate bytes with the existing artifact;
+identical bytes must not be rewritten. If a write is needed, preserve the
+current plan's provenance and explain which allowed input or `finding_id`
+caused it.
+If a legitimate plan change does occur, recompute the current snapshot and
+stop the ordered stage dispatch; the next attempt must refreeze and use the
+current snapshot-bound invocation keys. Do not create a new task, generation,
+replacement, lineage, or side-channel record.
+
 ## Required plan contract
 
 The generated plan preserves:

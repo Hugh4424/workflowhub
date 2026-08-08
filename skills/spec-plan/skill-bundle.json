@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": "spec-plan",
   "files": [
-    { "path": "SKILL.md", "sha256": "4f3cbd1a5242f84891c5555f730f639d1934a2018e000e2d0f2a71f90a19e233" },
+    { "path": "SKILL.md", "sha256": "17f120fd4a3476a8bf86ad56b3f73571b5131695dca0812599515b206cb72902" },
     { "path": "templates/plan-template.md", "sha256": "e7bfa6ae4c08a2cd00298c890c3534f9bed3b670fb98b39b921d84409abc3903" }
   ],
   "sources": [

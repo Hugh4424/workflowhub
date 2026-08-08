@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   existsSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -145,6 +146,20 @@ describe("ArtifactDir", () => {
     } finally {
       process.chdir(previousCwd);
     }
+  });
+
+  it("does not replace an artifact when the exact bytes are unchanged", () => {
+    const { worktreeRoot, task } = fixture();
+    const artifacts = ArtifactDir.open(worktreeRoot, task);
+    artifacts.writeAtomic("plan.md", "same bytes\n");
+    const before = lstatSync(artifacts.path("plan.md"));
+
+    expect(artifacts.writeAtomic("plan.md", "same bytes\n")).toBe(artifacts.path("plan.md"));
+
+    const after = lstatSync(artifacts.path("plan.md"));
+    expect(after.ino).toBe(before.ino);
+    expect(after.mtimeNs).toBe(before.mtimeNs);
+    expect(readFileSync(artifacts.path("plan.md"), "utf8")).toBe("same bytes\n");
   });
 
   it("revalidates the parent fd when an ancestor is swapped after precheck", () => {
