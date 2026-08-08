@@ -35,8 +35,12 @@ request 声明：
 这是一整个 reviewer group 的一次调用。WorkflowHub 传入本 stage 配置的完整
 候选 profile 列表，不逐个启动 CLI；3rd-review 按 adapter 自动排除与 host 同源
 的 profile，并行运行其余成员，管理它们的会话、健康、重试和私有附件 workspace。
-WorkflowHub 为同一 identity 使用确定 request ID 重连并轮询 `status`，不设外层
-wall-clock deadline，也不查看私有状态文件判断会话是否健康。每个候选都必须有一条
+WorkflowHub 为同一 identity 使用确定 request ID 重连并轮询 `status`，由 broker
+client 的 30 分钟默认 deadline 负责有限生命周期，不查看私有状态文件判断会话
+是否健康；Codex host bridge 另有 35 分钟安全 envelope。仅当运维显式设置
+`WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS` 时才覆盖 host envelope；低于 35 分钟或格式
+非法的值回退到 35 分钟，避免 host 先于 broker 杀掉子进程。任一截止后都必须保留
+`unavailable`/timeout 事实。每个候选都必须有一条
 公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成通过或悄悄丢弃。
 
 每个 provider 的公开结果最少包含：

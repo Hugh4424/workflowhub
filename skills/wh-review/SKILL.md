@@ -324,8 +324,16 @@ native CLI session paths remain provider-private and are never invented.
 Transport success is not review success. Authentication, cancellation, malformed
 output, missing material, and protocol failure never become a semantic verdict.
 The broker supervises provider liveness; WorkflowHub polls the same managed
-request without a wall-clock review deadline and never reads broker-private
-state to decide that a healthy review has stopped.
+request and never reads broker-private state to decide that a healthy review
+has stopped. The broker client has a finite 30-minute default deadline, while
+the WorkflowHub Codex host bridge gives `wh-review` a 35-minute envelope so the
+broker can return a structured unavailable/timeout result before the host
+bridge safety boundary. An explicitly configured well-formed positive
+`WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS` remains an operator override for the host
+envelope; values below 35 minutes or malformed values fall back to the safe
+35-minute envelope so the host cannot kill the broker before it records its
+own timeout. If either deadline fires, the result is an authenticated
+unavailable/timeout fact, never a review pass.
 
 CLI success returns a task-relative `result_ref` and `snapshot_tree`. Stage results store only that pair:
 

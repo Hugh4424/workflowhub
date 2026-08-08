@@ -17,6 +17,7 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 - 唯一 consumer：当前 Codex Stage Agent 在正式 `stage-runtime review --action=invoke` 中显式设置 `WORKFLOWHUB_HOST_BRIDGE=codex`；其他 provider 仍必须使用真实外部 bridge。
 - owner：`tools/cli/stage-runtime.mjs` 负责请求、子执行和 TaskKernel canonical write；本技能只负责告诉 Stage Agent 何时可以使用它。
+- deadline：宿主对普通非交互 stage skill 保留 15 分钟安全截止；`wh-review` 由 broker client 使用 30 分钟默认 deadline，Codex host bridge 保留 35 分钟 envelope 让 broker 先返回结构化结果。只有显式设置合法且不低于 35 分钟的 `WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS` 才扩大 host envelope；更短或非法值回退到 35 分钟。触发后只能记录真实 `unavailable`/timeout，不能改写成审查通过。
 - 替代关系：一旦 Multica launcher 为 Codex 提供真实 `host-invocation-request.v1` 响应通道，Stage Agent 应移除该环境变量，回到外部 bridge；不保留双写或永久兼容分支。
 - 删除条件：连续真实验证 Codex launcher 已能完成 request → outcome → hash/snapshot 回读后，删除该 Codex 分支、这段提示和对应合同测试。
 

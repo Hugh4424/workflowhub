@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "fe44473dceb5b45fd65e9e302bd77b9caf4285979b1bac1051e83887e6b9e253"
+      "sha256": "e7b7c8459a391f6f08dd70b9d760c1883751023de2a4b95772ea38a1a1e47857"
     },
     {
       "path": "contracts/build-code.md",
@@ -24,7 +24,7 @@
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "d4841c4abca9b074161329a4a1c82d8a21f8f7ef3a74dff0309babe93250331b"
+      "sha256": "138a6e6ad86b7290b6baf7a6c5751978aa0e900b567b04ecd571d714f8a8e301"
     },
     {
       "path": "contracts/scope-revision.md",
@@ -72,7 +72,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "c9d6aaa5efd338825fb823e10fe25a3c94148e47a8ef8e0f28fc1410760f9c7c"
+      "sha256": "94320b531eaadf1586be204e72da9789e743da840c8a13f55e1b241f06c7511d"
     },
     {
       "path": "scripts/review-result.mjs",

@@ -9,6 +9,8 @@ const groupFields = ["host_provider", "outcome", "providers", "round", "runtime_
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
+export const DEFAULT_MANAGED_REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
+
 // Reject filesystem roots, not ordinary review terms such as `map/AC`.
 const absolutePathPattern = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)(?:\/|$)|[A-Za-z]:[\\/])/;
 const fileUriPathPattern = /\bfile:\/\/\/(?:[A-Za-z0-9._~%-]|%[A-Fa-f0-9]{2})/i;
@@ -159,7 +161,7 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = null } = {}) {
+  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = DEFAULT_MANAGED_REVIEW_TIMEOUT_MS } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 0) throw new TypeError("pollIntervalMs must be a non-negative safe integer");
     if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000)) throw new TypeError("timeoutMs must be null or at least 1000ms");

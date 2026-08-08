@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
-import { ReviewProviderClient } from "../review-provider-client.mjs";
+import { DEFAULT_MANAGED_REVIEW_TIMEOUT_MS, ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject, withEphemeralReviewLockFixture } from "../review-runner.mjs";
 import { createTask, createTaskKernel, openTask } from "../../../../runtime/task/task-handle.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
@@ -135,7 +135,7 @@ describe("public provider client", () => {
     expect(result.providers.map(({ provider }) => provider)).toEqual(["claude-code/opus", "kimi/k3"]);
   });
 
-  it("lets the managed broker own the default lifecycle deadline", async () => {
+  it("uses a finite broker-owned default lifecycle deadline", async () => {
     const calls = [];
     const client = new ReviewProviderClient({
       pollIntervalMs: 0,
@@ -153,7 +153,8 @@ describe("public provider client", () => {
       prompt: "review", requestId: "default-deadline",
     })).resolves.toMatchObject({ provider: { provider: "kimi/k3", status: "completed" } });
     expect(calls).toHaveLength(2);
-    expect(calls.every((call) => !Object.hasOwn(call, "timeoutMs"))).toBe(true);
+    expect(DEFAULT_MANAGED_REVIEW_TIMEOUT_MS).toBe(30 * 60 * 1000);
+    expect(calls.every((call) => Number.isSafeInteger(call.timeoutMs) && call.timeoutMs >= 1000)).toBe(true);
   });
 
   it("rejects a group that omits a configured candidate", async () => {

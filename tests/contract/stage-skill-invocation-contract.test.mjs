@@ -12,6 +12,7 @@ import {
   buildCodexHostArgs,
   createStageSkillDispatchPublication,
   HOST_BRIDGE_OUTCOME_SCHEMA,
+  hostBridgeTimeoutMsForSkill,
 } from "../../tools/cli/stage-runtime.mjs";
 
 const roots = [];
@@ -296,6 +297,32 @@ describe("stage skill invocation contract", () => {
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.next_step.minLength).toBe(1);
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.properties.evidence_refs.items.minLength).toBe(1);
     expect(HOST_BRIDGE_OUTCOME_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it("lets wh-review use the managed broker deadline by default", () => {
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {})).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("spec-analyze", {})).toBe(15 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "120000",
+    })).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "120abc",
+    })).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "0",
+    })).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "-1",
+    })).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "9999999999999999999999",
+    })).toBe(35 * 60 * 1000);
+    expect(hostBridgeTimeoutMsForSkill("wh-review", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "3600000",
+    })).toBe(3600000);
+    expect(hostBridgeTimeoutMsForSkill("spec-analyze", {
+      WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS: "120000",
+    })).toBe(120000);
   });
 
   it("builds host bridge argv with only the trusted review packet root", () => {

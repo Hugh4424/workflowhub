@@ -35,6 +35,8 @@ const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
+const DEFAULT_HOST_BRIDGE_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_WH_REVIEW_HOST_BRIDGE_TIMEOUT_MS = 35 * 60 * 1000;
 
 function pathOverlaps(left, right) {
   const contains = (outer, inner) => {
@@ -109,6 +111,17 @@ export function assertHostBridgeResponse(value) {
   return Object.freeze({ ...value });
 }
 
+export function hostBridgeTimeoutMsForSkill(skillName, env = process.env) {
+  const fallback = skillName === "wh-review"
+    ? DEFAULT_WH_REVIEW_HOST_BRIDGE_TIMEOUT_MS
+    : DEFAULT_HOST_BRIDGE_TIMEOUT_MS;
+  const configured = env?.WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS?.trim?.();
+  if (typeof configured !== "string" || !/^\d+$/.test(configured)) return fallback;
+  const parsed = Number(configured);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
+  return skillName === "wh-review" ? Math.max(parsed, fallback) : parsed;
+}
+
 function runChild(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -123,8 +136,10 @@ function runChild(command, args, options = {}) {
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
-    const timeoutMs = Number.isInteger(options.timeoutMs) && options.timeoutMs > 0
-      ? options.timeoutMs : 15 * 60 * 1000;
+    const timeoutMs = options.timeoutMs === null
+      ? null
+      : Number.isInteger(options.timeoutMs) && options.timeoutMs > 0
+        ? options.timeoutMs : 15 * 60 * 1000;
     const terminate = (signal) => {
       try {
         if (child.pid) process.kill(-child.pid, signal);
@@ -134,7 +149,7 @@ function runChild(command, args, options = {}) {
       }
     };
     let settled = false;
-    const timer = setTimeout(() => {
+    const timer = timeoutMs === null ? null : setTimeout(() => {
       terminate("SIGTERM");
       const killTimer = setTimeout(() => {
         if (!settled) terminate("SIGKILL");
@@ -146,14 +161,14 @@ function runChild(command, args, options = {}) {
       }
     }, timeoutMs);
     child.once("error", (error) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (!settled) {
         settled = true;
         reject(error);
       }
     });
     child.once("close", (code, signal) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (!settled) {
         settled = true;
         resolve({ code, signal, stdout, stderr });
@@ -307,7 +322,7 @@ async function invokeCodexHost({ request, context, prepared }) {
     }), {
       cwd: worktreeRoot,
       env: { ...process.env, WORKFLOWHUB_HOST_BRIDGE_ACTIVE: "1" },
-      timeoutMs: Number.parseInt(process.env.WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS ?? "900000", 10),
+      timeoutMs: hostBridgeTimeoutMsForSkill(request.name),
       label: `Codex skill ${request.stage}/${request.name}`,
     });
     if (result.code !== 0) {
