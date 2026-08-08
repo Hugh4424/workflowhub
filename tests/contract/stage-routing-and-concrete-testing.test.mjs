@@ -75,6 +75,26 @@ describe("D-015 stage routing and concrete testing contract", () => {
       .toEqual(["review"]);
   });
 
+  it("requires handoff comments to expose inherited process facts and the plain-language plan", () => {
+    const protocol = read("skills/workflowhub-host-protocol/SKILL.md");
+    for (const label of [
+      "talk-with-zhipeng",
+      "grill-with-docs",
+      "research",
+      "blind review",
+      "detail review",
+      "decision-log",
+      "整体方案",
+      "unavailable",
+      "inherited from make-decision",
+    ]) {
+      expect(protocol, `host protocol must keep the handoff process index: ${label}`).toContain(label);
+    }
+    expect(protocol).toMatch(/不得重复发起 Talk/);
+    expect(protocol).toMatch(/不得重复发起 Grill/);
+    expect(protocol).toMatch(/做什么、怎么做、预期效果\/非目标/);
+  });
+
   it("routes build-code against actual scope and invokes one concrete testing skill", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",

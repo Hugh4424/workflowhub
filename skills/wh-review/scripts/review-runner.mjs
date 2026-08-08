@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, unlinkSync, writeSync } from "node:fs";
-import { hostname } from "node:os";
+import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, realpathSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
@@ -28,6 +28,7 @@ const ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/at
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 const REVIEW_LOCK_WAIT_MS = 10_000;
 const EPHEMERAL_LOCK_DIRECTORY = ".workflowhub-review-locks";
+const LOCK_HELPER_SCRIPT = "process.stdout.write('ready\\n'); process.stdin.resume(); process.stdin.on('end',()=>process.exit(0)); process.on('SIGTERM',()=>process.exit(0));";
 const reviewRootFor = () => "quality/reviews";
 const providerOutputPrefixFor = (task, attemptId) => `${reviewRootFor(task)}/attempts/${attemptId}/providers/`;
 
@@ -56,16 +57,6 @@ async function withLocalReviewLock(task, lockRef, operation) {
   }
 }
 
-function waitBriefly(milliseconds = 10) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-function processAlive(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-  try { process.kill(pid, 0); return true; }
-  catch (error) { return error?.code === "EPERM"; }
-}
-
 function ephemeralLockDirectory(attachmentRoot) {
   if (typeof attachmentRoot !== "string" || attachmentRoot.trim() === "") throw new TypeError("attachmentRoot is required for review locking");
   const root = realpathSync(attachmentRoot);
@@ -80,60 +71,87 @@ function ephemeralLockDirectory(attachmentRoot) {
   return directory;
 }
 
-function ephemeralLockOwnerDead(lockPath) {
-  let owner;
-  try { owner = JSON.parse(readFileSync(lockPath, "utf8")); }
-  catch { return false; }
-  // Never steal a lock from another host without a lease service. A local
-  // crashed process is recoverable because its PID is no longer alive.
-  return owner?.host === hostname() && !processAlive(owner?.pid);
+function nativeReviewLockSpec(candidate) {
+  const helper = [process.execPath, "-e", LOCK_HELPER_SCRIPT, String(process.pid)];
+  if (process.platform === "darwin" || process.platform === "freebsd") {
+    return { command: "/usr/bin/lockf", args: ["-s", "-t", String(REVIEW_LOCK_WAIT_MS / 1_000), "-k", candidate, ...helper] };
+  }
+  if (process.platform === "linux") {
+    return { command: "/usr/bin/flock", args: ["-w", String(REVIEW_LOCK_WAIT_MS / 1_000), candidate, ...helper] };
+  }
+  throw new Error(`review coordination lock is unsupported on ${process.platform}; no native advisory lock command is configured`);
 }
 
-function withEphemeralReviewLock(attachmentRoot, lockRef, operation) {
+function prepareEphemeralLockFile(candidate) {
+  let fd;
+  try {
+    fd = openSync(candidate, constants.O_CREAT | constants.O_RDWR | (constants.O_NOFOLLOW ?? 0), 0o600);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function acquireNativeReviewLock(candidate) {
+  const spec = nativeReviewLockSpec(candidate);
+  prepareEphemeralLockFile(candidate);
+  const child = spawn(spec.command, spec.args, { stdio: ["pipe", "pipe", "pipe"] });
+  let output = "";
+  let ready = false;
+  let settled = false;
+  let releasePromise = null;
+  const childClosed = new Promise((resolve) => child.once("close", resolve));
+  const release = () => {
+    if (releasePromise) return releasePromise;
+    releasePromise = (async () => {
+      if (child.stdin && !child.stdin.destroyed) child.stdin.end();
+      const closed = await Promise.race([
+        childClosed.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 1_000)),
+      ]);
+      if (!closed) {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+        await childClosed;
+      }
+    })();
+    return releasePromise;
+  };
+  return new Promise((resolve, reject) => {
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+      reject(error);
+    };
+    child.once("error", (error) => fail(new Error(`review coordination lock command failed: ${error.message}`)));
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+      if (!ready && output.includes("ready\n")) {
+        ready = true;
+        settled = true;
+        resolve({ release });
+      }
+    });
+    child.once("close", (code) => {
+      if (!ready) fail(new Error(`timed out waiting for review lock (native lock exit ${code ?? "unknown"})`));
+    });
+  });
+}
+
+async function withEphemeralReviewLock(attachmentRoot, lockRef, operation) {
   if (typeof operation !== "function") throw new TypeError("review lock operation must be a function");
   const directory = ephemeralLockDirectory(attachmentRoot);
   const candidate = resolve(directory, `${createHash("sha256").update(lockRef).digest("hex")}.lock`);
-  const nonce = randomUUID();
-  const started = Date.now();
-  let fd;
-  let owned = false;
-  while (!owned) {
-    try {
-      fd = openSync(candidate, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
-      writeSync(fd, `${JSON.stringify({ pid: process.pid, host: hostname(), started_at: new Date().toISOString(), nonce })}\n`, null, "utf8");
-      closeSync(fd); fd = undefined;
-      owned = true;
-    } catch (error) {
-      if (fd !== undefined) { closeSync(fd); fd = undefined; }
-      if (error?.code !== "EEXIST") {
-        try { unlinkSync(candidate); } catch (unlinkError) { if (unlinkError?.code !== "ENOENT") throw unlinkError; }
-        throw error;
-      }
-      if (ephemeralLockOwnerDead(candidate)) {
-        try { unlinkSync(candidate); } catch (unlinkError) { if (unlinkError?.code !== "ENOENT") throw unlinkError; }
-        continue;
-      }
-      const elapsed = Date.now() - started;
-      if (elapsed >= REVIEW_LOCK_WAIT_MS) throw new Error(`timed out waiting for review lock: ${lockRef}`);
-      waitBriefly(Math.min(10, REVIEW_LOCK_WAIT_MS - elapsed));
-    }
-  }
-  const release = () => {
-    let owner;
-    try { owner = JSON.parse(readFileSync(candidate, "utf8")); } catch {}
-    if (owner?.nonce !== nonce) throw new Error(`review lock ownership changed: ${lockRef}`);
-    unlinkSync(candidate);
-    try { rmdirSync(directory); } catch (error) { if (!['ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error; }
-  };
+  const holder = await acquireNativeReviewLock(candidate);
   try {
-    const result = operation();
-    if (result && typeof result.then === "function") return Promise.resolve(result).finally(release);
-    release();
-    return result;
-  } catch (error) {
-    release();
-    throw error;
+    return await operation();
+  } finally {
+    await holder.release();
   }
+}
+
+/** Explicit test seam; production dispatch uses withReviewLock below. */
+export function withEphemeralReviewLockFixture({ attachmentRoot, lockRef, operation } = {}) {
+  return withEphemeralReviewLock(attachmentRoot, lockRef, operation);
 }
 
 function withReviewLock(task, attachmentRoot, lockRef, operation) {

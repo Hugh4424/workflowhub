@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "124eafd7985db0d08d8331f02aa13efcebfa17ceadca295a0cbb0380fd360d42"
+      "sha256": "fe44473dceb5b45fd65e9e302bd77b9caf4285979b1bac1051e83887e6b9e253"
     },
     {
       "path": "contracts/build-code.md",
@@ -80,7 +80,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "c2b3d6d8ae26dc7c08a3c3641345afd1318a129e68d54352174b944a139efa26"
+      "sha256": "2ae676380112f97cee6f6b5c3d1a11d3da4f6cc8d6d61edf5343ec494f7719c6"
     },
     {
       "path": "scripts/review-source.mjs",

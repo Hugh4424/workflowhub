@@ -229,7 +229,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 27d12bd078c5fcf59fcfa7f6eeee8d483374d9af9bb1aae337a69c4ffcc96532
+    local_bundle_hash: 908fb957f838179d74efdcb7e6514394e94bad5938433726f5093a5f99c800ce
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -257,14 +257,14 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 504e8927abceac19010845843ca4ed229ddc40640ecc32ed0ddc3027f1d33996
+    local_bundle_hash: 0f8fb312f02719bf35c212a95e16d7711627224367b673bae1cdb725a6be746a
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
     design_idea: frozen materials、attempt/result、相同审查身份精确复用、verify-final
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: workflowhub 原生 V4 实现
+    local_changes: workflowhub 原生 V4 实现；review-runner 是唯一 consumer，使用受信 attachment root 下的原生 advisory lock 占位文件；内核在进程退出时释放持锁，锁文件只由 attachment-root 生命周期清理删除，runner 不按 PID 猜测或删除
     dependency_closure: [skills/wh-review]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: plan-ceo-review

@@ -37,7 +37,7 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 
 - **正式阶段收口的唯一可执行顺序**：评论、工作树文件、provider `pass` 或单独的 `wh-review` 结果都不是阶段完成。当前 Stage Agent 必须在注入的 Runner root 使用同一 TaskHandle 完成以下公共链路，并逐步回读：
   1. `node tools/cli/stage-runtime.mjs doctor --action=workspace --stage=<stage> --project=<project> --task=<task>`；
-  2. 对 `workflows/<stage>/steps.json` 中每个声明的 skill，使用同一公共入口 `node tools/cli/stage-runtime.mjs review --action=invoke --stage=<stage> --project=<project> --task=<task> --name=<skill> --invocation-key=<key>`。在 Codex runtime 中，宿主必须显式使用 `WORKFLOWHUB_HOST_BRIDGE=codex` 启用内置 Codex host bridge；它只服务非交互阶段技能，拒绝静默替代 `talk/grill/clarify` 或用户确认。桥接会实际启动一个受当前 Codex 配置约束的子执行，子执行只能写认证的任务 worktree 和统一可信配置指定的 review packet 目录，TaskHandle 记录目录只读；wh-review 的并发协调锁只能短暂放在可信 packet 目录中，释放后删除，不是 canonical record 或 progression fact；父 Runner 在接收结果后重新认证 worktree，再由 TaskKernel 写入 canonical outcome，最后返回真实的 `outcome_ref`、`outcome_hash`、`snapshot_tree` JSON。其他 runtime 未声明支持时继续使用外部 host bridge；不能把 Codex capability 宣称为所有 provider 已支持。条件 skill 若不触发，则仍用同一公共入口传 `--triggered=false --reason=<具体原因>`，不得把它伪装成 executed。不能手写、猜测或复制旧 outcome；
+  2. 对 `workflows/<stage>/steps.json` 中每个声明的 skill，使用同一公共入口 `node tools/cli/stage-runtime.mjs review --action=invoke --stage=<stage> --project=<project> --task=<task> --name=<skill> --invocation-key=<key>`。在 Codex runtime 中，宿主必须显式使用 `WORKFLOWHUB_HOST_BRIDGE=codex` 启用内置 Codex host bridge；它只服务非交互阶段技能，拒绝静默替代 `talk/grill/clarify` 或用户确认。桥接会实际启动一个受当前 Codex 配置约束的子执行，子执行只能写认证的任务 worktree 和统一可信配置指定的 review packet 目录，TaskHandle 记录目录只读；wh-review 的并发协调锁只能放在可信 packet 目录的固定占位文件上，由原生 advisory lock 持有，父/ helper 进程退出时内核自动释放，runner 不按 PID 夺锁或删除文件；它不是 canonical record 或 progression fact。父 Runner 在接收结果后重新认证 worktree，再由 TaskKernel 写入 canonical outcome，最后返回真实的 `outcome_ref`、`outcome_hash`、`snapshot_tree` JSON。其他 runtime 未声明支持时继续使用外部 host bridge；不能把 Codex capability 宣称为所有 provider 已支持。条件 skill 若不触发，则仍用同一公共入口传 `--triggered=false --reason=<具体原因>`，不得把它伪装成 executed。不能手写、猜测或复制旧 outcome；
   3. 由官方 producer 组装当前 receipts、finding dispositions 和 `stage_skill_dispatch`，使用 `node tools/cli/stage-runtime.mjs run --action=execute --stage=<stage> --project=<project> --task=<task> --input=<current-input.json>` 发布阶段事实；
   4. 立即使用 `node tools/cli/stage-runtime.mjs status --action=begin --stage=<stage> --project=<project> --task=<task>` 回读同一阶段的当前结果，再写完成/交接卡。
 
@@ -88,6 +88,16 @@ description: 让 Multica 中的 WorkflowHub 五阶段任务可见、可交接、
 2. **问题卡**：先自行处理。需要上游输入时，在上游 Issue @ 上游 Agent，说明它需要补什么；不要 @ 用户。只有范围不明、无法恢复的外部阻塞，或同一状态下持续无人接手时，才在当前 Issue @ 用户。
 3. **用户决策卡**：只写当前状态、问题、影响范围和 2–3 个互斥选项。每个选项写结果和风险；明确一个**推荐选项**及理由。使用工作区配置提供的真实 member mention，不能只写普通文本 `@名字`。
 4. **完成/交接卡**：已完成什么；产物和证据摘要；下游需要的输入；下一步；是否需要用户。工头把同一张简短交接事实写到当前和下游 Issue，然后才唤醒下游。
+
+每张阶段完成/交接卡还必须带一段**过程索引**，让用户不用翻回上游线程就能判断方案是否完整。过程索引不是新的事实存储，也不能替代 TaskHandle、quality fact、receipt 或正式 review；只把当前真实事实用大白话投影出来，并对不适用或缺失项写明原因。固定使用下面这些标签：
+
+- `talk-with-zhipeng`：`completed`、`inherited`、`not_applicable`、`unavailable` 或 `missing`，附一句方向/范围结论；下游阶段通常写 `inherited from make-decision`，不得重复发起 Talk。
+- `grill-with-docs`：同样写真实状态和一句领域/文档结论；下游阶段通常写 `inherited from make-decision`，不得重复发起 Grill。
+- `research`：写内外部调研是否执行、关键结论或真实跳过原因。
+- `blind review`、`detail review`：分别写实际审查对象、结论、重要 finding 和处置状态；`unavailable`/`missing` 必须保留，不能用 provider `pass` 代替。
+- `decision-log`：写当前决策记录是否已形成、它决定了什么、哪些未决项仍影响下一步；不能只说“已生成”。
+
+过程索引后必须再写整体方案：做什么、怎么做、预期效果/非目标、当前阶段真实结果、风险边界和下一步。没有对应事实就明确写 `unavailable`/`missing`/`not_applicable` 及原因；禁止根据旧评论、附件存在或 Agent 自己的推断补齐。这样 build-spec/build-plan/verify-code 能继承上游 Talk/Grill 的结果，又不会偷偷重复交互或制造第二套状态机。
 
 审查完成后另发一张**审查卡**：审查对象、按指定配置发起的 profile、正式结果列出的实际有效审查来源、结论、最多三个重要 finding、处理方式和下一步。同一 adapter 的多个 profile 不能称为“多路独立审查”或“多个独立 provider”；应写“按指定配置发起；实际有效审查以正式结果为准”。只有正式事实提供时才写耗时和 token；没有就写“未提供”，不能猜。
 

@@ -1,13 +1,13 @@
 import { afterEach } from "vitest";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
-import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject } from "../review-runner.mjs";
+import { runReview, runReviewFixture, verifyFinal, verifyFinalSubject, withEphemeralReviewLockFixture } from "../review-runner.mjs";
 import { createTask, createTaskKernel, openTask } from "../../../../runtime/task/task-handle.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
 import { execFileSync } from "node:child_process";
@@ -225,7 +225,40 @@ describe("aggregation and runner", () => {
     });
     expect(result.status).toBe("semantic");
     expect(existsSync(join(task.taskPath, "locks"))).toBe(false);
-    expect(existsSync(join(attachmentRoot, ".workflowhub-review-locks"))).toBe(false);
+    expect(existsSync(join(attachmentRoot, ".workflowhub-review-locks"))).toBe(true);
+    expect(readdirSync(join(attachmentRoot, ".workflowhub-review-locks"))).toEqual([expect.stringMatching(/\.lock$/)]);
+  });
+
+  it("uses a native advisory lock instead of PID-based stale deletion", () => {
+    const implementation = readFileSync(new URL("../review-runner.mjs", import.meta.url), "utf8");
+    expect(implementation).not.toContain("ephemeralLockOwnerDead");
+    expect(implementation).not.toContain("rmdirSync(directory)");
+    expect(implementation).toContain("nativeReviewLockSpec");
+    expect(implementation).toContain("LOCK_HELPER_SCRIPT");
+    expect(implementation).toContain("process.stdin.on('end'");
+  });
+
+  it("serializes native review locks and releases them after the operation", async () => {
+    const { attachmentRoot } = fixture("simple-review-native-lock-");
+    let signalStarted; let releaseFirst;
+    const firstStarted = new Promise((resolve) => { signalStarted = resolve; });
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+    let secondEntered = false;
+    const first = withEphemeralReviewLockFixture({
+      attachmentRoot, lockRef: "locks/reviews/shared.lock",
+      operation: async () => { signalStarted(); await firstGate; return "first"; },
+    });
+    await firstStarted;
+    const second = withEphemeralReviewLockFixture({
+      attachmentRoot, lockRef: "locks/reviews/shared.lock",
+      operation: async () => { secondEntered = true; return "second"; },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(secondEntered).toBe(false);
+    releaseFirst();
+    await expect(first).resolves.toBe("first");
+    await expect(second).resolves.toBe("second");
+    expect(secondEntered).toBe(true);
   });
 
   it("records a generic protocol failure without leaking managed stderr", async () => {
