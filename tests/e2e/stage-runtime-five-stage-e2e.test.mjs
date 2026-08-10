@@ -28,7 +28,7 @@ describe("public vNext runtime cutover", () => {
     ["doctor", "workspace"],
     ["status", "begin"],
     ["run", "execute"],
-    ["review", "invoke"],
+    ["review", "risk"],
     ["verify", "execute"],
     ["confirm", "decision"],
     ["authorize", "commit"],

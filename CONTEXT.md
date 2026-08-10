@@ -108,15 +108,6 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
 变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
-**当前 requirements 指针（current requirements pointer）**：
-指向同一任务最新 requirements ledger 与 coverage 的受控选择记录。requirement ID、每代
-ledger/coverage 字节和 lineage 不可变；pointer 可在 append-only revision 后更新。复用
-当前 ledger 前必须同时核验 ledger 与 coverage 的 ref、hash 和实际内容，不能用指针本身
-冒充覆盖事实。
-
-**当前 Phase 结果（current Phase result）**：
-某个工作树当前可继续使用的最新正式 Phase 结果；旧结果仍是历史，不会被覆盖。
-
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
 
@@ -163,25 +154,20 @@ workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05�
 对单个 build-code Phase 的完整、冻结 diff 审查；`pass` 与 `revise_required` 原样保留为质量事实，不决定结构性阶段放行，不因材料优化降低代码、测试、简单性或鲁棒性检查强度。
 
 **集成审查（integration review）**：
-build-code 结束时对最终快照的跨 Phase 交互审查。它读取连续的正式 Phase 审查覆盖链、跨 Phase seam 索引、每个 seam 的最终锚点或显式未知/不适用项，以及 AC 到改动和测试/证据的追踪；它不重新投递历史完整 diff，也不把 review verdict 改写成 stage pass。
+build-code 结束时对最终快照的当前交互审查。它读取当前四份材料、当前代码快照、
+当前测试事实和 AC 到改动/测试/证据的追踪；不读取 Phase lineage、seam 或历史
+snapshot 控制面，也不把 review verdict 改写成 stage pass。
 
 **AC 证据摘要（AC evidence summary）**：
 逐条 AC 的可读验收视图，记录结果、场景、判定标准、实际结果、证据引用/hash 和覆盖边界；它来自已认证证据，不包含原始日志。
-
-## verify-code 深化术语（m13e）
 
 ## 当前治理边界
 
 四材料决定是否可以继续工作；测试、审查、历史、inventory 和复杂度报告只提供事实，不是推进许可证。正式完成仍必须如实呈现测试、逐条验收、独立审查或 unavailable、交接和不可逆操作授权；旧条目到新条目的映射只记录治理演进，不生成新的控制链。历史 task 和历史 bytes 只读，provenance 与原始失败事实保留；新增机制必须登记职责、真实 consumer、owner、测试和删除/保留条件。
 
-**查痕（trace-check）**：
-verify-code 新增步骤，位于 test-strategy 之后、L3 之前。扫描 evidence/ 目录下各 phase 已产出的报告，核对是否存在、exit_code=0、以及是否通过 git_sha/content_hash 交叉验证（与 P0-3 freshness 校验同一套交叉验证逻辑，不单独只看 mtime）。缺口写入 `trace-check-report.json`，并把没有证据覆盖的验收标准写入 `missing_ac_coverage[]`。
-
-**phase-report**：
-verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文件（如 `l2-report.json`、`l3-e2e-report.json`），是查痕步骤读取比对的对象。
-
 **AC（验收标准 / acceptance criteria）**：
-沿用既有定义，指 spec 文档里列出的验收标准条目（见 verify-code/SKILL.md）。`missing_ac_coverage[]` 记录哪些 AC 条目在已产出的 phase-report 里找不到对应证据。
+沿用既有定义，指 spec 文档里列出的验收标准条目。当前测试、证据和审查缺口原样记录，
+不从历史 Phase 报告推导新的继续工作控制链。
 
 ## 组件 skill
 

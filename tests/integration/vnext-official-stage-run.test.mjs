@@ -11,21 +11,10 @@ import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
-import { createStageContentEvidenceWriter } from "../../runtime/evidence/stage-content-evidence.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
-const reviewLineage = (requestId) => ({
-  request_id: requestId,
-  prompt_hash: "0".repeat(64),
-  round: "initial",
-  prior_attempt_refs: [],
-  prior_runtime_ids: {},
-  correction_ref: null,
-  dispatch_sequence: 0,
-});
-
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
@@ -88,7 +77,6 @@ function publishReviewFixture(state) {
     snapshot_tree: snapshot.tree,
     material_id: "0".repeat(64),
     attempt_ref: "quality/reviews/attempts/vnext-build-spec/attempt.json",
-    lineage: reviewLineage("vnext-build-spec-request"),
     provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "fixture review passed", findings: [] } }],
     verdict: "pass",
     findings: [],
@@ -99,13 +87,15 @@ function publishReviewFixture(state) {
   return { ref, sha256: sha256(raw) };
 }
 
-describe("vNext official stage publication", () => {
+describe("vNext official stage completion", () => {
   it("reads the four current materials directly and rejects revision pointers/writers", () => {
     const state = fixture("vnext-direct-materials");
     expect(() => state.task.readRecord("materials/current.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("requirements/current.json")).toThrow(/ENOENT/);
     expect(() => state.kernel.publishMaterialRevision({ change_summary: "forbidden", source_refs: ["task.json"] }))
       .toThrow(/material revision writer is retired/);
+    expect(() => state.kernel.publishCanonicalRecord("publications/build-spec/demo.json", "{}\n"))
+      .toThrow(/quality namespace|canonical record namespace/i);
   });
 
   it('fake-pass:test-receipt refuses a non-zero test receipt as passed quality', async () => {
@@ -123,7 +113,7 @@ describe("vNext official stage publication", () => {
       snapshot_commit: state.candidate.baselineCommit,
       started_at: "2026-08-02T00:00:00.000Z",
       completed_at: "2026-08-02T00:00:01.000Z",
-      output_ref: "evidence/fake-pass.output",
+      output_ref: "quality/tests/output/fake-pass.output",
       output_hash: "b".repeat(64),
     };
     const raw = `${JSON.stringify(receipt, null, 2)}\n`;
@@ -135,25 +125,41 @@ describe("vNext official stage publication", () => {
     }));
     const facts = result.quality_fact_refs.map((item) => JSON.parse(state.task.readRecord(item)));
     expect(facts.find((item) => item.kind === "test")).toMatchObject({ status: "failed" });
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result.completion.missing).toContain("risk_tests_fresh");
+    expect(result).not.toHaveProperty("publication_ref");
+    expect(result).not.toHaveProperty("publication_hash");
   });
 
-  it("publishes quality facts and a derived publication without the legacy attempt writer", async () => {
+  it("returns derived completion from quality facts without a publication object", async () => {
     const state = fixture();
     const review = publishReviewFixture(state);
     const result = await runStage(
       "build-spec",
       contextFor("build-spec", state),
-      async () => ({ facts: { source: "official-stage-fixture" }, evidence_refs: [review] }),
+      async () => ({
+        facts: {
+          source: "official-stage-fixture",
+          completion_subjects: {
+            traceability: { status: "passed", evidence_refs: [] },
+            zero_major_ambiguities: { status: "passed", evidence_refs: [] },
+          },
+        },
+        evidence_refs: [review],
+        completion: { facts: { business_facts: { acceptance_criteria: "covered" } } },
+      }),
     );
 
-    expect(result).toMatchObject({ stage: "build-spec", status: "completed" });
-    expect(result.publication_ref).toMatch(/^publications\/build-spec\/[a-f0-9]{64}\.json$/);
-    expect(result.quality_fact_refs).toHaveLength(3);
+    expect(result).toMatchObject({ stage: "build-spec", status: "completed", work_status: "ready", quality_status: "passed" });
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result).not.toHaveProperty("publication_ref");
+    expect(result).not.toHaveProperty("publication_hash");
+    expect(result.quality_fact_refs).toHaveLength(2);
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
 
-  it("recognizes the canonical evidence/confirmations path in stage publication", async () => {
+  it("recognizes the canonical quality/confirmations path in stage completion", async () => {
     const state = fixture("vnext-confirmation-path");
     const snapshot = state.candidate.captureSnapshot();
     const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
@@ -163,7 +169,6 @@ describe("vNext official stage publication", () => {
       subject_kind: "worktree", phase_id: null, review_scope: null,
       source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
       snapshot_tree: snapshot.tree, material_id: "0".repeat(64), attempt_ref: "quality/reviews/attempts/vnext-build-plan/attempt.json",
-      lineage: reviewLineage("vnext-build-plan-request"),
       provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "fixture review passed", findings: [] } }],
       verdict: "pass", findings: [],
     })}\n`;
@@ -173,45 +178,41 @@ describe("vNext official stage publication", () => {
     state.kernel.publishCanonicalRecord(reviewRef, reviewRaw);
     state.kernel.publishCanonicalRecord(confirmationRef, confirmationRaw);
     const result = await runStage("build-plan", contextFor("build-plan", state), async () => ({
-      facts: { source: "confirmation-path-regression" },
+      facts: {
+        source: "confirmation-path-regression",
+        completion_subjects: Object.fromEntries(["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks"]
+          .map((subject) => [subject, { status: "passed", evidence_refs: [] }])),
+      },
+      completion: { facts: { business_facts: { acceptance_criteria: "covered" } } },
       evidence_refs: [
         { ref: reviewRef, sha256: createHash("sha256").update(reviewRaw).digest("hex") },
         { ref: confirmationRef, sha256: createHash("sha256").update(confirmationRaw).digest("hex") },
       ],
     }));
-    expect(result.status).toBe("completed");
-    expect(result.publication_ref).toMatch(/^publications\/build-plan\//);
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "passed" });
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result).not.toHaveProperty("publication_ref");
+    expect(result).not.toHaveProperty("publication_hash");
   });
 
-  it("lets make-decision publish interaction evidence without the retired journal writer", () => {
+  it("stores make-decision interaction evidence in the content-addressed quality namespace", () => {
     const state = fixture("vnext-make-decision-content");
-    const writer = createStageContentEvidenceWriter({
-      task: state.task,
-      workspace: state.candidate,
+    const snapshot = state.candidate.captureSnapshot();
+    const value = {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: state.task.identity.taskId,
       stage: "make-decision",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
-    });
-    const talk = (roundNumber) => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: {
-        interaction_type: "talk",
-        rounds: [{
-          round_number: roundNumber,
-          questions: [],
-          candidate_queue: [],
-          questions_already_asked: 0,
-          open_direction_changing_questions: 0,
-          current_total: 0,
-          end_reason: "no direction-changing ambiguity remains",
-          zero_question_reason: "the current requirement already fixes this direction",
-        }],
-        grill: null,
-      },
-    });
-    const first = talk(1);
-    const second = talk(2);
-    const third = talk(3);
-    expect([first, second, third].map(({ value }) => value.payload.rounds[0].round_number)).toEqual([1, 2, 3]);
+      snapshot_tree: snapshot.tree,
+      talk: { status: "completed", round_count: 1, architecture_direction_covered: true, user_outcome_covered: true },
+      clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "no_direction_changing_ambiguity" },
+      decision_ref: "quality/evidence/decision.md",
+      decision_hash: "a".repeat(64),
+    };
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    const ref = `quality/evidence/interactions/${sha256(raw)}.json`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    expect(JSON.parse(state.task.readRecord(ref))).toEqual(value);
+    expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
   });
 
   it("review:unavailable-not-passed routes the repository-owned official build-spec run to vNext facts", async () => {
@@ -240,7 +241,6 @@ describe("vNext official stage publication", () => {
       subject_kind: "worktree",
       phase_id: null,
       review_scope: null,
-      lineage: reviewLineage("vnext-official-build-spec-request"),
       provider_attempts: [],
       terminal_status: "unavailable",
       error: { code: "MATERIAL_INCOMPLETE", message: "fixture review unavailable" },
@@ -253,9 +253,12 @@ describe("vNext official stage publication", () => {
       workspace, artifacts,
     }, { receipts: { spec: spec.ref, review: attemptRef } });
 
-    expect(result.status).toBe("completed");
-    expect(result.quality_status).toBe("incomplete");
-    expect(result.quality_fact_refs).toHaveLength(3);
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
+    expect(result.completion).toMatchObject({ status: "in_progress", missing: ["independent_review"] });
+    expect(result).not.toHaveProperty("publication_ref");
+    expect(result).not.toHaveProperty("publication_hash");
+    expect(result.quality_fact_refs).toHaveLength(2);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
@@ -273,26 +276,37 @@ describe("vNext official stage publication", () => {
       approach: "使用当前材料和当前测试事实",
       effect: "逐项发布质量事实",
       verification: { conclusion: "测试与 AC 已覆盖", limits: ["独立审查仍有开放 finding"] },
-      artifacts: [{ label: "当前实现", ref: "quality/evidence/implementation/a.json", hash: "a".repeat(64), publication_lookup: "publications/verify-code/" }],
+      artifacts: [{ label: "当前实现", ref: "quality/evidence/implementation/a.json", hash: "a".repeat(64) }],
       review: { conclusion: "独立审查仍有开放 finding", status: "revise_required", providers: ["fixture"], findings: [], refs: [] },
       business_facts: { content: "present", code: "complete", tests: "passed", acceptance_criteria: "covered" },
-      declared_components: [], invocation_facts: [], audit_gaps: [], missing_items: ["independent review remains open"],
+      audit_gaps: [], missing_items: ["independent review remains open"],
       confirmation_summary: {
         completed: "已核对当前交付", specification: "当前材料已读取", scope: ["当前 verify-code"],
         non_goals: ["不把审查意见改写成通过"], phases: ["verify-code"], dependencies: [],
         tests: ["定向事实"], review_advice: "保留原始 finding", risks: ["独立审查仍有开放 finding"],
         deferred: ["finding 处置保留为质量事实"], next_stage_boundary: "不执行 close", expected_impact: "事实可回放",
       },
-      risks: ["独立审查仍有开放 finding"], dependencies: [], recovery_conditions: ["返回 verify-code 修复"],
-      downstream_read_rule: "只读当前正式事实", next_owner: "task owner", user_action: "需要处理未完成项",
+      risks: ["独立审查仍有开放 finding"], next_owner: "task owner", user_action: "需要处理未完成项",
     });
     const result = await runStage("verify-code", {
       stage: "verify-code", task: state.task, kernel, identity: state.task.identity,
       workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
       workspace, artifacts,
-    }, async () => ({ facts: { marker: "predicate-isolation" }, evidence_refs: [], missing_items: ["independent review remains open"], completion }));
+    }, async () => ({
+      facts: {
+        marker: "predicate-isolation",
+        completion_subjects: {
+          acceptance_criteria: { status: "passed", evidence_refs: [] },
+          exceptions: { status: "passed", evidence_refs: [] },
+        },
+      },
+      evidence_refs: [], missing_items: ["independent review remains open"], completion,
+    }));
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.find((fact) => fact.subject === "acceptance_criteria")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
     expect(facts.find((fact) => fact.subject === "exceptions")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result).not.toHaveProperty("publication_ref");
+    expect(result).not.toHaveProperty("publication_hash");
   });
 });

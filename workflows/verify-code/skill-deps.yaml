@@ -1,11 +1,11 @@
 stage: verify-code
 skills:
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: post_first_repair, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: post_first_repair, bundle: skills/wh-review/skill-bundle.json, owner: stage }
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
-  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
-  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
-  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
-  - { id: browser-cli, kind: cli, doctor_any: [[agent-browser, --version], [browser-use, doctor]], required_when: ui_acceptance, absence_semantics: blocked }
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
+  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
+  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: diagnostic }
+  - { id: browser-cli, kind: cli, doctor_any: [[agent-browser, --version], [browser-use, doctor]], required_when: ui_acceptance, absence_semantics: diagnostic }
 external_capabilities:
   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: fresh_verification_evidence, absence_semantics: diagnostic }

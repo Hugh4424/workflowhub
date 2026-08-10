@@ -241,14 +241,14 @@ describe("accepted decision coverage is exact and hash-bound", () => {
     const input = completeContract();
     input.appendices.push({
       kind: "risk-acceptance.v1",
-      ref: "evidence/review-risk.json",
+      ref: `quality/evidence/risk-acceptances/${"f".repeat(64)}.json`,
       hash: "f".repeat(64),
       decision_entry: decisionEntry(),
     });
     input.coverage.items[0].coverage_status = "accepted_omission";
     input.coverage.items[0].decision_location = {
       kind: "appendix",
-      ref: "evidence/review-risk.json",
+      ref: `quality/evidence/risk-acceptances/${"f".repeat(64)}.json`,
       entry_index: 0,
     };
     input.coverage.summary = { covered: 0, accepted_omission: 1, missing: 0 };

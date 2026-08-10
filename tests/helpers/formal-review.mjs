@@ -26,19 +26,10 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [finding] };
   writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), 1);
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
-  const lineage = {
-    request_id: `${stage}-${attemptId}`,
-    prompt_hash: materialId,
-    round: "initial",
-    prior_attempt_refs: [],
-    prior_runtime_ids: {},
-    correction_ref: null,
-    dispatch_sequence: 0,
-  };
   const subject = { subject_kind: subjectKind, phase_id: phaseId, review_scope: reviewScope, base_tree: snapshotTree, candidate_tree: snapshotTree };
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: task.identity.taskId, stage,
-    review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, lineage, ...subject,
+    review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_attempts: [{ provider, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
@@ -47,7 +38,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const findings = aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item }));
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
-    source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, lineage, ...subject,
+    source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_results: [{ provider, output: providerOutput }], verdict: aggregation.verdict,
     findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },

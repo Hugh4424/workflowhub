@@ -126,4 +126,28 @@ describe("canonical step manifest", () => {
       expect(validateStepManifest(item)).toEqual({ ok: true, errors: [] });
     }
   });
+
+  it("keeps all five portable manifests on four materials and quality facts without legacy control-plane containers", () => {
+    const forbidden = /journal:\/\/|task:\/\/content|confirmations:\/\/|results:\/\/current|task:\/\/(?:stage-result|stage-attempt)|\b(?:invocation|receipt)\b/i;
+
+    for (const stage of STAGES) {
+      const item = loadStageManifest(stage, repoRoot);
+      const source = JSON.stringify(item);
+      expect(source, `${stage} must not describe a legacy control plane`).not.toMatch(forbidden);
+      expect(item.steps[0].entry_conditions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "portable_skill_package", uri_or_path: `workflows/${stage}/SKILL.md` }),
+        expect.objectContaining({ kind: "portable_skill_dependencies", uri_or_path: `workflows/${stage}/skill-deps.yaml` }),
+      ]));
+      expect(item.steps.at(-1).observable_result).toMatch(/plain-language handoff|大白话交接/i);
+
+      for (const stepItem of item.steps) {
+        for (const evidence of [...stepItem.entry_conditions, ...stepItem.completion_evidence]) {
+          if (!evidence.uri_or_path.startsWith("step://")) {
+            expect(evidence.uri_or_path, `${stage}/${stepItem.step_slug} must use a real path or host-visible input`)
+              .not.toMatch(/^[a-z][a-z0-9_-]*:\/\//i);
+          }
+        }
+      }
+    }
+  });
 });

@@ -140,9 +140,22 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **保留**：首轮 compact packet 错误导致的 `REVISE`、第二轮 `05b20b2` 的 `PASS` 及其非阻断建议全部保留；新报告只绑定最终 `2d01747`，不覆盖历史 verdict。
 - **边界**：没有新增 receipt、snapshot lineage、review lock、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。Phase B 交接完成，后续进入 T006/T007 的 non-gate 回归。
 
+## 2026-08-10 T010 结构验收事实
+
+- **事实**：T010 已完成。`quality/reviews/reports/T010-structure.md` 固化了当前索引、bundle、历史和 architecture diagnostics 的读回结果：历史 inventory `461/461` 字节不变；Phase 0 deletion disposition、repository inventory `1174` delivery files、reference audit、retention audit、complexity hard-zero 和 skill closure 均通过；5 个变化 bundle 的 resolver/catalog hash 一致；Phase D provider raw diff 的 SHA/bytes 与 host `git show` 读回一致；public behavior compare/probe 通过。
+- **边界**：complexity report 中仍高于历史目标的 formal-test、production-line、schema、persistent-family 等预算只保留为 diagnostic，不升级为完成或工作 gate。没有新增控制面、第五份材料、public route、Multica/main/provider/model/daemon 改动。
+- **状态**：T010 标记 `completed`；进入 T011 的最终快照、逐 AC、宪法和独立异源复核。
+
 ## 2026-08-10 Phase C RED/GREEN 事实（异源审查待完成）
 
 - **范围**：修复 receipt、snapshot、历史 completion、Runner、TaskHandle、bridge、doctor/comment 缺失时错误冻结同 task 的路径；质量事实仍必须如实记录，不能伪造完成。
 - **RED**：基于 Phase B 提交 `2d01747` 的临时 detached worktree，T006 命令 exit=1；`official-component-receipts` 31 passed，`four-material-non-gate` 13 项中 11 failed，失败为预期目标断言，不是 setup/命令错误。
 - **GREEN**：当前 recovery worktree 同一命令 exit=0，2 files / 42 tests passed；同 task continuation 与 completion truthfulness 回归成立。T007 尚未取得 Phase C 独立异源 review，不提前标记整体完成。
 - **边界**：本 Phase 只收敛既有实现和测试，不新增 receipt replacement、第二 ledger、successor/recovery/rebind、review lock、public route 或第五份材料；Phase C review 仍是质量/交接事实，不是推进 gate。
+
+## 2026-08-10 Phase C 独立异源审查与 Phase D RED/GREEN 事实
+
+- **Phase C review**：候选提交 `0623cacc655fcbd9b53961d170aee9b89cc7108c`（parent `2d017473a5257db65cb5d8593c8b81fb034f970d`，candidate tree `36595a34afa57eba7cb2389682c61d9b8329bbc5`，parent tree `92e2cb990aceb2bee5d23c17bcbc6a4205ecc593`）由 `opencode/v4flash` runtime `c6fc3931-41b2-4aff-bf72-250b12afb18e` 独立复核，返回 `PASS`、无 blocking；报告见 `quality/reviews/reports/recovery-v2-phase-c-opencode-v4flash-c6fc3931-pass.md`。原始 provider 非阻断意见及处置见该报告，不覆盖历史事实。独立反向引用复核曾提出固定 verification receipt 的“无当前 consumer”风险；本轮确认生产 `runOfficialStage` 不调用该 writer、加新 writer 会违反 F10 当前 consumer 原则，因此保留 create-only fail-loud 边界，并由 non-gate 合同证明它不参与 work readiness。
+- **Phase C 处置**：`stage-content-contracts.mjs` 经反向引用确认仍是既有只读 consumer，保留；固定 official receipt 的不同内容写入继续 fail-loud，但不参与同 task work readiness；临时 packet purpose 元数据瑕疵不改写 provider verdict。
+- **Phase D RED**：基于 Phase C 提交的临时 detached worktree，使用仓库本地 `node_modules/.bin/vitest` 运行 T008 命令，`legacy-zero` 3 passed、`review-layering` 2 passed、`repository-inventory` 9 passed，`stage-skill-invocation` 7 failed，整体 exit=1；失败是旧树缺少新的直接 stage package resolver 导出，属于目标 RED，不是 setup/命令失败。临时 worktree 已移除。
+- **Phase D GREEN/review**：补齐 stage package 直接解析后的 Skill Bundle hash、更新 build-plan 对 `testing-system-blueprint` 的声明期望后，同一命令 exit=0，4 files / 21 tests passed；受影响的 routing/CLI/runtime-facade 回归另为 3 files / 32 tests passed。stage package 不派发 host invocation、不写 receipt；Talk/Grill 仍只属于 make-decision。候选提交 `06ff0af`（parent `0623cacc`，candidate tree `d260562262780501ccd49aa68e29d2ff059a6e05`）由 `opencode/v4flash` runtime `299d96b9-5579-4f80-abef-3726e24a44ea` 独立复核，返回 PASS、无 blocking；4 个 packet coverage 非阻断项及 T010 raw-diff/AC-8/AC-9 处置已记录在对应报告。T008/T009 已完成，进入 T010。

@@ -118,15 +118,6 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
   };
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "quality/tests/output/test.txt", output_hash: sha });
-  const reviewLineage = (requestId = "fixture-request") => ({
-    request_id: requestId,
-    prompt_hash: sha,
-    round: "initial",
-    prior_attempt_refs: [],
-    prior_runtime_ids: {},
-    correction_ref: null,
-    dispatch_sequence: 0
-  });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree, subjectKind = "worktree") => {
     const reviewStage = stage === "verify-code" ? "build-code" : stage;
     const reviewScope = reviewStage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null;
@@ -137,7 +128,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     return { version: "wh-review-result.v1", task_id: "task", stage: reviewStage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
       subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, review_scope: reviewScope, base_tree: tree, candidate_tree: snapshotTree,
-      material_id: sha, attempt_ref: `quality/reviews/attempts/${stage}-attempt/attempt.json`, lineage: reviewLineage(`${stage}-request`),
+      material_id: sha, attempt_ref: `quality/reviews/attempts/${stage}-attempt/attempt.json`,
       provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict: resultVerdict,
       findings: aggregation ? aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })) : (verdict === "invented" ? [{ provider: "fixture-provider", severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []),
       ...(aggregation ? { adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters } } : {}) };
@@ -165,7 +156,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
   const workerFor = (stage, values, currentTree = tree) => {
     const documents = completedBuildCodeDocuments();
     const workflowRunId = "fixture:attempt-0001";
-    const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
+    const auditRef = `quality/evidence/audits/${stage}/${"f".repeat(64)}.json`;
     if (!values[auditRef]) {
       const audit = {
         schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass",
@@ -202,7 +193,6 @@ ${task("T002", "contract GREEN", 0, "T001")}
       values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: result.stage, review_track: result.review_track ?? null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
         subject_kind: result.subject_kind, phase_id: result.phase_id, review_scope: result.review_scope, base_tree: result.base_tree, candidate_tree: result.candidate_tree,
-        lineage: result.lineage,
         provider_attempts: [{ provider: "fixture-provider", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
       values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage: result.stage, attempt_id: attemptId,
         provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex") };
@@ -295,7 +285,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("requires receipt schema and producer provenance instead of accepting shape-only JSON", async () => {
-    const auditRef = `evidence/audits/build-spec/${"f".repeat(64)}.json`;
+    const auditRef = `quality/evidence/audits/build-spec/${"f".repeat(64)}.json`;
     const audit = { schema_version: "v1", task_id: "task", stage_slug: "build-spec", verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [] };
     const worker = { stage: "build-spec", identity: { taskId: "task" }, writeArtifact() {}, createCheckpoint() { return {}; }, readReceipt: (ref) => ({ value: ref === auditRef ? audit : { content: "fake" }, sha256: "a".repeat(64) }) };
     await expect(officialStageHandler("build-spec")(worker, { receipts: { spec: "quality/evidence/spec.json", audit: auditRef } }))
@@ -322,50 +312,11 @@ ${task("T002", "contract GREEN", 0, "T001")}
       receipts: { spec: "quality/evidence/spec.json", review: "quality/reviews/results/review.json" },
     });
     expect(result.facts).not.toHaveProperty("audit_summary_ref");
-    expect(result.missing_items).toEqual(expect.arrayContaining([
+    expect(result.facts.audit_gaps).toEqual(expect.arrayContaining([
       "support:audit",
       expect.stringMatching(/audit unavailable\/unverified\/mismatch/i),
     ]));
-  });
-
-  it.each([
-    ["make-decision", { decision: "quality/evidence/decision.json" }],
-    ["build-spec", { spec: "quality/evidence/spec.json" }],
-    ["build-plan", { plan: "quality/evidence/plan.json", tasks: "quality/evidence/tasks.json" }],
-  ])("refuses to publish %s without its formal review receipts", async (stage, receipts) => {
-    const documents = completedBuildCodeDocuments();
-    const contentFor = (ref) => ref.includes("decision") ? "# Decision\n\nProceed.\n"
-      : ref.includes("tasks") ? documents.tasks : ref.includes("plan") ? documents.plan : documents.spec;
-    const values = Object.fromEntries(Object.values(receipts).map((ref) => {
-      const content = contentFor(ref);
-      return [ref, canonical(stage, {
-        producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
-        content, content_hash: createHash("sha256").update(content).digest("hex"),
-      })];
-    }));
-    const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
-    values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [], ...(stage === "make-decision" ? { through_step_id: 10, audit_scope: "pre_confirmation" } : {}) };
-    receipts.audit = auditRef;
-    const worker = {
-      ...workerFor(stage, values),
-      readArtifact: (name) => {
-        if (name === "decision-log.md") return "# Decision\n\nProceed.\n";
-        if (name === "spec.md") return documents.spec;
-        if (name === "plan.md") return documents.plan;
-        if (name === "tasks.md") return documents.tasks;
-        return undefined;
-      },
-      artifactRef: (name) => `specs/task/${name}`,
-      createCheckpoint: () => ({}),
-    };
-    const invocation = officialStageHandler(stage)(worker, { receipts });
-    if (stage === "build-plan") {
-      await expect(invocation).resolves.toMatchObject({
-        missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable.*review receipt ref/i)]),
-      });
-    } else {
-      await expect(invocation).rejects.toThrow(/review.*receipt ref/i);
-    }
+    expect(result.missing_items).not.toEqual(expect.arrayContaining(["support:audit"]));
   });
 
   it("rejects caller-owned workflow identity and an untracked make-decision resolution field", async () => {
@@ -637,11 +588,11 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const values = {
       "quality/evidence/decision.json": canonical(stage, { producer: { stage, component: "decision", version: "1" }, decision_ref: `quality/evidence/${decisionHash}.md`, decision_hash: decisionHash, content_hash: decisionHash, contract_refs: [] }),
       "evidence/interaction.json": interaction,
-      [`evidence/audits/make-decision/${"e".repeat(64)}.json`]: audit,
+      [`quality/evidence/audits/make-decision/${"e".repeat(64)}.json`]: audit,
       [directionRef]: direction, [detailRef]: detail, [directionResolutionRef]: directionResolution,
     };
     const worker = { ...workerFor(stage, values, currentTree), workflowRunId, candidateWorkspace: { worktreeRoot: "/tmp/candidate", baselineCommit: tree, captureSnapshot: () => ({ tree: currentTree }) }, readEvidence: (ref) => ref === `quality/evidence/${decisionHash}.md` ? { bytes: decisionLog, sha256: decisionHash } : { bytes: "interaction", sha256: sha }, readAuthenticatedReviewFlow: (subject) => subject.review_track === "direction" ? reviewFlow(directionRef, direction, { event_kind: "resolution", event_ref: `quality/reviews/flows/${"f".repeat(64)}/event-0002.json`, action_ref: directionResolutionRef, action_sha256: sha, identity: { task_id: "task", workflow_run_id: workflowRunId, stage, review_track: "direction", subject_kind: "worktree", phase_id: null, review_scope: null } }) : reviewFlow(detailRef, detail, { identity: { task_id: "task", workflow_run_id: workflowRunId, stage, review_track: "detail", subject_kind: "worktree", phase_id: null, review_scope: null } }) };
-    await expect(officialStageHandler(stage)(worker, { receipts: { decision: "quality/evidence/decision.json", audit: `evidence/audits/make-decision/${"e".repeat(64)}.json`, direction_review: directionRef, direction_review_resolution: directionResolutionRef, detail_review: detailRef } }))
+    await expect(officialStageHandler(stage)(worker, { receipts: { decision: "quality/evidence/decision.json", audit: `quality/evidence/audits/make-decision/${"e".repeat(64)}.json`, direction_review: directionRef, direction_review_resolution: directionResolutionRef, detail_review: detailRef } }))
       .rejects.toThrow(/unexpected receipt fields.*direction_review_resolution/i);
   });
 
@@ -682,7 +633,6 @@ ${task("T002", "contract GREEN", 0, "T001")}
       version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
       subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
-      lineage: reviewLineage("verify-unavailable-request"),
       material_id: sha, provider_attempts: [{
         provider: "fixture-provider", status: "completed", session_id: "old", runtime_id: "old", output_ref: earlierOutputRef, error: null,
       }, {
@@ -750,14 +700,14 @@ ${task("T002", "contract GREEN", 0, "T001")}
       taskId: "task", stage: "verify-code", reviewRef: "quality/reviews/results/quality.json",
       reviewHash: sha, result: quality, workflowRunId: "fixture:attempt-0001",
     });
-    const riskRef = `evidence/risk-acceptances/${"e".repeat(64)}.json`;
+    const riskRef = `quality/evidence/risk-acceptances/${"e".repeat(64)}.json`;
     values[riskRef] = buildRiskAcceptance({
       pause,
       findingId: pause.findings[0].finding_id,
-      cardRef: "evidence/review-risk-cards/fixture.json",
+      cardRef: `quality/evidence/risk-cards/${pause.findings[0].card_hash}.json`,
       cardHash: pause.findings[0].card_hash,
       selectedOption: "accept-risk",
-      replyRef: "evidence/review-risk-replies/fixture.json",
+      replyRef: `quality/evidence/risk-replies/${"d".repeat(64)}.json`,
       replyHash: "d".repeat(64),
       acceptedAt: "2026-07-19T00:00:02.000Z",
     });
@@ -781,7 +731,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       [attemptRef]: {
         version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: "build-code", review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
-        lineage: reviewLineage("false-unavailable-request"), material_id: sha, provider_attempts: [{
+        material_id: sha, provider_attempts: [{
           provider: "fixture-provider", status: "completed", session_id: "session", runtime_id: "runtime", output_ref: outputRef, error: null,
         }], terminal_status: "unavailable", error: { code: "PROVIDER_UNAVAILABLE", message: "claimed unavailable" },
       },
@@ -1037,7 +987,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "material-incomplete", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
-        lineage: reviewLineage("material-incomplete-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
       },
       "evidence/diff.patch": diffEvidence,
@@ -1074,7 +1024,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "material-incomplete-no-scope", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, base_tree: tree, candidate_tree: tree,
-        lineage: reviewLineage("material-incomplete-no-scope-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
       },
       "evidence/diff.patch": diffEvidence,
@@ -1108,7 +1058,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "false-predispatch", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
-        lineage: reviewLineage("false-predispatch-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "PROVIDER_UNAVAILABLE", message: "claimed provider failure without an attempt" },
       },
     };

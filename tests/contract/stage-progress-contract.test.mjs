@@ -1,17 +1,32 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { validateWorkflowHubStageProgress, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
-
-const read = (path) => readFileSync(path, "utf8");
+import {
+  deriveStageCompletion,
+  deriveStageProgress,
+} from "../../runtime/stage/completion-predicates.mjs";
 
 describe("WorkflowHub stage progress contract", () => {
-  it("requires plan and tasks to expose their own stage progress rows", () => {
-    const plan = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/plan.md");
-    const tasks = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md");
-    expect(validateWorkflowHubStageProgress({ plan, tasks })).toMatchObject({ ok: true, errors: [] });
+  it.each([
+    ["make-decision", {}, []],
+    ["build-spec", { "decision-log.md": "decision" }, ["decision-log.md"]],
+    ["build-plan", { "decision-log.md": "decision", "spec.md": "spec" }, ["decision-log.md", "spec.md"]],
+    ["build-code", {
+      "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks",
+    }, ["decision-log.md", "spec.md", "plan.md", "tasks.md"]],
+    ["verify-code", {
+      "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks",
+    }, ["decision-log.md", "spec.md", "plan.md", "tasks.md"]],
+  ])("lets %s start from materials that exist before the stage runs", (stage, materials, requiredMaterials) => {
+    const result = deriveStageProgress(stage, [], materials);
+    expect(result).toMatchObject({
+      work_status: "ready",
+      readiness_source: "current-material-presence",
+      required_materials: requiredMaterials,
+      missing_materials: [],
+    });
+    expect(result).not.toHaveProperty("status");
   });
 
-  it("reads declared progress without turning quality into a progression gate", () => {
+  it("derives only work readiness from material presence", () => {
     const plan = [
       "## WorkflowHub Stage Progress",
       "| Stage | Status | Work / artifacts | Review / handoff | Next / deferred risk |",
@@ -21,14 +36,15 @@ describe("WorkflowHub stage progress contract", () => {
     ].join("\n");
     const result = deriveStageProgress("make-decision", [], { "decision-log.md": "log", "spec.md": null, "plan.md": plan, "tasks.md": null });
     expect(result).toMatchObject({
-      status: "completed",
-      progress_source: "declared-markdown-stage-progress",
-      declared_quality_status: "incomplete",
+      work_status: "ready",
+      readiness_source: "current-material-presence",
+      missing_materials: [],
     });
+    expect(result).not.toHaveProperty("status");
   });
 
-  it("keeps an explicitly incomplete stage incomplete in public progress", () => {
-    const result = deriveStageProgress("verify-code", [], {
+  it("rejects completed plus incomplete fake green while keeping work ready", () => {
+    const readiness = deriveStageProgress("build-code", [], {
       "decision-log.md": "decision",
       "spec.md": "spec",
       "plan.md": "plan",
@@ -41,20 +57,15 @@ describe("WorkflowHub stage progress contract", () => {
       ].join("\n"),
     });
 
-    expect(result).toMatchObject({
-      status: "incomplete",
-      progress_source: "declared-markdown-stage-progress",
-      declared_quality_status: "incomplete",
-      missing: ["stage-progress:incomplete"],
+    expect(readiness).toMatchObject({
+      work_status: "ready",
+      readiness_source: "current-material-presence",
+      missing_materials: [],
     });
-  });
-
-  it("rejects a document that silently drops a stage row", () => {
-    const result = validateWorkflowHubStageProgress({
-      plan: "## WorkflowHub Stage Progress\n| Stage | Status | Review / handoff | Next / deferred risk |\n| --- | --- | --- | --- |\n| make-decision | completed | unknown | build-spec |\n",
-      tasks: "## WorkflowHub Stage Progress\n| Stage | Status | Execution / evidence | Handoff / next |\n| --- | --- | --- | --- |\n| build-code | completed | unknown | verify-code |\n| verify-code | pending | unknown | stop |\n",
+    expect(readiness).not.toHaveProperty("status");
+    expect(deriveStageCompletion("build-code", [])).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["integration_review"]),
     });
-    expect(result.ok).toBe(false);
-    expect(result.errors).toContain("plan is missing stage progress row: build-spec");
   });
 });

@@ -2,16 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import yaml from "js-yaml";
 
-import { buildClassificationManifest, selectReviewRound } from "../skills/wh-review/scripts/review-controller.mjs";
-
-const route = { mode: "full_on_structural_rework", initial: ["external/reviewer"] };
-const previous = {
-  result_ref: "quality/reviews/results/build-plan.json",
-  verdict: "pass",
-  snapshot_tree: "a".repeat(40),
-  adjudication: { clusters: [] },
-  classification_manifest: buildClassificationManifest({ draft_spec: "baseline" }),
-};
+const readStage = (stage) => readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
+const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
 
 describe("non-code review policy", () => {
   it("keeps planning advisories stage-owned and wh-review as the provider review", () => {
@@ -20,11 +12,12 @@ describe("non-code review policy", () => {
     const buildCode = yaml.load(readFileSync(new URL("../workflows/build-code/skill-deps.yaml", import.meta.url), "utf8"));
     const verifyCode = yaml.load(readFileSync(new URL("../workflows/verify-code/skill-deps.yaml", import.meta.url), "utf8"));
     expect(buildSpec.skills.map((entry) => entry.name)).toEqual([
-      "spec-specify", "spec-clarify", "simplicity-guard", "plan-ceo-review",
+      "spec-specify", "simplicity-guard", "plan-ceo-review",
       "plan-design-review", "wh-review",
     ]);
     expect(buildPlan.skills.map((entry) => entry.name)).toEqual([
       "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
+      "testing-system-blueprint",
       "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review",
     ]);
     expect(buildCode.skills.map((entry) => entry.name)).toEqual([
@@ -34,64 +27,71 @@ describe("non-code review policy", () => {
     expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["wh-review"]);
     for (const manifest of [buildSpec, buildPlan, buildCode, verifyCode]) {
       expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
-      expect(manifest.skills.every((entry) => entry.owner === "stage" && entry.dispatch === "stage")).toBe(true);
+      expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);
+      expect(manifest.skills.every((entry) => !("invocation" in entry) && !("dispatch" in entry))).toBe(true);
+      expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
+        .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
     }
   });
 
-  it.each(["make-decision", "build-spec", "build-plan", "verify-code"])("%s keeps review as current quality evidence, not a historical permit", (stage) => {
-    const skill = readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
-    expect(skill).toMatch(/review[\s\S]{0,160}(?:quality|finding|verdict|unavailable)/i);
-    expect(skill).toMatch(/(?:old|historical)[\s\S]{0,320}(?:audit|never|read-only)/i);
-    expect(skill).toMatch(/(?:never|not)[\s\S]{0,120}(?:block|license|permission|proceed)/i);
+  it.each(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"])("%s keeps review as quality evidence, not work permission", (stage) => {
+    const skill = readStage(stage);
+    expect(hasAny(skill, [
+      /review is a quality fact/i,
+      /review[^.\n]*(?:quality fact|质量事实)/i,
+      /review fact/i,
+    ]), `${stage}: review is evidence`).toBe(true);
+    expect(hasAny(skill, [
+      /not permission to continue working/i,
+      /not permission to\s+continue working/i,
+      /not\s+permission to continue working/i,
+      /not a progression gate/i,
+      /limit only the completion claim/i,
+      /does not prohibit code or material repair/i,
+      /缺质量事实只限制完成声明，不限制继续验收和修复/,
+    ]), `${stage}: review does not license or block work`).toBe(true);
+    expect(skill).toContain("unavailable");
+    expect(skill).toContain("pass");
   });
 
-  it.each(["make-decision", "build-spec", "build-plan"])("%s keeps v2 authority maps in every planning review retry", (stage) => {
-    const skill = readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
-    expect(skill).toContain("raw_requirement");
-    expect(skill).toContain("context_map");
-    expect(skill).toContain("evidence_map");
-    expect(skill).toMatch(/before every[\s\S]{0,260}(?:call|review)/i);
-    expect(skill).toMatch(/rebuild[\s\S]{0,220}(?:maps|both)/i);
-    expect(skill).toMatch(/MATERIAL_INCOMPLETE[\s\S]{0,120}unavailable/i);
-  });
-
-  it.each(["build-spec", "build-plan", "verify-code"])("%s does not review the same snapshot twice", (stage) => {
-    expect(selectReviewRound({
-      stage,
-      route,
-      previousResult: previous,
-      currentSnapshotTree: previous.snapshot_tree,
-    })).toEqual({ round: "none", reason: "current_quality_fact_recorded" });
-  });
-
-  it("uses one incremental review for changed first-three-stage material after a pass", () => {
-    for (const stage of ["make-decision", "build-spec", "build-plan"]) {
-      expect(selectReviewRound({
-        stage,
-        route,
-        previousResult: previous,
-        currentSnapshotTree: "b".repeat(40),
-        incrementalAvailable: true,
-      })).toEqual({ round: "incremental", reason: "changed_material_incremental" });
+  it("keeps planning context and evidence maps optional", () => {
+    const matrix = JSON.parse(readFileSync(new URL("../runtime/review/stage-materials.json", import.meta.url), "utf8"));
+    const rules = [
+      matrix.stages["make-decision"].tracks.detail,
+      matrix.stages["build-spec"],
+      matrix.stages["build-plan"],
+    ];
+    for (const rule of rules) {
+      expect(rule.v2_required_maps).toEqual([]);
+      expect(rule.optional).toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
+      expect(rule.required).not.toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
     }
   });
 
-  it("keeps code review's changed-snapshot policy unchanged", () => {
-    expect(selectReviewRound({
-      stage: "verify-code",
-      route,
-      previousResult: previous,
-      currentSnapshotTree: "b".repeat(40),
-      incrementalAvailable: true,
-    })).toEqual({ round: "initial", reason: "changed_snapshot" });
+  it("does not require snapshot, replacement, or continuation controls in review materials", () => {
+    const matrix = JSON.parse(readFileSync(new URL("../runtime/review/stage-materials.json", import.meta.url), "utf8"));
+    const serialized = JSON.stringify(matrix).toLowerCase();
+
+    for (const retiredControl of [
+      "snapshot",
+      "checkpoint",
+      "replacement",
+      "continuation",
+      "successor",
+      "rebind",
+    ]) {
+      expect(serialized, retiredControl).not.toContain(retiredControl);
+    }
   });
 
-  it("falls back to one full review when the delta is unavailable", () => {
-    expect(selectReviewRound({
-      stage: "build-spec",
-      route,
-      previousResult: previous,
-      currentSnapshotTree: "b".repeat(40),
-    })).toEqual({ round: "initial", reason: "changed_snapshot" });
+  it("keeps unavailable review visible while same-task work continues", () => {
+    for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = readStage(stage);
+      expect(skill).toContain("unavailable");
+      expect(skill).toMatch(/same task|same-task|同一 task/i);
+    }
+    expect(readStage("build-plan")).toMatch(/does not create a new task/i);
+    expect(readStage("build-code")).toMatch(/never require a new task/i);
+    expect(readStage("verify-code")).toMatch(/回同一 task 修复，不新建任务/);
   });
 });

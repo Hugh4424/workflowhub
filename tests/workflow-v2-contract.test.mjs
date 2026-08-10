@@ -4,8 +4,17 @@ import { join, resolve } from "node:path";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const readStage = (stage) => readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8");
-const compact = (text) => text.replace(/\s+/g, " ");
+const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
+
+function expectConcept(text, patterns, label) {
+  expect(hasAny(text, patterns), label).toBe(true);
+}
+
+function expectFourMaterials(text, stage) {
+  for (const material of materials) expect(text, `${stage}: ${material}`).toContain(material);
+}
 
 describe("five-stage current-material contract", () => {
   it.each(stages)("%s has a current skill identity", (stage) => {
@@ -13,64 +22,103 @@ describe("five-stage current-material contract", () => {
     expect(skill).toMatch(new RegExp(`^---[\\s\\S]*name: ${stage}[\\s\\S]*version: [0-9]+\\.[0-9]+\\.[0-9]+[\\s\\S]*---`));
   });
 
-  it("makes current materials authoritative and historical records audit-only", () => {
-    for (const stage of stages) {
-      const skill = readStage(stage);
-      expect(skill, stage).toMatch(/current (?:four )?materials/i);
-      expect(skill, stage).toMatch(/audit/i);
+  it("uses the four materials as the current work authority", () => {
+    for (const stage of stages) expectFourMaterials(readStage(stage), stage);
+
+    for (const stage of ["build-spec", "build-plan"]) {
+      expectConcept(readStage(stage), [
+        /only current work truth/i,
+        /only current (?:work )?authority/i,
+      ], `${stage}: current materials are authoritative`);
     }
-    expect(compact(readStage("build-code"))).toMatch(/never authorize or block ordinary implementation/i);
-    expect(compact(readStage("verify-code"))).toMatch(/never block a new verification attempt/i);
+    expectConcept(readStage("build-code"), [
+      /only these current materials define the work/i,
+    ], "build-code: current materials define work");
+    expectConcept(readStage("verify-code"), [
+      /当前 task 的以下四份材料存在且可读，就直接开始或继续验收/,
+    ], "verify-code: readable materials permit work");
   });
 
-  it("keeps real decisions, review, and human confirmation where they matter", () => {
+  it("keeps old facts read-only and outside work eligibility", () => {
     const decision = readStage("make-decision");
-    expect(decision).toMatch(/real `talk-with-zhipeng` conversation/i);
-    expect(decision).toMatch(/Research only when it can materially change/i);
-    expect(decision).toMatch(/independent review through `wh-review`/i);
-    expect(decision).toMatch(/real human answer/i);
+    const code = readStage("build-code");
+    const verify = readStage("verify-code");
+
+    expectConcept(decision, [/audit facts only/i], "make-decision: old facts are audit-only");
+    expectConcept(decision, [/neither authorize nor\s+block/i], "make-decision: old facts are not permits");
+    expectConcept(code, [/facts, not work permits/i], "build-code: auxiliary facts are not permits");
+    expectConcept(code, [/never freeze implementation or same-task\s+repair/i], "build-code: old facts cannot freeze work");
+    expectConcept(verify, [/只作背景，不是工作许可证/], "verify-code: old facts are background only");
+    expectConcept(verify, [/不能冻结.*同 task 修复/s], "verify-code: old facts cannot freeze repair");
+  });
+
+  it("keeps Talk, Clarify, research, and Grill owned by make-decision", () => {
+    const decision = readStage("make-decision");
+    for (const dependency of ["talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review"]) {
+      expect(decision).toContain(dependency);
+    }
+    expectConcept(decision, [/Do not invent user answers/i], "make-decision: confirmation is real");
+    expectConcept(decision, [/Research only when the answer could materially change/i], "make-decision: research is proportional");
 
     const plan = readStage("build-plan");
-    expect(plan).toMatch(/every FR\/AC/i);
-    expect(plan).toMatch(/independent `wh-review`/i);
-    expect(plan).toMatch(/explicit user accept or reject/i);
+    expectConcept(plan, [/Do not run Talk, Clarify, or Grill/i], "build-plan: decision activities stay upstream");
+    expectConcept(plan, [/Trace every decision, FR, and AC/i], "build-plan: implementation traceability remains");
+    expectConcept(plan, [/obtain the user's actual reply/i], "build-plan: normal confirmation remains real");
+    expectConcept(plan, [/does not turn confirmation into a machine work permit/i], "build-plan: confirmation is not work eligibility");
   });
 
-  it("keeps specification ambiguity, review, and revision honest", () => {
-    const spec = readStage("build-spec");
-    expect(spec).toMatch(/material ambiguity/i);
-    expect(spec).toMatch(/one independent `wh-review`/i);
-    expect(spec).toMatch(/Never loop reviews to manufacture a pass/i);
-    expect(spec).toMatch(/current-material revision note/i);
+  it("keeps one minimal task status inside tasks.md instead of a runtime ledger", () => {
+    const skill = readFileSync(join(root, "skills", "spec-tasks", "SKILL.md"), "utf8");
+    const template = readFileSync(join(root, "skills", "spec-tasks", "templates", "tasks-template.md"), "utf8");
+    expect(skill).toMatch(/`状态` \(`pending`, `in_progress`, or `completed`\)/);
+    expect(skill).toMatch(/authoritative `tasks\.md` material/);
+    expect(skill).toMatch(/Do not add workflow summaries[\s\S]*second\s+completion ledger/i);
+    expect(template.match(/- \*\*状态\*\*：`pending`/g)).toHaveLength(2);
+    expect(template.match(/- \*\*执行事实\*\*：N\/A — not started/g)).toHaveLength(2);
   });
 
-  it("keeps implementation scoped to current tasks and uses proportionate tests", () => {
-    const code = readStage("build-code");
-    expect(code).toMatch(/Tasks\.md is the only Task completion authority/i);
-    expect(code).toMatch(/focused test command/i);
-    expect(compact(code)).toMatch(/`build-code` does not require the complete regression command.*final `verify-code` boundary/i);
-    expect(code).toMatch(/one independent `wh-review` for the completed Phase/i);
-    expect(compact(code)).toMatch(/does not stop the same task or the next Task/i);
-    expect(compact(code)).toMatch(/Do not create a successor, rebind, continuation, recovery bridge, synthetic checkpoint, or replacement task/i);
+  it("records unavailable review honestly without turning it into pass", () => {
+    for (const stage of stages) {
+      const skill = readStage(stage);
+      expect(skill, `${stage}: records unavailable`).toContain("unavailable");
+      expectConcept(skill, [
+        /unavailable[\s\S]{0,140}(?:never|not)[\s\S]{0,40}`?pass`?/i,
+        /Never turn[\s\S]{0,100}quality evidence[\s\S]{0,80}`?pass`?/i,
+        /unavailable[\s\S]{0,140}(?:绝不是|不能)[\s\S]{0,40}`?pass`?/i,
+      ], `${stage}: unavailable is not pass`);
+    }
   });
 
-  it("keeps verification independent, per-AC, and separately authorized for close", () => {
-    const verify = readStage("verify-code");
-    expect(verify).toMatch(/complete-test fact/i);
-    expect(verify).toMatch(/every applicable acceptance criterion/i);
-    expect(verify).toMatch(/one independent `wh-review` semantic\/code review/i);
-    expect(verify).toMatch(/normal verify-code confirmation/i);
-    expect(verify).toMatch(/separate explicit authorization/i);
-    expect(verify).toMatch(/Keep it simple/i);
+  it("separates completion claims from permission to continue work", () => {
+    const expectations = {
+      "make-decision": [/limit only the\s+completion claim/i, /do\s+not prevent continued Talk/i],
+      "build-spec": [/lowers the completion claim/i, /continue drafting or repairing this same task/i],
+      "build-plan": [/lowers the completion claim/i, /continue research, planning, or repair in this\s+same task/i],
+      "build-code": [/limits the completion claim/i, /still allows same-task repair and the\s+next safe work item/i],
+      "verify-code": [/缺质量事实只限制完成声明/, /不限制继续验收和修复/],
+    };
+
+    for (const [stage, concepts] of Object.entries(expectations)) {
+      const skill = readStage(stage);
+      for (const concept of concepts) expectConcept(skill, [concept], `${stage}: completion/work split`);
+    }
   });
 
-  it("forbids old history from becoming a normal-work permit", () => {
-    expect(compact(readStage("build-spec"))).toMatch(/Do not create replacement tasks, continuation chains, invalidations, rebinding, or recovery machinery to revise a current specification/i);
-    expect(compact(readStage("build-code"))).toMatch(/Do not create a successor, rebind, continuation, recovery bridge, synthetic checkpoint, or replacement task/i);
-    expect(compact(readStage("verify-code"))).toMatch(/Do not create another task or any historical-evidence progression mechanism/i);
+  it("repairs the same task instead of creating replacement or continuation tasks", () => {
+    const sameTaskContracts = {
+      "make-decision": [/continue in the same task/i],
+      "build-spec": [/does not create a new task/i],
+      "build-plan": [/does not create a new task/i],
+      "build-code": [/never require a new task/i],
+      "verify-code": [/不能触发新建[\s\S]*(?:successor|continuation) task/i, /回同一 task 修复，不新建任务/],
+    };
+
+    for (const [stage, alternatives] of Object.entries(sameTaskContracts)) {
+      expectConcept(readStage(stage), alternatives, `${stage}: same-task repair without replacement`);
+    }
   });
 
-  it("keeps active context and step inventory free of retired progression permits", () => {
+  it("keeps context and the atomic-step inventory free of retired progression permits", () => {
     const context = readFileSync(join(root, "CONTEXT.md"), "utf8");
     const inventory = readFileSync(join(root, "docs/stage-atomic-step-inventory.md"), "utf8");
     expect(context).toMatch(/历史恢复记录（仅审计）/);
@@ -81,7 +129,7 @@ describe("five-stage current-material contract", () => {
     expect(inventory).toMatch(/never creates a reopen or recovery permit/i);
   });
 
-  it("does not make integration review depend on an accepted checkpoint", () => {
+  it("keeps integration review independent of an accepted checkpoint", () => {
     const adr = readFileSync(join(root, "docs/adr/0007-phase-and-integration-review-material-architecture.md"), "utf8");
     expect(adr).toMatch(/当前四份材料、当前代码树、fresh test/);
     expect(adr).toMatch(/不再\s*要求 accepted build-plan checkpoint/);

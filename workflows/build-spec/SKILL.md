@@ -1,187 +1,93 @@
 ---
 name: build-spec
-description: Draft, clarify, review, and revise the current feature specification.
-version: 3.0.0
+description: Turn the approved product decision into the current feature specification.
+version: 4.0.0
 ---
 
 # Build Spec
 
-## Purpose
+## Responsibility
 
-Turn the current product direction into a clear `spec.md`. Work is driven by
-the current four materials:
+Turn the current `decision-log.md` into the current `spec.md`.
 
-- `decision-log.md` — current product direction and explicit decisions.
-- `spec.md` — the specification being drafted or revised.
-- `plan.md` — current implementation approach, when it already exists.
-- `tasks.md` — current executable work breakdown, when it already exists.
+`decision-log.md`, `spec.md`, `plan.md`, and `tasks.md` are the current four
+materials and the only current work truth. This stage owns only `spec.md`:
 
-Old accepted records, receipts, review outputs, and runner history
-are read-only audit facts. They never decide whether this task may continue.
-Do not create replacement tasks, continuation chains, invalidations, rebinding,
-or recovery machinery to revise a current specification.
+- `decision-log.md` is the upstream authority for product direction.
+- An existing `spec.md` is the revision target.
+- `plan.md` and `tasks.md` are downstream outputs. Never use them to fill a
+  missing decision or let implementation detail redefine the product.
 
-## Working rules
+Do not add a new decision, implementation plan, task breakdown, or parallel
+authority. If the decision is incomplete, expose the gap instead of guessing.
 
-The content work is carried by the bundled `spec-specify` and `spec-clarify`
-skills. Read `skills/spec-specify/SKILL.md` and use its
-`skills/spec-specify/templates/spec-template.md` structure when drafting; run
-the ten-dimension ambiguity scan from `skills/spec-clarify/SKILL.md`. These are
-portable content contracts, not a second stage or a second source of truth.
+## Portable dependencies
 
-## Fixed invocation order and outputs
+The Stage Agent reads `workflows/build-spec/skill-deps.yaml` and directly reads
+the declared portable skill packages from their `path` and `bundle`. Apply the
+relevant content contracts in the same Stage Agent context. Their templates and
+checks guide `spec.md`; they do not create another stage or another source of
+truth.
 
-The stage-owned dispatcher runs the pre-review skills in this exact order:
+A dependency or independent reviewer may be unavailable. Record the real
+`unavailable` quality fact and continue drafting or repairing this same task.
+Never turn missing quality evidence into `pass`.
 
-1. `spec-specify` reads `decision-log.md` and produces the current `spec.md` draft.
-2. `spec-clarify` scans ambiguity. A material ambiguity produces a host-visible
-   question for the main agent; the stage waits for the user's real reply before
-   claiming the ambiguity is resolved. No ambiguity produces a recorded skipped
-   reason.
-3. `simplicity-guard` checks whether the requested behavior can be deleted,
-   narrowed, or reused. Its advisory fact does not rewrite the spec by itself.
-4. `plan-ceo-review` checks problem, scope, value, alternatives, and product
-   direction. It produces an advisory fact for the main agent.
-5. `plan-design-review` is invoked only when the frozen scope contains UI; it
-   is otherwise recorded as conditional `not_invoked` with a reason.
-6. The stage freezes the spec and then invokes `wh-review` exactly once for an
-   independent suggestion. `wh-review` does not repeat the three pre-review
-   lenses.
+## Work
 
-The outputs are the current `spec.md`, ambiguity facts, pre-review invocation
-facts, one wh-review attempt/result, and a main-agent finding disposition before
-the stage result is published. `spec-analyze` is deliberately absent because
-`plan.md` and `tasks.md` do not exist yet.
+1. Read the current `decision-log.md` and existing `spec.md`, if present.
+   Extract the original requirement, confirmed choices, boundaries, non-goals,
+   risks, deferred items, and open questions. Preserve every confirmed decision.
+2. Research the codebase only when a current interface, data rule, state,
+   compatibility boundary, or operational fact is needed to make the product
+   behavior precise. Put durable conclusions in `spec.md` as facts, constraints,
+   or explicit assumptions; do not create a separate research authority.
+3. List every material ambiguity separately. For each one, state whether it can
+   change scope, acceptance, interfaces, data, security, or operations.
+   Continue all unaffected drafting and repair.
+4. When the decision material cannot support a required specification claim,
+   write one focused clarification question and return it to `make-decision`.
+   Do not run Clarify in this stage or invent the answer.
+5. Write `spec.md` directly. Use stable IDs and cover the goal, scope, non-goals,
+   user scenarios and states, success and failure behavior, functional
+   requirements, acceptance criteria, interfaces/data/operational boundaries,
+   assumptions, risks, and deferred work. Every acceptance criterion needs an
+   observable pass oracle and failure condition.
+6. Check the result against the decision log and Constitution. The specification
+   must add no accidental scope, duplicate authority, speculative mechanism, or
+   implementation plan.
+7. Ask the declared independent review capability to review the current decision
+   and specification. Preserve the actual verdict and findings, or the real
+   `unavailable` result. Repair valid findings in `spec.md`; explain rejected
+   findings and unresolved risks. Review is a quality fact, not permission to
+   continue working on the task.
 
-1. Read the current decision log and any current plan or tasks before editing.
-   Preserve locked product decisions. If a current plan or task conflicts with
-   the direction, record the mismatch and revise the current materials; do not
-   treat old material as authority.
-2. Draft or revise `spec.md` directly in the task's current artifact area.
-   State goal, scope, non-goals, functional requirements, acceptance criteria,
-   interfaces/data/operational boundaries, risks, and assumptions in plain
-   language. Each requirement and acceptance criterion needs a stable ID.
-   Every scenario must expose an observable outcome, and every AC must expose
-   both a pass oracle and a failure condition before the spec is ready for
-   planning.
-3. Keep a short current-material revision note whenever the spec changes: what
-   changed, why, and which current materials it affects. Prior revisions remain
-   readable audit history. A missing old revision record is disclosed, not a
-   reason to stop work.
-4. Use the constitution checklist, especially F3, F4, F5, F8, and F10:
-   current materials enable progress; review informs quality rather than
-   licenses work; add no speculative gates or automation; prefer the simplest
-   adequate design. Record a real contradiction or missing information instead
-   of hiding it.
+## Completion
 
-## Ambiguity gate
+The content work is complete when:
 
-Before calling the specification ready for review, list every material
-ambiguity separately. For each one record its source, affected requirement,
-and whether it can change scope, acceptance, interfaces, data, security, or
-operations.
+- every confirmed decision is represented without adding a new decision;
+- every requirement and acceptance criterion has a stable, observable meaning;
+- scope, states, success/failure boundaries, non-goals, risks, and assumptions
+  are explicit;
+- every material ambiguity is resolved by current authority or remains plainly
+  identified as an upstream decision gap;
+- the independent review result is truthfully recorded as a verdict or
+  `unavailable`, with important findings addressed or disclosed.
 
-- A non-material ambiguity may be documented with its factual reason.
-- A material ambiguity needs one of: a locked upstream decision, a directly
-  derived fact, or a real user decision.
-- Ask the user one independent decision axis at a time. Give 2–3 mutually
-  exclusive options, mark one recommendation, and wait for the actual reply.
-- Do not merge independent decisions into one question or invent an answer.
+An upstream decision gap prevents claiming the specification is ready, but does
+not freeze investigation or repair in the same task. Missing or unavailable
+quality evidence lowers the completion claim; it does not create a new task.
 
-Unresolved material ambiguity stops a ready-for-review or ready-for-handoff
-claim. It does not prohibit continuing to draft, investigate, or repair the
-current materials.
+## Stage end
 
-## Independent review and revision
+Tell the user in plain language:
 
-### v2 review packet assembly
+- what product behavior the specification defines;
+- what is explicitly out of scope;
+- the important risks, unknowns, and review result;
+- what `build-plan` should do next and what it must not guess.
 
-`build-spec` uses the `wh_review.v2` contract. The caller must assemble one
-current review packet with `raw_requirement`, `approved_decision`, `draft_spec`,
-`context_map`, and `evidence_map` before every `wh-review` call. The two maps
-are required caller/runner review material, not optional metadata or runner
-state. Initial/full packets deliver them to the provider; an incremental
-packet intentionally delivers only the runner-generated `review_delta` after
-the current maps pass validation.
-
-- `context_map` selects the current interfaces, constraints, and reuse points
-  that the frozen spec depends on.
-- `evidence_map` maps each applicable acceptance criterion to its own current
-  evidence anchors; do not reuse one generic anchor for multiple criteria.
-- After a spec or material revision, rebuild both maps from that same current
-  frozen snapshot and resend them. Do not retry with only the three text
-  fields from the previous call.
-- If a map cannot be completed, send the valid `state: unknown` structure with
-  `unknown_reason`; never omit it, send `{}`, or invent anchors to get a review.
-  A missing or malformed map must remain the runner's
-  `MATERIAL_INCOMPLETE`/`unavailable` fact.
-
-1. Once the ambiguity gate is clear, send the exact current `spec.md`, relevant
-   current materials, and the ambiguity summary to one independent `wh-review`.
-   The review must be genuinely run. If the provider is unavailable, timed out,
-   or returned invalid output, record that result honestly as unavailable; it
-   is never a pass.
-2. Show the real verdict and findings. A finding is input to repair, not a
-   lock on further work. Fix valid issues in the current spec; reject an invalid
-   finding with a reason; or ask the user to accept a concrete risk when a
-   serious issue will remain.
-3. Before handoff, the main agent must inspect every finding and record its
-   disposition and evidence. Do not move directly to the next stage with an
-   unexplained review result. This is a quality fact and handoff record, not a
-   hidden gate: unavailable or ordinary findings remain visible without
-   blocking continued drafting or repair.
-   Before handoff, the main agent must present a plain-language disposition
-   summary for every finding. Each row names `finding_id`, original fact,
-   consequence, `status`, `next_action`, `evidence_ref`, `owner`, `consumer`,
-   and `retain_or_delete`; the summary is shown to the user and is not replaced
-   by a provider verdict. Record the same rows in the existing Task completion
-   area for risk-acceptance/missing-items consumers; do not add a resolution
-   ledger.
-4. After a material spec revision, update the material revision note and rerun
-   the ambiguity gate. When a prior review was `pass`, wh-review uses its
-   runner-generated delta to inspect only new or changed material and direct
-   impacts; it does not repeat a full review of unchanged content. If no safe
-   delta exists, request another full review only when the change materially
-   alters what the prior review covered; otherwise disclose the remaining
-   review scope and record the fallback decision explicitly.
-5. Never loop reviews to manufacture a pass or rewrite historical verdicts.
-
-## User confirmation and handoff
-
-Present the final current spec in a short brief: what it delivers, non-goals,
-key requirements and acceptance criteria, unresolved risks, and effects on the
-current plan/tasks. Ask for user input only when a clarification, scope change,
-or risk choice actually needs their decision. The user's existing instruction
-to continue without per-stage confirmation is sufficient for ordinary handoff;
-do not ask for a duplicate stage acceptance. That conversation is not an
-automatic acceptance, a new task, or permission for commit, push, merge,
-archive, or cleanup.
-
-When the spec is clear, hand off the current materials and the actual review
-outcome to `build-plan`. A later material change is handled by revising the
-same current materials and repeating only the affected clarification, review,
-or handoff work.
-
-At the end of this stage, tell the user in plain language what was done, what
-the spec contains, what is out of scope, the main risks and deferred items, and
-what `build-plan` must not guess. Continue to handoff under the existing
-authorization unless a new material decision is required. If a material
-clarification or risk choice is still open, wait for the user's actual reply
-before handoff; without that reply the stage remains `in_progress`/`pending`.
-
-## Formal-record boundary
-
-If the runtime writes a formal stage result, let its narrow publication
-preflight verify the current task/worktree/runtime identity and required output
-shape. A wrong binding or malformed formal result must fail loudly at that
-write boundary. Missing audit evidence is recorded as `missing` or
-`unavailable`; it must not block drafting or revision, and it must not be
-presented as completion.
-
-## Communication
-
-Use the user's language and simple Markdown. Clarification cards contain only
-the question, affected scope, options, recommendation, and consequence. Review
-cards state the actual reviewer, verdict, important findings, disposition, and
-next step. Do not expose raw paths, hashes, receipts, or internal runtime
-identifiers in user-facing messages.
+If a real clarification, scope change, or risk decision remains, name it and
+its owning stage. Any user confirmation is human alignment, not a machine work
+permit and not authorization to commit, push, merge, archive, or clean up.

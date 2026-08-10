@@ -59,7 +59,7 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
     command: "true", command_hash: sha256("true"), exit_code: 0,
     snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
     started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",
-    output_ref: "evidence/verify-code.output", output_hash: sha256("pass\n"),
+    output_ref: "quality/tests/output/verify-code.output", output_hash: sha256("pass\n"),
   };
   if (testVariant === "clean-head") testValue.snapshot_commit = snapshot.head;
   if (testVariant === "tree-mismatch") testValue.snapshot_tree = "0".repeat(40);
@@ -71,7 +71,7 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
     });
   }
   const testRaw = `${JSON.stringify(testValue, null, 2)}\n`;
-  kernel.publishCanonicalRecord("evidence/verify-code.output", "pass\n");
+  kernel.publishCanonicalRecord("quality/tests/output/verify-code.output", "pass\n");
   if (testVariant !== "missing") kernel.publishCanonicalRecord(testRef, testRaw);
   const testEvidence = { ref: testRef, sha256: sha256(testRaw), evidence_type: "test_receipt" };
   kernel.publishVNextQualityFact("verify-code", { kind: "test", status: "passed", subject: "full_tests_fresh", evidence: [testEvidence] });

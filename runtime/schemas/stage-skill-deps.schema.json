@@ -9,16 +9,14 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "path", "execution", "invocation", "trigger", "bundle", "owner", "dispatch"],
+        "required": ["name", "path", "execution", "trigger", "bundle", "owner"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "path": { "type": "string", "pattern": "^skills/[^/]+/SKILL\\.md$" },
           "execution": { "enum": ["inline", "independent"] },
-          "invocation": { "enum": ["always", "conditional"] },
           "trigger": { "type": "string", "minLength": 1 },
           "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" },
-          "owner": { "const": "stage" },
-          "dispatch": { "const": "stage" }
+          "owner": { "const": "stage" }
         },
         "additionalProperties": false
       }
@@ -52,7 +50,7 @@
           "minItems": 2,
           "items": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
         },
-        "absence_semantics": { "enum": ["blocked", "diagnostic", "human_required"] }
+        "absence_semantics": { "const": "diagnostic" }
       },
       "additionalProperties": false,
       "allOf": [{ "anyOf": [{ "required": ["doctor"] }, { "required": ["doctor_any"] }] }]

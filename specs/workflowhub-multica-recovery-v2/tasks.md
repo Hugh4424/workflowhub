@@ -76,6 +76,7 @@
 - **动作**：补失败合同；只增加目标行为断言，不删除能证明 immutable/provenance/错误写入边界的测试。
 - **验证**：role=RED; paired_task=T007; gate_cmd=`npx vitest run tests/contract/four-material-non-gate-contract.test.mjs tests/official-component-receipts.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`; expected_exit=`非零`; oracle=`ORACLE-NON-GATE`：目标断言因旧工作资格依赖而失败。
 - **证据**：evidence_path=`quality/tests/T006-non-gate-red.json`; record=`失败断言、旧依赖、exit`。
+- **测试路线事实**：`testing-system-blueprint` 只提供设计输入；`test-routing-advisor` 选定本行为 Phase 的具体路线，具体测试技能为 `backend-testing`；两者都不是继续工作的 gate。
 - **Trace**：D-four-materials → FR-2/FR-3/FR-4 → AC-2/AC-3/AC-4/AC-5/AC-12
 - **STOP**：出现第五份材料、new writer、successor/recovery/rebind 或把缺质量改写为 PASS 时停止。
 - **状态**：`completed`
@@ -85,14 +86,14 @@
 
 - **目标**：删除 receipt/snapshot/历史 completion 对工作资格和执行 shortcut 的依赖，保留质量事实、路径认证、幂等和 fail-loud 写入；同 task 修复继续。
 - **依赖**：T006
-- **精确文件**：`runtime/stage/stage-handlers.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-content-contracts.mjs`、`runtime/task/task-handle.mjs`、`runtime/task/task-kernel-implementation.mjs`、`tools/cli/stage-runtime.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`tests/contract/four-material-non-gate-contract.test.mjs`、`tests/official-component-receipts.test.mjs`
+- **精确文件**：`runtime/stage/stage-handlers.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-content-contracts.mjs`（保留为现有只读契约 consumer，本 Phase 未改写其职责）、`runtime/task/task-handle.mjs`、`runtime/task/task-kernel-implementation.mjs`、`tools/cli/stage-runtime.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`tests/contract/four-material-non-gate-contract.test.mjs`、`tests/official-component-receipts.test.mjs`
 - **动作**：实现 T006 合同；停止把 receipt/snapshot 当继续 shortcut，但保留现有事实读取、immutable/provenance 和错误边界；更新测试反映“质量缺失不等于完成”。
 - **验证**：role=GREEN; paired_task=T006; gate_cmd=`npx vitest run tests/contract/four-material-non-gate-contract.test.mjs tests/official-component-receipts.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`; expected_exit=`0`; oracle=`ORACLE-NON-GATE`：同 task 可继续，完成事实仍 incomplete/unknown/unavailable。
 - **证据**：evidence_path=`quality/tests/T007-non-gate-green.json`; record=`实际文件、测试 exit、continuation、completion predicates、质量事实`。
 - **Trace**：D-four-materials → FR-2/FR-3/FR-4 → AC-2/AC-3/AC-4/AC-5/AC-12
 - **STOP**：若只能靠新增 writer/bridge/ledger 通过测试，停止并回到设计。
 - **状态**：`completed`
-- **执行事实**：当前 recovery worktree 同一命令 exit=0，2 files / 42 tests passed（`four-material-non-gate` 13、`official-component-receipts` 29）。缺质量事实保持 `unknown`/`unavailable`/`incomplete`，同 task 可继续；receipt、snapshot、历史 completion 仍保留为质量/审计事实，未新增 writer、ledger、bridge 或 gate。Phase C 实现提交与异源 review 待完成。
+- **执行事实**：当前 recovery worktree 同一命令 exit=0，2 files / 42 tests passed（`four-material-non-gate` 13、`official-component-receipts` 29）。缺质量事实保持 `unknown`/`unavailable`/`incomplete`，同 task 可继续；receipt、snapshot、历史 completion 仍保留为质量/审计事实，未新增 writer、ledger、bridge 或 gate。`stage-content-contracts.mjs` 经反向引用确认仍由 `stage-handlers.mjs`、`canonical-receipt-writer.mjs` 和既有契约测试使用，因此保留，不是遗漏删除。Phase C 提交 `0623cac` 的 `opencode/v4flash` 独立 review 返回 PASS，无 blocking；报告待本轮写入。
 
 ## T008 — RED：控制面删除闭包
 
@@ -104,21 +105,21 @@
 - **证据**：evidence_path=`quality/reviews/T008-closure-red.json`; record=`反向引用、consumer、残留对象`。
 - **Trace**：D-no-control-plane → FR-6/FR-7/FR-8 → AC-1/AC-7/AC-9/AC-12
 - **STOP**：发现真实 consumer、需兼容 bridge 或影响历史 report bytes 时停止对应删除。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：以 Phase C 提交 `0623cacc655fcbd9b53961d170aee9b89cc7108c` 为 detached base，复制当前四个 closure 合同测试后运行 gate；`legacy-zero` 3 passed、`review-layering` 2 passed、`repository-inventory` 9 passed，`stage-skill-invocation` 因删除后的旧导出缺失而 7 项失败，整体 exit=1。临时 worktree 已移除；首次误用缺少本地依赖的 `npx` 命令未计为 RED，随后使用仓库 `node_modules/.bin/vitest` 取得有效 RED。
 
 ## T009 — GREEN：控制面删除闭包与历史只读
 
 - **目标**：只在 T008 的 consumer 结论支持时删除完整 reader/writer/schema/fixture/manifest/route 闭包，保留历史只读事实和 provider provenance。
 - **依赖**：T008
-- **精确文件**：`core/runtime-mode.mjs`、`core/task-close.mjs`、`runtime/review/review-output.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-handlers.mjs`、`runtime/review/schemas/attempt.schema.json`、`runtime/review/schemas/result.schema.json`、`runtime/review/schemas/stage-materials.schema.json`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`tools/cli/stage-runtime.mjs`、`tests/contract/legacy-zero.test.mjs`、`tests/contract/review-layering.test.mjs`、`tests/contract/stage-skill-invocation-contract.test.mjs`、`tests/contract/repository-inventory.test.mjs`
+- **精确文件**：`core/runtime-mode.mjs`、`core/task-close.mjs`、`runtime/review/review-output.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-handlers.mjs`、`runtime/review/schemas/attempt.schema.json`、`runtime/review/schemas/result.schema.json`、`runtime/review/schemas/stage-materials.schema.json`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`tools/cli/stage-runtime.mjs`、`runtime/stage/stage-skill-runtime.mjs`、`skills/grill-with-docs/skill-bundle.json`、`skills/spec-plan/skill-bundle.json`、`skills/spec-tasks/skill-bundle.json`、`skills/testing-system-blueprint/skill-bundle.json`、`skills/wh-review/skill-bundle.json`、`tests/contract/legacy-zero.test.mjs`、`tests/contract/review-layering.test.mjs`、`tests/contract/stage-skill-invocation-contract.test.mjs`、`tests/contract/repository-inventory.test.mjs`
 - **动作**：按 T008 反向引用逐项删除或降为只读；不引入兼容 bridge、successor、recovery、rebind、第二执行器或 public route。
 - **验证**：role=GREEN; paired_task=T008; gate_cmd=`npx vitest run tests/contract/legacy-zero.test.mjs tests/contract/review-layering.test.mjs tests/contract/stage-skill-invocation-contract.test.mjs tests/contract/repository-inventory.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`; expected_exit=`0`; oracle=`ORACLE-CLOSURE`：无残留控制面，历史只读和 provenance 断言保留。
 - **证据**：evidence_path=`quality/reviews/T009-closure-green.json`; record=`删除闭包、reader/writer/schema/fixture/manifest/public route、测试 exit`。
 - **Trace**：D-no-control-plane → FR-6/FR-7/FR-8 → AC-1/AC-7/AC-9/AC-12
 - **STOP**：任何删除导致历史 facts/report 不可读或需要新控制面补偿时停止。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：刷新 Phase 变更后失效的 Skill Bundle 文件 hash，补齐 build-plan 的 `testing-system-blueprint` 当前依赖期望；同一 gate exit=0，4 files / 21 tests passed。`legacy-zero`、review layering、直接 stage package resolver、repository inventory 均通过；stage package 只解析声明 bundle，不派发 host invocation、不写 receipt。无新增 bridge、lock、second executor、lineage、public route；历史 inventory/report 仍只读。候选提交 `06ff0af` 的 `opencode/v4flash` runtime `299d96b9-5579-4f80-abef-3726e24a44ea` 返回 PASS、无 blocking；compact packet 覆盖限制及 T010 处置已记录在 `quality/reviews/reports/recovery-v2-phase-d-opencode-v4flash-299d96b9-pass.md`。
 
 ## T010 — 当前索引、bundle 与结构事实
 
@@ -130,8 +131,8 @@
 - **证据**：evidence_path=`quality/reviews/reports/T010-structure.md`; record=`命令 exit、inventory、bundle hash、历史 bytes、隔离对照`。
 - **Trace**：D-history-is-immutable → FR-7/FR-8 → AC-8/AC-9
 - **STOP**：诊断需要新增 runtime writer、public command 或覆盖旧报告时停止。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：`quality/reviews/reports/T010-structure.md` 已记录结构验收：历史 inventory `461/461` 字节不变；Phase 0 deletion disposition、repository inventory（`1174` delivery files）、reference audit、retention audit、complexity hard-zero、skill closure 和五个 bundle hash 均通过；Phase D provider raw diff SHA/bytes 与 host `git show` 读回一致；public behavior compare/probe 通过。architecture complexity 的超预算项仍只作 diagnostic，不作为工作或交付 gate。
 
 ## T011 — 最终测试、异源审查与验收
 
@@ -143,5 +144,5 @@
 - **证据**：evidence_path=`quality/reviews/reports/T011-final-acceptance.md`; record=`测试统计、review 原文/packet hash、AC 逐项、constitution checklist、隔离证据、commit tree`。
 - **Trace**：D-final-acceptance → FR-1..FR-10 → AC-1..AC-12
 - **STOP**：发现新 control plane、四材料冲突、main/Multica 变化、review subject 漂移或需猜测通过结论时停止收尾。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`in_progress`
+- **执行事实**：当前全量验收已完成本地命令部分：`npm test` exit=0（safe `146` files / `1252 passed` / `1 skipped`；exclusive `2` files / `31 passed`）；`npm run check` exit=0；public behavior compare/probe exit=0；待以当前最终提交树重新冻结并取得一次新的 `opencode/v4flash` 独立审查，再完成逐 AC、宪法和隔离报告。旧 provider PASS/REVISE 原文保留，不冒充当前最终审查。

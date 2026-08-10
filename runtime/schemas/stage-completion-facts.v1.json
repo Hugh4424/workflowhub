@@ -3,7 +3,7 @@
   "$id": "stage-completion-facts.v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "result", "objective", "approach", "effect", "verification", "artifacts", "review", "missing_items", "risks", "dependencies", "recovery_conditions", "downstream_read_rule", "next_owner", "user_action"],
+  "required": ["schema_version", "result", "objective", "approach", "effect", "verification", "artifacts", "review", "missing_items", "risks", "next_owner", "user_action"],
   "properties": {
     "schema_version": { "const": "stage-completion-facts.v1" },
     "result": { "type": "string", "minLength": 1 },
@@ -36,16 +36,11 @@
         "acceptance_criteria": { "enum": ["covered", "not_applicable", "missing"] }
       }
     },
-    "declared_components": { "type": "array", "items": { "$ref": "#/$defs/declaredComponent" } },
-    "invocation_facts": { "type": "array", "items": { "$ref": "#/$defs/invocationFact" } },
     "audit_gaps": { "type": "array", "items": { "$ref": "#/$defs/auditGap" } },
     "verification_items": { "type": "array", "items": { "$ref": "#/$defs/verificationItem" } },
     "completion_effect": { "const": "disclose_only" },
     "missing_items": { "$ref": "#/$defs/stringList" },
     "risks": { "$ref": "#/$defs/stringList" },
-    "dependencies": { "$ref": "#/$defs/stringList" },
-    "recovery_conditions": { "$ref": "#/$defs/stringList" },
-    "downstream_read_rule": { "type": "string", "minLength": 1 },
     "next_owner": { "type": "string", "minLength": 1 },
     "user_action": { "type": "string", "minLength": 1 }
   },
@@ -58,37 +53,6 @@
   "$defs": {
     "ref": { "type": "object", "additionalProperties": false, "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "minLength": 1 }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } },
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-    "declaredComponent": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["task_id", "stage", "workflow_run_id", "name", "invocation_key", "bundle_hash", "declared_trigger", "invocation"],
-      "properties": {
-        "task_id": { "type": "string", "minLength": 1 },
-        "stage": { "type": "string", "minLength": 1 },
-        "workflow_run_id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "invocation_key": { "type": "string", "minLength": 1 },
-        "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "declared_trigger": { "type": "string", "minLength": 1 },
-        "invocation": { "enum": ["always", "conditional"] }
-      }
-    },
-    "invocationFact": {
-      "type": "object",
-      "required": ["task_id", "stage", "workflow_run_id", "name", "invocation_key", "bundle_hash", "declared_trigger", "status"],
-      "properties": {
-        "task_id": { "type": "string", "minLength": 1 },
-        "stage": { "type": "string", "minLength": 1 },
-        "workflow_run_id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "invocation_key": { "type": "string", "minLength": 1 },
-        "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "declared_trigger": { "type": "string", "minLength": 1 },
-        "status": { "enum": ["executed", "not_invoked", "trigger=false", "unavailable"] },
-        "reason": { "type": "string" }
-      },
-      "additionalProperties": true
-    },
     "auditGap": {
       "type": "object",
       "additionalProperties": false,
@@ -113,12 +77,11 @@
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["label", "ref", "hash", "publication_lookup"],
+      "required": ["label", "ref", "hash"],
       "properties": {
         "label": { "type": "string", "minLength": 1 },
         "ref": { "type": "string", "minLength": 1 },
-        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "publication_lookup": { "type": "string", "minLength": 1 }
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },
     "component": {

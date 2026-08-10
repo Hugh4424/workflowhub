@@ -29,15 +29,16 @@ function fixture() {
     record_model: "vnext-single-write",
   } });
   const kernel = createTaskKernel(task);
-  kernel.publishCanonicalRecord("evidence/delivery.json", "delivery evidence\n");
+  kernel.publishCanonicalRecord("quality/evidence/delivery.json", "delivery evidence\n");
   return { task, kernel };
 }
 
 describe("manual delivery close", () => {
   it("records delivered business status without formal acceptance", () => {
     const state = fixture();
-    const result = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "evidence/delivery.json" });
+    const result = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
     expect(result).toMatchObject({ business_status: "delivered", formal_status: "blocked" });
+    expect(result.output_ref).toMatch(/^quality\/evidence\/manual-delivery-close\/[a-f0-9]{64}\.json$/);
     expect(JSON.parse(state.task.readRecord(result.output_ref))).toMatchObject({
       schema_version: "manual-delivery-close.v1", business_status: "delivered", formal_status: "blocked",
     });
@@ -46,8 +47,8 @@ describe("manual delivery close", () => {
 
   it("is idempotent for the same source bytes", () => {
     const state = fixture();
-    const first = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "evidence/delivery.json" });
-    const second = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "evidence/delivery.json" });
+    const first = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
+    const second = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
     expect(second.output_ref).toBe(first.output_ref);
   });
 });

@@ -648,7 +648,7 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   const handoff = artifacts.filter((item) => item.record_kind === "handoff");
   const facts = [
     createHealthFact({ fact_id: "health:task_dir", domain: "task_dir", status: "present", observed_value: true, source_ref: "task.json" }),
-    createHealthFact({ fact_id: "health:worktree", domain: "worktree", status: "present", observed_value: preflight.snapshot.tree, source_ref: "publications/make-decision/" }),
+    createHealthFact({ fact_id: "health:worktree", domain: "worktree", status: "present", observed_value: preflight.snapshot.tree, source_ref: "task.json" }),
     createHealthFact({ fact_id: "health:review", domain: "review", status: artifactRefs.some((item) => item.status === "unknown") ? "unknown" : artifactRefs.some((item) => item.status === "missing") ? "missing" : artifactRefs.length ? "present" : "unknown", observed_value: artifactRefs.length, source_ref: artifactRefs[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:verify", domain: "verify", status: verify.some((item) => item.status === "unknown") ? "unknown" : verify.some((item) => item.status === "missing") ? "missing" : verify.length ? "present" : "unknown", observed_value: verify.length, source_ref: verify[0]?.source_ref ?? null }),
     createHealthFact({ fact_id: "health:handoff", domain: "handoff", status: handoff.some((item) => item.status === "unknown") ? "unknown" : handoff.some((item) => item.status === "missing") ? "missing" : handoff.length ? "present" : "unknown", observed_value: handoff.length, source_ref: handoff[0]?.source_ref ?? null }),

@@ -22,25 +22,25 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | make-decision | 12 | publish-decision | S10 | publish the current artifact snapshot |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
 | build-spec | 2 | spec-specify | spec generation | generate spec.md from decision-log |
-| build-spec | 3 | spec-clarify | ambiguity scan | material ambiguity waits for user reply |
-| build-spec | 4 | simplicity-guard | simplicity lens | delete, narrow, or reuse before lock |
-| build-spec | 5 | plan-ceo-review | product lens | record advisory product findings |
-| build-spec | 6 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
-| build-spec | 7 | freeze-spec | material freeze | freeze before independent review |
-| build-spec | 8 | review-frozen-spec | wh-review | one advisory异源 review |
-| build-spec | 9 | main-agent-disposes-findings | disposition | inspect every finding |
-| build-spec | 10 | publish-spec-result | handoff | publish spec and facts |
+| build-spec | 3 | simplicity-guard | simplicity lens | delete, narrow, or reuse before lock |
+| build-spec | 4 | plan-ceo-review | product lens | record advisory product findings |
+| build-spec | 5 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
+| build-spec | 6 | freeze-spec | material freeze | freeze before independent review |
+| build-spec | 7 | review-frozen-spec | wh-review | one advisory异源 review |
+| build-spec | 8 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-spec | 9 | publish-spec-result | handoff | publish spec and facts |
 | build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
-| build-plan | 3 | spec-plan | plan generation | produce plan draft |
-| build-plan | 4 | simplicity-guard | simplicity lens | delete, narrow, or reuse |
-| build-plan | 5 | plan-eng-review | engineering lens | inspect boundaries and failure paths |
-| build-plan | 6 | test-routing-advisor | test routing | preselect tier and concrete skill |
-| build-plan | 7 | spec-tasks | task generation | record commands, oracle, evidence |
-| build-plan | 8 | spec-analyze | cross-material trace | check original requirement through evidence |
-| build-plan | 9 | review-plan | wh-review | one advisory异源 review |
-| build-plan | 10 | main-agent-disposes-findings | disposition | inspect every finding |
-| build-plan | 11 | publish-plan-result | handoff | publish plan/tasks and facts |
+| build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |
+| build-plan | 4 | spec-plan | plan generation | produce plan draft |
+| build-plan | 5 | simplicity-guard | simplicity lens | delete, narrow, or reuse |
+| build-plan | 6 | plan-eng-review | engineering lens | inspect boundaries and failure paths |
+| build-plan | 7 | test-routing-advisor | test routing | preselect tier and concrete skill |
+| build-plan | 8 | spec-tasks | task generation | record commands, oracle, evidence |
+| build-plan | 9 | spec-analyze | cross-material trace | check original requirement through evidence |
+| build-plan | 10 | review-plan | wh-review | one advisory异源 review |
+| build-plan | 11 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-plan | 12 | publish-plan-result | handoff | publish plan/tasks and facts |
 | build-code | 1 | read-current-task-documents | pre-read | read all four current materials |
 | build-code | 2 | write-red-tests | TDD RED | record real RED or unknown |
 | build-code | 3 | implement-change | implementation | stay within task scope |
@@ -48,7 +48,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 5 | invoke-concrete-testing-skill | concrete testing | invoke backend/frontend/fullstack after code |
 | build-code | 6 | run-tests | phase test | execute focused command and oracle |
 | build-code | 7 | scan-diff | diff scan | repair accidental scope drift |
-| build-code | 8 | review-change | phase review | current Phase requires review pass |
+| build-code | 8 | review-change | phase review | record current review fact; unavailable never blocks repair |
 | build-code | 9 | analyze-review-findings | disposition | main agent assesses every finding |
 | build-code | 10 | capture-implementation | evidence | bind evidence to current snapshot |
 | build-code | 11 | authenticate-current-task-completion | task audit | retain incomplete facts honestly |

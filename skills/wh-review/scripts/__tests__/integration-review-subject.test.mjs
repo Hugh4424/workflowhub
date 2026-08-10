@@ -11,14 +11,15 @@ import { buildIntegrationReviewSubject, inspectIntegrationReviewSubject } from "
 
 const sha = (raw) => createHash("sha256").update(raw).digest("hex");
 
-function fixture({ stale = false, missingAc = false, multiTask = false } = {}) {
+function fixture({ stale = false, missingAc = false, missingExecution = false, multiTask = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-integration-current-"));
   execFileSync("git", ["init", "-q"], { cwd: root });
   execFileSync("git", ["config", "user.name", "fixture"], { cwd: root });
   execFileSync("git", ["config", "user.email", "fixture@example.test"], { cwd: root });
   const storage = mkdtempSync(join(realpathSync(process.cwd()), ".workflowhub-integration-storage-"));
   const taskId = "current-only"; const dir = join(root, "specs", taskId); mkdirSync(dir, { recursive: true });
-  const taskBody = `#### T001 — current proof\n\n##### 执行状态填写区（唯一完成权威）\n\n- [x] **任务完成**\n- **status**：\`completed\`\n- **actual_changes**：current implementation\n- **covered_ac**：${missingAc ? "AC-01" : "AC-01、AC-02"}\n- **evidence_refs**：PLACEHOLDER\n${multiTask ? "\n#### T002 — second current proof\n\n##### 执行状态填写区（唯一完成权威）\n\n- [x] **任务完成**\n- **status**：\`completed\`\n- **actual_changes**：second current implementation\n- **covered_ac**：AC-01\n- **evidence_refs**：PLACEHOLDER\n" : ""}`;
+  const executionFacts = missingExecution ? "" : "current implementation";
+  const taskBody = `## T001 — current proof\n\n- **状态**：\`completed\`\n- **执行事实**：${executionFacts}\n- **证据**：evidence_path=\`quality/evidence/implementation.json\`; evidence_path=\`quality/tests/build-code.json\`; record=\`PLACEHOLDER\`\n- **Trace**：source/current → FR-01 → ${missingAc ? "AC-01" : "AC-01、AC-02"}\n${multiTask ? "\n## T002 — second current proof\n\n- **状态**：\`completed\`\n- **执行事实**：second current implementation\n- **证据**：evidence_path=\`quality/evidence/implementation.json\`; evidence_path=\`quality/tests/build-code.json\`; record=\`PLACEHOLDER\`\n- **Trace**：source/current → FR-01 → AC-01\n" : ""}`;
   const files = { "decision-log.md": "# decision\n", "spec.md": "# spec\nAC-01\nAC-02\n", "plan.md": "# plan\n", "tasks.md": taskBody, "runtime/fixture.mjs": "export const fixture = 'base';\n" };
   mkdirSync(join(root, "runtime"), { recursive: true });
   for (const [name, raw] of Object.entries(files)) writeFileSync(join(name.startsWith("runtime/") ? root : dir, name), raw);
@@ -35,7 +36,7 @@ function fixture({ stale = false, missingAc = false, multiTask = false } = {}) {
     { ref: "quality/evidence/implementation.json", sha256: sha(implementationRaw) },
     { ref: "quality/tests/build-code.json", sha256: sha(greenRaw) },
   ];
-  files["tasks.md"] = taskBody.replaceAll("PLACEHOLDER", `\`${JSON.stringify(refs)}\``);
+  files["tasks.md"] = taskBody.replaceAll("PLACEHOLDER", "current implementation and GREEN evidence");
   writeFileSync(join(dir, "tasks.md"), files["tasks.md"]);
   const revision = { task_id: taskId, hashes: Object.fromEntries(Object.entries(files).map(([name, raw]) => [name, sha(raw)])) };
   const revisionRaw = JSON.stringify(revision); const pointer = { task_id: taskId, revision_ref: "materials/revisions/current.json", revision_hash: sha(revisionRaw) };
@@ -62,16 +63,25 @@ function fixture({ stale = false, missingAc = false, multiTask = false } = {}) {
 }
 
 describe("integration review subject current-state boundary", () => {
-  it("keeps missing historical Phase coverage as an audit gap", () => {
+  it("does not create a historical Phase coverage audit gate", () => {
     const f = fixture();
     try {
       const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
-      expect(subject.formal_record_status).toMatchObject({ status: "unavailable" });
-      expect(subject.audit_gaps).toEqual(expect.arrayContaining([
-        expect.objectContaining({ kind: "historical_phase_coverage" }),
-      ]));
+      expect(subject.formal_record_status).toMatchObject({ status: "available" });
+      expect(subject).not.toHaveProperty("phase_coverage");
+      expect(subject).not.toHaveProperty("seam_index");
     }
     finally { f.cleanup(); }
+  });
+
+  it("parses the current H2 task-card format into completion history", () => {
+    const f = fixture({ multiTask: true });
+    try {
+      const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
+      expect(subject.formal_record_status).toMatchObject({ status: "available" });
+      expect(subject.ac_trace.entries.find((entry) => entry.acceptance_criterion_id === "AC-01").change.map((entry) => entry.task_id))
+        .toEqual(["T001", "T002"]);
+    } finally { f.cleanup(); }
   });
 
   it("keeps missing current Task rows as an AC audit gap", () => {
@@ -84,6 +94,14 @@ describe("integration review subject current-state boundary", () => {
       ]));
     }
     finally { f.cleanup(); }
+  });
+
+  it("does not treat a completed card without execution facts as usable history", () => {
+    const f = fixture({ missingExecution: true });
+    try {
+      expect(() => buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree }))
+        .toThrow(/completed T001 lacks execution facts/);
+    } finally { f.cleanup(); }
   });
 
   it("preserves every completed Task as an AC change and anchor mapping", () => {
@@ -100,10 +118,10 @@ describe("integration review subject current-state boundary", () => {
     const f = fixture();
     try {
       const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.finalTree });
-      expect(subject.phase_coverage.implementation_anchors).toEqual([
+      expect(subject.ac_trace.implementation_anchors).toEqual([
         expect.objectContaining({ id: "implementation-runtime__fixture.mjs-1", path: "runtime/fixture.mjs", role: "implementation" }),
       ]);
-      expect(subject.phase_coverage.implementation_anchors[0].start_line).toBe(1);
+      expect(subject.ac_trace.implementation_anchors[0].start_line).toBe(1);
     } finally { f.cleanup(); }
   });
 

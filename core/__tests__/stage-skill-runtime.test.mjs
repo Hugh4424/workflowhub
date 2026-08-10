@@ -2,192 +2,191 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { dispatchStageSkill, preflightStageSkills } from "../../runtime/stage/stage-skill-runtime.mjs";
+import * as stageSkillRuntime from "../../runtime/stage/stage-skill-runtime.mjs";
 
+const {
+  loadStageSkillManifest,
+  loadStageSkillStepManifest,
+  resolveStageSkillPackages,
+} = stageSkillRuntime;
 const roots = [];
-const outcome = Object.freeze({
-  outcome_ref: "evidence/outcome.json",
-  outcome_hash: "a".repeat(64),
-  snapshot_tree: "b".repeat(40),
-});
-afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
-function fixture({ invocation = "conditional" } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-dispatch-"));
+afterEach(() => {
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+function writeJson(file, value) {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function fixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-portable-skill-"));
   roots.push(root);
-  fs.mkdirSync(path.join(root, "skills/demo"), { recursive: true });
-  fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
-  fs.writeFileSync(path.join(root, "skills/demo/SKILL.md"), "# local\n");
-  fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md"] }));
-  fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), `stage: stage
+  fs.mkdirSync(path.join(root, "workflows/build-code"), { recursive: true });
+  fs.mkdirSync(path.join(root, "skills/alpha"), { recursive: true });
+  fs.mkdirSync(path.join(root, "skills/beta"), { recursive: true });
+
+  for (const name of ["alpha", "beta"]) {
+    fs.writeFileSync(path.join(root, `skills/${name}/SKILL.md`), `# ${name}\n`);
+    fs.writeFileSync(
+      path.join(root, `skills/${name}/execute.mjs`),
+      `throw new Error(${JSON.stringify(`${name} package must not execute`)});\n`,
+    );
+    writeJson(path.join(root, `skills/${name}/skill-bundle.json`), {
+      schema_version: 1,
+      skill: name,
+      files: ["SKILL.md", "execute.mjs"],
+    });
+  }
+
+  fs.writeFileSync(path.join(root, "workflows/build-code/skill-deps.yaml"), `stage: build-code
 skills:
-  - { name: demo, path: skills/demo/SKILL.md, bundle: skills/demo/skill-bundle.json, execution: independent, invocation: ${invocation}, trigger: test, owner: stage, dispatch: stage }
-runtime_capabilities: []
-external_capabilities: []
+  - { name: beta, path: skills/beta/SKILL.md, bundle: skills/beta/skill-bundle.json }
+  - { name: alpha, path: skills/alpha/SKILL.md, bundle: skills/alpha/skill-bundle.json }
 `);
+  writeJson(path.join(root, "workflows/build-code/steps.json"), {
+    schema_version: "2.0.0",
+    stage_slug: "build-code",
+    steps: [
+      {
+        step_id: 1,
+        step_slug: "parse-package",
+        order: 1,
+        entry_conditions: [{ kind: "input", uri_or_path: "package://root" }],
+        completion_evidence: [{ kind: "package", uri_or_path: "package://parsed" }],
+        observable_result: "The portable package is parsed.",
+        depends_on: [],
+      },
+      {
+        step_id: 2,
+        step_slug: "validate-package",
+        order: 2,
+        entry_conditions: [{ kind: "package", uri_or_path: "step://1" }],
+        completion_evidence: [{ kind: "package", uri_or_path: "package://validated" }],
+        observable_result: "The portable package is validated.",
+        depends_on: [1],
+      },
+    ],
+  });
   return root;
 }
 
-describe("stage skill runtime", () => {
-  it("records an always dependency as executed only after hostInvoke returns an outcome", async () => {
-    const root = fixture({ invocation: "always" });
-    let calls = 0;
-    const result = await dispatchStageSkill({
-      packageRoot: root,
-      stage: "stage",
-      name: "demo",
-      hostInvoke: () => {
-        calls += 1;
-        return { outcome: "done", ...outcome };
-      },
+describe("stage skill portable package runtime", () => {
+  it("exposes only package parsing APIs, without preflight or invocation APIs", () => {
+    expect(loadStageSkillManifest).toBeTypeOf("function");
+    expect(loadStageSkillStepManifest).toBeTypeOf("function");
+    expect(resolveStageSkillPackages).toBeTypeOf("function");
+    expect(stageSkillRuntime).not.toHaveProperty("preflightStageSkills");
+    expect(stageSkillRuntime).not.toHaveProperty("dispatchStageSkill");
+    expect(stageSkillRuntime).not.toHaveProperty("dispatchOrderedStageSkills");
+  });
+
+  it("parses and validates the stage and step manifests", () => {
+    const root = fixture();
+    const skills = loadStageSkillManifest(root, "build-code");
+    const steps = loadStageSkillStepManifest(root, "build-code");
+
+    expect(skills).toMatchObject({
+      root: fs.realpathSync(root),
+      relative: "workflows/build-code/skill-deps.yaml",
+      source: fs.realpathSync(path.join(root, "workflows/build-code/skill-deps.yaml")),
     });
-    expect(calls).toBe(1);
-    expect(result, "ORACLE-INV: a real hostInvoke result must become a runtime-owned executed fact").toMatchObject({
-      schema_version: "stage-skill-invocation.v1",
-      name: "demo",
-      status: "executed",
-    });
+    expect(skills.manifest.skills.map(({ name }) => name)).toEqual(["beta", "alpha"]);
+    expect(steps.relative).toBe("workflows/build-code/steps.json");
+    expect(steps.manifest.steps.map(({ step_id, order }) => [step_id, order])).toEqual([[1, 1], [2, 2]]);
   });
 
-  it("rejects a triggered conditional dependency when hostInvoke returns no outcome", async () => {
+  it("resolves package paths and stable content hashes in declaration order without executing assets", () => {
     const root = fixture();
-    await expect(dispatchStageSkill({
-      packageRoot: root,
-      stage: "stage",
-      name: "demo",
-      triggered: true,
-      hostInvoke: () => undefined,
-    }), "ORACLE-INV: trigger=true without a host outcome cannot count as executed").rejects.toThrow(/outcome|result/i);
+    const first = resolveStageSkillPackages({ packageRoot: root, stage: "build-code" });
+    const second = resolveStageSkillPackages({ packageRoot: root, stage: "build-code" });
+
+    expect([...first.dependencies.keys()]).toEqual(["beta", "alpha"]);
+    expect([...first.payloads.keys()]).toEqual(["beta", "alpha"]);
+    expect([...first.payloads.values()].map(({ bundle_hash }) => bundle_hash))
+      .toEqual([...second.payloads.values()].map(({ bundle_hash }) => bundle_hash));
+
+    for (const [name, payload] of first.payloads) {
+      expect(payload).toMatchObject({
+        name,
+        package_root: fs.realpathSync(root),
+        source_manifest: fs.realpathSync(path.join(root, "workflows/build-code/skill-deps.yaml")),
+        resolved_skill_path: fs.realpathSync(path.join(root, `skills/${name}/SKILL.md`)),
+      });
+      expect(payload.bundle_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(payload.resolved_bundle_paths).toEqual([
+        fs.realpathSync(path.join(root, `skills/${name}/SKILL.md`)),
+        fs.realpathSync(path.join(root, `skills/${name}/execute.mjs`)),
+      ]);
+    }
   });
 
-  it("preflights and dispatches a complete repository-local payload with a stable content hash", async () => {
+  it("changes only the affected package hash when its content changes", () => {
     const root = fixture();
-    expect(preflightStageSkills({ packageRoot: root, stage: "stage" }).dependencies.has("demo")).toBe(true);
-    const second = await dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", hostInvoke: payload => ({ ...payload, ...outcome }) });
-    const again = await dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", hostInvoke: payload => ({ ...payload, ...outcome }) });
-    expect({ ...second, created_at: null }).toEqual({ ...again, created_at: null });
-    expect(second).toMatchObject({ name: "demo", package_root: fs.realpathSync(root) });
-    expect(second.resolved_skill_path).toBe(fs.realpathSync(path.join(root, "skills/demo/SKILL.md")));
-    expect(second.resolved_bundle_paths).toContain(second.resolved_skill_path);
-    expect(second.bundle_hash).toMatch(/^[a-f0-9]{64}$/);
+    const before = resolveStageSkillPackages({ packageRoot: root, stage: "build-code" });
+    fs.appendFileSync(path.join(root, "skills/beta/SKILL.md"), "changed\n");
+    const after = resolveStageSkillPackages({ packageRoot: root, stage: "build-code" });
+
+    expect(after.payloads.get("beta").bundle_hash).not.toBe(before.payloads.get("beta").bundle_hash);
+    expect(after.payloads.get("alpha").bundle_hash).toBe(before.payloads.get("alpha").bundle_hash);
   });
 
-  it("records an untriggered conditional skill without invoking the host", async () => {
+  it.each(["../build-code", "Build-code", "build_code", ""])("rejects invalid stage input %j", (stage) => {
     const root = fixture();
-    let invoked = false;
-    const result = await dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", triggered: false, hostInvoke: () => { invoked = true; } });
-    expect(result.status).toBe("not_invoked");
-    expect(result.reason).toBe("trigger_false");
-    expect(invoked).toBe(false);
+    expect(() => loadStageSkillManifest(root, stage)).toThrow(/invalid stage/);
+    expect(() => loadStageSkillStepManifest(root, stage)).toThrow(/invalid stage/);
   });
 
-  it("preserves a concrete trigger-false reason in the runtime-owned fact", async () => {
+  it("rejects a manifest for another stage", () => {
     const root = fixture();
-    const result = await dispatchStageSkill({
-      packageRoot: root,
-      stage: "stage",
-      name: "demo",
-      triggered: false,
-      notInvokedReason: "No material ambiguity after the six-dimension check.",
-      hostInvoke: () => { throw new Error("conditional host must not run"); },
-    });
-    expect(result).toMatchObject({
-      status: "not_invoked",
-      reason: "No material ambiguity after the six-dimension check.",
-    });
+    const manifestPath = path.join(root, "workflows/build-code/skill-deps.yaml");
+    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace("stage: build-code", "stage: build-plan"));
+    expect(() => loadStageSkillManifest(root, "build-code")).toThrow("build-code: invalid skill manifest");
   });
 
-  it("validates conditional bundle assets during stage preflight", () => {
+  it("rejects invalid step ordering", () => {
     const root = fixture();
-    fs.rmSync(path.join(root, "skills/demo/SKILL.md"));
+    const manifestPath = path.join(root, "workflows/build-code/steps.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest.steps[1].order = 3;
+    writeJson(manifestPath, manifest);
+    expect(() => loadStageSkillStepManifest(root, "build-code"))
+      .toThrow(/invalid step manifest.*missing order 2/);
+  });
+
+  it("rejects paths that escape the portable package", () => {
+    const root = fixture();
+    const manifestPath = path.join(root, "workflows/build-code/skill-deps.yaml");
+    fs.writeFileSync(
+      manifestPath,
+      fs.readFileSync(manifestPath, "utf8").replace("skills/beta/SKILL.md", "../outside/SKILL.md"),
+    );
+
     let failure;
     try {
-      preflightStageSkills({ packageRoot: root, stage: "stage" });
+      resolveStageSkillPackages({ packageRoot: root, stage: "build-code" });
     } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
-    expect(failure.code).not.toBe("ENOENT");
     expect(failure.diagnostic).toMatchObject({
       schema_version: "workflowhub-skill-diagnostic.v1",
       source: "resolver",
-      skill: "demo",
+      skill: "beta",
       status: "blocked",
       code: "SKILL_RESOLUTION_FAILED",
     });
   });
 
-  it("records an unavailable independent context without a human gate", async () => {
+  it("rejects a bundle with an incorrect asset hash", () => {
     const root = fixture();
-    await expect(dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", independentContextAvailable: false, hostInvoke: () => null })).resolves.toMatchObject({
-      schema_version: "stage-skill-invocation.v1",
-      name: "demo",
-      status: "unavailable",
-      reason: "independent_context_unavailable",
+    writeJson(path.join(root, "skills/beta/skill-bundle.json"), {
+      schema_version: 1,
+      skill: "beta",
+      files: [{ path: "SKILL.md", sha256: "0".repeat(64) }],
     });
-  });
 
-  it("records a truthful unavailable fact before propagating a hostInvoke failure", async () => {
-    const root = fixture({ invocation: "always" });
-    const published = [];
-    const kernel = {
-      task: { identity: { taskId: "task-1" } },
-      deriveStageWorkflowRunId: () => "stage:0001:test",
-      publishStageSkillInvocation: (fact) => published.push(fact),
-    };
-    const failure = new Error("host exploded");
-    await expect(dispatchStageSkill({
-      packageRoot: root, stage: "stage", name: "demo", kernel,
-      hostInvoke: () => { throw failure; },
-    }), "AC-16: host failure remains visible after truthful invocation recording").rejects.toBe(failure);
-    expect(published).toHaveLength(1);
-    expect(published[0]).toMatchObject({
-      schema_version: "stage-skill-invocation.v1",
-      status: "unavailable",
-      reason: "host_invoke_failed:Error",
-    });
+    expect(() => resolveStageSkillPackages({ packageRoot: root, stage: "build-code" }))
+      .toThrow(/bundle sha256 mismatch/);
   });
-
-  it("records a blocked doctor diagnostic without blocking stage startup", () => {
-    const root = fixture();
-    fs.appendFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "");
-    const manifestPath = path.join(root, "workflows/stage/skill-deps.yaml");
-    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace("runtime_capabilities: []", "runtime_capabilities:\n  - { id: missing, kind: cli, required_when: always, doctor: [missing-cli], absence_semantics: blocked }"));
-    const prepared = preflightStageSkills({ packageRoot: root, stage: "stage", run: () => ({ status: 127, error: new Error("missing") }) });
-    expect(prepared.payloads.has("demo")).toBe(true);
-    expect(prepared.capabilityResults).toContainEqual(expect.objectContaining({
-      schema_version: "workflowhub-skill-diagnostic.v1",
-      source: "doctor",
-      skill: "missing",
-      status: "blocked",
-    }));
-  });
-
-  it.each(["blocked", "human_required"])("keeps a %s doctor result advisory through host invocation", async (absenceSemantics) => {
-    const root = fixture();
-    const manifestPath = path.join(root, "workflows/stage/skill-deps.yaml");
-    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace(
-      "runtime_capabilities: []",
-      `runtime_capabilities:\n  - { id: missing, kind: cli, required_when: always, doctor: [missing-cli], absence_semantics: ${absenceSemantics} }`,
-    ));
-    const hostCalls = [];
-    const result = await dispatchStageSkill({
-      packageRoot: root,
-      stage: "stage",
-      name: "demo",
-      run: () => ({ status: 127, error: new Error("missing") }),
-      hostInvoke: (payload) => {
-        hostCalls.push(payload);
-        return { ...payload, ...outcome };
-      },
-    });
-    expect(hostCalls).toHaveLength(1);
-    expect(result.doctor_diagnostics).toContainEqual(expect.objectContaining({
-      schema_version: "workflowhub-skill-diagnostic.v1",
-      skill: "missing",
-      status: absenceSemantics,
-      enforcement: "advisory",
-    }));
-  });
-
 });

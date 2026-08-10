@@ -8,34 +8,33 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 已批准 spec 和验收标准。
 - 待审 plan，至少包含 phase、任务、依赖和验证方式。
 - 与 plan 一一对应的 `draft_tasks`；它是独立冻结材料，审查任务拆分、依赖和验收能否真正执行。
-- 仅由 `context_map` 明确选择的模块边界、依赖、接口或测试约定片段；本阶段不得默认附带 diff 或完整当前文件。
+- 可选的 `context_map` / `evidence_map` 优化；提供时仅交付 map 明确选择的模块边界、依赖、接口或测试约定片段。本阶段不得默认附带 diff 或完整当前文件，maps 缺失仍须调用 provider。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
 如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
-但 provider packet 只放 `review_delta`、审查指令和其中列出的变更内容；未变化
-材料已由基线覆盖，不重复放入或审查。
+每次审查都完整交付当前材料；材料变化后重新调用会产生新的不可变 attempt，
+不读取上一轮结果，也不生成增量材料或增量审查范围。
 
-`wh_review.v2` 路由还必须给出 `context_map` 和 `evidence_map`。每张 map 都有
+`context_map` 和 `evidence_map` 是可选优化。提供时每张 map 都必须有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
 `rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。
 `complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
 `not_applicable` 或 `unknown` 条目必须给出受限 `reason_code` 和理由，不能用自由文本
 `not_needed_reason` 绕过锚点；runner 仅交付 complete anchor 的片段，不按目录或文件全文
-扩张材料。
+扩张材料。缺失 maps 不返回 `MATERIAL_INCOMPLETE`，也不阻止 provider 调用。
 
-缺少任一必需材料时，本次 attempt 返回 `unavailable`，并以已认证 attempt action
-留在当前 review flow；它没有语义 verdict，也不能写成“审查通过”。补齐后可在同一
-flow 重跑。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
+缺少任一必需材料时，本次 attempt 返回 `unavailable`，并写入
+`quality/reviews/attempts/*` 作为不可变质量事实；它没有语义 verdict，也不能写成
+“审查通过”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
+`review-instructions.md` 必须说明未提供及原因。
 
 首轮 `revise_required` 是质量事实，不是 stage pass gate。主 agent 应直接修复；普通
-修复不做二审。可选 response ledger 仅写外置审计记录，缺失或不能验证时明确为
-`unverified`，不得声称已修复或通过。已有 `pass` 基线后若新增或修改材料，runner
-生成 `review_delta`，只审查新增内容及其直接影响，不重新审查未变化内容。无法安全
-生成 delta 时才回退一次完整初始审查。若修改方向、验收、接口、schema、状态、安全、
-并发、拓扑、phase 顺序或测试策略，增量审查仍须覆盖受影响的直接关系；第二轮 finding
-同样只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须在本阶段的
-人类确认摘要中显式展示。
+修复不做二审。外置审计记录若存在，缺失或不能验证时明确为
+`unverified`，不得声称已修复或通过。材料变化后的新 attempt 仍完整交付当前材料。
+若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
+新 attempt 的事实只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须
+在本阶段的人类确认摘要中显式展示。
 
 人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把

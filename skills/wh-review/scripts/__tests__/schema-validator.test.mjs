@@ -3,7 +3,6 @@ import { compiledSchemaNames, validateSchema } from "../schema-validator.mjs";
 
 const hash = "a".repeat(64);
 const oid = "b".repeat(40);
-const lineage = { request_id: "schema-test", prompt_hash: hash, round: "initial", prior_attempt_refs: [], prior_runtime_ids: {}, correction_ref: null, dispatch_sequence: 0 };
 
 function expectSchemaError(name, value, pointer) {
   try {
@@ -30,7 +29,6 @@ describe("schema-validator", () => {
       source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
       snapshot_tree: oid,
       material_id: hash,
-      lineage,
       provider_attempts: [],
       terminal_status: "semantic",
       error: null,
@@ -50,7 +48,6 @@ describe("schema-validator", () => {
       snapshot_tree: oid,
       material_id: hash,
       attempt_ref: "reviews/attempts/attempt-1.json",
-      lineage,
       verdict: "unavailable",
       findings: [{ provider: "opencode", severity: "major", path: "a.mjs", issue: "bad", recommendation: "fix" }],
       provider_results: [{ provider: "opencode", output: { verdict: "pass", summary: "ok", findings: [] } }],
@@ -69,7 +66,6 @@ describe("schema-validator", () => {
       snapshot_tree: oid,
       material_id: hash,
       attempt_ref: "reviews/attempts/attempt-1.json",
-      lineage,
       verdict: "pass",
       findings: [],
       provider_results: [{

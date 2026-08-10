@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -13,7 +12,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
-import { createStageContentEvidenceWriter } from "../../runtime/evidence/stage-content-evidence.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
@@ -77,63 +75,6 @@ function fixture(taskId, { prepare = true } = {}) {
     ? ArtifactDir.open(context.candidateWorkspace.worktreeRoot, task)
     : null;
   return { root, repo, storage, home, task, taskPath, context, artifacts };
-}
-
-function publishInteractionAggregate(state, decision) {
-  const writer = createStageContentEvidenceWriter({
-    task: state.task,
-    workspace: state.context.candidateWorkspace,
-    stage: "make-decision",
-    workflowRunId: state.context.workflowRunId,
-  });
-  const talk = (roundNumber) => writer.publish({
-    kind: "interaction-completion.v1",
-    payload: {
-      interaction_type: "talk",
-      rounds: [{
-        round_number: roundNumber,
-        questions: [],
-        candidate_queue: [],
-        questions_already_asked: 0,
-        open_direction_changing_questions: 0,
-        current_total: 0,
-        end_reason: "no direction-changing ambiguity remains",
-        zero_question_reason: "the fixture has no unresolved direction-changing question",
-      }],
-      grill: null,
-    },
-  });
-  const rounds = [talk(1), talk(2), talk(3)];
-  const grill = writer.publish({
-    kind: "interaction-completion.v1",
-    payload: {
-      interaction_type: "grill",
-      rounds: [],
-      grill: {
-        context: { status: "no-change", reason: "fixture has no context contradiction" },
-        adr: { status: "not-needed", reason: "fixture has no architecture decision" },
-        conflicts: { status: "none", reason: "fixture has no conflicts" },
-        file_references: [],
-        no_file_reason: "fixture uses no file references",
-        exit_checks: {
-          context_checked: true,
-          adr_checked: true,
-          conflicts_checked: true,
-          file_references_checked: true,
-        },
-      },
-    },
-  });
-  return writer.publish({
-    kind: "interaction-completion.v1",
-    payload: {
-      interaction_type: "aggregate",
-      rounds: rounds.map(({ ref, hash }) => ({ ref, hash })),
-      grill: { ref: grill.ref, hash: grill.hash },
-      decision_ref: decision.value.decision_ref,
-      decision_hash: decision.value.decision_hash,
-    },
-  });
 }
 
 describe("make-decision current artifact path contract", () => {
@@ -209,8 +150,6 @@ describe("make-decision current artifact path contract", () => {
       snapshotTree: snapshot.tree,
       reviewTrack: "detail",
     });
-    publishInteractionAggregate(state, decision);
-
     await expect(runOfficialStage("make-decision", state.context, {
       receipts: {
         decision: decision.ref,

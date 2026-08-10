@@ -67,10 +67,10 @@ function acceptance(pause, findingId = pause.findings[0].finding_id) {
   return buildRiskAcceptance({
     pause,
     findingId,
-    cardRef: `evidence/review-risk-cards/${findingId}.json`,
+    cardRef: `quality/evidence/risk-cards/${finding.card_hash}.json`,
     cardHash: finding.card_hash,
     selectedOption: "accept-risk",
-    replyRef: `evidence/review-risk-replies/${findingId}.json`,
+    replyRef: `quality/evidence/risk-replies/${"c".repeat(64)}.json`,
     replyHash: "c".repeat(64),
     acceptedAt: "2026-08-02T00:00:00.000Z",
   });
@@ -142,18 +142,18 @@ describe("current quality boundary", () => {
     expect(q2).toMatch(/独立审查事实和人类交接共同证明/);
   });
 
-  it("requires real independent review and fresh test facts before formal completion", () => {
-    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
-      const skill = read(`workflows/${stage}/SKILL.md`);
-      expect(skill, stage).toMatch(/independent.*review|独立.*审查/i);
-      expect(skill, stage).toMatch(/unavailable/i);
-    }
-    const buildCode = read("workflows/build-code/SKILL.md");
+  it("keeps verify-code completion bound to current AC, test, and independent-review facts", () => {
     const verifyCode = read("workflows/verify-code/SKILL.md");
-    expect(buildCode).toMatch(/current\s+test evidence/i);
-    expect(buildCode).toMatch(/stale,\s+missing,\s+or mismatched\s+evidence means publish no completion/i);
-    expect(verifyCode).toMatch(/current complete test suite is green/i);
-    expect(verifyCode).toMatch(/every applicable AC is `pass`/i);
+    const verifySteps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
+    const reviewSteps = verifySteps.filter(({ completion_evidence: evidence }) =>
+      evidence.some(({ kind }) => kind === "review"));
+
+    expect(reviewSteps).toHaveLength(1);
+    expect(reviewSteps[0].observable_result).toMatch(/异源|independent/i);
+    expect(verifyCode).toMatch(/语义反向检查/);
+    expect(verifyCode).toMatch(/每个适用\s*AC|every applicable acceptance criterion/i);
+    expect(verifyCode).toMatch(/unavailable[\s\S]{0,120}(?:绝不是|不能算)[\s\S]{0,30}pass/i);
+    expect(verifyCode).toMatch(/最终测试[\s\S]{0,160}(?:通过|green)/i);
   });
 });
 
@@ -164,10 +164,10 @@ describe("risk acceptance behavior", () => {
     expect(() => buildRiskAcceptance({
       pause,
       findingId: finding.finding_id,
-      cardRef: "evidence/review-risk-cards/demo.json",
+      cardRef: `quality/evidence/risk-cards/${finding.card_hash}.json`,
       cardHash: finding.card_hash,
       selectedOption: "repair",
-      replyRef: "evidence/review-risk-replies/demo.json",
+      replyRef: `quality/evidence/risk-replies/${"c".repeat(64)}.json`,
       replyHash: "c".repeat(64),
       acceptedAt: "2026-08-02T00:00:00.000Z",
     })).toThrow(/exact accept-risk option/i);

@@ -1,25 +1,25 @@
 {
   "schema_version": "workflowhub-complexity-report.v1",
   "source": {
-    "git_head": "bf7a6abfcd3abe788b6956c20422dc624d1423cd",
-    "tracked_tree_sha256": "4ee54f94cb6f844c6075391e2c6b335a2c4f2fd5e8df5e55ec6fd6520c98701b",
-    "tracked_files": 1183,
-    "delivery_files": 1183,
-    "source_files": 305
+    "git_head": "06ff0aff7f1023a6fa34ffb57fdf08ef4f0ecd08",
+    "tracked_tree_sha256": "3841d2091bd62da0ddcfb2cb089f12094317633ca1bb67a023863cdf8712b858",
+    "tracked_files": 1191,
+    "delivery_files": 1191,
+    "source_files": 296
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 154,
+      "actual": 150,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
-      "actual": 514,
+      "actual": 456,
       "files": 15,
       "definition": "non-test files under tests, fixtures, or helpers"
     },
     "persistent_object_families": {
       "source": "runtime/task/task-handle.mjs",
-      "source_sha256": "44ac0f3085926201d12e0982f5d464f06d985b79e20a7f6c78211358466cf01b",
+      "source_sha256": "c5166ff44d5ea656e2acdefda15f4aee348430854f042a3ecf59de4b5ecb1932",
       "names": [
         "evidence",
         "publications",
@@ -57,17 +57,17 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 22035,
+      "actual": 20292,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 12035,
+      "delta_from_target": 10292,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 31027,
+      "actual": 27044,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 19027,
+      "delta_from_target": 15044,
       "within_limit": false
     },
     "public_runner_behaviors": {
@@ -78,10 +78,10 @@
       "within_limit": true
     },
     "schemas": {
-      "actual": 41,
+      "actual": 38,
       "target": 8,
       "limit": 10,
-      "delta_from_target": 33,
+      "delta_from_target": 30,
       "within_limit": false
     },
     "persistent_object_families": {
@@ -167,20 +167,20 @@
       "lines": 2098
     },
     {
-      "path": "skills/wh-review/scripts/review-runner.mjs",
-      "lines": 1530
-    },
-    {
       "path": "runtime/stage/stage-handlers.mjs",
-      "lines": 1458
-    },
-    {
-      "path": "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
-      "lines": 1431
+      "lines": 1543
     },
     {
       "path": "tests/final-cutover-guards.red.test.mjs",
-      "lines": 1386
+      "lines": 1336
+    },
+    {
+      "path": "skills/wh-review/scripts/review-materials.mjs",
+      "lines": 1162
+    },
+    {
+      "path": "core/task-close.mjs",
+      "lines": 1005
     }
   ],
   "follow_up": [

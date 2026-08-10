@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveLocalSkill, resolveSkillDispatch, validateReviewBundleProjection, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { resolveLocalSkill, resolveSkillPackage, validateReviewBundleProjection, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -27,7 +27,7 @@ describe("local skill resolver", () => {
     const root = fixture();
     fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
     fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
-    expect(resolveSkillDispatch({
+    expect(resolveSkillPackage({
       packageRoot: root,
       manifestPath: "workflows/stage/skill-deps.yaml",
       dependency: { name: "demo", path: "skills/demo/SKILL.md", bundle: "skills/demo/skill-bundle.json" },
@@ -48,7 +48,7 @@ describe("local skill resolver", () => {
     fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
     let failure;
     try {
-      resolveSkillDispatch({
+      resolveSkillPackage({
         packageRoot: root,
         manifestPath: "workflows/stage/skill-deps.yaml",
         dependency: { name: "demo", path: "skills/missing/SKILL.md", bundle: "skills/demo/skill-bundle.json" },

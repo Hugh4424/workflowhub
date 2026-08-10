@@ -41,7 +41,7 @@ describe("runner release", () => {
     expect(result.source_tree_unchanged).toBe(true);
     expect(result.stage_skill_smoke).toMatchObject({
       status: "passed",
-      mode: "no_provider_preflight",
+      mode: "no_provider_package_resolution",
       release_inputs_unchanged: true,
     });
     expect(result.stage_skill_smoke.stages.map(({ stage }) => stage)).toEqual([

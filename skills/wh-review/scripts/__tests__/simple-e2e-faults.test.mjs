@@ -11,7 +11,15 @@ const source = { targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead
 const pass = JSON.stringify({ verdict: "pass", summary: "complete", findings: [] });
 const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
 function bundle(root) { return { bundleRoot: root, attachmentRoot: root, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }; }
-function client(output = pass) { return { run: async ({ provider }) => ({ runtimeId: "runtime", provider: { provider, status: "completed", session_id: "session", output, error: null } }) }; }
+function providerResult(provider, { output = pass, status = "completed", error = null } = {}) {
+  return {
+    provider, status, session_id: status === "completed" ? "session" : null, output, error,
+    execution: { adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,
+      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
+      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime" },
+  };
+}
+function client(output = pass) { return { runGroup: async ({ providers }) => ({ runtimeId: "runtime", providers: providers.map((provider) => providerResult(provider, { output })) }) }; }
 const temporary=[];
 function fixture(prefix) { const root=realpathSync(mkdtempSync(join(tmpdir(),prefix))); temporary.push(root); const attachmentRoot=join(root,"attachments"); mkdirSync(attachmentRoot); const task=createTask({storageRoot:root,taskPath:join(root,"Projects","Demo","tasks","task"),manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"task",created_at:new Date().toISOString(),target_repo_root:join(root,"repo"),issue_ids:[],inputs:{}}}); return {root,attachmentRoot,task}; }
 afterEach(()=>{while(temporary.length)rmSync(temporary.pop(),{recursive:true,force:true});});
@@ -30,8 +38,8 @@ describe("simple runner fake E2E and recovery", () => {
   it("retains an immutable unavailable attempt and permits a later formal retry", async () => {
     const { attachmentRoot, task } = fixture("wh-review-recover-");
     const calls = [];
-    const failed = { run: async () => { calls.push(true); const error = new Error("no auth"); error.code = "AUTH"; throw error; } };
-    const recovered = { run: async ({ provider }) => { calls.push(true); return { runtimeId: "runtime-2", provider: { provider, status: "completed", session_id: "session", output: pass, error: null } }; } };
+    const failed = { runGroup: async () => { calls.push(true); const error = new Error("no auth"); error.code = "AUTH"; throw error; } };
+    const recovered = { runGroup: async ({ providers }) => { calls.push(true); return { runtimeId: "runtime-2", providers: providers.map((provider) => providerResult(provider)) }; } };
     const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
     const first = await runReviewFixture({ ...input, providerClient: failed });
     const second = await runReviewFixture({ ...input, providerClient: recovered });
@@ -43,7 +51,7 @@ describe("simple runner fake E2E and recovery", () => {
 
   it("keeps protocol mismatch and invalid format non-semantic", async () => {
     const { attachmentRoot, task } = fixture("wh-review-fault-");
-    const protocol = { run: async () => { const error = new Error("bad protocol"); error.code = "PROTOCOL_INCOMPATIBLE"; throw error; } };
+    const protocol = { runGroup: async () => { const error = new Error("bad protocol"); error.code = "PROTOCOL_INCOMPATIBLE"; throw error; } };
     const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
     expect((await runReviewFixture({ ...input, providerClient: protocol })).resultRef).toBe(null);
     expect((await runReviewFixture({ ...input, providerClient: client("not json") })).resultRef).toBe(null);

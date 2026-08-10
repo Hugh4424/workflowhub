@@ -13,13 +13,13 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
 如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
-但 provider packet 只放 `review_delta`、审查指令和其中列出的变更内容；未变化
-材料已由基线覆盖，不重复放入或审查。
+每次审查都完整交付当前材料；材料变化后重新调用会产生新的不可变 attempt，
+不读取上一轮结果，也不生成增量材料或增量审查范围。
 
-缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 的已认证
-provider-attempt action 留在 review flow 中；它没有语义 verdict，也不能写成“审查通过”。
-补齐后可在同一 track 重新调用。direction/detail flow 必须绑定当前
-make-decision run；direction 只有在 Round 2 完成后才能记录，detail 只有在
+缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 下
+`quality/reviews/attempts/*` 的不可变质量事实保留；它没有语义 verdict，也不能写成
+“审查通过”。补齐后可在同一 track 重新调用，产生新的质量事实。direction/detail
+结果必须绑定当前材料与冻结快照；direction 只有在 Round 2 完成后才能记录，detail 只有在
 Round 3、完整 grill 和 decision draft 完成后才能记录，不能互相替代或跳过中间步骤。
 
 ## direction
@@ -46,7 +46,7 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 - 原始用户需求。
 - 已批准方向，包括可读 decision log 与 grill 文档判断。
 - 待审规格或验收草案。
-- 仅由 `context_map` 明确选择的、与方向落地直接相关的既有约束片段；不得默认附带 diff 或完整当前文件。
+- 可选的 `context_map` / `evidence_map` 优化：仅交付 map 明确选择、与方向落地直接相关的片段；不得默认附带 diff 或完整当前文件。未提供 maps 仍须调用 provider。
 
 审查重点：
 
@@ -63,12 +63,13 @@ detail 必须加载 `simplicity-guard` 只读 lens，逐项执行 P0-P3：优先
 direction 是不含候选方案的盲审，禁止加载 `simplicity-guard`，避免从不存在的
 方案中推断或裁剪内容。
 
-`wh_review.v2` 的 detail 还必须提供 `context_map` 和 `evidence_map`。每张 map 的
-map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；每个 entry
-有 id、subject、rationale、disposition。`complete` entry 必须使用可验证 anchors
-（id、snapshot path、行区间、role、reason）；`not_applicable` 或 `unknown` entry 必须
-有受限 reason code 和理由，不能用自由文本 `not_needed_reason` 冒充完整判断。map-level
-`unknown` 还必须说明 `unknown_reason`。runner 只交付 complete anchors 对应的直接片段。
+`context_map` 和 `evidence_map` 只是可选优化。提供时，map-level state 必须是
+`complete|unknown`，并包含简短 summary 和逐项 entries；每个 entry 包含 id、subject、
+rationale、disposition。`complete` entry 必须使用可验证 anchors（id、snapshot path、
+行区间、role、reason）；`not_applicable` 或 `unknown` entry 必须有受限 reason code 和
+理由，不能用自由文本 `not_needed_reason` 冒充完整判断。map-level `unknown` 还必须说明
+`unknown_reason`。runner 只交付 complete anchors 对应的直接片段；maps 缺失不返回
+`MATERIAL_INCOMPLETE`，也不阻止 provider 调用。
 
 ## 输出
 
@@ -77,6 +78,5 @@ map-level state 是 `complete|unknown`，有简短 summary 和逐项 entries；�
 `pass` 和 `revise_required` 都只是异源 provider 的质量事实，不是 WorkflowHub
 stage 的通过/不通过。make-decision 使用 `single_round`：初次语义结果后不再调用
 provider 追求 `pass`；finding 处理和最终快照变化属于业务材料变更。已有 `pass`
-基线后若只新增或修改当前材料，runner 生成 `review_delta`，只审查新增内容及其
-直接影响，不重新审查未变化内容。无法安全生成 delta 时才回退一次完整初始审查；
-旧 verdict 不被改写，也不生成 resolution action。
+材料变化后的新 attempt 仍完整交付当前材料；旧 verdict 不被改写，也不生成
+resolution action。
