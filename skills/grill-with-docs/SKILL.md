@@ -50,12 +50,30 @@ decision-log 使用：
 4. 与现有术语或 ADR 的冲突，以及处理结果；
 5. 四项退出检查逐项的 `pass` 或未解决结果及事实依据。
 
-结束记录同时形成 `interaction-completion.v1` 内容 payload：保留候选队列状态、问题
-序号与动态总数、`card_hash` 和格式检查、ask/reply/re-rank 顺序、宿主提供的可见消息
-ref/hash、选中项，以及上述 CONTEXT、ADR、冲突、实际文件引用和四项退出事实。调用方
-把 payload 交给受控 writer 发布；本技能不得填写 task/stage/run/producer/ref/hash/tree
-等身份字段。长期记录不得保存完整问题卡原文或 secret、token、password、credential、
-cookie 等秘密。
+结束时只向父 Stage Agent 返回最小 `grill_summary`：
+
+```yaml
+grill_summary:
+  status: completed
+  direction_changing_challenges_resolved: true | false
+  context: { status: changed | no-change, reason: "...", file_references: [] }
+  adr: { status: created | not-needed, reason: "...", file_references: [] }
+  conflicts: { status: resolved | none, disposition: "..." }
+  exit_checks:
+    external_interfaces: pass | unresolved
+    canonical_names: pass | unresolved
+    failure_semantics: pass | unresolved
+    scope_boundaries: pass | unresolved
+  decision_updates:
+    - 只保留应写进 decision-log.md 的结论、风险、冲突处置或开放问题
+```
+
+候选队列、问题卡、ask/reply/re-rank、完整问答和 Grill 历史只在当前会话内使用，不形成
+run、revision、latest、ledger 或独立持久记录。本技能不填写 task、stage、snapshot、
+decision ref/hash、文件路径或内容 hash，也不调用受控 writer。父 Stage Agent 只把
+`decision_updates` 和必要的 CONTEXT/ADR 结果写进 `decision-log.md`；当前
+`workflowhub-interaction-aggregate.v1` 不保存 Grill 历史，Grill 事实也不向下游重复传递。
+不得返回或持久化完整问题卡原文或 secret、token、password、credential、cookie 等秘密。
 
 `CONTEXT.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
 真时才创建。即使没有文件变化，也必须记录 `no change` / `not needed` 及理由；不能只写

@@ -17,33 +17,31 @@ const validCycle = () => ({
 });
 
 describe("verify-code bounded architect acceptance", () => {
-  it("declares the fixed four-step order and one provider skill", () => {
+  it("declares one independent review between two bounded repair opportunities", () => {
     const deps = yaml.load(read("workflows/verify-code/skill-deps.yaml"));
     expect(deps.skills.map(({ name }) => name)).toEqual(["wh-review"]);
     const steps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
-    expect(steps.map(({ step_slug }) => step_slug).slice(0, 7)).toEqual([
-      "read-current-materials-and-code",
-      "architect-acceptance-review",
-      "main-agent-repair-batch-1",
-      "run-declared-check-before-independent-review",
-      "run-one-independent-architecture-review",
-      "main-agent-repair-batch-2",
-      "run-final-check-and-handoff",
-    ]);
-    expect(steps.filter(({ step_slug }) => step_slug.includes("independent-review"))).toHaveLength(1);
+    const evidenceKind = (step, kind) => step.completion_evidence.some((entry) => entry.kind === kind);
+    const reviewIndexes = steps.flatMap((step, index) => evidenceKind(step, "review") ? [index] : []);
+    const repairIndexes = steps.flatMap((step, index) => evidenceKind(step, "repair") ? [index] : []);
+
+    expect(reviewIndexes).toHaveLength(1);
+    expect(repairIndexes).toHaveLength(2);
+    expect(repairIndexes[0]).toBeLessThan(reviewIndexes[0]);
+    expect(reviewIndexes[0]).toBeLessThan(repairIndexes[1]);
+    expect(steps[reviewIndexes[0]].observable_result).toMatch(/异源|independent/i);
   });
 
-  it("keeps the external packet short and does not require replay maps", () => {
+  it("keeps the independent-review packet focused on current acceptance facts", () => {
     const verify = JSON.parse(read("runtime/review/stage-materials.json")).stages["verify-code"];
-    expect(verify.required).toEqual([
+    expect(verify.required).toEqual(expect.arrayContaining([
       "acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "review_instructions",
-    ]);
+    ]));
     expect(verify.v2_required_maps).toEqual([]);
-    expect(read("skills/wh-review/contracts/verify-code.md")).toMatch(/不是第二套证据审计/);
-    expect(read("skills/wh-review/contracts/verify-code.md")).toMatch(/不重复调用 provider/);
-    expect(read("skills/wh-review/SKILL.md")).toMatch(/one bounded post-repair architect review/);
-    expect(read("skills/wh-review/SKILL.md")).not.toMatch(/verify-code.*acceptance_evidence.*context_map.*evidence_map/s);
-    expect(read("skills/wh-review/scripts/review-materials.mjs")).toMatch(/one bounded post-repair architect review/);
+    const contract = read("skills/wh-review/contracts/verify-code.md");
+    expect(contract).toMatch(/异源架构验收|independent.*architect/i);
+    expect(contract).toMatch(/(?:只调用[\s\S]{0,50}wh-review[\s\S]{0,30}一次)|(?:wh-review[\s\S]{0,50}once)/i);
+    expect(contract).toMatch(/unavailable[\s\S]{0,120}(?:incomplete|缺事实)/i);
   });
 
   it("accepts one architect review, one independent review and two repair slots", () => {
@@ -60,11 +58,11 @@ describe("verify-code bounded architect acceptance", () => {
     expect(() => validateVerifyReviewCycle({ ...unavailable, conclusion: "failed" })).toThrow(/unavailable/i);
   });
 
-  it("keeps requirement replay optional and forbids a review loop", () => {
+  it("requires semantic reverse checking and forbids a review loop", () => {
     const skill = read("workflows/verify-code/SKILL.md");
-    expect(skill).toMatch(/requirement replay/);
-    expect(skill).toMatch(/可选审计事实/);
-    expect(skill).toMatch(/不因 provider verdict.*反复循环/);
-    expect(skill).toMatch(/证据缺失不能算 pass/);
+    expect(skill).toMatch(/语义反向检查/);
+    expect(skill).toMatch(/每个适用\s*AC|every applicable acceptance criterion/i);
+    expect(skill).toMatch(/(?:不再开启新的\s*review\s*轮)|(?:不因[\s\S]{0,80}verdict[\s\S]{0,80}反复循环)/i);
+    expect(skill).toMatch(/证据缺失不能算\s*`?pass`?/i);
   });
 });

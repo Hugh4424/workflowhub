@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-export { createPublication, publishImmutable } from "../stage/publication.mjs";
 import { execFileSync } from "node:child_process";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
@@ -177,7 +176,7 @@ function currentImplementationReceipt({ task, workspace, version }) {
   const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
   const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
   const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
-  const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
+  const diffHash = sha256(diff), diffRef = `quality/evidence/implementation/${diffHash}.diff`;
   publishIdempotently({ task, write: createTaskKernel(task).publishCanonicalRecord, ref: diffRef, raw: diff, label: "implementation diff evidence" });
   return {
     value: { schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "build-code", producer: { stage: "build-code", component: "implementation", version }, changed, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash },
@@ -192,7 +191,7 @@ export function captureWorkspaceSnapshot(workspace) {
 }
 
 /** Fixed registry for official non-test component receipts. */
-export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf, targetRef } = {}) {
+export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf } = {}) {
   const safeTask = assertTaskHandle(task);
   const registration = registrationFor(safeTask, component);
   if (!registration || registration.stage !== stage) throw new Error("component is not allowlisted for this stage");
@@ -362,47 +361,8 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   }
   const raw = canonicalJson(value);
   if (revisionOf !== undefined) throw new Error("REPLACEMENT_RETIRED: official records are create-only; publish a new task material instead");
-  if (targetRef !== undefined) {
-    if (typeof targetRef !== "string" || !new RegExp(`^quality/evidence/${component}/[a-f0-9]{64}\\.json$`).test(targetRef)) {
-      throw new TypeError("current official component receipt ref must be content-addressed under its component namespace");
-    }
-    publishIdempotently({ task: safeTask, write, ref: targetRef, raw, label: "current official component receipt" });
-    return Object.freeze({ ref: targetRef, sha256: sha256(raw), value: Object.freeze(value), revision: false, current: true });
-  }
   publishIdempotently({ task: safeTask, write, ref: registration.ref, raw, label: "official component receipt" });
   return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
-}
-
-/**
- * Capture a new immutable implementation fact for a repaired current snapshot.
- * This never overwrites the fixed historical component receipt and does not
- * create a replacement/latest control plane; integration review consumes the
- * returned content-addressed fact explicitly.
- */
-export function writeCurrentImplementationReceipt({ task, workspace, version = "1.0.0" } = {}) {
-  const safeTask = assertTaskHandle(task);
-  const value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
-  const raw = canonicalJson(value);
-  const ref = `quality/evidence/implementation/${sha256(raw)}.json`;
-  const write = createTaskKernel(safeTask).publishCanonicalRecord;
-  publishIdempotently({ task: safeTask, write, ref, raw, label: "current implementation receipt" });
-  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
-}
-
-/**
- * Publish a current material/evidence/verification fact without replacing the
- * fixed historical receipt. The explicit content-addressed ref is the only
- * current binding; no latest/replacement selector is introduced.
- */
-export function writeCurrentOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0" } = {}) {
-  const safeTask = assertTaskHandle(task);
-  const registration = registrationFor(safeTask, component);
-  if (!registration || registration.stage !== stage || component === "implementation") {
-    throw new Error("current official component is not allowlisted for this stage");
-  }
-  const inputHash = sha256(canonicalJson({ stage, component, payload }));
-  const targetRef = `quality/evidence/${component}/${inputHash}.json`;
-  return writeOfficialComponentReceipt({ task: safeTask, workspace, stage, component, payload, version, targetRef });
 }
 
 export { validateAcceptanceEvidence };

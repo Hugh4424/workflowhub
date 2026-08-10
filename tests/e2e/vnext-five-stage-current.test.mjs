@@ -10,8 +10,6 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { createStageContentEvidenceWriter, readLatestStageContentEvidence } from "../../runtime/evidence/stage-content-evidence.mjs";
-import { buildDecisionCoverageAudit } from "../../runtime/stage/stage-content-contracts.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
@@ -19,18 +17,9 @@ const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const reviewLineage = (requestId) => ({
-  request_id: requestId,
-  prompt_hash: "b".repeat(64),
-  round: "initial",
-  prior_attempt_refs: [],
-  prior_runtime_ids: {},
-  correction_ref: null,
-  dispatch_sequence: 0,
-});
 function currentRef(value) {
   return typeof value === "string"
-    ? value.replace(/^receipts\/tests\//, "quality/tests/").replace(/^evidence\/test-output\//, "quality/tests\/output\/").replace(/^receipts\/(decision|spec|plan|tasks|implementation|verification)\.json$/, "quality/evidence/$1.json").replace(/^reviews\//, "quality/reviews/").replace(/^evidence\/confirmations\//, "quality/confirmations/")
+    ? value.replace(/^receipts\/tests\//, "quality/tests/").replace(/^evidence\/test-output\//, "quality/tests\/output\/").replace(/^receipts\/(decision|spec|plan|tasks|implementation|verification)\.json$/, "quality/evidence/$1.json").replace(/^reviews\//, "quality/reviews/").replace(/^evidence\/confirmations\//, "quality/confirmations/").replace(/^evidence\//, "quality/evidence/")
     : value;
 }
 function currentValue(value) {
@@ -176,6 +165,8 @@ F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Q1 Q2 Q3 S1 S2 S3 S4 S5 S6 S7 S8.
 ## Complexity Trade-offs
 Use one fixture task and no extra runtime path.
 
+Deletion proof: N/A — no deletion is part of this fixture.
+
 ## Phase 1
 ### Goal
 Cover one public stage route.
@@ -203,12 +194,12 @@ Stop on a route or snapshot mismatch.
 - **gate_cmd**：\`npx vitest run tests/e2e/vnext-five-stage-current.test.mjs\`
 - **expected_exit**：${expectedExit}
 - **oracle**：ORACLE-PUBLIC-ROUTE — the stage publishes current quality facts.
-- **evidence_path**：evidence/public-${id}.json
+- **evidence_path**：quality/evidence/public-${id}.json
 - **verification_role**：${role}
 - **paired_task**：${role === "RED" ? "T002" : "T001"}
 - **actual_changes**：public route fixture implementation
 - **executed_commands**：public stage runtime
-- **evidence_refs**：\`[{"ref":"evidence/public-task-proof.json","sha256":"${taskProofHash}"}]\`
+- **evidence_refs**：\`[{"ref":"quality/evidence/public-task-proof.json","sha256":"${taskProofHash}"}]\`
 - **covered_ac**：AC-1
 - **review_fact**：public route review fact
 - **completed_at**：2026-08-04T00:00:01.000Z
@@ -216,12 +207,14 @@ Stop on a route or snapshot mismatch.
 ##### 执行状态填写区（唯一完成权威）
 - [x] **任务完成**
 - **status**：\`completed\`
+- **状态**：\`completed\`
+- **执行事实**：public route command executed; expected exit observed; evidence and review recorded
 `;
   return { plan, tasks: `# Tasks\n\n${task("T001", "RED", "none", 1)}\n${task("T002", "GREEN", "T001", 0)}` };
 }
 
 function publicAcceptanceEvidence(state, snapshot, proof) {
-  const leaf = record(state, "evidence/public-AC-1.json", {
+  const leaf = record(state, "quality/evidence/public-AC-1.json", {
     schema_version: "acceptance-evidence.v1",
     acceptance_criterion_id: "AC-1", result: "pass",
     refs: [{ ref: proof.ref, sha256: proof.sha256 }], snapshot_tree: snapshot.tree,
@@ -254,7 +247,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
     refs.push(record(state, `receipts/tests/${stage}-${testExit}${suffix}.json`, {
       schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage,
       producer: { stage, component: "current-five-stage-test", version: "1.0.0" },
-      command: testExit === 0 ? "true" : "false", command_hash: "a".repeat(64), exit_code: testExit,
+      command: testExit === 0 ? "true" : "false", command_hash: sha256(testExit === 0 ? "true" : "false"), exit_code: testExit,
       material_revision: materialRevision, source_digest: snapshot.source_digest,
       snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
       started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",
@@ -267,7 +260,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
         version: "wh-review-attempt.v1", attempt_id: `${stage}-unavailable${suffix}`,
         task_id: state.task.identity.taskId, stage, review_track: stage === "make-decision" ? "direction" : null,
         subject_kind: "worktree", phase_id: null, review_scope: stage === "build-code" ? "integration" : null, snapshot_tree: snapshot.tree,
-        material_id: "b".repeat(64), lineage: reviewLineage(`${stage}-unavailable-request${suffix}`), provider_attempts: [], terminal_status: "unavailable",
+        material_id: "b".repeat(64), provider_attempts: [], terminal_status: "unavailable",
         error: { code: "PROVIDER_UNAVAILABLE", message: "fixture provider unavailable" },
       }
     : {
@@ -275,7 +268,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
         review_track: stage === "make-decision" ? "direction" : null, subject_kind: "worktree",
         phase_id: null, review_scope: stage === "build-code" ? "integration" : null,
         source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
-        snapshot_tree: snapshot.tree, material_id: "b".repeat(64), attempt_ref: `reviews/attempts/${stage}-pass${suffix}/attempt.json`, lineage: reviewLineage(`${stage}-pass-request${suffix}`),
+        snapshot_tree: snapshot.tree, material_id: "b".repeat(64), attempt_ref: `reviews/attempts/${stage}-pass${suffix}/attempt.json`,
         provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "current fixture review", findings: [] } }],
         verdict: review === "pass" ? "pass" : "invalid", findings: [],
       };
@@ -287,81 +280,79 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
       confirmed_at: "2026-08-04T00:00:01.000Z",
     }));
   }
-  return { evidence_refs: refs };
+  const acceptanceSubjects = {
+    "make-decision": ["scope", "non_goals", "risks", "talk_clarify"],
+    "build-spec": ["zero_major_ambiguities"],
+    "build-plan": ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks"],
+    "build-code": ["acceptance_criteria"],
+    "verify-code": ["acceptance_criteria", "exceptions"],
+  }[stage];
+  return {
+    facts: {
+      completion_subjects: Object.fromEntries(acceptanceSubjects.map((subject) => [subject, {
+        status: "passed", evidence_refs: [], detail: `fixture ${subject}`,
+      }])),
+    },
+    evidence_refs: refs,
+    completion: { facts: { business_facts: { acceptance_criteria: "covered" } } },
+  };
 }
 
 describe("current vNext five-stage runtime", () => {
-  it("runs make-decision through the public route without an audit receipt", () => {
-    const state = fixture("public-make-decision-no-audit");
-    const writer = createStageContentEvidenceWriter({
-      task: state.task,
-      workspace: state.candidate,
-      stage: "make-decision",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+  it("does not let a passing direction review hide a failed detail review", async () => {
+    const state = fixture("make-decision-review-subjects");
+    const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    const direction = writeFormalReviewFixture({
+      task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction",
     });
-    const decisionLog = "# public decision\n";
+    const detail = writeFormalReviewFixture({
+      task: state.task, stage: "make-decision", snapshotTree: snapshot.tree,
+      reviewTrack: "detail", verdict: "revise_required",
+    });
+    const reviewFact = (ref) => ({
+      result_ref: ref, result_hash: sha256(state.task.readRecord(ref)), snapshot_tree: snapshot.tree,
+    });
+    const result = await runStage("make-decision", context("make-decision", state), async () => {
+      const currentEvidence = evidence(state, "make-decision");
+      return {
+        ...currentEvidence,
+        facts: {
+          ...currentEvidence.facts,
+          reviews: { direction: reviewFact(direction.resultRef), detail: reviewFact(detail.resultRef) },
+        },
+        evidence_refs: [
+          ...currentEvidence.evidence_refs,
+          { ref: direction.resultRef, sha256: reviewFact(direction.resultRef).result_hash },
+          { ref: detail.resultRef, sha256: reviewFact(detail.resultRef).result_hash },
+        ],
+      };
+    });
+    expect(result.completion.missing).toContain("detail_review");
+    expect(result.completion.missing).not.toContain("direction_review");
+  });
+
+  it("completes make-decision without coverage audit while accepting immutable Talk/Clarify evidence", () => {
+    const state = fixture("public-make-decision-no-audit");
+    const decisionLog = "# public decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
     state.artifacts.writeAtomic("decision-log.md", decisionLog);
     const decision = writeOfficialComponentReceipt({
       task: state.task, stage: "make-decision", component: "decision",
       payload: { decision_log: decisionLog, contract_refs: [] },
     });
-    const talk = (roundNumber) => writer.publish({
-      kind: "interaction-completion.v1",
-      payload: {
-        interaction_type: "talk",
-        rounds: [{
-          round_number: roundNumber, questions: [], candidate_queue: [],
-          questions_already_asked: 0, open_direction_changing_questions: 0,
-          current_total: 0, end_reason: "no direction-changing ambiguity remains",
-          zero_question_reason: "the current requirement already fixes this direction",
-        }],
-        grill: null,
-      },
-    });
-    const rounds = [talk(1), talk(2), talk(3)];
-    const grill = writer.publish({
-      kind: "interaction-completion.v1",
-      payload: {
-        interaction_type: "grill", rounds: [],
-        grill: {
-          context: { status: "no-change", reason: "fixture has no context contradiction" },
-          adr: { status: "not-needed", reason: "fixture has no architecture decision" },
-          conflicts: { status: "none", reason: "fixture has no conflicts" },
-          file_references: [], no_file_reason: "fixture uses no file references",
-          exit_checks: { context_checked: true, adr_checked: true, conflicts_checked: true, file_references_checked: true },
-        },
-      },
-    });
-    const aggregate = writer.publish({
-      kind: "interaction-completion.v1",
-      payload: {
-        interaction_type: "aggregate",
-        rounds: rounds.map(({ ref, hash }) => ({ ref, hash })),
-        grill: { ref: grill.ref, hash: grill.hash },
-        decision_ref: decision.value.decision_ref,
-        decision_hash: decision.value.decision_hash,
-      },
-    });
-    expect(aggregate.ref).toMatch(/^evidence\/stage-content\//);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-    const testReceipts = {};
-    for (const name of ["research", "grill"]) {
-      const output = "pass\n";
-      const outputRef = currentRef(`evidence/test-output/make-decision-${name}.txt`);
-      const receiptRef = `quality/tests/${name}.json`;
-      state.kernel.publishCanonicalRecord(outputRef, output);
-      const value = {
-        schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage: "make-decision",
-        producer: { stage: "make-decision", component: `make-decision-${name}`, version: "1.0.0" },
-        command: "true", command_hash: sha256("true"), exit_code: 0,
-        snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
-        started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",
-        output_ref: outputRef, output_hash: sha256(output),
-      };
-      const raw = `${JSON.stringify(value, null, 2)}\n`;
-      state.kernel.publishCanonicalRecord(receiptRef, raw);
-      testReceipts[name] = { ref: receiptRef, hash: sha256(raw) };
-    }
+    const interactionValue = {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: state.task.identity.taskId,
+      stage: "make-decision",
+      snapshot_tree: snapshot.tree,
+      talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true },
+      clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "no_direction_changing_ambiguity" },
+      decision_ref: decision.value.decision_ref,
+      decision_hash: decision.value.decision_hash,
+    };
+    const interactionRaw = `${JSON.stringify(interactionValue, null, 2)}\n`;
+    const interactionRef = `quality/evidence/interactions/${sha256(interactionRaw)}.json`;
+    state.kernel.publishCanonicalRecord(interactionRef, interactionRaw);
     const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
@@ -378,8 +369,8 @@ describe("current vNext five-stage runtime", () => {
     expect(confirmation.quality_fact_ref).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
     const input = join(state.root, "make-decision-input.json");
     writeFileSync(input, `${JSON.stringify({ receipts: {
-      decision: decision.ref, direction_review: direction.resultRef, detail_review: detail.resultRef,
-      research: testReceipts.research.ref, grill: testReceipts.grill.ref, confirmation: confirmation.ref,
+      decision: decision.ref, interaction: interactionRef, direction_review: direction.resultRef, detail_review: detail.resultRef,
+      confirmation: confirmation.ref,
     } })}\n`);
     const result = spawnSync(process.execPath, [
       runtime, "run", "--action=execute", "--stage=make-decision", "--project=WorkflowHub",
@@ -392,14 +383,22 @@ describe("current vNext five-stage runtime", () => {
     expect(result.status, result.stderr).toBe(0);
     const publicRun = JSON.parse(result.stdout);
     const publicFacts = publicRun.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(publicFacts.find((fact) => fact.subject === "research")?.evidence[0]?.ref).toBe(testReceipts.research.ref);
-    expect(publicFacts.find((fact) => fact.subject === "grill")?.evidence[0]?.ref).toBe(testReceipts.grill.ref);
-    expect(publicRun, `${result.stdout}\n${result.stderr}\n${JSON.stringify(publicFacts)}`).toMatchObject({ stage: "make-decision", status: "completed" });
+    expect(publicFacts.some((fact) => fact.subject === "research")).toBe(false);
+    expect(publicFacts.some((fact) => fact.subject === "grill")).toBe(false);
+    const talkClarifyFact = publicFacts.find((fact) => fact.subject === "talk_clarify");
+    expect(talkClarifyFact).toMatchObject({ status: "passed" });
+    const acceptance = JSON.parse(state.task.readRecord(talkClarifyFact.evidence[0].ref));
+    const subjectEvidence = JSON.parse(state.task.readRecord(acceptance.refs[0].ref));
+    expect(subjectEvidence.subject_fact.evidence_refs).toEqual([{ ref: interactionRef, sha256: sha256(interactionRaw) }]);
+    expect(publicRun, `${result.stdout}\n${result.stderr}\n${JSON.stringify(publicFacts)}`).toMatchObject({ stage: "make-decision", status: "completed", work_status: "ready" });
     expect(() => state.task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT/);
-    expect(publicStatus(state, "make-decision")).toMatchObject({
-      status: "completed",
+    const status = publicStatus(state, "make-decision");
+    expect(status).toMatchObject({
+      work_status: "ready",
+      quality_status: "completed",
       quality_fact_refs: expect.arrayContaining(publicRun.quality_fact_refs),
     });
+    expect(status).not.toHaveProperty("status");
   });
 
   it("records a rejected public confirmation as a failed current fact", () => {
@@ -417,11 +416,13 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = JSON.parse(result.stdout);
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ kind: "confirmation", subject: "human_confirmation", status: "failed" });
-    expect(publicStatus(state, "make-decision")).toMatchObject({
-      status: "completed",
+    const status = publicStatus(state, "make-decision");
+    expect(status).toMatchObject({
+      work_status: "ready",
       quality_status: "in_progress",
       quality_fact_refs: expect.arrayContaining([confirmation.quality_fact_ref]),
     });
+    expect(status).not.toHaveProperty("status");
   });
 
   it("confirms make-decision before future-stage materials exist", () => {
@@ -429,12 +430,14 @@ describe("current vNext five-stage runtime", () => {
     const confirmation = publicConfirm(state, "make-decision");
     const fact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
     expect(fact).toMatchObject({ stage: "make-decision", subject: "human_confirmation", status: "passed" });
-    expect(publicStatus(state, "make-decision")).toMatchObject({
-      status: "completed",
+    const status = publicStatus(state, "make-decision");
+    expect(status).toMatchObject({
+      work_status: "ready",
       quality_status: "in_progress",
       quality_fact_refs: expect.arrayContaining([confirmation.quality_fact_ref]),
       quality_predicates: { human_confirmation: { status: "satisfied" } },
     });
+    expect(status).not.toHaveProperty("status");
   });
 
   it("fails loudly on non-ENOENT current-material reads and does not create future materials", async () => {
@@ -467,70 +470,6 @@ describe("current vNext five-stage runtime", () => {
     expect(() => missing.artifacts.read("tasks.md")).toThrow(/ENOENT/);
   });
 
-  it("revalidates grill with only current make-decision material", () => {
-    const state = fixture("public-grill-revalidation-without-future-materials", { materialFiles: ["decision-log.md"] });
-    const writer = createStageContentEvidenceWriter({
-      task: state.task,
-      workspace: state.candidate,
-      stage: "make-decision",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
-    });
-    const grill = {
-      context: { status: "no-change", reason: "fixture has no context contradiction" },
-      adr: { status: "not-needed", reason: "fixture has no architecture decision" },
-      conflicts: { status: "none", reason: "fixture has no conflicts" },
-      file_references: [],
-      no_file_reason: "fixture uses no file references",
-      exit_checks: { context_checked: true, adr_checked: true, conflicts_checked: true, file_references_checked: true },
-    };
-    const initial = writer.publish({ kind: "interaction-completion.v1", payload: {
-      interaction_type: "grill", rounds: [], grill,
-    } });
-    state.artifacts.writeAtomic("decision-log.md", "# decision revision\n");
-    const revalidated = writer.publish({ kind: "interaction-completion.v1", payload: {
-      interaction_type: "grill-revalidation", rounds: [], grill,
-    } });
-    expect(revalidated.ref).toMatch(/interaction-completion\.grill-revalidation-0001\.json$/);
-    expect(revalidated.value.payload.previous_grill).toEqual({ ref: initial.ref, hash: initial.hash });
-    expect(revalidated.value.payload.material_revision.ref).toBe("current-four-materials");
-  });
-
-  it("advances an immutable stage-content revision through the CAS latest pointer", () => {
-    const state = fixture("public-stage-content-revision", { materialFiles: ["decision-log.md"] });
-    const writer = createStageContentEvidenceWriter({
-      task: state.task,
-      workspace: state.candidate,
-      stage: "make-decision",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
-    });
-    const audit = buildDecisionCoverageAudit({
-      decisionLogRef: "quality/evidence/decision.md",
-      decisionLogHash: "a".repeat(64),
-      sourceItems: [{ source_item_ref: "quality/evidence/source.md", source_item_hash: "b".repeat(64) }],
-      mappings: [{
-        source_item_ref: "quality/evidence/source.md",
-        source_item_hash: "b".repeat(64),
-        coverage_status: "covered",
-        decision_location: { kind: "main", ref: "quality/evidence/decision.md", entry_index: 0 },
-      }],
-    });
-    const first = writer.publish({ kind: "decision-coverage-audit.v1", payload: audit });
-    const second = writer.publish({ kind: "decision-coverage-audit.v1", revision: 2, payload: audit });
-    const latest = readLatestStageContentEvidence({
-      task: state.task,
-      stage: "make-decision",
-      workflowRunId: state.kernel.deriveStageWorkflowRunId("make-decision"),
-      kind: "decision-coverage-audit.v1",
-    });
-    expect(first.ref).toMatch(/decision-coverage-audit\.v1\.json$/);
-    expect(second.ref).toMatch(/decision-coverage-audit\.v1\.revision-0002\.json$/);
-    expect(latest.ref).toBe(second.ref);
-    expect(latest.hash).toBe(second.hash);
-    const retry = writer.publish({ kind: "decision-coverage-audit.v1", revision: 2, payload: audit });
-    expect(retry.ref).toBe(second.ref);
-    expect(retry.hash).toBe(second.hash);
-  });
-
   it("keeps the vNext risk pause and explicit acceptance route usable", () => {
     const state = fixture("vnext-risk-acceptance");
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
@@ -548,13 +487,17 @@ describe("current vNext five-stage runtime", () => {
     const pause = state.kernel.prepareReviewRiskPause({ stage: "build-code", reviewResultRef: review.ref });
     expect(pause.status).toBe("paused");
     const finding = pause.findings[0];
-    const reply = record(state, "evidence/review-risk-replies/fixture.json", "human accepts this bounded fixture risk\n");
+    expect(finding.card_ref).toBe(`quality/evidence/risk-cards/${finding.card_hash}.json`);
+    expect(sha256(state.task.readRecord(finding.card_ref))).toBe(finding.card_hash);
+    const replyText = "human accepts this bounded fixture risk\n";
+    const replyRaw = `${JSON.stringify(replyText, null, 2)}\n`;
+    const reply = record(state, `quality/evidence/risk-replies/${sha256(replyRaw)}.json`, replyText);
     const accepted = state.kernel.acceptReviewRisk({
       stage: "build-code", reviewResultRef: review.ref, findingId: finding.finding_id,
       cardRef: finding.card_ref, cardHash: finding.card_hash, selectedOption: "accept-risk",
       replyRef: reply.ref, replyHash: reply.sha256,
     });
-    expect(accepted.risk_acceptance_ref).toMatch(/^evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
+    expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
   it("uses the public run route and reports missing receipts without legacy results", () => {
@@ -587,20 +530,24 @@ describe("current vNext five-stage runtime", () => {
         subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
       };
     };
-    const result = await runStage("verify-code", context("verify-code", state), async () => ({
-      facts: {
-        review: reviewFact(buildReview.resultRef, "integration"),
-        quality_note: reviewFact(qualityReview.resultRef, null),
-      },
-      missing_items: ["fixture only exercises review evidence binding"],
-      ...evidence(state, "verify-code"),
-    }));
+    const result = await runStage("verify-code", context("verify-code", state), async () => {
+      const currentEvidence = evidence(state, "verify-code");
+      return {
+        ...currentEvidence,
+        facts: {
+          ...currentEvidence.facts,
+          review: reviewFact(buildReview.resultRef, "integration"),
+          quality_note: reviewFact(qualityReview.resultRef, null),
+        },
+        missing_items: ["fixture only exercises review evidence binding"],
+      };
+    });
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.find((fact) => fact.subject === "same_build_integration_review")).toBeUndefined();
     expect(facts.find((fact) => fact.subject === "independent_review")?.evidence[0]?.ref).toBe(qualityReview.resultRef);
   });
 
-  it("completes build-spec through verify-code through the public run route", () => {
+  it("runs build-spec through verify-code without inventing an audit gate", () => {
     const state = fixture("public-build-spec-through-verify-code");
     const specContent = "# Specification\n\n- FR-1: public stage execution.\n- AC-1: current quality facts are published.\n";
     state.artifacts.writeAtomic("spec.md", specContent);
@@ -611,9 +558,10 @@ describe("current vNext five-stage runtime", () => {
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
     const specRun = publicRun(state, "build-spec", { receipts: { spec: spec.ref, review: specReview.resultRef } });
     expect(specRun.status).toBe("completed");
-    expect(publicStatus(state, "build-spec").status).toBe("completed");
+    expect(specRun.completion.missing).not.toContain("traceability");
+    expect(publicStatus(state, "build-spec")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 
-    const planProof = record(state, "evidence/public-task-proof.json", { verified: true, scope: "public plan fixture" });
+    const planProof = record(state, "quality/evidence/public-task-proof.json", { verified: true, scope: "public plan fixture" });
     const planFixture = publicPlanFixture(planProof.sha256);
     state.artifacts.writeAtomic("plan.md", planFixture.plan);
     state.artifacts.writeAtomic("tasks.md", planFixture.tasks);
@@ -630,7 +578,9 @@ describe("current vNext five-stage runtime", () => {
       receipts: { plan: plan.ref, tasks: tasks.ref, review: planReview.resultRef },
     });
     expect(planRun.status).toBe("completed");
-    expect(publicStatus(state, "build-plan").status).toBe("completed");
+    expect(planRun.completion.missing).not.toContain("support:audit");
+    expect(planRun.completion.missing).not.toEqual(expect.arrayContaining([expect.stringMatching(/audit unavailable\/unverified\/mismatch/i)]));
+    expect(publicStatus(state, "build-plan")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 
     writeFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"), "implemented through public route\n");
     const workspace = openCurrentTaskWorkspace(state.task);
@@ -640,21 +590,33 @@ describe("current vNext five-stage runtime", () => {
     const buildSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const buildTests = publicTestReceipt(state, "build-code", buildSnapshot);
     const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: buildSnapshot.tree });
-    const buildProof = record(state, "evidence/public-build-code-proof.json", { verified: true, snapshot_tree: buildSnapshot.tree });
+    const buildProof = record(state, "quality/evidence/public-build-code-proof.json", { verified: true, snapshot_tree: buildSnapshot.tree });
     const buildRun = publicRun(state, "build-code", {
       receipts: { implementation: implementation.ref, tests: buildTests.ref, review: buildReview.resultRef },
       acceptance_coverage: {
         snapshot_tree: buildSnapshot.tree, accepted_criterion_ids: ["AC-1"],
-        items: [{ acceptance_criterion_id: "AC-1", status: "covered", evidence_refs: [buildProof] }],
+        items: [{
+          acceptance_criterion_id: "AC-1",
+          status: "covered",
+          evidence_refs: [buildProof],
+          scenario: "run build-code through the public stage route",
+          oracle: "current implementation, tests, AC evidence, and integration review complete",
+          actual_outcome: "public build-code returned completed",
+          coverage_limits: "fixture covers AC-1 only",
+          implementation_anchor: { id: "impl-ac-1", path: "src/app.txt", start_line: 1, end_line: 1, role: "implementation" },
+          verification_anchor: { id: "verify-ac-1", path: "tasks.md", start_line: 1, end_line: 1, role: "verification" },
+        }],
       },
     });
-    expect(buildRun.status).toBe("completed");
-    expect(publicStatus(state, "build-code").status).toBe("completed");
+    expect(buildRun, JSON.stringify(buildRun)).toMatchObject({ status: "completed" });
+    expect(buildRun.completion.missing).not.toContain("support:audit");
+    expect(buildRun.completion.missing).not.toEqual(expect.arrayContaining([expect.stringMatching(/audit unavailable\/unverified\/mismatch/i)]));
+    expect(publicStatus(state, "build-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 
     const verifySnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const verifyTests = publicTestReceipt(state, "verify-code", verifySnapshot);
     const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: verifySnapshot.tree });
-    const verifyProof = record(state, "evidence/public-verify-code-proof.json", { verified: true, snapshot_tree: verifySnapshot.tree });
+    const verifyProof = record(state, "quality/evidence/public-verify-code-proof.json", { verified: true, snapshot_tree: verifySnapshot.tree });
     const evidenceReceipt = publicAcceptanceEvidence(state, verifySnapshot, verifyProof);
     const verification = publicVerificationReceipt(state, verifyProof);
     publicConfirm(state, "verify-code");
@@ -665,7 +627,7 @@ describe("current vNext five-stage runtime", () => {
       },
     });
     expect(verifyRun.status).toBe("completed");
-    expect(publicStatus(state, "verify-code").status).toBe("completed");
+    expect(publicStatus(state, "verify-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });
   });
 
   it("completes all five stages from the current four materials", async () => {
@@ -680,7 +642,20 @@ describe("current vNext five-stage runtime", () => {
       if (stage === "build-code") writeFileSync(join(state.candidate.worktreeRoot, "src/app.txt"), "implemented\n");
       const result = await runStage(stage, context(stage, state), async () => {
         const currentEvidence = evidence(state, stage);
-        const facts = { source: "current-five-stage-test", stage };
+        const facts = { ...currentEvidence.facts, source: "current-five-stage-test", stage };
+        if (stage === "make-decision") {
+          const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+          const direction = writeFormalReviewFixture({ task: state.task, stage, snapshotTree: snapshot.tree, reviewTrack: "direction" });
+          const detail = writeFormalReviewFixture({ task: state.task, stage, snapshotTree: snapshot.tree, reviewTrack: "detail" });
+          facts.reviews = {
+            direction: { result_ref: direction.resultRef, result_hash: sha256(state.task.readRecord(direction.resultRef)), snapshot_tree: snapshot.tree },
+            detail: { result_ref: detail.resultRef, result_hash: sha256(state.task.readRecord(detail.resultRef)), snapshot_tree: snapshot.tree },
+          };
+          currentEvidence.evidence_refs.push(
+            { ref: direction.resultRef, sha256: facts.reviews.direction.result_hash },
+            { ref: detail.resultRef, sha256: facts.reviews.detail.result_hash },
+          );
+        }
         if (stage === "verify-code") {
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
           const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
@@ -696,11 +671,12 @@ describe("current vNext five-stage runtime", () => {
             { ref: qualityReview.resultRef, sha256: facts.quality_note.result_hash },
           );
         }
-        return { facts, ...currentEvidence };
+        return { ...currentEvidence, facts };
       });
       statuses[stage] = result.status;
       const projection = publicStatus(state, stage);
-      expect(projection.status, JSON.stringify({ stage, projection })).toBe("completed");
+      expect(projection, JSON.stringify({ stage, projection })).toMatchObject({ work_status: "ready", quality_status: "completed" });
+      expect(projection).not.toHaveProperty("status");
     }
     expect(statuses).toEqual(Object.fromEntries(stages.map((stage) => [stage, "completed"])));
   });
@@ -719,13 +695,15 @@ describe("current vNext five-stage runtime", () => {
     expect(state.task.identity.taskId).toBe("current-five-stage-revision");
   });
 
-  it("records failed or unavailable evidence without blocking stage progression", async () => {
+  it("keeps work ready but reports incomplete quality until failure is repaired", async () => {
     const state = fixture("current-five-stage-retry");
     const failed = await runStage("build-code", context("build-code", state), async () => ({
       facts: { source: "failed-build" }, ...evidence(state, "build-code", { testExit: 1, review: "unavailable", confirm: false }),
     }));
-    expect(failed.status).toBe("completed");
-    expect(failed.quality_status).toBe("incomplete");
+    expect(failed).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(failed.completion.missing.length).toBeGreaterThan(0);
+    expect(failed).not.toHaveProperty("publication_ref");
+    expect(failed).not.toHaveProperty("publication_hash");
     const repaired = await runStage("build-code", context("build-code", state), async () => ({
       facts: { source: "repaired-build" }, ...evidence(state, "build-code", { suffix: "-repaired" }),
     }));

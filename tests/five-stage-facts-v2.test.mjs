@@ -6,7 +6,7 @@ const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1
 const acceptanceCoverage={ snapshot_tree:"a".repeat(40), accepted_criterion_ids:["AC-1"], items:[{ acceptance_criterion_id:"AC-1", status:"unknown", evidence_refs:[] }] };
 const audit=(stage)=>({
   audit_contract_version:"v1",
-  audit_summary_ref:`evidence/audits/${stage}/${"5".repeat(64)}.json`,
+  audit_summary_ref:`quality/evidence/audits/${stage}/${"5".repeat(64)}.json`,
   audit_summary_hash:"5".repeat(64),
   audit_verdict:"pass",
   content_evidence_refs:[],

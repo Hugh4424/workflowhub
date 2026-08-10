@@ -233,7 +233,7 @@ export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel
   };
   const payloadRaw = `${JSON.stringify(payload, null, 2)}\n`;
   const payloadHash = sha256(payloadRaw);
-  const outputRef = `evidence/manual-delivery-close/${payloadHash}.json`;
+  const outputRef = `quality/evidence/manual-delivery-close/${payloadHash}.json`;
   const existingOutput = readOptional(task, outputRef);
   if (existingOutput !== undefined && existingOutput !== payloadRaw) {
     throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);

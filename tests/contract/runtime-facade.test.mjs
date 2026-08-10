@@ -89,6 +89,13 @@ describe("runtime facade", () => {
     expect(delegate).not.toHaveBeenCalled();
   });
 
+  test("routes verify execution to canonical test capture instead of the stage run input", async () => {
+    const delegate = vi.fn(async ([operation]) => operation);
+    await expect(stageRuntimeCliMain(["verify", "--action=execute"], { delegate }))
+      .resolves.toBe("capture-tests");
+    expect(delegate).toHaveBeenCalledOnce();
+  });
+
   test("does not expose material revision as a public behavior", async () => {
     const delegate = vi.fn();
     await expect(stageRuntimeCliMain([

@@ -3,7 +3,7 @@
   "baseline_commit": "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf",
   "collector": {
     "path": "tools/architecture/public-behavior-baseline.mjs",
-    "sha256": "6a78d901fe40fc2a3b5379126d1ad7eca69397519b25e0a8e4869a6e2319b122"
+    "sha256": "f0e56f93d422efe428c9ebb293718169c8cfb0f77ba9be47f0d585d143c2a7b9"
   },
   "runtime": {
     "node": "v24.14.0",
@@ -35,7 +35,7 @@
   },
   "candidate": {
     "path": "tests/fixtures/public-behavior-baseline/v1/candidate.json",
-    "sha256": "125b4537e5d2706d40aa16d791b9a7f6708b3a860201539729e3dbb128d7198b"
+    "sha256": "6049467c2ce2520b78778dbffe31d6e3e5bb37e6342e9a284592942be61d8e0d"
   },
   "normalization": "ANSI, absolute paths, hashes, UUIDs, timestamps and durations are tokenized"
 }

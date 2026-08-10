@@ -30,7 +30,6 @@ import {
   brandTaskHandle,
   brandTaskKernel,
 } from "../../core/task-capability.mjs";
-export { publishImmutable } from "../stage/publication.mjs";
 export { assertTaskHandle, assertTaskKernel } from "../../core/task-capability.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
@@ -38,7 +37,6 @@ const FORBIDDEN_MANIFEST_FIELDS = new Set([
 ]);
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const CANONICAL_RECORD_WRITERS = new WeakMap();
-const STAGE_CONTENT_POINTER_REPLACERS = new WeakMap();
 const INVOCATION_IDENTITY_WRITERS = new WeakMap();
 const PATH_CARD_WRITERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
@@ -767,17 +765,6 @@ function makeTaskHandle(taskPath, manifest) {
     verifyManifest();
     return createOnlyAt(realTaskPath, relativePath, data);
   });
-  STAGE_CONTENT_POINTER_REPLACERS.set(frozen, (relativePath, data, options = {}) => {
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    verifyManifest();
-    if (!/^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.latest\.json$/.test(relativePath ?? "")) {
-      throw new Error("stage content latest pointer path is invalid");
-    }
-    if (typeof options.validator !== "function" || typeof options.expectedPriorRaw !== "string") {
-      throw new Error("stage content latest pointer replacement requires CAS binding");
-    }
-    return writeAtomicAt(realTaskPath, relativePath, data, options);
-  });
   return frozen;
 }
 
@@ -832,12 +819,6 @@ export function createTaskKernel(taskHandle, options) {
       const writer = CANONICAL_RECORD_WRITERS.get(task);
       if (typeof writer !== "function") throw new TypeError("authentic TaskHandle canonical writer required");
       return writer;
-    },
-    replaceStageContentPointerFor(task) {
-      assertTaskHandle(task);
-      const replacer = STAGE_CONTENT_POINTER_REPLACERS.get(task);
-      if (typeof replacer !== "function") throw new TypeError("authentic stage content pointer replacer required");
-      return replacer;
     },
   }));
   brandTaskKernel(kernel);

@@ -42,17 +42,19 @@ describe("spec and plan content artifact closure", () => {
   it("keeps the recovered content skills declared by their owning stage", () => {
     const buildSpec = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
-    expect(buildSpec.skills.map((item) => item.name)).toEqual(expect.arrayContaining(["spec-specify", "spec-clarify"]));
+    expect(buildSpec.skills.map((item) => item.name)).toContain("spec-specify");
+    expect(buildSpec.skills.map((item) => item.name)).not.toContain("spec-clarify");
     expect(buildPlan.skills.map((item) => item.name)).toEqual(expect.arrayContaining(["spec-plan", "spec-tasks"]));
     for (const item of [...buildSpec.skills, ...buildPlan.skills]) {
-      if (["spec-specify", "spec-clarify", "spec-plan", "spec-tasks"].includes(item.name)) {
+      if (["spec-specify", "spec-plan", "spec-tasks"].includes(item.name)) {
         expect(item.execution).toBe("inline");
-        expect(item.invocation).toBe("always");
+        expect(item).not.toHaveProperty("invocation");
+        expect(item).not.toHaveProperty("dispatch");
       }
     }
   });
 
-  it("retains the high-value template fields without creating a second authority", () => {
+  it("keeps plan and task templates design-only without runtime sediment", () => {
     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
     const specSkill = read("skills/spec-specify/SKILL.md");
     const specTemplate = read("skills/spec-specify/templates/spec-template.md");
@@ -69,28 +71,37 @@ describe("spec and plan content artifact closure", () => {
     }
     expect(clarify).toMatch(/十个维度/);
     for (const text of [planSkill, planTemplate]) {
-      expect(text).toMatch(/Constitution/);
-      expect(text).toMatch(/STOP/);
-      expect(text).toMatch(/rollback|恢复/i);
+      expect(text).toMatch(/implementation solution|实现方案/i);
+      expect(text).toMatch(/boundar|边界/i);
+      expect(text).toMatch(/dependenc|依赖/i);
+      expect(text).toMatch(/test plan|测试计划/i);
+      expect(text).toMatch(/risk|风险/i);
+      expect(text).toMatch(/rollback|回滚/i);
+      expect(text).toMatch(/task mapping|任务映射/i);
       expect(text).toMatch(/FR.*AC|FR\/AC/si);
     }
     for (const text of [tasksSkill, tasksTemplate]) {
       expect(text).toMatch(/RED/);
       expect(text).toMatch(/GREEN/);
+      expect(text).toMatch(/gate_cmd/);
+      expect(text).toMatch(/expected_exit/);
       expect(text).toMatch(/oracle/i);
-      expect(text).toMatch(/evidence/i);
-      expect(text).toMatch(/Dependency Graph|DAG/);
+      expect(text).toMatch(/evidence_path/);
+      expect(text).toMatch(/STOP/);
     }
-    expect(tasksSkill).toMatch(/test-routing-advisor/);
-    expect(tasksSkill).toMatch(/does not invoke the concrete[\s\S]*testing-system-blueprint/);
-    expect(tasksTemplate).toMatch(/test_strategy_owner/);
-    expect(tasksTemplate).toMatch(/scenarios \/ commands \/ expected exit \/ oracle/);
-    expect(tasksTemplate).toMatch(/test method/);
-    expect(tasksTemplate).toMatch(/build-code.*真实 changed files.*重路由/s);
-    expect(tasksTemplate).toMatch(/coverage limits/);
-    expect(tasksTemplate).toMatch(/final current-snapshot aggregate strategy/);
-    expect(tasksTemplate).toMatch(/evidence_refs.*TaskKernel|TaskKernel.*evidence_refs/s);
-    expect(tasksTemplate).toMatch(/evidence_note/);
+    expect(tasksSkill).toMatch(/designs?[^.]*RED[^.]*GREEN/i);
+    expect(tasksSkill).toMatch(/does not run|不得执行/i);
+    const forbidden = /TaskKernel|\bsnapshot\b|\binvocation\b|user_handoff|WorkflowHub Stage Progress|process index|comment projection|执行状态填写区/i;
+    for (const text of [planSkill, planTemplate, tasksSkill, tasksTemplate]) {
+      expect(text).not.toMatch(forbidden);
+    }
+    const allowedCardLabels = ["目标", "依赖", "精确文件", "动作", "验证", "证据", "Trace", "STOP", "状态", "执行事实"];
+    const templateCards = tasksTemplate.split(/^## /m).slice(1);
+    expect(templateCards).toHaveLength(2);
+    for (const card of templateCards) {
+      const labels = [...card.matchAll(/^- \*\*(.+?)\*\*：/gm)].map((match) => match[1]);
+      expect(labels).toEqual(allowedCardLabels);
+    }
     const buildPlanNames = buildPlan.skills.map((item) => item.name);
     expect(buildPlanNames).toContain("test-routing-advisor");
     expect(buildPlanNames).not.toEqual(expect.arrayContaining([

@@ -58,7 +58,6 @@ Required input fields:
   "stage": "build-code",
   "review_track": null,
   "host_provider": "codex",
-  "previous_runtime_ids": {},
   "materials": {
     "approved_spec": "...",
     "acceptance_criteria": "...",

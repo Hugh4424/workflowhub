@@ -50,24 +50,28 @@ describe("build-code apply quality contract", () => {
   it("records task strategy and execution facts in the canonical step manifest", () => {
     const steps = JSON.parse(read("workflows/build-code/steps.json"));
     const route = steps.steps.find((step) => step.step_slug === "inspect-and-route-actual-tests");
-    expect(route.completion_evidence.map((item) => item.kind)).toEqual(expect.arrayContaining(["changed_files", "test_routing", "skill_invocation"]));
-    expect(route.observable_result).toMatch(/Actual changed files/);
+    expect(route.completion_evidence.map((item) => item.kind)).toEqual(expect.arrayContaining(["changed_files", "test_routing"]));
+    expect(route.completion_evidence.map((item) => item.kind)).not.toContain("skill_invocation");
+    expect(route.observable_result).toMatch(/actual changed files/i);
     const concrete = steps.steps.find((step) => step.step_slug === "invoke-concrete-testing-skill");
-    expect(concrete.completion_evidence.map((item) => item.uri_or_path)).toContain("skill://concrete-testing");
+    expect(concrete.completion_evidence.map((item) => item.kind)).toEqual(["test_strategy"]);
     expect(concrete.observable_result).toMatch(/backend\/frontend\/fullstack/);
     const runTests = steps.steps.find((step) => step.step_slug === "run-tests");
+    expect(runTests.entry_conditions.map((item) => item.kind)).toEqual(["test_strategy"]);
     expect(runTests.completion_evidence.map((item) => item.kind)).toContain("test");
     expect(runTests.observable_result).toMatch(/concrete testing strategy/);
     const publish = steps.steps.find((step) => step.step_slug === "publish-code-result");
-    expect(publish.completion_evidence.map((item) => item.kind)).toContain("final_test_summary");
-    expect(publish.completion_evidence.map((item) => item.kind)).toEqual(expect.arrayContaining(["final_test_strategy", "final_test_result"]));
-    expect(publish.observable_result).toMatch(/final aggregate strategy/);
+    expect(publish.completion_evidence.map((item) => item.kind)).toEqual(["tasks", "test", "review"]);
+    expect(publish.completion_evidence.map((item) => item.uri_or_path)).toEqual([
+      "tasks.md", "quality/tests/", "quality/reviews/",
+    ]);
+    expect(publish.observable_result).toMatch(/plain-language handoff/);
   });
 
   it("keeps testing skills in build-plan design only, not build-code execution metadata", () => {
     const registry = read("skills/reuse-registry.md");
     expect(registry).toMatch(/`test-routing-advisor`.*build-plan.*build-code.*changed files/s);
-    expect(registry).toMatch(/`testing-system-blueprint`.*不在本标准链/s);
+    expect(registry).toMatch(/`testing-system-blueprint`.*build-plan.*advisory/s);
     expect(registry).toMatch(/`backend-testing`.*build-code/s);
     expect(registry).toMatch(/`frontend-testing`.*build-code/s);
     expect(registry).toMatch(/`fullstack-slice-testing`.*build-code/s);

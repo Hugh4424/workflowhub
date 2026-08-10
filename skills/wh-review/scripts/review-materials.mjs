@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
 import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
-import { validateScopeRevisionMaterial } from "../../../runtime/review/scope-revision-contract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skillPlan = JSON.parse(readFileSync(resolve(here, "..", "stage-skill-plan.json"), "utf8"));
@@ -288,123 +287,11 @@ function integrationEntries(value, key) {
 }
 
 function validateIntegrationMaterials({ task, source, materials }) {
-  const coverage = materials.phase_coverage;
-  const historicalCoverageUnavailable = coverage?.status === "unavailable";
-  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage)
-      || coverage.schema_version !== "phase-review-coverage.v1"
-      || coverage.snapshot_tree !== source.snapshotTree
-      || (historicalCoverageUnavailable && (coverage.checkpoint !== null || !Array.isArray(coverage.phases) || coverage.phases.length !== 0))
-      || (!historicalCoverageUnavailable && (!coverage.checkpoint || typeof coverage.checkpoint.commit !== "string" || typeof coverage.checkpoint.tree !== "string"
-        || !Array.isArray(coverage.phases) || coverage.phases.length === 0
-        || coverage.phases.some((phase) => !phase || typeof phase.phase_id !== "string" || phase.review_result?.ref === undefined
-          || phase.phase_map_trace?.ref === undefined || phase.green_test_receipt?.ref === undefined)))
-      || !Array.isArray(coverage.phases)
-      || !coverage.implementation_receipt || !coverage.green_test_receipt) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires phase-review-coverage.v1 for the frozen final snapshot");
-  }
-  const phaseIds = coverage.phases.map(({ phase_id }) => phase_id).filter(Boolean);
-  if (!historicalCoverageUnavailable && new Set(phaseIds).size !== phaseIds.length) throw new Error("MATERIAL_INCOMPLETE: integration Phase coverage contains duplicate phases");
-  for (const [label, value] of [["implementation", coverage.implementation_receipt], ["GREEN", coverage.green_test_receipt]]) {
-    if (typeof value?.ref !== "string" || hashValue(value?.sha256, `integration ${label} receipt hash`) === "") {
-      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt binding is invalid`);
-    }
-    const raw = assertTaskHandle(task).readRecord(value.ref);
-    if (sha256(raw) !== value.sha256.replace(/^sha256:/, "")) throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt hash mismatch`);
-    let receipt;
-    try { receipt = JSON.parse(raw); } catch { throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt must be JSON`); }
-    if (receipt.snapshot_tree !== source.snapshotTree || (label === "GREEN" && receipt.exit_code !== 0)) {
-      throw new Error(`MATERIAL_INCOMPLETE: integration ${label} receipt is not a passing final-snapshot fact`);
-    }
-  }
-  if (!Array.isArray(coverage.implementation_anchors)
-      || (coverage.implementation_anchors.length === 0 && coverage.implementation_excerpt_status !== "not_applicable")) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires current final-snapshot implementation excerpts or an explicit not_applicable fact");
-  }
-  if (coverage.implementation_anchors.length > 0) validateAnchors("phase_coverage", "implementation", coverage.implementation_anchors);
-  if (historicalCoverageUnavailable) {
-    const seams = materials.seam_index;
-    if (!seams || typeof seams !== "object" || Array.isArray(seams)
-        || seams.schema_version !== "cross-phase-seam-index.v1"
-        || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)
-        || seams.entries.some((seam) => !seam || typeof seam !== "object"
-          || typeof seam.seam_id !== "string"
-          || !["unknown", "not_applicable"].includes(seam.state ?? seam.status)
-          || (seam.state ?? seam.status) !== "not_applicable" && seam.reason_code !== "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS")) {
-      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires explicit unknown seam facts");
-    }
-    const trace = materials.ac_trace;
-    if (!trace || typeof trace !== "object" || Array.isArray(trace)
-        || trace.schema_version !== "ac-change-test-trace.v1"
-        || trace.snapshot_tree !== source.snapshotTree
-        || !Array.isArray(trace.acceptance_ids) || trace.acceptance_ids.length === 0
-        || new Set(trace.acceptance_ids).size !== trace.acceptance_ids.length) {
-      throw new Error("MATERIAL_INCOMPLETE: current-only integration requires a declared AC trace");
-    }
-    const traced = new Set();
-    for (const entry of integrationEntries(trace, "ac_trace")) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)
-          || typeof entry.acceptance_criterion_id !== "string"
-          || !trace.acceptance_ids.includes(entry.acceptance_criterion_id)
-          || traced.has(entry.acceptance_criterion_id)
-          || !Array.isArray(entry.change) || !Array.isArray(entry.test) || !Array.isArray(entry.evidence)
-          || entry.change.length === 0 || entry.test.length === 0 || entry.evidence.length === 0) {
-        throw new Error("MATERIAL_INCOMPLETE: current-only integration AC mapping is incomplete");
-      }
-      traced.add(entry.acceptance_criterion_id);
-      validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
-      for (const change of entry.change) {
-        const currentTask = change?.task_id === null
-          || coverage.completed_tasks.some((task) => task?.task_id === change?.task_id);
-        if (!currentTask || typeof change.summary !== "string" || change.summary.trim() === "") {
-          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} current change mapping is invalid`);
-        }
-      }
-      for (const test of entry.test) {
-        if (test?.receipt_ref !== coverage.green_test_receipt.ref
-            || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== coverage.green_test_receipt.sha256.replace(/^sha256:/, "")) {
-          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not current GREEN evidence`);
-        }
-      }
-      for (const evidence of entry.evidence) {
-        if (evidence?.ref !== coverage.implementation_receipt.ref
-            || hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) !== coverage.implementation_receipt.sha256.replace(/^sha256:/, "")) {
-          throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not current implementation evidence`);
-        }
-      }
-    }
-    if (traced.size !== trace.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: current-only AC trace omits an accepted AC");
-    return;
-  }
-  for (const phase of historicalCoverageUnavailable ? [] : coverage.phases) {
-    for (const [label, binding] of [["phase map trace", phase.phase_map_trace], ["phase review", phase.review_result], ["phase GREEN", phase.green_test_receipt]]) {
-      if (typeof binding?.ref !== "string" || hashValue(binding.sha256, `integration ${label} hash`) === "") {
-        throw new Error(`MATERIAL_INCOMPLETE: integration ${label} binding is invalid`);
-      }
-      const raw = assertTaskHandle(task).readRecord(binding.ref);
-      if (sha256(raw) !== binding.sha256.replace(/^sha256:/, "")) throw new Error(`MATERIAL_INCOMPLETE: integration ${label} hash mismatch`);
-    }
-    if (phase.review_result.verdict !== "pass" || phase.snapshot_tree === undefined) {
-      throw new Error(`MATERIAL_INCOMPLETE: integration Phase ${phase.phase_id} is not a passing snapshot-bound fact`);
-    }
-  }
-
-  const seams = materials.seam_index;
-  if (!seams || typeof seams !== "object" || Array.isArray(seams) || seams.schema_version !== "cross-phase-seam-index.v1" || seams.snapshot_tree !== source.snapshotTree || !Array.isArray(seams.entries)) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires a cross-phase seam index");
-  }
-  for (const seam of seams.entries) {
-    if (!seam || typeof seam !== "object" || typeof seam.seam_id !== "string" || !["complete", "unknown", "not_applicable"].includes(seam.state ?? seam.status)) {
-      throw new Error("MATERIAL_INCOMPLETE: integration seam entry is invalid");
-    }
-    if ((seam.state ?? seam.status) !== "complete" && seam.reason_code !== "TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS") {
-      throw new Error("MATERIAL_INCOMPLETE: uncertified seam must expose TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS");
-    }
-  }
-
   const trace = materials.ac_trace;
-  if (!trace || typeof trace !== "object" || Array.isArray(trace) || trace.schema_version !== "ac-change-test-trace.v1" || trace.snapshot_tree !== source.snapshotTree ||
-      !Array.isArray(trace.acceptance_ids) || trace.acceptance_ids.length === 0 || new Set(trace.acceptance_ids).size !== trace.acceptance_ids.length) {
-    throw new Error("MATERIAL_INCOMPLETE: integration requires one declared AC trace per accepted AC");
+  if (!trace || typeof trace !== "object" || Array.isArray(trace) || trace.schema_version !== "ac-change-test-trace.v1"
+      || trace.snapshot_tree !== source.snapshotTree || !Array.isArray(trace.acceptance_ids)
+      || trace.acceptance_ids.length === 0 || new Set(trace.acceptance_ids).size !== trace.acceptance_ids.length) {
+    throw new Error("MATERIAL_INCOMPLETE: current AC evidence is invalid");
   }
   const traced = new Set();
   for (const entry of integrationEntries(trace, "ac_trace")) {
@@ -412,25 +299,28 @@ function validateIntegrationMaterials({ task, source, materials }) {
         !trace.acceptance_ids.includes(entry.acceptance_criterion_id) || traced.has(entry.acceptance_criterion_id) ||
         !Array.isArray(entry.change) || !Array.isArray(entry.test) || !Array.isArray(entry.evidence) ||
         entry.change.length === 0 || entry.test.length === 0 || entry.evidence.length === 0) {
-      throw new Error("MATERIAL_INCOMPLETE: every integration AC requires change, test, and evidence mappings");
+      throw new Error("MATERIAL_INCOMPLETE: current AC evidence requires change, test, and evidence mappings");
     }
     traced.add(entry.acceptance_criterion_id);
     validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
     for (const change of entry.change) {
-      const currentReceiptMapping = historicalCoverageUnavailable && change?.task_id === null;
-      if ((!currentReceiptMapping && (typeof change?.task_id !== "string" || !coverage.completed_tasks.some((task) => task?.task_id === change.task_id))) || typeof change.summary !== "string" || change.summary === "") {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is not current completed-task evidence`);
+      if ((change?.task_id !== null && typeof change?.task_id !== "string") || typeof change.summary !== "string" || change.summary.trim() === "") {
+        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} change mapping is invalid`);
       }
     }
     for (const test of entry.test) {
-      if (test?.receipt_ref !== coverage.green_test_receipt.ref || hashValue(test.receipt_hash, `AC ${entry.acceptance_criterion_id} test hash`) !== coverage.green_test_receipt.sha256.replace(/^sha256:/, "")) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test mapping is not current GREEN evidence`);
-      }
+      if (typeof test?.receipt_ref !== "string" || !HASH.test(test.receipt_hash ?? "")) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test binding is invalid`);
+      const raw = assertTaskHandle(task).readRecord(test.receipt_ref);
+      if (sha256(raw) !== test.receipt_hash) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test hash mismatch`);
+      const receipt = JSON.parse(raw);
+      if (receipt.snapshot_tree !== source.snapshotTree || receipt.exit_code !== 0) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test is not a passing current-snapshot fact`);
     }
     for (const evidence of entry.evidence) {
-      if (evidence?.ref !== coverage.implementation_receipt.ref || hashValue(evidence.sha256, `AC ${entry.acceptance_criterion_id} evidence hash`) !== coverage.implementation_receipt.sha256.replace(/^sha256:/, "")) {
-        throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence mapping is not current implementation evidence`);
-      }
+      if (typeof evidence?.ref !== "string" || !HASH.test(evidence.sha256 ?? "")) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence binding is invalid`);
+      const raw = assertTaskHandle(task).readRecord(evidence.ref);
+      if (sha256(raw) !== evidence.sha256) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence hash mismatch`);
+      const receipt = JSON.parse(raw);
+      if (receipt.snapshot_tree !== source.snapshotTree) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence is not current-snapshot fact`);
     }
     if (entry.evidence_status === "historical_non_replayable") {
       const disposition = entry.disposition;
@@ -441,7 +331,7 @@ function validateIntegrationMaterials({ task, source, materials }) {
       }
     }
   }
-  if (traced.size !== trace.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: integration AC trace omits an accepted AC");
+  if (traced.size !== trace.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: current AC evidence omits an accepted AC");
 }
 
 function validateChangeIds(key, map, changeMap) {
@@ -460,18 +350,26 @@ function requireChangeCoverage(key, map, changeMap) {
   if (missing.length) throw new Error(`MATERIAL_INCOMPLETE: ${key} omits change_ids ${missing.join(",")}`);
 }
 
-function validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap = null) {
-  if (!strictV2Maps) return;
-  for (const key of rule.v2_required_maps ?? []) {
-    if (!(key in materials)) throw new Error(`MATERIAL_INCOMPLETE: wh_review.v2 requires ${key}`);
+function validateV2AuthorityMaps(_rule, materials, _strictV2Maps, changeMap = null) {
+  for (const key of ["context_map", "evidence_map"]) {
+    if (!(key in materials)) continue;
     validateAuthorityMap(key, materials[key]);
-    if (key === "evidence_map") validateDistinctAcceptanceEvidenceAnchors(materials[key]);
+  }
+  const suppliedBuildCodeMaps = ["phase_map", "impact_map", "reuse_map", "acceptance_map"]
+    .filter((key) => key in materials);
+  for (const key of suppliedBuildCodeMaps) {
+    validateAuthorityMap(key, materials[key]);
     if (key === "acceptance_map") validateBuildCodeAcceptanceMap(materials[key]);
   }
-  if (rule.v2_required_maps?.includes("impact_map")) {
-    for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) validateChangeIds(key, materials[key], changeMap);
+  if (changeMap === null || suppliedBuildCodeMaps.length === 0) return;
+  for (const key of suppliedBuildCodeMaps) validateChangeIds(key, materials[key], changeMap);
+  if (materials.phase_map) {
     requireChangeCoverage("phase_map", materials.phase_map, changeMap);
+  }
+  if (materials.impact_map) {
     requireChangeCoverage("impact_map", materials.impact_map, changeMap);
+  }
+  if (materials.acceptance_map) {
     const anchorIds = new Set(selectedAnchors(materials).map(({ id }) => id));
     for (const entry of materials.acceptance_map.entries) {
       for (const id of [...(entry.implementation_anchor_ids ?? []), ...(entry.verification_anchor_ids ?? [])]) {
@@ -481,10 +379,10 @@ function validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap = null
   }
 }
 
-function validateMaterialAllowlist(rule, materials, reviewRound) {
+function validateMaterialAllowlist(rule, materials) {
   const allowed = new Set([...rule.required, ...rule.optional]);
   for (const key of Object.keys(materials)) {
-    if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for ${reviewRound} review`);
+    if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: ${key} is not allowed for this review`);
   }
 }
 
@@ -504,9 +402,6 @@ export function canonicalMaterialManifest(entries) {
 }
 
 export function reviewMaterialBytes(key, value) {
-  if (key === "review_delta" && value && typeof value === "object" && !Array.isArray(value)) {
-    return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
-  }
   return materialBytes(value);
 }
 
@@ -536,37 +431,13 @@ export function buildPlanningArtifacts({
 
 const ruleFor = reviewRuleFor;
 
-function scopeRevisionRule(stage) {
-  if (!new Set(["build-code", "verify-code"]).has(stage)) {
-    throw new Error("MATERIAL_INCOMPLETE: scope_revision is only valid for build-code or verify-code");
-  }
-  return Object.freeze({
-    source_bundle: "none",
-    required: ["scope_revision", "review_instructions"],
-    optional: [],
-    generated: ["review_instructions"],
-    forbidden: [],
-    minimum_reviewers: 1,
-    v2_required_maps: [],
-  });
-}
-
-function scopeRevisionInstructions(stage) {
-  return `Review stage ${stage}/scope_revision. This is a single, bounded design review for a temporary mid-task requirement change. Read bundle/review-instructions.md, contracts/scope-revision.md, and only the files in bundle/. Judge whether the temporary request is legitimate, aligned with the task core goal, consistently reflected across decision-log.md/spec.md/plan.md/tasks.md, and complete across user flow, data/state, success/failure boundaries, implementation, tests, review, delivery, risks, deferrals, and Constitution constraints. Do not judge whether code already passes, do not turn this review into a full stage review, do not demand provider pass, and do not reopen unchanged history. Return one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
-}
-
 function stagePlanFor(stage, track) {
   const stagePlan = skillPlan.stages[stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
-export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewRound = "initial", reviewScope = null, reviewKind = null) {
-  if (reviewKind === "scope_revision") {
-    if (reviewRound !== "initial") throw new Error("MATERIAL_INCOMPLETE: scope_revision review cannot use incremental or closure round");
-    return scopeRevisionInstructions(stage);
-  }
+export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null) {
   const rule = ruleFor(stage, track, reviewScope);
-  if (!new Set(["initial", "incremental", "closure", "full", "legacy"]).has(reviewRound)) throw new TypeError("reviewRound is invalid");
   const plan = stagePlanFor(stage, track);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
@@ -576,14 +447,10 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
-  const roundInstruction = reviewRound === "incremental"
-    ? "This is a bounded incremental review. The prior pass is an immutable baseline. Review only requirements/review_delta.json and its direct impacts; unchanged baseline material is intentionally omitted from the provider packet. Do not reopen unchanged sections and do not seek a new pass for unchanged content. For make-decision, build-spec, and build-plan, canonical-evidence.json is intentionally empty: these stages review decision/spec/plan materials, not implementation execution receipts."
-    : reviewRound === "closure"
-    ? "This is a bounded closure review. Review only the prior actionable findings and response ledger, whether each claimed repair is complete, and whether a non-fix has a stated reason. Do not reopen a full design/code review unless the supplied delta proves a material change."
-    : "This is a full review of the supplied stage subject.";
+  const reviewInstruction = "This is a full review of the supplied current stage subject.";
   const verifyBound = stage === "verify-code"
     ? "This is one bounded post-repair architect review. Inspect the compact acceptance summary, the architect assessment, the final test summary, and open risks. Do not demand a full evidence tree, historical replay, provider pass, or another review; report only findings that can affect delivery."
-    : `${blind} ${roundInstruction}`;
+    : `${blind} ${reviewInstruction}`;
   return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the included diff-shards/ and summaries as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${verifyBound} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
@@ -911,53 +778,6 @@ export function validateDiffIndexBundle(bundleRoot) {
   }
 }
 
-/**
- * Build the small AC-to-change/test declaration that becomes immutable Phase
- * evidence after the formal review is written.  It is deliberately derived
- * from the validated V2 Phase maps, rather than copied from a caller-supplied
- * final integration packet.  Final integration adds its canonical evidence
- * bindings later, after the review result and Phase evidence exist.
- */
-export function derivePhaseAcceptanceTrace({ source, phaseId, materials, strictV2Maps = false } = {}) {
-  if (!strictV2Maps) return null;
-  if (typeof phaseId !== "string" || phaseId.length === 0) throw new TypeError("phaseId is required for a Phase acceptance trace");
-  const acceptanceMap = materials?.acceptance_map;
-  const testEvidence = materials?.test_evidence;
-  if (!acceptanceMap || !testEvidence) throw new Error("MATERIAL_INCOMPLETE: Phase AC trace requires acceptance_map and test_evidence");
-  const diffIndex = diffIndexFor(source);
-  const changeMap = changeMapFor({ source, phaseId, diffIndex });
-  validateBuildCodeAcceptanceMap(acceptanceMap);
-  validateAuthorityMap("acceptance_map", acceptanceMap);
-  validateChangeIds("acceptance_map", acceptanceMap, changeMap);
-  if (typeof testEvidence.receipt_ref !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(testEvidence.receipt_hash ?? "")) {
-    throw new Error("MATERIAL_INCOMPLETE: Phase AC trace requires a canonical test receipt binding");
-  }
-  const changes = new Map(changeMap.changes.map((change) => [change.change_id, change]));
-  const entries = acceptanceMap.entries.map((entry) => {
-    if (entry.disposition !== "complete") {
-      throw new Error(`MATERIAL_INCOMPLETE: Phase AC ${entry.id} requires complete change/test anchors`);
-    }
-    return {
-      acceptance_criterion_id: entry.id,
-      change: entry.change_ids.map((changeId) => {
-        const change = changes.get(changeId);
-        if (!change) throw new Error(`MATERIAL_INCOMPLETE: Phase AC ${entry.id} references an unknown change`);
-        return { change_id: change.change_id, path: change.path };
-      }),
-      test: [{ receipt_ref: testEvidence.receipt_ref, receipt_hash: testEvidence.receipt_hash.replace(/^sha256:/, "") }],
-      anchors: entry.anchors.map(({ id, path, start_line, end_line, role, reason }) => ({ id, path, start_line, end_line, role, reason })),
-    };
-  });
-  return Object.freeze({
-    schema_version: "phase-ac-change-test-trace.v1",
-    phase_id: phaseId,
-    base_tree: source.baseTree,
-    snapshot_tree: source.snapshotTree,
-    acceptance_ids: [...acceptanceMap.acceptance_ids],
-    entries: Object.freeze(entries),
-  });
-}
-
 function packetAuthority(path, rule) {
   if (path === "source.json") return { authority: "required", inclusion_reason: "immutable_snapshot_identity" };
   if (path === "changes.diff") return { authority: "required", inclusion_reason: "complete_phase_diff" };
@@ -972,9 +792,6 @@ function packetAuthority(path, rule) {
   if (path.startsWith("skills/")) return { authority: "review_lens", inclusion_reason: "declared_reviewer_lens" };
   if (path === "review-instructions.md") return { authority: "required", inclusion_reason: "fixed_stage_instructions" };
   if (path.startsWith("requirements/")) {
-    if (path === "requirements/scope-revision.json" || path.startsWith("requirements/scope-revision/")) {
-      return { authority: "required", inclusion_reason: "scope_revision_current_materials" };
-    }
     const key = path.slice("requirements/".length).replace(/\.(?:md|json)$/, "");
     if (key === "ac_evidence_summary") return { authority: "evidence", inclusion_reason: "generated_per_ac_evidence_summary" };
     return rule.required.includes(key)
@@ -1060,17 +877,17 @@ function selectedAnchors(materials) {
     if (!map || !Array.isArray(map.entries)) continue;
     for (const entry of map.entries) for (const anchor of entry.anchors ?? []) anchors.push({ ...anchor, map: key, entry_id: entry.id, change_ids: entry.change_ids ?? [] });
   }
-  for (const [key, idKey] of [["seam_index", "seam_id"], ["ac_trace", "acceptance_criterion_id"]]) {
+  for (const [key, idKey] of [["ac_trace", "acceptance_criterion_id"]]) {
     const record = materials[key];
     if (!record || !Array.isArray(record.entries)) continue;
     for (const entry of record.entries) {
       for (const anchor of entry.anchors ?? []) anchors.push({ ...anchor, map: key, entry_id: entry[idKey], change_ids: [] });
     }
   }
-  const implementationAnchors = materials.phase_coverage?.implementation_anchors;
+  const implementationAnchors = materials.ac_trace?.implementation_anchors;
   if (Array.isArray(implementationAnchors)) {
     for (const anchor of implementationAnchors) {
-      anchors.push({ ...anchor, map: "phase_coverage", entry_id: "implementation", change_ids: [] });
+      anchors.push({ ...anchor, map: "ac_trace", entry_id: "implementation", change_ids: [] });
     }
   }
   const ids = new Set();
@@ -1149,44 +966,35 @@ function writeTestSummary({ bundleRoot, task, materials }) {
   write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify(summary, null, 2)}\n`, "utf8"));
 }
 
-export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, uiScope = false, materials = {}, strictV2Maps = false, reviewRound = "initial" } = {}) {
+export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, uiScope = false, materials = {}, strictV2Maps = false } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
-  const isScopeRevision = Object.prototype.hasOwnProperty.call(materials, "scope_revision");
-  const effectiveScope = isScopeRevision ? null : stage === "build-code" ? (reviewScope ?? "phase") : null;
-  const rule = isScopeRevision ? scopeRevisionRule(stage) : ruleFor(stage, reviewTrack, effectiveScope);
-  if (isScopeRevision) validateScopeRevisionMaterial(materials.scope_revision, { stage });
+  const effectiveScope = stage === "build-code" ? (reviewScope ?? "phase") : null;
+  const rule = ruleFor(stage, reviewTrack, effectiveScope);
   for (const key of rule.required) if (!(key in materials) || !materialPresent(materials[key])) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${key}`);
-  validateMaterialAllowlist(rule, materials, reviewRound);
+  validateMaterialAllowlist(rule, materials);
   if (stage === "make-decision" && reviewTrack === "direction") {
     const allowed = new Set([...rule.required, ...rule.optional]);
     for (const key of Object.keys(materials)) if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
   }
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
-  const diffIndex = !isScopeRevision && stage === "build-code" && effectiveScope === "phase" ? diffIndexFor(source) : null;
-  const changeMap = !isScopeRevision && stage === "build-code" && effectiveScope === "phase" ? changeMapFor({ source, phaseId, diffIndex }) : null;
+  const diffIndex = stage === "build-code" && effectiveScope === "phase" ? diffIndexFor(source) : null;
+  const changeMap = stage === "build-code" && effectiveScope === "phase" ? changeMapFor({ source, phaseId, diffIndex }) : null;
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
-  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, reviewRound, effectiveScope, isScopeRevision ? "scope_revision" : null);
+  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
-  if (!isScopeRevision) validateVerifyEvidenceRoots(stage, materials);
-  if (!isScopeRevision && stage === "build-code") validateBuildCodeTestEvidence(materials, strictV2Maps);
+  validateVerifyEvidenceRoots(stage, materials);
+  if (stage === "build-code") validateBuildCodeTestEvidence(materials, strictV2Maps);
   rejectDirectRawEvidence(materials);
-  if (!isScopeRevision && stage === "build-code" && effectiveScope === "integration") {
+  if (stage === "build-code" && effectiveScope === "integration") {
     validateIntegrationFreshTests({ task, source, materials });
     validateIntegrationMaterials({ task, source, materials });
   }
-  if (!isScopeRevision && stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
+  if (stage === "build-code" && effectiveScope === "phase") validateBuildCodeContextSelection({ source, materials, diffIndex });
   const acEvidenceSummary = stage === "verify-code" && materials.acceptance_evidence
     ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
     : null;
   let providerMaterials = Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence"));
-  if (reviewRound === "incremental") {
-    if (!materialPresent(materials.review_delta)) throw new Error("MATERIAL_INCOMPLETE: incremental review requires runner-generated review_delta");
-    providerMaterials = {
-      review_instructions: materials.review_instructions,
-      review_delta: materials.review_delta,
-    };
-  }
-  const selectedContextDelivery = !isScopeRevision && rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
+  const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
   if (selectedContextDelivery) {
     const compacted = { ...providerMaterials };
     for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
@@ -1269,13 +1077,13 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     bundleRoot,
     reviewDataRoot,
     source,
-    materials: reviewRound === "incremental" ? { review_delta: materials.review_delta } : materials,
+    materials,
     canonicalOnly: selectedContextDelivery,
   });
 
   const stagePlan = stagePlanFor(stage, reviewTrack);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${reviewTrack ?? "default"}`);
-  const contractName = isScopeRevision ? "scope-revision" : stage === "make-decision" ? "make-decision" : stage;
+  const contractName = stage === "make-decision" ? "make-decision" : stage;
   write(bundleRoot, `contracts/${contractName}.md`, readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`));
   write(bundleRoot, "contracts/provider-protocol.md", readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol"));
   const selectedSkills = [...(stagePlan?.required_skills ?? []), ...(uiScope === true ? (stagePlan?.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])];
@@ -1285,23 +1093,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
 
   for (const [key, value] of Object.entries(providerMaterials)) {
-    if (key === "scope_revision") {
-      const current = value.current_materials;
-      const metadata = {
-        ...value,
-        current_materials: Object.fromEntries(Object.entries(current).map(([name, material]) => [name, {
-          path: `requirements/scope-revision/${name}.md`,
-          bytes: Buffer.byteLength(material.excerpt, "utf8"),
-          sha256: sha256(Buffer.from(material.excerpt, "utf8")),
-          source_path: material.path,
-          source_bytes: material.source_bytes,
-          source_sha256: material.source_sha256,
-        }]))
-      };
-      write(bundleRoot, "requirements/scope-revision.json", reviewMaterialBytes(key, metadata));
-      for (const [name, material] of Object.entries(current)) write(bundleRoot, `requirements/scope-revision/${name}.md`, Buffer.from(material.excerpt, "utf8"));
-      continue;
-    }
     const path = key === "review_instructions" ? "review-instructions.md" : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
     write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
@@ -1320,7 +1111,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
-  if ((isScopeRevision || (stage === "build-code" && effectiveScope === "phase")) && deliveryBytes > 330 * 1024) {
+  if (stage === "build-code" && effectiveScope === "phase" && deliveryBytes > 330 * 1024) {
     throw new Error("MATERIAL_INCOMPLETE: review packet exceeds 330 KiB; provide bounded affected excerpts");
   }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
@@ -1329,11 +1120,14 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
 
 function freezeCanonicalEvidence({ bundleRoot, task, stage, materials }) {
   const entries = [];
-  if (stage === "build-code" && materials.phase_coverage) {
-    for (const [kind, binding] of [
-      ["implementation", materials.phase_coverage.implementation_receipt],
-      ["tests", materials.phase_coverage.green_test_receipt],
-    ]) {
+  if (stage === "build-code" && materials.ac_trace) {
+    const bindings = new Map();
+    for (const item of materials.ac_trace.entries ?? []) {
+      for (const evidence of item.evidence ?? []) bindings.set(`implementation:${evidence.ref}`, { kind: "implementation", ref: evidence.ref, sha256: evidence.sha256 });
+      for (const test of item.test ?? []) bindings.set(`tests:${test.receipt_ref}`, { kind: "tests", ref: test.receipt_ref, sha256: test.receipt_hash });
+    }
+    for (const { kind, ref, sha256: expectedHash } of bindings.values()) {
+      const binding = { ref, sha256: expectedHash };
       if (!binding?.ref || !binding?.sha256) continue;
       const raw = assertTaskHandle(task).readRecord(binding.ref);
       const digest = sha256(raw);

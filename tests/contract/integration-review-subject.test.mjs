@@ -63,8 +63,8 @@ function fixture() {
   return { root, tree, task, artifacts };
 }
 
-describe("integration review subject history is non-blocking", () => {
-  it("builds a current subject when checkpoint, Phase history, and task rows are absent", () => {
+describe("integration review subject current-material boundary", () => {
+  it("builds a current subject without Phase history or seam records", () => {
     const f = fixture();
     const subject = buildIntegrationReviewSubject({
       task: f.task,
@@ -75,18 +75,13 @@ describe("integration review subject history is non-blocking", () => {
     });
 
     expect(subject.formal_record_status.status).toBe("unavailable");
-    expect(subject.audit_gaps.map(({ kind }) => kind)).toEqual(expect.arrayContaining([
-      "historical_phase_coverage",
-      "task_completion_history",
-    ]));
+    expect(subject.audit_gaps.map(({ kind }) => kind)).toEqual(["task_completion_history"]);
     expect(subject.ac_trace.entries).toHaveLength(1);
     expect(subject.ac_trace.entries[0].acceptance_criterion_id).toBe("AC-01");
     expect(subject.ac_trace.entries[0].change[0].task_id).toBeNull();
-    expect(subject.phase_coverage.status).toBe("unavailable");
-    expect(subject.phase_coverage.implementation_receipt).toEqual({ ref: "receipts/implementation.json", sha256: expect.any(String) });
-    expect(subject.phase_coverage.green_test_receipt).toEqual({ ref: "receipts/green.json", sha256: expect.any(String) });
-    expect(subject.phase_coverage.implementation_receipt).not.toHaveProperty("value");
-    expect(subject.phase_coverage.green_test_receipt).not.toHaveProperty("value");
+    expect(subject).not.toHaveProperty("phase_coverage");
+    expect(subject).not.toHaveProperty("seam_index");
+    expect(subject.ac_trace.implementation_anchors).toEqual([]);
   });
 
   it("keeps current implementation evidence fail-closed", () => {

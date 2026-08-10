@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
@@ -12,13 +13,41 @@ const candidate = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseli
 
 describe("public behavior baseline", () => {
   let evidence;
+  const liveProbe = process.env.WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR === "1";
 
   beforeAll(() => {
     // The live collector is an explicit architecture probe. Keep the normal suite
     // bounded and run the 14 isolated CLI cases only when requested.
-    evidence = process.env.WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR === "1"
+    evidence = liveProbe
       ? collectBehaviorEvidence(process.cwd())
       : candidate;
+  });
+
+  it.runIf(liveProbe)("executes every public behavior successfully in the real probe", () => {
+    expect(evidence.help.status, evidence.help.stderr).toBe(0);
+    for (const behavior of ["doctor", "status", "run", "review", "verify", "confirm", "authorize"]) {
+      for (const item of evidence[behavior].cases) {
+        expect(item.result.status, `${behavior}/${item.case_id}: ${item.result.stderr}`).toBe(0);
+      }
+    }
+    expect(evidence.doctor.cases[0].result.json).toMatchObject({ stage: "make-decision", materials: "working" });
+    expect(evidence.status.cases[0].result.json).toMatchObject({
+      work_status: "ready",
+      quality_status: "in_progress",
+    });
+    expect(evidence.run.cases[0].result.json).toMatchObject({
+      schema_version: "stage-runtime-result.vnext",
+      stage: "build-code",
+      work_status: "ready",
+    });
+    expect(evidence.review.cases[0].result.json).toMatchObject({ status: "continue" });
+    expect(evidence.verify.cases[0].result.json).toMatchObject({
+      schema_version: "workflowhub-receipt.v1",
+      stage: "verify-code",
+      exit_code: 0,
+    });
+    expect(evidence.confirm.cases[0].result.json).toMatchObject({ value: { schema_version: "human-confirmation.v2" } });
+    expect(evidence.authorize.cases[0].result.json).toMatchObject({ value: { schema_version: "irreversible-authorization.v1" } });
   });
 
   it("covers exactly the seven stable public behaviors plus help", () => {
@@ -65,7 +94,12 @@ describe("public behavior baseline", () => {
       probe: "run",
       baseline: { action: "scope", result: { status: 0, stdout: "legacy ledger" } },
       candidate: { action: "execute", result: { status: 1, stderr: "TypeError: run input requires a receipts object" } },
-    })).toBe("approved_internal_change");
+    })).toBe("behavior_regression");
+    expect(classifyComparison({
+      probe: "verify",
+      baseline: { result: { status: 0, stdout: "test receipt" } },
+      candidate: { result: { status: 1, stderr: "TypeError: run input requires a receipts object" } },
+    })).toBe("behavior_regression");
     expect(classifyComparison({
       probe: "authorize",
       baseline: { result: { status: 1, stderr: "full audit writer is only valid for a bounded human-confirmation attempt" } },
@@ -74,7 +108,12 @@ describe("public behavior baseline", () => {
     expect(classifyComparison({
       probe: "doctor",
       baseline: { result: { status: 0 } },
-      candidate: { result: { status: 0, json: { stage: "make-decision", materials: "not_applicable" } } },
+      candidate: { result: { status: 0, json: { stage: "make-decision", worktree_root: "/tmp/worktree", baseline_commit: "a".repeat(40) } } },
+    })).toBe("approved_internal_change");
+    expect(classifyComparison({
+      probe: "status",
+      baseline: { result: { status: 0 } },
+      candidate: { result: { status: 0, json: { work_status: "blocked_by_missing_material", quality_status: "in_progress", quality_predicates: {} } }, public_write_set: ["task.json"] },
     })).toBe("approved_internal_change");
     expect(classifyComparison({
       probe: "verify",
@@ -106,6 +145,25 @@ describe("public behavior baseline", () => {
     expect(manifest.baseline.path).not.toBe(manifest.candidate.path);
     expect(manifest.baseline.sha256).not.toBe(manifest.candidate.sha256);
   });
+
+  it("baseline:compare fails loud when --baseline is not the frozen fixture commit", () => {
+    const manifest = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseline/v1/manifest.json", "utf8"));
+    const requestedBaseline = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(requestedBaseline).not.toBe(manifest.baseline_commit);
+
+    const result = spawnSync(process.execPath, [
+      "tools/architecture/public-behavior-baseline.mjs",
+      "compare",
+      `--baseline=${requestedBaseline}`,
+      "--candidate=worktree",
+    ], { encoding: "utf8" });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("baseline fixture commit mismatch");
+    expect(result.stderr).toContain(requestedBaseline);
+    expect(result.stderr).toContain(manifest.baseline_commit);
+  }, 60_000);
 
   it("baseline:candidate-equals-baseline does not silently overwrite a changed candidate", () => {
     expect(JSON.stringify(candidate)).not.toBe(JSON.stringify(baseline));

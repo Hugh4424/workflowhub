@@ -20,11 +20,29 @@ function validator(name) {
 }
 
 describe("simple wh-review contracts", () => {
+  it("keeps finding disposition free of retired re-review flow identity", async () => {
+    const { validateReviewDisposition } = await import("../review-result.mjs");
+    expect(validateReviewDisposition({
+      finding_id: "finding-1",
+      decision: "accept",
+      verification: "reproduced",
+      root_cause: "confirmed",
+      evidence: "quality/evidence/finding-1.json",
+    })).toEqual({ valid: true, errors: [] });
+    expect(validateReviewDisposition({
+      finding_id: "finding-1",
+      decision: "accept",
+      verification: "reproduced",
+      root_cause: "confirmed",
+      evidence: "quality/evidence/finding-1.json",
+      rereview_flow_id: "retired-flow",
+    })).toMatchObject({ valid: false, errors: ["rereview_flow_id is retired"] });
+  });
+
   it("publishes the simple production entrypoints and bundles their runtime closure", () => {
     const manifest = readJson(join(root, "wh-review", "manifest.json"));
     expect(manifest.commands).toEqual({
       run: "scripts/wh-review-cli.mjs run",
-      "format-correct": "scripts/wh-review-cli.mjs format-correct",
       "verify-final": "scripts/wh-review-cli.mjs verify-final",
       doctor: "scripts/wh-review-cli.mjs doctor"
     });
@@ -56,7 +74,6 @@ describe("simple wh-review contracts", () => {
       "contracts/workflowhub-result.v2.json",
       "scripts/review-materials.mjs",
       "scripts/ac-evidence-summary.mjs",
-      "scripts/review-controller.mjs",
       "scripts/review-output.mjs",
       "scripts/review-provider-client.mjs",
       "scripts/review-result.mjs",
@@ -72,34 +89,21 @@ describe("simple wh-review contracts", () => {
     for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
-    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "test_evidence", "context_map", "evidence_map", "phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
-      expect(skill, material).toContain(material);
-    }
+    expect(skill).toContain("runtime/review/stage-materials.json");
+    expect(skill).toMatch(/strict material allowlist/i);
+    expect(skill).toMatch(/`context_map` and `evidence_map` are optional/);
     expect(skill).toMatch(/3rd-review config/i);
-    expect(skill).toMatch(/Runner-owned Skill entrypoint/);
-    expect(skill).toMatch(/codex-home\/skills/);
-    expect(skill).toMatch(/npm ci --ignore-scripts/);
-    expect(skill).toMatch(/Do not use\s+`npm install`/);
-    expect(skill).toMatch(/injected root exclusively/);
-    expect(skill).toMatch(/do not run a second checkout or fall back to cwd, a local\s+canonical repository/i);
-    expect(skill).toMatch(/host adapter.*provisioning protocol/i);
-    expect(skill).toMatch(/must not select providers/i);
-    expect(skill).toMatch(/`review_instructions`; callers must not add it/);
-    expect(skill).toMatch(/Local input validation fails before an attempt exists/);
-    expect(skill).toMatch(/later retry uses the same public contract[\s\S]*must not guess fields, providers, or models/i);
-    expect(skill).toMatch(/Send the input JSON over stdin/);
-    expect(skill).toMatch(/Never place a transient review-input file in/);
-    for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
+    expect(skill).toMatch(/Callers cannot select provider, model/);
+    expect(skill).toMatch(/Send transient input through stdin/);
+    for (const name of ["target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(name);
   });
 
-  it("requires the host protocol to provision the canonical Runner when Multica did not inject one", () => {
+  it("requires one explicit package root without checkout or path guessing", () => {
     const protocol = readFileSync(join(root, "workflowhub-host-protocol", "SKILL.md"), "utf8");
-    expect(protocol).toMatch(/multica repo checkout https:\/\/github\.com\/Hugh4424\/workflowhub --ref main/);
-    expect(protocol).toMatch(/npm ci --ignore-scripts/);
-    expect(protocol).toMatch(/不得用会改写锁文件的 `npm install` 代替/);
-    expect(protocol).toMatch(/若 Multica run 已注入 Runner root，必须只使用该注入的绝对路径/);
-    expect(protocol).toMatch(/checkout 非零就立即 fail-closed，绝不 fallback/);
-    expect(protocol).toMatch(/不能扫描本机目录、猜路径/);
+    expect(protocol).toMatch(/项目登记资源或宿主明确注入的绝对路径/);
+    expect(protocol).toMatch(/不扫描目录、不猜路径、不从旧记录回退/);
+    expect(protocol).not.toMatch(/multica repo checkout/);
+    expect(protocol).not.toMatch(/WORKFLOWHUB_HOST_BRIDGE|invoke-stage-skill/);
   });
 
   it("keeps the stage skill plan limited to provider-visible lenses", () => {
@@ -140,17 +144,17 @@ describe("simple wh-review contracts", () => {
             ]
       );
       for (const dependency of deps.skills.filter(({ name }) => reviewOwned.has(name))) {
-        expect(dependency.invocation, `${stage}: ${dependency.name}`).toBe("conditional");
+        expect(dependency, `${stage}: ${dependency.name}`).not.toHaveProperty("invocation");
+        expect(dependency, `${stage}: ${dependency.name}`).not.toHaveProperty("dispatch");
       }
     }
 
     const stageDependencies = (stage) => yaml.load(
       readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8")
     ).skills;
-    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
-      .toMatchObject({ execution: "inline", invocation: "always", trigger: "ambiguity_scan" });
+    expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify")).toBeUndefined();
     expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
-      .toMatchObject({ execution: "inline", invocation: "always", trigger: "cross_material_analysis" });
+      .toMatchObject({ execution: "inline", trigger: "cross_material_analysis" });
     expect(stageDependencies("build-code").find(({ name }) => name === "review")).toBeUndefined();
     expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
     expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
@@ -165,14 +169,16 @@ describe("simple wh-review contracts", () => {
       for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
     const deps = yaml.load(readFileSync(join(projectRoot, "workflows", "verify-code", "skill-deps.yaml"), "utf8"));
     expect(deps.skills.find(({ name }) => name === "wh-review"))
-      .toMatchObject({ execution: "inline", invocation: "always", trigger: "post_first_repair" });
+      .toMatchObject({ execution: "inline", trigger: "post_first_repair" });
     const steps = readJson(join(projectRoot, "workflows", "verify-code", "steps.json")).steps;
     const qualityReview = steps.find(({ step_slug }) => step_slug === "run-one-independent-architecture-review");
     const publish = steps.find(({ step_slug }) => step_slug === "publish-verification-attempt");
     expect(qualityReview).toMatchObject({ order: 5, depends_on: [4], completion_evidence: expect.arrayContaining([
-      { kind: "review", uri_or_path: "review://verify-code-independent" },
-      { kind: "skill_invocation", uri_or_path: "skill://wh-review" },
+      { kind: "review", uri_or_path: "quality/reviews/" },
     ]) });
+    expect(qualityReview.completion_evidence).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "skill_invocation" }),
+    ]));
     expect(publish).toMatchObject({ order: 8, depends_on: [7] });
     const contract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
     expect(contract).toMatch(/post-repair[\s\S]*异源架构验收[\s\S]*wh-review/);
@@ -191,15 +197,6 @@ describe("simple wh-review contracts", () => {
       source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
       snapshot_tree: oid,
       material_id: hash,
-      lineage: {
-        request_id: "request-1",
-        prompt_hash: hash,
-        round: "initial",
-        prior_attempt_refs: [],
-        prior_runtime_ids: {},
-        correction_ref: null,
-        dispatch_sequence: 0
-      },
       provider_attempts: [{ provider: "opencode", status: "failed", session_id: null, runtime_id: null, output_ref: null, error: { code: "AUTH", message: "login required" } }],
       terminal_status: "unavailable",
       error: { code: "PROVIDER_UNAVAILABLE", message: "no valid provider" }
@@ -244,27 +241,30 @@ describe("simple wh-review contracts", () => {
     expect(validate(forbiddenDraftTasks)).toBe(false);
     expect(matrix.stages["build-code"].profiles.phase.source_bundle).toBe("diff");
     expect(matrix.stages["build-code"].profiles.integration.source_bundle).toBe("none");
-    expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "ac_trace"]));
+    expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["approved_spec", "acceptance_criteria", "test_evidence", "ac_trace", "review_instructions"]));
+    expect(matrix.stages["build-code"].profiles.integration.required).not.toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "phase_map_trace"]));
+    expect(matrix.stages["build-code"].profiles.integration.optional).toEqual([]);
     for (const stage of ["build-spec", "build-plan"]) {
       const rule = matrix.stages[stage];
-      expect(rule.v2_required_maps).toEqual(["context_map", "evidence_map"]);
-      expect(rule.required).toEqual(expect.arrayContaining(rule.v2_required_maps));
-      expect(rule.optional).not.toEqual(expect.arrayContaining(rule.v2_required_maps));
+      expect(rule.v2_required_maps).toEqual([]);
+      expect(rule.required).not.toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
+      expect(rule.optional).toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
     }
     expect(matrix.stages["verify-code"].v2_required_maps).toEqual([]);
     expect(matrix.stages["verify-code"].required).toEqual(expect.arrayContaining(["architect_assessment", "final_test_summary"]));
     expect(matrix.stages["verify-code"].optional).toEqual(expect.arrayContaining(["acceptance_evidence", "context_map", "evidence_map"]));
     expect(matrix.stages["make-decision"].tracks.direction.v2_required_maps).toEqual([]);
     const detail = matrix.stages["make-decision"].tracks.detail;
-    expect(detail.v2_required_maps).toEqual(["context_map", "evidence_map"]);
-    expect(detail.required).toEqual(expect.arrayContaining(detail.v2_required_maps));
-    expect(detail.optional).not.toEqual(expect.arrayContaining(detail.v2_required_maps));
+    expect(detail.v2_required_maps).toEqual([]);
+    expect(detail.required).not.toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
+    expect(detail.optional).toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
     const phase = matrix.stages["build-code"].profiles.phase;
-    expect(phase.required).toEqual(expect.arrayContaining(phase.v2_required_maps));
-    expect(phase.optional).not.toEqual(expect.arrayContaining(phase.v2_required_maps));
-    const missingIntegrationTrace = structuredClone(matrix);
-    missingIntegrationTrace.stages["build-code"].profiles.integration.required = missingIntegrationTrace.stages["build-code"].profiles.integration.required.filter((key) => key !== "ac_trace");
-    expect(validate(missingIntegrationTrace)).toBe(false);
+    expect(phase.v2_required_maps).toEqual([]);
+    expect(phase.required).not.toEqual(expect.arrayContaining(["phase_map", "impact_map", "reuse_map", "acceptance_map"]));
+    expect(phase.optional).toEqual(expect.arrayContaining(["phase_map", "impact_map", "reuse_map", "acceptance_map"]));
+    const missingIntegrationTests = structuredClone(matrix);
+    missingIntegrationTests.stages["build-code"].profiles.integration.required = missingIntegrationTests.stages["build-code"].profiles.integration.required.filter((key) => key !== "test_evidence");
+    expect(validate(missingIntegrationTests)).toBe(false);
     const direction = matrix.stages["make-decision"].tracks.direction;
     expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement", "objective_facts"]));
     expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution", "decision_log", "spec", "plan", "changes_diff"]));

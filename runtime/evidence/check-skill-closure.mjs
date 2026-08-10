@@ -6,6 +6,8 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { resolveLocalSkill, validateReviewBundleProjection, validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
 import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 
+const MAKE_DECISION_ONLY_SKILLS = new Set(["talk-with-zhipeng", "grill-with-docs"]);
+
 function readYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function pushError(errors, message) { errors.push(message); }
 function schemaValidator(root, name) {
@@ -83,19 +85,30 @@ export function checkSkillClosure(packageRoot) {
       const pathName = dep.path?.split("/").at(-2);
       if (pathName !== dep.name) pushError(errors, `${stage}: dependency name/path mismatch for ${dep.name}`);
       declared.add(dep.name);
-      if (dep.owner !== "stage" || dep.dispatch !== "stage") {
-        pushError(errors, `${stage}: stage manifest skill must declare owner=stage and dispatch=stage: ${dep.name}`);
+      if (dep.owner !== "stage") pushError(errors, `${stage}: stage manifest skill must declare owner=stage: ${dep.name}`);
+      if (stage !== "make-decision" && MAKE_DECISION_ONLY_SKILLS.has(dep.name)) {
+        pushError(errors, `${stage}: ${dep.name} is owned exclusively by make-decision`);
       }
       const catalogEntry = byName.get(dep.name);
       if (!catalogEntry) pushError(errors, `${stage}: undeclared catalog skill ${dep.name}`);
       if (catalogEntry?.path !== dep.path) pushError(errors, `${stage}: catalog path mismatch for ${dep.name}`);
-      if (!dep.trigger || !["always", "conditional"].includes(dep.invocation)) pushError(errors, `${stage}: invalid invocation contract for ${dep.name}`);
+      if (typeof dep.trigger !== "string" || dep.trigger.length === 0) pushError(errors, `${stage}: invalid trigger for ${dep.name}`);
       if (!["inline", "independent"].includes(dep.execution)) pushError(errors, `${stage}: invalid execution mode for ${dep.name}`);
       try {
         resolveLocalSkill(root, dep.path);
         const checked = validateSkillBundle(root, dep.bundle, dep.path);
         validateSchema(validateBundle, checked.bundle, `${stage}/${dep.name}: bundle`, errors);
       } catch (error) { pushError(errors, `${stage}/${dep.name}: ${error.message}`); }
+    }
+    for (const [group, capabilities] of [
+      ["runtime_capabilities", manifest.runtime_capabilities],
+      ["external_capabilities", manifest.external_capabilities],
+    ]) {
+      for (const capability of capabilities || []) {
+        if (capability.absence_semantics !== "diagnostic") {
+          pushError(errors, `${stage}: ${group}/${capability.id} absence_semantics must be diagnostic`);
+        }
+      }
     }
     if (manifestNames.has("wh-review")) {
       const plan = JSON.parse(fs.readFileSync(path.join(root, "skills/wh-review/stage-skill-plan.json"), "utf8"));
@@ -133,13 +146,6 @@ export function checkSkillClosure(packageRoot) {
       }
     }
     const prompt = fs.readFileSync(path.join(root, `workflows/${stage}/SKILL.md`), "utf8");
-    for (const dep of manifest.skills || []) {
-      if (reviewPlanNames.has(dep.name)) continue;
-      const escaped = dep.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (!prompt.includes(dep.path) && !new RegExp(`(?:^|[^a-z0-9-])${escaped}(?:$|[^a-z0-9-])`, "im").test(prompt)) {
-        pushError(errors, `${stage}: manifest skill has no runtime prompt reference: ${dep.name}`);
-      }
-    }
     for (const line of prompt.split("\n")) {
       if (line.includes("原组件路径")) continue;
       for (const match of line.matchAll(/skills\/([a-z][a-z0-9-]*)\/SKILL\.md/g)) {

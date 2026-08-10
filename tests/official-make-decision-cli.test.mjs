@@ -42,7 +42,7 @@ describe("make-decision public CLI cutover", () => {
     ["doctor", "workspace"],
     ["status", "begin"],
     ["run", "execute"],
-    ["review", "invoke"],
+    ["review", "risk"],
     ["confirm", "decision"],
     ["authorize", "commit"],
   ])("recognizes public route %s:%s before task lookup", (behavior, action) => {

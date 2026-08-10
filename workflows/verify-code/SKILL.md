@@ -6,115 +6,104 @@ version: 4.0.0
 
 # Verify Code：架构师验收
 
-## 目标
+## 目标与进入条件
 
 verify-code 只回答一个问题：当前实现是否完整、合理、能交付。
 
-它要看当前四份材料（current materials）、真实代码和当前改动，重点检查：
+当前 task 的以下四份材料存在且可读，就直接开始或继续验收：
 
-- 原始需求有没有漏掉；
-- 用户流程、状态、成功和失败边界是否闭合；
-- 完整用户流程是否从入口走到成功、失败和恢复结果；
-- 设计中的职责、模块接口、复用和失败处理是否合理；
-- 代码是否真的实现了设计；
-- 验收点和测试是否足够支持结论。
+- `decision-log.md`
+- `spec.md`
+- `plan.md`
+- `tasks.md`
 
-每次结论前都必须做一次语义反向检查：原始需求 → 决策 → Design/spec → 完整用户流程
-（入口、成功、失败和恢复）→ plan/tasks → AC → 测试/证据。`requirement_replay` 是否持久化
-是可选的审计表现形式，但这次反向检查本身不是可选项；缺少证据只能记为
+旧 review、provider 状态、执行记录和审计历史只作背景，不是工作许可证。它们缺失、失败、
+过期或 `unavailable`，都不能冻结代码修改、材料修正、测试或同 task 修复，也不能触发新建
+successor、recovery、rebind 或 continuation task。
+
+Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decision。verify-code 读取其
+结论，不要求用户重讲过程，也不要求过程索引。发现原始方向真的变化时，保持同一 task，
+交给 make-decision 更新决定；发现实现或现有材料问题时，在同一 task 修复。
+
+## 验收范围
+
+检查四份材料、真实代码和当前改动，重点回答：
+
+- 原始需求是否完整落到当前决定、设计、计划和任务；
+- 用户流程是否覆盖入口、成功、失败和恢复；
+- 状态、数据、接口、复用、安全和失败处理是否合理；
+- 代码是否真的实现设计；
+- 每个适用 AC 是否有当前结果；
+- 风险相关测试和独立 review 是否足以支持结论。
+
+每次结论前必须做一次语义反向检查：原始需求 → 决策 → `spec.md` → 完整用户流程
+（入口、成功、失败和恢复）→ `plan.md`/`tasks.md` → AC → 测试/证据。缺证据只能记为
 `unknown/incomplete`，不能算 `pass`。如果 decision-log 明确引用了研究，必须检查对应的当前
-研究事实；没有真实研究问题时，`skipped` 也要保留，不能凭空补研究。
+研究事实；没有真实研究问题时，保留 `skipped`，不能凭空补研究。
 
-本阶段不是重新写 spec/plan，也不是整理审计档案。它 never block a new verification attempt；发现需求本身变了，才回到
-make-decision；发现实现问题，回到同一任务修复。
+## Portable dependency
 
-这里的 Design 指 `spec.md` 中的用户可观察需求、流程、状态和验收边界，不是要在
-verify-code 重新设计产品。
-
-## 采用的审查方法
-
-主 agent 用本机 `code-review` 的两条线检查：
-
-1. **Spec**：实现是否符合原始需求和四份材料。
-2. **Standards**：实现是否符合宪法、仓库约定和安全边界。
-
-同时用 `codebase-design` 的词汇检查 module、interface、seam、depth、locality
-和复用。它们是思考方法，不创建额外 ledger、provider 或 stage gate。
-
-WorkflowHub 只调用一次 `wh-review` 做异源复核。它是 one independent `wh-review` semantic/code review，不是
-第二个收集器。AgentHub 原
-`test-acceptance` 提示词中的真实测试和验收矩阵保留；历史 fresh-replay、重复
-gate、重复审查和“必须拿 pass 才能继续”不保留。
+直接使用 `skill-deps.yaml` 声明的 portable dependency：打开 `wh-review` 的已声明
+`SKILL.md`，在当前 agent 上下文中执行。不要经过 dispatcher、invocation protocol 或辅助
+推进 gate。`wh-review` 负责异源独立复核；主 agent 负责验收判断和 finding 处置。
 
 ## 固定流程：最多四个动作
 
-严格按下面顺序做，最多一次架构检查、两次主 agent 修改、一次异源复核：
-
 1. **架构师检查一次**
 
-   读取 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`、当前 diff 和真实实现。
-   输出短报告：问题、代码/材料锚点、影响、建议、是否属于当前范围。
-同时给 every applicable acceptance criterion 一个简短结论：`pass`、`fail`、`unknown` 或 `deferred`。证据缺失不能算 pass。
+   读取四材料、当前 diff、真实实现和已有当前测试事实。输出短报告：问题、代码/材料锚点、
+   影响、建议、是否属于当前范围。给 every applicable acceptance criterion 一个简短结论：
+   `pass`、`fail`、`unknown`、`deferred` 或 `not_applicable`；证据缺失不能算 `pass`。
+   完成标准：原始需求反向检查、完整用户流程、风险边界和逐 AC 结果全部有明确结论。
 
 2. **主 agent 修改一次**
 
-   主 agent 逐条判断第一步的 findings。只修合理且影响交付的问题；无效 finding
-   记录理由；不为格式或审计偏好扩散范围。所有修改在同一任务完成，不创建 successor、
-   replacement review 或新 ledger。
+   逐条判断第一步 findings。修复合理且影响交付的问题；无效 finding 记录证据；延期项写清
+   风险和 owner。不为格式或审计偏好扩散范围。修改留在同一 task。生产代码变更后只跑
+   受影响测试。完成标准：每个 finding 都有 `fixed`、`rejected_invalid`、`accepted_risk` 或
+   `needs_human`。
 
 3. **异源审查一次**
 
-   修改后调用一次 `wh-review`。它看当前验收标准、架构师短报告、最终测试摘要和
-   未决风险，重点找需求遗漏、架构边界错误、实现与设计不一致、失败路径遗漏。
-   `pass`、`revise_required`、`unavailable` 都只是事实；不因 provider verdict 反复循环。
+   直接使用 `wh-review` 检查当前验收标准、架构师短报告、真实测试摘要、代码上下文和未决
+   风险。保留原始 provider、model、session、verdict、error 和 provenance。`pass`、
+   `revise_required`、timeout、invalid output、failure、`unavailable` 都按原样记录；
+   `unavailable` 绝不是 `pass`，也不因 verdict 反复循环。完成标准：一份真实异源 review
+   事实或真实 unavailable 事实已经记录。
 
-4. **主 agent 最后修改一次**
+4. **主 agent 收尾修改一次**
 
-   主 agent 逐条判断异源 findings。修复有效且影响交付的问题，记录无效或延期项。
-   这是最后一批修复；修复后只做受影响测试和一次最终测试/检查，不再开启新的审查轮。
-
-`verification.json` 可以用一个很短的 `review_cycle` 记录这四步；它是交接摘要，
-不是第二套状态机。每个 finding 必须留下来源、影响、判断、处理或延期对象，但不要求
-为每个历史来源重新建一条 requirement replay；原始需求回放只保留为可选审计事实，不重复建立历史台账。
+   逐条判断异源 findings，修复有效且影响交付的问题，记录无效、风险接受或延期项。修复后
+   跑受影响测试，再执行一次 `tasks.md` 声明的最终测试/检查；不再开启新的 review 轮。
+   完成标准：每个 finding 有处置，最终测试有真实结果，每个适用 AC 有最终状态。
 
 ## 测试和证据
 
-- 最终测试命令只读 `tasks.md` 的 final route，不硬编码 `npm test`；它形成一个 current complete test command
-  和 current complete-test fact，并绑定当前 snapshot。要得到 `passed`，current complete test suite is green，
-  且 every applicable AC is `pass`（或明确 `not_applicable`）。
-- 第一次架构检查前可以读已有测试事实；修复生产代码后只跑受影响测试。
-- 最终只跑一次声明的最终测试。测试失败是 `failed`；超时、缺失或环境不可用是
-  `unknown/incomplete`，不能重跑到变绿。
-- 每个适用 AC 只保留一个简短结果：场景、预期、实际结果和覆盖限制。已有 canonical
-  acceptance evidence 可以复用；不为审查包复制完整日志、全量 evidence tree 或历史 replay。
-- CLI/runtime 任务记录 `browser_qa=not_applicable` 及理由；只有 UI 任务才做真实浏览器验收。
-- 旧 receipt、旧 review、旧 audit 只作背景，不能证明当前代码正确，也不能触发循环。
-- Old and historical receipts, reviews, and audits are read-only background; they never license or block current progress.
+- 最终测试命令只读 `tasks.md` 的 final route，不硬编码工具。真实执行命令、结果和覆盖限制。
+- 最终声明 `passed` 前，风险相关测试和 current complete test suite 必须为 green，且 every
+  applicable AC 为 `pass` 或有真实 `not_applicable` 理由。
+- 测试失败记 `failed`；超时、缺命令、环境不可用记 `unknown/incomplete`，不能重跑到变绿。
+- 每个适用 AC 保留场景、预期、实际、证据和覆盖限制。已有当前有效证据可以复用；不复制
+  全量日志或历史台账。
+- UI 任务执行真实浏览器验收；非 UI 任务记录 `not_applicable` 和理由。
+- 独立 review 是必须记录的质量事实；真实 `unavailable` 可作为事实，但不能支持 `passed`。
 
-## 结论
+## 结论与 fail-loud 写入
 
-- `passed`：当前代码符合四份材料，适用 AC 有结果，最终测试通过，异源审查已做且没有
-  未处理的严重问题。
-- `failed`：代码、测试或 AC 明确失败；回同一任务修复，但不新建任务。
-- `incomplete`：测试、审查、AC 或快照事实缺失/不可用/超时；如实显示缺口，不伪造 pass。
+- `passed`：实现符合四材料，完整用户流程闭合，适用 AC 有当前结果，风险相关测试和最终
+  测试通过，独立 review 已做，且没有未处置的严重 finding。
+- `failed`：代码、测试或 AC 明确失败；回同一 task 修复，不新建任务。
+- `incomplete`：测试、review、AC 或其他必要质量事实缺失、不可用或超时；如实显示缺口。
 
-在交接中用大白话说明：检查了什么、修了什么、审查指出什么、最后还剩什么风险。
-verify-code 的确认只确认这份验收结论；confirmation accepts only this verification conclusion，does not authorize
-irreversible action；这是 normal verify-code confirmation，不是 close。failure never authorizes close；close 需要
-separate explicit authorization。
-close、commit、push、merge、archive 和清理
-仍需 separate explicit authorization。
+缺质量事实只限制完成声明，不限制继续验收和修复。运行事实写入遇到错 task、workspace、
+runtime、hash、schema 或写集合时，对该次写入 fail-loud，保留原始错误，不伪造成功；代码、
+四材料、测试和 finding 修复仍在同一 task 继续。
 
-## Keep it simple
+## 阶段末交接
 
-保留能回答当前验收问题的最小事实；不为了让表格、receipt 或 provider packet 看起来
-完整而新增字段。review、测试或 evidence 缺失时标 `unknown/incomplete`，但不因此开新循环。
+用大白话说明：检查了什么、修了什么、逐 AC 和测试结果、异源 review 的真实状态、finding
+如何处置、最后还剩什么风险。只让用户确认这份验收结论；该确认不授权 commit、push、
+merge、archive 或 cleanup，这些操作仍需单独明确授权。
 
-## 不做的事
-
-- 不把 requirement replay、历史 inventory、review packet hash 或 provider transport
-  变成当前交付 gate。
-- 不因为 reviewer 没有 pass 就无限重审。
-- 不用一次全量测试绿替代 AC、用户流程或架构判断。
-- 不新增证据系统、恢复系统、successor/predecessor、reopen 或 replacement task。
-- Do not create another task or any historical-evidence progression mechanism。
+不要求用户重复 Talk/Grill，不要求下游读取验收过程索引，不用一次全量测试绿替代 AC、
+用户流程或架构判断，也不因 reviewer 没有 `pass` 而无限重审。

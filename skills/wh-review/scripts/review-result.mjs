@@ -129,8 +129,8 @@ export function aggregateProviderResults(providerResults, minimumReviewers = 1, 
 const DISPOSITION_DECISIONS = new Set(["accept", "partial", "reject", "needs_human"]);
 
 // A disposition is the smallest durable fact needed after a finding is
-// consumed. Replay bindings, repair flow, and re-review orchestration belong
-// to the wh-review controller and are deliberately not part of this contract.
+// consumed. Replay bindings and re-review orchestration are retired and are
+// deliberately not part of this contract.
 export function validateReviewDisposition(value) {
   const errors = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -139,10 +139,11 @@ export function validateReviewDisposition(value) {
   if (typeof value.finding_id !== "string" || value.finding_id.trim() === "") errors.push("finding_id required");
   if (!DISPOSITION_DECISIONS.has(value.decision)) errors.push("invalid decision");
   if (["accept", "partial"].includes(value.decision)) {
-    for (const field of ["verification", "root_cause", "evidence", "rereview_flow_id"]) {
+    for (const field of ["verification", "root_cause", "evidence"]) {
       if (typeof value[field] !== "string" || value[field].trim() === "") errors.push(`${field} required for accepted finding`);
     }
   }
+  if (value.rereview_flow_id !== undefined) errors.push("rereview_flow_id is retired");
   if (value.decision === "reject" && (typeof value.evidence !== "string" || value.evidence.trim() === "")) {
     errors.push("evidence required for rejected finding");
   }
@@ -212,7 +213,6 @@ function latestAttempts(attempt) {
   return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
-const REVIEW_ROUNDS = new Set(["initial", "incremental", "closure", "full", "legacy"]);
 const FAILURE_CATEGORIES = Object.freeze({
   completed: "completed",
   OUTPUT_INVALID: "output_invalid",
@@ -286,59 +286,16 @@ export function classificationSummary(attempt, result = null) {
   };
 }
 
-export function validateReviewLineage(value, label = "review lineage") {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
-  const allowed = new Set(["request_id", "prompt_hash", "round", "prior_attempt_refs", "prior_runtime_ids", "correction_ref", "dispatch_sequence"]);
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new Error(`${label} contains unsupported fields: ${unknown.join(", ")}`);
-  if (typeof value.request_id !== "string" || value.request_id.trim() === "") throw new TypeError(`${label}.request_id is required`);
-  if (!/^[a-f0-9]{64}$/.test(value.prompt_hash ?? "")) throw new TypeError(`${label}.prompt_hash must be sha256`);
-  if (!REVIEW_ROUNDS.has(value.round)) throw new TypeError(`${label}.round is invalid`);
-  const refPattern = /^(?:quality\/reviews|reviews)\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/;
-  if (!Array.isArray(value.prior_attempt_refs) || value.prior_attempt_refs.some((ref) => typeof ref !== "string" || !refPattern.test(ref))) {
-    throw new TypeError(`${label}.prior_attempt_refs must contain canonical attempt refs`);
-  }
-  if (!value.prior_runtime_ids || typeof value.prior_runtime_ids !== "object" || Array.isArray(value.prior_runtime_ids)
-      || Object.values(value.prior_runtime_ids).some((runtimeId) => runtimeId !== null && (typeof runtimeId !== "string" || runtimeId.trim() === ""))) {
-    throw new TypeError(`${label}.prior_runtime_ids must be a provider-to-runtime map`);
-  }
-  if (value.correction_ref !== null && !refPattern.test(value.correction_ref ?? "")) throw new TypeError(`${label}.correction_ref must be null or a canonical attempt ref`);
-  if (!Number.isSafeInteger(value.dispatch_sequence) || value.dispatch_sequence < 0) throw new TypeError(`${label}.dispatch_sequence must be a non-negative integer`);
-  return Object.freeze({
-    request_id: value.request_id,
-    prompt_hash: value.prompt_hash,
-    round: value.round,
-    prior_attempt_refs: Object.freeze([...value.prior_attempt_refs]),
-    prior_runtime_ids: Object.freeze({ ...value.prior_runtime_ids }),
-    correction_ref: value.correction_ref,
-    dispatch_sequence: value.dispatch_sequence,
-  });
-}
-
-export function createReviewLineage({ requestId, promptHash, round, priorAttemptRefs = [], priorRuntimeIds = {}, correctionRef = null, dispatchSequence = 0 } = {}) {
-  return validateReviewLineage({
-    request_id: requestId,
-    prompt_hash: promptHash,
-    round,
-    prior_attempt_refs: priorAttemptRefs,
-    prior_runtime_ids: priorRuntimeIds,
-    correction_ref: correctionRef,
-    dispatch_sequence: dispatchSequence,
-  });
-}
-
 export function aggregateReviewMetrics(attempts = []) {
   const records = Array.isArray(attempts) ? attempts : [attempts];
   const failureTaxonomy = {};
   let providerAttemptCount = 0;
   let retryCount = 0;
-  let correctionCount = 0;
   let failedDurationMs = 0;
   for (const record of records) {
     const summary = classificationSummary(record);
     providerAttemptCount += summary.provider_attempt_count;
     retryCount += summary.retry_count;
-    if (record?.lineage?.correction_ref !== null && record?.lineage?.correction_ref !== undefined) correctionCount += 1;
     failedDurationMs += summary.failed_duration_ms;
     for (const [code, entry] of Object.entries(summary.failure_taxonomy)) {
       failureTaxonomy[code] = { code: entry.code, category: entry.category, count: (failureTaxonomy[code]?.count ?? 0) + entry.count };
@@ -348,7 +305,6 @@ export function aggregateReviewMetrics(attempts = []) {
     attempt_count: records.length,
     provider_attempt_count: providerAttemptCount,
     retry_count: retryCount,
-    correction_count: correctionCount,
     failed_duration_ms: failedDurationMs,
     failure_taxonomy: failureTaxonomy,
   };
@@ -370,7 +326,7 @@ export function renderReviewReport({ attempt, result = null }) {
     "",
   ];
   if (attempt.review_policy) {
-    lines.push(`- policy: \`${attempt.review_policy.source}/${attempt.review_policy.round}\`; configured mode \`${attempt.review_policy.mode}\``);
+    lines.push(`- policy: \`${attempt.review_policy.source}\`; configured mode \`${attempt.review_policy.mode}\``);
     lines.push(`- requested profiles: ${attempt.review_policy.requested_profiles.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
     const pins = attempt.review_policy.requested_profile_specs ?? [];
     if (pins.length > 0) lines.push(`- requested profile pins: ${pins.map((profile) => `\`${profile.provider}\` priority=${profile.priority}; model=${profile.model ?? "null"}; effort=${profile.effort ?? "null"}; thinking=${profile.thinking ?? "null"}`).join(" | ")}`);

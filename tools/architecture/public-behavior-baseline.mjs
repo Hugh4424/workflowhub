@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, realpathSync, readdirSync, lstatSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCanonicalSource, createSourceManifest } from "../../runtime/evidence/canonical-source.mjs";
+import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
 import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const FIXTURE_ROOT = resolve(ROOT, "tests/fixtures/public-behavior-baseline/v1");
@@ -86,45 +88,6 @@ function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 }
 
-function fixedSourceManifest() {
-  const canonical = createCanonicalSource({
-    source_type: "workflowhub-baseline",
-    source_id: "public-behavior-baseline",
-    revision: "v1",
-    requirements: ["BASELINE-001"],
-  });
-  const manifest = createSourceManifest({
-    canonical_source: canonical,
-    atoms: [{
-      requirement_id: "BASELINE-001",
-      text: "The public behavior remains observable.",
-      owner: "workflowhub-baseline",
-      authority: "fixed-baseline-input",
-      status: "accepted",
-      stale: false,
-      derived_from: [],
-      supersedes: [],
-    }],
-  });
-  if (!manifest.ok) throw new Error(`unable to create fixed source manifest: ${manifest.errors?.join("; ")}`);
-  return manifest.manifest;
-}
-
-function fixedLedgerInput() {
-  const source_manifest = fixedSourceManifest();
-  const ref = (kind, uri_or_path) => ({ kind, uri_or_path, content_hash: sha256(uri_or_path) });
-  return {
-    source_manifest,
-    mappings: {
-      "BASELINE-001": {
-        decision_ref: ref("decision", "baseline://decision/BASELINE-001"),
-        artifact_refs: [ref("artifact", "baseline://artifact/BASELINE-001")],
-        acceptance_criteria_refs: [ref("acceptance", "baseline://acceptance/BASELINE-001")],
-      },
-    },
-  };
-}
-
 function prepareIsolatedCase(root, behavior, variant = "default") {
   const caseRoot = mkdtempSync(join(realpathSync("/tmp"), "workflowhub-public-behavior-case-"));
   const home = join(caseRoot, "home");
@@ -164,11 +127,17 @@ function setupAction(root, state, args) {
   return runCli(root, args, { env: state.env });
 }
 
+function requireSuccessfulSetup(result, label) {
+  if (result.status !== 0) throw new Error(`${label} failed: ${result.stderr || result.stdout}`);
+  return result;
+}
+
 function collectCase(root, behavior, variant = "default") {
   const state = prepareIsolatedCase(root, behavior, variant);
   try {
     const common = [`--project=${state.project}`, `--task=${state.task}`];
     let action;
+    let stage = "make-decision";
     let inputPath;
     let setup = [];
     if (behavior === "doctor") {
@@ -177,38 +146,87 @@ function collectCase(root, behavior, variant = "default") {
       action = "begin";
     } else if (behavior === "run") {
       action = "execute";
-      setup.push(setupAction(root, state, ["status", "--action=begin", "--stage=make-decision", ...common, `--reason=fixed baseline status ${variant}`]));
-      inputPath = join(state.caseRoot, "requirements.json");
-      writeFileSync(inputPath, `${JSON.stringify(fixedLedgerInput(), null, 2)}\n`, "utf8");
+      stage = "build-code";
+      setup.push(requireSuccessfulSetup(
+        setupAction(root, state, ["doctor", "--action=workspace", "--stage=make-decision", ...common]),
+        `run ${variant} workspace setup`,
+      ));
+      const task = openTask(state.taskPath, state.project, state.task);
+      const workspace = openCurrentTaskWorkspace(task);
+      const implementation = writeOfficialComponentReceipt({
+        task,
+        workspace,
+        stage,
+        component: "implementation",
+        payload: {},
+      });
+      const testInputPath = join(state.caseRoot, `run-tests-${variant}.json`);
+      writeFileSync(testInputPath, `${JSON.stringify({
+        command: "true",
+        receipt_ref: `quality/tests/baseline-run-${variant}.json`,
+        output_ref: `quality/tests/output/baseline-run-${variant}.output`,
+      }, null, 2)}\n`, "utf8");
+      const tests = requireSuccessfulSetup(
+        setupAction(root, state, ["verify", "--action=execute", `--stage=${stage}`, ...common, `--input=${testInputPath}`]),
+        `run ${variant} test setup`,
+      );
+      setup.push(tests);
+      inputPath = join(state.caseRoot, `run-${variant}.json`);
+      writeFileSync(inputPath, `${JSON.stringify({
+        receipts: {
+          implementation: implementation.ref,
+          tests: tests.json.receipt_ref,
+        },
+      }, null, 2)}\n`, "utf8");
     } else if (behavior === "review") {
-      action = "invoke";
-      setup.push(setupAction(root, state, ["doctor", "--action=workspace", "--stage=make-decision", ...common]));
-      setup.push(setupAction(root, state, ["status", "--action=begin", "--stage=build-spec", ...common, `--reason=fixed baseline review ${variant}`]));
+      action = "risk";
+      stage = "build-spec";
+      setup.push(requireSuccessfulSetup(
+        setupAction(root, state, ["doctor", "--action=workspace", "--stage=make-decision", ...common]),
+        `review ${variant} workspace setup`,
+      ));
+      const task = openTask(state.taskPath, state.project, state.task);
+      const workspace = openCurrentTaskWorkspace(task);
+      const reviewRef = `quality/reviews/results/baseline-review-${variant}.json`;
+      const reviewPath = join(state.taskPath, reviewRef);
+      mkdirSync(dirname(reviewPath), { recursive: true });
+      writeFileSync(reviewPath, `${JSON.stringify({
+        task_id: state.task,
+        stage,
+        snapshot_tree: captureExecutionSnapshot(workspace.worktreeRoot).tree,
+        verdict: "pass",
+        adjudication: { clusters: [] },
+      }, null, 2)}\n`, "utf8");
+      inputPath = join(state.caseRoot, "review-risk.json");
+      writeFileSync(inputPath, `${JSON.stringify({ review_result_ref: reviewRef }, null, 2)}\n`, "utf8");
     } else if (behavior === "verify") {
       action = "execute";
-      setup.push(setupAction(root, state, ["doctor", "--action=workspace", "--stage=make-decision", ...common]));
+      stage = "verify-code";
+      setup.push(requireSuccessfulSetup(
+        setupAction(root, state, ["doctor", "--action=workspace", "--stage=make-decision", ...common]),
+        `verify ${variant} workspace setup`,
+      ));
       inputPath = join(state.caseRoot, "verify.json");
       const command = variant === "default" ? "true" : "node -e \"process.stdout.write('fixed-baseline-alternate')\"";
-      writeFileSync(inputPath, `${JSON.stringify({ command, receipt_ref: `receipts/baseline-verify-${variant}.json`, output_ref: `evidence/baseline-verify-${variant}.output` }, null, 2)}\n`, "utf8");
+      writeFileSync(inputPath, `${JSON.stringify({ command, receipt_ref: `quality/tests/baseline-verify-${variant}.json`, output_ref: `quality/tests/output/baseline-verify-${variant}.output` }, null, 2)}\n`, "utf8");
     } else if (behavior === "confirm") {
       action = "decision";
     } else if (behavior === "authorize") {
       action = "commit";
-      const confirmation = setupAction(root, state, ["confirm", "--action=decision", ...common, "--stage=make-decision", "--decision=accepted"]);
+      const confirmation = setupAction(root, state, ["confirm", "--action=decision", ...common, "--stage=make-decision", "--attempt=HEAD", "--decision=accepted"]);
       setup.push(confirmation);
       if (confirmation.status !== 0 || !confirmation.json?.ref) throw new Error("baseline authorize setup could not publish confirmation");
       state.confirmationRef = confirmation.json.ref;
     } else {
       throw new TypeError(`unknown public behavior: ${behavior}`);
     }
-    const args = [behavior, `--action=${action}`, ...common, `--stage=${behavior === "verify" ? "verify-code" : "make-decision"}`];
-    if (behavior === "doctor") args.push("--stage=make-decision");
+    const args = [behavior, `--action=${action}`, ...common, `--stage=${stage}`];
     if (behavior === "status") args.push("--reason=fixed baseline begin");
     if (behavior === "run") args.push(`--input=${inputPath}`);
-    if (behavior === "review") args.push("--stage=build-spec", "--name=plan-design-review", "--invocation-key=baseline", "--triggered=false", "--reason=not required for fixed baseline");
+    if (behavior === "review") args.push(`--input=${inputPath}`);
     if (behavior === "verify") args.push(`--input=${inputPath}`);
     if (behavior === "confirm") args.push("--decision=accepted");
-    if (behavior === "authorize") args.push(`--human-confirmation-ref=${state.confirmationRef}`, "--subject-ref=HEAD");
+    if (behavior === "authorize") args.push(`--subject-ref=${state.confirmationRef}`);
     const result = runCli(root, args, { env: state.env });
     const writeSet = listFiles(state.taskPath);
     const input = inputPath
@@ -293,57 +311,48 @@ function validateCaseEvidence(caseValue, label, errors) {
 }
 
 export function classifyComparison({ probe, baseline, candidate } = {}) {
+  const candidateResult = probe === "help" ? candidate : candidate?.result;
+  if (candidateResult?.status !== 0) return "behavior_regression";
   if (JSON.stringify(semanticProjection(baseline)) === JSON.stringify(semanticProjection(candidate))) return "preserved";
   const baselineText = JSON.stringify(baseline);
-  const candidateText = JSON.stringify(candidate);
+  if (probe === "help"
+      && JSON.stringify(candidateResult?.json?.behaviors) === JSON.stringify(BEHAVIORS)
+      && Object.keys(candidateResult?.json?.actions ?? {}).every((behavior) => BEHAVIORS.includes(behavior))) {
+    return "approved_internal_change";
+  }
   if (probe === "run" && /legacy attempt writer is unavailable for vNext tasks/.test(baselineText)
-      && !/legacy attempt writer is unavailable for vNext tasks/.test(candidateText)) return "approved_bug_fix";
-  // The vNext cutover intentionally retires the old `run:scope` ledger input.
-  // The current public `run:execute` route rejects that legacy payload before
-  // any fact is written; this is an explicit contract change, not a silent
-  // regression. Keep the classification narrow so unrelated run failures
-  // still fail the baseline comparison.
+      && !/legacy attempt writer is unavailable for vNext tasks/.test(JSON.stringify(candidate))) return "approved_bug_fix";
   if (probe === "run"
       && baseline.action === "scope"
       && candidate.action === "execute"
-      && candidate.result?.status === 1
-      && /run input requires a receipts object/.test(candidate.result?.stderr ?? "")) {
-    return "approved_internal_change";
-  }
-  if (probe === "verify"
-      && candidate.result?.status === 1
-      && /run input requires a receipts object/.test(candidate.result?.stderr ?? "")) {
+      && candidate.result?.json?.schema_version === "stage-runtime-result.vnext"
+      && candidate.result?.json?.stage === "build-code") {
     return "approved_internal_change";
   }
   if (probe === "doctor"
-      && candidate.result?.status === 0
       && candidate.result?.json?.stage === "make-decision"
-      && candidate.result?.json?.materials === "not_applicable") {
+      && typeof candidate.result?.json?.worktree_root === "string"
+      && typeof candidate.result?.json?.baseline_commit === "string") {
     return "approved_internal_change";
   }
   if (probe === "status"
-      && candidate.result?.status === 0
-      && candidate.result?.json?.status === "in_progress"
-      && Array.isArray(candidate.result?.json?.predicates)
-        === false
-      && candidate.result?.json?.predicates
+      && new Set(["ready", "blocked_by_missing_material"]).has(candidate.result?.json?.work_status)
+      && new Set(["in_progress", "completed"]).has(candidate.result?.json?.quality_status)
+      && candidate.result?.json?.quality_predicates
       && !candidate.public_write_set?.some((ref) => ref.startsWith("runs/"))) {
     return "approved_internal_change";
   }
   if (probe === "review"
-      && candidate.result?.status === 0
-      && candidate.result?.json?.invocation?.status === "not_invoked"
-      && String(candidate.result?.json?.invocation?.workflow_run_id ?? "").startsWith("vnext-")) {
+      && candidate.action === "risk"
+      && candidate.result?.json?.status === "continue") {
     return "approved_internal_change";
   }
   if (probe === "verify"
-      && candidate.result?.status === 0
       && candidate.result?.json?.schema_version === "workflowhub-receipt.v1"
       && typeof candidate.result?.json?.source_digest === "string") {
     return "approved_internal_change";
   }
   if (probe === "confirm"
-      && candidate.result?.status === 0
       && candidate.result?.json?.value?.schema_version === "human-confirmation.v2"
       && /^(?:quality\/confirmations|evidence\/confirmations)\//.test(String(candidate.result?.json?.ref ?? ""))) {
     return "approved_internal_change";
@@ -353,7 +362,6 @@ export function classifyComparison({ probe, baseline, candidate } = {}) {
   // a bug fix, not mistaken for a public behavior regression.
   if (probe === "authorize"
       && /full audit writer is only valid for a bounded human-confirmation attempt/.test(baselineText)
-      && candidate.result?.status === 0
       && ["authorization.v2", "irreversible-authorization.v1"].includes(candidate.result?.json?.value?.schema_version)) {
     return "approved_bug_fix";
   }
@@ -419,6 +427,10 @@ export function verify({ root = ROOT } = {}) {
 export function compare({ baseline = "HEAD", root = ROOT, candidate = "worktree" } = {}) {
   const commit = resolveCommit(baseline);
   if (candidate !== "worktree") throw new TypeError("compare candidate must be worktree");
+  const fixtureCommit = readJson(MANIFEST).baseline_commit;
+  if (fixtureCommit !== commit) {
+    throw new Error(`baseline fixture commit mismatch: requested ${commit}, frozen fixture ${fixtureCommit}`);
+  }
   const baselineTree = git(root, ["rev-parse", `${commit}^{tree}`]);
   const candidateSnapshot = captureExecutionSnapshot(root);
   if (candidateSnapshot.tree === baselineTree) {
@@ -432,6 +444,10 @@ export function compare({ baseline = "HEAD", root = ROOT, candidate = "worktree"
   const expected = frozenBaseline();
   const actual = collectBehaviorEvidence(root);
     const conclusions = Object.fromEntries(PROBES.map((probe) => {
+      if (probe === "help") {
+        const classification = classifyComparison({ probe, baseline: expected.help, candidate: actual.help });
+        return [probe, { classification, cases: [{ case_id: "help", classification }] }];
+      }
       const baselineCases = expected[probe]?.cases ?? [];
       const candidateCases = actual[probe]?.cases ?? [];
       const cases = baselineCases.map((baselineCase, index) => ({

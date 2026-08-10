@@ -8,143 +8,156 @@ version: 3.0.0
 
 ## Purpose
 
-Turn the original requirement into one readable, user-confirmed direction. The
-result must state the problem, scope, non-goals, success criteria, important
-trade-offs, risks, and unresolved items. It creates the first current material
-through the authenticated ArtifactDir as the task's `decision-log.md`.
+Turn the original requirement into one readable, user-confirmed direction in
+`decision-log.md`. This stage exclusively owns user-facing Talk, Clarify,
+necessary research, Grill, and the decision log. Downstream stages consume the
+result; they do not replay these activities or infer missing decisions.
 
-## Working rule
+## Authority
 
-The current materials are the source of truth:
+The current task has four working materials:
 
 1. `decision-log.md`
 2. `spec.md`
 3. `plan.md`
 4. `tasks.md`
 
-These names are relative to the authenticated ArtifactDir. A root-level
-`decision-log.md` is not a current material and must never be read or written.
+`make-decision` owns `decision-log.md`. Read the original requirement and any
+current materials that already exist. Old accepted records, reviews, execution
+records, worktrees, and history are audit facts only; they neither authorize nor
+block Talk, drafting, revision, or same-task repair.
 
-At this stage, author the decision log from the original requirement and current
-facts. Later stages may revise it in the same task. Old accepted records,
-receipts, reviews, snapshots, generations, worktrees, and runner
-history are read-only audit records. They never license or block ordinary work.
+Keep three conclusions separate:
 
-Keep three questions separate:
+- Work may continue while the current requirement and materials can be read.
+- A fact write with a wrong task, workspace, runtime, hash, schema, or declared
+  write boundary fails loudly for that write.
+- Stage completion additionally requires the real decision work and quality
+  facts listed below.
 
-- Can work continue? Read the current materials and fix or extend them.
-- Can a formal record be published? Its current task, workspace, runtime, and
-  declared write set must be structurally authentic; fail loudly if not.
-- Can this stage be called complete? Its real Talk, needed research, independent
-  review (or real `unavailable`), user confirmation, and handoff must exist.
+A failed fact write never freezes the conversation or material repair. Preserve
+the error, fix the binding or content, and continue in the same task.
 
-## Runtime boundary
+## Portable dependencies
 
-Use only the launcher-supplied `StageContext`. Do not infer task identity from
-cwd, Git, branch, issue number, or directory scanning. `make-decision` alone
-may call `prepare` to create or validate the authenticated CandidateWorkspace;
-that is a write-boundary check, not a historical-progress gate.
+Use the dependency packages declared in `skill-deps.yaml` directly. Open each
+dependency's declared `SKILL.md` and follow it in the current agent context. Do
+not route them through a dispatcher, invocation protocol, or auxiliary progress
+gate.
 
-The launcher owns paths, TaskKernel records, execution identity, and metrics.
-Use `ctx.kernel` for records, `ctx.candidateWorkspace` for the authenticated
-worktree, and `ctx.artifacts` for the current material. Write only
-`ctx.artifacts.writeAtomic("decision-log.md", content)`; never write a root
-file or use a caller-supplied path. Do not copy runner files into the target
-repository or pass `--runner-root`. Caller-owned temporary inputs stay under
-an OS temporary directory; canonical records stay TaskKernel-owned.
+- `talk-with-zhipeng`: user-facing Talk and Clarify.
+- `grill-with-docs`: challenge the chosen direction against current facts.
+- `decision-log`: write the decision record.
+- `wh-review`: obtain independent review evidence.
 
-The current public sequence is `run`, `confirm`, then `authorize` when an
-irreversible operation needs authorization. There is no public `prepare`,
-`start-run`, or accepted-result writer. `confirm` must contain a real human answer.
-A rejected confirmation is an honest result; preserve it and revise the
-current material if needed.
+Only the main agent may execute user-facing Talk, Grill, or Clarify. Research
+may use an independent agent or search provider, but the main agent presents the
+decision and questions to the user.
 
 ## Procedure
 
-1. Read the original requirement and current facts. Run the stage preflight and
-   publish only the current decision facts and quality facts.
-2. Only the main agent may execute user-facing Talk, Grill, or Clarify. Run a
-   real `talk-with-zhipeng` conversation in the user's visible context (repeat
-   only when the user adds a new direction-changing question). Talk must
-   cover both architecture direction and product journey or user outcome. Ask
-   only questions whose answers could change direction. Do not invent user
-   answers. Finish when direction-changing ambiguity is resolved or explicitly
-   recorded.
-3. Research only when it can materially change the direction and is authorized.
-   Use a frozen, non-sensitive request. Otherwise record a clear skip reason.
-   Report the few findings that changed scope, constraints, or risk.
-4. Run `grill-with-docs` after Talk Round 3 to check the current domain and
-   documentation facts before drafting the decision record. Grill must show a
-   visible plain-language summary, options, consequences, and risks in the
-   user's conversation; a silent child-agent call is not communication.
-5. Draft `decision-log.md` through `ctx.artifacts`. For every load-bearing decision, record its source,
-   facts and constraints, choice and rationale, affected scope, consequences,
-   risks, rejected alternatives, non-goals, and unresolved items. Use plain
-   language and update `CONTEXT.md` or an ADR only when that documentation is
-   genuinely needed.
-6. Run independent review through `wh-review`. The direction track receives a
-   blind packet: requirement, objective facts, constraints, and non-goals only.
-   The detail track reviews the current decision material. For that detail
-   track, the caller must include `context_map` and `evidence_map` with the
-   current `raw_requirement`, `approved_direction`, and
-   `draft_spec_or_acceptance` before every call. Rebuild and resend both maps
-   after a material revision; do not retry with only the text fields. If a map
-   is incomplete, use the valid `state: unknown` form with `unknown_reason`,
-   never omit it, send `{}`, or invent anchors. Record the actual result as
-   returned: `MATERIAL_INCOMPLETE`/`unavailable`, failure, or a finding is
-   never `pass`. Initial/full detail packets deliver both maps; an incremental
-   packet intentionally delivers only the runner-generated `review_delta` after
-   the current maps pass validation.
-7. Address valid findings in the same task. Repair them, reject invalid ones
-   with evidence, or let the user explicitly accept a concrete risk. A finding
-   never requires a new task or repeat review solely to manufacture a pass. If
-   the current material changes, update it and, after an existing `pass`
-   baseline, let wh-review inspect only the runner-generated delta and its
-   direct impacts. Do not send unchanged material for a second full review. If
-   a safe delta cannot be derived, record the fallback full review explicitly.
-8. Publish the current decision receipt and facts using the runtime's declared
-   schema. Publication must reject wrong task/workspace/runtime bindings,
-   mismatched content, or false execution identity. The bytes in
-   the ArtifactDir `decision-log.md` must equal the immutable quality-evidence
-   decision bytes; otherwise fail loudly. Missing historical evidence is
-   disclosed as audit debt, not used to prevent work.
-9. Present a short decision card: direction, scope, non-goals, success criteria,
-   main risks, review facts, and unresolved items. Ask for explicit accept or
-   reject and record the real answer with `confirm`; use `authorize` only for
-   a separately authorized irreversible operation.
+1. Replay the original requirement. Separate confirmed facts, assumptions,
+   direction-changing ambiguity, non-goals, and deferred work. Completion:
+   every part of the original requirement is represented or explicitly marked
+   unresolved.
+2. Run visible Talk and Clarify. Talk must cover both architecture direction and
+   product journey or user outcome. Ask only questions whose answers could
+   change direction, one at a time when practical. Offer 2-3 meaningful choices
+   with plain-language consequences and risks. Do not invent user answers.
+   Keep the dependency's candidate queues and question cards in the current
+   conversation only. Accept only its minimal `talk`, `clarify`, and
+   `decision_updates` result. Completion: `talk` truthfully reports architecture
+   and user-outcome coverage, while `clarify.open_direction_changing_questions`
+   is `0` after a real reply or because no direction-changing ambiguity exists.
+3. Research only when the answer could materially change the direction. Use a
+   narrow, non-sensitive question and report only findings that change scope,
+   constraints, feasibility, or risk. Otherwise record a short skip reason.
+   Completion: every necessary research question has a finding or a truthful
+   `unavailable`; unnecessary research has a reason for skipping.
+4. Use `grill-with-docs` once the direction is stable. Present its useful
+   challenge in plain language: options, consequences, risks, conflicts, and
+   disposition. Fold its minimal `grill_summary.decision_updates` and necessary
+   CONTEXT/ADR outcome into `decision-log.md`, then discard the session history;
+   do not pass Grill facts downstream or store a separate Grill record.
+   Completion: every direction-changing challenge is resolved or remains visible
+   as an unresolved risk in `decision-log.md`.
+5. Use `decision-log` to write `decision-log.md`. For every load-bearing
+   decision record the original source, facts and constraints, choice and
+   rationale, affected scope, consequences, risks, rejected alternatives,
+   non-goals, unresolved items, and deferred work. Completion: the record is
+   readable without reconstructing the Talk history and does not claim an
+   answer the user did not give.
+6. Use `wh-review` directly for independent review of the current requirement
+   and decision. Review context maps are optional; provide them only when they
+   improve the review. Preserve actual provider, model, session, verdict, error,
+   and provenance. `MATERIAL_INCOMPLETE`, failure, timeout, and `unavailable`
+   are never `pass`. Completion: one real independent review attempt is recorded
+   or its real unavailability is recorded.
+7. Dispose every finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
+   `needs_human`. Repair valid findings in this task; reject invalid findings
+   with evidence; ask the user before accepting a concrete serious risk. Do not
+   repeat an unchanged review merely to manufacture `pass`. Completion: no
+   finding is unexplained.
+8. Present a short decision card: direction, scope, non-goals, success criteria,
+   main risks, review fact, unresolved items, and deferred work. Ask the user to
+   accept or reject it and preserve the actual answer. A rejection leads to
+   another bounded revision of this same task.
 
-Before handoff to `build-spec`, present a short plain-language summary of what
-was done, the artifacts produced, scope and non-goals, risks, deferred items,
-and what the next stage must not guess. Wait for the user's actual reply before
-handoff; without that reply keep the stage `in_progress`/`pending` and do not
-claim completion.
+After the user accepts the final current decision, the Stage Agent directly
+assembles exactly one immutable interaction aggregate with these fields:
 
-## Review and quality
+```json
+{
+  "schema_version": "workflowhub-interaction-aggregate.v1",
+  "task_id": "<current task>",
+  "stage": "make-decision",
+  "snapshot_tree": "<current snapshot tree>",
+  "talk": {
+    "status": "completed",
+    "round_count": 3,
+    "architecture_direction_covered": true,
+    "user_outcome_covered": true
+  },
+  "clarify": {
+    "status": "resolved",
+    "open_direction_changing_questions": 0,
+    "resolved_by": "user_reply"
+  },
+  "decision_ref": "<current decision-log ref>",
+  "decision_hash": "<current decision-log hash>"
+}
+```
 
-`wh-review` is the only review-provider owner. Review is independent quality
-evidence, not an automatic pass gate. Major or blocking actionable findings
-require one real user choice: repair first (recommended) or accept the stated
-risk. The latter keeps the original verdict and never excuses structural
-publication errors.
+Serialize the aggregate once, hash those exact bytes with SHA-256, and write it
+directly to `quality/evidence/interactions/<sha256>.json`. The path hash must
+match the stored bytes. Bind only the current task, `make-decision` stage,
+snapshot, and accepted decision. Do not create a run, revision, latest pointer,
+ledger, controlled-writer protocol, per-round record, question-card archive, or
+Grill history. If the accepted decision changes before completion, assemble a
+new aggregate from the new final decision; never mutate an existing hash path.
 
-Do not claim completion until all declared components have actually run (or a
-conditional one has a recorded skip reason), the review fact is real, and the
-user confirmation and handoff are real. Completion is distinct from commit,
-push, merge, archive, or cleanup; those need separate authorization.
+## Completion and fact writing
 
-## Communication and handoff
+Do not claim this stage complete until Talk and Clarify are resolved, necessary
+research ran or has a truthful outcome, Grill ran, `decision-log.md` is current,
+independent review is recorded as its actual result, every finding has a
+disposition, the user explicitly accepted the decision, and the content-addressed
+interaction aggregate binds that accepted decision. The aggregate is a completion
+fact, not a permit to continue working.
 
-Use the user's language and concise plain-language cards. Talk questions offer
-2–3 meaningful choices only when a user decision is needed. Review cards name
-the subject, actual providers, verdict, important findings, intended
-disposition, and next step. Keep paths, hashes, refs, and commands in formal
-records.
+Missing or unavailable quality facts limit only the completion claim. They do
+not prevent continued Talk, decision-log revision, or finding repair. Write
+current facts only to the task's existing fact and quality stores. If a
+structural check rejects a write, report that exact failure; never turn it into
+success or create a substitute record.
 
-Report completion through the runtime-owned renderer and `skill-deps.yaml`:
-every always component is `executed`; every conditional component is `executed`
-or `trigger=false — reason`. Do not invent a parallel completion state machine.
+## Communication and stage end
 
-## Metrics
+Use the user's language and plain-language cards. Keep paths, hashes, refs, and
+commands in formal records. Before moving to `build-spec`, explain what was
+decided, scope and non-goals, remaining risks, deferred work, and what downstream
+stages must not guess. Wait for the user's actual reply before handoff; without
+that reply keep the stage `in_progress`/`pending` and do not claim completion.
 
-Use only the launcher-issued metrics capability. Record entry and exit; metric
-write failures are warnings and must not fabricate success.
+Downstream stages read this summary and the four materials. They must not ask the
+user to repeat Talk or Grill, and they need no index of the decision process.

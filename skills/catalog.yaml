@@ -41,7 +41,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b966baea047b65314719a1aec8190bbc5da55b8ff5cbe6301b5fc0294343cf78
+    local_bundle_hash: 87961a81e4ca775d1630c715604228147e432d92009c389e2469af069617d49c
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -83,7 +83,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f2cb46ec55c11d2e842ee8434b2a85feeeea948dc56fc9d4dd8d51b4e1c1fedb
+    local_bundle_hash: 024ad59eb4ca93d3469b01056b1a248d47f1836e7914552d4c74a54c4159f716
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -137,7 +137,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: fc56691d20b70a4168062a7bfd15b1e2d46c8560882d30e437a8e8653e2f7df1
+    local_bundle_hash: 0bf4d23484ac31e0dc71ebf3149b91ee51ab4fc8647e609413cb61f8609329b1
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -147,7 +147,7 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 恢复 plan 内容合同和模板；同一 TaskHandle 重试按允许输入幂等复用 plan；唯一 plan 真相仍由 build-plan 当前材料承载
+    local_changes: 计划只保留实现方案、边界、依赖、测试、风险、回滚和任务映射；删除运行时状态与宿主交接字段
     retry_contract:
       owner: spec-plan Stage Agent
       consumer: same TaskHandle current build-plan stage
@@ -158,7 +158,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.1.0
-    local_bundle_hash: 3d398cd1671a3f98b1286d465f881cdb8c760ae91a466640381f1ceb663835f5
+    local_bundle_hash: ea7f2dc50d5bff4751a815ba617f9e26f50484833ab364e78cd574dc459e71a8
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -168,7 +168,7 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 恢复任务粒度、RED/GREEN、oracle 和追溯模板；不新增 issue tracker 或状态机
+    local_changes: 任务卡保留目标、依赖、精确文件、动作、验证、证据、追溯、STOP，以及四材料内唯一的最小状态和执行事实；不承载 runtime 状态机
     dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze
@@ -229,7 +229,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 72b33f2921bd2382e5c73c9202b9e523842fcc2d019e3125026444c54e263de1
+    local_bundle_hash: fdcb3dd41334e46d8d8d4487c62e9ed5562e390fd1465693edc526a548af3179
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -237,7 +237,7 @@ skills:
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
     used_by_stages: []
     upstream: []
-    local_changes: 保留仓内 provenance；增加显式 Codex-only host bridge 规则与删除条件，排除核心 Bundle 和生产扫描，未接入五个阶段依赖
+    local_changes: 宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知
     dependency_closure: []
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync
@@ -257,14 +257,14 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: dfc86b3fb5789cf2a53588ab27f02c048147c3c243aa8eb550d8d7a6c0b3f32a
+    local_bundle_hash: 73248bccd6992326a79bb1a669ce6a96050d627ea3b8dde81f32411dea9122eb
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
-    design_idea: frozen materials、attempt/result、相同审查身份精确复用、verify-final
+    design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: workflowhub 原生 V4 实现；review-runner 是唯一 consumer，使用受信 attachment root 下的原生 advisory lock 占位文件；内核在进程退出时释放持锁，锁文件只由 attachment-root 生命周期清理删除，runner 不按 PID 猜测或删除
+    local_changes: 只冻结材料并调用一次新的 3rd-review 公共 run；不发起 continuation/session 恢复，删除 scope_revision、本地协调锁、provider polling 和第二 timeout，保留路径安全与 broker 返回的原始 provenance
     dependency_closure: [skills/wh-review]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: plan-ceo-review
@@ -439,15 +439,15 @@ skills:
   - name: testing-system-blueprint
     path: skills/testing-system-blueprint/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 47abb7b30f417f5ea1444b37151b6013a66b63b94328e1e4f5e8e68e225f4400
+    local_bundle_hash: c59ba3c2def665e78aec7fe5fe70effa1b6531877dd83b3a39c192e3308aec2f
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 保留可复用的测试蓝图参考，不进入本标准阶段调用链
+    purpose: build-plan 的 advisory 测试设计输入，不承担执行器或交付 gate
     design_idea: blueprint 先于执行器，覆盖行为、状态、错误、seam 和交付限制
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md" }]
-    local_changes: 标明不进入标准 build-plan/build-code 链；不新增 AgentHub release gate 或执行器控制面
+    local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面
     dependency_closure: []
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
   - name: backend-testing
@@ -543,7 +543,7 @@ capability_decisions:
   - name: superpowers-requesting-code-review
     status: absorbed
     purpose: 请求独立 code review
-    design_idea: 审查必须异源、有 receipt、有 continuation
+    design_idea: 审查必须异源、有 receipt；每次都是新的 broker public request
     used_by_stages: [build-code]
     local_path: skills/wh-review
     upstream: [{ <<: *superpowers, path: "skills/requesting-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/requesting-code-review" }]

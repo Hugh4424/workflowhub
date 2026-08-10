@@ -4,12 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { smokeLocalSkillDispatch } from "../../tools/cli/smoke-local-skill-dispatch.mjs";
+import { smokeLocalSkillPackages } from "../../tools/cli/smoke-local-skill-dispatch.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
-it("dispatches the canonical git archive under a clean HOME", async () => {
+it("resolves direct skill packages from the canonical git archive", async () => {
   const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-archive-"));
   roots.push(temporary);
@@ -26,9 +26,9 @@ it("dispatches the canonical git archive under a clean HOME", async () => {
   // A canonical archive intentionally excludes node_modules. Install the
   // declared production dependencies before exercising the extracted runtime.
   execFileSync("npm", ["ci", "--ignore-scripts", "--offline"], { cwd: artifact, stdio: "ignore" });
-  const result = await smokeLocalSkillDispatch(artifact);
+  const result = smokeLocalSkillPackages(artifact);
   expect(result).toHaveLength(5);
-  expect(result.every(item => item.dispatch_count > 0)).toBe(true);
-  expect(result.every(item => item.authenticated_outcome_count === item.dispatch_count)).toBe(true);
+  expect(result.every(item => item.skill_count > 0 && item.step_count > 0)).toBe(true);
+  expect(result.every(item => item.bundle_hashes.length === item.skill_count)).toBe(true);
   expect(fs.existsSync(path.join(artifact, ".git"))).toBe(false);
 }, 15_000);

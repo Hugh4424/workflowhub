@@ -17,7 +17,7 @@ export async function runProviderSmoke(input) {
   mkdirSync(reviewDataRoot, { recursive: true }); mkdirSync(attachmentRoot, { recursive: true }); mkdirSync(dirname(evidencePath), { recursive: true });
   const providerClient = new ReviewProviderClient({ command, config });
   const result = await runReview({ sourceRoot, targetRepoRoot, reviewDataRoot, attachmentRoot, taskId: required(input, "task_id"), stage: required(input, "stage"), reviewTrack: input.review_track ?? null,
-    materials, hostProvider: required(input, "host_provider"), providers, previousRuntimeIds: input.previous_runtime_ids ?? {}, providerClient });
+    materials, hostProvider: required(input, "host_provider"), providers, providerClient });
   const evidence = { version: 1, kind: "real-provider-smoke", input: { source_root: sourceRoot, target_repo_root: targetRepoRoot, review_data_root: reviewDataRoot, attachment_root: attachmentRoot, config, providers, task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null }, result };
   writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, { flag: "wx" }); return { ...result, evidencePath };
 }

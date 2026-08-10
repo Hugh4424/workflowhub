@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import yaml from "js-yaml";
 
 import { validateAcceptanceDesignMinimum, validateSpecContentProfile } from "../runtime/stage/stage-content-contracts.mjs";
 
 describe("current specification contract", () => {
-  it("requires a readable current spec, a revision note, and real independent review", () => {
+  it("keeps one current spec revision target and one real independent review fact", () => {
     const workflow = readFileSync(new URL("../workflows/build-spec/SKILL.md", import.meta.url), "utf8");
-    for (const term of [
-      "current four materials",
-      "stable ID",
-      "current-material revision note",
-      "independent `wh-review`",
-      "never a pass",
-    ]) expect(workflow).toContain(term);
+    const deps = yaml.load(readFileSync(new URL("../workflows/build-spec/skill-deps.yaml", import.meta.url), "utf8"));
+    const steps = JSON.parse(readFileSync(new URL("../workflows/build-spec/steps.json", import.meta.url), "utf8")).steps;
+    const reviewSteps = steps.filter(({ step_slug }) => step_slug === "review-frozen-spec");
+
+    expect(workflow).toMatch(/decision-log\.md[\s\S]*spec\.md[\s\S]*plan\.md[\s\S]*tasks\.md/);
+    expect(workflow).toMatch(/(?:existing|current)[^\n]*spec\.md[^\n]*(?:revision target|当前)/i);
+    expect(workflow).toMatch(/stable IDs?/i);
+    expect(deps.skills.filter(({ name }) => name === "wh-review")).toHaveLength(1);
+    expect(reviewSteps).toHaveLength(1);
+    expect(reviewSteps[0].observable_result).toMatch(/independent.*wh-review|独立.*wh-review/i);
+    expect(workflow).toMatch(/unavailable[\s\S]{0,220}(?:never|不能|不得)[\s\S]{0,40}pass/i);
   });
 });
 

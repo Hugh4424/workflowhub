@@ -44,8 +44,7 @@
         "generated": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "forbidden": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "minimum_reviewers": { "type": "integer", "minimum": 1 },
-        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "scope_revision": { "$ref": "#/$defs/rule" }
+        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
     },
@@ -79,8 +78,7 @@
           "required": ["phase", "integration"],
           "properties": {
             "phase": { "$ref": "#/$defs/phaseRule" },
-            "integration": { "$ref": "#/$defs/integrationRule" },
-            "scope_revision": { "$ref": "#/$defs/rule" }
+            "integration": { "$ref": "#/$defs/integrationRule" }
           },
           "additionalProperties": false
         }
@@ -106,9 +104,11 @@
             "source_bundle": { "const": "none" },
             "required": {
               "allOf": [
-                { "contains": { "const": "phase_coverage" } },
-                { "contains": { "const": "seam_index" } },
-                { "contains": { "const": "ac_trace" } }
+                { "contains": { "const": "test_evidence" } },
+                { "contains": { "const": "ac_trace" } },
+                { "not": { "contains": { "const": "phase_coverage" } } },
+                { "not": { "contains": { "const": "seam_index" } } },
+                { "not": { "contains": { "const": "phase_map_trace" } } }
               ]
             },
             "forbidden": {

@@ -14,7 +14,15 @@ function observations(stage) {
 
 describe("five-stage completion predicates derive only from quality facts", () => {
   it("reserves full-suite freshness for final verification", () => {
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("grill");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("research");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("decision_coverage");
+    expect(STAGE_PREDICATES["build-spec"]).not.toHaveProperty("traceability");
+    expect(STAGE_PREDICATES["make-decision"].direction_review).toBe("review");
+    expect(STAGE_PREDICATES["make-decision"].detail_review).toBe("review");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("independent_review");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
+    expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");
     expect(STAGE_PREDICATES["build-code"].risk_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"].full_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
@@ -75,9 +83,9 @@ describe("five-stage completion predicates derive only from quality facts", () =
       "plan.md": "plan",
       "tasks.md": "tasks",
     })).toMatchObject({
-      status: "completed",
-      authority: "current-four-materials-and-plan-tasks",
-      missing: [],
+      work_status: "ready",
+      work_authority: "current-four-materials-and-plan-tasks",
+      missing_materials: [],
     });
   });
 
@@ -87,24 +95,24 @@ describe("five-stage completion predicates derive only from quality facts", () =
       "spec.md": "spec",
       "plan.md": "plan",
       "tasks.md": "tasks",
-    })).toMatchObject({ status: "completed", missing: [], fact_refs: [] });
+    })).toMatchObject({ work_status: "ready", missing_materials: [] });
   });
 
   it("does not make early stages depend on files created later", () => {
     expect(deriveStageProgress("make-decision", [], {
       "decision-log.md": "decision",
     })).toMatchObject({
-      status: "completed",
-      required_materials: ["decision-log.md"],
-      missing: [],
+      work_status: "ready",
+      required_materials: [],
+      missing_materials: [],
     });
     expect(deriveStageProgress("build-spec", [], {
       "decision-log.md": "decision",
       "spec.md": "spec",
     })).toMatchObject({
-      status: "completed",
-      required_materials: ["decision-log.md", "spec.md"],
-      missing: [],
+      work_status: "ready",
+      required_materials: ["decision-log.md"],
+      missing_materials: [],
     });
   });
 });

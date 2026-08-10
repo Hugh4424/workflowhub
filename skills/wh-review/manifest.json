@@ -3,7 +3,6 @@
   "name": "wh-review",
   "commands": {
     "run": "scripts/wh-review-cli.mjs run",
-    "format-correct": "scripts/wh-review-cli.mjs format-correct",
     "verify-final": "scripts/wh-review-cli.mjs verify-final",
     "doctor": "scripts/wh-review-cli.mjs doctor"
   },
@@ -38,10 +37,6 @@
     "build-code": {
       "path": "contracts/build-code.md",
       "required_skills": ["simplicity-guard", "review"]
-    },
-    "scope-revision": {
-      "path": "contracts/scope-revision.md",
-      "required_skills": ["review"]
     },
     "verify-code": {
       "path": "contracts/verify-code.md",

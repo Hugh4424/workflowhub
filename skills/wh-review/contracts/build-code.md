@@ -9,11 +9,18 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 review verdict 不是继续工作或无限复审的 gate；Phase 完成仍需要测试、AC、finding
 disposition 和 serious 风险处置事实。
 
+Phase 的审查对象由宿主根据 `phase_id` 和 Git 工作树推导，调用方不能传入
+`tasks.md` 的 `execution_file_paths`、`phasePaths` 或其他路径选择器。已提交的 Phase
+以直接父提交树到候选提交树为审查范围，并记录 `commit_oid`、`parent_commit`、
+`parent_tree`、`commit_tree`、`candidate_tree` 及树一致性；未提交的 Phase 不伪造提交，
+记录 `commit_oid=null` 和当前 HEAD 树。提交树与候选树不一致时，结果只能是
+`unavailable`/`incomplete`，不能继续沿用旧审查结论。上述绑定是审查事实的完整性保护，
+不是任务继续工作的 gate，也不引入恢复、重绑或锁状态。
+
 `phase_id` 缺失时，runner 自动派生 `review_scope=integration`，且
 `subject_kind=worktree`。它只用于所有 Phase 之后的最终集成审查，不能重放历史
 diff，也不能替代任何 Phase 审查。调用方不得提供或覆盖 scope。Phase result、legacy
-无 scope worktree result、或不同快照的 worktree result 都不能作为最终结果或
-verify-code lineage。
+无 scope worktree result、或不同快照的 worktree result 都不能作为最终结果。
 
 ## Phase 审查必需材料
 
@@ -83,34 +90,19 @@ DRY/KISS/YAGNI/SoC、复杂度或可读性 finding 必须指出当前 diff 中�
 
 ## 最终 Integration 审查材料
 
-Integration 在调用 provider 前直接绑定最终快照的当前
-implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
-implementation/GREEN receipt。Phase 之间允许只更新 tasks/material completion 的
-提交；因此连续性以 Git commit ancestry 和每段自身的 tree/hash 绑定为准，不要求
-相邻 Phase 的 tree 字节相等。若已声明的 Phase lineage 存在缺段、分叉、重复、哈希
-不连续、历史正式审查没有 trace 或 legacy 无 scope result，本身要作为
-`unavailable/unknown` 质量事实保留；不能伪造补链，也不能回退为累计 diff、全项目包。
-在历史 lineage 从未提供或无法认证时，允许明确标记 `phase_coverage.status=unavailable`
-并用当前 implementation/GREEN、显式 AC trace 和当前快照完成 current-only integration
-审查；这不是历史审查通过，也不是阶段 Gate。
+Integration 只读取当前四份材料（批准的 `spec.md`/AC 来自当前材料）、最终代码
+快照、当前快照的测试事实、当前 AC trace、冻结 reviewer lens 和审查说明。runner
+在调用 provider 前校验 implementation/test receipt 的当前 snapshot 绑定；这些是
+质量事实，不是继续工作的许可证。
 
-Phase coverage 只传最小身份、review result、phase-map trace 和 GREEN receipt；
-历史 Phase 的 raw evidence、review attempt、provider output_ref、逐 AC anchor 不
-进入 Integration packet。最终 AC 的 `change/test/evidence` 追踪只使用当前 tasks
-和当前快照收据。这样历史审查可审计、但不会把旧 provider 私有字段或过时的逐项
-映射重新变成当前工作的阻塞条件。
+AC trace 只表达当前 AC 到当前任务变化、测试和证据的对应关系，并验证引用的 hash
+与最终快照一致。历史 Phase 审查、旧 snapshot、seam、phase map、continuity 或
+lineage 记录不属于当前 Integration 输入，也不生成新的控制链；它们若存在，只能
+作为只读历史事实保留。
 
-Integration packet 只包含：批准 spec/AC、最终快照的 fresh test summary、
-`phase-review-coverage.v1`、`cross-phase-seam-index.v1`、AC trace、冻结 reviewer
-lens，以及由这些记录选择的最终快照片段。它明确禁止 `changes.diff`、完整历史 Phase
-diff、cumulative diff、raw log、完整项目和重复 `integration_map`。
-
-seam index 不是猜测器。只有 canonical trace 已认证生产者/消费者接口、schema、共享
-状态或资源、错误/取消流、跨 Phase 测试关系，并有最终快照 anchor 时，seam 才能标为
-`complete`。当前最小 phase trace 只认证路径和证据绑定，不能证明上述语义关系；因此
-派生的条目必须诚实标为 `unknown`，写明 `TRACE_HAS_PATHS_NOT_SEMANTIC_SEAMS`，而不是
-把共享路径或相邻 Phase 伪称为完整语义 seam。`unknown` 是给 reviewer 的风险事实，不能
-被静默补全。
+Integration packet 明确禁止 `changes.diff`、累计历史 diff、raw log、完整项目和
+重复 `integration_map`。缺少或不可用的质量事实如实记录为 `unavailable`，但不得
+把质量结果改写成完成，也不得把它变成阻止同一任务修复的 gate。
 
 Integration 的正式结果必须与 implementation receipt、fresh test receipt 和最终
 snapshot 同树；verdict 原样保留为质量事实，不能被改写成阶段通过。它仍是严格

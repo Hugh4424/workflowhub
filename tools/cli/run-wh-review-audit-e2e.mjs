@@ -10,6 +10,12 @@ const oid = "1".repeat(40); const materialId = "a".repeat(64);
 const source = Object.freeze({ targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead: oid, snapshotTree: oid });
 const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
 const pass = JSON.stringify({ verdict: "pass", summary: "fake E2E completed", findings: [] });
+function providerResult(provider) {
+  return { provider, status: "completed", session_id: "fake-session", output: pass, error: null,
+    execution: { adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,
+      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
+      retry: { count: 0, progress_events: 0 }, runtime_id: "runtime" } };
+}
 
 /** Test fixture only. This never constitutes provider or external-project E2E evidence. */
 export async function runAuditFixture({ outputRoot } = {}) {
@@ -22,7 +28,7 @@ export async function runAuditFixture({ outputRoot } = {}) {
   } });
   const records = [];
   for (const [stage, reviewTrack] of stages) {
-    const providerClient = { run: async ({ provider }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, provider: { provider, status: "completed", session_id: "fake-session", output: pass, error: null } }) };
+    const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, providers: providers.map(providerResult) }) };
     const result = await runReviewFixture({ task, attachmentRoot, taskId: "audit-e2e", stage, reviewTrack, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, attachmentRoot, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }) });
     records.push({ stage, review_track: reviewTrack, status: result.status, verdict: result.verdict, snapshot_tree: result.snapshotTree, material_id: result.materialId, attempt_ref: result.attemptRef, result_ref: result.resultRef });

@@ -9,8 +9,6 @@ const groupFields = ["host_provider", "outcome", "providers", "round", "runtime_
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
-export const DEFAULT_MANAGED_REVIEW_TIMEOUT_MS = 30 * 60 * 1000;
-
 // Reject filesystem roots, not ordinary review terms such as `map/AC`.
 const absolutePathPattern = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)(?:\/|$)|[A-Za-z]:[\\/])/;
 const fileUriPathPattern = /\bfile:\/\/\/(?:[A-Za-z0-9._~%-]|%[A-Fa-f0-9]{2})/i;
@@ -21,21 +19,12 @@ function containsPrivatePath(value) {
   return Array.isArray(value) ? value.some(containsPrivatePath) : Object.values(value).some(containsPrivatePath);
 }
 
-function execute(command, args, { timeoutMs } = {}) {
+function execute(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); let stdout = "", stderr = ""; let settled = false;
-    const timer = timeoutMs === undefined || timeoutMs === null ? null : setTimeout(() => {
-      if (settled) return;
-      child.kill("SIGTERM");
-      setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 250).unref?.();
-      const error = failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${timeoutMs}ms`);
-      error.stdout = stdout; error.stderr = stderr;
-      settled = true;
-      reject(error);
-    }, timeoutMs);
     child.stdout.on("data", (bytes) => { stdout += bytes; }); child.stderr.on("data", (bytes) => { stderr += bytes; });
-    child.once("error", (error) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); reject(error); });
-    child.once("close", (exitCode) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); resolve({ exitCode, stdout, stderr }); });
+    child.once("error", (error) => { if (settled) return; settled = true; reject(error); });
+    child.once("close", (exitCode) => { if (settled) return; settled = true; resolve({ exitCode, stdout, stderr }); });
   });
 }
 
@@ -76,46 +65,39 @@ function attemptError(value) {
   });
 }
 
-function validatePublicGroup(value, { runtimeId, hostProvider }) {
-  exactKeys(value, groupFields, "3rd-review managed group");
-  if (value.version !== 4 || value.runtime_id !== runtimeId || value.host_provider !== hostProvider ||
+function validatePublicGroup(value, { hostProvider }) {
+  exactKeys(value, groupFields, "3rd-review public group");
+  if (value.version !== 4 || typeof value.runtime_id !== "string" || value.runtime_id.length === 0 || value.host_provider !== hostProvider ||
       !["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"].includes(value.outcome) ||
       !Number.isSafeInteger(value.round) || value.round < 0 ||
       !(value.selected_tier === null || (Number.isSafeInteger(value.selected_tier) && value.selected_tier >= 0)) ||
       !Array.isArray(value.providers) || value.providers.length === 0) {
-    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed group is invalid");
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review public group is invalid");
   }
   return value;
 }
 
-function parseManagedWire(wire, command) {
-  if (wire?.exitCode !== 0) {
-    // `start`/`status` are a required public protocol. A broker that only
-    // understands legacy `run`, or emits non-public data, must never trigger
-    // a second dispatch through that legacy path.
-    throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} did not return a valid public result`);
+function parsePublicRun(wire) {
+  // `run` exits 3 when the terminal provider group is unavailable. Its stdout
+  // is still the authoritative public result and must not be discarded.
+  if (wire?.exitCode !== 0 && wire?.exitCode !== 3) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review public run did not return a valid public result");
   }
   let result;
   try { result = JSON.parse(wire.stdout); }
-  catch { throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} stdout is not JSON`); }
-  if (containsPrivatePath(result)) throw failure("PUBLIC_RESULT_INVALID", `3rd-review managed ${command} result contains a private path`);
+  catch { throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review public run stdout is not JSON"); }
+  if (containsPrivatePath(result)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review public run result contains a private path");
   return result;
 }
 
-function validateManagedLifecycle(value, { requestId, materialId, runtimeId = null } = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== "workflowhub-run.v1" ||
-      value.request_id !== requestId || typeof value.runtime_id !== "string" || value.runtime_id.length === 0 ||
-      (runtimeId !== null && value.runtime_id !== runtimeId) || value.material_id !== materialId ||
-      !["starting", "running", "terminal"].includes(value.state)) {
-    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review returned an invalid managed lifecycle result");
+function rawOutputRef(value, provider, runtimeId) {
+  if (value === null) return null;
+  exactKeys(value, ["provider", "runtime_id", "stderr_sha256", "stdout_sha256", "version"], "raw_output_ref");
+  if (value.version !== "broker-output-ref.v1" || value.provider !== provider || value.runtime_id !== runtimeId ||
+      !/^[a-f0-9]{64}$/.test(value.stdout_sha256) || !/^[a-f0-9]{64}$/.test(value.stderr_sha256)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "raw_output_ref is not valid public provenance");
   }
-  const expected = value.state === "terminal"
-    ? ["group", "material_id", "request_id", "runtime_id", "state", "version"]
-    : ["material_id", "request_id", "runtime_id", "state", "version"];
-  if (Object.keys(value).sort().join("\u0000") !== expected.join("\u0000")) {
-    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed lifecycle result has unsupported fields");
-  }
-  return value;
+  return Object.freeze({ ...value });
 }
 
 function validatePublicProvider(value, providers, materialId, runtimeId) {
@@ -142,7 +124,7 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
   exactKeys(value.retry, ["count", "progress_events"], "retry");
   const retry = { count: nullableInteger(value.retry.count, "retry.count"), progress_events: nullableInteger(value.retry.progress_events, "retry.progress_events") };
   if (retry.count === null || retry.progress_events === null) throw failure("PROTOCOL_INCOMPATIBLE", "retry fields must be non-null non-negative integers");
-  if (value.raw_output_ref !== null) throw failure("PROTOCOL_INCOMPATIBLE", "managed status must not expose raw output references");
+  const publicRawOutputRef = rawOutputRef(value.raw_output_ref, provider, runtimeId);
   const sessionId = nullableString(value.session_id, "session_id");
   if (value.output !== null && typeof value.output !== "string") throw failure("PROTOCOL_INCOMPATIBLE", "output must be a string or null");
   const error = attemptError(value.error);
@@ -152,6 +134,7 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
   return Object.freeze({
     provider, status: value.status, session_id: sessionId, output: value.output, error,
     unavailable_diagnostics: unavailableDiagnostics,
+    raw_output_ref: publicRawOutputRef,
     execution: Object.freeze({
       adapter: value.adapter, model: value.model, effort: value.effort, thinking: value.thinking,
       timing: Object.freeze(timing), usage: value.usage, retry: Object.freeze(retry),
@@ -161,41 +144,24 @@ function validatePublicProvider(value, providers, materialId, runtimeId) {
 }
 
 export class ReviewProviderClient {
-  constructor({ command = null, config = null, invoke = null, pollIntervalMs = 1000, timeoutMs = DEFAULT_MANAGED_REVIEW_TIMEOUT_MS } = {}) {
+  constructor({ command = null, config = null, invoke = null } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
-    if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 0) throw new TypeError("pollIntervalMs must be a non-negative safe integer");
-    if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000)) throw new TypeError("timeoutMs must be null or at least 1000ms");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
-    this.pollIntervalMs = pollIntervalMs; this.timeoutMs = timeoutMs;
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, continuationRuntimeId = null, requestId } = {}) {
-    if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt && requestId)) throw new TypeError("hostProvider, providers, materials, prompt, and requestId are required");
+  async runGroup({ hostProvider, providers, materials, prompt } = {}) {
+    if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
-    if (typeof requestId !== "string" || requestId.length === 0 || containsPrivatePath(requestId)) throw new TypeError("requestId must be a non-empty public identifier");
     const entries = (materials.deliveryManifest ?? materials.manifest ?? []).map(({ path, bytes, sha256 }) => ({ source: `${materials.sourcePrefix}/${path}`, destination: path, size: bytes, sha256, embed: false }));
-    // A stage is one broker reviewer group. 3rd-review owns the group-level
+    // Each caller makes one public broker run. 3rd-review owns the group-level
     // heterologous filter, dispatch, native-session lifecycle, and all public
-    // per-provider outcomes. WorkflowHub only supplies the configured
-    // candidate profiles plus frozen material.
-    const request = { version: 4, host_provider: hostProvider, required_result_protocol: protocol, provider_allowlist: [...providers], prompt, continuation: continuationRuntimeId ? { runtime_id: continuationRuntimeId } : null };
+    // per-provider outcomes. Its public run contract does not promise
+    // cross-caller deduplication, so WorkflowHub does not claim it here.
+    const request = { version: 4, host_provider: hostProvider, required_result_protocol: protocol, provider_allowlist: [...providers], prompt };
     const attachments = { version: 1, bundle_id: materials.materialId, entries };
-    const deadline = this.timeoutMs === null ? null : Date.now() + this.timeoutMs;
-    const invoke = (value) => this.invoke({
-      ...value,
-      ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) }),
-    });
-    const start = validateManagedLifecycle(parseManagedWire(await invoke({ command: "start", request, requestId, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only" }), "start"), { requestId, materialId: materials.materialId });
-    let lifecycle = start;
-    while (lifecycle.state !== "terminal") {
-      const remaining = deadline === null ? null : deadline - Date.now();
-      if (remaining !== null && remaining <= 0) throw failure("PROVIDER_TIMEOUT", `3rd-review managed broker exceeded ${this.timeoutMs}ms`);
-      if (this.pollIntervalMs > 0) await new Promise((resolve) => setTimeout(resolve, remaining === null ? this.pollIntervalMs : Math.min(this.pollIntervalMs, remaining)));
-      lifecycle = validateManagedLifecycle(parseManagedWire(await invoke({ command: "status", runtimeId: start.runtime_id }), "status"), {
-        requestId, materialId: materials.materialId, runtimeId: start.runtime_id,
-      });
-    }
-    const result = validatePublicGroup(lifecycle.group, { runtimeId: start.runtime_id, hostProvider });
+    const result = validatePublicGroup(parsePublicRun(await this.invoke({
+      command: "run", request, attachments, attachmentsRoot: materials.attachmentRoot, attachmentDelivery: "file_only",
+    })), { hostProvider });
     const requested = new Set(providers);
     const received = new Set();
     const publicProviders = result.providers.map((item) => {
@@ -210,32 +176,21 @@ export class ReviewProviderClient {
     return Object.freeze({ runtimeId: result.runtime_id, providers: Object.freeze(publicProviders) });
   }
 
-  // Kept for direct consumers during the transition. The review runner uses
-  // runGroup exclusively, so production review dispatch is never fan-out by
-  // WorkflowHub.
-  async run({ hostProvider, provider, materials, prompt, continuationRuntimeId = null, requestId } = {}) {
-    const result = await this.runGroup({ hostProvider, providers: [provider], materials, prompt, continuationRuntimeId, requestId });
-    return { runtimeId: result.runtimeId, provider: result.providers[0] };
-  }
-
-  async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null, timeoutMs = this.timeoutMs }) {
+  async #invokeCli({ command, request = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null }) {
     let temporary = null;
     try {
       temporary = mkdtempSync(join(tmpdir(), "wh-review-public-"));
       let args;
-      if (command === "start") {
+      if (command === "run") {
         const requestPath = join(temporary, "request.json"); const attachmentsPath = join(temporary, "attachments.json");
         writeFileSync(requestPath, `${JSON.stringify(request)}\n`, { mode: 0o600 }); writeFileSync(attachmentsPath, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
-        args = [...this.command.slice(1), "start", `--config=${this.config}`, `--request=${requestPath}`, `--request-id=${requestId}`, `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
-      } else if (command === "status") {
-        args = [...this.command.slice(1), "status", `--config=${this.config}`, `--runtime-id=${runtimeId}`];
-      } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported managed broker command: ${command}`);
-      return await execute(this.command[0], args, { timeoutMs });
+        args = [...this.command.slice(1), "run", `--config=${this.config}`, `--request=${requestPath}`, `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
+      } else throw failure("PROTOCOL_INCOMPATIBLE", `unsupported public broker command: ${command}`);
+      return await execute(this.command[0], args);
     } catch (error) {
       // Local filesystem, spawn, and configuration failures can include host
       // paths. The caller only receives a public broker-protocol diagnostic.
-      if (error?.code === "PROVIDER_TIMEOUT") throw error;
-      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed ${command} did not return a valid public result`);
+      throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review public ${command} did not return a valid public result`);
     } finally {
       if (temporary !== null) {
         try { rmSync(temporary, { recursive: true, force: true }); }

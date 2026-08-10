@@ -164,21 +164,34 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 
 四维结论、四选一裁决、推翻条件、每条结论的「证据/主观」标注，都以结构化字段显式保留，落到决策记录里。
 
-### 11. 最小 typed interaction facts
+### 11. 返回最小交互事实
 
-每个 Round 返回一个 `interaction-completion.v1` 内容 payload，由调用方交给受控 writer
-发布；本技能不能填写 task、stage、run、producer、ref、hash、tree、root、task path 或
-cwd。payload 至少保留：
+候选队列、问题卡、ask/reply/re-rank 过程只用于当前对话内收敛，不形成 run、revision、
+latest、ledger 或独立交互历史。三个 Round 全部结束后，本技能只把父 Stage Agent 完成
+当前决策所需的最小结构化事实返回内存：
 
-- Round、完整候选队列及每项的影响和 `待回答` / `已由事实回答` / `不适用` 状态；
-- 题号、按公式计算的当前总数、每次总数变化原因和本轮结束结论；
-- `card_hash` 和单轴、2–3 互斥项、推荐及理由、逐项含义/后果/风险的格式检查结果；
-- ask、reply、re-rank 的顺序，以及宿主提供的 ask/reply 可见消息 ref/hash；
-- 选中的选项和重排前后的队列变化。
+```yaml
+talk:
+  status: completed
+  round_count: 3
+  architecture_direction_covered: true
+  user_outcome_covered: true
+clarify:
+  status: resolved
+  open_direction_changing_questions: 0
+  resolved_by: user_reply | no_direction_changing_ambiguity
+decision_updates:
+  - 只保留需要写进 decision-log.md 的结论、依据、风险或未决项
+```
 
-长期记录不得保存完整问题卡原文，也不得保存 secret、token、password、credential、
-cookie 或其他秘密；卡片只以内容 hash 和格式检查事实进入记录。ref/hash 只证明宿主
-确认消息已投递到可见表面，不证明作者身份、真人阅读或客户端渲染。
+`architecture_direction_covered` 与 `user_outcome_covered` 只有在本轮真实覆盖后才能为
+`true`。仍有会改变方向的问题时，`clarify.status` 不能写 `resolved`，也不能把
+`open_direction_changing_questions` 写成 `0`。本技能不填写 task、stage、snapshot、
+decision ref/hash、文件路径或内容 hash；这些绑定由父 Stage Agent 在最终决策完成时组装。
+
+不得返回或持久化完整候选队列、完整问题卡、逐轮问答历史、Grill 历史、secret、token、
+password、credential、cookie 或其他秘密。用户真实答案的决策含义进入
+`decision_updates`，原始对话仍留在宿主会话，不复制成第二套记录。
 
 ## 输出
 
@@ -197,10 +210,11 @@ cookie 或其他秘密；卡片只以内容 hash 和格式检查事实进入记�
 
 ## workflowhub 薄适配层
 
-核心层产出的是「调研入 / 决策记录出」的纯逻辑。薄适配层只做两件事：
+核心层产出的是「调研入 / 最小决策事实出」的纯逻辑。薄适配层只做两件事：
 
 1. **读调研**：从当前 workflowhub 任务约定的相对路径读取调研、规格、计划或测试证据，整理成初始咨询材料。
-2. **落记录**：把结构化决策返回父 stage，由父 stage 使用 TaskHandle 受控记录能力落盘。
+2. **返回事实**：把最小 `talk`、`clarify` 和 `decision_updates` 返回父 Stage Agent；本技能
+   不直接写工作流文件或质量记录。
 
 适配层只负责「从哪读、往哪写」，不含对话收敛判断逻辑。换一个工作流只需换这一层，核心层不动。
 
@@ -209,7 +223,8 @@ cookie 或其他秘密；卡片只以内容 hash 和格式检查事实进入记�
 - 每条四维结论必标「证据」或「主观」，不得遗漏；「证据」必须有具体原文引用或可验证数据来源。
 - 一次最多问一个关键问题，其余走最小合理假设并说明。
 - 只把用户实际给出的回复当作回答；不得由 Agent 模拟、补写或代替用户确认。提问后必须等待用户回复，再继续依赖该答案的步骤。
-- 三个 Round 的职责、开始队列、每答重排和结束结论均须保留；一轮的结果不能冒充另一轮已执行。
+- 三个 Round 的职责、开始队列、每答重排和结束结论必须在当前会话真实执行；长期只保留
+  父 Stage Agent 完成决策所需的最小摘要，一轮的结果不能冒充另一轮已执行。
 - 核心层不触碰任何具体工作流的私有路径。
 - 不修改与对话无关的文件；丢弃任一需求条目必须登记理由。
 

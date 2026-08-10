@@ -26,7 +26,7 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0
   const testReceipt = publish("quality/tests/verify-tests.json", {
     schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", snapshot_tree: snapshotTree, source_digest: sourceDigest, exit_code: exitCode,
   });
-  const observation = publish("evidence/ac-1-observation.json", {
+  const observation = publish("quality/evidence/ac-1-observation.json", {
     schema_version: "acceptance-observation.v1", acceptance_criterion_id: "AC-1", snapshot_tree: snapshotTree,
     summary: genericMetadata ? {
       scenario: "AC-1 保存后重新读取", oracle: "AC-1 返回与写入值一致", actual_outcome: genericOutcome ? "当前快照测试通过" : "AC-1 读取值一致",
@@ -36,7 +36,7 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0
       evidence_type: "structured_observation", coverage_limits: ["未覆盖断电"], exceptions: ["无"],
     },
   });
-  const observation2 = publish("evidence/ac-2-observation.json", {
+  const observation2 = publish("quality/evidence/ac-2-observation.json", {
     schema_version: "acceptance-observation.v1", acceptance_criterion_id: "AC-2", snapshot_tree: snapshotTree,
     summary: genericMetadata ? {
       scenario: "AC-1 保存后重新读取", oracle: "AC-1 返回与写入值一致", actual_outcome: genericOutcome ? "当前快照测试通过" : "AC-1 读取值一致",
@@ -46,16 +46,16 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0
       evidence_type: "structured_observation", coverage_limits: ["未覆盖断电"], exceptions: ["无"],
     },
   });
-  const rawProof = publish("evidence/ac-2-proof.txt", "provider raw output must never enter summary\n");
-  const ac1 = publish("evidence/ac-1.json", {
+  const rawProof = publish("quality/evidence/ac-2-proof.txt", "provider raw output must never enter summary\n");
+  const ac1 = publish("quality/evidence/ac-1.json", {
     schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", snapshot_tree: snapshotTree, source_digest: sourceDigest,
     refs: [observation],
   });
-  const ac2 = publish("evidence/ac-2.json", {
+  const ac2 = publish("quality/evidence/ac-2.json", {
     schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-2", result: "pass", source_digest: sourceDigest,
     snapshot_tree: mismatchLeafSnapshot ? "b".repeat(40) : snapshotTree, refs: [genericMetadata || genericOutcome ? observation2 : rawProof],
   });
-  const aggregate = publish("evidence/verify-aggregate.json", {
+  const aggregate = publish("quality/evidence/verify-aggregate.json", {
     schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "verify-code", producer: { component: "evidence" },
     refs: duplicate ? [ac1, ac1] : [ac1, ac2],
   });

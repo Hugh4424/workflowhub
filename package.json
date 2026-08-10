@@ -4,9 +4,11 @@
   "private": true,
   "description": "AI 开发工作流编排工具，按设计宪法构建",
   "scripts": {
-    "check": "markdownlint-cli2 \"**/*.md\" && node tools/cli/verify-structure.mjs && node tools/cli/run-checks.mjs && npm run check:skill-closure && npm run smoke:skill-dispatch",
+    "check": "markdownlint-cli2 \"**/*.md\" && node tools/cli/verify-structure.mjs && node tools/cli/run-checks.mjs && npm run check:skill-closure && npm run smoke:skill-packages",
     "check:skill-closure": "node runtime/evidence/check-skill-closure.mjs",
-    "smoke:skill-dispatch": "node tools/cli/smoke-local-skill-dispatch.mjs",
+    "smoke:skill-packages": "node tools/cli/smoke-local-skill-dispatch.mjs",
+    "probe:public-behavior": "WORKFLOWHUB_LIVE_PUBLIC_BEHAVIOR=1 vitest run tests/contract/public-behavior-baseline.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+    "compare:public-behavior": "node tools/architecture/public-behavior-baseline.mjs compare --baseline=c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf --candidate=worktree",
     "test": "npm run test:safe && npm run test:exclusive",
     "test:safe": "vitest run --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
     "test:exclusive": "vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism"

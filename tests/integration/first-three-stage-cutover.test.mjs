@@ -63,7 +63,7 @@ function publishReviewFixture(state, verdict = "pass") {
 }
 
 describe("first three stage vNext cutover", () => {
-  it("keeps all three stages on current materials and quality/publication facts", async () => {
+  it("keeps all three stages ready on current materials without publishing incomplete quality", async () => {
     const state = fixture();
     expect(() => state.kernel.startStageRun("build-spec", { reason: "vNext must not create a run" }))
       .toThrow(/stage run writer is retired/i);
@@ -81,14 +81,10 @@ describe("first three stage vNext cutover", () => {
         ...(stage === "build-spec" ? {} : { missing_items: ["human_confirmation"] }),
       }));
       expect(result.quality_fact_refs.length).toBeGreaterThan(0);
-      if (stage === "build-spec") {
-        expect(result.status).toBe("completed");
-        expect(result.publication_ref).toMatch(new RegExp(`^publications/${stage}/`));
-      } else {
-        expect(result.status).toBe("completed");
-        expect(result.quality_status).toBe("incomplete");
-        expect(result.publication_ref).toMatch(new RegExp(`^publications/${stage}/`));
-      }
+      expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+      expect(result.completion.missing.length).toBeGreaterThan(0);
+      expect(result).not.toHaveProperty("publication_ref");
+      expect(result).not.toHaveProperty("publication_hash");
     }
 
     state.artifacts.writeAtomic("plan.md", "# revised plan\n");
@@ -116,11 +112,12 @@ describe("first three stage vNext cutover", () => {
     const first = await runStage("build-spec", context, stableHandler);
     const second = await runStage("build-spec", context, stableHandler);
     expect(second.quality_fact_refs).toEqual(first.quality_fact_refs);
-    expect(second.publication_ref).toBe(first.publication_ref);
+    expect(second).toMatchObject({ status: "in_progress", work_status: "ready" });
+    expect(second).not.toHaveProperty("publication_ref");
     expect(readdirSync(join(state.task.taskPath, "quality", "facts"))).toHaveLength(first.quality_fact_refs.length);
   });
 
-  it("does not require a provider pass for build-spec progression", async () => {
+  it("keeps work ready but does not publish when the build-spec review fails", async () => {
     const state = fixture();
     const review = publishReviewFixture(state, "revise_required");
     const context = {
@@ -131,8 +128,8 @@ describe("first three stage vNext cutover", () => {
     const result = await runStage("build-spec", context, async () => ({
       facts: { source: "review-opinion" }, evidence_refs: [review],
     }));
-    expect(result.status).toBe("completed");
-    expect(result.quality_status).toBe("incomplete");
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result.quality_warnings).toContain("independent_review:failed");
+    expect(result).not.toHaveProperty("publication_ref");
   });
 });

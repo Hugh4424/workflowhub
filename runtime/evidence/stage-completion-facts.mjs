@@ -36,12 +36,10 @@ function artifact(value, index) {
   text(item.label, `artifacts[${index}].label`);
   text(item.ref, `artifacts[${index}].ref`);
   if (!SHA256.test(item.hash ?? "")) throw new TypeError(`artifact hash must be sha256`);
-  text(item.publication_lookup, `artifacts[${index}].publication_lookup`);
   return {
     label: item.label,
     ref: item.ref,
     hash: item.hash,
-    publication_lookup: item.publication_lookup,
   };
 }
 
@@ -148,8 +146,6 @@ export function reconcileStageCompletion({
   result,
   missingItems,
   businessFacts,
-  declaredComponents,
-  invocationFacts,
   auditGaps,
   verificationItems: itemizedVerification,
 }) {
@@ -162,40 +158,6 @@ export function reconcileStageCompletion({
     acceptance_criteria: new Set(["covered", "not_applicable"]),
   })) {
     if (!accepted.has(business[name])) derivedMissing.push(`business ${name} is incomplete`);
-  }
-  const declared = declaredComponents;
-  const invocations = invocationFacts;
-  if (!Array.isArray(declared) || !Array.isArray(invocations)) {
-    throw new TypeError("declared_components and invocation_facts must be arrays");
-  }
-  for (const component of declared) {
-    const name = text(component?.name, "declared_components[].name");
-    const invocation = text(component?.invocation, "declared_components[].invocation");
-    const requiredBinding = {
-      task_id: text(component?.task_id, "declared_components[].task_id"),
-      stage: text(component?.stage, "declared_components[].stage"),
-      workflow_run_id: text(component?.workflow_run_id, "declared_components[].workflow_run_id"),
-      name,
-      invocation_key: text(component?.invocation_key, "declared_components[].invocation_key"),
-      bundle_hash: text(component?.bundle_hash, "declared_components[].bundle_hash"),
-      declared_trigger: text(component?.declared_trigger, "declared_components[].declared_trigger"),
-    };
-    const observed = invocations.find((fact) => Object.entries(requiredBinding)
-      .every(([key, expected]) => fact?.[key] === expected));
-    const satisfied = observed?.status === "executed"
-      || (invocation === "conditional"
-        && new Set(["not_invoked", "trigger=false"]).has(observed?.status)
-        && typeof observed.reason === "string" && observed.reason.trim() !== "");
-    if (satisfied) continue;
-    if (!observed) {
-      derivedMissing.push(`${name} invocation is missing`);
-      continue;
-    }
-    if (observed.status === "unavailable" && typeof observed.reason === "string" && observed.reason.trim() !== "") {
-      derivedMissing.push(`${name} invocation is unavailable: ${observed.reason}`);
-      continue;
-    }
-    derivedMissing.push(`${name} invocation is incomplete`);
   }
   const gaps = auditGaps;
   if (!Array.isArray(gaps)) throw new TypeError("audit_gaps must be an array");
@@ -221,8 +183,6 @@ export function reconcileStageCompletion({
     result: derivedMissing.length > 0 ? "incomplete" : result,
     missing_items: combinedMissing,
     business_facts: structuredClone(businessFacts),
-    declared_components: structuredClone(declared),
-    invocation_facts: structuredClone(invocations),
     audit_gaps: normalizedGaps,
     completion_effect: "disclose_only",
     ...(normalizedVerification === undefined ? {} : { verification_items: normalizedVerification }),
@@ -245,8 +205,6 @@ export function createStageCompletionFacts(input) {
     result,
     missingItems,
     businessFacts: value.business_facts,
-    declaredComponents: value.declared_components,
-    invocationFacts: value.invocation_facts,
     auditGaps: value.audit_gaps,
     verificationItems: value.verification_items,
   });
@@ -282,17 +240,12 @@ export function createStageCompletionFacts(input) {
     }),
     missing_items: reconciled.missing_items,
     business_facts: reconciled.business_facts,
-    declared_components: reconciled.declared_components,
-    invocation_facts: reconciled.invocation_facts,
     audit_gaps: reconciled.audit_gaps,
     completion_effect: reconciled.completion_effect,
     ...(reconciled.verification_items === undefined ? {} : {
       verification_items: reconciled.verification_items,
     }),
     risks: stringList(value.risks, "risks"),
-    dependencies: stringList(value.dependencies, "dependencies"),
-    recovery_conditions: stringList(value.recovery_conditions, "recovery_conditions"),
-    downstream_read_rule: text(value.downstream_read_rule, "downstream_read_rule"),
     next_owner: text(value.next_owner, "next_owner"),
     user_action: text(value.user_action, "user_action"),
   };

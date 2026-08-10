@@ -46,7 +46,6 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-e2e-")));
   const runnerRoot = path.join(root, "runner");
   const bundleRoot = path.join(root, "skill-bundle");
-  const providerRoot = path.join(root, "provider-bundle");
   const targetRepo = path.join(root, "target");
   const home = path.join(root, "home");
   const storage = path.join(root, "storage");
@@ -58,18 +57,6 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
 
   await buildRunnerRelease({ packageRoot: SOURCE_ROOT, outputDir: runnerRoot });
   await buildSkillBundleRelease({ packageRoot: SOURCE_ROOT, outputDir: bundleRoot });
-  // Provider recovery uses a minimal, immutable Skill Bundle projection. It
-  // avoids unrelated review assets while still exercising the released
-  // runner's resolver, invocation fact and idempotent-write path.
-  fs.mkdirSync(path.join(providerRoot, "workflows", "build-code"), { recursive: true });
-  fs.mkdirSync(path.join(providerRoot, "skills"), { recursive: true });
-  fs.cpSync(path.join(SOURCE_ROOT, "skills", "test-routing-advisor"), path.join(providerRoot, "skills", "test-routing-advisor"), { recursive: true });
-  fs.writeFileSync(path.join(providerRoot, "workflows", "build-code", "skill-deps.yaml"), [
-    "stage: build-code",
-    "skills:",
-    "  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, invocation: conditional, trigger: l2_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json }",
-    "",
-  ].join("\n"));
   installRunnerRelease({
     releaseRoot: runnerRoot,
     skillBundleRoot: bundleRoot,
@@ -97,7 +84,6 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
   };
   makeReadOnly(runnerRoot);
   makeReadOnly(bundleRoot);
-  makeReadOnly(providerRoot);
   const cli = (argv) => parseCli(spawnSync(process.execPath, [runtimePath, ...argv], {
     cwd: targetRepo,
     env,
@@ -155,7 +141,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
   };
 
   return Object.freeze({
-    root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor,
+    root, runnerRoot, bundleRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor,
     sourceHashBefore, finish, dispose,
     sourceTree: () => runGit(runnerRoot, ["rev-parse", "HEAD^{tree}"]),
     worktreeRoot: () => {
@@ -166,7 +152,7 @@ export async function createReadOnlyRunnerFixture({ taskId = `e2e-${Date.now()}`
 }
 
 /** Reattach CLI/module capabilities inside a child Node process. */
-export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, sourceHashBefore }) {
+export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRoot, targetRepo, home, storage, taskPath, taskId, sourceHashBefore }) {
   const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };
   const runtimePath = path.join(runnerRoot, "tools/cli/stage-runtime.mjs");
   const cli = (argv) => parseCli(spawnSync(process.execPath, [runtimePath, ...argv], { cwd: targetRepo, env, encoding: "utf8" }), argv.join(" "));
@@ -186,14 +172,14 @@ export function createExistingReadOnlyRunnerFixture({ root, runnerRoot, bundleRo
     if (sourceHashAfter !== sourceHashBefore) throw new Error(`installed WorkflowHub runner changed during E2E: ${sourceHashBefore} -> ${sourceHashAfter}`);
     return sourceHashAfter;
   };
-  return Object.freeze({ root, runnerRoot, bundleRoot, providerRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor, sourceHashBefore, finish });
+  return Object.freeze({ root, runnerRoot, bundleRoot, targetRepo, home, storage, taskPath, taskId, env, cli, load, contextFor, sourceHashBefore, finish });
 }
 
 /** Execute a complete scenario in a plain Node child, outside Vitest's module transformer. */
 export function runScenarioInChild(fixture, scenario) {
   const helperUrl = pathToFileURL(fileURLToPath(import.meta.url)).href;
   const payload = JSON.stringify({
-    root: fixture.root, runnerRoot: fixture.runnerRoot, bundleRoot: fixture.bundleRoot, providerRoot: fixture.providerRoot,
+    root: fixture.root, runnerRoot: fixture.runnerRoot, bundleRoot: fixture.bundleRoot,
     targetRepo: fixture.targetRepo, home: fixture.home, storage: fixture.storage,
     taskPath: fixture.taskPath, taskId: fixture.taskId, sourceHashBefore: fixture.sourceHashBefore,
   });
@@ -207,10 +193,8 @@ export function runScenarioInChild(fixture, scenario) {
 
 export async function runScenario(fixture, scenario) {
   let stale = false;
-  let providerRecovered = false;
-  let providerHistoryPreserved = false;
   const accepted = await runFiveStageChain(fixture, {
-    onStage: async ({ stage, context, worktree, runner }) => {
+    onStage: async ({ stage, context, worktree }) => {
       if (scenario === "material-revision" && stage === "build-plan") {
         fs.writeFileSync(path.join(worktree, "specs", fixture.taskId, "spec.md"), "# revised spec\n");
         fs.writeFileSync(path.join(worktree, "specs", fixture.taskId, "plan.md"), "# revised plan\n");
@@ -221,41 +205,9 @@ export async function runScenario(fixture, scenario) {
         const { evaluateFactFreshness } = await import(pathToFileURL(path.join(SOURCE_ROOT, "runtime/evidence/freshness.mjs")).href);
         stale = evaluateFactFreshness({ ...value, ref: "fact.json", sha256: hash(raw) }, { material_revision: "revision-b", snapshot_tree: currentTree }, { read: () => raw }).status === "stale";
       }
-      if (scenario === "idempotent-resume" && stage === "build-code") {
-        const { dispatchStageSkill } = await fixture.load("runtime/stage/stage-skill-runtime.mjs");
-        const unavailable = await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "resume", independentContextAvailable: false, kernel: context.kernel });
-        const replay = await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "resume", independentContextAvailable: false, kernel: context.kernel });
-        const replayWrite = context.kernel.publishStageSkillInvocation(replay);
-        if (unavailable.status !== "unavailable" || replayWrite.idempotent !== true) throw new Error("provider unavailable invocation was not idempotent");
-        const snapshotTree = captureGitWorktreeSnapshot(worktree).tree;
-        const resultRaw = `${JSON.stringify({ schema_version: "stage-content-evidence.v1", snapshot_tree: snapshotTree })}\n`;
-        const resultRef = "evidence/e2e-provider-recovered.json";
-        context.kernel.publishCanonicalRecord(resultRef, resultRaw);
-        const resultHash = hash(resultRaw);
-        let interrupted = true;
-        const hostInvoke = async () => {
-          if (interrupted) { interrupted = false; throw new Error("simulated write interruption"); }
-          return { outcome_ref: resultRef, outcome_hash: resultHash, snapshot_tree: snapshotTree };
-        };
-        try { await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "provider-recovery", kernel: context.kernel, hostInvoke }); }
-        catch (error) { if (!/simulated write interruption/.test(error.message)) throw error; }
-        const recovered = await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "provider-recovery", kernel: context.kernel, hostInvoke });
-        providerRecovered = recovered.status === "executed";
-        const { stageSkillInvocationRef } = await fixture.load("core/stage-skill-invocation.mjs");
-        const baseRef = stageSkillInvocationRef({
-          task_id: fixture.taskId,
-          workflow_run_id: context.kernel.deriveStageWorkflowRunId(stage),
-          stage,
-          name: "test-routing-advisor",
-          invocation_key: "provider-recovery",
-        });
-        providerHistoryPreserved = JSON.parse(context.kernel.task.readRecord(baseRef)).status === "unavailable";
-        if (!providerRecovered) throw new Error("provider did not recover");
-        if (!runner) throw new Error("runner missing");
-      }
     },
   });
-  return { scenario, accepted_stages: Object.keys(accepted), stale, provider_recovered: providerRecovered, provider_history_preserved: providerHistoryPreserved, source_hash: fixture.finish() };
+  return { scenario, accepted_stages: Object.keys(accepted), stale, source_hash: fixture.finish() };
 }
 
 /** Execute all five stages through the released runner's StageRunner boundary. */
@@ -268,7 +220,6 @@ export async function runFiveStageChain(fixture, { onStage } = {}) {
     const snapshotTree = captureGitWorktreeSnapshot(worktree).tree;
     const payload = { scenario: "five-stage-e2e", oracle: "source-immutable", actual_outcome: "pass", evidence_type: "fixture" };
     const content = {
-      schema_version: "stage-content-evidence.v1",
       kind: `e2e-${stage}`,
       task_id: taskId,
       stage,
@@ -279,7 +230,7 @@ export async function runFiveStageChain(fixture, { onStage } = {}) {
     };
     const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
     const contentHash = hash(contentRaw);
-    const contentRef = `evidence/stage-content/${contentHash}/e2e-${stage}.json`;
+    const contentRef = `quality/evidence/e2e/${contentHash}.json`;
     try { context.kernel.publishCanonicalRecord(contentRef, contentRaw); }
     catch (error) { if (error?.code !== "EEXIST" || context.kernel.task.readRecord(contentRef) !== contentRaw) throw error; }
     const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
@@ -293,7 +244,7 @@ export async function runFiveStageChain(fixture, { onStage } = {}) {
       content_evidence_refs: contentEvidenceRefs,
     };
     const summaryHash = hashAuditSummary(unsigned);
-    const auditRef = `evidence/audits/${stage}/${summaryHash}.json`;
+    const auditRef = `quality/evidence/audits/${stage}/${summaryHash}.json`;
     const auditRaw = `${JSON.stringify({ ...unsigned, summary_hash: summaryHash }, null, 2)}\n`;
     try { context.kernel.publishCanonicalRecord(auditRef, auditRaw); }
     catch (error) { if (error?.code !== "EEXIST" || context.kernel.task.readRecord(auditRef) !== auditRaw) throw error; }

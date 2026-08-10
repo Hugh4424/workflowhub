@@ -14,10 +14,10 @@
 
 ## 3rd-review 公共结果：workflowhub-result.v2
 
-WorkflowHub 只调用 managed public lifecycle：
+WorkflowHub 只发起一次同步 public request：
 
 ```text
-workflowhub-run.v1 start -> workflowhub-run.v1 status -> workflowhub-result.v2
+3rd-review run --request -> terminal workflowhub-result.v2 group
 ```
 
 request 声明：
@@ -35,12 +35,10 @@ request 声明：
 这是一整个 reviewer group 的一次调用。WorkflowHub 传入本 stage 配置的完整
 候选 profile 列表，不逐个启动 CLI；3rd-review 按 adapter 自动排除与 host 同源
 的 profile，并行运行其余成员，管理它们的会话、健康、重试和私有附件 workspace。
-WorkflowHub 为同一 identity 使用确定 request ID 重连并轮询 `status`，由 broker
-client 的 30 分钟默认 deadline 负责有限生命周期，不查看私有状态文件判断会话
-是否健康；Codex host bridge 另有 35 分钟安全 envelope。仅当运维显式设置
-`WORKFLOWHUB_HOST_BRIDGE_TIMEOUT_MS` 时才覆盖 host envelope；低于 35 分钟或格式
-非法的值回退到 35 分钟，避免 host 先于 broker 杀掉子进程。任一截止后都必须保留
-`unavailable`/timeout 事实。每个候选都必须有一条
+WorkflowHub 不实现 advisory lock、process flight、polling、poll interval、session lifecycle
+或额外 timeout；这些 provider lifecycle 事实由 3rd-review broker 负责。`run` 阻塞到
+broker 返回 terminal group；exit code `3` 的 stdout 仍是合法的 unavailable terminal
+group，必须按公开协议读取，不能丢弃或改写为 pass。每个候选都必须有一条
 公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成通过或悄悄丢弃。
 
 每个 provider 的公开结果最少包含：
@@ -77,7 +75,7 @@ client 的 30 分钟默认 deadline 负责有限生命周期，不查看私有�
 - WorkflowHub 严格校验 `adapter/model/effort/thinking`、时间、usage、retry、runtime/session 和公共结果结构；绝不读取 broker private runtime、raw output 或 session 文件。
 - `session_file_path` 必须为 `null`；报告应显示 `SESSION_PATH_UNAVAILABLE`，不能猜测路径。
 - provider 未回传 usage 时必须为 `null`，不能用 packet bytes 冒充 token。
-- `raw_output_ref` 必须为 `null`；任何 raw output 都是 broker 私有数据。
+- `raw_output_ref` 可以为 `null`，也可以是 `broker-output-ref.v1` 的公开逻辑引用；它只含 runtime/provider 和 stdout/stderr SHA-256，不能用于读取 broker 私有 raw output。
 - 协议不兼容必须在 provider 启动前返回 `PROTOCOL_INCOMPATIBLE`。
 - runtime/session 只用于续跑和诊断，不参与材料身份、聚合或放行。
 - `completed` 只表示 provider 已返回。只有 reviewer output 解析成功后才有语义结果。
@@ -143,7 +141,7 @@ profile，只取配置优先级最高的一条作为该 adapter 的代表；优�
 还要绑定新鲜测试和独立审查。response ledger、resolution record 和旧 namespace
 不属于当前生产审查输入。
 
-不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误时只能请求同一冻结材料的协议恢复；公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都不得提升为 pass；后续正式调用可在同一公共合同下再次尝试，不能因为次数耗尽而伪造或阻断语义审查。
+不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都不得提升为 pass；后续正式调用只能是新的普通 review 请求，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
 
 ## 失败分类
 

@@ -1,1 +1,18 @@
-{"schema_version":1,"skill":"testing-system-blueprint","files":[{"path":"SKILL.md","sha256":"dd93d4f54e53290b8e1812948e4113590eea25e46e9f9da216cbb2878678ddc0"}],"sources":[{"url":"https://github.com/Hugh4424/AgentHub","commit":"258f5a2548fa8cc15325c6aa18dd107c1fc497b9","path":"packages/core/agenthub/skills/testing-system-blueprint/SKILL.md","license":"MIT"}]}
+{
+  "schema_version": 1,
+  "skill": "testing-system-blueprint",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "50fee171a2f65417f4d8e0258827580179808f19ccaefaf0cdce4c91806295d8"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/Hugh4424/AgentHub",
+      "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+      "path": "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

@@ -63,7 +63,7 @@
 - `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。
 - `review-response` — adapted；build-code revise_required。来源 Superpowers [`receiving-code-review`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review)，MIT。适配 wh-review continuation flow。
 - `test-routing-advisor` — adapted；build-plan 预判、build-code 真实范围变化时重判。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON 并保留预判/重判事实。
-- `testing-system-blueprint` — adapted；本任务不进入标准 build-plan/build-code 调用链。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。保留为可复用技能，不自动加入阶段依赖。
+- `testing-system-blueprint` — adapted；build-plan 的 advisory 测试设计输入，供 build-code 按真实改动消费；不承担执行器、交付 gate 或第二控制面。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。
 - `backend-testing` — adapted；build-code 真实后端改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing)，MIT。保留真实后端边界测试和报告字段，不新增执行器控制面。
 - `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，不把 browser pass 当推进 gate。
 - `fullstack-slice-testing` — adapted；build-code 真实跨边界改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing)，MIT。保留真实 seam slice 和报告，不恢复强制 worktree/commit/release gate。
@@ -119,7 +119,7 @@
 - absorbed：Matt `code-review` 双轴进入 `review`；`research` primary-source/citation 进入 `spec-research`；`to-tickets` 阻塞边/tracer bullet 进入 `spec-tasks`。
 - watch：Matt `domain-modeling`、`codebase-design`、`prototype`。没有独立 stage 触发、消费点、验证合同前不进入运行闭包。
 
-测试策略边界：`test-routing-advisor` 在 `build-plan` 为每个 Phase 和最终完整测试预判 tier/skill；`build-code` 检查真实 changed files，必要时重判，再调用 `backend-testing`、`frontend-testing` 或 `fullstack-slice-testing`。`testing-system-blueprint` 不在本标准链中。
+测试策略边界：`testing-system-blueprint` 在 `build-plan` 只形成 advisory 测试设计；`test-routing-advisor` 为每个 Phase 和最终完整测试预判 tier/skill；`build-code` 检查真实 changed files，必要时重判，再调用 `backend-testing`、`frontend-testing` 或 `fullstack-slice-testing`。这些都是事实记录，不是推进 gate。
 
 - rejected：Matt `implement`、setup、deprecated、in-progress、personal skills。与现有 stage 编排重复或不稳定。
 - absorbed：gstack review 证据可见性进入 `review`；state/data-flow 进入 `spec-plan`；Ship release discipline 进入 verify-code。

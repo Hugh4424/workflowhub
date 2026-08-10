@@ -3,12 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { listDeliveryFiles, listUntrackedFiles } from "./inventory.mjs";
 
 import { buildRunnerRelease, installRunnerRelease, validateRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
 import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { resolveStageSkillPackages } from "../../runtime/stage/stage-skill-runtime.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -58,10 +59,8 @@ function assertReleasedSourceInput({ sourceRoot, releaseRoot, locator }) {
 }
 
 /**
- * Resolve every real workflow manifest through the installed Runner without
- * invoking a host/provider. This proves the released stage inputs and their
- * declared skill closures are runnable from release bytes, rather than only
- * from the Hub checkout or a fake stage handler.
+ * Resolve every real workflow manifest and portable skill package from the
+ * installed release without invoking a host/provider.
  */
 export async function smokeReleasedStageDependencies({ sourceRoot, runnerRoot, bundleRoot } = {}) {
   const source = fs.realpathSync(sourceRoot);
@@ -71,19 +70,15 @@ export async function smokeReleasedStageDependencies({ sourceRoot, runnerRoot, b
     runner_manifest: fileHash(runner, "runner-release.json"),
     skill_manifest: fileHash(bundle, "skill-bundle.json"),
   };
-  const { preflightStageSkills } = await import(pathToFileURL(path.join(runner, "runtime/stage/stage-skill-runtime.mjs")).href);
   const stages = [];
   for (const stage of STAGES) {
     const manifestLocator = `workflows/${stage}/skill-deps.yaml`;
     const skillLocator = `workflows/${stage}/SKILL.md`;
     const manifestHash = assertReleasedSourceInput({ sourceRoot: source, releaseRoot: runner, locator: manifestLocator });
     const skillHash = assertReleasedSourceInput({ sourceRoot: source, releaseRoot: runner, locator: skillLocator });
-    const prepared = preflightStageSkills({
+    const prepared = resolveStageSkillPackages({
       packageRoot: runner,
       stage,
-      activeConditions: [],
-      commands: { "target-test-command": [process.execPath, "--version"] },
-      probes: {},
     });
     const dependencies = prepared.manifest.skills.map((dependency) => {
       const payload = prepared.payloads.get(dependency.name);
@@ -114,7 +109,7 @@ export async function smokeReleasedStageDependencies({ sourceRoot, runnerRoot, b
   }
   return Object.freeze({
     status: "passed",
-    mode: "no_provider_preflight",
+    mode: "no_provider_package_resolution",
     stages,
     release_inputs_unchanged: true,
   });

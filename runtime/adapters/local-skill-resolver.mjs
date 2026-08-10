@@ -146,7 +146,7 @@ export function validateReviewBundleProjection(packageRoot, reviewBundlePath, ex
   return { projection, projectionPath, entrypoint, files: selected, bundleHash: checked.bundleHash, projectionHash };
 }
 
-export function resolveSkillDispatch({ packageRoot, manifestPath, dependency }) {
+export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
   const skill = dependency?.name;
   try {
     if (!skill || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");

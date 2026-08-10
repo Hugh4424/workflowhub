@@ -121,12 +121,11 @@ describe("spec-plan retry and artifact idempotence contract", () => {
     }).action).toBe("reuse");
   });
 
-  it("requires the prompt to preserve provenance and stop on snapshot change", () => {
+  it("keeps runtime retry state out of the plan authoring prompt", () => {
     const skill = read("skills/spec-plan/SKILL.md");
-    expect(skill).toMatch(/allowed current-input\s+facts only/);
-    expect(skill).toMatch(/current\s+in this snapshot and valid,\s+carry its formal `id`/);
-    expect(skill).toMatch(/A `tasks\.md` completion or stale plan-hash\s+binding is a downstream task-projection change/);
-    expect(skill).toMatch(/preserve the\s+current plan's provenance/);
-    expect(skill).toMatch(/recompute the current snapshot and[\s\S]*stop the ordered stage dispatch/);
+    expect(skill).toMatch(/implementation solution/i);
+    expect(skill).toMatch(/test plan/i);
+    expect(skill).toMatch(/task mapping/i);
+    expect(skill).not.toMatch(/TaskKernel|\breceipts?\b|\bsnapshot\b|\binvocation\b|user_handoff|WorkflowHub Stage Progress|process index|comment projection/i);
   });
 });

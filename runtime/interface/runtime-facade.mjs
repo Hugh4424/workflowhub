@@ -13,17 +13,11 @@ export const RUNTIME_BEHAVIORS = Object.freeze([
 const BEHAVIOR_BY_INTERNAL_OPERATION = Object.freeze({
   doctor: "doctor",
   status: "status",
-  "record-research": "run",
   artifact: "run",
-  receipt: "run",
-  "publish-content-evidence": "run",
-  "invoke-stage-skill": "review",
   "review-risk-pause": "review",
   "capture-tests": "verify",
-  "publish-acceptance-evidence": "verify",
   confirm: "confirm",
   "authorize-operation": "authorize",
-  "verify-execute": "verify",
   run: "run",
 });
 

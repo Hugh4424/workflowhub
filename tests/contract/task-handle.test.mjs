@@ -16,7 +16,7 @@ import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
+import { createTask, createTaskKernel, openTask } from "../../runtime/task/task-handle.mjs";
 
 const temporaryDirs = [];
 const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../../runtime/task/task-handle.mjs");
@@ -57,6 +57,17 @@ afterEach(() => {
 });
 
 describe("TaskHandle", () => {
+  it("keeps vNext canonical records inside the quality namespace", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const kernel = createTaskKernel(task);
+
+    expect(() => kernel.publishCanonicalRecord("evidence/root.txt", "legacy root\n"))
+      .toThrow(/quality namespace/i);
+    expect(() => kernel.publishCanonicalRecord("quality/evidence/current.txt", "current\n"))
+      .not.toThrow();
+  });
+
   it("enumerates only sorted regular canonical stage attempts", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });
@@ -119,6 +130,25 @@ describe("TaskHandle", () => {
     writeFileSync(join(auditsRoot, `${a}.json`), "{}");
     writeFileSync(join(auditsRoot, "ignored.txt"), "{}");
     expect(task.listCanonicalReviewResultRefs()).toEqual([]);
+  });
+
+  it("does not expose retired review-flow operations from TaskKernel", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const kernel = createTaskKernel(task);
+
+    for (const operation of [
+      "readReviewFlow",
+      "readReviewFlowHistory",
+      "deriveReviewFlowIdentity",
+      "withReviewFlowLock",
+      "recordReviewAttempt",
+      "assertReviewFlowReady",
+      "advanceReviewFlow",
+      "adoptLegacyReviewRoot",
+    ]) {
+      expect(kernel[operation]).toBeUndefined();
+    }
   });
 
   it("enumerates only sorted regular canonical review attempts", () => {
