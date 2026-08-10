@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
-import { buildReviewMaterials, reviewInstructionsFor } from "../review-materials.mjs";
+import { buildReviewMaterials, phaseDiffDeliveryForPath, requirementIds, reviewInstructionsFor } from "../review-materials.mjs";
 import { runReview, runReviewFixture, verifyFinalSubject } from "../review-runner.mjs";
 import { createTask } from "../../../../runtime/task/task-handle.mjs";
 
@@ -279,6 +279,15 @@ describe("broker boundary", () => {
 });
 
 describe("material and workspace boundaries", () => {
+  it("delivers implementation code and recognizes namespaced requirements", () => {
+    expect(phaseDiffDeliveryForPath("paperbuilder/application/smart_iteration.py")).toBe("included");
+    expect(phaseDiffDeliveryForPath("frontend/src/smart-iteration.test.tsx")).toBe("included");
+    expect(phaseDiffDeliveryForPath("specs/f14-intelligent-iteration/spec.md")).toBe("summary");
+    expect([...requirementIds("FR-ROBUST-001 AC-ROBUST-009 FR-001 AC-002")].sort()).toEqual([
+      "AC-002", "AC-ROBUST-009", "FR-001", "FR-ROBUST-001",
+    ]);
+  });
+
   it("builds a phase packet from current diff and does not require maps", () => {
     const { attachmentRoot, task } = fixture("review-phase-");
     const diff = Buffer.from("diff --git a/runtime/example.mjs b/runtime/example.mjs\nindex 1111111..2222222 100644\n--- a/runtime/example.mjs\n+++ b/runtime/example.mjs\n@@ -1 +1 @@\n-old\n+new\n");

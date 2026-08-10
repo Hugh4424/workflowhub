@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
@@ -35,16 +35,31 @@ const FULL_PHASE_DIFF_PREFIXES = [
   "skills/test-routing-advisor/",
   "tools/cli/",
 ];
+
+// Provider-visible Phase diffs must include implementation code regardless of
+// which project owns the path. Keep documentation, configuration, fixtures,
+// and generated reports as bounded summaries unless they are selected through
+// the normal context/authority maps.
+const FULL_PHASE_DIFF_CODE_EXTENSIONS = new Set([
+  ".c", ".cc", ".cpp", ".cxx", ".css", ".fish", ".go", ".h", ".hpp",
+  ".java", ".js", ".jsx", ".kt", ".m", ".mjs", ".mm", ".php", ".py",
+  ".pyi", ".rb", ".rs", ".sass", ".scss", ".sh", ".sql", ".svelte",
+  ".swift", ".ts", ".tsx", ".vue", ".zsh",
+]);
+
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
- * directly own the current contract complete. Core tests, generic skill
+ * directly own the current contract complete. Configuration, generic skill
  * catalog/registry metadata, architecture reports, fixtures, generated
  * reports, and task materials stay provider-visible only as bounded summaries;
  * their canonical bytes remain available for audit. This keeps the provider
  * packet below the hard transport limit without hiding changed-file coverage.
  */
 export function phaseDiffDeliveryForPath(path) {
-  return FULL_PHASE_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "included" : "summary";
+  return FULL_PHASE_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
+    || FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())
+    ? "included"
+    : "summary";
 }
 
 function sha256File(path) {
@@ -564,8 +579,8 @@ function compactAuthorityMap(map, archive) {
   };
 }
 
-function requirementIds(value) {
-  return new Set(String(value ?? "").match(/\b(?:FR|AC)-\d+\b/g) ?? []);
+export function requirementIds(value) {
+  return new Set(String(value ?? "").match(/\b(?:FR|AC)(?:-[A-Z][A-Z0-9_]*)*-\d+\b/g) ?? []);
 }
 
 function compactApprovedSpec(spec, acceptanceCriteria, acceptanceMap, archive) {
@@ -673,15 +688,36 @@ function semanticAnchorRanges(change, anchor) {
   };
 }
 
+function selectedPhaseChangeIds(materials) {
+  const selected = new Set();
+  for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
+    for (const entry of materials[key]?.entries ?? []) {
+      // Acceptance anchors can point at a changed file whose full diff is not
+      // needed in the packet. `diff_delivery: summary` keeps that mapping
+      // accurate while the bounded context excerpt remains provider-visible.
+      if (
+        (entry.disposition === "complete" || key === "acceptance_map")
+        && entry.diff_delivery !== "summary"
+      ) {
+        for (const changeId of entry.change_ids ?? []) selected.add(changeId);
+      }
+    }
+  }
+  return selected;
+}
+
 function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials }) {
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
+  const selectedChangeIds = selectedPhaseChangeIds(materials);
   const shards = [];
   let ordinal = 0;
   for (const section of diffSections(source)) {
     const change = changesByPath.get(section.path);
     if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
-    const delivery = phaseDiffDeliveryForPath(section.path);
+    const delivery = selectedChangeIds.size > 0
+      ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
+      : phaseDiffDeliveryForPath(section.path);
     const bodies = delivery === "included"
       ? Array.from({ length: Math.ceil(section.bytes.length / PHASE_DIFF_SHARD_TARGET_BYTES) }, (_value, index) => {
         const offset = index * PHASE_DIFF_SHARD_TARGET_BYTES;
@@ -697,7 +733,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
           source_bytes: section.bytes.length,
           hunk_ids: change.hunks.map(({ hunk_id }) => hunk_id),
           delivery: "summary",
-          note: "Full diff is retained in the canonical Phase archive; this bounded summary is the provider-visible view for a non-code/test/material path.",
+          note: "Full diff is retained in the canonical Phase archive; this bounded summary is the provider-visible view for a non-selected path.",
         })}\n`, "utf8"),
       }];
     for (const { offset, body } of bodies) {
@@ -728,13 +764,16 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const index = {
     schema_version: "wh-review-diff-index.v1",
     delivery_mode: "selected_context",
+    ...(selectedChangeIds.size > 0 ? { selected_change_ids: [...selectedChangeIds].sort() } : {}),
     full_diff: { ...archive, lines: (() => { let count = 0; forEachTextLine(source.diffPath, () => { count += 1; }); return count; })() },
     coverage: { change_ids_total: changeMap.changes.length, change_ids_indexed: covered.size },
     changes: compactChanges,
     anchors: selectedAnchors(materials).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
-      if (phaseDiffDeliveryForPath(anchor.path) !== "included") return canonicalAnchorSource({ reviewDataRoot, source, anchor });
+      if (selectedChangeIds.size > 0
+        ? !selectedChangeIds.has(change.change_id)
+        : phaseDiffDeliveryForPath(anchor.path) !== "included") return canonicalAnchorSource({ reviewDataRoot, source, anchor });
       const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
       const shard = change.shards.find(({ delivery }) => delivery === "included");
       if (!shard) throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
@@ -756,10 +795,13 @@ export function validateDiffIndexBundle(bundleRoot) {
     throw new Error("MATERIAL_INCOMPLETE: diff index contract mismatch");
   }
   const covered = new Set();
+  const selectedChangeIds = new Set(index.selected_change_ids ?? []);
   for (const change of index.changes ?? []) {
     covered.add(change.change_id);
     const shards = Array.isArray(change.shards) ? change.shards : [];
-    const requiresFullDiff = phaseDiffDeliveryForPath(change.path ?? "") === "included";
+    const requiresFullDiff = selectedChangeIds.size > 0
+      ? selectedChangeIds.has(change.change_id)
+      : phaseDiffDeliveryForPath(change.path ?? "") === "included";
     if (!shards.some(({ delivery }) => delivery === "included") && (requiresFullDiff || !shards.some(({ delivery }) => delivery === "summary"))) {
       throw new Error(`MATERIAL_INCOMPLETE: changed path ${change.path ?? change.change_id} has no provider-visible diff shard`);
     }
@@ -902,6 +944,7 @@ function validateBuildCodeContextSelection({ source, materials, diffIndex }) {
     if (anchor.map === "acceptance_map" && /(?:^|\/)spec\.md$/i.test(anchor.path)) continue;
     const changed = source.changedFiles.find((item) => item.path === anchor.path);
     if (!changed) continue;
+    if (anchor.role === "diff_excerpt") continue;
     if (typeof anchor.outside_diff_reason !== "string" || anchor.outside_diff_reason.trim() === "") {
       throw new Error(`MATERIAL_INCOMPLETE: build-code context anchor ${anchor.id} names changed file ${anchor.path} and requires outside_diff_reason`);
     }
@@ -1077,7 +1120,10 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     reviewDataRoot,
     source,
     materials,
-    canonicalOnly: selectedContextDelivery,
+    // Large diff packets still need the explicitly selected bounded excerpts
+    // in the provider bundle. The complete source remains canonical; only
+    // map-selected excerpts are embedded here.
+    canonicalOnly: false,
   });
 
   const stagePlan = stagePlanFor(stage, reviewTrack);
