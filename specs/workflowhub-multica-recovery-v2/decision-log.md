@@ -159,3 +159,12 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **Phase C 处置**：`stage-content-contracts.mjs` 经反向引用确认仍是既有只读 consumer，保留；固定 official receipt 的不同内容写入继续 fail-loud，但不参与同 task work readiness；临时 packet purpose 元数据瑕疵不改写 provider verdict。
 - **Phase D RED**：基于 Phase C 提交的临时 detached worktree，使用仓库本地 `node_modules/.bin/vitest` 运行 T008 命令，`legacy-zero` 3 passed、`review-layering` 2 passed、`repository-inventory` 9 passed，`stage-skill-invocation` 7 failed，整体 exit=1；失败是旧树缺少新的直接 stage package resolver 导出，属于目标 RED，不是 setup/命令失败。临时 worktree 已移除。
 - **Phase D GREEN/review**：补齐 stage package 直接解析后的 Skill Bundle hash、更新 build-plan 对 `testing-system-blueprint` 的声明期望后，同一命令 exit=0，4 files / 21 tests passed；受影响的 routing/CLI/runtime-facade 回归另为 3 files / 32 tests passed。stage package 不派发 host invocation、不写 receipt；Talk/Grill 仍只属于 make-decision。候选提交 `06ff0af`（parent `0623cacc`，candidate tree `d260562262780501ccd49aa68e29d2ff059a6e05`）由 `opencode/v4flash` runtime `299d96b9-5579-4f80-abef-3726e24a44ea` 独立复核，返回 PASS、无 blocking；4 个 packet coverage 非阻断项及 T010 raw-diff/AC-8/AC-9 处置已记录在对应报告。T008/T009 已完成，进入 T010。
+
+## 2026-08-10 T011 最终验收事实
+
+- 最终实现提交 `dde024a7e1808e522e5095fb64f2c602a84cd99e` 已由 `opencode/v4flash` 独立审查，runtime `8bc61193-747c-4e04-b114-7112941fe27c` 返回 `PASS`、无 blocking；完整实现 diff 的 provider-visible file identity 已验证。
+- provider 指出的非阻断问题已收口：从最终树重新采集 public-behavior fixture，提交 `c4d6f1008fadfd14c8a962aad9c922a02fcd0d81` 只更新 `candidate.json` 和 `manifest.json`，使当前谓词显示 `direction_review`/`detail_review`，不再冻结退役的 `decision_coverage`/`research`/`independent_review` 投影。
+- follow-up 提交由 `opencode/v4flash` runtime `dcf45653-912c-491b-a536-c4b1f419e192` 独立复核，返回 `PASS`、无 blocking；报告见 `quality/reviews/reports/recovery-v2-opencode-v4flash-c4d6f10-pass.md`。
+- 最终本地命令事实：`npm test` exit=0（safe 146 files / 1252 passed / 1 skipped；exclusive 2 files / 31 passed）；`npm run check` exit=0；public behavior verify/compare/probe 全部 exit=0，live probe 10 tests passed；`git diff --check` exit=0。
+- 宪法边界：四份当前材料仍是唯一工作真相；质量、review、test、evidence、history、provider、receipt、audit 仍是事实而非继续工作或交付 gate；没有新增 Runner、TaskHandle、receipt replacement、snapshot lineage、bridge、review lock、second ledger、第五份材料或 public route；没有修改 Multica、main、provider/model/daemon。
+- 验收结论：T011 完成，恢复分支仅完成本地实现、测试、独立审查与验收；merge/push/cleanup/Multica 同步仍是独立动作，未执行。

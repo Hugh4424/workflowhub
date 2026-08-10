@@ -76,10 +76,10 @@ docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md	keep	no 
 docs/adr/0009-stage-content-authority.md	keep	no approved deletion or move proof in Phase 0	ca1b9398747e32f7cc465496a289583aff32aa30392dfe099c37536bd408b960
 docs/adr/0010-serious-review-disposition.md	keep	no approved deletion or move proof in Phase 0	b734500c0f9184b8e3b53c04089ef0610eabf275eb4109e8d4bec678c5f7b8d2
 docs/adr/0011-authenticated-review-flow-generations.md	keep	no approved deletion or move proof in Phase 0	b85dd7f1e6c1eed9194d8e300047da06e86ecb5ed37eba76b5b135cbd97a453d
-docs/architecture/complexity-baseline.json	keep	no approved deletion or move proof in Phase 0	b4dc8253e5266d4b6eef88570e071b8de09f6d0d36a25206ff319d9a80bf93e0
+docs/architecture/complexity-baseline.json	keep	no approved deletion or move proof in Phase 0	ab549fa3ee7cbef898e934f7d31fbf9124fc169a42be2905b53c56d71f0e85ba
 docs/architecture/deletion-plan.json	keep	no approved deletion or move proof in Phase 0	3f78b935884589e9d290b4166a5ce91ce0c10cdd376ab2a9df7710caf7f8188d
 docs/architecture/deletions-proof.json	keep	no approved deletion or move proof in Phase 0	0db3b179a3e0dfbe7b3cc85f8c9c15795903c18f1c931225ff6e251e44598920
-docs/architecture/final-complexity-report.json	keep	no approved deletion or move proof in Phase 0	e174d297cf70aad170f025aa20cb0fe44dad56c2ab8690c67b3d71c615c022e1
+docs/architecture/final-complexity-report.json	keep	no approved deletion or move proof in Phase 0	d3767d3919ca51bad208a28c9f81b5c80c7fb0fadba97e8cca437611a67530a7
 docs/architecture/final-coverage-audit.md	keep	no approved deletion or move proof in Phase 0	615488184adc9d368f61b5576c803d992694b911e23c8fea6b5071c84f7399c9
 docs/architecture/history-inventory.json	keep	no approved deletion or move proof in Phase 0	f8c514a8a4f4fb52306f9a859930dd2b8a819af07030d241a420658546ca8788
 docs/architecture/legacy-import-proof.json	archive	immutable migration audit evidence	b7dd7aa44571becae4eb1207269a3e28b9b3461abfc8c76a5dff39d48bfa447e
@@ -265,11 +265,13 @@ metrics/record-schema.mjs	keep	no approved deletion or move proof in Phase 0	b56
 package-lock.json	keep	no approved deletion or move proof in Phase 0	a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b
 package.json	keep	no approved deletion or move proof in Phase 0	ee585641b83a59ab5d81f22d3a8005b12209662662ec2517e9518ba3b9a6a4e8
 quality/reviews/reports/T010-structure.md	keep	no approved deletion or move proof in Phase 0	4459020e4fe206049feaf5eca12cfedbde5d140ad8a8d18b1e33c364c33c0652
+quality/reviews/reports/T011-final-acceptance.md	keep	no approved deletion or move proof in Phase 0	add8e274be01846fefa036e13e5d0e604595d27139296cac11bb1a7a05fc79c7
 quality/reviews/reports/recovery-v2-final-validation-r4-20260810.md	keep	no approved deletion or move proof in Phase 0	157ac8402bbc0084b6e1f02dfb5b0f97de2ae4805c0b24eaccc2df2ba4eafcb9
 quality/reviews/reports/recovery-v2-opencode-v4flash-16848180-pass-before-microfix.md	keep	no approved deletion or move proof in Phase 0	029c2db9bfe0889c466b250c4f706e562e8289b117533354813529b0fe090713
 quality/reviews/reports/recovery-v2-opencode-v4flash-8e5f15af-pass.md	keep	no approved deletion or move proof in Phase 0	4311cd5f6d9462f8d3a103e54ffc989ff653b69076975fa1460d4a7396318763
 quality/reviews/reports/recovery-v2-opencode-v4flash-b5f9ce57-revise.md	keep	no approved deletion or move proof in Phase 0	10871bb6f777c017658db8dc73289d29e9d2ecf278d9f8130f7035bdb28b3396
 quality/reviews/reports/recovery-v2-opencode-v4flash-b95a8e19-pass-before-final-microfix.md	keep	no approved deletion or move proof in Phase 0	8886d2ba7411febf282e58a48bc2d80d9de7b360c6e3ad2f739eabdeaa067cf9
+quality/reviews/reports/recovery-v2-opencode-v4flash-c4d6f10-pass.md	keep	no approved deletion or move proof in Phase 0	d4422e9f8abc739fd5a9e2e0099aae46dcd5cf46302310d708982bae6a4f0951
 quality/reviews/reports/recovery-v2-phase-a-opencode-v4flash-7ef4658c-pass.md	keep	no approved deletion or move proof in Phase 0	9ac76b7c0901e7fc5f01d54a4fa78ce653cd0ead8e06c6d4d9c7375a141ca1db
 quality/reviews/reports/recovery-v2-phase-b-opencode-v4flash-18ff4817-pass.md	keep	no approved deletion or move proof in Phase 0	4682740c622ee7ec0b35242e3115cd85d546cd45c187ed90249163cdc52a4256
 quality/reviews/reports/recovery-v2-phase-c-opencode-v4flash-c6fc3931-pass.md	keep	no approved deletion or move proof in Phase 0	aa25272e357f3f1ec3e0d6dfb76c55578220c9a1b664bc1de0d7754b6f091ff7
@@ -1000,7 +1002,7 @@ specs/workflowhub-complexity-governance-v2/decision-log.md	keep	no approved dele
 specs/workflowhub-complexity-governance-v2/plan.md	keep	no approved deletion or move proof in Phase 0	e27f85c5d3c490a432f424314e0df19768e607b3ab94c53dde4a849beaad9b9d
 specs/workflowhub-complexity-governance-v2/spec.md	keep	no approved deletion or move proof in Phase 0	fddc204f0b416bc0aad3ebe409f9dda36a3036c8f86fc295ad8372d188f7716e
 specs/workflowhub-complexity-governance-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	e3caae47a2eec118808916fd6b0fed1191551a3435921492013454ff571f3d54
-specs/workflowhub-multica-recovery-v2/decision-log.md	keep	no approved deletion or move proof in Phase 0	560f649e68732c75ab641d24bcf6694e70e740e9c254fdd85fb64751e82f4ab7
+specs/workflowhub-multica-recovery-v2/decision-log.md	keep	no approved deletion or move proof in Phase 0	c675dab93059a8528793a47658fc4a93c448dd2535fdff23bf3d692c37a70268
 specs/workflowhub-multica-recovery-v2/plan.md	keep	no approved deletion or move proof in Phase 0	2efa2e30fe7b294919393b9774cfcddc3f556413ed67af7ba29e469e43341ae6
 specs/workflowhub-multica-recovery-v2/quality/reviews/reports/recovery-v2-final-validation-20260809.md	keep	no approved deletion or move proof in Phase 0	1d39304b3dadd4c57d559ffc71b673edb77a91fcb2caf8c3deb0915ffa27e0fd
 specs/workflowhub-multica-recovery-v2/quality/reviews/reports/recovery-v2-final-validation-r2-20260809.md	keep	no approved deletion or move proof in Phase 0	087c68c09040ef096d82a5ec72842895c807fb43c379aa1463f4c422da2cd5e5
@@ -1010,7 +1012,7 @@ specs/workflowhub-multica-recovery-v2/quality/reviews/reports/recovery-v2-openco
 specs/workflowhub-multica-recovery-v2/quality/reviews/reports/recovery-v2-opencode-v4flash-a90a8094-pass.md	keep	no approved deletion or move proof in Phase 0	b4fb50e9fbd54e202f6920b0bc15c8dc31c3a86f78c8cfbb81fbdcc8701fe0b1
 specs/workflowhub-multica-recovery-v2/quality/reviews/reports/recovery-v2-validation-20260809.md	keep	no approved deletion or move proof in Phase 0	fb1c02fe256159eadfb31fe0b6b14d7b185f4437df63687fd72a1703b8488623
 specs/workflowhub-multica-recovery-v2/spec.md	keep	no approved deletion or move proof in Phase 0	a497bf0aa0e95184e6aaf1282363769259c57342b3c36c20f3be22d38ff6aab7
-specs/workflowhub-multica-recovery-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	f64a34724fd9681863578b0926f2b65ba96b6f6e96c6ad52bd1ff1d7636db97d
+specs/workflowhub-multica-recovery-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	7dd84385b31bee24f878111cafa7380f2cba82ae8a8a955a6e63022cbbfd41d1
 tests/baseline.test.mjs	keep	no approved deletion or move proof in Phase 0	99c63b5247db98a26898aaac6cb299706147a125238208ef9649f62c65913056
 tests/boundary-confirm.test.mjs	keep	no approved deletion or move proof in Phase 0	fb95ee762e26df24c1b037e4a983df1a9da724090c8f9de051354d2dca0ebebe
 tests/build-code-diff-only.test.mjs	keep	no approved deletion or move proof in Phase 0	0d44b065b4fc198de23626cd425d6b29e39827ff3dd4c5998cb602612e4c1c49
@@ -1064,8 +1066,8 @@ tests/fixtures/mutations/identity-tree-hash.json	keep	no approved deletion or mo
 tests/fixtures/mutations/missing-completion.json	keep	no approved deletion or move proof in Phase 0	6651562658cc0bcde08cdd331a7bf9367125dfc21ea09445a2c72d05bc0f98dc
 tests/fixtures/mutations/review-major.json	keep	no approved deletion or move proof in Phase 0	84fe2dbbb7cef38b987f0c256cc223b14650910931ce19852ee34772b5054956
 tests/fixtures/public-behavior-baseline/v1/baseline.json	keep	no approved deletion or move proof in Phase 0	724ab945b6a98970ebd7144c3286cb7604b39f739a6b60ca04dd526c416c148b
-tests/fixtures/public-behavior-baseline/v1/candidate.json	keep	no approved deletion or move proof in Phase 0	58247d7e59fdd3cd0de242bb3b46410b4f23558a5271f4cbf2f796efe842ff92
-tests/fixtures/public-behavior-baseline/v1/manifest.json	keep	no approved deletion or move proof in Phase 0	37507c45ad278672d30304dc0bbc571bd8cda9e3737dee05ccfce9a458a911e7
+tests/fixtures/public-behavior-baseline/v1/candidate.json	keep	no approved deletion or move proof in Phase 0	6049467c2ce2520b78778dbffe31d6e3e5bb37e6342e9a284592942be61d8e0d
+tests/fixtures/public-behavior-baseline/v1/manifest.json	keep	no approved deletion or move proof in Phase 0	909080066d0838c3b4bbe1ffa475e83adb4db16c45975dad2093bab0cfd5adf0
 tests/fixtures/step-audit/duplicate.json	keep	no approved deletion or move proof in Phase 0	6a322e8af075fbc685d5bf18897e526796c5c4692af681d460057c87f9fd4d81
 tests/fixtures/step-audit/missing.json	keep	no approved deletion or move proof in Phase 0	51cea38a437baa242c334aad5cc28b8868f676cfd19bbe12ced3f1f5310bb9f6
 tests/fixtures/step-audit/normal.json	keep	no approved deletion or move proof in Phase 0	74067e30036d0718a2e3e487e61789555cc380978a5d8983fe471c4f31596e94

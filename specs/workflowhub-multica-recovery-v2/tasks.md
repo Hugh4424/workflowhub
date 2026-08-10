@@ -144,5 +144,5 @@
 - **证据**：evidence_path=`quality/reviews/reports/T011-final-acceptance.md`; record=`测试统计、review 原文/packet hash、AC 逐项、constitution checklist、隔离证据、commit tree`。
 - **Trace**：D-final-acceptance → FR-1..FR-10 → AC-1..AC-12
 - **STOP**：发现新 control plane、四材料冲突、main/Multica 变化、review subject 漂移或需猜测通过结论时停止收尾。
-- **状态**：`in_progress`
-- **执行事实**：当前全量验收已完成本地命令部分：`npm test` exit=0（safe `146` files / `1252 passed` / `1 skipped`；exclusive `2` files / `31 passed`）；`npm run check` exit=0；public behavior compare/probe exit=0；待以当前最终提交树重新冻结并取得一次新的 `opencode/v4flash` 独立审查，再完成逐 AC、宪法和隔离报告。旧 provider PASS/REVISE 原文保留，不冒充当前最终审查。
+- **状态**：`completed`
+- **执行事实**：最终实现提交 `dde024a7e1808e522e5095fb64f2c602a84cd99e` 的完整 `opencode/v4flash` 独立审查 runtime `8bc61193-747c-4e04-b114-7112941fe27c` 返回 `PASS`、无 blocking；provider 指出的 public-behavior fixture 过期问题已由 `c4d6f1008fadfd14c8a962aad9c922a02fcd0d81` 修正。follow-up 的 `opencode/v4flash` 独立审查 runtime `dcf45653-912c-491b-a536-c4b1f419e192` 也返回 `PASS`、无 blocking。最终测试、compare/probe、baseline verify、constitution/check、隔离和逐项验收事实写入 `quality/reviews/reports/T011-final-acceptance.md`；旧 PASS/REVISE 原文保留，不冒充当前结论。
