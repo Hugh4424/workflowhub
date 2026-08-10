@@ -7,11 +7,13 @@ description: 审查方案是否走过四阶梯最小路径，识别范围膨胀�
 
 ## 定位
 
-这是一个可直接由 stage-owned dispatcher 调用的只读 advisory lens/skill，不产
-stage-result，不修改被审材料。build-spec/build-plan 直接调用它并保存
-invocation fact；后续 wh-review 只读取该事实，不重复调用或重复计数。
-它也可以被其他明确声明的 review packet 复用，但不能被偷偷变成第二个
-stage owner。
+这是一个放入 wh-review 冻结 packet 的只读 advisory lens/skill，不产 stage-result，不
+修改被审材料。它与 `plan-ceo-review` 共用同一 packet；provider 在同一 findings 输出中
+报告具体问题。它不是 stage-owned dispatcher 的输入，不生成 `*-facts`、invocation receipt、
+独立 runtime 或第二个 stage owner。
+
+lens 缺失、不可用或没有 finding 只记录为 review 事实，不阻止同一 task 继续工作；它没有
+独立调用、独立结果或继续工作的前置条件。
 
 审查目标不是把缺口变成更多要求，而是找出能删除、复用或缩小的内容。
 发现额外内容时必须明确建议删除；不得用“以后可能需要”替它保留位置。
@@ -44,10 +46,10 @@ P3：最小新增
     ③ 手术式修改：只动必须动的地方，只清理自己改动产生的孤儿代码，每行改动可追溯到需求
 ```
 
-## Provider 审查协议
+## Packet lens contract
 
-逐项检查待审方案中的新增能力、抽象、模块、入口、状态、证据、迁移和发布
-机制。每项必须停在第一个可用阶梯，并在 finding 中写明 `P0`、`P1`、
+provider 在同一 packet 中逐项检查待审方案中的新增能力、抽象、模块、入口、状态、证据、
+迁移和发布机制。每项必须停在第一个可用阶梯，并在 finding 中写明 `P0`、`P1`、
 `P2` 或 `P3`：
 
 - P0 不成立：要求删除该内容，并指出它缺少哪一种必要性证据。
@@ -68,9 +70,9 @@ P3：最小新增
 或个人风格裁决，也不得删除需求明确要求的测试、输入校验、错误处理、安全
 或可访问性保护。
 
-任一上述问题会实质扩大实现或维护面时，输出 `revise_required`。只报具体、
-可执行的删除或缩减 finding；不得建议顺手建设通用框架。没有这类问题时，
-不制造 finding。
+任一上述问题会实质扩大实现或维护面时，在同一 provider findings 中输出具体、可执行的
+删除或缩减 finding；不得建议顺手建设通用框架。没有这类问题时，不制造 finding。lens
+不输出 verdict、summary 或独立结果。
 
 ## 例外（不适用四阶梯）
 

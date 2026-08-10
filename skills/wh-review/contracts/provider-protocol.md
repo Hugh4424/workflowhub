@@ -1,6 +1,6 @@
 # Provider Protocol
 
-本合同分开两件事：3rd-review 向 WorkflowHub 返回什么，以及 reviewer 模型输出什么。传输成功不等于审查通过。
+本合同分开两件事：3rd-review 向 WorkflowHub 返回什么，以及 reviewer 模型输出什么。传输成功不等于没有 finding。
 
 ## 材料边界
 
@@ -8,7 +8,7 @@
 - provider 不得访问真实仓库、运行 Git、读取宿主绝对路径或自行补取材料。
 - `material_id` 由 WorkflowHub 根据 canonical manifest 计算，绑定全部 provider 可见文件的相对路径、byte size 和 SHA-256；它不包含宿主路径、provider、session、runtime 或时间。
 - 3rd-review 负责附件复制和文件完整性。WorkflowHub 不读取 3rd-review 的 private workspace、`state.json`、raw 文件或内部 attestation。
-- 材料缺失、不可读、传输失败或 hash 不符都不是语义 verdict。
+- 材料缺失、不可读、传输失败或 hash 不符都不是 findings 结果。
 - Phase 大 diff 可使用 `diff-index.v1`。provider 只能读取 manifest 内的 index、已选
   shard、摘要和 anchors；材料必须自足完成审查，不存在二次补取或包外工具入口。
 
@@ -38,8 +38,8 @@ request 声明：
 WorkflowHub 不实现 advisory lock、process flight、polling、poll interval、session lifecycle
 或额外 timeout；这些 provider lifecycle 事实由 3rd-review broker 负责。`run` 阻塞到
 broker 返回 terminal group；exit code `3` 的 stdout 仍是合法的 unavailable terminal
-group，必须按公开协议读取，不能丢弃或改写为 pass。每个候选都必须有一条
-公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成通过或悄悄丢弃。
+group，必须按公开协议读取，不能丢弃或改写为空 findings。每个候选都必须有一条
+公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没有 finding 或悄悄丢弃。
 
 每个 provider 的公开结果最少包含：
 
@@ -78,21 +78,20 @@ group，必须按公开协议读取，不能丢弃或改写为 pass。每个候�
 - `raw_output_ref` 可以为 `null`，也可以是 `broker-output-ref.v1` 的公开逻辑引用；它只含 runtime/provider 和 stdout/stderr SHA-256，不能用于读取 broker 私有 raw output。
 - 协议不兼容必须在 provider 启动前返回 `PROTOCOL_INCOMPATIBLE`。
 - runtime/session 只用于续跑和诊断，不参与材料身份、聚合或放行。
-- `completed` 只表示 provider 已返回。只有 reviewer output 解析成功后才有语义结果。
+- `completed` 只表示 provider 已返回。只有 reviewer output 解析成功且符合 findings schema
+  后，才有可用的 findings 结果。
 
 ## Reviewer 最小输出
 
-允许完整纯 JSON，或全文唯一一个 fenced JSON object。最小结构：
+允许完整纯 JSON，或全文唯一一个 fenced JSON object。provider 的唯一语义输出是 findings：
 
 ```json
 {
-  "verdict": "pass",
-  "summary": "简短结论",
   "findings": []
 }
 ```
 
-`verdict` 只能是 `pass` 或 `revise_required`。finding 结构：
+除 `findings` 外不得输出 `verdict`、`summary`、stage 状态或 reviewer 结论。finding 结构：
 
 ```json
 {
@@ -109,17 +108,16 @@ group，必须按公开协议读取，不能丢弃或改写为 pass。每个候�
 
 `severity` 只能是 `blocking`、`major` 或 `minor`。`path` 必须是 provider 可见的材料相对路径；没有可靠行号时 `line` 可以省略或为 `null`，不得猜测行号。
 
-语义一致性是硬合同：
+Finding 约束是硬合同：
 
-- `pass` 只能包含 `minor` finding，也可以没有 finding。
-- 只要存在 `major` 或 `blocking` finding，`verdict` 必须是 `revise_required`。
-- `revise_required` 必须至少包含一条具体 finding，不得只给空泛结论。
+- `findings` 为空只表示 provider 没有提出具体问题，不表示 stage 完成或允许继续工作。
 - `major` 和 `blocking` 必须有 `root_cause`、`evidence_kind` 和 `evidence`。`evidence_kind` 只能是 `direct`、`machine` 或 `inferred`；不得把猜测标为 direct。
-- host 会校验锚点、聚合重复 finding，并只让有足够证据的 cluster 阻断。单个 `inferred` major/blocking 不会因 provider 品牌、置信度或 token 数而自动放行或阻断。
+- host 会校验锚点、聚合重复 finding，并标出证据充分度。单个 `inferred` major/blocking
+  不会因 provider 品牌、置信度或 token 数自动改变 stage 状态。
 
 ## 聚合规则
 
-只接受 parse-valid 的 `pass|revise_required` 输出。相同 adapter 若返回多个成功
+只接受 parse-valid 的 findings 输出。相同 adapter 若返回多个成功
 profile，只取配置优先级最高的一条作为该 adapter 的代表；优先级只决定去重代表，不是
 模型智力权重，也不会决定 finding 是否成立。host 按 packet 路径、行号和规范化 issue
 聚类，并保留每个 provider 的 attribution。
@@ -127,21 +125,19 @@ profile，只取配置优先级最高的一条作为该 adapter 的代表；优�
 - `blocking|major`：有有效 `direct|machine` anchor，或有至少两个异源 adapter 的相同
   `inferred` evidence，才是 `actionable`。
 - 无效 direct/machine anchor 为 `invalid_evidence`；仅一个 inferred adapter 为
-  `needs_corroboration`。两者都不让语义 verdict 变成 `revise_required`。
-- `minor` 为 `nonblocking_minor`。只有存在 `actionable` cluster，聚合 verdict 才是
-  `revise_required`；否则在 quorum 已满足时为 `pass`。
+  `needs_corroboration`。两者都只作为事实和处置提示，不是 stage gate。
+- `minor` 为 `nonblocking_minor`。存在 `actionable` cluster 时，主 agent 需要处理；没有
+  actionable cluster 也不生成 reviewer 结论。
 
 这使具体、可复核证据可以由一个异源 reviewer 报告，同时不会把 transient model
 质量波动、品牌或成本当作裁决依据。
 
-每个冻结 snapshot 只允许一次语义审查。`revise_required` 必须原样保留，不能
-通过 response ledger、risk acceptance、零 provider action 或同一 snapshot 的再次
-调用改成 `pass`。修改后生成新 snapshot 时，才开始一次新的初始审查；旧结果只
-作为历史质量事实。`build-code` 永远是完整 phase/integration 审查，`verify-code`
-还要绑定新鲜测试和独立审查。response ledger、resolution record 和旧 namespace
-不属于当前生产审查输入。
+每个冻结 snapshot 只允许一次语义 findings 审查。修改后生成新 snapshot 时，才开始
+一次新的初始审查；旧结果只作为历史质量事实。`build-code` 永远是完整 phase/integration
+审查，`verify-code` 还要绑定新鲜测试和独立审查。response ledger、resolution record
+和旧 namespace 不属于当前生产审查输入。
 
-不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都不得提升为 pass；后续正式调用只能是新的普通 review 请求，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
+不要求 reviewer 输出 checklist、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都保持为失败事实；后续正式调用只能是新的普通 review 请求，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
 
 ## 失败分类
 

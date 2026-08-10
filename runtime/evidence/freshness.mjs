@@ -5,6 +5,7 @@ import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs"
 import { validateSchema } from "../review/schema-validator.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
+const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -87,7 +88,8 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
             ? value.subject_kind === "worktree" && value.review_scope === "integration"
             : value.subject_kind === "worktree";
         if (!subjectMatches) throw new Error("review subject mismatch");
-        if (!expectedPassed(fact.status, value.verdict === "pass", value.verdict === "revise_required")) throw new Error("review outcome mismatch");
+        if (Object.hasOwn(value, "verdict")) throw new Error("current review result must not expose reviewer verdict");
+        if (fact.status !== "recorded") throw new Error("review result requires a recorded review fact");
       }
     } else if (evidence.evidence_type === "acceptance_evidence") {
       const acceptance = validateAcceptanceEvidence(value);
@@ -132,6 +134,8 @@ export function evaluateFactFreshness(fact, current, { read }) {
         if (parsed[field] !== fact[field]) dependencies.fact = "stale";
       }
       if (parsed.schema_version !== "quality-fact.v1") dependencies.fact = "stale";
+      if (!QUALITY_STATUSES.has(parsed.status)
+          || (parsed.status === "recorded" && parsed.kind !== "review")) dependencies.fact = "stale";
     } catch { dependencies.fact = "stale"; }
   }
   for (const evidence of fact.evidence ?? []) {

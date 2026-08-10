@@ -13,7 +13,7 @@ function facts(stage, overrides = {}) {
         snapshot_tree: "tree",
         kind,
         subject,
-        status: overrides[subject]?.status ?? "passed",
+        status: overrides[subject]?.status ?? (kind === "review" ? "recorded" : "passed"),
         fact_id: `fact-${index}`,
       },
     },

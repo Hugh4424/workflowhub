@@ -9,7 +9,7 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 const oid = "1".repeat(40); const materialId = "a".repeat(64);
 const source = Object.freeze({ targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead: oid, snapshotTree: oid });
 const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
-const pass = JSON.stringify({ verdict: "pass", summary: "fake E2E completed", findings: [] });
+const pass = JSON.stringify({ findings: [] });
 function providerResult(provider) {
   return { provider, status: "completed", session_id: "fake-session", output: pass, error: null,
     execution: { adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null,
@@ -31,11 +31,11 @@ export async function runAuditFixture({ outputRoot } = {}) {
     const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, providers: providers.map(providerResult) }) };
     const result = await runReviewFixture({ task, attachmentRoot, taskId: "audit-e2e", stage, reviewTrack, hostProvider: "codex", providers: ["kimi"], providerClient,
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, attachmentRoot, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }) });
-    records.push({ stage, review_track: reviewTrack, status: result.status, verdict: result.verdict, snapshot_tree: result.snapshotTree, material_id: result.materialId, attempt_ref: result.attemptRef, result_ref: result.resultRef });
+    records.push({ stage, review_track: reviewTrack, status: result.status, snapshot_tree: result.snapshotTree, material_id: result.materialId, attempt_ref: result.attemptRef, result_ref: result.resultRef });
   }
   const evidenceRef = "fixtures/fake-broker-audit.json";
   task.createRecordAtomic(evidenceRef, `${JSON.stringify({ version: 1, kind: "fake-broker", fixture_only: true, is_real_e2e: false, records }, null, 2)}\n`);
-  return { ok: records.every((item) => item.verdict === "pass"), evidence_ref: evidenceRef, records };
+  return { ok: records.every((item) => item.status === "available"), evidence_ref: evidenceRef, records };
 }
 
 /** @deprecated Test compatibility alias. Never report this as real E2E. */

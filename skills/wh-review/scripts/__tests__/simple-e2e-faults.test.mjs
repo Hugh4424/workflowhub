@@ -8,7 +8,7 @@ import { createTask } from "../../../../runtime/task/task-handle.mjs";
 
 const oid = "1".repeat(40); const materialId = "a".repeat(64);
 const source = { targetCommit: oid, baseCommit: oid, baseTree: oid, capturedHead: oid, snapshotTree: oid };
-const pass = JSON.stringify({ verdict: "pass", summary: "complete", findings: [] });
+const pass = JSON.stringify({ findings: [] });
 const stages = [["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null]];
 function bundle(root) { return { bundleRoot: root, attachmentRoot: root, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }; }
 function providerResult(provider, { output = pass, status = "completed", error = null } = {}) {
@@ -30,7 +30,7 @@ describe("simple runner fake E2E and recovery", () => {
       const { attachmentRoot, task } = fixture("wh-review-e2e-");
       const out = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage, reviewTrack,
         hostProvider: "codex", providers: ["kimi"], providerClient: client(), captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) });
-      expect(out.verdict).toBe("pass");
+      expect(out.status).toBe("available");
       const result = JSON.parse(task.readRecord(out.resultRef)); expect(result).toMatchObject({ stage, review_track: reviewTrack, snapshot_tree: oid, material_id: materialId });
     }
   });
@@ -44,7 +44,7 @@ describe("simple runner fake E2E and recovery", () => {
     const first = await runReviewFixture({ ...input, providerClient: failed });
     const second = await runReviewFixture({ ...input, providerClient: recovered });
     expect(first.status).toBe("unavailable");
-    expect(second).toMatchObject({ status: "semantic", verdict: "pass" });
+    expect(second).toMatchObject({ status: "available" });
     expect(second.attemptRef).not.toBe(first.attemptRef);
     expect(calls).toHaveLength(2);
   });

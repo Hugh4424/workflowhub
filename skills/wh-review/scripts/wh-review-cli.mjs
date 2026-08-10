@@ -98,7 +98,6 @@ export async function runReviewRound(input) {
     });
     return {
       status: result.status,
-      verdict: result.verdict,
       attempt_ref: result.attemptRef,
       result_ref: result.resultRef,
       report_ref: result.reportRef,
@@ -137,7 +136,7 @@ export async function runReviewRound(input) {
     providers: selection.providers, reviewPolicy, providerClient: client,
   });
   return {
-    status: result.status, verdict: result.verdict,
+    status: result.status,
     attempt_ref: result.attemptRef,
     result_ref: result.resultRef,
     report_ref: result.reportRef,

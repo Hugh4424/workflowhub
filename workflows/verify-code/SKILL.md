@@ -63,13 +63,14 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
    受影响测试。完成标准：每个 finding 都有 `fixed`、`rejected_invalid`、`accepted_risk` 或
    `needs_human`。
 
-3. **异源审查一次**
+3. **异源 findings 审查一次**
 
    直接使用 `wh-review` 检查当前验收标准、架构师短报告、真实测试摘要、代码上下文和未决
-   风险。保留原始 provider、model、session、verdict、error 和 provenance。`pass`、
-   `revise_required`、timeout、invalid output、failure、`unavailable` 都按原样记录；
-   `unavailable` 绝不是 `pass`，也不因 verdict 反复循环。完成标准：一份真实异源 review
-   事实或真实 unavailable 事实已经记录。
+   风险。provider 只输出 `findings`；保留原始 provider、model、session、transport status、
+   findings、error 和 provenance。timeout、invalid output、failure、`unavailable` 都按
+   原样记录；`unavailable` 不改写为空 findings，也不因 finding 结果反复循环。完成标准：
+   一份真实异源 review 事实已经记录；真实 unavailable 也必须记录，但会使
+   当前质量/阶段完成结论保持 incomplete，不阻止同 task 修复。
 
 4. **主 agent 收尾修改一次**
 
@@ -86,7 +87,9 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
 - 每个适用 AC 保留场景、预期、实际、证据和覆盖限制。已有当前有效证据可以复用；不复制
   全量日志或历史台账。
 - UI 任务执行真实浏览器验收；非 UI 任务记录 `not_applicable` 和理由。
-- 独立 review 是必须记录的质量事实；真实 `unavailable` 可作为事实，但不能支持 `passed`。
+- 独立 review 的 findings、传输状态和 provenance 是必须记录的质量事实；真实
+  `unavailable` 可作为事实，但不能支持 `passed`。
+  `unavailable` 绝不是 `pass`，也不阻止同 task 修复。
 
 ## 结论与 fail-loud 写入
 
@@ -101,9 +104,9 @@ runtime、hash、schema 或写集合时，对该次写入 fail-loud，保留原�
 
 ## 阶段末交接
 
-用大白话说明：检查了什么、修了什么、逐 AC 和测试结果、异源 review 的真实状态、finding
+用大白话说明：检查了什么、修了什么、逐 AC 和测试结果、异源 review 的 findings/传输事实、finding
 如何处置、最后还剩什么风险。只让用户确认这份验收结论；该确认不授权 commit、push、
 merge、archive 或 cleanup，这些操作仍需单独明确授权。
 
 不要求用户重复 Talk/Grill，不要求下游读取验收过程索引，不用一次全量测试绿替代 AC、
-用户流程或架构判断，也不因 reviewer 没有 `pass` 而无限重审。
+用户流程或架构判断，也不因 reviewer 没有新的 finding 而无限重审。

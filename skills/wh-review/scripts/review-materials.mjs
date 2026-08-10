@@ -35,7 +35,6 @@ const FULL_PHASE_DIFF_PREFIXES = [
   "skills/test-routing-advisor/",
   "tools/cli/",
 ];
-
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
  * directly own the current contract complete. Core tests, generic skill
@@ -451,7 +450,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const verifyBound = stage === "verify-code"
     ? "This is one bounded post-repair architect review. Inspect the compact acceptance summary, the architect assessment, the final test summary, and open risks. Do not demand a full evidence tree, historical replay, provider pass, or another review; report only findings that can affect delivery."
     : `${blind} ${reviewInstruction}`;
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the included diff-shards/ and summaries as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${verifyBound} Return only one JSON object with verdict, summary, and findings using the requested reviewer schema. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${verifyBound} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }

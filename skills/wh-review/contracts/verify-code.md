@@ -30,6 +30,7 @@ requirement replay、旧 review ledger、provider session 或本机绝对路径�
 
 ## 结果
 
-只输出 provider protocol 要求的最小 JSON：`verdict`、`summary`、`findings`。
-`pass`、`revise_required`、`unavailable` 都是质量事实。主 agent 必须逐条判断 finding；
-没有严重问题才可形成 `passed`，缺事实只能是 `incomplete`，不通过重复审查制造绿色。
+只输出 provider protocol 要求的最小 JSON：只包含 `findings`。
+findings、传输状态和 `unavailable` 都是质量事实。主 agent 必须逐条判断 finding；
+stage 是否形成 `passed` 或 `incomplete` 由当前验收事实决定，不由 provider 输出结论，
+也不通过重复审查制造绿色。

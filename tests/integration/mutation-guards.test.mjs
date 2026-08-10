@@ -20,7 +20,7 @@ function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
     fact: {
       ref: `quality/${stage}-${subject}.json`,
-      value: { task_id: "task", stage, material_revision: "revision", snapshot_tree: "tree", kind, subject, status: "passed", fact_id: `fact-${index}` },
+      value: { task_id: "task", stage, material_revision: "revision", snapshot_tree: "tree", kind, subject, status: kind === "review" ? "recorded" : "passed", fact_id: `fact-${index}` },
     },
     freshness: { status: "current" },
     authenticated: true,

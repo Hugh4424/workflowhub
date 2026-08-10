@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review semantic result",
   "type": "object",
-  "required": ["version", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "attempt_ref", "provider_results", "verdict", "findings"],
+  "required": ["version", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "attempt_ref", "provider_results", "findings", "adjudication"],
   "properties": {
     "version": { "const": "wh-review-result.v1" },
     "task_id": { "type": "string", "minLength": 1 },
@@ -25,24 +25,12 @@
         "properties": {
           "provider": { "type": "string", "minLength": 1 },
           "output": {
-            "type": "object", "required": ["verdict", "summary", "findings"],
-            "properties": {
-              "verdict": { "enum": ["pass", "revise_required"] },
-              "summary": { "type": "string", "minLength": 1 },
-              "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
-            },
-            "allOf": [{
-              "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
-              "then": { "properties": { "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/finding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } } } },
-              "else": { "properties": { "findings": { "type": "array", "minItems": 1 } } }
-            }],
-            "additionalProperties": false
+            "$ref": "#/$defs/providerOutput"
           }
         },
         "additionalProperties": false
       }
     },
-    "verdict": { "enum": ["pass", "revise_required"] },
     "findings": { "type": "array", "items": { "$ref": "#/$defs/resultFinding" } },
     "adjudication": {
       "type": "object",
@@ -55,6 +43,13 @@
     }
   },
   "$defs": {
+    "providerOutput": {
+      "type": "object", "required": ["findings"],
+      "properties": {
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+      },
+      "additionalProperties": false
+    },
     "finding": {
       "type": "object", "required": ["severity", "path", "issue", "recommendation"],
       "properties": {
@@ -102,14 +97,6 @@
     "if": { "properties": { "subject_kind": { "const": "phase" } }, "required": ["subject_kind"] },
     "then": { "required": ["phase_id", "base_tree", "candidate_tree"], "properties": { "stage": { "const": "build-code" }, "phase_id": { "type": "string", "minLength": 1 } } },
     "else": { "properties": { "phase_id": { "type": "null" } } }
-  }, {
-    "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
-    "then": {
-      "properties": {
-        "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/resultFinding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } }
-      }
-    },
-    "else": { "properties": { "findings": { "type": "array", "minItems": 1 } } }
   }],
   "additionalProperties": false
 }

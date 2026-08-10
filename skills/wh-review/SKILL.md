@@ -1,6 +1,6 @@
 ---
 name: wh-review
-description: Freeze current materials, ask the configured 3rd-review broker for independent review, and preserve the real result.
+description: Freeze current materials, ask the configured 3rd-review broker for findings, and preserve the real review facts.
 ---
 
 # wh-review
@@ -10,10 +10,11 @@ description: Freeze current materials, ask the configured 3rd-review broker for 
 ## Main path
 
 1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks.
-2. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
-3. Resolve provider/model from trusted 3rd-review configuration. Call the broker once through its public request contract.
-4. Preserve the broker's real public result and provenance as an immutable attempt/result.
-5. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
+2. Add any applicable `simplicity-guard` and `plan-ceo-review` files as read-only advisory lenses in this same packet. Do not invoke either lens as a separate skill or create a second output path.
+3. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
+4. Resolve provider/model from trusted 3rd-review configuration. Call the broker once through its public request contract and request findings only.
+5. Preserve the broker's real public result and provenance, including findings and transport status, as an immutable review fact.
+6. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
 
 WorkflowHub does not start models directly and does not implement provider polling, native coordination locks, session lifecycle, fallback routing, retry loops, or a second timeout. Those belong to the 3rd-review broker.
 
@@ -57,6 +58,10 @@ Read `runtime/review/stage-materials.json` before building input. The common sha
 
 There is no `scope_revision` review kind or state machine. A user-requested direction change updates the same four materials through the normal responsible stage, then the affected current stage reviews the new material through its ordinary review track.
 
+The two ordinary lenses are packet-local advisory material. They do not write `*-facts`, invocation
+receipts, dispatch records, stage results, or independent runtime state. Their absence is a review
+fact, not a prerequisite for continuing the same task.
+
 ## Material and path safety
 
 - The provider receives only the frozen bundle and cannot read the repository, host paths, Git, shell or network.
@@ -72,10 +77,14 @@ There is no `scope_revision` review kind or state machine. A user-requested dire
 - requested and actual profile/provider/model;
 - runtime/session IDs that the broker publicly exposes;
 - duration and usage when provided, otherwise `not provided`;
-- raw public diagnostics, verdict, findings and provenance;
+- raw public diagnostics, findings and provenance;
 - an immutable `unavailable` result for authentication, timeout, transport, malformed output or protocol failure.
 
-Transport success is not review success. `unavailable` is never rewritten as `pass`. A provider `pass` is quality advice, not stage completion.
+An `unavailable` result is never `pass`.
+
+Transport success is not a clean review. Empty findings are quality advice, not stage completion.
+`unavailable` remains an unavailable fact and is never rewritten as empty findings or `pass`.
+It may leave the quality claim incomplete, but it does not block same-task work.
 
 WorkflowHub does not inspect broker-private files or infer liveness. It awaits the broker's public request and records the terminal public outcome. If the broker call itself cannot return a trustworthy terminal result, record the exact failure as `unavailable`; do not select another provider or create a local lifecycle controller.
 
@@ -83,7 +92,7 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 
 - Keep every original finding and source attribution.
 - The Stage Agent records one disposition per finding: fixed, rejected with reason, accepted risk with authority, or needs human decision.
-- Review only a changed material/snapshot or a specifically repaired risk. Never rerun an unchanged review merely to obtain `pass`.
+- Review only a changed material/snapshot or a specifically repaired risk. Never rerun an unchanged review merely to obtain an empty findings list.
 - Same-adapter profiles are not multiple independent sources. Aggregation keeps actual adapter independence and concrete anchors visible.
 - A valid direct or machine anchor may support a major finding. Inferred evidence from one source remains uncorroborated rather than becoming blocking truth.
 
@@ -106,6 +115,6 @@ Review contracts under `contracts/<stage>.md` describe the question for each sub
 
 ## Completion boundary
 
-CLI success returns a task-relative result reference and the bound source identity when applicable. Consumers open that result and do not trust copied verdict text.
+CLI success returns a task-relative review fact reference and the bound source identity when applicable. Consumers open that fact and do not trust copied finding text.
 
 `verify-final` checks that a referenced final code review still matches the current implementation. A mismatch or missing review is a truthful completion gap; it does not prevent same-task repair. Commit, push and merge remain separately authorized operations.

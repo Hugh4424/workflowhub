@@ -5,8 +5,8 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 ## 两种审查主体
 
 `phase_id` 存在时，runner 自动派生 `review_scope=phase`。这是一份严格代码审查：
-必须审查完整当前 Phase diff，不能只检查上轮 finding；正式 verdict 原样保留为质量事实。
-review verdict 不是继续工作或无限复审的 gate；Phase 完成仍需要测试、AC、finding
+必须审查完整当前 Phase diff，不能只检查上轮 finding；provider findings 原样保留为质量事实。
+review findings 不是继续工作或无限复审的 gate；Phase 完成仍需要测试、AC、finding
 disposition 和 serious 风险处置事实。
 
 Phase 的审查对象由宿主根据 `phase_id` 和 Git 工作树推导，调用方不能传入
@@ -105,15 +105,15 @@ Integration packet 明确禁止 `changes.diff`、累计历史 diff、raw log、�
 把质量结果改写成完成，也不得把它变成阻止同一任务修复的 gate。
 
 Integration 的正式结果必须与 implementation receipt、fresh test receipt 和最终
-snapshot 同树；verdict 原样保留为质量事实，不能被改写成阶段通过。它仍是严格
+snapshot 同树；findings 和传输状态原样保留为质量事实，不能被改写成阶段通过。它仍是严格
 build-code 边界，不适用 build-spec/build-plan/verify-code 的普通修复免二审规则。
 
-provider 无法形成 semantic result 时，认证的 `unavailable` attempt 也是原样保留的
-质量事实，不得改写成 `pass`，也不得称为“审查通过”。Phase 与 Integration 的结构
-闭包仍按各自合同继续判定；`unavailable` 本身不使用 risk acceptance。`revise_required`
-中存在 actionable `major|blocking` serious finding 时，按精确 finding/card/reply
-绑定要求修复或显式接受风险；不为取得 reviewer `pass` 无限重复审查。
+provider 无法形成 semantic findings 时，认证的 `unavailable` attempt 也是原样保留的
+质量事实，不得改写成“没有问题”，也不得称为“审查通过”。Phase 与 Integration 的结构
+闭包仍按各自合同继续判定；`unavailable` 本身不使用 risk acceptance。存在 actionable
+`major|blocking` serious finding 时，按精确 finding/card/reply 绑定要求修复或显式接受
+风险；不为取得空 findings 无限重复审查。
 
 ## 输出
 
-输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

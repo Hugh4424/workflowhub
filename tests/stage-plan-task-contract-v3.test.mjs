@@ -344,7 +344,7 @@ describe("plan-task.v3 structural contract", () => {
         receipt_ref: evidenceRef,
         receipt_hash: evidenceHash,
       },
-      review: { verdict: "pass", result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
+      review: { status: "recorded", result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
       acceptanceCoverage: {
         accepted_criterion_ids: ["AC1"],
         items: [{
@@ -386,7 +386,7 @@ describe("plan-task.v3 structural contract", () => {
         receipt_ref: evidenceRef,
         receipt_hash: evidenceHash,
       },
-      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review"), verdict: "pass" },
+      review: { status: "recorded", result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
       acceptanceCoverage: {
         accepted_criterion_ids: ["AC1"],
         items: [{
@@ -413,7 +413,7 @@ describe("plan-task.v3 structural contract", () => {
         receipt_ref: "receipts/current-tests.json",
         receipt_hash: sha256("current-tests"),
       },
-      review: { result_ref: "reviews/results/current.json", result_hash: sha256("review"), verdict: "pass" },
+      review: { status: "recorded", result_ref: "reviews/results/current.json", result_hash: sha256("review") },
       acceptanceCoverage: {
         accepted_criterion_ids: ["AC1"],
         items: [{
@@ -457,7 +457,7 @@ describe("plan-task.v3 structural contract", () => {
         receipt_ref: receiptRef,
         receipt_hash: sha256(receiptRaw),
       },
-      review: { result_ref: "reviews/results/phase-1.json", result_hash: sha256("review"), verdict: "pass" },
+      review: { status: "recorded", result_ref: "reviews/results/phase-1.json", result_hash: sha256("review") },
       acceptanceCoverage: {
         accepted_criterion_ids: ["AC1"],
         items: [{

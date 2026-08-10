@@ -2,6 +2,7 @@ import { sha256 } from "./freshness.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const KINDS = new Set(["test", "review", "acceptance_criterion", "confirmation"]);
+const STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 const EVIDENCE_TYPES = Object.freeze({
   test: "test_receipt",
   review: "review_result",
@@ -31,7 +32,8 @@ export function createQualityFact({ taskId, stage, materialRevision, snapshotTre
   if (typeof taskId !== "string" || taskId.trim() === "" || !STAGES.has(stage)) throw new TypeError("quality fact identity is invalid");
   if (!/^revision-[a-f0-9]{64}$/.test(materialRevision ?? "") || typeof snapshotTree !== "string" || snapshotTree.trim() === "") throw new TypeError("quality fact material revision and snapshot tree are required");
   if (!KINDS.has(kind) || typeof subject !== "string" || subject.trim() === "") throw new TypeError("quality fact kind and subject are required");
-  if (!new Set(["passed", "failed", "unavailable", "missing"]).has(status)) throw new TypeError("quality fact status is invalid");
+  if (!STATUSES.has(status)) throw new TypeError("quality fact status is invalid");
+  if (status === "recorded" && kind !== "review") throw new TypeError("recorded quality fact status is only valid for review facts");
   if (!Array.isArray(evidence) || evidence.length === 0 || evidence.some((entry) =>
     !entry || typeof entry !== "object" || typeof entry.ref !== "string"
     || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || entry.evidence_type !== EVIDENCE_TYPES[kind])) {

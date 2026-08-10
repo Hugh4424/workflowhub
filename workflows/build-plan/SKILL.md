@@ -30,12 +30,17 @@ materials and do not create another runtime or source of truth.
 
 A dependency or independent reviewer may be unavailable. Record the real
 `unavailable` quality fact and continue research, planning, or repair in this
-same task. Never turn missing quality evidence into `pass`.
+same task. Never turn missing quality evidence into empty findings or stage
+completion.
+
+`simplicity-guard`, when applicable, belongs in the same `wh-review` packet. It
+is read-only advisory material, not a separate call; it does not create
+`*-facts`, invocation receipts, dispatchers, an independent runtime, or a
+prerequisite for continuing this task.
 
 ## Boundaries
 
-- Do not run Talk, Clarify, or Grill. Product direction belongs to
-  `make-decision`.
+- Do not run Talk, Clarify, or Grill. Product direction belongs to `make-decision`.
 - When the current decision/spec cannot support a necessary planning choice,
   write one focused question and return it to the owning upstream stage. Never
   invent product intent.
@@ -73,11 +78,13 @@ same task. Never turn missing quality evidence into `pass`.
    scope, orphan tasks, and missing two-way traceability. Repair the owned
    materials; send product or acceptance changes back to the owning upstream
    stage.
-7. Ask the declared independent review capability to review the current plan and
-   tasks against the decision and specification. Preserve the actual verdict
-   and findings, or the real `unavailable` result. Repair valid findings; explain
-   rejected findings and unresolved risks. Review is a quality fact, not
-   permission to continue working on the task.
+7. Ask the declared independent review capability to inspect the current plan and
+   tasks against the decision and specification. Preserve the actual findings,
+   transport status, and provenance, or the real `unavailable` result. Repair
+   valid findings; explain rejected findings and unresolved risks. An
+   `unavailable` review is never `pass`; it does not block planning or same-task
+   repair. Review is a quality fact, not permission to continue working; it is
+   quality fact, not permission to continue working on the task.
 
 ## Completion
 
@@ -89,8 +96,9 @@ The content work is complete when:
   unknowns are explicit enough for implementation;
 - tasks are bounded, dependency-ordered, and have checkable completion criteria;
 - test work is fully designed but no RED/GREEN execution is claimed;
-- the independent review result is truthfully recorded as a verdict or
-  `unavailable`, with important findings addressed or disclosed.
+- the independent review findings and transport status are truthfully recorded,
+  with important findings addressed or disclosed. If transport is unavailable,
+  the plan remains quality-incomplete even though same-task planning continues.
 
 An upstream material gap prevents claiming the affected plan is ready, but does
 not freeze unaffected planning or same-task repair. Missing or unavailable
@@ -102,7 +110,7 @@ Tell the user in plain language:
 
 - the chosen implementation approach and why it is the simplest adequate one;
 - what `plan.md` and `tasks.md` now cover and what remains out of scope;
-- the main dependencies, risks, unknowns, and review result;
+- the main dependencies, risks, unknowns, and review findings/transport facts;
 - what `build-code` should do next and what it must not guess.
 
 If a real scope, planning, or risk decision remains, name it and its owning

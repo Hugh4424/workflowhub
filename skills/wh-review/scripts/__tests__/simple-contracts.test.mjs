@@ -60,9 +60,9 @@ describe("simple wh-review contracts", () => {
       provider_result_contract: "contracts/workflowhub-result.v2.json"
     });
     const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
-    expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
-    expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`[^\n]*`revise_required`/);
-    expect(providerProtocol).toMatch(/`revise_required`[^\n]*至少包含一条具体 finding/);
+    expect(providerProtocol).toContain('"findings": []');
+    expect(providerProtocol).toMatch(/不得输出 `verdict`、`summary`/);
+    expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`/);
     const e2e = readFileSync(join(root, "..", "docs", "wh-review-e2e.md"), "utf8");
     expect(e2e).toMatch(/source_repo/);
     expect(e2e).toMatch(/active_runners/);
@@ -294,14 +294,14 @@ describe("simple wh-review contracts", () => {
       expect(contract, stage).toMatch(/provider.*冻结材料/);
       expect(contract, stage).toMatch(/必需材料|共同材料/);
       expect(contract, stage).toMatch(/审查重点/);
-      expect(contract, stage).toMatch(/verdict.*summary.*findings/s);
+      expect(contract, stage).toMatch(/只包含 `findings`|只包含.*findings/s);
     }
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"]).not.toHaveProperty("optional_skills");
     expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
   });
 
-  it("makes scope expansion revise-required without rejecting necessary protections", () => {
+  it("reports scope expansion as findings without rejecting necessary protections", () => {
     const lens = readFileSync(join(root, "simplicity-guard", "SKILL.md"), "utf8");
     for (const expansion of [
       "scope creep",
@@ -311,7 +311,7 @@ describe("simple wh-review contracts", () => {
       "死代码",
       "隐藏失败兜底"
     ]) expect(lens).toContain(expansion);
-    expect(lens).toMatch(/任一上述问题[\s\S]*输出 `revise_required`/);
+    expect(lens).toMatch(/同一 findings 输出中\s*报告具体问题/);
     for (const protection of ["测试", "输入校验", "错误处理", "安全", "可访问性"])
       expect(lens).toMatch(new RegExp(`不得删除[^。]*${protection}|${protection}[\\s\\S]*不得因追求少代码而删掉`));
   });

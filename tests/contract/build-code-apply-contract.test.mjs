@@ -34,13 +34,13 @@ describe("build-code apply quality contract", () => {
     expect(skill).toMatch(/current Phase review is required as a recorded quality\s+fact/i);
     expect(skill).toMatch(/final aggregate strategy/);
     expect(skill).toContain("publish no completion");
-    expect(skill).toContain("`revise_required`");
     expect(skill).toContain("`unavailable`");
+    expect(skill).toContain("findings");
   });
 
   it("does not reintroduce AgentHub pass, commit, or full-suite gates", () => {
     const skill = read("workflows/build-code/SKILL.md");
-    expect(skill).toMatch(/verdict is not a progression gate/i);
+    expect(skill).toMatch(/findings and transport status are not a progression gate/i);
     expect(skill).not.toMatch(/cannot hand off until the current[\s\S]{0,80}review result is `pass`/i);
     expect(skill).not.toMatch(/clean worktree.*required.*progress/i);
     expect(skill).not.toMatch(/commit.*required.*progress/i);

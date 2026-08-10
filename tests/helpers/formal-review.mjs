@@ -23,7 +23,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     evidence_kind: "direct",
     evidence: "fixture evidence is intentionally anchored to the fixture path",
   };
-  const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [finding] };
+  const providerOutput = { findings: verdict === "pass" ? [] : [finding] };
   writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), 1);
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
   const subject = { subject_kind: subjectKind, phase_id: phaseId, review_scope: reviewScope, base_tree: snapshotTree, candidate_tree: snapshotTree };
@@ -35,12 +35,12 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     terminal_status: "semantic", error: null,
   });
   const aggregation = aggregateProviderResults([{ provider, review: providerOutput }], 1);
-  const findings = aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item }));
+  const findings = aggregation.findings.map((item) => ({ provider: item.providers[0], ...item }));
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
     source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
-    provider_results: [{ provider, output: providerOutput }], verdict: aggregation.verdict,
+    provider_results: [{ provider, output: providerOutput }],
     findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   });
   return Object.freeze({ resultRef, attemptRef, outputRef, materialId });

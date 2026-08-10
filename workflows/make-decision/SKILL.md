@@ -87,16 +87,18 @@ decision and questions to the user.
    non-goals, unresolved items, and deferred work. Completion: the record is
    readable without reconstructing the Talk history and does not claim an
    answer the user did not give.
-6. Use `wh-review` directly for independent review of the current requirement
-   and decision. Review context maps are optional; provide them only when they
-   improve the review. Preserve actual provider, model, session, verdict, error,
-   and provenance. `MATERIAL_INCOMPLETE`, failure, timeout, and `unavailable`
-   are never `pass`. Completion: one real independent review attempt is recorded
-   or its real unavailability is recorded.
+6. Use `wh-review` directly for independent findings on the current requirement
+   and decision. An `unavailable` review is never `pass`; it remains a truthful
+   quality fact and does not block same-task work. Review context maps are optional; provide them only when they
+   improve the review. Preserve actual provider, model, session, transport status,
+   findings, error, and provenance. `MATERIAL_INCOMPLETE`, failure, timeout, and
+   `unavailable` remain review facts. Completion: one real independent review
+   attempt is recorded or its real unavailability is recorded. A real
+   unavailable fact is not a pass and does not make the stage formally complete.
 7. Dispose every finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
    `needs_human`. Repair valid findings in this task; reject invalid findings
    with evidence; ask the user before accepting a concrete serious risk. Do not
-   repeat an unchanged review merely to manufacture `pass`. Completion: no
+   repeat an unchanged review merely to manufacture empty findings. Completion: no
    finding is unexplained.
 8. Present a short decision card: direction, scope, non-goals, success criteria,
    main risks, review fact, unresolved items, and deferred work. Ask the user to
@@ -140,7 +142,7 @@ new aggregate from the new final decision; never mutate an existing hash path.
 
 Do not claim this stage complete until Talk and Clarify are resolved, necessary
 research ran or has a truthful outcome, Grill ran, `decision-log.md` is current,
-independent review is recorded as its actual result, every finding has a
+independent review findings and transport facts are recorded, every finding has a
 disposition, the user explicitly accepted the decision, and the content-addressed
 interaction aggregate binds that accepted decision. The aggregate is a completion
 fact, not a permit to continue working.

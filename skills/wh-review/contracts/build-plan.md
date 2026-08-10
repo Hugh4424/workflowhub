@@ -25,12 +25,12 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 扩张材料。缺失 maps 不返回 `MATERIAL_INCOMPLETE`，也不阻止 provider 调用。
 
 缺少任一必需材料时，本次 attempt 返回 `unavailable`，并写入
-`quality/reviews/attempts/*` 作为不可变质量事实；它没有语义 verdict，也不能写成
-“审查通过”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
+`quality/reviews/attempts/*` 作为不可变质量事实；它没有 findings，也不能写成
+“没有问题”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
 `review-instructions.md` 必须说明未提供及原因。
 
-首轮 `revise_required` 是质量事实，不是 stage pass gate。主 agent 应直接修复；普通
-修复不做二审。外置审计记录若存在，缺失或不能验证时明确为
+首轮 findings 是质量事实，不是 stage gate。主 agent 应直接修复；普通修复不做二审。
+外置审计记录若存在，缺失或不能验证时明确为
 `unverified`，不得声称已修复或通过。材料变化后的新 attempt 仍完整交付当前材料。
 若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
 新 attempt 的事实只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须
@@ -38,7 +38,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
-provider verdict 转成“审查通过”。
+provider findings 转成“审查通过”。
 
 审查结果用于暴露问题和记录处置；阶段是否推进由正式 stage contract 与证据决定。
 
@@ -49,13 +49,12 @@ provider verdict 转成“审查通过”。
 - 接口、状态、失败路径、并发和回退是否遗漏。
 - 验证是否能在行为错误时失败，而不是只检查文件存在。
 - 是否引入 spec 未要求的抽象、兼容层或范围。
-- `simplicity-guard` 和 `plan-eng-review` 已在 build-plan 的 test-routing-advisor
-  之前由 stage-owned dispatcher 执行；本次 provider 只读取它们的 invocation
-  facts 和冻结 plan/tasks，不重复调用或重复计数。若事实缺失，报材料/调用事实
-  缺口，不自行补做 lens。
-- scope creep、重复已有能力、没有故障证据的长期能力，或修订后仍无理由保留
-  的旧内容，实质扩大实现或维护面时必须 `revise_required`。
+- `simplicity-guard` 在适用时作为同一 wh-review packet 内的 advisory lens。它不单独
+  调用、不生成 `*-facts`、invocation receipt、dispatcher 或独立 runtime；lens 缺失只记录
+  为事实，不成为继续工作的前置条件。
+- scope creep、重复已有能力、没有故障证据的长期能力，或修订后仍无理由保留的旧内容，
+  报告具体删除或缩减 finding。
 
 ## 输出
 
-输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

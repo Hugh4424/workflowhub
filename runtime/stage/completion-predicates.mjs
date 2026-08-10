@@ -18,30 +18,43 @@ export const STAGE_PREDICATES = Object.freeze({
     scope: "acceptance_criterion",
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
     talk_clarify: "acceptance_criterion",
+    finding_dispositions: "acceptance_criterion",
     direction_review: "review",
     detail_review: "review",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
     zero_major_ambiguities: "acceptance_criterion",
+    finding_dispositions: "acceptance_criterion",
     independent_review: "review",
   }),
   "build-plan": Object.freeze({
     fr_coverage: "acceptance_criterion", ac_coverage: "acceptance_criterion",
     dependencies: "acceptance_criterion", deletion_proofs: "acceptance_criterion",
     executable_tasks: "acceptance_criterion", independent_review: "review",
+    finding_dispositions: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
   "build-code": Object.freeze({
     risk_tests_fresh: "test",
-    acceptance_criteria: "acceptance_criterion", integration_review: "review",
+    acceptance_criteria: "acceptance_criterion", finding_dispositions: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
     full_tests_fresh: "test",
-    independent_review: "review", acceptance_criteria: "acceptance_criterion",
+    independent_review: "review", finding_dispositions: "acceptance_criterion", acceptance_criteria: "acceptance_criterion",
     exceptions: "acceptance_criterion", human_confirmation: "confirmation",
   }),
 });
+
+function satisfiesQualityPredicate(fact, kind) {
+  if (kind === "review") {
+    // A real unavailable attempt is a current quality fact, but it is not a
+    // completed independent review. It remains visible to stage handlers and
+    // never blocks same-task repair; it must not satisfy formal completion.
+    return fact.status === "recorded";
+  }
+  return fact.status === "passed";
+}
 
 export function deriveStageCompletion(stage, observations = []) {
   if (!STAGES.includes(stage)) throw new TypeError(`unsupported stage: ${stage}`);
@@ -50,9 +63,11 @@ export function deriveStageCompletion(stage, observations = []) {
   const satisfied = new Map();
   for (const observation of observations) {
     const fact = observation?.fact?.value ?? observation?.fact;
-    if (!fact || fact.stage !== stage || fact.status !== "passed"
+    if (!fact || fact.stage !== stage
         || observation.authenticated !== true || observation.freshness?.status !== "current") continue;
-    if (requirements[fact.subject] === fact.kind) satisfied.set(fact.subject, observation);
+    if (requirements[fact.subject] === fact.kind && satisfiesQualityPredicate(fact, fact.kind)) {
+      satisfied.set(fact.subject, observation);
+    }
   }
   const missing = Object.keys(requirements).filter((subject) => !satisfied.has(subject));
   const result = Object.freeze({

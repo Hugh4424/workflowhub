@@ -163,20 +163,31 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
 function reviewEvidenceStatus(task, candidate) {
   if (!candidate) return { status: "missing" };
   let record;
+  let raw;
   try {
-    record = JSON.parse(task.readRecord(candidate.ref));
+    raw = task.readRecord(candidate.ref);
+    if (candidate.sha256 && createHash("sha256").update(raw).digest("hex") !== candidate.sha256) return { status: "missing" };
+    record = JSON.parse(raw);
   } catch {
-    return { status: "unavailable" };
+    // Only a canonical wh-review attempt with terminal_status=unavailable is
+    // an unavailable review fact. A missing or malformed record is missing
+    // evidence, not a transport result that may be disclosed as unavailable.
+    return { status: "missing" };
   }
   if (/^quality\/reviews\/results\//.test(candidate.ref)) {
-    if (record?.verdict === "pass") return { status: "passed" };
-    if (record?.verdict === "revise_required") return { status: "failed" };
-    return { status: "unavailable" };
+    if (record?.version === "wh-review-result.v1"
+        && !Object.hasOwn(record, "verdict")
+        && Array.isArray(record.provider_results)
+        && Array.isArray(record.findings)
+        && record.adjudication?.version === "wh-review-adjudication.v1") {
+      return { status: "recorded" };
+    }
+    return { status: "missing" };
   }
   if (/^quality\/reviews\/attempts\//.test(candidate.ref) && record?.terminal_status === "unavailable") {
     return { status: "unavailable" };
   }
-  return { status: "unavailable" };
+  return { status: "missing" };
 }
 
 function testEvidenceStatus(task, candidate) {
@@ -232,7 +243,15 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       const candidate = evidenceCandidate(result, kind, subject, ctx.stage)
       ?? (kind === "confirmation" ? currentConfirmationCandidate(ctx, snapshot.tree) : null);
     const acceptanceSubject = kind === "acceptance_criterion"
-      ? result.facts?.completion_subjects?.[subject]
+      ? subject === "finding_dispositions"
+        ? (() => {
+          const dispositions = result.facts?.finding_dispositions;
+          const items = Array.isArray(dispositions?.items) ? dispositions.items : [];
+          const complete = dispositions?.status === "not_applicable"
+            || (dispositions?.status === "recorded" && items.every((item) => item.status !== "needs_human"));
+          return { status: complete ? "passed" : "missing", detail: "serious findings are fixed or explicitly risk-accepted" };
+        })()
+        : result.facts?.completion_subjects?.[subject]
       : null;
     const review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate) : null;
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate) : null;
@@ -250,7 +269,8 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       : candidate === null
         ? "missing"
         : "passed";
-    if (status !== "passed") {
+    const qualityPredicatePassed = kind === "review" ? status === "recorded" : status === "passed";
+    if (!qualityPredicatePassed) {
       allPassed = false;
       qualityWarnings.push(`${subject}:${status}`);
     }
@@ -338,8 +358,8 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
     work_status: readiness.work_status,
     readiness,
     completion,
-    quality_status: allPassed && !result.verification_failure ? "passed" : "incomplete",
-    ...(allPassed && !result.verification_failure ? {} : {
+    quality_status: allPassed && !result.verification_failure && !(result.missing_items?.length) ? "passed" : "incomplete",
+    ...(allPassed && !result.verification_failure && !(result.missing_items?.length) ? {} : {
       quality_warnings: Object.freeze([
         ...qualityWarnings,
         ...(result.missing_items ?? []),

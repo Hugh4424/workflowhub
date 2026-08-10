@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
 import { validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 import { normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
@@ -11,7 +12,7 @@ import { equivalentWorkspaceTrees, isMaterialOnlySnapshotDelta } from "../task/g
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateAcceptanceDesignMinimum, validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../stage/stage-content-contracts.mjs";
-import { canonicalReviewFindings, deriveSeriousReviewPause, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
+import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -63,7 +64,7 @@ function semanticAnchor(value) {
 }
 function completionReview(records) {
   const reviews = records.filter(Boolean);
-  const statuses = reviews.map((entry) => entry.facts.verdict ?? entry.facts.status);
+  const statuses = reviews.map((entry) => entry.facts.status);
   return {
     conclusion: statuses.length
       ? `异源质量建议已记录：${statuses.join(", ")}`
@@ -78,10 +79,7 @@ function completionReview(records) {
 }
 function boundReviewQualityFacts(entries) {
   return entries.filter(([, record]) => Boolean(record)).map(([label, entry]) => {
-    const fact = entry.facts.status === "unavailable"
-      ? "unavailable（认证质量事实）"
-      : `${entry.facts.verdict}（认证质量事实）`;
-    return `${label}=${fact}`;
+    return `${label}=${entry.facts.status ?? "unknown"}（认证质量事实）`;
   }).join("；");
 }
 function completionSubjectMissingItems(result) {
@@ -127,7 +125,7 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
       phases: [stage],
       dependencies: stage === "make-decision" ? [] : ["读取当前四材料"],
       tests: [verification],
-      review_advice: "异源 review 是建议事实；真实 unavailable、revise_required 或 finding 必须继续保留",
+      review_advice: "异源 review 是建议事实；真实 unavailable、transport error 或 finding 必须继续保留",
       risks: userSafeMissing.length ? userSafeMissing : ["当前验证只覆盖已声明范围"],
       deferred: missing.length ? userSafeMissing : ["未在本阶段声明的工作留给后续阶段"],
       next_stage_boundary: `下一阶段 ${copy.next_owner} 读取当前四材料，不能猜测缺失需求`,
@@ -451,7 +449,11 @@ export function certifyBuildCodeQualityBasis({
   const outside = [...new Set(changedFiles)].filter((path) => !planned.has(path));
   const qualityGaps = [];
   if (tests?.exit_code !== 0) qualityGaps.push("current risk tests are not passing");
-  if (review?.status !== "unavailable" && review?.verdict !== "pass") qualityGaps.push("integration review is not passing");
+  if (review?.status !== "recorded" && review?.status !== "unavailable") {
+    // Keep the legacy verdict-only diagnostic readable for old history while
+    // making the new recorded/unavailable fact boundary authoritative.
+    qualityGaps.push("integration review is not passing");
+  }
   const reviewRef = review?.result_ref ?? review?.attempt_ref;
   const reviewHash = review?.result_hash ?? review?.attempt_hash;
   if (typeof reviewRef !== "string" || !SHA256.test(reviewHash ?? "")) {
@@ -467,7 +469,7 @@ export function certifyBuildCodeQualityBasis({
   return Object.freeze({
     changed: Object.freeze([...new Set(changedFiles)]),
     audit_gaps: Object.freeze(outside.length ? [`current diff includes files outside historical task boundaries: ${outside.join(", ")}`] : []),
-    review: Object.freeze({ ref: reviewRef ?? null, sha256: reviewHash ?? null, verdict: review.verdict ?? null, status: review.status ?? null }),
+    review: Object.freeze({ ref: reviewRef ?? null, sha256: reviewHash ?? null, status: review.status ?? null }),
     quality_gaps: Object.freeze(qualityGaps),
     formal_record_status: Object.freeze({ ...formalRecordStatus }),
   });
@@ -690,7 +692,8 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
       const providerOutputName = providerAttempt.output_ref.slice(providerPrefix.length);
       if (!providerAttempt.output_ref.startsWith(providerPrefix) || !/^[a-zA-Z0-9._-]+\.output\.json$/.test(providerOutputName)) throw new Error(`review provider ${providerAttempt.provider} output ref provenance mismatch`);
       const providerFromRef = providerOutputName.replace(/\.output\.json$/, "").replace(/-[0-9]+$/, "");
-      if (providerFromRef !== providerAttempt.provider) throw new Error(`review provider ${providerAttempt.provider} output ref identity mismatch`);
+      const expectedProviderFilePart = `p-${Buffer.from(providerAttempt.provider, "utf8").toString("base64url")}`;
+      if (providerFromRef !== expectedProviderFilePart) throw new Error(`review provider ${providerAttempt.provider} output ref identity mismatch`);
       const outputRecord = object(worker.readReceipt(providerAttempt.output_ref), `review provider ${providerAttempt.provider} output record`);
       output = object(outputRecord.value, `review provider ${providerAttempt.provider} output`);
       if (!SHA256.test(outputRecord.sha256 ?? "")) throw new Error(`review provider ${providerAttempt.provider} output hash must be sha256`);
@@ -726,8 +729,9 @@ function scopeFacts(scope) {
 }
 function requireFinalIntegrationReview(review, label) {
   if (!review || !review.scope) return `${label} is missing an authenticated integration review fact`;
-  if (review.facts?.status !== "unavailable" && review.facts?.verdict !== "pass") {
-    return `${label} verdict is ${review.facts?.verdict ?? "missing"}; quality remains visible but does not block stage progression`;
+  const legacyPass = review.facts?.status === undefined && review.facts?.verdict === "pass";
+  if (!new Set(["recorded", "unavailable"]).has(review.facts?.status) && !legacyPass) {
+    return `${label} is not recorded as a current review fact; quality remains visible but does not block stage progression`;
   }
   const scope = review.scope;
   if (scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
@@ -761,39 +765,14 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
   return { verified: true, evidence: accepted.map(({ ref, sha256 }) => ({ ref, sha256 })) };
 }
 
-function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage) {
-  if (review?.facts?.status === "unavailable") return [];
-  // A passing review has already classified its findings in the authenticated
-  // result. Only a revise_required result needs a separate handoff
-  // disposition; otherwise an advisory pass can incorrectly make the stage
-  // incomplete.
-  if (review?.value?.verdict === "pass") return [];
-  const clusters = canonicalReviewFindings(review.value);
-  if (clusters.length === 0) return [];
-
-  const findingIds = clusters.map((cluster) => cluster.id).filter(Boolean);
-  const warnings = [
-    `review findings require per-finding analysis and disposition before handoff: ${findingIds.join(", ") || "unresolved findings"}`,
-  ];
-  const pause = deriveSeriousReviewPause({
-    taskId: worker.identity.taskId,
-    stage: producerStage,
-    reviewRef: review.ref,
-    reviewHash: review.evidence.sha256,
-    result: review.value,
-    workflowRunId: typeof worker.deriveStageWorkflowRunId === "function"
-      ? worker.deriveStageWorkflowRunId(producerStage)
-      : worker.workflowRunId,
-  });
-  if (pause.status === "paused") {
-    const seriousIds = pause.findings.map(({ finding_id }) => finding_id);
-    warnings.push(riskAcceptance.verified
-      ? `serious review findings remain revise_required; explicit risk acceptance is recorded but does not make the review pass: ${seriousIds.join(", ")}`
-      : `serious review findings require repair or explicit risk acceptance before formal completion: ${seriousIds.join(", ")}`);
-  } else if (review.value.verdict === "revise_required" && !riskAcceptance.verified) {
-    warnings.push("review findings recorded; response evidence: unknown/unverified");
-  }
-  return warnings;
+function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage, invocation = {}) {
+  if (review?.facts?.status === "unavailable" || !review?.value) return [];
+  const seriousFindings = canonicalReviewFindings(review.value).filter(isActionableSeriousFinding);
+  if (seriousFindings.length === 0) return [];
+  const suppliedIds = new Set((invocation.finding_dispositions ?? []).map((entry) => entry?.finding_id));
+  const missingIds = seriousFindings.map(({ id }) => id).filter((id) => !suppliedIds.has(id));
+  if (missingIds.length === 0) return [];
+  return [`authenticated actionable serious review findings require disposition before formal completion: ${missingIds.join(", ")}`];
 }
 
 const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
@@ -803,7 +782,10 @@ const FINDING_DISPOSITION_FIELDS = new Set([
 ]);
 
 function findingDispositions(reviews, invocation) {
-  const findings = reviews.flatMap((review) => review?.value?.findings ?? [])
+  const findings = reviews.flatMap((review) => review?.facts?.status === "unavailable" || !review?.value
+    ? []
+    : canonicalReviewFindings(review.value))
+    .filter(isActionableSeriousFinding)
     .filter((finding) => typeof finding?.id === "string");
   const ids = [...new Set(findings.map(({ id }) => id))];
   if (ids.length === 0) {
@@ -955,7 +937,7 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
   const riskAcceptanceName = expectedTrack !== undefined
     ? `${expectedTrack}_risk_acceptance`
     : (name === "quality_review" ? "quality_risk_acceptance" : "risk_acceptance");
-  const riskAcceptance = item.value.verdict === "revise_required"
+  const riskAcceptance = canonicalReviewFindings(item.value).some(isActionableSeriousFinding)
     ? riskAcceptanceForReview(worker, invocation, { ref: item.ref, evidence: item.evidence, value: item.value }, expectedTrack, riskAcceptanceName, producerStage)
     : { verified: false, evidence: [] };
   const riskEvidence = riskAcceptance.evidence;
@@ -964,9 +946,10 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     { ref: item.ref, evidence: item.evidence, value: item.value },
     riskAcceptance,
     producerStage,
+    invocation,
   );
   return {
-    facts: { verdict: item.value.verdict, result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
+    facts: { status: "recorded", result_ref: item.ref, result_hash: item.evidence.sha256, snapshot_tree: item.value.snapshot_tree, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope) },
     ref: item.ref,
     evidence: item.evidence,
     value: item.value,
@@ -1293,7 +1276,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
-    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? review.facts.verdict}`,
+    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? "unknown"}`,
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {

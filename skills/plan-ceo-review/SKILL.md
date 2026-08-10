@@ -5,9 +5,10 @@ description: Report-only product-direction review lens for premise, scope, lever
 
 # plan-ceo-review
 
-Source: adapted from the project review baseline. Mode: `advisory`, stage-owned,
-file-only, no stage result and no provider verdict. build-spec calls this skill
-before the final wh-review; wh-review only reads the resulting fact.
+Source: adapted from the project review baseline. Mode: `advisory`, file-only, and
+packet-local. `wh-review` includes this lens in the same frozen packet when it is
+applicable; it is not called separately and has no stage result, provider verdict,
+`*-facts`, invocation receipt, dispatcher, or independent runtime.
 
 ## Check
 
@@ -19,4 +20,5 @@ before the final wh-review; wh-review only reads the resulting fact.
 
 ## Result
 
-Return observations with concrete packet evidence. This lens only evaluates supplied material.
+Return observations with concrete packet evidence inside the same provider findings stream. This
+lens only evaluates supplied material; its absence or lack of findings does not block same-task work.

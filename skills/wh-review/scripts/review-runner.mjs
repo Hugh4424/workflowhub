@@ -209,7 +209,7 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
   writeAttempt(task, refs.attemptRef, attempt);
   writeReviewReport(task, refs.reportRef, { attempt });
   return {
-    status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef,
+    status: "unavailable", attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef,
     snapshotTree: source.snapshotTree, materialId, runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
     reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
   };
@@ -247,7 +247,13 @@ function rejectProfileMismatches(reviewed, policy) {
 }
 
 function reviewGroupOutcome(provider, result, runtimeId) {
-  if (result.status !== "completed" || typeof result.output !== "string") return { provider, review: null, final: result, calls: [{ runtimeId, provider: result }] };
+  // A broker must not expose semantic output when transport already reports
+  // an error. Some adapters can return a completed-shaped envelope while
+  // retaining a non-zero lifecycle error; that is unavailable evidence, not
+  // a valid findings result.
+  if (result.status !== "completed" || typeof result.output !== "string" || result.error) {
+    return { provider, review: null, final: result, calls: [{ runtimeId, provider: result }] };
+  }
   try {
     return { provider, review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls: [{ runtimeId, provider: result }] };
   } catch {
@@ -367,29 +373,29 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     report_ref: refs.reportRef, provider_attempts: providerAttempts,
-    terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
-    error: aggregation.status === "semantic" ? null : (() => { const error = primaryError(reviewed); return { code: error.code, message: `${error.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }; })(),
+    terminal_status: aggregation.status === "available" ? "semantic" : "unavailable",
+    error: aggregation.status === "available" ? null : (() => { const error = primaryError(reviewed); return { code: error.code, message: `${error.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }; })(),
     ...(policy ? { review_policy: policy, policy_snapshot_hash: hashCanonical(policy), coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) } : {}),
   };
   validateSchema("attempt", attempt);
   writeAttempt(taskHandle, refs.attemptRef, attempt);
-  if (aggregation.status !== "semantic") {
+  if (aggregation.status !== "available") {
     writeReviewReport(taskHandle, refs.reportRef, { attempt });
-    return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    return { status: "unavailable", attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
   }
   const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-  const findings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
+  const findings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const result = {
     version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject,
     source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
-    verdict: aggregation.verdict, findings,
+    findings,
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
   validateSchema("result", result);
   writeSemanticResult(taskHandle, refs.resultRef, result);
   writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
-  return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+  return { status: "available", attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
 }
 
 export async function runReview(options = {}) {

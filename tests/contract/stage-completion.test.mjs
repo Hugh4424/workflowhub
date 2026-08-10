@@ -5,7 +5,7 @@ function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
     fact: {
       ref: `quality/${subject}.json`,
-      value: { task_id: "task", stage, material_revision: "revision", snapshot_tree: "tree", kind, subject, status: "passed", fact_id: `fact-${index}` },
+      value: { task_id: "task", stage, material_revision: "revision", snapshot_tree: "tree", kind, subject, status: kind === "review" ? "recorded" : "passed", fact_id: `fact-${index}` },
     },
     freshness: { status: "current" },
     authenticated: true,
@@ -67,6 +67,32 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
     facts[0] = { ...observations("build-plan")[0], fact: { ...facts[0].fact, value: { ...facts[0].fact.value, kind: "test" } } };
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
+  });
+
+  it("keeps a real unavailable review visible without declaring stage completion", () => {
+    const facts = observations("build-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    review.fact.value.status = "unavailable";
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["integration_review"]),
+    });
+    expect(deriveStageProgress("build-code", facts, {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+      "plan.md": "plan",
+      "tasks.md": "tasks",
+    })).toMatchObject({ work_status: "ready" });
+  });
+
+  it("does not treat a provider-style passed review fact as recorded review", () => {
+    const facts = observations("build-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    review.fact.value.status = "passed";
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["integration_review"]),
+    });
   });
 
   it("keeps stage progress independent from quality status and freshness", () => {

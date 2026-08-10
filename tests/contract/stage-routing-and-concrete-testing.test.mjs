@@ -150,7 +150,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").observable_result)
       .toMatch(/tasks\.md is marked completed only when actual changes, tests, AC evidence, and review dispositions support that claim/i);
     const skill = read("workflows/build-code/SKILL.md");
-    expect(skill).toMatch(/review\s+verdict is not a progression gate/i);
+    expect(skill).toMatch(/findings\s+and transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
   });
 

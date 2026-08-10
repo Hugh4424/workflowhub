@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { parseReviewerOutput } from "./review-output.mjs";
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -13,47 +14,8 @@ function invalid(message) {
   throw error;
 }
 
-const verdicts = new Set(["pass", "revise_required"]);
-const severities = new Set(["blocking", "major", "minor"]);
-const evidenceKinds = new Set(["direct", "inferred", "machine"]);
-
-function validateFinding(value, index, requireEvidence) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) invalid(`provider finding ${index} must be an object`);
-  if (!severities.has(value.severity) || typeof value.path !== "string" || !value.path
-      || value.path.startsWith("/") || value.path.includes("\\")
-      || (value.line !== undefined && value.line !== null && (!Number.isSafeInteger(value.line) || value.line < 1))
-      || typeof value.issue !== "string" || !value.issue.trim()
-      || typeof value.recommendation !== "string" || !value.recommendation.trim()) {
-    invalid(`provider finding ${index} is invalid`);
-  }
-  const needsEvidence = value.severity !== "minor";
-  if (requireEvidence && needsEvidence
-      && (!evidenceKinds.has(value.evidence_kind) || typeof value.evidence !== "string" || !value.evidence.trim()
-        || typeof value.root_cause !== "string" || !value.root_cause.trim())) {
-    invalid(`provider finding ${index} evidence is invalid`);
-  }
-  return {
-    severity: value.severity, path: value.path, ...(Number.isSafeInteger(value.line) ? { line: value.line } : {}),
-    issue: value.issue, recommendation: value.recommendation,
-    ...(value.evidence_kind ? { evidence_kind: value.evidence_kind } : {}),
-    ...(typeof value.evidence === "string" && value.evidence.trim() ? { evidence: value.evidence } : {}),
-    ...(typeof value.root_cause === "string" && value.root_cause.trim() ? { root_cause: value.root_cause } : {}),
-  };
-}
-
-export function parseCanonicalReviewerOutput(raw, { requireEvidence = false } = {}) {
-  if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
-  let value;
-  try { value = JSON.parse(raw.trim()); }
-  catch { invalid("canonical provider output must be pure JSON"); }
-  if (!value || typeof value !== "object" || Array.isArray(value) || !verdicts.has(value.verdict)
-      || typeof value.summary !== "string" || !value.summary.trim() || !Array.isArray(value.findings)) {
-    invalid("provider output shape is invalid");
-  }
-  const findings = value.findings.map((finding, index) => validateFinding(finding, index, requireEvidence));
-  if (value.verdict === "revise_required" && findings.length === 0) invalid("revise_required needs a finding");
-  if (value.verdict === "pass" && findings.some((finding) => finding.severity !== "minor")) invalid("pass contains a major finding");
-  return Object.freeze({ verdict: value.verdict, summary: value.summary, findings: Object.freeze(findings) });
+export function parseCanonicalReviewerOutput(raw, options = {}) {
+  return parseReviewerOutput(raw, options);
 }
 
 function adapterOf(provider) { return provider.split("/", 1)[0]; }
@@ -110,7 +72,11 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be positive");
   const priority = new Map(profilePriority.map((provider, index) => [provider, index]));
   const byAdapter = new Map();
-  providerResults.filter((item) => item?.review && verdicts.has(item.review.verdict)).forEach((item, index) => {
+  providerResults.filter((item) => {
+    const review = item?.review;
+    return review && typeof review === "object" && !Array.isArray(review)
+      && Object.keys(review).length === 1 && Object.hasOwn(review, "findings") && Array.isArray(review.findings);
+  }).forEach((item, index) => {
     const adapter = adapterOf(item.provider); const current = byAdapter.get(adapter);
     const rank = priority.get(item.provider) ?? Number.MAX_SAFE_INTEGER;
     const currentRank = current ? (priority.get(current.item.provider) ?? Number.MAX_SAFE_INTEGER) : null;
@@ -128,10 +94,10 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   }
   const clusters = grouped.map(clusterRecord).sort((left, right) => left.id.localeCompare(right.id));
   const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
-  const reportFindings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
-  const adjudication = { version: "wh-review-adjudication.v1", clusters, actionable, reportFindings };
-  if (valid.length < minimumReviewers) return { status: "unavailable", verdict: null, valid, adjudication };
-  return { status: "semantic", verdict: actionable.length ? "revise_required" : "pass", valid, adjudication };
+  const findings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
+  const adjudication = { version: "wh-review-adjudication.v1", clusters, actionable };
+  if (valid.length < minimumReviewers) return { status: "unavailable", valid, findings, adjudication };
+  return { status: "available", valid, findings, adjudication };
 }
 
 export function conservativelyAssessUnattestedAnchors(items) {
@@ -187,15 +153,14 @@ export function authenticateCanonicalReviewResult({
   }
   const eligibleCompleted = [...latestCompleted.values()].filter((item) => eligible === null || eligible.has(item.provider));
   const aggregation = aggregateCanonicalProviderResults(assess(eligibleCompleted), minimum, { profilePriority: priority });
-  if (aggregation.status !== "semantic") invalid("completed provider outputs do not satisfy review quorum");
+  if (aggregation.status !== "available") invalid("completed provider outputs do not satisfy review quorum");
   const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
-  const expectedFindings = aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding }));
+  const expectedFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };
   const legacyFindings = expectedProviderResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
-  const legacyVerdict = expectedProviderResults.some(({ output }) => output.verdict === "revise_required") ? "revise_required" : "pass";
   const semanticMatches = result.adjudication === undefined
-    ? result.verdict === legacyVerdict && isDeepStrictEqual(result.findings, legacyFindings)
-    : result.verdict === aggregation.verdict && isDeepStrictEqual(result.findings, expectedFindings)
+    ? result.verdict !== undefined && isDeepStrictEqual(result.findings, legacyFindings)
+    : result.verdict === undefined && isDeepStrictEqual(result.findings, expectedFindings)
       && isDeepStrictEqual(result.adjudication, expectedAdjudication);
   if (!semanticMatches || !isDeepStrictEqual(result.provider_results, expectedProviderResults)) {
     invalid("semantic result does not exactly match completed provider evidence and aggregation");

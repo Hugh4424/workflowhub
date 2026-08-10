@@ -14,8 +14,8 @@ function canonicalJson(value) {
 
 function fixture({ secondStatus = "completed" } = {}) {
   const reviews = [
-    { provider: "alpha/main", review: { verdict: "pass", summary: "alpha", findings: [] } },
-    { provider: "beta/main", review: { verdict: "pass", summary: "beta", findings: [] } },
+    { provider: "alpha/main", review: { findings: [] } },
+    { provider: "beta/main", review: { findings: [] } },
   ];
   const policy = {
     source: "wh_review.v2", mode: "single_round", minimum_heterologous: 2,
@@ -38,8 +38,7 @@ function fixture({ secondStatus = "completed" } = {}) {
   const aggregation = aggregateCanonicalProviderResults(reviews, 2, { profilePriority: policy.requested_profiles });
   const result = {
     provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
-    verdict: aggregation.verdict,
-    findings: aggregation.adjudication.reportFindings.map((finding) => ({ provider: finding.providers[0], ...finding })),
+    findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
   const providerOutputs = reviews.map((item, index) => ({
@@ -51,7 +50,7 @@ function fixture({ secondStatus = "completed" } = {}) {
 describe("canonical review result authentication", () => {
   it("accepts the exact aggregation and rejects semantic field tampering or omitted completed providers", () => {
     const { attempt, result, providerOutputs } = fixture();
-    expect(authenticateCanonicalReviewResult({ attempt, result, providerOutputs }).aggregation.status).toBe("semantic");
+    expect(authenticateCanonicalReviewResult({ attempt, result, providerOutputs }).aggregation.status).toBe("available");
     for (const tampered of [
       { ...result, verdict: "revise_required" },
       { ...result, findings: [{ provider: "alpha/main", severity: "minor", path: "x", issue: "x", recommendation: "x" }] },

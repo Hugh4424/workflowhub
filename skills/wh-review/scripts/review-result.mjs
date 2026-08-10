@@ -1,6 +1,5 @@
 import { posix } from "node:path";
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { createCanonicalReviewWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
 import { aggregateCanonicalProviderResults } from "../../../runtime/review/canonical-review-result.mjs";
@@ -10,116 +9,11 @@ function safePart(value, label) {
   return value;
 }
 
-function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
-}
-
 function providerFilePart(provider) {
   if (typeof provider !== "string" || provider.length === 0) throw new TypeError("provider is invalid");
   // Provider profile IDs intentionally use `adapter/profile`. Encode only the
   // filename component: records keep the original profile ID for attribution.
   return `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
-}
-
-function normalizedIssue(value) {
-  return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
-}
-
-function overlap(left, right) {
-  const leftTerms = new Set(left); const rightTerms = new Set(right);
-  if (!leftTerms.size || !rightTerms.size) return 0;
-  let shared = 0;
-  for (const item of leftTerms) if (rightTerms.has(item)) shared += 1;
-  return shared / Math.min(leftTerms.size, rightTerms.size);
-}
-
-function findingKey(finding) {
-  return `${finding.path}\u0000${finding.line ?? ""}\u0000${normalizedIssue(finding.issue).join(" ")}`;
-}
-
-function sameCluster(cluster, candidate) {
-  const seed = cluster.members[0];
-  if (seed.finding.path !== candidate.finding.path) return false;
-  if (seed.finding.line !== undefined && candidate.finding.line !== undefined && seed.finding.line !== candidate.finding.line) return false;
-  const left = normalizedIssue(seed.finding.issue); const right = normalizedIssue(candidate.finding.issue);
-  return left.join(" ") === right.join(" ") || overlap(left, right) >= 0.7;
-}
-
-function severityOf(members) {
-  if (members.some(({ finding }) => finding.severity === "blocking")) return "blocking";
-  if (members.some(({ finding }) => finding.severity === "major")) return "major";
-  return "minor";
-}
-
-function adapterOf(provider) { return provider.split("/", 1)[0]; }
-
-function prioritizedValidResults(providerResults, profilePriority) {
-  if (!Array.isArray(profilePriority) || profilePriority.some((provider) => typeof provider !== "string" || provider.length === 0)) {
-    throw new TypeError("profilePriority must be a string array");
-  }
-  const priority = new Map(profilePriority.map((provider, index) => [provider, index]));
-  const valid = providerResults.filter((item) => item?.review && ["pass", "revise_required"].includes(item.review.verdict));
-  const byAdapter = new Map();
-  for (let index = 0; index < valid.length; index += 1) {
-    const candidate = valid[index]; const adapter = adapterOf(candidate.provider);
-    const current = byAdapter.get(adapter);
-    const candidatePriority = priority.get(candidate.provider) ?? Number.MAX_SAFE_INTEGER;
-    const currentPriority = current ? (priority.get(current.item.provider) ?? Number.MAX_SAFE_INTEGER) : null;
-    // Route order decides which profile represents an adapter. If a test
-    // double or a non-conforming broker returns several successful profiles
-    // for one CLI, only that representative contributes to quorum or verdict.
-    if (!current || candidatePriority < currentPriority || (candidatePriority === currentPriority && index < current.index)) {
-      byAdapter.set(adapter, { item: candidate, index });
-    }
-  }
-  return [...byAdapter.values()].map(({ item }) => item)
-    .sort((left, right) => left.provider.localeCompare(right.provider));
-}
-
-function clusterRecord(cluster) {
-  const members = [...cluster.members].sort((left, right) => left.provider.localeCompare(right.provider) || left.index - right.index);
-  const severity = severityOf(members);
-  const validDirect = members.filter(({ finding, anchorValid }) =>
-    ["direct", "machine"].includes(finding.evidence_kind) && anchorValid !== false);
-  const inferredAdapters = new Set(members.filter(({ finding }) => finding.evidence_kind === "inferred").map(({ adapter }) => adapter));
-  const id = `F-${createHash("sha256").update(findingKey(members[0].finding)).digest("hex").slice(0, 12)}`;
-  let disposition = "nonblocking_minor"; let evidenceStatus = "minor";
-  if (severity !== "minor") {
-    if (validDirect.length > 0) { disposition = "actionable"; evidenceStatus = "direct"; }
-    else if (inferredAdapters.size >= 2) { disposition = "actionable"; evidenceStatus = "corroborated_inference"; }
-    else if (members.some(({ finding, anchorValid }) => ["direct", "machine"].includes(finding.evidence_kind) && anchorValid === false)) {
-      disposition = "invalid_evidence"; evidenceStatus = "invalid_anchor";
-    } else { disposition = "needs_corroboration"; evidenceStatus = "single_inference"; }
-  }
-  const representative = members[0].finding;
-  return {
-    id, severity, path: representative.path, ...(representative.line ? { line: representative.line } : {}),
-    issue: representative.issue, root_cause: representative.root_cause ?? representative.issue, recommendation: representative.recommendation,
-    providers: [...new Set(members.map(({ provider }) => provider))], adapter_count: new Set(members.map(({ adapter }) => adapter)).size,
-    finding_count: members.length, disposition, evidence_status: evidenceStatus,
-    provider_findings: members.map(({ provider, adapter, finding, anchorValid }) => ({
-      provider, adapter, severity: finding.severity, evidence_kind: finding.evidence_kind ?? "unspecified",
-      evidence_anchor_valid: anchorValid !== false,
-    })),
-  };
-}
-
-function adjudicate(valid) {
-  const candidates = valid.flatMap((item) => item.review.findings.map((finding, index) => ({
-    provider: item.provider, adapter: adapterOf(item.provider), finding, index, anchorValid: item.evidenceAnchors?.[index] ?? true,
-  }))).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
-  const grouped = [];
-  for (const candidate of candidates) {
-    const cluster = grouped.find((current) => sameCluster(current, candidate));
-    if (cluster) cluster.members.push(candidate);
-    else grouped.push({ members: [candidate] });
-  }
-  const clusters = grouped.map(clusterRecord).sort((left, right) => left.id.localeCompare(right.id));
-  const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
-  const reportFindings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
-  return { version: "wh-review-adjudication.v1", clusters, actionable, reportFindings };
 }
 
 export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [] } = {}) {
@@ -320,7 +214,7 @@ export function renderReviewReport({ attempt, result = null }) {
     `- snapshot: \`${attempt.snapshot_tree}\``,
     `- material: \`${attempt.material_id}\``,
     `- terminal status: \`${attempt.terminal_status}\``,
-    `- verdict: \`${result?.verdict ?? "unavailable"}\``,
+    `- semantic result: \`${result ? "available" : "unavailable"}\``,
     "",
     "## Routing and coverage",
     "",
@@ -369,8 +263,7 @@ export function renderReviewReport({ attempt, result = null }) {
   const providerResults = result?.provider_results ?? [];
   if (providerResults.length === 0) lines.push("No semantic provider finding output is available.");
   for (const providerResult of providerResults) {
-    lines.push(`### ${providerResult.provider} — ${providerResult.output.verdict}`);
-    lines.push(`- summary: ${providerResult.output.summary}`);
+    lines.push(`### ${providerResult.provider}`);
     if (providerResult.output.findings.length === 0) lines.push("- findings: none");
     for (const finding of providerResult.output.findings) {
       lines.push(`- ${finding.severity}: ${finding.path}${finding.line ? `:${finding.line}` : ""} — ${finding.issue}`);

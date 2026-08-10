@@ -31,7 +31,12 @@ truth.
 
 A dependency or independent reviewer may be unavailable. Record the real
 `unavailable` quality fact and continue drafting or repairing this same task.
-Never turn missing quality evidence into `pass`.
+Never turn missing quality evidence into empty findings or stage completion.
+
+`simplicity-guard` and `plan-ceo-review` are optional advisory lenses in the same
+`wh-review` packet. Include their read-only skill files when applicable; do not
+invoke them separately or create `*-facts`, invocation receipts, dispatchers, or
+independent runtimes. Their absence is a review fact, not a work prerequisite.
 
 ## Work
 
@@ -56,11 +61,12 @@ Never turn missing quality evidence into `pass`.
 6. Check the result against the decision log and Constitution. The specification
    must add no accidental scope, duplicate authority, speculative mechanism, or
    implementation plan.
-7. Ask the declared independent review capability to review the current decision
-   and specification. Preserve the actual verdict and findings, or the real
-   `unavailable` result. Repair valid findings in `spec.md`; explain rejected
-   findings and unresolved risks. Review is a quality fact, not permission to
-   continue working on the task.
+7. Ask the declared independent review capability to inspect the current decision
+   and specification. Preserve the actual findings, transport status, and
+   provenance, or the real `unavailable` result. Repair valid findings in `spec.md`;
+   explain rejected findings and unresolved risks. An `unavailable` review is
+   never `pass`; it does not block drafting or same-task repair. Review is a quality fact, not
+   permission to continue working on the task.
 
 ## Completion
 
@@ -72,8 +78,10 @@ The content work is complete when:
   are explicit;
 - every material ambiguity is resolved by current authority or remains plainly
   identified as an upstream decision gap;
-- the independent review result is truthfully recorded as a verdict or
-  `unavailable`, with important findings addressed or disclosed.
+- the independent review findings and transport status are truthfully recorded,
+  with important findings addressed or disclosed. If transport is unavailable,
+  the specification remains quality-incomplete even though same-task drafting
+  continues.
 
 An upstream decision gap prevents claiming the specification is ready, but does
 not freeze investigation or repair in the same task. Missing or unavailable
@@ -85,7 +93,7 @@ Tell the user in plain language:
 
 - what product behavior the specification defines;
 - what is explicitly out of scope;
-- the important risks, unknowns, and review result;
+- the important risks, unknowns, and review findings/transport facts;
 - what `build-plan` should do next and what it must not guess.
 
 If a real clarification, scope change, or risk decision remains, name it and

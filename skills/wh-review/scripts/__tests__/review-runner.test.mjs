@@ -15,9 +15,8 @@ const source = {
   targetCommit: "1".repeat(40), baseCommit: "2".repeat(40), baseTree: "3".repeat(40),
   capturedHead: "4".repeat(40), snapshotTree: "5".repeat(40),
 };
-const pass = JSON.stringify({ verdict: "pass", summary: "ok", findings: [] });
-const revise = JSON.stringify({
-  verdict: "revise_required", summary: "fix", findings: [{
+const pass = JSON.stringify({ findings: [] });
+const revise = JSON.stringify({ findings: [{
     severity: "major", path: "a.js", line: 1, issue: "bug", root_cause: "missing guard",
     recommendation: "fix it", evidence_kind: "direct", evidence: "a.js line 1 calls the unsafe branch",
   }],
@@ -86,15 +85,15 @@ afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: 
 
 describe("review output and facts", () => {
   it("accepts one JSON reviewer object and rejects extra output", () => {
-    expect(parseReviewerOutput(pass).verdict).toBe("pass");
-    expect(parseReviewerOutput(`note\n\`\`\`json\n${revise}\n\`\`\``).verdict).toBe("revise_required");
+    expect(parseReviewerOutput(pass)).toEqual({ findings: [] });
+    expect(parseReviewerOutput(`note\n\`\`\`json\n${revise}\n\`\`\``).findings).toHaveLength(1);
     expect(() => parseReviewerOutput(`\`\`\`json\n${pass}\n\`\`\`\n\`\`\`json\n${pass}\n\`\`\``)).toThrow(/OUTPUT_INVALID/);
     expect(() => parseReviewerOutput("not json")).toThrow(/OUTPUT_INVALID/);
     expect(() => parseReviewerOutput(JSON.stringify({
-      verdict: "revise_required", summary: "missing evidence", findings: [{
+      findings: [{
         severity: "major", path: "a.js", issue: "bug", recommendation: "fix",
       }],
-    }), { requireEvidence: true })).toThrow(/evidence_kind/);
+    }), { requireEvidence: true })).toThrow(/evidence/);
   });
 
   it("keeps provider failures separate from finding quality facts", () => {
@@ -110,7 +109,7 @@ describe("review output and facts", () => {
   });
 
   it("aggregates direct evidence without turning one invalid anchor into a pass finding", () => {
-    const direct = { provider: "kimi/coding", review: { verdict: "revise_required", summary: "x", findings: [{ severity: "major", path: "a.js", line: 1, issue: "x", recommendation: "fix", evidence_kind: "direct", evidence: "a.js:1" }] }, final: { status: "completed" }, calls: [], evidenceAnchors: [true] };
+    const direct = { provider: "kimi/coding", review: { findings: [{ severity: "major", path: "a.js", line: 1, issue: "x", recommendation: "fix", evidence_kind: "direct", evidence: "a.js:1", root_cause: "unsafe branch" }] }, final: { status: "completed" }, calls: [], evidenceAnchors: [true] };
     const invalid = { provider: "opencode/v4flash", review: direct.review, final: { status: "completed" }, calls: [], evidenceAnchors: [false] };
     expect(aggregateProviderResults([direct, invalid], 1).adjudication.clusters[0]).toMatchObject({ disposition: "actionable" });
   });
@@ -120,7 +119,7 @@ describe("review output and facts", () => {
       { provider: "kimi/k3", review: JSON.parse(pass) },
       { provider: "opencode/v4flash", review: null },
     ], 2);
-    expect(result).toMatchObject({ status: "unavailable", verdict: null, valid: [{ provider: "kimi/k3" }] });
+    expect(result).toMatchObject({ status: "unavailable", valid: [{ provider: "kimi/k3" }] });
   });
 });
 
@@ -180,7 +179,7 @@ describe("broker boundary", () => {
       task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
       providerClient: groupClient([publicProvider("kimi")]), captureSource: () => source, buildMaterials: materialBuilder(),
     });
-    expect(result.status).toBe("semantic");
+    expect(result.status).toBe("available");
     expect(existsSync(join(task.taskPath, "locks"))).toBe(false);
     expect(existsSync(join(attachmentRoot, ".workflowhub-review-locks"))).toBe(false);
   });
@@ -194,7 +193,8 @@ describe("broker boundary", () => {
     const attempt = JSON.parse(task.readRecord(result.attemptRef));
     const semantic = JSON.parse(task.readRecord(result.resultRef));
     expect(attempt).toMatchObject({ terminal_status: "semantic", provider_attempts: [{ runtime_id: "group-runtime" }] });
-    expect(semantic).toMatchObject({ version: "wh-review-result.v1", attempt_ref: result.attemptRef, verdict: "pass" });
+    expect(semantic).toMatchObject({ version: "wh-review-result.v1", attempt_ref: result.attemptRef, findings: [] });
+    expect(semantic).not.toHaveProperty("verdict");
     for (const record of [attempt, semantic]) {
       expect(record).not.toHaveProperty("lineage");
       expect(record).not.toHaveProperty("classification_manifest");
@@ -227,7 +227,7 @@ describe("broker boundary", () => {
       task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
       providerClient: groupClient([publicProvider("kimi", { output: "not json" })], calls), captureSource: () => source, buildMaterials: materialBuilder(),
     });
-    expect(result).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
     expect(calls).toHaveLength(1);
     expect(JSON.parse(task.readRecord(result.attemptRef)).provider_attempts[0].error).toMatchObject({ code: "OUTPUT_INVALID" });
   });
@@ -239,8 +239,26 @@ describe("broker boundary", () => {
       providerClient: groupClient([publicProvider("kimi", { status: "failed", output: null, error: { code: "AUTH", message: "missing" } })]),
       captureSource: () => source, buildMaterials: materialBuilder(),
     });
-    expect(result).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
     expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({ terminal_status: "unavailable", error: { code: "AUTH" } });
+  });
+
+  it("does not parse semantic output when transport carries a nonzero error", async () => {
+    const { attachmentRoot, task } = fixture("review-transport-error-envelope-");
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: groupClient([publicProvider("kimi", {
+        status: "completed", output: pass,
+        error: { code: "PROCESS_EXIT_NONZERO", message: "provider process exited with 1" },
+      })]),
+      captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({
+      terminal_status: "unavailable",
+      error: { code: "PROCESS_EXIT_NONZERO" },
+      provider_attempts: [{ status: "failed", error: { code: "PROCESS_EXIT_NONZERO" } }],
+    });
   });
 
   it("rejects a pinned execution mismatch as unavailable evidence", async () => {
@@ -298,7 +316,7 @@ describe("material and workspace boundaries", () => {
       providerClient: groupClient([publicProvider("kimi")], calls), captureSource: () => source,
       buildMaterials: () => { const error = new Error(`MATERIAL_INCOMPLETE: failed to read ${privatePath}`); error.code = "MATERIAL_INCOMPLETE"; throw error; },
     });
-    expect(result).toMatchObject({ status: "unavailable", verdict: null, resultRef: null });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
     expect(calls).toHaveLength(0);
     const attempt = JSON.parse(task.readRecord(result.attemptRef));
     expect(attempt.error).toEqual({ code: "MATERIAL_INCOMPLETE", message: "review material preflight failed; private diagnostic withheld" });

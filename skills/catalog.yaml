@@ -70,7 +70,7 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 0f5dc3785ba5f3bb44dde860239533077e05e8291bf98325f002f1a98250217c
+    local_bundle_hash: c36970ae6d0639d5d0cc33fb1858c63534fb40bb2bcb548b65de0b3fd20dc413
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 审查方案是否遵守四阶梯最小路径
@@ -257,7 +257,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 73248bccd6992326a79bb1a669ce6a96050d627ea3b8dde81f32411dea9122eb
+    local_bundle_hash: 786b6ba08fc72cdf2d4fb25c5c2151700d53ceb4065fcbae540ca9f82db53344
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -270,7 +270,7 @@ skills:
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: e19c95d699bf2fb3a91ee597f3bb51d3348f04b2a023c1408551a00681a6ad69
+    local_bundle_hash: b17c4fd34e191391c32f2eb16f10a3b6d42bdbf9cf2594187700697f5f87b4ea
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 产品方向审查 lens

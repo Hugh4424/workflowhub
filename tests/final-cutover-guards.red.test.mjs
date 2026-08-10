@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { certifyBuildCodeQualityBasis, officialStageHandler } from "../runtime/stage/stage-handlers.mjs";
@@ -13,14 +14,15 @@ const buildNonGateReviewResponseRecord = () => ({});
 
 describe("final cutover guard contracts", () => {
   const sha = createHash("sha256").update("true").digest("hex"), tree = "b".repeat(40);
+  const providerFilePart = (provider) => `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
   const canonicalHash = (value) => createHash("sha256").update(`${JSON.stringify(value, null, 2)}\n`).digest("hex");
 
-  it("does not certify build-code completion from revise_required without a verified resolution", () => {
+  it("does not certify build-code completion from an unrecorded review quality fact", () => {
     expect(certifyBuildCodeQualityBasis({
       changedFiles: [],
       plannedChanges: [],
       tests: { exit_code: 0 },
-      review: { verdict: "revise_required", result_ref: "quality/reviews/results/review.json", result_hash: sha },
+      review: { status: "unknown", result_ref: "quality/reviews/results/review.json", result_hash: sha },
       expectedAc: ["AC1"],
       coveredAc: ["AC1"],
     })).toMatchObject({ quality_gaps: ["integration review is not passing"] });
@@ -33,7 +35,7 @@ describe("final cutover guard contracts", () => {
       review: { status: "unavailable", attempt_ref: "quality/reviews/attempts/review/attempt.json", attempt_hash: sha },
       expectedAc: ["AC1"],
       coveredAc: ["AC1"],
-    })).toMatchObject({ review: { status: "unavailable", verdict: null } });
+    })).toMatchObject({ review: { status: "unavailable" } });
   });
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
   const completedBuildCodeDocuments = () => {
@@ -122,15 +124,17 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const reviewStage = stage === "verify-code" ? "build-code" : stage;
     const reviewScope = reviewStage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null;
     const providerFinding = { severity: "major", path: "fixture", issue: "fixture", root_cause: "fixture review identifies an anchored issue", recommendation: "revise", evidence_kind: "direct", evidence: "fixture evidence is anchored to the fixture path" };
-    const providerOutput = { verdict, summary: "fixture review", findings: verdict === "revise_required" ? [providerFinding] : (verdict === "invented" ? [{ severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []) };
-    const aggregation = ["pass", "revise_required"].includes(verdict) ? aggregateProviderResults([{ provider: "fixture-provider", review: providerOutput }], 1) : null;
-    const resultVerdict = aggregation?.verdict ?? verdict;
+    const providerOutput = verdict === "invented"
+      ? { verdict, findings: [{ severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] }
+      : { findings: verdict === "revise_required" ? [providerFinding] : [] };
+    const aggregation = verdict === "invented" ? null : aggregateProviderResults([{ provider: "fixture-provider", review: providerOutput }], 1);
     return { version: "wh-review-result.v1", task_id: "task", stage: reviewStage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
       subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, review_scope: reviewScope, base_tree: tree, candidate_tree: snapshotTree,
       material_id: sha, attempt_ref: `quality/reviews/attempts/${stage}-attempt/attempt.json`,
-      provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict: resultVerdict,
-      findings: aggregation ? aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })) : (verdict === "invented" ? [{ provider: "fixture-provider", severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []),
+      provider_results: [{ provider: "fixture-provider", output: providerOutput }],
+      ...(verdict === "invented" ? { verdict } : {}),
+      findings: aggregation ? aggregation.findings.map((item) => ({ provider: item.providers[0], ...item })) : (verdict === "invented" ? [{ provider: "fixture-provider", severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []),
       ...(aggregation ? { adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters } } : {}) };
   };
   const qualityReviewReceipt = (snapshotTree = tree) => ({
@@ -150,7 +154,6 @@ ${task("T002", "contract GREEN", 0, "T001")}
     root_result_ref: resultRef,
     head_result_ref: resultRef,
     result_sha256: sha,
-    verdict: result.verdict ?? null,
     ...overrides,
   });
   const workerFor = (stage, values, currentTree = tree) => {
@@ -188,7 +191,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       qualityReviewRef = "quality/reviews/results/quality.json";
     }
     for (const result of Object.values(values).filter((value) => value?.version === "wh-review-result.v1")) {
-      const attemptId = result.attempt_ref.split("/")[3], outputRef = `quality/reviews/attempts/${attemptId}/providers/fixture-provider.output.json`;
+      const attemptId = result.attempt_ref.split("/")[3], outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFilePart("fixture-provider")}.output.json`;
       const content = JSON.stringify(result.provider_results[0].output);
       values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: result.stage, review_track: result.review_track ?? null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
@@ -620,15 +623,15 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.verification_failure).toBe(true);
     expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
     expect(result.missing_items).toEqual(expect.arrayContaining([
-      expect.stringMatching(/review findings require per-finding analysis and disposition/i),
+      expect.stringMatching(/actionable serious review findings require disposition/i),
     ]));
     expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
   });
 
   it("preserves an authenticated unavailable build-code review as a non-gate quality fact", async () => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-unavailable/attempt.json";
-    const earlierOutputRef = "quality/reviews/attempts/verify-unavailable/providers/fixture-provider.output.json";
-    const earlierContent = JSON.stringify({ verdict: "pass", summary: "superseded output", findings: [] });
+    const earlierOutputRef = `quality/reviews/attempts/verify-unavailable/providers/${providerFilePart("fixture-provider")}.output.json`;
+    const earlierContent = JSON.stringify({ findings: [] });
     const unavailable = {
       version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
@@ -668,7 +671,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       facts: { review: { status: "unavailable" } },
     });
     expect(result.missing_items.join("\n")).toMatch(/build-code integration review is unavailable/i);
-    expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=pass/i);
+    expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=recorded/i);
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
     expect(result.missing_items.join("\n")).toMatch(/unavailable|integration review/i);
   });
@@ -680,13 +683,12 @@ ${task("T002", "contract GREEN", 0, "T001")}
       root_cause: "fixture detail", recommendation: "consider cleanup",
       evidence_kind: "direct", evidence: "fixture anchor",
     };
-    const providerOutput = { verdict: "revise_required", summary: "minor advice", findings: [finding] };
+    const providerOutput = { findings: [finding] };
     const aggregation = aggregateProviderResults([{ provider: "fixture-provider", review: providerOutput }], 1);
     const quality = {
       ...qualityReviewReceipt(),
       provider_results: [{ provider: "fixture-provider", output: providerOutput }],
-      verdict: aggregation.verdict,
-      findings: aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })),
+      findings: aggregation.findings.map((item) => ({ provider: item.providers[0], ...item })),
       adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
     };
     const values = {
@@ -718,14 +720,14 @@ ${task("T002", "contract GREEN", 0, "T001")}
         evidence: "quality/evidence/evidence.json", audit: worker.auditRef,
       },
     });
-    expect(result.completion.system.verification.conclusion).toMatch(/verify-code independent=revise_required.*认证质量事实/i);
+    expect(result.completion.system.verification.conclusion).toMatch(/独立验证发现未满足项.*verify-code independent=recorded.*认证质量事实/i);
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
   });
 
   it("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {
     const stage = "verify-code", attemptId = "false-unavailable", attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
-    const outputRef = `quality/reviews/attempts/${attemptId}/providers/fixture-provider.output.json`;
-    const content = JSON.stringify({ verdict: "pass", summary: "review passed", findings: [] });
+    const outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFilePart("fixture-provider")}.output.json`;
+    const content = JSON.stringify({ findings: [] });
     const values = {
       "quality/tests/tests.json": testsReceipt(stage),
       [attemptRef]: {
@@ -801,7 +803,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     const worker = workerFor(stage, values), attempt = values[values["quality/reviews/results/review.json"].attempt_ref];
     const output = values[attempt.provider_attempts[0].output_ref];
-    output.content = JSON.stringify({ verdict: "revise_required", summary: "must revise", findings: [{ severity: "major", path: "src/a.js", issue: "bug", recommendation: "fix it" }] });
+    output.content = JSON.stringify({ findings: [{ severity: "major", path: "src/a.js", issue: "bug", recommendation: "fix it" }] });
     output.content_hash = createHash("sha256").update(output.content).digest("hex");
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } })).rejects.toThrow(/semantic output mismatch|verdict does not match|OUTPUT_INVALID/i);
   });
@@ -939,7 +941,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it("records every supplied finding disposition without changing the review verdict", async () => {
+  it("records every supplied finding disposition without changing the review quality status", async () => {
     const stage = "build-code";
     const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
     const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
@@ -971,7 +973,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
       }],
     });
     expect(result.facts.finding_dispositions).toMatchObject({ status: "recorded", items: [{ finding_id: finding.id, status: "needs_human" }] });
-    expect(result.facts.review.verdict).toBe("revise_required");
+    expect(result.facts.review.status).toBe("recorded");
+    expect(result.facts.review).not.toHaveProperty("verdict");
     expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/finding disposition is missing/i)]));
   });
 

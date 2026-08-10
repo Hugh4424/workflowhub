@@ -9,6 +9,7 @@ import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-result.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
@@ -47,14 +48,17 @@ function fixture() {
 
 function publishReviewFixture(state, verdict = "pass") {
   const snapshot = state.candidate.captureSnapshot();
+  const providerOutput = { findings: verdict === "pass" ? [] : [{ severity: "minor", path: "spec.md", line: 1, issue: "fixture finding", recommendation: "record it", evidence_kind: "direct", evidence: "fixture evidence" }] };
+  const aggregation = aggregateProviderResults([{ provider: "fixture", review: providerOutput }], 1);
   const value = {
     version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-spec",
     review_track: null, subject_kind: "worktree", phase_id: null, review_scope: null,
     source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
     snapshot_tree: snapshot.tree, material_id: "0".repeat(64),
     attempt_ref: "quality/reviews/attempts/first-three-build-spec/attempt.json",
-    provider_results: [{ provider: "fixture", output: { verdict, summary: `fixture review ${verdict}`, findings: verdict === "pass" ? [] : [{ severity: "minor", path: "spec.md", line: 1, issue: "fixture finding", recommendation: "record it" }] } }],
-    verdict, findings: verdict === "pass" ? [] : [{ provider: "fixture", severity: "minor", path: "spec.md", line: 1, issue: "fixture finding", recommendation: "record it" }],
+    provider_results: [{ provider: "fixture", output: providerOutput }],
+    findings: aggregation.findings.map((item) => ({ provider: item.providers[0], ...item })),
+    adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
   const raw = `${JSON.stringify(value, null, 2)}\n`;
   const ref = "quality/reviews/results/first-three-build-spec.json";
@@ -129,7 +133,8 @@ describe("first three stage vNext cutover", () => {
       facts: { source: "review-opinion" }, evidence_refs: [review],
     }));
     expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
-    expect(result.quality_warnings).toContain("independent_review:failed");
+    expect(result.quality_warnings).toContain("zero_major_ambiguities:missing");
+    expect(result.quality_warnings).not.toContain("independent_review:failed");
     expect(result).not.toHaveProperty("publication_ref");
   });
 });

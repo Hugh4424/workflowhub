@@ -38,7 +38,7 @@ describe("v2 human boundary summaries", () => {
       "provider", "status", "session_id", "runtime_id", "output_ref", "error",
     ]));
     expect(result.required).toEqual(expect.arrayContaining([
-      "source", "snapshot_tree", "material_id", "attempt_ref", "provider_results", "verdict", "findings",
+      "source", "snapshot_tree", "material_id", "attempt_ref", "provider_results", "findings", "adjudication",
     ]));
     expect(result.properties.provider_results.items.required).toEqual(expect.arrayContaining(["provider", "output"]));
     expect(review).toMatch(/real public result and provenance|真实[^\n]*provenance/i);

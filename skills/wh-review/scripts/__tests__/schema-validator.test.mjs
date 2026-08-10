@@ -37,7 +37,7 @@ describe("schema-validator", () => {
     expectSchemaError("attempt", attempt, "/leaked");
   });
 
-  it("rejects an invalid semantic result verdict", () => {
+  it("rejects a retired semantic result verdict", () => {
     const result = {
       version: "wh-review-result.v1",
       task_id: "task-1",
@@ -50,7 +50,7 @@ describe("schema-validator", () => {
       attempt_ref: "reviews/attempts/attempt-1.json",
       verdict: "unavailable",
       findings: [{ provider: "opencode", severity: "major", path: "a.mjs", issue: "bad", recommendation: "fix" }],
-      provider_results: [{ provider: "opencode", output: { verdict: "pass", summary: "ok", findings: [] } }],
+      provider_results: [{ provider: "opencode", output: { findings: [] } }],
     };
     expectSchemaError("result", result, "/verdict");
   });
@@ -66,12 +66,10 @@ describe("schema-validator", () => {
       snapshot_tree: oid,
       material_id: hash,
       attempt_ref: "reviews/attempts/attempt-1.json",
-      verdict: "pass",
       findings: [],
       provider_results: [{
         provider: "kimi/coding",
         output: {
-          verdict: "revise_required", summary: "unverified concern",
           findings: [{ severity: "major", path: "requirements/impact_map.json", issue: "scope concern", recommendation: "verify approved scope", evidence_kind: "direct", evidence: "the submitted anchor is invalid" }],
         },
       }],

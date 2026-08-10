@@ -147,7 +147,7 @@ describe("wh-review production CLI", () => {
       encoding: "utf8",
       env: { ...process.env, HOME: home },
     }));
-    expect(result).toMatchObject({ status: "unavailable", verdict: null, result_ref: null, runtime_ids: {} });
+    expect(result).toMatchObject({ status: "unavailable", result_ref: null, runtime_ids: {} });
     const attempt = JSON.parse(task.readRecord(result.attempt_ref));
     expect(attempt).toMatchObject({
       terminal_status: "unavailable",

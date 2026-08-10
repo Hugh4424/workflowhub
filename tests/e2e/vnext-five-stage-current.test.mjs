@@ -269,8 +269,9 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
         phase_id: null, review_scope: stage === "build-code" ? "integration" : null,
         source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: snapshot.tree, captured_head: snapshot.head },
         snapshot_tree: snapshot.tree, material_id: "b".repeat(64), attempt_ref: `reviews/attempts/${stage}-pass${suffix}/attempt.json`,
-        provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "current fixture review", findings: [] } }],
-        verdict: review === "pass" ? "pass" : "invalid", findings: [],
+        provider_results: [{ provider: "fixture", output: { findings: [] } }],
+        findings: [],
+        adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
       };
   refs.push(record(state, reviewRef, reviewValue));
   if (["make-decision", "build-plan", "verify-code"].includes(stage) && confirm) {
@@ -292,6 +293,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
       completion_subjects: Object.fromEntries(acceptanceSubjects.map((subject) => [subject, {
         status: "passed", evidence_refs: [], detail: `fixture ${subject}`,
       }])),
+      finding_dispositions: { status: "not_applicable", items: [] },
     },
     evidence_refs: refs,
     completion: { facts: { business_facts: { acceptance_criteria: "covered" } } },
@@ -299,7 +301,7 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
 }
 
 describe("current vNext five-stage runtime", () => {
-  it("does not let a passing direction review hide a failed detail review", async () => {
+  it("records direction and detail review findings without a verdict gate", async () => {
     const state = fixture("make-decision-review-subjects");
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const direction = writeFormalReviewFixture({
@@ -327,8 +329,9 @@ describe("current vNext five-stage runtime", () => {
         ],
       };
     });
-    expect(result.completion.missing).toContain("detail_review");
+    expect(result.completion.missing).not.toContain("detail_review");
     expect(result.completion.missing).not.toContain("direction_review");
+    expect(result.completion.status).toBe("completed");
   });
 
   it("completes make-decision without coverage audit while accepting immutable Talk/Clarify evidence", () => {
@@ -477,8 +480,7 @@ describe("current vNext five-stage runtime", () => {
       task_id: state.task.identity.taskId,
       stage: "build-code",
       snapshot_tree: snapshot.tree,
-      verdict: "revise_required",
-      adjudication: { clusters: [{
+        adjudication: { clusters: [{
         id: "F-123456789abc", severity: "major", path: "src/app.txt", line: 1,
         issue: "fixture serious issue", root_cause: "fixture root cause", recommendation: "repair or explicitly accept",
         providers: ["fixture"], disposition: "actionable", evidence_status: "direct",
@@ -526,7 +528,7 @@ describe("current vNext five-stage runtime", () => {
     const reviewFact = (ref, reviewScope) => {
       const raw = state.task.readRecord(ref);
       return {
-        verdict: "pass", result_ref: ref, result_hash: sha256(raw), snapshot_tree: snapshot.tree,
+        status: "recorded", result_ref: ref, result_hash: sha256(raw), snapshot_tree: snapshot.tree,
         subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
       };
     };
@@ -661,7 +663,7 @@ describe("current vNext five-stage runtime", () => {
           const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
           const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree });
           const reviewFact = (ref, reviewScope) => ({
-            verdict: "pass", result_ref: ref, result_hash: sha256(state.task.readRecord(ref)),
+            status: "recorded", result_ref: ref, result_hash: sha256(state.task.readRecord(ref)),
             snapshot_tree: snapshot.tree, subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
           });
           facts.review = reviewFact(buildReview.resultRef, "integration");

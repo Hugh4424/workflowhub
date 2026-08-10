@@ -26,19 +26,19 @@ role、reason）；`not_applicable` 或 `unknown` entry 必须有受限 `reason_
 provider 调用。
 
 缺少任一必需材料时，本次 attempt 返回 `unavailable`，并写入
-`quality/reviews/attempts/*` 作为不可变质量事实；它没有语义 verdict，也不能写成
-“审查通过”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
+`quality/reviews/attempts/*` 作为不可变质量事实；它没有 findings，也不能写成
+“没有问题”。补齐后重新调用会产生新的质量事实。可选材料不存在时，
 `review-instructions.md` 必须说明未提供及原因。
 
-首轮 `revise_required` 是质量事实，不是 stage pass gate。主 agent 应直接修复；普通
-修复不做二审。外置审计记录若存在，缺失或不能验证时明确为
+首轮 findings 是质量事实，不是 stage gate。主 agent 应直接修复；普通修复不做二审。
+外置审计记录若存在，缺失或不能验证时明确为
 `unverified`，不得声称已修复或通过。材料变化后的新 attempt 仍完整交付当前材料。
 若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
 新 attempt 的事实只供改进，不循环也不阻断 stage 推进。
 
 人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
-provider verdict 转成“审查通过”。
+provider findings 转成“审查通过”。
 
 ## 审查重点
 
@@ -50,13 +50,13 @@ provider verdict 转成“审查通过”。
 - 验收是否客观、可判断。
 - 范围、非目标、状态和接口责任是否一致。
 - 是否伪造来源，或未经批准扩大、缩减范围。
-- `simplicity-guard`、`plan-ceo-review` 和条件 UI `plan-design-review` 已在
-  build-spec 的 wh-review 之前由 stage-owned dispatcher 执行；本次 provider
-  只读取这些 invocation facts 和冻结 spec，不重复调用或重复计数。若事实缺失，
-  报材料/调用事实缺口，不自行补做 lens。
-- 发现上述内容实质扩大实现或维护面时必须 `revise_required`，不得以补充更多
+- `simplicity-guard` 和 `plan-ceo-review` 是同一 wh-review packet 内的可选 advisory
+  lens。它们以只读技能文件随 packet 提供，provider 在同一 findings 中报告具体问题；
+  不单独调用、不生成 `*-facts`、invocation receipt、dispatcher 或独立 runtime。
+  lens 缺失只记录为材料事实，不阻止同 task 继续工作。
+- 发现上述内容实质扩大实现或维护面时，报告具体删除或缩减 finding，不得以补充更多
   要求、通用框架或未来兼容层代替删除。
 
 ## 输出
 
-输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

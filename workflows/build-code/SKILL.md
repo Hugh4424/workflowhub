@@ -77,10 +77,12 @@ quality or completion claim; it does not prohibit code or material repair.
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
-5. Use `wh-review` directly for one independent review of the completed Phase.
-   Preserve the actual result; `unavailable` is never `pass`. Do not re-review an
-   unchanged change merely to chase `pass`. Completion: the review or its real
-   unavailability is recorded with provenance.
+5. Use `wh-review` directly for one independent findings review of the completed
+   Phase. Preserve the actual findings, transport status, and provenance;
+   `unavailable` remains an unavailable fact. Do not re-review an unchanged change
+   merely to chase an empty findings list. Completion: the review or its real
+   unavailability is recorded with provenance; an unavailable attempt keeps the
+   stage quality claim incomplete.
 6. Inspect every finding and record `fixed`, `rejected_invalid`,
    `accepted_risk`, or `needs_human`. Repair valid findings in this same task and
    rerun affected checks. Reject invalid findings with evidence. Keep serious
@@ -99,10 +101,16 @@ Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
 
-A current Phase review is required as a recorded quality fact. The review
-verdict is not a progression gate: an unavailable or adverse result stays
+A current Phase review is required as a recorded quality fact. Its findings and
+transport status are not a progression gate: an unavailable or adverse fact stays
 visible, limits the completion claim, and still allows same-task repair and the
 next safe work item.
+
+Review findings and transport status are not a progression gate. A reviewer
+verdict is not a progression gate either; the current contract records findings
+only, while serious findings are handled through explicit disposition.
+
+`unavailable` is never `pass` and never a work blocker.
 
 ## Final aggregate
 
@@ -119,10 +127,11 @@ final aggregate.
 ## Completion and fail-loud writes
 
 Rule: publish no completion unless the requested behavior is implemented, relevant
-real tests ran, every applicable AC has a result, independent review ran or is
-truthfully `unavailable`, every finding has a disposition, and the stage-end
-plain-language summary exists. Keep `revise_required`, `unavailable`, failed,
-and unknown results visible.
+real tests ran, every applicable AC has a result, a current independent review
+result is recorded, every finding has a disposition, and the stage-end
+plain-language summary exists. Keep adverse, unavailable, failed, and unknown
+review facts visible; an unavailable attempt remains quality-incomplete and does
+not block same-task repair.
 
 A fact write with a wrong task, workspace, runtime, hash, schema, or declared
 write boundary fails loudly for that write. Preserve the error and never invent
@@ -133,7 +142,8 @@ claim until repaired.
 ## Reporting
 
 After each Phase, report only delivered behavior, actual focused test results,
-AC limits, review result, finding disposition, unresolved risk, and next Task.
+AC limits, review findings/transport facts, finding disposition, unresolved risk,
+and next Task.
 At the end, explain in plain language what changed, which evidence is current,
 what remains unknown, and what `verify-code` will check. Verify-code reads this
 summary and the four materials; it does not repeat Talk, Grill, or require a

@@ -26,7 +26,7 @@ function hashValue(value) {
   return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
 }
 
-function serious(cluster) {
+export function isActionableSeriousFinding(cluster) {
   return cluster?.disposition === "actionable"
     && new Set(["major", "blocking"]).has(cluster.severity)
     && new Set(["direct", "corroborated_inference"]).has(cluster.evidence_status);
@@ -113,7 +113,7 @@ export function deriveSeriousReviewPause({
   text(reviewRef, "reviewRef");
   if (!HASH.test(reviewHash ?? "")) throw new TypeError("reviewHash must be sha256");
   const clusters = canonicalReviewFindings(review);
-  const findings = clusters.filter(serious).map((cluster) => cardFor(
+  const findings = clusters.filter(isActionableSeriousFinding).map((cluster) => cardFor(
     cluster,
     reviewRef,
     reviewHash,
@@ -128,7 +128,6 @@ export function deriveSeriousReviewPause({
     review_ref: reviewRef,
     review_hash: reviewHash,
     snapshot_tree: review.snapshot_tree,
-    review_verdict: review.verdict,
     findings,
   });
 }
@@ -161,7 +160,6 @@ export function buildRiskAcceptance({
     snapshot_tree: state.snapshot_tree,
     review_ref: state.review_ref,
     review_hash: state.review_hash,
-    review_verdict: state.review_verdict,
     finding_ref: `${state.review_ref}#${finding.finding_id}`,
     finding_id: finding.finding_id,
     finding_hash: finding.finding_hash,

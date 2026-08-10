@@ -28,7 +28,7 @@ describe("review writer TaskHandle boundary", () => {
     const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
     const provenance={task_id:"review-task",stage:"build-code",review_track:null,source,snapshot_tree:"b".repeat(40),material_id:"c".repeat(64)};
     const attempt={version:"wh-review-attempt.v1",attempt_id:"a",...provenance,provider_attempts:[],terminal_status:"semantic",error:null};
-    const result={version:"wh-review-result.v1",...provenance,attempt_ref:"quality/reviews/attempts/a/attempt.json",provider_results:[{provider:"fixture",output:{verdict:"pass",summary:"ok",findings:[]}}],verdict:"pass",findings:[]};
+    const result={version:"wh-review-result.v1",...provenance,attempt_ref:"quality/reviews/attempts/a/attempt.json",provider_results:[{provider:"fixture",output:{findings:[]}}],findings:[],adjudication:{version:"wh-review-adjudication.v1",clusters:[]}};
     writeAttempt(task, "quality/reviews/attempts/a/attempt.json", attempt);
     writeSemanticResult(task, "quality/reviews/results/a.json", result);
     expect(JSON.parse(task.readRecord("quality/reviews/attempts/a/attempt.json"))).toEqual(attempt);

@@ -12,7 +12,7 @@
     "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
     "snapshot_tree": { "type": "string", "minLength": 1 },
     "kind": { "enum": ["test", "review", "acceptance_criterion", "confirmation"] },
-    "status": { "enum": ["passed", "failed", "unavailable", "missing"] },
+    "status": { "enum": ["passed", "failed", "unavailable", "missing", "recorded"] },
     "subject": { "type": "string", "minLength": 1 },
     "evidence": {
       "type": "array",
@@ -29,5 +29,16 @@
       }
     },
     "recorded_at": { "type": "string", "format": "date-time" }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "recorded" } }
+      },
+      "then": {
+        "properties": { "kind": { "const": "review" } }
+      }
+    }
+  ]
 }

@@ -17,8 +17,8 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 不读取上一轮结果，也不生成增量材料或增量审查范围。
 
 缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 下
-`quality/reviews/attempts/*` 的不可变质量事实保留；它没有语义 verdict，也不能写成
-“审查通过”。补齐后可在同一 track 重新调用，产生新的质量事实。direction/detail
+`quality/reviews/attempts/*` 的不可变质量事实保留；它没有 findings，也不能写成
+“没有问题”。补齐后可在同一 track 重新调用，产生新的质量事实。direction/detail
 结果必须绑定当前材料与冻结快照；direction 只有在 Round 2 完成后才能记录，detail 只有在
 Round 3、完整 grill 和 decision draft 完成后才能记录，不能互相替代或跳过中间步骤。
 
@@ -56,12 +56,13 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 - grill 结果是否记录 CONTEXT changed/no-change、ADR created/not-needed 的三项判断、冲突处理、文件引用和四项退出检查。
 - 方案是否忠实于批准方向，关键前提和边界是否完整，验收是否可判断，是否未经确认扩大范围。
 
-detail 必须加载 `simplicity-guard` 只读 lens，逐项执行 P0-P3：优先删除、
-直接复用或最小改造；标出 scope creep、重复已有能力，以及没有故障证据或
-硬约束的长期能力。实质扩大实现或维护面时必须 `revise_required`。
+detail 的同一 wh-review packet 必须包含 `simplicity-guard` 只读 advisory lens，逐项执行
+P0-P3：优先删除、直接复用或最小改造；标出 scope creep、重复已有能力，以及没有故障
+证据或硬约束的长期能力。lens 不单独调用、不生成事实或 receipt；发现实质扩大实现或
+维护面的内容时，在同一 findings 中报告具体问题，由 Stage Agent 处置。
 
-direction 是不含候选方案的盲审，禁止加载 `simplicity-guard`，避免从不存在的
-方案中推断或裁剪内容。
+direction 是不含候选方案的盲审，不包含 `simplicity-guard` 或其他依赖候选方案的 lens，
+避免从不存在的方案中推断或裁剪内容。
 
 `context_map` 和 `evidence_map` 只是可选优化。提供时，map-level state 必须是
 `complete|unknown`，并包含简短 summary 和逐项 entries；每个 entry 包含 id、subject、
@@ -73,10 +74,9 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 
 ## 输出
 
-输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
 
-`pass` 和 `revise_required` 都只是异源 provider 的质量事实，不是 WorkflowHub
-stage 的通过/不通过。make-decision 使用 `single_round`：初次语义结果后不再调用
-provider 追求 `pass`；finding 处理和最终快照变化属于业务材料变更。已有 `pass`
-材料变化后的新 attempt 仍完整交付当前材料；旧 verdict 不被改写，也不生成
-resolution action。
+findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
+通过/不通过。make-decision 使用 `single_round`：初次 findings 结果后不再调用 provider
+追求空 findings；finding 处理和最终快照变化属于业务材料变更。材料变化后的新 attempt
+仍完整交付当前材料；旧 findings 不被改写，也不生成独立 resolution action。
