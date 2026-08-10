@@ -65,7 +65,7 @@ The public-behavior candidate fixture was regenerated from the final tree after 
 - No new Runner, TaskHandle, receipt replacement, snapshot lineage, bridge, review lock, successor/recovery/rebind, second executor, or public command was introduced.
 - Phase review was retained as the requested quality/handoff step without entering build-plan as Grill or becoming a workflow gate.
 - Historical reports and retained facts remain read-only; no historical bytes were overwritten.
-- Main and Multica were not modified. The only worktree changes are on the independent recovery branch; the pre-existing main untracked capture directory was preserved.
+- No command in this recovery changed main or Multica. Final readback shows main currently has five pre-existing working-tree modifications (`core/task-close.mjs`, `runtime/task/task-handle.mjs`, `runtime/task/task-kernel-implementation.mjs`, `skills/wh-review/scripts/review-materials.mjs`, and `tests/contract/review-materials-contract.test.mjs`) plus the pre-existing untracked `runtime/review/capture-UVzapU/`; their hashes differ from the recovery tree. Provenance of those concurrent main edits is not inferred; they were preserved untouched. The recovery branch remains isolated and clean.
 - No provider/model/daemon configuration was changed. No push, merge, or Multica synchronization was performed.
 
 ## Acceptance boundary
