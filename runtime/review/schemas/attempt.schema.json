@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review attempt",
   "type": "object",
-  "required": ["version", "attempt_id", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "lineage", "provider_attempts", "terminal_status", "error"],
+  "required": ["version", "attempt_id", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "provider_attempts", "terminal_status", "error"],
           "properties": {
     "version": { "const": "wh-review-attempt.v1" },
     "attempt_id": { "type": "string", "minLength": 1 },
@@ -21,40 +21,31 @@
         "target_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
         "base_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
         "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
+        "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "phase_commit": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["committed", "commit_oid", "parent_commit", "parent_tree", "commit_tree", "candidate_tree", "tree_matches_candidate"],
+              "properties": {
+                "committed": { "type": "boolean" },
+                "commit_oid": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40,64}$" },
+                "parent_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+                "parent_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+                "commit_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+                "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+                "tree_matches_candidate": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
       },
       "additionalProperties": false
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "lineage": {
-      "type": "object",
-      "required": ["request_id", "prompt_hash", "round", "prior_attempt_refs", "prior_runtime_ids", "correction_ref", "dispatch_sequence"],
-      "properties": {
-        "request_id": { "type": "string", "minLength": 1 },
-        "prompt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "round": { "enum": ["initial", "incremental", "closure", "full", "legacy"] },
-        "prior_attempt_refs": { "type": "array", "items": { "type": "string", "pattern": "^(?:quality/reviews|reviews)/attempts/[A-Za-z0-9._-]+/attempt\\.json$" } },
-        "prior_runtime_ids": { "type": "object", "additionalProperties": { "type": ["string", "null"] } },
-        "correction_ref": { "type": ["string", "null"], "pattern": "^(?:quality/reviews|reviews)/attempts/[A-Za-z0-9._-]+/attempt\\.json$" },
-        "dispatch_sequence": { "type": "integer", "minimum": 0 }
-      },
-      "additionalProperties": false
-    },
-    "classification_manifest": {
-      "type": "object", "required": ["version", "entries"],
-      "properties": {
-        "version": { "const": "wh-review-classification-manifest.v1" },
-        "entries": { "type": "array", "items": {
-          "type": "object", "required": ["identity", "category", "sha256"],
-          "properties": {
-            "identity": { "type": "string", "minLength": 1 },
-            "category": { "type": "string", "minLength": 1 },
-            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-          }, "additionalProperties": false
-        } }
-      }, "additionalProperties": false
-    },
     "review_policy": {
       "type": "object",
       "required": ["source", "mode", "minimum_heterologous", "requested_profiles", "eligible_profiles", "same_source_exclusions", "effective_profiles"],
@@ -80,7 +71,6 @@
         },
         "eligible_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "same_source_exclusions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "round": { "enum": ["initial", "incremental", "closure", "full", "legacy"] },
         "effective_profiles": {
           "type": "array",
           "items": {
@@ -194,6 +184,23 @@
             ]
           },
           "output_ref": { "type": ["string", "null"] },
+          "raw_output_ref": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["version", "runtime_id", "provider", "stdout_sha256", "stderr_sha256"],
+                "properties": {
+                  "version": { "const": "broker-output-ref.v1" },
+                  "runtime_id": { "type": "string", "minLength": 1 },
+                  "provider": { "type": "string", "minLength": 1 },
+                  "stdout_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                  "stderr_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
           "error": {
             "oneOf": [
               { "type": "null" },

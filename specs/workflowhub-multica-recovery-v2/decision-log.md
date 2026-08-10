@@ -120,3 +120,11 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **结论**：无 blocking；四材料、文件边界和 Phase A 方向一致。非阻断项为：任务映射遗漏 T001；T002/T003 没有显式记录具体测试技能；FR-10/AC-11 未对称写出 parent；T002/T003 执行事实与当前 GREEN 结果存在时间差；后续 packet 必须提供完整 diff。
 - **修正**：映射补入 T001；Phase A 明确以 `backend-testing` 作为唯一具体测试技能并保留材料/文档 N/A 边界；FR-10/AC-11 补充提交 OID、直接 parent、`commit_oid^{tree}`；T002 未捕获的历史 RED 不回溯伪造，T003 只记录实际 GREEN；重新生成完整 diff packet 后再接受 Phase A 的最终 review 结论。
 - **边界**：上述修正只更新当前四材料和审查事实，不新增 receipt、snapshot、lock、bridge、ledger 或 public route；首轮 review 的原始输出和 hashes 保留，不覆盖为新的 verdict。
+
+## 2026-08-10 Phase B 实施与 GREEN 事实（异源审查待完成）
+
+- **范围**：修复 Phase build-code review subject 的宿主绑定，避免 caller、可变任务卡路径或旧 snapshot 改变审查对象。
+- **实现**：`review-runner` 只消费 `phase_id`；`review-source` 对已提交 Phase 以直接 parent tree 到 candidate tree 派生 changed files，并记录 commit OID、parent、parent/commit/candidate tree 与一致性；未提交 Phase 记录 `commit_oid=null`；树变化使旧结果不可复用。schema、合同和 Phase 回归已同步。
+- **测试事实**：T004 在实现前真实 RED（6 中 3 项新增断言失败，exit=1，无 setup 错误）；T005 Phase 合同 GREEN 为 1 file / 7 tests passed，review-runner、schema、integration subject、review-layering 聚焦回归另为 36 tests passed。具体测试技能为 `backend-testing`；测试和 review 仍是质量事实，不是推进 gate。
+- **当前状态**：Phase B 代码与测试尚未取得最终独立 `opencode/v4flash` 结论；在审查完成前不标记 Phase B 完成，不宣称整体修复完成。
+- **宪法边界**：没有新增 receipt、snapshot lineage、review lock、managed request-id、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。

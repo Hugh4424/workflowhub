@@ -52,8 +52,8 @@
 - **证据**：evidence_path=`quality/reviews/T004-phase-subject-red.json`; record=`失败断言、绑定字段、exit`。
 - **Trace**：D-Phase-subject → FR-10 → AC-11/AC-12
 - **STOP**：需要 local review lock、managed request-id、provider Git 访问或自动 commit 时停止。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：在 Phase B 实现前运行同一命令，6 tests 总数中原有 3 项通过、3 项新增 subject-binding 断言失败，exit=1；失败信号分别为 committed changed files 为空、caller `phasePaths` 未被拒绝、commit tree mismatch 未触发失效。无 setup/命令错误，RED 事实未被覆盖。
 
 ## T005 — GREEN：Phase review subject 与实现提交事实
 
@@ -65,8 +65,8 @@
 - **证据**：evidence_path=`quality/reviews/T005-phase-subject-green.json`; record=`phase_id、baseline、changed files、candidate tree、commit_oid、parent、commit tree、review result/unavailable`。
 - **Trace**：D-Phase-subject → FR-10 → AC-11/AC-12
 - **STOP**：发现 review 仍由 caller 路径/累计 diff/旧 snapshot 选择，或需要新 control plane 时停止。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`in_progress`
+- **执行事实**：已实现 host-derived Phase subject：`review-runner` 不再读取 `tasks.md.execution_file_paths`，`review-source` 从 Phase 直接 parent/candidate tree 派生 changed files，并记录 commit/parent/tree；无提交记录 `commit_oid=null`，树不一致由 `verifyFinalSubject` 识别。Phase 合同 GREEN 命令 exit=0，1 file / 7 tests passed；review-runner、schema、integration subject、review-layering 聚焦回归共 36 tests passed。待 Phase B 独立异源 review 后收尾。
 
 ## T006 — RED：receipt、snapshot、历史 completion non-gate
 
