@@ -113,3 +113,10 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **发现**：初版计划的 RED/GREEN 卡存在跨行为配对歧义；使用了通配 exact files；T006 错误引用不存在的 “T1 inventory”；FR-5/AC-6 owner 不够明确；blueprint 尚未接入 build-plan；Phase review 的 commit OID、parent、`commit_oid^{tree}`、candidate tree 和无 commit 记录格式不完整；最终 `npm test` 不能单独证明 verify、逐 AC、宪法和隔离。
 - **处置**：将计划收敛为 T001-T011；T002/T003、T004/T005、T006/T007、T008/T009 各自独立 RED→GREEN；改用逐文件清单；把 FR-5/AC-6 显式映射到 T002/T003；将 blueprint 接入 build-plan、保持 build-code 消费而不重复执行；补齐 Phase subject/提交树字段；将最终命令降为基础信号，另行要求逐 AC、verify、异源 review、宪法和隔离证据；不新增第五份材料或控制面。
 - **当前状态**：设计审查的阻断项已修正；`npx markdownlint-cli2` 四材料 exit=0，Phase route 合同当前 GREEN 为 3 tests passed。T002 的历史 RED 未在本轮材料已被修改后重新伪造，后续执行事实必须如实记录。
+
+## 2026-08-10 Phase A 首轮异源审查与修正事实
+
+- **审查来源**：`opencode/v4flash`，3rd-review runtime `2f529c00-2c5b-4b00-a2eb-a6306ce0964b`；附件 `file_only` 身份校验通过；首轮 packet 的 `changes.diff` 误为 commit stat，未包含 hunks，因此不能把它当作完整代码内容审查。
+- **结论**：无 blocking；四材料、文件边界和 Phase A 方向一致。非阻断项为：任务映射遗漏 T001；T002/T003 没有显式记录具体测试技能；FR-10/AC-11 未对称写出 parent；T002/T003 执行事实与当前 GREEN 结果存在时间差；后续 packet 必须提供完整 diff。
+- **修正**：映射补入 T001；Phase A 明确以 `backend-testing` 作为唯一具体测试技能并保留材料/文档 N/A 边界；FR-10/AC-11 补充提交 OID、直接 parent、`commit_oid^{tree}`；T002 未捕获的历史 RED 不回溯伪造，T003 只记录实际 GREEN；重新生成完整 diff packet 后再接受 Phase A 的最终 review 结论。
+- **边界**：上述修正只更新当前四材料和审查事实，不新增 receipt、snapshot、lock、bridge、ledger 或 public route；首轮 review 的原始输出和 hashes 保留，不覆盖为新的 verdict。

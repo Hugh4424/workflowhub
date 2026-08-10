@@ -44,7 +44,7 @@ wh-review 直接消费四材料、必要 diff/代码上下文和测试事实；m
 
 ### FR-10 Phase review subject
 
-Phase review 的 subject 只能由 WorkflowHub 根据 `phase_id`、实际变更文件、基线和候选树派生。caller 不得传入 review 文件路径、累计 diff、任意 commit 或旧 snapshot 来改变审查对象；若存在实现提交，必须记录提交与候选树绑定，树不一致则该 review 只能是 `unavailable`/`incomplete`，不能伪造 PASS。没有提交时，review 冻结当前候选树并如实记录无 commit，不为此创建 recovery/rebind/continuation 对象。
+Phase review 的 subject 只能由 WorkflowHub 根据 `phase_id`、实际变更文件、基线和候选树派生。caller 不得传入 review 文件路径、累计 diff、任意 commit 或旧 snapshot 来改变审查对象；若存在实现提交，必须记录提交 OID、直接 parent、`commit_oid^{tree}` 与候选树绑定，树不一致则该 review 只能是 `unavailable`/`incomplete`，不能伪造 PASS。没有提交时，review 冻结当前候选树并如实记录无 commit，不为此创建 recovery/rebind/continuation 对象。
 
 ## 验收条件
 
@@ -58,7 +58,7 @@ Phase review 的 subject 只能由 WorkflowHub 根据 `phase_id`、实际变更�
 - AC-8：27 个事故提交全部有完整 SHA、当前 consumer、处置 Phase 和验证 oracle。
 - AC-9：历史 report 字节不变，Multica 源码和配置 pre/post 状态一致。
 - AC-10：每个有行为代码变更的 Phase 都能从 `tasks.md` 找到 blueprint、route、一个具体测试技能、RED/GREEN 命令、oracle 和证据路径；无代码 Phase 不产生伪造测试。
-- AC-11：Phase review 只审实际 Phase 候选树；有独立授权提交时验证 `commit_oid^{tree}` 与候选树一致，树变化后旧 review 不得继续作为当前事实；无提交时明确记录 `commit unavailable`，不阻止同 task 修复。
+- AC-11：Phase review 只审实际 Phase 候选树；有独立授权提交时记录提交 OID、直接 parent，并验证 `commit_oid^{tree}` 与候选树一致，树变化后旧 review 不得继续作为当前事实；无提交时明确记录 `commit unavailable`，不阻止同 task 修复。
 - AC-12：`build-plan` 不调用 Grill、不要求 receipt/handoff/comment/quality PASS；`build-code` 执行实时 route 和一个具体测试技能；Phase review 只影响交接质量事实，不影响同 task 工作资格。
 
 ## 非目标

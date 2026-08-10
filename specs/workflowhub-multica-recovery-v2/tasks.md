@@ -21,22 +21,22 @@
 - **目标**：先证明当前工作流没有把 blueprint 接入 build-plan、没有把 FR-5/AC-6 的阶段归属写清楚，或错误把 blueprint 当作执行 gate。
 - **依赖**：T001
 - **精确文件**：`tests/contract/phase-quality-handoff.test.mjs`
-- **动作**：添加只针对 blueprint 依赖、build-plan 步骤顺序、Talk/Grill 不下沉、route/具体测试边界的失败合同；不改生产实现。
+- **动作**：添加只针对 blueprint 依赖、build-plan 步骤顺序、Talk/Grill 不下沉、route/具体测试边界的失败合同；本 Phase 按行为工作流合同选择 `backend-testing` 作为唯一具体测试技能；不改生产实现。
 - **验证**：role=RED; paired_task=T003; gate_cmd=`npx vitest run tests/contract/phase-quality-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`; expected_exit=`非零`; oracle=`ORACLE-PHASE-ROUTE`：目标断言因当前合同缺失而失败，不得因环境失败。
-- **证据**：evidence_path=`quality/tests/T002-phase-route-red.json`; record=`失败断言、exit、输出`。
+- **证据**：evidence_path=`quality/tests/T002-phase-route-red.json`; record=`失败断言、exit、输出、concrete_skill=backend-testing`。
 - **Trace**：D-Phase-quality → FR-5/FR-9 → AC-6/AC-10/AC-12
 - **STOP**：RED 因环境/命令损坏失败，或需要永久 blueprint ledger、receipt、gate、执行器时停止。
 - **状态**：`pending`
-- **执行事实**：N/A — not started
+- **执行事实**：未在实现前捕获 RED；不回溯伪造失败输出。测试合同已在 T003 实现后运行 GREEN，过程偏差保留为事实。
 
 ## T003 — GREEN：Phase blueprint 与 route 合同
 
 - **目标**：让 build-plan 先设计 blueprint，再 route；build-code 消费设计并直接选择一个适用具体测试技能；不执行 RED/GREEN，不调用 Grill。
 - **依赖**：T002
 - **精确文件**：`workflows/build-plan/SKILL.md`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-plan/steps.json`、`skills/testing-system-blueprint/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`workflows/build-code/steps.json`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`、`tests/contract/phase-quality-handoff.test.mjs`
-- **动作**：实现 T002 合同；把 blueprint 作为 build-plan advisory 输入并折叠到四材料；build-code 保持实时 route、一个具体 testing skill、文档 Phase N/A 例外；不新增 ledger/receipt/gate。
+- **动作**：实现 T002 合同；把 blueprint 作为 build-plan advisory 输入并折叠到四材料；build-code 保持实时 route、唯一具体测试技能 `backend-testing`（其他行为 Phase 仍按实际边界在 `backend-testing`、`frontend-testing`、`fullstack-slice-testing` 中单选）、文档 Phase N/A 例外；不新增 ledger/receipt/gate。
 - **验证**：role=GREEN; paired_task=T002; gate_cmd=`npx vitest run tests/contract/phase-quality-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`; expected_exit=`0`; oracle=`ORACLE-PHASE-ROUTE`：同一命令通过且保留 negative assertions。
-- **证据**：evidence_path=`quality/tests/T003-phase-route-green.json`; record=`实际文件、GREEN exit、skill dependency、步骤顺序、覆盖限制`。
+- **证据**：evidence_path=`quality/tests/T003-phase-route-green.json`; record=`实际文件、GREEN exit、concrete_skill=backend-testing、skill dependency、步骤顺序、覆盖限制`。
 - **Trace**：D-Phase-quality → FR-5/FR-9 → AC-6/AC-10/AC-12
 - **STOP**：route 依赖旧 snapshot/receipt 或需要多选具体测试技能作为 gate 时停止并回到 plan。
 - **状态**：`pending`
@@ -57,7 +57,7 @@
 
 ## T005 — GREEN：Phase review subject 与实现提交事实
 
-- **目标**：review 只审 host 从 `phase_id` 和真实 changed files 派生的候选树；若有独立授权的实现提交，记录 commit OID、parent 和 `commit_oid^{tree}`；树变化后旧 review 失效；无提交如实记录 unavailable。
+- **目标**：review 只审 host 从 `phase_id` 和真实 changed files 派生的候选树；若有独立授权的实现提交，记录 commit OID、直接 parent 和 `commit_oid^{tree}`；树变化后旧 review 失效；无提交如实记录 unavailable。
 - **依赖**：T004
 - **精确文件**：`skills/wh-review/SKILL.md`、`skills/wh-review/contracts/build-code.md`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/review-source.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`runtime/review/schemas/attempt.schema.json`、`runtime/review/schemas/result.schema.json`、`runtime/review/schemas/stage-materials.schema.json`、`runtime/review/stage-materials.json`、`workflows/build-code/diff-scanner.mjs`、`tests/contract/phase-quality-handoff.test.mjs`
 - **动作**：实现 T004 合同；caller 只传 `phase_id`；host 派生 subject；提交只包含 Phase 实现/必要测试且需独立授权；review 记录 frozen tree/commit tree，不提供 provider Git 或本地锁。
