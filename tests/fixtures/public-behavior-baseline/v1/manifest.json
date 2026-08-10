@@ -35,7 +35,7 @@
   },
   "candidate": {
     "path": "tests/fixtures/public-behavior-baseline/v1/candidate.json",
-    "sha256": "58247d7e59fdd3cd0de242bb3b46410b4f23558a5271f4cbf2f796efe842ff92"
+    "sha256": "6049467c2ce2520b78778dbffe31d6e3e5bb37e6342e9a284592942be61d8e0d"
   },
   "normalization": "ANSI, absolute paths, hashes, UUIDs, timestamps and durations are tokenized"
 }

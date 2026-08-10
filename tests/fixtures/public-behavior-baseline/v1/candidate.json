@@ -67,7 +67,7 @@
         "setup": [],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/f5c516a5-5c56-493b-a1bc-b6edf5e58c8e.json",
+          "identity/executions/74e7971a-3658-420c-b663-9cf55f1ce6b6.json",
           "index.json",
           "quality/verify.json",
           "task.json"
@@ -78,23 +78,23 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/f5c516a5-5c56-493b-a1bc-b6edf5e58c8e.json",
-            "sha256": "346230e4adc5d7d0294a423d907a958507d2b70c5ed53b7bf21572df349d43e0"
+            "ref": "identity/executions/74e7971a-3658-420c-b663-9cf55f1ce6b6.json",
+            "sha256": "cc651cb3a2c0508cfb92e4c5f84c6f7a6a7d33777b49912398c1a3f4ddbe2b09"
           },
           {
             "ref": "index.json",
-            "sha256": "d7804f16c6f05ea5d276d5408f918e215614355dad206eac019d44047846c40c"
+            "sha256": "2c8878da95da30f2b5303823aafe5d28cddfebd60beeeca5e2a125aa133717b3"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "3dea8449a8c7460dee6ef78ef9dd1da58766043a4949b8390621d89c5056b367"
+            "sha256": "e930f63046426ea0a5a92126b04d89ad0c608b6f1e1346d3e9c1b0676e494577"
           },
           {
             "ref": "task.json",
-            "sha256": "a03e764fb7893a98d40311f2f66e8e9cfef664328537566a28da50c419d81383"
+            "sha256": "fa96b83b7b0eacdfee5bb51fea6e071868897a9fee0df974813274890d9802d6"
           }
         ],
-        "write_set_content_hash": "07076beeb08d054563f0e824d70705263135d844607e4f934e66b703cab3cdc4",
+        "write_set_content_hash": "4dc6e113c2a3f39609954262092b09a9ad1f4b5c99c2d9da14930f597763a7eb",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "task.json"
@@ -107,12 +107,12 @@
           "json": {
             "stage": "make-decision",
             "task_id": "public-behavior-doctor-default",
-            "worktree_root": "/private/tmp/workflowhub-public-behavior-case-EMrhXV/repo-public-behavior-doctor-default",
-            "baseline_commit": "802535937b333ea844c956eae40570ce05c3dd53",
+            "worktree_root": "/private/tmp/workflowhub-public-behavior-case-MSnSf0/repo-public-behavior-doctor-default",
+            "baseline_commit": "32f1d415efa548ec914c2eca9b77a018c8c72305",
             "materials": "working"
           },
           "hashes": {
-            "raw_stdout_sha256": "6bbc2251a6865e6d1907feda678e31edf5fed21535652dc1d754df7391d1a92c",
+            "raw_stdout_sha256": "cf0559190bccd3e6d15dd05da6b20f514b5dc81a0c2f5ded2e04c5d240fb11e7",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "4f87e05cbfe4a84888d80cc161768c1a8f701cfc8745becc7dc1a19deeb1b4d0",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -133,7 +133,7 @@
         "setup": [],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/4a759702-0d5d-45ee-af29-1fe7540352fa.json",
+          "identity/executions/8e6bba31-303f-4a3d-8abc-b793cd97f4f9.json",
           "index.json",
           "quality/verify.json",
           "task.json"
@@ -144,23 +144,23 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/4a759702-0d5d-45ee-af29-1fe7540352fa.json",
-            "sha256": "eb8f6e83578f6fef92e97c0e4ee25ff877983cfa55af3a3dfb588739399fb61a"
+            "ref": "identity/executions/8e6bba31-303f-4a3d-8abc-b793cd97f4f9.json",
+            "sha256": "54e0a63e3b32da0020f734d35cd7c44caeeac357698af9eff27484f0a4c89544"
           },
           {
             "ref": "index.json",
-            "sha256": "e70522386539e245a28811f2a78d8be255a5753f830e1d4d65a5da9c71557fcf"
+            "sha256": "047b3d7908c34d0cf039ba62867861ec3cf1a8163965c9b0e4f43c128f7fee9b"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "d7a29b477992bbcbad23fc498bdd6699084ace51e8fb7b6eaa592e02fc6d0d9e"
+            "sha256": "b1e85cd3d51bbe2b68faed0df4bbe9ece38f0e953dfe845710a4304f6f955645"
           },
           {
             "ref": "task.json",
-            "sha256": "4bf66faf629a4c8936feeaa594c2fb8cd47002e5c0f4664223e44134d5920886"
+            "sha256": "a55b88180b6a38293e860cfb86fc90b6142f6d0a2c36be54eabe34312cb11d85"
           }
         ],
-        "write_set_content_hash": "203a78f8d2e0243210be2c51f198167da73c6b898687becfc91d3237b299eb1e",
+        "write_set_content_hash": "8156d9310dcee922213ad7c434e87888c048f38611206e6931319b359e626d43",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "task.json"
@@ -173,12 +173,12 @@
           "json": {
             "stage": "make-decision",
             "task_id": "public-behavior-doctor-alternate",
-            "worktree_root": "/private/tmp/workflowhub-public-behavior-case-yPlJD0/repo-public-behavior-doctor-alternate",
-            "baseline_commit": "c676c66e15d4f946be6878fd0274ed6a00cda501",
+            "worktree_root": "/private/tmp/workflowhub-public-behavior-case-VoxrAI/repo-public-behavior-doctor-alternate",
+            "baseline_commit": "47d322a47c4b4e94bf12e8a4116720cd03877aad",
             "materials": "working"
           },
           "hashes": {
-            "raw_stdout_sha256": "5f285040e580f12acde3fb1dd29c911fbc5a5f23f99838a07982dda40b6d2533",
+            "raw_stdout_sha256": "72aa96e1f7d45043d5337d7f3c3e366639e67ab8a35120c5bc7cde45042c8dbb",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "848ecf8e4de8c6ce12e25e0ac0e4ca450cec16487f05c422bed99e7deb260146",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -215,25 +215,25 @@
           },
           {
             "ref": "index.json",
-            "sha256": "2434c10a27f9748aec9679d4872a87b8498a03153401e3f497bebce1d940a1e8"
+            "sha256": "3766e367f00bcd5c086380569b9805ad90c22cce6686f37b6c42023555bc49be"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "20c9f9921ea3fd38f8efcb9c2545e95e043ad7d7a4884a658233bf20ed3c5b6f"
+            "sha256": "16351369399cb32155fc78a34d4cd9cfd436df37c72706238e865f0941c64678"
           },
           {
             "ref": "task.json",
-            "sha256": "f44bedd1c1cc74f6064bc3900a1b9fde64fcd88b8fa30e6764c1f9430a8d621c"
+            "sha256": "41b859385334ed90666f115091b340e9f05c18e5eb9bcb12a5ea892aea8fd6c2"
           }
         ],
-        "write_set_content_hash": "15081333a912639ae2de658d027333b663a5bfcdf408a010dc448491245bd009",
+        "write_set_content_hash": "8f4356a0d6b67a2ae0f7001a5105349db84ef64820c3a351d25b732300174841",
         "public_write_set": [
           "task.json"
         ],
         "result": {
           "status": 0,
           "signal": null,
-          "stdout": "{\n  \"stage\": \"make-decision\",\n  \"work_status\": \"ready\",\n  \"work_authority\": \"current-four-materials-and-plan-tasks\",\n  \"readiness_source\": \"current-material-presence\",\n  \"required_materials\": [],\n  \"missing_materials\": [],\n  \"quality_status\": \"in_progress\",\n  \"quality_missing\": [\n    \"decision_coverage\",\n    \"scope\",\n    \"non_goals\",\n    \"risks\",\n    \"talk_clarify\",\n    \"research\",\n    \"independent_review\",\n    \"human_confirmation\"\n  ],\n  \"quality_fact_refs\": [],\n  \"quality_predicates\": {\n    \"decision_coverage\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"scope\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"non_goals\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"risks\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"talk_clarify\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"research\": {\n      \"kind\": \"test\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"independent_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"human_confirmation\": {\n      \"kind\": \"confirmation\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    }\n  }\n}\n",
+          "stdout": "{\n  \"stage\": \"make-decision\",\n  \"work_status\": \"ready\",\n  \"work_authority\": \"current-four-materials-and-plan-tasks\",\n  \"readiness_source\": \"current-material-presence\",\n  \"required_materials\": [],\n  \"missing_materials\": [],\n  \"quality_status\": \"in_progress\",\n  \"quality_missing\": [\n    \"scope\",\n    \"non_goals\",\n    \"risks\",\n    \"talk_clarify\",\n    \"direction_review\",\n    \"detail_review\",\n    \"human_confirmation\"\n  ],\n  \"quality_fact_refs\": [],\n  \"quality_predicates\": {\n    \"scope\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"non_goals\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"risks\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"talk_clarify\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"direction_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"detail_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"human_confirmation\": {\n      \"kind\": \"confirmation\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    }\n  }\n}\n",
           "stderr": "",
           "json": {
             "stage": "make-decision",
@@ -244,22 +244,16 @@
             "missing_materials": [],
             "quality_status": "in_progress",
             "quality_missing": [
-              "decision_coverage",
               "scope",
               "non_goals",
               "risks",
               "talk_clarify",
-              "research",
-              "independent_review",
+              "direction_review",
+              "detail_review",
               "human_confirmation"
             ],
             "quality_fact_refs": [],
             "quality_predicates": {
-              "decision_coverage": {
-                "kind": "acceptance_criterion",
-                "status": "missing",
-                "fact_ref": null
-              },
               "scope": {
                 "kind": "acceptance_criterion",
                 "status": "missing",
@@ -280,12 +274,12 @@
                 "status": "missing",
                 "fact_ref": null
               },
-              "research": {
-                "kind": "test",
+              "direction_review": {
+                "kind": "review",
                 "status": "missing",
                 "fact_ref": null
               },
-              "independent_review": {
+              "detail_review": {
                 "kind": "review",
                 "status": "missing",
                 "fact_ref": null
@@ -298,9 +292,9 @@
             }
           },
           "hashes": {
-            "raw_stdout_sha256": "0cac057781e0f68abf06de05935eabab997645e05aedbaa84efb895dcd2a1ae3",
+            "raw_stdout_sha256": "ee7e3fedd740d1a83bfe7e7e90b22b4ff0d5d1e835048a9385fc636a22f47026",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "normalized_stdout_sha256": "0cac057781e0f68abf06de05935eabab997645e05aedbaa84efb895dcd2a1ae3",
+            "normalized_stdout_sha256": "ee7e3fedd740d1a83bfe7e7e90b22b4ff0d5d1e835048a9385fc636a22f47026",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
         }
@@ -331,25 +325,25 @@
           },
           {
             "ref": "index.json",
-            "sha256": "ebb5a303c8590383795adbc67a971fdc27c293a64623cf074e1a49ed587c99c5"
+            "sha256": "8c372207d1234b6f354432a35dd3e638da93a7f63b2b7078358d0dfebb454323"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "602de5bb46be24590c08858d17f18de36f9c8f85f632b458d27040104c25f22f"
+            "sha256": "5949483cc6788ee9b531abf56b9fb78fc1cc36c9efb3e5c8c5bdfa5a7d19bd6f"
           },
           {
             "ref": "task.json",
-            "sha256": "7fa34af1151aeff339bc56986083c203328234bcaed5498c39351091f6c8b303"
+            "sha256": "ced3500ffe66b1db70bdcf3382ace9c0c6e8d4888f6ee518e7b1366ebc236c3c"
           }
         ],
-        "write_set_content_hash": "0993861d615e1f851d7553b08ec654561ac2afa4d130710a578af60bf54d7ce7",
+        "write_set_content_hash": "5be11df22a935bedce8da82fe00ef421ab23a45d2160c07e2a528256fb74cf25",
         "public_write_set": [
           "task.json"
         ],
         "result": {
           "status": 0,
           "signal": null,
-          "stdout": "{\n  \"stage\": \"make-decision\",\n  \"work_status\": \"ready\",\n  \"work_authority\": \"current-four-materials-and-plan-tasks\",\n  \"readiness_source\": \"current-material-presence\",\n  \"required_materials\": [],\n  \"missing_materials\": [],\n  \"quality_status\": \"in_progress\",\n  \"quality_missing\": [\n    \"decision_coverage\",\n    \"scope\",\n    \"non_goals\",\n    \"risks\",\n    \"talk_clarify\",\n    \"research\",\n    \"independent_review\",\n    \"human_confirmation\"\n  ],\n  \"quality_fact_refs\": [],\n  \"quality_predicates\": {\n    \"decision_coverage\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"scope\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"non_goals\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"risks\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"talk_clarify\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"research\": {\n      \"kind\": \"test\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"independent_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"human_confirmation\": {\n      \"kind\": \"confirmation\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    }\n  }\n}\n",
+          "stdout": "{\n  \"stage\": \"make-decision\",\n  \"work_status\": \"ready\",\n  \"work_authority\": \"current-four-materials-and-plan-tasks\",\n  \"readiness_source\": \"current-material-presence\",\n  \"required_materials\": [],\n  \"missing_materials\": [],\n  \"quality_status\": \"in_progress\",\n  \"quality_missing\": [\n    \"scope\",\n    \"non_goals\",\n    \"risks\",\n    \"talk_clarify\",\n    \"direction_review\",\n    \"detail_review\",\n    \"human_confirmation\"\n  ],\n  \"quality_fact_refs\": [],\n  \"quality_predicates\": {\n    \"scope\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"non_goals\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"risks\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"talk_clarify\": {\n      \"kind\": \"acceptance_criterion\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"direction_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"detail_review\": {\n      \"kind\": \"review\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    },\n    \"human_confirmation\": {\n      \"kind\": \"confirmation\",\n      \"status\": \"missing\",\n      \"fact_ref\": null\n    }\n  }\n}\n",
           "stderr": "",
           "json": {
             "stage": "make-decision",
@@ -360,22 +354,16 @@
             "missing_materials": [],
             "quality_status": "in_progress",
             "quality_missing": [
-              "decision_coverage",
               "scope",
               "non_goals",
               "risks",
               "talk_clarify",
-              "research",
-              "independent_review",
+              "direction_review",
+              "detail_review",
               "human_confirmation"
             ],
             "quality_fact_refs": [],
             "quality_predicates": {
-              "decision_coverage": {
-                "kind": "acceptance_criterion",
-                "status": "missing",
-                "fact_ref": null
-              },
               "scope": {
                 "kind": "acceptance_criterion",
                 "status": "missing",
@@ -396,12 +384,12 @@
                 "status": "missing",
                 "fact_ref": null
               },
-              "research": {
-                "kind": "test",
+              "direction_review": {
+                "kind": "review",
                 "status": "missing",
                 "fact_ref": null
               },
-              "independent_review": {
+              "detail_review": {
                 "kind": "review",
                 "status": "missing",
                 "fact_ref": null
@@ -414,9 +402,9 @@
             }
           },
           "hashes": {
-            "raw_stdout_sha256": "0cac057781e0f68abf06de05935eabab997645e05aedbaa84efb895dcd2a1ae3",
+            "raw_stdout_sha256": "ee7e3fedd740d1a83bfe7e7e90b22b4ff0d5d1e835048a9385fc636a22f47026",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "normalized_stdout_sha256": "0cac057781e0f68abf06de05935eabab997645e05aedbaa84efb895dcd2a1ae3",
+            "normalized_stdout_sha256": "ee7e3fedd740d1a83bfe7e7e90b22b4ff0d5d1e835048a9385fc636a22f47026",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
         }
@@ -449,12 +437,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-run-default",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-ReyVy2/repo-public-behavior-run-default",
-              "baseline_commit": "ebbd228e032997e496653ef3e2f4f1103cf34b90",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-6TY8HE/repo-public-behavior-run-default",
+              "baseline_commit": "6e71cc1a8fc3286b466a257277a24e35937f0029",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "9675355b73d6f0e9eb010b4340e880d6272e0e0efb8908d83ce2ed450ea5a6cc",
+              "raw_stdout_sha256": "080132b43e45a11099ab83b8c7e33227f1efe9e18a8a69878bec822aa5dd085b",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "f20959bd9f378b18ce7d9aa8e6f88bcaa5e4e3b62e58e2b37485cbb83d4b9ea6",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -477,12 +465,12 @@
               "command": "true",
               "command_hash": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
               "exit_code": 0,
-              "snapshot_head": "ebbd228e032997e496653ef3e2f4f1103cf34b90",
+              "snapshot_head": "6e71cc1a8fc3286b466a257277a24e35937f0029",
               "snapshot_tree": "50cdd307360d30a7341d93a37c9fa4c0b48bb6f9",
-              "snapshot_commit": "fa2e6254a65c5aff29bb82a4887ce788eb4a70ee",
-              "source_digest": "0874a150019be5272fdf4124e012c70dbfee8aad95e075ab298b41191f6a934f",
-              "started_at": "2026-08-09T14:54:17.279Z",
-              "completed_at": "2026-08-09T14:54:17.377Z",
+              "snapshot_commit": "87a7914915c157b454989c3f2722567970a7609f",
+              "source_digest": "cfa75877dbdc343d6ca881c733276916187e2ad5cad0cbe74ce087c4b174f40e",
+              "started_at": "2026-08-10T02:18:03.674Z",
+              "completed_at": "2026-08-10T02:18:03.773Z",
               "output_ref": "quality/tests/output/baseline-run-default.output",
               "output_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
               "lease": {
@@ -491,10 +479,10 @@
                 "wait_ms": 10000
               },
               "receipt_ref": "quality/tests/baseline-run-default.json",
-              "receipt_hash": "16687731ee6f02bd4f04fdedd47cdd156aa0729d7d906a574a3a83b7d9b1e611"
+              "receipt_hash": "54005202de3f8c5c7d3228be127ee74386ddbde66ccdda0e1f8118942e58d181"
             },
             "hashes": {
-              "raw_stdout_sha256": "f752f68420cfb23c672fd86b6e8ec91f74994d136c2fba7a3a901a0ae93e5c20",
+              "raw_stdout_sha256": "f5f0598de2dda7ef6388e2e8ba73e59c470b4e9ea127b8ffe845fd5bc5d5d34e",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "d621d3b70233b8e655f593deb05b3212c8ecfb2aa487f32128040698ce57adb6",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -502,22 +490,19 @@
           }
         ],
         "write_set": [
-          "evidence/implementation-496b246e170356ebc7545dc7c34fcd9207e63653fdb5851a9d6d19b5e54f1c09.diff",
           "facts.jsonl",
-          "identity/executions/a47b737e-3a19-4a4b-acc3-7e221b2a6664.json",
-          "identity/executions/c9608113-4900-418e-bc08-a6a691de011a.json",
-          "identity/executions/f95cc548-ec4a-4332-9b11-e51e89001e85.json",
+          "identity/executions/55f1e27a-a14d-4575-85e7-40b14135d37e.json",
+          "identity/executions/77ad80cd-7005-46ab-81e1-f383a57ad981.json",
+          "identity/executions/c49ea036-6399-4408-9e42-82b6e17b42c2.json",
           "index.json",
           "quality/evidence/acceptance/build-code/acceptance_criteria-f6254612340de132b69c2375ddae0ec69989e264fae5145a401ad029ababcfdc.json",
-          "quality/evidence/acceptance/build-code/tasks_complete-722c86ad043c61cd30418f5dd4ddc47a0b087e6b33d3e222a8d267b370bf2d7d.json",
+          "quality/evidence/implementation/02c635342c5477180502f38d69f2ae5e260451acdb2870ab3ec0143e93d94184.diff",
           "quality/evidence/implementation.json",
           "quality/evidence/stage-quality/build-code/acceptance_criteria-11278f00b7cf5fdec24491e5bd170f671eeb76094e1ac0a4a9756a43213dd84d.json",
-          "quality/evidence/stage-quality/build-code/tasks_complete-a593f7b24943a3e7bb53fca886f7407769ecc2fb4fd11728df18f5a457c66651.json",
           "quality/evidence/stage-quality-missing/build-code/integration_review-7aa606e5be02d7552880ddf83235dd1c2b6248f525ac9e7b925d32404cc2c603.json",
-          "quality/facts/35aa74fc23649bde92f84c823f7c7decc947fe3d9693a8632281d640598dbcf4.json",
           "quality/facts/a59d44927499019d30c20e3632e49bf71dd1d1627a0fdc9aebaa09e31994c275.json",
           "quality/facts/adf586e072c99e1f986890c3b1b8ccb2317988461e308e4bd999a9587adab2de.json",
-          "quality/facts/c6d0d27fc738bc70314875aa13d3bcbf493e7e2b40bbe527475b92f04d123426.json",
+          "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json",
           "quality/tests/baseline-run-default.json",
           "quality/tests/output/baseline-run-default.output",
           "quality/verify.json",
@@ -525,72 +510,60 @@
         ],
         "write_set_content": [
           {
-            "ref": "evidence/implementation-496b246e170356ebc7545dc7c34fcd9207e63653fdb5851a9d6d19b5e54f1c09.diff",
-            "sha256": "496b246e170356ebc7545dc7c34fcd9207e63653fdb5851a9d6d19b5e54f1c09"
-          },
-          {
             "ref": "facts.jsonl",
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/a47b737e-3a19-4a4b-acc3-7e221b2a6664.json",
-            "sha256": "49c5e54d48e61e110b06559d27dfca52850241eebe3154474fa585d046165bab"
+            "ref": "identity/executions/55f1e27a-a14d-4575-85e7-40b14135d37e.json",
+            "sha256": "cbc1c27a52adf23a9379c4065a005ab4553a219df1bbff23da4a2c992738ce29"
           },
           {
-            "ref": "identity/executions/c9608113-4900-418e-bc08-a6a691de011a.json",
-            "sha256": "461ee2de425ef84bb084ccbff51444f95d028af9441fc65254cc845a1b8d7c40"
+            "ref": "identity/executions/77ad80cd-7005-46ab-81e1-f383a57ad981.json",
+            "sha256": "7ccf6599f48dedf24d7be4eae17bbdc67de75c2c1ba32ebdff0dec15918dc52a"
           },
           {
-            "ref": "identity/executions/f95cc548-ec4a-4332-9b11-e51e89001e85.json",
-            "sha256": "aa1c42fdf3673a97df78869d6090a619f2d64046aa0aad8c858cdccc86b05c8a"
+            "ref": "identity/executions/c49ea036-6399-4408-9e42-82b6e17b42c2.json",
+            "sha256": "c55d23b5ed0782141b75058cc7444f21c61253391de2ee232f39373c3f114029"
           },
           {
             "ref": "index.json",
-            "sha256": "1946062cefa6c0eff6039c5a0d49dce481df808566ccb558ed0b1f22252e97b3"
+            "sha256": "dad2187f5e564f98f5dcae6c74923607a1efb13a1a32064302f862e42a5ef279"
           },
           {
             "ref": "quality/evidence/acceptance/build-code/acceptance_criteria-f6254612340de132b69c2375ddae0ec69989e264fae5145a401ad029ababcfdc.json",
             "sha256": "f6254612340de132b69c2375ddae0ec69989e264fae5145a401ad029ababcfdc"
           },
           {
-            "ref": "quality/evidence/acceptance/build-code/tasks_complete-722c86ad043c61cd30418f5dd4ddc47a0b087e6b33d3e222a8d267b370bf2d7d.json",
-            "sha256": "722c86ad043c61cd30418f5dd4ddc47a0b087e6b33d3e222a8d267b370bf2d7d"
+            "ref": "quality/evidence/implementation/02c635342c5477180502f38d69f2ae5e260451acdb2870ab3ec0143e93d94184.diff",
+            "sha256": "02c635342c5477180502f38d69f2ae5e260451acdb2870ab3ec0143e93d94184"
           },
           {
             "ref": "quality/evidence/implementation.json",
-            "sha256": "8281cbcb9b46f505fc5102c9a423370f4a675dbdc8dc843ff42c0b2085583a0d"
+            "sha256": "2c1315013579dfa72b6de19ea6c66b463cc30f62a8533665a0c51cf7572390fa"
           },
           {
             "ref": "quality/evidence/stage-quality/build-code/acceptance_criteria-11278f00b7cf5fdec24491e5bd170f671eeb76094e1ac0a4a9756a43213dd84d.json",
             "sha256": "11278f00b7cf5fdec24491e5bd170f671eeb76094e1ac0a4a9756a43213dd84d"
           },
           {
-            "ref": "quality/evidence/stage-quality/build-code/tasks_complete-a593f7b24943a3e7bb53fca886f7407769ecc2fb4fd11728df18f5a457c66651.json",
-            "sha256": "a593f7b24943a3e7bb53fca886f7407769ecc2fb4fd11728df18f5a457c66651"
-          },
-          {
             "ref": "quality/evidence/stage-quality-missing/build-code/integration_review-7aa606e5be02d7552880ddf83235dd1c2b6248f525ac9e7b925d32404cc2c603.json",
             "sha256": "7aa606e5be02d7552880ddf83235dd1c2b6248f525ac9e7b925d32404cc2c603"
           },
           {
-            "ref": "quality/facts/35aa74fc23649bde92f84c823f7c7decc947fe3d9693a8632281d640598dbcf4.json",
-            "sha256": "7ffb52d3a319a0ea50f952254c80acca15ede1f173ce46a8eeaf22d3408adc91"
-          },
-          {
             "ref": "quality/facts/a59d44927499019d30c20e3632e49bf71dd1d1627a0fdc9aebaa09e31994c275.json",
-            "sha256": "3d884f67f365438e686450f26a9b55984dcda46c15ddf4a44f1b6861d39ba6ad"
+            "sha256": "167ddcc9af5edb970840fda92387ef01a5b394e497409e9b1c1e3bb459229026"
           },
           {
             "ref": "quality/facts/adf586e072c99e1f986890c3b1b8ccb2317988461e308e4bd999a9587adab2de.json",
-            "sha256": "b32c35f3631b4fe71371aaabaa0e9733d07eb2de8e9119105ea9e4181748c960"
+            "sha256": "c7ecfc57960dbb0607fb4fc5a0112d6383fe701839a2d353979226004f7a85f5"
           },
           {
-            "ref": "quality/facts/c6d0d27fc738bc70314875aa13d3bcbf493e7e2b40bbe527475b92f04d123426.json",
-            "sha256": "576a9f111437b69bf245dc9414460a1cef3e2a13989978bd581873f696a4c451"
+            "ref": "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json",
+            "sha256": "e542c0cae74086003823c8376df80b9f539b7d7ae9856a52e494db5ca1957385"
           },
           {
             "ref": "quality/tests/baseline-run-default.json",
-            "sha256": "16687731ee6f02bd4f04fdedd47cdd156aa0729d7d906a574a3a83b7d9b1e611"
+            "sha256": "54005202de3f8c5c7d3228be127ee74386ddbde66ccdda0e1f8118942e58d181"
           },
           {
             "ref": "quality/tests/output/baseline-run-default.output",
@@ -598,26 +571,23 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "c5a2dcad3ab2b973d1ad606efc24ece3e6927fd121e16916262118e198769bd0"
+            "sha256": "00aa83c55d9508d6203787d4e0662cce8e03605648ee4ce999e4126112b30022"
           },
           {
             "ref": "task.json",
-            "sha256": "f99135ef1343530ab4070b757c9c2f818d1dd28ed4cd6ca7d5585813b328a1a8"
+            "sha256": "03ff4c24071eadaa328e0bea9af782d51cb46378b4640866a0ed3db43454d59e"
           }
         ],
-        "write_set_content_hash": "2d3d5a69d14161f3068faa6946657e864d35f9e579bb54cbe7097070b5f2e021",
+        "write_set_content_hash": "143fda4981c906fad19a209d66592eac1e29b69c5a2c363f95d4a55262446903",
         "public_write_set": [
-          "evidence/implementation-<SHA256>.diff",
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
           "quality/evidence/acceptance/build-code/acceptance_criteria-<SHA256>.json",
-          "quality/evidence/acceptance/build-code/tasks_complete-<SHA256>.json",
+          "quality/evidence/implementation/<SHA256>.diff",
           "quality/evidence/implementation.json",
           "quality/evidence/stage-quality/build-code/acceptance_criteria-<SHA256>.json",
-          "quality/evidence/stage-quality/build-code/tasks_complete-<SHA256>.json",
           "quality/evidence/stage-quality-missing/build-code/integration_review-<SHA256>.json",
-          "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
@@ -628,7 +598,7 @@
         "result": {
           "status": 0,
           "signal": null,
-          "stdout": "{\n  \"schema_version\": \"stage-runtime-result.vnext\",\n  \"stage\": \"build-code\",\n  \"status\": \"in_progress\",\n  \"work_status\": \"ready\",\n  \"readiness\": {\n    \"stage\": \"build-code\",\n    \"work_status\": \"ready\",\n    \"work_authority\": \"current-four-materials-and-plan-tasks\",\n    \"readiness_source\": \"current-material-presence\",\n    \"required_materials\": [\n      \"decision-log.md\",\n      \"spec.md\",\n      \"plan.md\",\n      \"tasks.md\"\n    ],\n    \"missing_materials\": []\n  },\n  \"completion\": {\n    \"stage\": \"build-code\",\n    \"status\": \"in_progress\",\n    \"predicates\": {\n      \"tasks_complete\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"risk_tests_fresh\": {\n        \"kind\": \"test\",\n        \"status\": \"satisfied\",\n        \"fact_ref\": \"quality/facts/<SHA256>.json\"\n      },\n      \"acceptance_criteria\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"integration_review\": {\n        \"kind\": \"review\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      }\n    },\n    \"fact_refs\": [\n      \"quality/facts/<SHA256>.json\"\n    ],\n    \"missing\": [\n      \"tasks_complete\",\n      \"acceptance_criteria\",\n      \"integration_review\"\n    ]\n  },\n  \"quality_status\": \"incomplete\",\n  \"quality_warnings\": [\n    \"tasks_complete:missing\",\n    \"acceptance_criteria:missing\",\n    \"integration_review:missing\",\n    \"audit unavailable/unverified/mismatch: audit summary ref must be non-empty\",\n    \"support:audit\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ],\n  \"quality_fact_refs\": [\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\"\n  ],\n  \"missing_items\": [\n    \"audit unavailable/unverified/mismatch: audit summary ref must be non-empty\",\n    \"support:audit\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ]\n}\n",
+          "stdout": "{\n  \"schema_version\": \"stage-runtime-result.vnext\",\n  \"stage\": \"build-code\",\n  \"status\": \"in_progress\",\n  \"work_status\": \"ready\",\n  \"readiness\": {\n    \"stage\": \"build-code\",\n    \"work_status\": \"ready\",\n    \"work_authority\": \"current-four-materials-and-plan-tasks\",\n    \"readiness_source\": \"current-material-presence\",\n    \"required_materials\": [\n      \"decision-log.md\",\n      \"spec.md\",\n      \"plan.md\",\n      \"tasks.md\"\n    ],\n    \"missing_materials\": []\n  },\n  \"completion\": {\n    \"stage\": \"build-code\",\n    \"status\": \"in_progress\",\n    \"predicates\": {\n      \"risk_tests_fresh\": {\n        \"kind\": \"test\",\n        \"status\": \"satisfied\",\n        \"fact_ref\": \"quality/facts/<SHA256>.json\"\n      },\n      \"acceptance_criteria\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"integration_review\": {\n        \"kind\": \"review\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      }\n    },\n    \"fact_refs\": [\n      \"quality/facts/<SHA256>.json\"\n    ],\n    \"missing\": [\n      \"acceptance_criteria\",\n      \"integration_review\"\n    ]\n  },\n  \"quality_status\": \"incomplete\",\n  \"quality_warnings\": [\n    \"acceptance_criteria:missing\",\n    \"integration_review:missing\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ],\n  \"quality_fact_refs\": [\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\"\n  ],\n  \"missing_items\": [\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ]\n}\n",
           "stderr": "",
           "json": {
             "schema_version": "stage-runtime-result.vnext",
@@ -652,15 +622,10 @@
               "stage": "build-code",
               "status": "in_progress",
               "predicates": {
-                "tasks_complete": {
-                  "kind": "acceptance_criterion",
-                  "status": "missing",
-                  "fact_ref": null
-                },
                 "risk_tests_fresh": {
                   "kind": "test",
                   "status": "satisfied",
-                  "fact_ref": "quality/facts/c6d0d27fc738bc70314875aa13d3bcbf493e7e2b40bbe527475b92f04d123426.json"
+                  "fact_ref": "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json"
                 },
                 "acceptance_criteria": {
                   "kind": "acceptance_criterion",
@@ -674,43 +639,36 @@
                 }
               },
               "fact_refs": [
-                "quality/facts/c6d0d27fc738bc70314875aa13d3bcbf493e7e2b40bbe527475b92f04d123426.json"
+                "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json"
               ],
               "missing": [
-                "tasks_complete",
                 "acceptance_criteria",
                 "integration_review"
               ]
             },
             "quality_status": "incomplete",
             "quality_warnings": [
-              "tasks_complete:missing",
               "acceptance_criteria:missing",
               "integration_review:missing",
-              "audit unavailable/unverified/mismatch: audit summary ref must be non-empty",
-              "support:audit",
               "build-code final review is missing an authenticated integration review fact",
               "acceptance coverage unavailable: build-code acceptance_coverage must be an object",
               "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace"
             ],
             "quality_fact_refs": [
-              "quality/facts/35aa74fc23649bde92f84c823f7c7decc947fe3d9693a8632281d640598dbcf4.json",
-              "quality/facts/c6d0d27fc738bc70314875aa13d3bcbf493e7e2b40bbe527475b92f04d123426.json",
+              "quality/facts/e701d46e560690c5090f587d051dfcd1264af4e08f07a6068d4242346f7be6ef.json",
               "quality/facts/adf586e072c99e1f986890c3b1b8ccb2317988461e308e4bd999a9587adab2de.json",
               "quality/facts/a59d44927499019d30c20e3632e49bf71dd1d1627a0fdc9aebaa09e31994c275.json"
             ],
             "missing_items": [
-              "audit unavailable/unverified/mismatch: audit summary ref must be non-empty",
-              "support:audit",
               "build-code final review is missing an authenticated integration review fact",
               "acceptance coverage unavailable: build-code acceptance_coverage must be an object",
               "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace"
             ]
           },
           "hashes": {
-            "raw_stdout_sha256": "5ef5f974921fb751402766eba468b9d7eb4fc636356e73cadc2e85e35d2608b7",
+            "raw_stdout_sha256": "d45cfd7126f6d95131d54cc4bc049a355d3b2e1ec55ddcd0e6ae5a665a06cf66",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "normalized_stdout_sha256": "2e48f3a55aad521eb8404bf9e2db9f9bc9eba22b91bead8a2d1516a999fd0634",
+            "normalized_stdout_sha256": "11d9692a6a4947a64bb42a0ba3dab1132642ad1faecf125b97cdf7b9f80625f3",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
         }
@@ -739,12 +697,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-run-alternate",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-d2qWAy/repo-public-behavior-run-alternate",
-              "baseline_commit": "a352597e437d102679fc54d55b138ebfb86a09e4",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-xti8nu/repo-public-behavior-run-alternate",
+              "baseline_commit": "742b9c6a8ab4f50012a96e553ea83b11528e0bc0",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "0f36b3dd15513714e4938fb56115ca915bbaffc431a83e3c4f283c6b427c02e7",
+              "raw_stdout_sha256": "ba100a5233677bd81bef3cda33dc9e31d2378c13c77bed707dc34d043fb2ce47",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "71f4aa206188849ad71bec30e81d44803f4ad04b91ae7b0e494485284f59d602",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -767,12 +725,12 @@
               "command": "true",
               "command_hash": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
               "exit_code": 0,
-              "snapshot_head": "a352597e437d102679fc54d55b138ebfb86a09e4",
+              "snapshot_head": "742b9c6a8ab4f50012a96e553ea83b11528e0bc0",
               "snapshot_tree": "8b6e8294495129a32d102f08703201c7273d0c1f",
-              "snapshot_commit": "bb905c738c92a23be3566b94e3da116b257dabcf",
-              "source_digest": "583ca5e3928d0af533abd345dba8bf5221a461d0a7c2933600e68dab054273a0",
-              "started_at": "2026-08-09T14:54:24.472Z",
-              "completed_at": "2026-08-09T14:54:24.583Z",
+              "snapshot_commit": "d0245e2902a91e084dee0b79d7665b4852e56226",
+              "source_digest": "26684a7e02e63f333fbaa667cd74143999c8296c042fe65290593170f971319a",
+              "started_at": "2026-08-10T02:18:10.178Z",
+              "completed_at": "2026-08-10T02:18:10.274Z",
               "output_ref": "quality/tests/output/baseline-run-alternate.output",
               "output_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
               "lease": {
@@ -781,10 +739,10 @@
                 "wait_ms": 10000
               },
               "receipt_ref": "quality/tests/baseline-run-alternate.json",
-              "receipt_hash": "a0802361e69d20808b34fe8615c7b63c277f2ad4ea2cdacf29b82b7c15caa8b2"
+              "receipt_hash": "968c8dea32236b44270e6aa50bf8e30b4e3256b0764fb215a831a1c626c6040e"
             },
             "hashes": {
-              "raw_stdout_sha256": "6c33c6d2ac055845aa7e68d70456577d7d50e0bd1d568fc97792475cc44f7d47",
+              "raw_stdout_sha256": "e92501f180ed93f018ac41b2fda8b0d458ccaba0fe3fbb07bf316d98f8027c8c",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "81162b0a7419a17aef44cc393e080d035e7076f51cdd28e191a90c127deaa180",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -792,21 +750,18 @@
           }
         ],
         "write_set": [
-          "evidence/implementation-d6940c9da11a565b5e22f8137241693fd778b0fae2e24c564168d0d407f07f2d.diff",
           "facts.jsonl",
-          "identity/executions/6215925c-ec5d-41d0-ae07-61d4d2e640af.json",
-          "identity/executions/8c922690-571a-4327-ba68-901ba30b732f.json",
-          "identity/executions/ef9fda2a-48c6-4fcb-b0ab-5374902d6aca.json",
+          "identity/executions/274616ca-3e87-4780-872e-007bd7493726.json",
+          "identity/executions/c18fd94f-dd47-4389-9986-3e8f4df2731a.json",
+          "identity/executions/f5945142-c729-416d-abf3-e6be9526b13d.json",
           "index.json",
           "quality/evidence/acceptance/build-code/acceptance_criteria-140ed68ecbd7cd601022a97a2160eb3aa82f3eb0bebcb40f993350ee0cfe2305.json",
-          "quality/evidence/acceptance/build-code/tasks_complete-196cf01da092292d162f8de1a1a592c932d187f06b367f3dc1b078fc52291816.json",
+          "quality/evidence/implementation/50bad60faf4f662a27056a9265f02eade0d3557e53ca6340140d9ee0247607ab.diff",
           "quality/evidence/implementation.json",
           "quality/evidence/stage-quality/build-code/acceptance_criteria-4aa702d32c8b76782fdfa6a5d86682a859d95db594f82b707bb2fd74472c295b.json",
-          "quality/evidence/stage-quality/build-code/tasks_complete-3a424b5ec6df145487bce8e260a782068b2e434a2d64372f73bff670b4efd5c4.json",
           "quality/evidence/stage-quality-missing/build-code/integration_review-d4e032bfa08004b222c35871e17ac9bfdd0cc9aa565a849a0fb161a2de630ffe.json",
           "quality/facts/2ab12959f0504520b27ecc069f03855bb255185847aa822075ad11a7e96856eb.json",
-          "quality/facts/cd0ce92ec38b650e79431fc0fbd916d46f5849f338798e528f57e69e3b345eef.json",
-          "quality/facts/e15ac259f096d600fe539cf8ab9de0534b097b1d28e532b95fcc3d31dadd24b1.json",
+          "quality/facts/34eff3aa4c2c4dfdfe3dbe66811b59422c0a796a52a8be5a8a4bfe12e8b41f07.json",
           "quality/facts/f0312dae8d21c020b78f8b9ee8c732f774cae5efa134fe2375c660b876297854.json",
           "quality/tests/baseline-run-alternate.json",
           "quality/tests/output/baseline-run-alternate.output",
@@ -815,48 +770,40 @@
         ],
         "write_set_content": [
           {
-            "ref": "evidence/implementation-d6940c9da11a565b5e22f8137241693fd778b0fae2e24c564168d0d407f07f2d.diff",
-            "sha256": "d6940c9da11a565b5e22f8137241693fd778b0fae2e24c564168d0d407f07f2d"
-          },
-          {
             "ref": "facts.jsonl",
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/6215925c-ec5d-41d0-ae07-61d4d2e640af.json",
-            "sha256": "26e99e96f444a27f8bf7d03e6296acbfc00849302160eae4a1ec30bfd1250d8f"
+            "ref": "identity/executions/274616ca-3e87-4780-872e-007bd7493726.json",
+            "sha256": "37e998f824093ebc356aa624a3ce74ca75daf0275b589191bf4be134d1f503eb"
           },
           {
-            "ref": "identity/executions/8c922690-571a-4327-ba68-901ba30b732f.json",
-            "sha256": "d42513710759cd7ed85089ec67af91bfaa2a729e336f6eb571f26289a8a0181d"
+            "ref": "identity/executions/c18fd94f-dd47-4389-9986-3e8f4df2731a.json",
+            "sha256": "eb57820c2773faaa65a70e9c8f98f3d81640b37f297caea9f6f863a6cd2053e4"
           },
           {
-            "ref": "identity/executions/ef9fda2a-48c6-4fcb-b0ab-5374902d6aca.json",
-            "sha256": "441cb8c907acba7374938f8316c8ffee2a5f3bb71c0e5f3297ce4967a1ab0877"
+            "ref": "identity/executions/f5945142-c729-416d-abf3-e6be9526b13d.json",
+            "sha256": "cd20732d2dcfc8bcd3499240249852a8eab08168e36d8ecff2c8bfb34bd01bc8"
           },
           {
             "ref": "index.json",
-            "sha256": "0b835128c53da0c8ac5d55f23ee40096701726c410fd02d613e27e607b2e0cfb"
+            "sha256": "fcdd2cc3afbee7d25d2ac074a5e4bd81f1a9cf45e2620a7ce77ca6a258c25260"
           },
           {
             "ref": "quality/evidence/acceptance/build-code/acceptance_criteria-140ed68ecbd7cd601022a97a2160eb3aa82f3eb0bebcb40f993350ee0cfe2305.json",
             "sha256": "140ed68ecbd7cd601022a97a2160eb3aa82f3eb0bebcb40f993350ee0cfe2305"
           },
           {
-            "ref": "quality/evidence/acceptance/build-code/tasks_complete-196cf01da092292d162f8de1a1a592c932d187f06b367f3dc1b078fc52291816.json",
-            "sha256": "196cf01da092292d162f8de1a1a592c932d187f06b367f3dc1b078fc52291816"
+            "ref": "quality/evidence/implementation/50bad60faf4f662a27056a9265f02eade0d3557e53ca6340140d9ee0247607ab.diff",
+            "sha256": "50bad60faf4f662a27056a9265f02eade0d3557e53ca6340140d9ee0247607ab"
           },
           {
             "ref": "quality/evidence/implementation.json",
-            "sha256": "b1cad1d81b123af677bf78278223eefb314e84a99ae3a6771048d36c09acdd81"
+            "sha256": "8ccdc3473180557dcf930e715403be9ca2e7b3b144c32ed2ea3df97f977fabd5"
           },
           {
             "ref": "quality/evidence/stage-quality/build-code/acceptance_criteria-4aa702d32c8b76782fdfa6a5d86682a859d95db594f82b707bb2fd74472c295b.json",
             "sha256": "4aa702d32c8b76782fdfa6a5d86682a859d95db594f82b707bb2fd74472c295b"
-          },
-          {
-            "ref": "quality/evidence/stage-quality/build-code/tasks_complete-3a424b5ec6df145487bce8e260a782068b2e434a2d64372f73bff670b4efd5c4.json",
-            "sha256": "3a424b5ec6df145487bce8e260a782068b2e434a2d64372f73bff670b4efd5c4"
           },
           {
             "ref": "quality/evidence/stage-quality-missing/build-code/integration_review-d4e032bfa08004b222c35871e17ac9bfdd0cc9aa565a849a0fb161a2de630ffe.json",
@@ -864,23 +811,19 @@
           },
           {
             "ref": "quality/facts/2ab12959f0504520b27ecc069f03855bb255185847aa822075ad11a7e96856eb.json",
-            "sha256": "53d2b7f7a3214c33307e7e9449ca010ea02ba0b60c277c9a4963aca0c57b9330"
+            "sha256": "8eabc3196cb502bb51439799d2c13f432b018ee9ecd8006618ffc61ae4c60bce"
           },
           {
-            "ref": "quality/facts/cd0ce92ec38b650e79431fc0fbd916d46f5849f338798e528f57e69e3b345eef.json",
-            "sha256": "a812602b2f551a21d42984d719309798c25b1cbcfd36dce085eed787e2d6841e"
-          },
-          {
-            "ref": "quality/facts/e15ac259f096d600fe539cf8ab9de0534b097b1d28e532b95fcc3d31dadd24b1.json",
-            "sha256": "4a2735262a9d084b53d1a5de18df91083b3ed0399944f4fab5638344f109c749"
+            "ref": "quality/facts/34eff3aa4c2c4dfdfe3dbe66811b59422c0a796a52a8be5a8a4bfe12e8b41f07.json",
+            "sha256": "21d70f943c476e6331eb064b5e9747d9507d8ce6c2d6ba56c0e87a64e3b8023a"
           },
           {
             "ref": "quality/facts/f0312dae8d21c020b78f8b9ee8c732f774cae5efa134fe2375c660b876297854.json",
-            "sha256": "8ecb250d26498f05b6a339730edbd945f8930bbfd9a8acb871779b8d6f50ffeb"
+            "sha256": "181cc773b312c8ec34c9b97f45da56f6daecf407d3874e2782663b209fdb8c16"
           },
           {
             "ref": "quality/tests/baseline-run-alternate.json",
-            "sha256": "a0802361e69d20808b34fe8615c7b63c277f2ad4ea2cdacf29b82b7c15caa8b2"
+            "sha256": "968c8dea32236b44270e6aa50bf8e30b4e3256b0764fb215a831a1c626c6040e"
           },
           {
             "ref": "quality/tests/output/baseline-run-alternate.output",
@@ -888,26 +831,23 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "9c64b98964c2397b1ac88948339776d77d35684bd6526b82713a8b8de7899649"
+            "sha256": "08bc44e3ef389af25aa465773e424258e14a6ae4e6a03688f9bf6987ba198c0c"
           },
           {
             "ref": "task.json",
-            "sha256": "586ffb88893324eae097316f9ebc46e98c66650419af13a19d150fd71d195ea5"
+            "sha256": "5224f2fbb46d15aab3e619eef00c268f265d7b5c35752b72c8a2464b6477e215"
           }
         ],
-        "write_set_content_hash": "f49dca6d4ca4071cd6aa1a0e91780c156dc676b15184c2779ece2e8edb169a2e",
+        "write_set_content_hash": "16cbdc40660beb30e751c8a7ccdc8be078960849ac6da082bb08b2b08b656296",
         "public_write_set": [
-          "evidence/implementation-<SHA256>.diff",
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
           "quality/evidence/acceptance/build-code/acceptance_criteria-<SHA256>.json",
-          "quality/evidence/acceptance/build-code/tasks_complete-<SHA256>.json",
+          "quality/evidence/implementation/<SHA256>.diff",
           "quality/evidence/implementation.json",
           "quality/evidence/stage-quality/build-code/acceptance_criteria-<SHA256>.json",
-          "quality/evidence/stage-quality/build-code/tasks_complete-<SHA256>.json",
           "quality/evidence/stage-quality-missing/build-code/integration_review-<SHA256>.json",
-          "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
           "quality/facts/<SHA256>.json",
@@ -918,7 +858,7 @@
         "result": {
           "status": 0,
           "signal": null,
-          "stdout": "{\n  \"schema_version\": \"stage-runtime-result.vnext\",\n  \"stage\": \"build-code\",\n  \"status\": \"in_progress\",\n  \"work_status\": \"ready\",\n  \"readiness\": {\n    \"stage\": \"build-code\",\n    \"work_status\": \"ready\",\n    \"work_authority\": \"current-four-materials-and-plan-tasks\",\n    \"readiness_source\": \"current-material-presence\",\n    \"required_materials\": [\n      \"decision-log.md\",\n      \"spec.md\",\n      \"plan.md\",\n      \"tasks.md\"\n    ],\n    \"missing_materials\": []\n  },\n  \"completion\": {\n    \"stage\": \"build-code\",\n    \"status\": \"in_progress\",\n    \"predicates\": {\n      \"tasks_complete\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"risk_tests_fresh\": {\n        \"kind\": \"test\",\n        \"status\": \"satisfied\",\n        \"fact_ref\": \"quality/facts/<SHA256>.json\"\n      },\n      \"acceptance_criteria\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"integration_review\": {\n        \"kind\": \"review\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      }\n    },\n    \"fact_refs\": [\n      \"quality/facts/<SHA256>.json\"\n    ],\n    \"missing\": [\n      \"tasks_complete\",\n      \"acceptance_criteria\",\n      \"integration_review\"\n    ]\n  },\n  \"quality_status\": \"incomplete\",\n  \"quality_warnings\": [\n    \"tasks_complete:missing\",\n    \"acceptance_criteria:missing\",\n    \"integration_review:missing\",\n    \"audit unavailable/unverified/mismatch: audit summary ref must be non-empty\",\n    \"support:audit\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ],\n  \"quality_fact_refs\": [\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\"\n  ],\n  \"missing_items\": [\n    \"audit unavailable/unverified/mismatch: audit summary ref must be non-empty\",\n    \"support:audit\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ]\n}\n",
+          "stdout": "{\n  \"schema_version\": \"stage-runtime-result.vnext\",\n  \"stage\": \"build-code\",\n  \"status\": \"in_progress\",\n  \"work_status\": \"ready\",\n  \"readiness\": {\n    \"stage\": \"build-code\",\n    \"work_status\": \"ready\",\n    \"work_authority\": \"current-four-materials-and-plan-tasks\",\n    \"readiness_source\": \"current-material-presence\",\n    \"required_materials\": [\n      \"decision-log.md\",\n      \"spec.md\",\n      \"plan.md\",\n      \"tasks.md\"\n    ],\n    \"missing_materials\": []\n  },\n  \"completion\": {\n    \"stage\": \"build-code\",\n    \"status\": \"in_progress\",\n    \"predicates\": {\n      \"risk_tests_fresh\": {\n        \"kind\": \"test\",\n        \"status\": \"satisfied\",\n        \"fact_ref\": \"quality/facts/<SHA256>.json\"\n      },\n      \"acceptance_criteria\": {\n        \"kind\": \"acceptance_criterion\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      },\n      \"integration_review\": {\n        \"kind\": \"review\",\n        \"status\": \"missing\",\n        \"fact_ref\": null\n      }\n    },\n    \"fact_refs\": [\n      \"quality/facts/<SHA256>.json\"\n    ],\n    \"missing\": [\n      \"acceptance_criteria\",\n      \"integration_review\"\n    ]\n  },\n  \"quality_status\": \"incomplete\",\n  \"quality_warnings\": [\n    \"acceptance_criteria:missing\",\n    \"integration_review:missing\",\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ],\n  \"quality_fact_refs\": [\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\",\n    \"quality/facts/<SHA256>.json\"\n  ],\n  \"missing_items\": [\n    \"build-code final review is missing an authenticated integration review fact\",\n    \"acceptance coverage unavailable: build-code acceptance_coverage must be an object\",\n    \"review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace\"\n  ]\n}\n",
           "stderr": "",
           "json": {
             "schema_version": "stage-runtime-result.vnext",
@@ -942,15 +882,10 @@
               "stage": "build-code",
               "status": "in_progress",
               "predicates": {
-                "tasks_complete": {
-                  "kind": "acceptance_criterion",
-                  "status": "missing",
-                  "fact_ref": null
-                },
                 "risk_tests_fresh": {
                   "kind": "test",
                   "status": "satisfied",
-                  "fact_ref": "quality/facts/e15ac259f096d600fe539cf8ab9de0534b097b1d28e532b95fcc3d31dadd24b1.json"
+                  "fact_ref": "quality/facts/34eff3aa4c2c4dfdfe3dbe66811b59422c0a796a52a8be5a8a4bfe12e8b41f07.json"
                 },
                 "acceptance_criteria": {
                   "kind": "acceptance_criterion",
@@ -964,43 +899,36 @@
                 }
               },
               "fact_refs": [
-                "quality/facts/e15ac259f096d600fe539cf8ab9de0534b097b1d28e532b95fcc3d31dadd24b1.json"
+                "quality/facts/34eff3aa4c2c4dfdfe3dbe66811b59422c0a796a52a8be5a8a4bfe12e8b41f07.json"
               ],
               "missing": [
-                "tasks_complete",
                 "acceptance_criteria",
                 "integration_review"
               ]
             },
             "quality_status": "incomplete",
             "quality_warnings": [
-              "tasks_complete:missing",
               "acceptance_criteria:missing",
               "integration_review:missing",
-              "audit unavailable/unverified/mismatch: audit summary ref must be non-empty",
-              "support:audit",
               "build-code final review is missing an authenticated integration review fact",
               "acceptance coverage unavailable: build-code acceptance_coverage must be an object",
               "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace"
             ],
             "quality_fact_refs": [
-              "quality/facts/cd0ce92ec38b650e79431fc0fbd916d46f5849f338798e528f57e69e3b345eef.json",
-              "quality/facts/e15ac259f096d600fe539cf8ab9de0534b097b1d28e532b95fcc3d31dadd24b1.json",
+              "quality/facts/34eff3aa4c2c4dfdfe3dbe66811b59422c0a796a52a8be5a8a4bfe12e8b41f07.json",
               "quality/facts/f0312dae8d21c020b78f8b9ee8c732f774cae5efa134fe2375c660b876297854.json",
               "quality/facts/2ab12959f0504520b27ecc069f03855bb255185847aa822075ad11a7e96856eb.json"
             ],
             "missing_items": [
-              "audit unavailable/unverified/mismatch: audit summary ref must be non-empty",
-              "support:audit",
               "build-code final review is missing an authenticated integration review fact",
               "acceptance coverage unavailable: build-code acceptance_coverage must be an object",
               "review unavailable: MATERIAL_INCOMPLETE: build-code review receipt ref is missing; expected quality/reviews/results/ namespace"
             ]
           },
           "hashes": {
-            "raw_stdout_sha256": "a1b193a7238fe0246e440b244aaa784c0b8c47880e6cfae17dfb264bc29353d7",
+            "raw_stdout_sha256": "a000ec7a591f8ed14b1a627ce79caa63c1ebf5bcc5a0781b0c3dfa1368efaadd",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "normalized_stdout_sha256": "2e48f3a55aad521eb8404bf9e2db9f9bc9eba22b91bead8a2d1516a999fd0634",
+            "normalized_stdout_sha256": "11d9692a6a4947a64bb42a0ba3dab1132642ad1faecf125b97cdf7b9f80625f3",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
         }
@@ -1033,12 +961,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-review-default",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-sA7fZq/repo-public-behavior-review-default",
-              "baseline_commit": "fabda2fa6277171cc70c67a800933172e9fb8901",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-fUvZzf/repo-public-behavior-review-default",
+              "baseline_commit": "60e99e2758dd00ec4d61d23d6fd81d8696ba9332",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "292cf64249aa10bbc40015fa2ae01de5ef912466aa3365c4564eba811a930b58",
+              "raw_stdout_sha256": "1091c48469c91df3468605828e8b6fb3c64312aac31cb79180959ab6c6f57d3a",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "fd2f87899500124d32eac917b7406113ee5ee25652ad7c9926e5ebac2dadb721",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1047,8 +975,8 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/3cdcaf8f-8c13-422f-8d27-abc9393ba322.json",
-          "identity/executions/9dba39bb-38c7-4b71-9b7e-8658c369e69a.json",
+          "identity/executions/41608f09-b250-440f-9c96-29798082e607.json",
+          "identity/executions/c720c405-9cdd-4c19-9dc9-5a04e8e1574a.json",
           "index.json",
           "quality/reviews/results/baseline-review-default.json",
           "quality/verify.json",
@@ -1060,16 +988,16 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/3cdcaf8f-8c13-422f-8d27-abc9393ba322.json",
-            "sha256": "74338987cfecae94021fef5e734daa1037e29b6ef03ce274a719ea6a72de29a9"
+            "ref": "identity/executions/41608f09-b250-440f-9c96-29798082e607.json",
+            "sha256": "4fecfa34ad0c3e0c27f0f0762ea1f5fc0c8cded7e30c2670e309335a7d4b1f29"
           },
           {
-            "ref": "identity/executions/9dba39bb-38c7-4b71-9b7e-8658c369e69a.json",
-            "sha256": "b2c2556d89918ceb01ea70ba644fe61a4ac6308a6cac0726dc4e9e61ddb718c4"
+            "ref": "identity/executions/c720c405-9cdd-4c19-9dc9-5a04e8e1574a.json",
+            "sha256": "1666553c371e3be6228f2ec523469a03c3337d32b9919d325380fb6fc0e81ad0"
           },
           {
             "ref": "index.json",
-            "sha256": "5049f903600ac6d4a4ca8949db87b75eb1dcb763abd460ed4faae210e5f3e937"
+            "sha256": "57bd6eb40ef1121b9e8c797c901fb358abff96cd3bbce5a8b5b9ee4e6277117e"
           },
           {
             "ref": "quality/reviews/results/baseline-review-default.json",
@@ -1077,14 +1005,14 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "c6015e565353bdc580a8b72de908df7c1e16e8407c502670cafd1d396db52441"
+            "sha256": "b9ad6fa0047ee38775ac0c445c8a6bd771285d5913428975f6705fb846a98ca8"
           },
           {
             "ref": "task.json",
-            "sha256": "554089cb07158e3a38897ea81b5f091e4478c00e010eeb63608dc73c61c1929e"
+            "sha256": "085e549f0f281ebfb5295e0272308222263a487d8e1ccc12943dee91f69c4f90"
           }
         ],
-        "write_set_content_hash": "e24a09ddc8511c07c94d5877ed247902fac1dfcf686b1dfaeeab0d9d332fec4a",
+        "write_set_content_hash": "c16afd06050d90b6353f7e5f9e98b32e73740b54b017c500bf04bf2408b303f5",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1140,12 +1068,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-review-alternate",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-g1qhr3/repo-public-behavior-review-alternate",
-              "baseline_commit": "6fe62f86c18ab590c0ebef43e5becdc173a4148b",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-WPppAy/repo-public-behavior-review-alternate",
+              "baseline_commit": "0e482a6e80cb68ee7f292a7c3fcd6d0ab7ed7ba0",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "c56673ed6771de7c8dbd2e5c66620ff314c909950e0e6a6eed570d972f7eb6e1",
+              "raw_stdout_sha256": "3e83d6cb071b01573b06b66bc42f24ac8ff765e5e5e6bfb2309bab393095e0c5",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "9bfe6985de5e35ec16ca6b3f562ddb9c8b02f79086dcaa2f2b9cd3b67655ce1c",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1154,8 +1082,8 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/1bf1d507-ed08-4ed7-ba58-6adef700dfc1.json",
-          "identity/executions/59973de8-1396-445b-91b9-f5a2a5580153.json",
+          "identity/executions/1f502de4-29f6-4d77-a835-d37782d18616.json",
+          "identity/executions/859b9ad5-72f8-4ca6-9a6a-7127999ab5c6.json",
           "index.json",
           "quality/reviews/results/baseline-review-alternate.json",
           "quality/verify.json",
@@ -1167,16 +1095,16 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/1bf1d507-ed08-4ed7-ba58-6adef700dfc1.json",
-            "sha256": "acf5a8ca1a4d6c263a925ab897cc33e96832c57f87c609592f1b994f313a76f0"
+            "ref": "identity/executions/1f502de4-29f6-4d77-a835-d37782d18616.json",
+            "sha256": "376377a4ce9ae32b2eb2a177115d3d63bb69453d943501573dd4912afd6bb1fa"
           },
           {
-            "ref": "identity/executions/59973de8-1396-445b-91b9-f5a2a5580153.json",
-            "sha256": "3d288ce61768c049102f0e019b6b3c30fbce296eefd1c432e7c698b06f41c178"
+            "ref": "identity/executions/859b9ad5-72f8-4ca6-9a6a-7127999ab5c6.json",
+            "sha256": "6aaa0e9f1a5f02f2e2ef14be76d7128669cc73360933ea900a27f22b482390db"
           },
           {
             "ref": "index.json",
-            "sha256": "f5128a0ad275b73fd0ba2fbe6728f8a4babf06f6ad222a4026f055a48a09d444"
+            "sha256": "3acc2ba88a9409c72b63bc43bfd040d647452d91a076f876430e72f4561991ab"
           },
           {
             "ref": "quality/reviews/results/baseline-review-alternate.json",
@@ -1184,14 +1112,14 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "c45f17018735c07bcd4231221a15642eae7a2d52bf0a5bfe0a2c8972e8187aaa"
+            "sha256": "2788f346fbe5b0d7d7f7bc9cd23876ca9e10126cabd1a670a3a017aa936d01d6"
           },
           {
             "ref": "task.json",
-            "sha256": "0c6ce4e9a897f1eafecba47a0c7b9ed00971389873ad4576f235698adbf02519"
+            "sha256": "89e0e75bee51dd46b7365eacb04efb94b9080ea4d2fce364fb8d9fdc0458c4a3"
           }
         ],
-        "write_set_content_hash": "b4dce4ffd2f36f9c6d21760b7fca17c06fddd7664e80282089610b48193b58cd",
+        "write_set_content_hash": "211c48c826b2002bfb6ba37cd98e3090196a00911e56f1f99e412eac2a890b9a",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1251,12 +1179,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-verify-default",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-fsASTp/repo-public-behavior-verify-default",
-              "baseline_commit": "c7f704dcaa976249ffb283ec1241a976cbbb5df4",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-5JKYSg/repo-public-behavior-verify-default",
+              "baseline_commit": "1243b352a50264936c3d0413295f62e9366b30bd",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "97d6babcba4ff1e53de73f1b823eac805725ee525e607dc44920117fcd882895",
+              "raw_stdout_sha256": "f7603fd1a1f02dc9bf95ef88cabc00b1bb2b6bbebe415ad60e3dba5cfe6e7a7a",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "c24490e8f52bbb572d84406b1bc2cbb64385be09f8e388adfb161d1c2894a8bc",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1265,8 +1193,8 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/dd3c3cae-ccdf-4ddc-9db8-275e53e290c1.json",
-          "identity/executions/f3714416-35a1-4078-9ec9-f6d7a16aaa8f.json",
+          "identity/executions/98ca551a-64d0-4aff-97f1-3ca7759b7850.json",
+          "identity/executions/f1ed3a37-0068-4668-b2c7-f172d14f97d8.json",
           "index.json",
           "quality/tests/baseline-verify-default.json",
           "quality/tests/output/baseline-verify-default.output",
@@ -1279,20 +1207,20 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/dd3c3cae-ccdf-4ddc-9db8-275e53e290c1.json",
-            "sha256": "4a2a2c63324efbcfeb279f0d77ba9bf588a2e70cf17e5d58582cc7c4447099fe"
+            "ref": "identity/executions/98ca551a-64d0-4aff-97f1-3ca7759b7850.json",
+            "sha256": "131ca810999ff9b3185d7f6ecc92b304d291216429ab5d07c7d91858e77e5334"
           },
           {
-            "ref": "identity/executions/f3714416-35a1-4078-9ec9-f6d7a16aaa8f.json",
-            "sha256": "439ad85f5d172dc14bb43f26c1fd113737478e07c634cdbb8fca72c34e407f74"
+            "ref": "identity/executions/f1ed3a37-0068-4668-b2c7-f172d14f97d8.json",
+            "sha256": "40d6e13cbf359453bc2507389ec85df96bf50c928af9a0bfae9f11649cb6499c"
           },
           {
             "ref": "index.json",
-            "sha256": "6486b25aade64ff90cdc72c5bcec7af8c2fc83f6ffbc6408feb1bf1d0921d1a7"
+            "sha256": "ef28f32f34c2f447cbcee22e7eed1c783fd2d2fbf05e41de94381660dfe5ed7c"
           },
           {
             "ref": "quality/tests/baseline-verify-default.json",
-            "sha256": "6da8feb810da03cbb0d352636b2a3f42ae40394b3a95ce4dca48d48784a36304"
+            "sha256": "632d35ddca55258559e4fd7196d2804f51ae94e8414cb27734da2046fcc6e3fd"
           },
           {
             "ref": "quality/tests/output/baseline-verify-default.output",
@@ -1300,14 +1228,14 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "a0fac3efcd7bef3458e8000c105d6074a1b8072014eab5f7ce1ba69fc36718fb"
+            "sha256": "0a1d176bd8f441fcbc2b6c6d3fc527cba00f49c3ad79a24a861a89cdd2c43d18"
           },
           {
             "ref": "task.json",
-            "sha256": "f5760b90dab682e94d05882c493f9360c251b54a1953b9bd8526e0c4e6b25963"
+            "sha256": "f5a5dbd51477e9c06927fef3f476117aa5b37fd5c0b697dd22b28e6593a5f8be"
           }
         ],
-        "write_set_content_hash": "65d6e5144931382678df709fd009ee7fc4342bbe86d91b6c93e4b92506d358f3",
+        "write_set_content_hash": "a2f865f8b1395f6e1ba1f021ecc2eb35432bfc1a0a70573a37f8b9c84e0d9bc2",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1332,12 +1260,12 @@
             "command": "true",
             "command_hash": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
             "exit_code": 0,
-            "snapshot_head": "c7f704dcaa976249ffb283ec1241a976cbbb5df4",
+            "snapshot_head": "1243b352a50264936c3d0413295f62e9366b30bd",
             "snapshot_tree": "68365260d016292225b4a8f74ebcc79f64c8aeff",
-            "snapshot_commit": "699b007eebd639fa7065edd41de0e364f089b236",
-            "source_digest": "c80f0d7da19b11e5bdf15162317eec6dd2e209018482c5abd1fdbca08a677911",
-            "started_at": "2026-08-09T14:54:37.240Z",
-            "completed_at": "2026-08-09T14:54:37.340Z",
+            "snapshot_commit": "1024ba1e8b6d11798f278e402ccebec13c5f999a",
+            "source_digest": "f49eeeb7a77a6e466268df617fd664e2144ac01e18318093d0d5b0033dc810b3",
+            "started_at": "2026-08-10T02:18:21.325Z",
+            "completed_at": "2026-08-10T02:18:21.440Z",
             "output_ref": "quality/tests/output/baseline-verify-default.output",
             "output_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
             "lease": {
@@ -1346,10 +1274,10 @@
               "wait_ms": 10000
             },
             "receipt_ref": "quality/tests/baseline-verify-default.json",
-            "receipt_hash": "6da8feb810da03cbb0d352636b2a3f42ae40394b3a95ce4dca48d48784a36304"
+            "receipt_hash": "632d35ddca55258559e4fd7196d2804f51ae94e8414cb27734da2046fcc6e3fd"
           },
           "hashes": {
-            "raw_stdout_sha256": "01477b938ce1400c2cf6831f4093fccc39fcb135dc61c18716f588eedf52562e",
+            "raw_stdout_sha256": "9175d21b84b0867c4994aa187da2ccc7ed7f82a9d98743b286d4e67f9d8302c9",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "6b42b1c5c7a3c2030baa68db14017c6e5a6a4dc29fb6ea02606465ca6bca3272",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1380,12 +1308,12 @@
             "json": {
               "stage": "make-decision",
               "task_id": "public-behavior-verify-alternate",
-              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-PEX5Fp/repo-public-behavior-verify-alternate",
-              "baseline_commit": "ef4353c9801d376e6e06b51dbb196e517759fe49",
+              "worktree_root": "/private/tmp/workflowhub-public-behavior-case-3wMY7n/repo-public-behavior-verify-alternate",
+              "baseline_commit": "41f16dd408c6cdfa06a694c2656da7feb43b3866",
               "materials": "working"
             },
             "hashes": {
-              "raw_stdout_sha256": "92cfa05de7d5ff57fef9846006b643d887eacadca088e1a7267214b910333034",
+              "raw_stdout_sha256": "e440ab282c2b3910a1a631f11b6f29af8bfe92a81613c834f6b2476022367ded",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "a7c869665ce7da2f305800951f1436e49e13ae2070f85e637dfa5269099db9fa",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1394,8 +1322,8 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/7eb6750e-0bd1-4993-a9c8-9e91fdd7f0bd.json",
-          "identity/executions/99cb8483-f797-454b-9727-57bf15d84e24.json",
+          "identity/executions/7e33f1bb-8509-453d-b81b-17317e14c495.json",
+          "identity/executions/8b8c3355-6837-49a3-b719-3c42bb4ccffa.json",
           "index.json",
           "quality/tests/baseline-verify-alternate.json",
           "quality/tests/output/baseline-verify-alternate.output",
@@ -1408,20 +1336,20 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/7eb6750e-0bd1-4993-a9c8-9e91fdd7f0bd.json",
-            "sha256": "b59ee029fe5898ca3e371c0de200e627b614a793438a77e8d178e5b09af22bda"
+            "ref": "identity/executions/7e33f1bb-8509-453d-b81b-17317e14c495.json",
+            "sha256": "83a6a503b403fb9e155f8aa7426ab525cfe9112f59542e8c4deee15893d8f4c6"
           },
           {
-            "ref": "identity/executions/99cb8483-f797-454b-9727-57bf15d84e24.json",
-            "sha256": "38a3db8f0fd65880fbddbece5a66b8fb51ec53b361df68ae314e97dc2e7b98cd"
+            "ref": "identity/executions/8b8c3355-6837-49a3-b719-3c42bb4ccffa.json",
+            "sha256": "3efb82c2e02ff1efb2bc60386f42b7856e9c6c33fda1e093c7131a5f8d054fc9"
           },
           {
             "ref": "index.json",
-            "sha256": "43826e140517f1b8906145d54ec3a14702a3a23ec3bb4e49a23578940f0bfed2"
+            "sha256": "4ba012e1ffa2e18ac71db6e630a7508b1627dbcdcd5c41ec5a09becd7fb60974"
           },
           {
             "ref": "quality/tests/baseline-verify-alternate.json",
-            "sha256": "f968552ba42f2c96e5c8b024250a568c2b6faa8cd4f4207df02089ece0ea0101"
+            "sha256": "56ae2c942ab6f9a3357af5bdbffd2eb5f4f2472d343ad1ed62733b0c3df6b33a"
           },
           {
             "ref": "quality/tests/output/baseline-verify-alternate.output",
@@ -1429,14 +1357,14 @@
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "4b54453d4d6be3284aa9cad42dece5157830c0e4f2e87718e995aa31d7851e42"
+            "sha256": "3de645e68aa2663f54ee4aad5d0aaedc07e504491a830f17cb7a5dbb8a617c53"
           },
           {
             "ref": "task.json",
-            "sha256": "5b5f1f0ce043640afc5210985ed092836c68f0ea916f8dcc7e188f1a628a24e0"
+            "sha256": "36b31096ecf00526515ac983db13219871b5c15777dc0ace94abc534798898e1"
           }
         ],
-        "write_set_content_hash": "993a1ef157e3c286aad333c7a4fc66c43952878cd2a2b40479165dc9afc2e8a7",
+        "write_set_content_hash": "68891bb2de7a2d67a6b3801bed1d8a534cb896cf54c00c404461fec1920a19e3",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1461,12 +1389,12 @@
             "command": "node -e \"process.stdout.write('fixed-baseline-alternate')\"",
             "command_hash": "b94118fd75e3e5fabd3881764936dce4e67636ff9bf5e364034c667dad28c562",
             "exit_code": 0,
-            "snapshot_head": "ef4353c9801d376e6e06b51dbb196e517759fe49",
+            "snapshot_head": "41f16dd408c6cdfa06a694c2656da7feb43b3866",
             "snapshot_tree": "3ff85d79dfc3889c2543b4372e80b9b5c380b34d",
-            "snapshot_commit": "37b2cbdd1390f2f33784f72be6a652e6cad8ca89",
-            "source_digest": "2e29d86065548efe1bce7151148e80b176082fc1dd4d22891278c0aa938da1a5",
-            "started_at": "2026-08-09T14:54:40.713Z",
-            "completed_at": "2026-08-09T14:54:40.837Z",
+            "snapshot_commit": "5ebf4fe0b908cf6c05104092e1e7c376870f1c2a",
+            "source_digest": "aece6fda3be602e3caf1cdc8df932d403fa55b321b903346a09e5e2eec7bfb1f",
+            "started_at": "2026-08-10T02:18:24.657Z",
+            "completed_at": "2026-08-10T02:18:24.773Z",
             "output_ref": "quality/tests/output/baseline-verify-alternate.output",
             "output_hash": "c44ce26ba0d35679b81f9ad5f4e42c6ac10b86d1fe1efacf6c9dcc8e85a3dc7f",
             "lease": {
@@ -1475,10 +1403,10 @@
               "wait_ms": 10000
             },
             "receipt_ref": "quality/tests/baseline-verify-alternate.json",
-            "receipt_hash": "f968552ba42f2c96e5c8b024250a568c2b6faa8cd4f4207df02089ece0ea0101"
+            "receipt_hash": "56ae2c942ab6f9a3357af5bdbffd2eb5f4f2472d343ad1ed62733b0c3df6b33a"
           },
           "hashes": {
-            "raw_stdout_sha256": "60fee7aea085c9c8fa91c6e806ed732dc9b3919196093aec656705a0318c22f9",
+            "raw_stdout_sha256": "f89ad6f131acce59cb91a6fe8285d3a2a7e4e4c5a9c47aba261940f0d1586a0c",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "3372f8972b0634e8d59e2d63fde78313e879461cdb6abe500aed774efe63edae",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1506,10 +1434,10 @@
         "setup": [],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/01c307ba-7f0c-467f-80a4-a8dcf7be5a8b.json",
+          "identity/executions/4624daed-f7c1-47eb-8c52-1460512567af.json",
           "index.json",
-          "quality/confirmations/ced4feb763f40bf0c47912a4230675a39a02b8dea32432a2d4708ca5b616f8d8.json",
-          "quality/facts/50aac95cc1c70a44f0c446d30b777f91c85583d0405522718da7c5a72cc851e4.json",
+          "quality/confirmations/fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05.json",
+          "quality/facts/c0c10479fece9960d6385ad0b46b357509373895dad97aefd9ea75a35a7be9d2.json",
           "quality/verify.json",
           "task.json"
         ],
@@ -1519,31 +1447,31 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/01c307ba-7f0c-467f-80a4-a8dcf7be5a8b.json",
-            "sha256": "bd598d8a89475dcbae7e09e3d53a7d176457b06ce4b48a321c705177ef8a16d4"
+            "ref": "identity/executions/4624daed-f7c1-47eb-8c52-1460512567af.json",
+            "sha256": "3ec183706d9cc80ee48393e324d84f3e47529838430a1949d76783295a033e5f"
           },
           {
             "ref": "index.json",
-            "sha256": "79fbfea2c78d4f3a28f341a5ccc1e71368fd3788f76a69ddacaf96d755ce08e9"
+            "sha256": "a64e151fe2a1adac80ce39430018d2835dcd6aaf01e4b6dc6e7c6b118ab42e4f"
           },
           {
-            "ref": "quality/confirmations/ced4feb763f40bf0c47912a4230675a39a02b8dea32432a2d4708ca5b616f8d8.json",
-            "sha256": "ced4feb763f40bf0c47912a4230675a39a02b8dea32432a2d4708ca5b616f8d8"
+            "ref": "quality/confirmations/fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05.json",
+            "sha256": "fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05"
           },
           {
-            "ref": "quality/facts/50aac95cc1c70a44f0c446d30b777f91c85583d0405522718da7c5a72cc851e4.json",
-            "sha256": "56dda2a0050b92f96e20748f673d6f618b9598fa8ad4a89c8397f45005bc542b"
+            "ref": "quality/facts/c0c10479fece9960d6385ad0b46b357509373895dad97aefd9ea75a35a7be9d2.json",
+            "sha256": "22816c1301b724d9c18471b2a9747e0e4d894b418305673dd37c99dc733b71a8"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "ebab71accadb7ab3fab642624154b0315c31e975a533f9d6538cb7d61fb1dc2f"
+            "sha256": "0bba9b7981b55ca18dbbd1a2337177cc753065e96bdce42aadf8ec46fbbac0e2"
           },
           {
             "ref": "task.json",
-            "sha256": "1c99040e33ecc586b7e465d3b7d2b42eacfdd4f69d0b1cb0665d108c76f65b51"
+            "sha256": "93121ca4978358ab45e334218d296bb8b16f0d9669ae2f5177af2ec6bc9bf9bf"
           }
         ],
-        "write_set_content_hash": "dc45402c9a129c1ff0febb057bd8bcf0cb3175ad9ba4c0d3bf835c867681963d",
+        "write_set_content_hash": "686ac1e979fd1cec20e561c807f72bc488008ee47481d070ee3f68af0c437159",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "quality/confirmations/<SHA256>.json",
@@ -1556,8 +1484,8 @@
           "stdout": "{\n  \"ref\": \"quality/confirmations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"human-confirmation.v2\",\n    \"task_id\": \"public-behavior-confirm-default\",\n    \"stage\": \"make-decision\",\n    \"decision\": \"accepted\",\n    \"subject_ref\": null,\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"confirmed_at\": \"<TIME>\"\n  },\n  \"quality_fact_ref\": \"quality/facts/<SHA256>.json\",\n  \"quality_fact_hash\": \"<SHA256>\"\n}\n",
           "stderr": "",
           "json": {
-            "ref": "quality/confirmations/ced4feb763f40bf0c47912a4230675a39a02b8dea32432a2d4708ca5b616f8d8.json",
-            "hash": "ced4feb763f40bf0c47912a4230675a39a02b8dea32432a2d4708ca5b616f8d8",
+            "ref": "quality/confirmations/fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05.json",
+            "hash": "fbc59ff266ca0076fa4f9271d86faedf165e632fd2e9e31db5913e566d1d8a05",
             "value": {
               "schema_version": "human-confirmation.v2",
               "task_id": "public-behavior-confirm-default",
@@ -1566,13 +1494,13 @@
               "subject_ref": null,
               "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
               "snapshot_tree": "a160450b369d315ad9f3bf089bab2323858a8db3",
-              "confirmed_at": "2026-08-09T14:54:42.692Z"
+              "confirmed_at": "2026-08-10T02:18:26.607Z"
             },
-            "quality_fact_ref": "quality/facts/50aac95cc1c70a44f0c446d30b777f91c85583d0405522718da7c5a72cc851e4.json",
-            "quality_fact_hash": "56dda2a0050b92f96e20748f673d6f618b9598fa8ad4a89c8397f45005bc542b"
+            "quality_fact_ref": "quality/facts/c0c10479fece9960d6385ad0b46b357509373895dad97aefd9ea75a35a7be9d2.json",
+            "quality_fact_hash": "22816c1301b724d9c18471b2a9747e0e4d894b418305673dd37c99dc733b71a8"
           },
           "hashes": {
-            "raw_stdout_sha256": "434eb0a68d271e2ec65b5132a832cb1d668ac3ddc1d562530ccfc0267eeca3f3",
+            "raw_stdout_sha256": "038cadf25a5dafce15b077bacf708fd186757ae4443954e784d0fbda29357dec",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "601d46742d6443daaeb8fcc52e5773cfeaf0d50a168313d3e76d36b33519b3f0",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1596,10 +1524,10 @@
         "setup": [],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/d77f23e9-d192-4609-9e1c-2d132681b860.json",
+          "identity/executions/77dd9523-701f-4e19-8d4d-d27bdf3aaef2.json",
           "index.json",
-          "quality/confirmations/c4798c8fe889b89af9cab448521f28f560ce88018492182a1e31e821120a6c51.json",
-          "quality/facts/34e8db212050f5e0244faefe08fb7e1a9330626aec752f5a4fe696f01d8cc6b9.json",
+          "quality/confirmations/10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b.json",
+          "quality/facts/c2dcdde2223980f0d3ca380d3143aaee0c316e21412ba7e90be2280f7c1ad858.json",
           "quality/verify.json",
           "task.json"
         ],
@@ -1609,31 +1537,31 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/d77f23e9-d192-4609-9e1c-2d132681b860.json",
-            "sha256": "fc768d964fae483b49a497f76789f5cf8a37242b1a40fcb5262f9f8bb61247c7"
+            "ref": "identity/executions/77dd9523-701f-4e19-8d4d-d27bdf3aaef2.json",
+            "sha256": "2cf5f9ff1d6dbf64d781c6524b6948e92a4d3902a4869dd6cdb544d5dc3cb3fd"
           },
           {
             "ref": "index.json",
-            "sha256": "a95cb54483b62fc4a200a486bb913d5249da66265123fff43468489fb961c9f8"
+            "sha256": "f516dce6410e6aa3d54630b14c430b68360e49d77be42dbdf894f144d509ac2a"
           },
           {
-            "ref": "quality/confirmations/c4798c8fe889b89af9cab448521f28f560ce88018492182a1e31e821120a6c51.json",
-            "sha256": "c4798c8fe889b89af9cab448521f28f560ce88018492182a1e31e821120a6c51"
+            "ref": "quality/confirmations/10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b.json",
+            "sha256": "10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b"
           },
           {
-            "ref": "quality/facts/34e8db212050f5e0244faefe08fb7e1a9330626aec752f5a4fe696f01d8cc6b9.json",
-            "sha256": "11d4810aad5a93a22db94b4c151e7389d0cd9bd47c670d2f90da6ba606b3e309"
+            "ref": "quality/facts/c2dcdde2223980f0d3ca380d3143aaee0c316e21412ba7e90be2280f7c1ad858.json",
+            "sha256": "0186fe602b9f28e26f333854f115df9656525d665408f4bb5c8156277a596a74"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "3b6c95edd01f15aabd831136302018de0f481e7b384a6fa5a10315222242eebd"
+            "sha256": "9c676d7d0aaef5401ec978446b06a56e2cb6ccc9ebae56816c02515afc4dcb9f"
           },
           {
             "ref": "task.json",
-            "sha256": "e7d5db4697c2ecdf5447d9864230e15a133444f78a44b0317054637fd1643efc"
+            "sha256": "cf054773f423e692427123773997d980bd21778e3990330e81538e4c64282843"
           }
         ],
-        "write_set_content_hash": "ac936354c1ed542d6dc7e7764e885817bc93e776034fa87af33f910464a48ad9",
+        "write_set_content_hash": "9e90c033d64b0bdb9c9798aad3bfda98b13bcc66af7cac6b7a89a39c4e779fc3",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "quality/confirmations/<SHA256>.json",
@@ -1646,8 +1574,8 @@
           "stdout": "{\n  \"ref\": \"quality/confirmations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"human-confirmation.v2\",\n    \"task_id\": \"public-behavior-confirm-alternate\",\n    \"stage\": \"make-decision\",\n    \"decision\": \"accepted\",\n    \"subject_ref\": null,\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"confirmed_at\": \"<TIME>\"\n  },\n  \"quality_fact_ref\": \"quality/facts/<SHA256>.json\",\n  \"quality_fact_hash\": \"<SHA256>\"\n}\n",
           "stderr": "",
           "json": {
-            "ref": "quality/confirmations/c4798c8fe889b89af9cab448521f28f560ce88018492182a1e31e821120a6c51.json",
-            "hash": "c4798c8fe889b89af9cab448521f28f560ce88018492182a1e31e821120a6c51",
+            "ref": "quality/confirmations/10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b.json",
+            "hash": "10390184d6680894755fcfbe5b48d8004cc408ace453565810ddb47941c9148b",
             "value": {
               "schema_version": "human-confirmation.v2",
               "task_id": "public-behavior-confirm-alternate",
@@ -1656,13 +1584,13 @@
               "subject_ref": null,
               "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
               "snapshot_tree": "814f154527310237a105e66b39264d953f5f6584",
-              "confirmed_at": "2026-08-09T14:54:44.287Z"
+              "confirmed_at": "2026-08-10T02:18:28.144Z"
             },
-            "quality_fact_ref": "quality/facts/34e8db212050f5e0244faefe08fb7e1a9330626aec752f5a4fe696f01d8cc6b9.json",
-            "quality_fact_hash": "11d4810aad5a93a22db94b4c151e7389d0cd9bd47c670d2f90da6ba606b3e309"
+            "quality_fact_ref": "quality/facts/c2dcdde2223980f0d3ca380d3143aaee0c316e21412ba7e90be2280f7c1ad858.json",
+            "quality_fact_hash": "0186fe602b9f28e26f333854f115df9656525d665408f4bb5c8156277a596a74"
           },
           "hashes": {
-            "raw_stdout_sha256": "b27661106af2f7ce4b90ca8c08b23164a9ae7edb9f85c30fbcff8777435ff806",
+            "raw_stdout_sha256": "908ee073ba404d530115a2f716b5465fbd4811890e7ea8eccc3df89da0b20de0",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "66e6bb8a5f10bf24a262e2b8b413f1c0228c9d4789921d89108590b95d8936f3",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1685,7 +1613,7 @@
           "--subject-ref=quality/confirmations/<SHA256>.json"
         ],
         "input": {
-          "confirmation_ref": "quality/confirmations/76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98.json"
+          "confirmation_ref": "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json"
         },
         "setup": [
           {
@@ -1694,8 +1622,8 @@
             "stdout": "{\n  \"ref\": \"quality/confirmations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"human-confirmation.v2\",\n    \"task_id\": \"public-behavior-authorize-default\",\n    \"stage\": \"make-decision\",\n    \"decision\": \"accepted\",\n    \"subject_ref\": \"HEAD\",\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"confirmed_at\": \"<TIME>\"\n  },\n  \"quality_fact_ref\": \"quality/facts/<SHA256>.json\",\n  \"quality_fact_hash\": \"<SHA256>\"\n}\n",
             "stderr": "",
             "json": {
-              "ref": "quality/confirmations/76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98.json",
-              "hash": "76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98",
+              "ref": "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json",
+              "hash": "8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc",
               "value": {
                 "schema_version": "human-confirmation.v2",
                 "task_id": "public-behavior-authorize-default",
@@ -1704,13 +1632,13 @@
                 "subject_ref": "HEAD",
                 "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
                 "snapshot_tree": "20f53e4991ec6de30e3e6945ae0c525ce146263f",
-                "confirmed_at": "2026-08-09T14:54:46.397Z"
+                "confirmed_at": "2026-08-10T02:18:29.790Z"
               },
-              "quality_fact_ref": "quality/facts/e99f6490a5b51bc74ccce3b57156713d651107986466a9d6a9c174343254e3be.json",
-              "quality_fact_hash": "f43292207325955787c6d9dfbf54221eabf484850e85c29a8eae575e31826b11"
+              "quality_fact_ref": "quality/facts/ef740a8d67199703b79aa1644904a83b964cb954f7cb256bafaf944946b423dd.json",
+              "quality_fact_hash": "feeed05483a021be5c28a57845999a20a6c8fe78d436e3c1830a1117a7332f32"
             },
             "hashes": {
-              "raw_stdout_sha256": "41cb1935b505cc6296103a082955b300c769b3ed79bfda5d4beb714d214bd47e",
+              "raw_stdout_sha256": "f0af8013f322ad9fe6b0ecac1f2488143a4c8ced31e3752d10f4333679fa2612",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "62241ada12cdc775accabc8052a5b699a077bfb5e105c54c7e5333239deb65b0",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1719,12 +1647,12 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/28f24f67-df2d-4989-a3cb-d94b94c20ecc.json",
-          "identity/executions/f6ff5362-b4f9-40f0-9a6f-3f682e388ec4.json",
+          "identity/executions/bcac9d2e-f33f-44dc-8614-383ba550db1f.json",
+          "identity/executions/e01d57dd-6f2e-4362-9e06-ee5988137c93.json",
           "index.json",
-          "quality/authorizations/de65ce3d5461d2dce0ba0487e199185744f3f5455cf4d36a149889016329289d.json",
-          "quality/confirmations/76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98.json",
-          "quality/facts/e99f6490a5b51bc74ccce3b57156713d651107986466a9d6a9c174343254e3be.json",
+          "quality/authorizations/862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f.json",
+          "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json",
+          "quality/facts/ef740a8d67199703b79aa1644904a83b964cb954f7cb256bafaf944946b423dd.json",
           "quality/verify.json",
           "task.json"
         ],
@@ -1734,39 +1662,39 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/28f24f67-df2d-4989-a3cb-d94b94c20ecc.json",
-            "sha256": "6eadbae9594a8547d823c425df2aa6afc1aac1914ed9fbd3b83b744abf4a2ef3"
+            "ref": "identity/executions/bcac9d2e-f33f-44dc-8614-383ba550db1f.json",
+            "sha256": "56b2ca805dc3a889781138412548079b43d17722b5db94a3beced941e463f725"
           },
           {
-            "ref": "identity/executions/f6ff5362-b4f9-40f0-9a6f-3f682e388ec4.json",
-            "sha256": "64ed7b7efa7f037fbdd9b9c1c6a3f646cded348614303346c9e12a2bf7ac5766"
+            "ref": "identity/executions/e01d57dd-6f2e-4362-9e06-ee5988137c93.json",
+            "sha256": "6563e70aab37e6cce982d9b3a2e9f4d0fc2935567c6076b8e9858aeaf172a00e"
           },
           {
             "ref": "index.json",
-            "sha256": "440a9f7e2ab2224ddc6539c4ce6a09cfd39979049d2ed520b5eb67eb6e4927cd"
+            "sha256": "608def345fe4bc9e7abc9822ef328e48cc12dd7792f3790901c2125d1afc5d9d"
           },
           {
-            "ref": "quality/authorizations/de65ce3d5461d2dce0ba0487e199185744f3f5455cf4d36a149889016329289d.json",
-            "sha256": "de65ce3d5461d2dce0ba0487e199185744f3f5455cf4d36a149889016329289d"
+            "ref": "quality/authorizations/862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f.json",
+            "sha256": "862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f"
           },
           {
-            "ref": "quality/confirmations/76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98.json",
-            "sha256": "76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98"
+            "ref": "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json",
+            "sha256": "8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc"
           },
           {
-            "ref": "quality/facts/e99f6490a5b51bc74ccce3b57156713d651107986466a9d6a9c174343254e3be.json",
-            "sha256": "f43292207325955787c6d9dfbf54221eabf484850e85c29a8eae575e31826b11"
+            "ref": "quality/facts/ef740a8d67199703b79aa1644904a83b964cb954f7cb256bafaf944946b423dd.json",
+            "sha256": "feeed05483a021be5c28a57845999a20a6c8fe78d436e3c1830a1117a7332f32"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "e632482032bedc0af5fa9bae93acb055298675d1084fcaf3baa32b8f45ca76fa"
+            "sha256": "a12adc76d4e83526e47550641c11fce34e457733c00fab2ded586a772c262029"
           },
           {
             "ref": "task.json",
-            "sha256": "7f087aba23262827de394b0713c432de5c8989cb04f0dbc1c97d6ded0fda926d"
+            "sha256": "e3e89eb1bc2deda285ce43821df736758988aad7e0a36932ef74f61a3054510b"
           }
         ],
-        "write_set_content_hash": "e1b73faa043bdb83bde256f364df880dc2ed7e1db1ebdcfb7e6fa9e421e1b62e",
+        "write_set_content_hash": "97c796659e29563a42559ad3fd8a8888763cd9e381fe1792e94078ddddc86167",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1781,21 +1709,21 @@
           "stdout": "{\n  \"ref\": \"quality/authorizations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"irreversible-authorization.v1\",\n    \"task_id\": \"public-behavior-authorize-default\",\n    \"operation\": \"commit\",\n    \"subject_ref\": \"quality/confirmations/<SHA256>.json\",\n    \"subject_hash\": \"<SHA256>\",\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"authorized_at\": \"<TIME>\"\n  }\n}\n",
           "stderr": "",
           "json": {
-            "ref": "quality/authorizations/de65ce3d5461d2dce0ba0487e199185744f3f5455cf4d36a149889016329289d.json",
-            "hash": "de65ce3d5461d2dce0ba0487e199185744f3f5455cf4d36a149889016329289d",
+            "ref": "quality/authorizations/862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f.json",
+            "hash": "862883acf9942a5c31f5b2cb9a4b5ba744389a23345dae130178bf2854eb396f",
             "value": {
               "schema_version": "irreversible-authorization.v1",
               "task_id": "public-behavior-authorize-default",
               "operation": "commit",
-              "subject_ref": "quality/confirmations/76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98.json",
-              "subject_hash": "76477c6f47de3dffe8b6fd140ea32206fbf2d360f9c6319d55c213e81b143c98",
+              "subject_ref": "quality/confirmations/8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc.json",
+              "subject_hash": "8788eea11306bfa92b3c383690e756eb7abfebd14d95d3233c03ffd14efe0dbc",
               "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
               "snapshot_tree": "20f53e4991ec6de30e3e6945ae0c525ce146263f",
-              "authorized_at": "2026-08-09T14:54:48.082Z"
+              "authorized_at": "2026-08-10T02:18:31.089Z"
             }
           },
           "hashes": {
-            "raw_stdout_sha256": "29141b55037253f24c463c167098d88488e9c02ee366df0d44a6db7b16feb4eb",
+            "raw_stdout_sha256": "2fc075a40059aa94bae840804c7df7c7dc42c02c61bb751dafc167704cbab07b",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "bfbfa33c0379f436c7760433ce4678d704dfc6cd89421a33efce39eff7ba8325",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1814,7 +1742,7 @@
           "--subject-ref=quality/confirmations/<SHA256>.json"
         ],
         "input": {
-          "confirmation_ref": "quality/confirmations/e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876.json"
+          "confirmation_ref": "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json"
         },
         "setup": [
           {
@@ -1823,8 +1751,8 @@
             "stdout": "{\n  \"ref\": \"quality/confirmations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"human-confirmation.v2\",\n    \"task_id\": \"public-behavior-authorize-alternate\",\n    \"stage\": \"make-decision\",\n    \"decision\": \"accepted\",\n    \"subject_ref\": \"HEAD\",\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"confirmed_at\": \"<TIME>\"\n  },\n  \"quality_fact_ref\": \"quality/facts/<SHA256>.json\",\n  \"quality_fact_hash\": \"<SHA256>\"\n}\n",
             "stderr": "",
             "json": {
-              "ref": "quality/confirmations/e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876.json",
-              "hash": "e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876",
+              "ref": "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json",
+              "hash": "8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4",
               "value": {
                 "schema_version": "human-confirmation.v2",
                 "task_id": "public-behavior-authorize-alternate",
@@ -1833,13 +1761,13 @@
                 "subject_ref": "HEAD",
                 "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
                 "snapshot_tree": "c5c02cae0c8e0fe5a1aebbd2407b918de569a366",
-                "confirmed_at": "2026-08-09T14:54:50.124Z"
+                "confirmed_at": "2026-08-10T02:18:32.608Z"
               },
-              "quality_fact_ref": "quality/facts/cdcaced846e339ec024d1cb569599fd4a561d43b8b2a84a4d6d52f87004ce2b5.json",
-              "quality_fact_hash": "dbcc62ddf88c1900718e4657b1bcaca90888a4e64bbfecbf27e632c570939058"
+              "quality_fact_ref": "quality/facts/2ac3ea3639caf96bb090ff2d980a9d1364eea8d96f4ebf18608189af6ff81d0e.json",
+              "quality_fact_hash": "cea9ef58622e6381369f93a2afe75a5c81a336d0da45c6c8de5e3c0a1cfb98f8"
             },
             "hashes": {
-              "raw_stdout_sha256": "a4249b59e00cf2952c7035b0fa13a37ea39a94c40ee15af53c282386deffa46d",
+              "raw_stdout_sha256": "86f0c1611c9931797e39700a7d402b3e993bb6769c5aa9911f372f5e5119dff1",
               "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
               "normalized_stdout_sha256": "937e0b037fbeee44f30dd5866131dc8f1d66518f5196efafa744f3e0b0f4ed83",
               "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -1848,12 +1776,12 @@
         ],
         "write_set": [
           "facts.jsonl",
-          "identity/executions/05a11d4e-53b4-4621-8527-9de9080519a4.json",
-          "identity/executions/845bfeb9-55f9-4582-88d1-bfe952b78acc.json",
+          "identity/executions/2846f4d4-aa6b-4c01-b785-43dd004ac5c3.json",
+          "identity/executions/d8879bd3-85a5-403d-8682-1e4a153c8ad2.json",
           "index.json",
-          "quality/authorizations/6632f7fb8108324c17c435d9a2eef5bf41bb75371e71b1f39fbed7e6a4783e3b.json",
-          "quality/confirmations/e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876.json",
-          "quality/facts/cdcaced846e339ec024d1cb569599fd4a561d43b8b2a84a4d6d52f87004ce2b5.json",
+          "quality/authorizations/200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8.json",
+          "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json",
+          "quality/facts/2ac3ea3639caf96bb090ff2d980a9d1364eea8d96f4ebf18608189af6ff81d0e.json",
           "quality/verify.json",
           "task.json"
         ],
@@ -1863,39 +1791,39 @@
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           },
           {
-            "ref": "identity/executions/05a11d4e-53b4-4621-8527-9de9080519a4.json",
-            "sha256": "863df02a074dd5ccdd4f34d5e68c4cb664b28144f0c76278dfa253cace490db4"
+            "ref": "identity/executions/2846f4d4-aa6b-4c01-b785-43dd004ac5c3.json",
+            "sha256": "f370c1fb818f35dc73f16ec078a708de9a32f21b2c0d6b82957c9513e68cf149"
           },
           {
-            "ref": "identity/executions/845bfeb9-55f9-4582-88d1-bfe952b78acc.json",
-            "sha256": "4d03589a5fead7b338d08b95c49cc22fe2a66c247f36c68d6ad4ab639d1052f8"
+            "ref": "identity/executions/d8879bd3-85a5-403d-8682-1e4a153c8ad2.json",
+            "sha256": "8318383a67957be9c0982dc02d1497208d5f6d32c095b4c0c8ba5553e716131b"
           },
           {
             "ref": "index.json",
-            "sha256": "b09d7b2e21d905664279a26afb3e8ba75f29a449b8fefb8983acab2d648c6185"
+            "sha256": "b391b9c98a31bfeacf72df6d964bba30d49c982dd706a5d64e438ceac6a73235"
           },
           {
-            "ref": "quality/authorizations/6632f7fb8108324c17c435d9a2eef5bf41bb75371e71b1f39fbed7e6a4783e3b.json",
-            "sha256": "6632f7fb8108324c17c435d9a2eef5bf41bb75371e71b1f39fbed7e6a4783e3b"
+            "ref": "quality/authorizations/200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8.json",
+            "sha256": "200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8"
           },
           {
-            "ref": "quality/confirmations/e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876.json",
-            "sha256": "e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876"
+            "ref": "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json",
+            "sha256": "8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4"
           },
           {
-            "ref": "quality/facts/cdcaced846e339ec024d1cb569599fd4a561d43b8b2a84a4d6d52f87004ce2b5.json",
-            "sha256": "dbcc62ddf88c1900718e4657b1bcaca90888a4e64bbfecbf27e632c570939058"
+            "ref": "quality/facts/2ac3ea3639caf96bb090ff2d980a9d1364eea8d96f4ebf18608189af6ff81d0e.json",
+            "sha256": "cea9ef58622e6381369f93a2afe75a5c81a336d0da45c6c8de5e3c0a1cfb98f8"
           },
           {
             "ref": "quality/verify.json",
-            "sha256": "73d9b9815f0ab63a43544f81da304e9f7d230724f5036c9eeb262d97987d17b7"
+            "sha256": "6ddb2e616743482f8f9210097cc0ac5ddb7c193c6d38a17d390d0170f50894d5"
           },
           {
             "ref": "task.json",
-            "sha256": "b69b0e8c449dd7324a68acf5e03ed95ea9564115177b9b0d606dc9efb0f4daf6"
+            "sha256": "9a12db18b94079ef2c9342f40a9beacc4b04e0359c13840f39e1842521763109"
           }
         ],
-        "write_set_content_hash": "244764c4647e00be6590c04789a555f84184e10d503c8b7ac7b67fee6849a6b9",
+        "write_set_content_hash": "d28c5bdcc28dfb82a4fbf0958766d3fa57c80ce059ab26d4339a8fcbea45561b",
         "public_write_set": [
           "identity/executions/<UUID>.json",
           "identity/executions/<UUID>.json",
@@ -1910,21 +1838,21 @@
           "stdout": "{\n  \"ref\": \"quality/authorizations/<SHA256>.json\",\n  \"hash\": \"<SHA256>\",\n  \"value\": {\n    \"schema_version\": \"irreversible-authorization.v1\",\n    \"task_id\": \"public-behavior-authorize-alternate\",\n    \"operation\": \"commit\",\n    \"subject_ref\": \"quality/confirmations/<SHA256>.json\",\n    \"subject_hash\": \"<SHA256>\",\n    \"material_revision\": \"revision-<SHA256>\",\n    \"snapshot_tree\": \"<GIT_OID>\",\n    \"authorized_at\": \"<TIME>\"\n  }\n}\n",
           "stderr": "",
           "json": {
-            "ref": "quality/authorizations/6632f7fb8108324c17c435d9a2eef5bf41bb75371e71b1f39fbed7e6a4783e3b.json",
-            "hash": "6632f7fb8108324c17c435d9a2eef5bf41bb75371e71b1f39fbed7e6a4783e3b",
+            "ref": "quality/authorizations/200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8.json",
+            "hash": "200a3068f9d73ea31a623eb157e9d8c4f77bd8f5f5e9285f05fc78a1bda973e8",
             "value": {
               "schema_version": "irreversible-authorization.v1",
               "task_id": "public-behavior-authorize-alternate",
               "operation": "commit",
-              "subject_ref": "quality/confirmations/e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876.json",
-              "subject_hash": "e33299b1c2103fa3d53b1ed6b874529128eb7c1a85eb3f844ee9f1218ce00876",
+              "subject_ref": "quality/confirmations/8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4.json",
+              "subject_hash": "8e23dc13c7eefad5fed45e4189f2c9120dbfe9925244ac4cff5df2d3b0ccbed4",
               "material_revision": "revision-873e19f353c283b6042c91acea29e5b2d6f5d48d5c74d2b2173dc59e2c584e8a",
               "snapshot_tree": "c5c02cae0c8e0fe5a1aebbd2407b918de569a366",
-              "authorized_at": "2026-08-09T14:54:51.582Z"
+              "authorized_at": "2026-08-10T02:18:33.938Z"
             }
           },
           "hashes": {
-            "raw_stdout_sha256": "a00acb98e41a88887653233c5e6f03b138075247ad7a99f3cfbb1799641b53fa",
+            "raw_stdout_sha256": "40c785aefc838ee99025ff27586b1e930ab034b7c95fd4d724e954c428febe52",
             "raw_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "normalized_stdout_sha256": "9ba7ed4eec1a34d855b084734b3bf7d8e38fb22487bb74f559fb44075416fab1",
             "normalized_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
