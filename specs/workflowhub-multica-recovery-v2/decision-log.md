@@ -127,4 +127,6 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **实现**：`review-runner` 只消费 `phase_id`；`review-source` 对已提交 Phase 以直接 parent tree 到 candidate tree 派生 changed files，并记录 commit OID、parent、parent/commit/candidate tree 与一致性；未提交 Phase 记录 `commit_oid=null`；树变化使旧结果不可复用。schema、合同和 Phase 回归已同步。
 - **测试事实**：T004 在实现前真实 RED（6 中 3 项新增断言失败，exit=1，无 setup 错误）；T005 Phase 合同 GREEN 为 1 file / 7 tests passed，review-runner、schema、integration subject、review-layering 聚焦回归另为 36 tests passed。具体测试技能为 `backend-testing`；测试和 review 仍是质量事实，不是推进 gate。
 - **当前状态**：Phase B 代码与测试尚未取得最终独立 `opencode/v4flash` 结论；在审查完成前不标记 Phase B 完成，不宣称整体修复完成。
+- **首轮复核事实**：`opencode/v4flash` runtime `4ec6fbb8-7755-433e-9d09-3595a79d7e8e` 返回 `REVISE`。唯一 blocking 是本地 compact dossier 将 parent tree 生成错误，造成与 changed files/raw diff 自相矛盾；provider 同时确认实现方向、tree 失效逻辑、schema 对齐和无新增控制面无 blocking。该 review 原文保留，不改写为 PASS。
+- **修正**：改用“先解析 direct parent commit，再读取 parent^{tree}”生成审查绑定；把残留 `phase-gate` 错误文案改为“quality facts, not verify-final results”，避免把 Phase review 暗示为推进 gate。修正后必须重新取得独立结论。
 - **宪法边界**：没有新增 receipt、snapshot lineage、review lock、managed request-id、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。

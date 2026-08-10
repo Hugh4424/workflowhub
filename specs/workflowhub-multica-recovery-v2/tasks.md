@@ -66,7 +66,7 @@
 - **Trace**：D-Phase-subject → FR-10 → AC-11/AC-12
 - **STOP**：发现 review 仍由 caller 路径/累计 diff/旧 snapshot 选择，或需要新 control plane 时停止。
 - **状态**：`in_progress`
-- **执行事实**：已实现 host-derived Phase subject：`review-runner` 不再读取 `tasks.md.execution_file_paths`，`review-source` 从 Phase 直接 parent/candidate tree 派生 changed files，并记录 commit/parent/tree；无提交记录 `commit_oid=null`，树不一致由 `verifyFinalSubject` 识别。Phase 合同 GREEN 命令 exit=0，1 file / 7 tests passed；review-runner、schema、integration subject、review-layering 聚焦回归共 36 tests passed。待 Phase B 独立异源 review 后收尾。
+- **执行事实**：已实现 host-derived Phase subject：`review-runner` 不再读取 `tasks.md.execution_file_paths`，`review-source` 从 Phase 直接 parent/candidate tree 派生 changed files，并记录 commit/parent/tree；无提交记录 `commit_oid=null`，树不一致由 `verifyFinalSubject` 识别。Phase 合同 GREEN 命令 exit=0，1 file / 7 tests passed；review-runner、schema、integration subject、review-layering 聚焦回归共 36 tests passed。首轮独立审查真实返回 `REVISE`，唯一阻断为审查包错误记录 parent tree，已修正包生成逻辑；实现方向未被判定为阻断。待修正包的 Phase B 独立异源 review 后收尾。
 
 ## T006 — RED：receipt、snapshot、历史 completion non-gate
 

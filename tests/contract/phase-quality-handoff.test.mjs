@@ -65,6 +65,8 @@ describe("Phase quality and handoff contract", () => {
     const source = read("skills/wh-review/scripts/review-source.mjs");
     expect(runner).not.toMatch(/phaseExecutionPaths|execution_file_paths/);
     expect(source).toMatch(/phase review paths are derived from the Phase commit/);
+    expect(runner).toMatch(/phase review results are quality facts, not verify-final results/);
+    expect(runner).not.toMatch(/phase-gate/);
   });
 
   it("preserves the four-material and task-card boundary", () => {
