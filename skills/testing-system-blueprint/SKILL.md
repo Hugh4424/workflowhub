@@ -6,11 +6,12 @@ version: 1.0.0
 
 # Testing System Blueprint
 
-这是一个可复用的测试设计和缺口扫描技能，不是测试通过门；它不属于本任务
-标准 build-plan/build-code 调用链。当前标准链由 build-plan 的
-`test-routing-advisor` 预判、tasks 记录合同，再由 build-code 按真实 changed
-files 调用具体 testing skill。只有未来明确把 blueprint 纳入阶段依赖时，才可
-另行使用，不得把它偷偷当成当前阶段事实。
+这是 build-plan 的测试设计输入，不是测试通过门；它只负责把风险维度、场景、
+oracle、证据路径和覆盖限制折叠进 `plan.md`/`tasks.md`。标准链是：build-plan
+先读取本技能设计 blueprint，再用 `test-routing-advisor` 选择路线；build-code
+按真实 changed files 直接调用一个适用的具体 testing skill。build-code 消费
+已设计的 blueprint，不重复运行本技能，不生成第二份 ledger，也不把 blueprint
+当成开始、继续或完成的 gate。
 
 至少检查：行为结果、状态/数据流、错误/取消/恢复、权限/安全、并发/原子性、
 跨模块 seam、可观测性/来源，以及 UI 适用时的加载/空/错误/边界和可访问性。

@@ -1,234 +1,114 @@
 ---
 name: build-plan
-description: Turn the current specification into a reviewable implementation plan and executable task list.
-version: 3.0.0
+description: Turn the approved decision and specification into the current implementation plan and task list.
+version: 4.0.0
 ---
 
 # Build Plan
 
-## Purpose
+## Responsibility
 
-Turn the current `spec.md` into a readable `plan.md` and executable `tasks.md`.
-The plan must cover scope, phases, dependencies, tests, review, delivery
-boundary, risks, and every FR/AC. The task list must be ordered, bounded, and
-have a command or observable result for each task.
+Turn the current `decision-log.md` and `spec.md` into the current `plan.md` and
+`tasks.md`.
 
-## Working rule
+`decision-log.md`, `spec.md`, `plan.md`, and `tasks.md` are the current four
+materials and the only current work truth. This stage owns only `plan.md` and
+`tasks.md`. It does not change product direction, rewrite the specification, or
+execute implementation.
 
-Use the bundled `spec-plan` and `spec-tasks` content contracts before writing.
-`skills/spec-plan/templates/plan-template.md` is the only plan shape and
-`skills/spec-tasks/templates/tasks-template.md` is the only task-card shape;
-the stage skill remains the orchestrator and no second runtime state is added.
+If planning exposes a product or acceptance gap, report the exact gap to the
+owning upstream stage. Continue all unaffected research and planning in this
+same task; never silently fill the gap from code or old records.
 
-The current four materials are the source of truth:
+## Portable dependencies
 
-1. `decision-log.md`
-2. `spec.md`
-3. `plan.md`
-4. `tasks.md`
+The Stage Agent reads `workflows/build-plan/skill-deps.yaml` and directly reads
+the declared portable skill packages from their `path` and `bundle`. Apply the
+relevant research, planning, task-design, simplicity, test-routing, analysis,
+and review contracts in the same Stage Agent context. They guide the two owned
+materials and do not create another runtime or source of truth.
 
-Read the first two and author the latter two. Revise any current material in
-this same task when the work reveals a need. Old accepted records, receipts,
-reviews, snapshots, generations, and runner history are read-only
-audit records. They never license or block normal planning or implementation.
+A dependency or independent reviewer may be unavailable. Record the real
+`unavailable` quality fact and continue research, planning, or repair in this
+same task. Never turn missing quality evidence into `pass`.
 
-Do not stop at “there is a task for each FR”. Every task needs an exact file
-boundary, STOP condition, command, oracle, evidence path and completion facts.
-The final plan must contain a two-way FR↔Task↔AC matrix and a dependency DAG;
-unknown interfaces or consumers remain explicit STOP/unknown facts.
+## Boundaries
 
-Current materials decide whether work can continue. Formal publication still
-fails loudly for an invalid current task/workspace/runtime binding, wrong write
-set, mismatched content, or false execution identity. Stage completion still
-requires real research where needed, deterministic planning checks, independent
-review (or real `unavailable`), current user authorization, and handoff; it
-does not create a duplicate conversational confirmation for every stage.
+- Do not run Talk, Clarify, or Grill. Product direction belongs to
+  `make-decision`.
+- When the current decision/spec cannot support a necessary planning choice,
+  write one focused question and return it to the owning upstream stage. Never
+  invent product intent.
+- Do not implement code or execute RED/GREEN. Plan test scenarios, commands,
+  expected outcomes, and evidence for `build-code` to execute later.
+- Do not add another authority beside the four materials.
 
-## Runtime boundary
+## Work
 
-Use only the launcher-supplied `StageContext`; use `ctx.kernel` for formal
-records and `ctx.artifacts` for the four materials. Do not derive identity or
-paths from cwd, Git, branch, issue number, or scans. Do not call `prepare`, pass
-`--runner-root`, or copy runner files into the product repository.
+1. Read the current decision, specification, and existing plan/tasks if present.
+   Extract every requirement, acceptance criterion, constraint, non-goal, risk,
+   deferred item, and unresolved upstream question.
+2. Research the codebase in proportion to the implementation risk. Verify reuse
+   points, current consumers, ownership boundaries, interfaces, data changes,
+   failure paths, test conventions, and rollback options. Put durable conclusions
+   in `plan.md` or the owning task card; do not create a separate research
+   authority.
+3. Choose the simplest implementation that satisfies the current decision and
+   specification. Prefer deletion, narrowing, or reuse before adding a new
+   mechanism. Keep unknown consumers or interfaces explicit.
+4. Write `plan.md` with implementation boundaries, phases, dependencies,
+   affected modules or exact files where knowable, data/API changes, failure and
+   recovery behavior, rollback, test design, independent-review scope, delivery
+   boundary, risks, and deferred work. Trace every decision, FR, and AC to the
+   phase that owns it.
+5. Write `tasks.md` as an ordered, acyclic set of executable task cards. Each
+   card states its objective, requirement/AC coverage, exact file boundary or
+   explicit unknown, dependencies, STOP condition, planned checks and commands,
+   expected exit and oracle, evidence destination, risks, and completion
+   criterion. Each card also has one minimal current status (`pending`,
+   `in_progress`, or `completed`) and one execution-facts field; these live in
+   `tasks.md` itself and are not a receipt, runtime gate, or second ledger.
+   Include one final aggregate verification task.
+6. Analyze the four current materials for omissions, contradictions, accidental
+   scope, orphan tasks, and missing two-way traceability. Repair the owned
+   materials; send product or acceptance changes back to the owning upstream
+   stage.
+7. Ask the declared independent review capability to review the current plan and
+   tasks against the decision and specification. Preserve the actual verdict
+   and findings, or the real `unavailable` result. Repair valid findings; explain
+   rejected findings and unresolved risks. Review is a quality fact, not
+   permission to continue working on the task.
 
-Use an OS temporary directory for caller-owned drafts and runtime inputs.
-Publish the current reviewed `plan.md` and `tasks.md` via the runtime's artifact,
-receipt, and run schemas. The formal runtime sequence remains `run`, `confirm`,
-then `authorize` where the runtime explicitly requires those records; the
-user's existing authorization is sufficient for ordinary conversational
-handoff and no duplicate stage question is created. The current source
-snapshot is a provenance fact only, never a prerequisite or work permit.
+## Completion
 
-## Fixed invocation order and outputs
+The content work is complete when:
 
-The high-intelligence planning model uses this exact order:
+- `plan.md` and `tasks.md` cover every current decision, requirement, and AC
+  without adding product scope;
+- codebase facts, ownership, dependencies, failure paths, rollback, risks, and
+  unknowns are explicit enough for implementation;
+- tasks are bounded, dependency-ordered, and have checkable completion criteria;
+- test work is fully designed but no RED/GREEN execution is claimed;
+- the independent review result is truthfully recorded as a verdict or
+  `unavailable`, with important findings addressed or disclosed.
 
-1. `spec-research`: invoke only when there is a real research question that
-   could change the plan; otherwise record `skipped` and the reason.
-2. `spec-plan`: create the readable plan draft from the frozen decision/spec.
-3. `simplicity-guard`: look for deletion, narrowing, or reuse before more
-   planning is locked.
-4. `plan-eng-review`: check engineering boundaries, dependencies, failure paths,
-   rollback and verification of the plan draft.
-5. `test-routing-advisor`: preselect `simple`, `feature`, or `fullstack` and
-   the expected concrete testing skill separately for every Phase and the final
-   full test.
-6. `spec-tasks`: turn that design into ordered executable task cards.
-7. `spec-analyze`: read the original requirement projection plus
-   `decision-log.md`, `spec.md`, `plan.md`, and `tasks.md`; report the complete
-   trace and every omission or contradiction.
-8. `wh-review`: run one independent advisory review over the frozen plan/tasks.
+An upstream material gap prevents claiming the affected plan is ready, but does
+not freeze unaffected planning or same-task repair. Missing or unavailable
+quality evidence lowers the completion claim; it does not create a new task.
 
-Build-plan does not invoke `backend-testing`, `frontend-testing`,
-`fullstack-slice-testing`, or `testing-system-blueprint`. Those skills need the
-real post-implementation changed-file range and are invoked by build-code.
-Build-plan still writes the preselected tier, expected skill, scenarios,
-commands, oracle, evidence path and limits into plan/tasks so ordinary build-code
-does not invent product or test intent.
+## Stage end
 
-## Procedure
+Tell the user in plain language:
 
-### v2 review packet assembly
+- the chosen implementation approach and why it is the simplest adequate one;
+- what `plan.md` and `tasks.md` now cover and what remains out of scope;
+- the main dependencies, risks, unknowns, and review result;
+- what `build-code` should do next and what it must not guess.
 
-`build-plan` uses the `wh_review.v2` contract. The caller must assemble one
-current review packet with `raw_requirement`, `approved_spec`,
-`acceptance_criteria`, `draft_plan`, `draft_tasks`, `context_map`, and
-`evidence_map` before every `wh-review` call.
-The two maps are required caller/runner review material, not optional metadata
-or runner state. Initial/full packets deliver them to the provider; an
-incremental packet intentionally delivers only the runner-generated
-`review_delta` after the current maps pass validation.
-
-- `context_map` selects the current module boundaries, dependencies,
-  interfaces, and test conventions that the plan relies on.
-- `evidence_map` maps each applicable acceptance criterion to its own current
-  evidence anchors; do not reuse one generic anchor for multiple criteria.
-- After a plan, task, or upstream material revision, rebuild both maps from the
-  same current frozen snapshot and resend them. Do not retry with only the
-  planning text fields from the previous call.
-- If a map cannot be completed, send the valid `state: unknown` structure with
-  `unknown_reason`; never omit it, send `{}`, or invent anchors to get a review.
-  A missing or malformed map remains the runner's
-  `MATERIAL_INCOMPLETE`/`unavailable` fact.
-
-1. Read current `decision-log.md` and `spec.md`; identify the FRs, ACs,
-   constraints, non-goals, risks, and open decisions that affect the plan.
-2. Do proportionate `spec-research` only when it can materially change the
-   implementation. Keep research as input to the plan, not a new permanent
-   artifact; otherwise record why it was skipped.
-3. Write current `plan.md` with phases, ownership boundaries, dependencies,
-   data/API changes, risks, tests, independent-review scope, and delivery
-   boundary. Prefer the simplest design that meets the current requirements.
-4. Run `simplicity-guard` once against the plan draft, then `plan-eng-review`
-   once against the plan boundary, dependencies, failure paths and verification
-   approach. Preserve both advisory facts and apply only findings the main
-   agent judges valid.
-5. Run `test-routing-advisor` once for every Phase and once for the final full
-   test. It must return a tier and expected concrete testing skill based on the
-   planned scope. It does not execute tests.
-6. Write current `tasks.md`. Materialize the routing result in every task card:
-   exact changed files and FR/AC, tier, scenarios, commands, expected exit,
-   oracle, fixtures/services, browser route when relevant, evidence path,
-   coverage limits, skip reasons, snapshot binding, and the model/phase that
-   owns the strategy. Maintain bidirectional FR/AC coverage and an acyclic
-   order.
-7. Run `spec-analyze` after `tasks.md` exists. It reads the original requirement
-   projection, decision-log, spec, plan and tasks, and checks source-to-AC/test
-   coverage, contradictions, user-flow/state boundaries, orphan work and
-   accidental scope. It is report-only; the main agent must judge every finding.
-8. Treat the recorded task strategy as an execution contract. `build-code`
-   consumes it, checks actual changed files, and invokes the concrete testing
-   skill after implementation. If the actual range differs, it reruns
-   `test-routing-advisor` before selecting the concrete skill. It never invents
-   product requirements or acceptance oracles. Put a dedicated final aggregate
-   strategy in `tasks.md` during build-plan; missing strategy is
-   `MATERIAL_INCOMPLETE`.
-9. Run deterministic checks over the exact current materials. They must verify
-   complete phase/task rows, executable checks, dependency acyclicity, and
-   FR/AC coverage. Structural errors stop formal publication until fixed; they
-   do not require a new task or historical-record repair.
-10. Run one independent `wh-review` over the complete current `spec.md`,
-   `plan.md`, and `tasks.md`. `wh-review` alone owns providers and its internal
-   lenses. Record the actual verdict and provider availability; never rewrite
-   unavailable or failed as pass.
-11. Address valid review findings in the same task. Repair, reject invalid
-   findings with evidence, or let the user accept a specific risk. Do not add
-   process machinery or repeat an unchanged review. When a prior review was
-   `pass`, wh-review uses a runner-generated delta for new or changed plan
-   material and its direct impacts, rather than repeating a full review of
-   unchanged content. If no safe delta exists, record the fallback full review
-   explicitly. Rerun only affected checks and the review needed to assess that
-   change.
-12. Before handoff, the main agent must inspect every finding and record its
-   disposition, evidence, and next action. A finding cannot be silently carried
-   into implementation. This disposition is a quality fact, not a hidden gate:
-   it keeps unavailable or unresolved quality visible without blocking ordinary
-   same-task repair or progression.
-   Before handoff, the main agent must present a plain-language disposition
-   summary for every finding. Each row names `finding_id`, original fact,
-   consequence, `status`, `next_action`, `evidence_ref`, `owner`, `consumer`,
-   and `retain_or_delete`; the summary is shown to the user and is not replaced
-   by a provider verdict. Record the same rows in the existing Task completion
-   area for risk-acceptance/missing-items consumers; do not add a resolution
-   ledger.
-13. Publish exact final plan/task receipts and the stage attempt through the
-   runtime's declared schema. Publication must authenticate current structure;
-   audit gaps remain visible but do not block work.
-
-   The two official component receipts are mandatory current-stage inputs, not
-   optional commentary: the current receipt returned by the repository-owned
-   producer must contain the exact current `plan.md` and `tasks.md`, each with
-   its authenticated hash and `build-plan` producer identity. Initial receipts
-   may use `quality/evidence/plan.json` and `quality/evidence/tasks.json`; after
-   a current-material revision, use the producer's content-addressed current
-   refs and never overwrite an older fixed receipt. Pass both current refs to
-   the official `run` together with the current review/disposition and
-   `stage_skill_dispatch` facts. Do not substitute attachments, comments,
-   provider output, or an old receipt. If a receipt producer cannot publish,
-   record the precise `unavailable`/`incomplete` fact and keep the same task in
-   repair; do not handwrite a receipt or claim completion. An audit-carrier
-   gap is disclosed as audit debt and is not by itself a work or progression
-   gate; only missing formal completion/handoff facts may keep the next stage
-   asleep.
-14. Present a short plan summary: scope and non-goals, phases/dependencies,
-   FR/AC and check coverage, review facts, risks, and delivery boundary. Reuse
-   the user's existing explicit instruction to continue without per-stage
-   confirmation. Ask again only if a new product decision, scope change, or
-   concrete risk acceptance is required; do not manufacture a stage prompt.
-
-## Review, confirmation, and completion
-
-Independent review is quality evidence, not a general progress gate. An
-actionable major or blocking finding needs a real user choice: repair first
-(recommended) or accept the stated risk. Risk acceptance preserves the review
-verdict and never bypasses structural publication checks or formal runtime
-records.
-
-Do not call build-plan complete until the declared planning work, checks,
-independent review fact, current authorization, and handoff are real. Do not treat
-the confirmation or source snapshot as authorization to commit, push, merge,
-archive, or clean up; those actions require separate authorization.
-
-## Communication and handoff
-
-Use concise plain language in the user's language. A research or draft card
-states only conclusions that affect the plan. A review card states subject,
-actual providers, verdict, important findings, disposition, and next step. A
-confirmation card offers 2–3 meaningful choices only where user input is
-needed. Keep paths, hashes, refs, and commands in formal records.
-
-Use the runtime-owned completion renderer and `skill-deps.yaml`: every always
-component is `executed`; every conditional component is `executed` or
-`trigger=false — reason`. Do not create a separate progress state machine.
-
-At the end of this stage, tell the user in plain language what was planned, what
-will be delivered, what is out of scope, the main risks and deferred items, and
-what `build-code` must not guess. Wait for the user's actual reply before
-handoff; without that reply the stage remains `in_progress`/`pending`. A new
-scope or serious risk needs an explicit user accept or reject; the existing
-authorization covers ordinary continuation only.
-
-## Metrics
-
-Use only the launcher-issued metrics capability. Record entry and exit; metrics
-failures are warnings and never proof of completion.
+If a real scope, planning, or risk decision remains, name it and its owning
+upstream stage. Then obtain the user's actual reply to the plain-language plan
+summary before claiming that build-plan itself is accepted or its handoff is
+complete. Absence of that reply keeps the build-plan acceptance claim open; it
+does not turn confirmation into a machine work permit or block safe same-task
+work from the four materials. It is not authorization to commit, push, merge,
+archive, or clean up.

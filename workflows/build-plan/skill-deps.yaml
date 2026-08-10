@@ -1,18 +1,19 @@
 stage: build-plan
 skills:
-  - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, invocation: conditional, trigger: real_research_question, bundle: skills/spec-research/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: spec-plan, path: skills/spec-plan/SKILL.md, execution: inline, invocation: always, trigger: plan_design, bundle: skills/spec-plan/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, invocation: always, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: plan-eng-review, path: skills/plan-eng-review/SKILL.md, execution: inline, invocation: always, trigger: engineering_plan_check, bundle: skills/plan-eng-review/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, invocation: always, trigger: task_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, invocation: always, trigger: task_design, bundle: skills/spec-tasks/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, invocation: always, trigger: cross_material_analysis, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, dispatch: stage }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, trigger: real_research_question, bundle: skills/spec-research/skill-bundle.json, owner: stage }
+  - { name: spec-plan, path: skills/spec-plan/SKILL.md, execution: inline, trigger: plan_design, bundle: skills/spec-plan/skill-bundle.json, owner: stage }
+  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage }
+  - { name: plan-eng-review, path: skills/plan-eng-review/SKILL.md, execution: inline, trigger: engineering_plan_check, bundle: skills/plan-eng-review/skill-bundle.json, owner: stage }
+  - { name: testing-system-blueprint, path: skills/testing-system-blueprint/SKILL.md, execution: inline, trigger: phase_test_design, bundle: skills/testing-system-blueprint/skill-bundle.json, owner: stage }
+  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, trigger: task_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage }
+  - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, trigger: task_design, bundle: skills/spec-tasks/skill-bundle.json, owner: stage }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: cross_material_analysis, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
-  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
-  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
-  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: research_or_review, absence_semantics: blocked }
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
+  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
+  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: research_or_review, absence_semantics: diagnostic }
 external_capabilities:
   - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: research_or_review, absence_semantics: diagnostic }
   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }
