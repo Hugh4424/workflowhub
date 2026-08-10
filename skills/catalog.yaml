@@ -109,7 +109,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: eac4b5a8cbb3a70ec7c6db1924fa3f96b2121766bab91447f9791fc1b699ac59
+    local_bundle_hash: 96eb520ddf3c4f596ba12fe076b6e7e7e3f0104f8c3dcb4057b433c67751089f
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
@@ -131,13 +131,13 @@ skills:
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
-    local_changes: 保留可独立搬运的十维歧义扫描合同；owner 是 skill catalog 与 closure test；当前 Clarify 由 make-decision 的 talk-with-zhipeng 负责，不作为 build-spec 阶段依赖；当历史审计不再需要该合同且 closure test 删除时移除
+    local_changes: 保留可独立搬运的十维歧义扫描合同；当前由 make-decision 的 Talk/Clarify 交互与 spec 内容合同消费，不作为 build-spec 阶段依赖；closure test 只确认它没有被重新接入；当这些历史/内容合同不再需要时移除
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 4907d3df2037838032593fc670ec2c07bc187ea91abe002768c40804243d40db
+    local_bundle_hash: 28b5a84373d6c74b1702e7d8e68401ec4dff7c5cdeeed501b58735c835b69e98
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -153,7 +153,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 6a413a3b1055e9ab27f808871a53e5c378627b5f948e69f5e370591749719027
+    local_bundle_hash: fb7e5f2050c59fc4abbbc4af284750826a9e80b03cff3aa8bf6e53657dd640c5
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -176,7 +176,7 @@ skills:
     design_idea: report-only packet lens
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；当前 consumer 是 contract tests 和历史材料复核，owner 是 runtime/stage/stage-content-contracts.mjs；没有 runtime work gate；当同等 source-bound contract coverage 被移除且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；当前 consumer 是 build-plan 的 planning_artifacts packet projection、contract tests 和历史材料复核，owner 是 review-materials.mjs 与 runtime/stage/stage-content-contracts.mjs；没有 runtime work gate；当 build-plan 移除该 report step 且无历史材料引用时删除
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
   - name: stage-step-receipts
@@ -190,7 +190,7 @@ skills:
     design_idea: 只承载步骤证据，不引入第二 verdict engine
     used_by_stages: []
     upstream: []
-    local_changes: 仅保留历史合同 provenance；owner 是 skill catalog 与历史审计；当前阶段不依赖该 absorbed skill，不恢复独立 receipt runtime；当历史审计与 provenance 不再需要该条目时移除
+    local_changes: 仅保留历史合同 provenance；当前阶段不依赖该 absorbed skill，不恢复独立 receipt runtime；closure test 只确认它没有被重新接入；当历史审计与 provenance 不再需要该条目时移除
     dependency_closure: []
     update_policy: 随 canonical step 与 receipt schema 变更审查
   - name: audit-summary-carrier
@@ -204,7 +204,7 @@ skills:
     design_idea: 保留可验证引用，不复制第二份事实源
     used_by_stages: []
     upstream: []
-    local_changes: 已吸收到 runtime evidence facts；owner 是历史 catalog/provenance；当前没有阶段 consumer，不保留独立 runtime skill；当历史审计与 provenance 不再需要该条目时移除
+    local_changes: 已吸收到 runtime evidence facts；当前没有阶段 consumer，不保留独立 runtime skill；catalog 与 closure test 只保留其历史 provenance；当历史审计与 provenance 不再需要该条目时移除
     dependency_closure: []
     update_policy: 随 stage-result audit schema 变更审查
   - name: requirement-lineage

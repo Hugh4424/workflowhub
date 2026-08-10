@@ -25,7 +25,7 @@ context and return only their findings; do not inline them or route them
 through a dispatcher. This includes research when needed and
 `test-routing-advisor`. `spec-plan`, `simplicity-guard`, `plan-eng-review`,
 `testing-system-blueprint`, `spec-tasks`, and `spec-analyze` remain inline.
-The declared independent findings-review adapter is the stage's review adapter;
+The review dependency declared in `skill-deps.yaml` is the stage's review adapter;
 its broker request must produce findings in an independent reviewer context. It is not
 an inline self-review lens and does not share the Stage Agent's judgment.
 `simplicity-guard` and the plan-review lenses inspect the same plan material and
@@ -92,8 +92,8 @@ not new workflow stages and not gates.
    evidence refs, covered ACs, review fact, completion time, and the human
    readable `执行事实`. Every card also requires test tier/method, scenarios,
    fixtures, and coverage limits; these remain in that same card as design
-   facts, not a second authority. The separately tracked `source_refs /
-   decision_refs` and test-design fields are required companion facts, not
+   facts, not a second authority. The `source_refs / decision_refs` and
+   test-design fields are required companion facts inside the same card, not
    additional runtime structural fields or a second authority. For every phase in
    `plan.md`, put its required
    `Goal`/`Files`/`Tasks`/`Verify`/`Knowledge`/`STOP`/`Done`/`Risks and rollback`

@@ -64,11 +64,12 @@ The binding records `source_status` (`current`, `deferred`, `non-goal`, or
 decision-log prose into `spec.md`, and an FR without a source binding is a new
 requirement that must return to `make-decision`.
 
-When a build-code or verify-code scope revision changes product behavior,
-re-read the four current materials and update only affected FR/AC/source
-bindings plus the revision note. Preserve old facts as history; do not silently
-turn a task finding into an upstream decision or use `build-spec` to invent the
-missing choice.
+When make-decision authorizes a scope revision that changes product behavior,
+the owning spec-authoring stage re-reads the four current materials and updates
+only affected FR/AC/source bindings plus the revision note. Preserve old facts
+as history; do not silently turn a task finding into an upstream decision or use
+`build-spec` to invent the missing choice. Build-code and verify-code report a
+material gap to this owner; they do not rewrite `spec.md` themselves.
 
 Include module, entity, data-lifecycle, and compatibility contracts only at the
 product boundary. For each conditional subsection, write either the applicable

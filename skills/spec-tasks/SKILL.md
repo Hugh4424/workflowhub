@@ -54,6 +54,12 @@ restates the owning plan phase boundary for reading only;
 The block summarizes one implementation phase; it is not a new stage, progress
 store, or runtime state object.
 
+For a small single-behavior change, project one Phase with one RED/GREEN pair
+and one FINAL aggregate card. Keep the required card shape, but use
+`N/A — reason` for fields that are truly not applicable. Do not create dummy
+cards or phases merely to satisfy the example template; fullstack work may
+split into more cards only when the dependency and file boundaries are real.
+
 ## Projection rules
 
 - Copy task IDs, dependencies, exact files, and FR/AC mapping from `plan.md`.

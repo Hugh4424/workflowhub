@@ -63,6 +63,19 @@ describe("four-material non-gate contract", () => {
     expect(cli).not.toMatch(/invokeCodexHost|WORKFLOWHUB_HOST_BRIDGE|stage_skill_dispatch|invoke-stage-skill|host-invocations/);
   });
 
+  it("keeps four-material ownership with authoring stages", () => {
+    const buildCode = readFileSync("workflows/build-code/SKILL.md", "utf8");
+    const verifyCode = readFileSync("workflows/verify-code/SKILL.md", "utf8");
+    const specSpecify = readFileSync("skills/spec-specify/SKILL.md", "utf8");
+    expect(buildCode).toContain("Build-code does not\nauthor or rewrite the four current materials");
+    expect(buildCode).toContain("`spec.md` belongs\nto `build-spec`");
+    expect(buildCode).not.toMatch(/may update `spec\.md`, `plan\.md`, and `tasks\.md`/);
+    expect(verifyCode).toContain("不在 verify-code\n中改写材料");
+    expect(verifyCode).toContain("`spec.md` → build-spec；`plan.md`\/`tasks.md` → build-plan");
+    expect(specSpecify).toContain("Build-code and verify-code report a\nmaterial gap to this owner");
+    expect(specSpecify).not.toMatch(/When a build-code or verify-code scope revision/);
+  });
+
   it("keeps legacy stage-content access explicit and immutable", () => {
     const evidence = readFileSync("runtime/evidence/stage-content-evidence.mjs", "utf8");
     const taskHandle = readFileSync("runtime/task/task-handle.mjs", "utf8");

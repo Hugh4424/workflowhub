@@ -177,7 +177,7 @@
 
 ## 4. Final current-snapshot aggregate strategy
 
-- **test tier / test method**：[填写：最终 tier 与具体 testing skill]
+- **tier / method**：[填写：最终 tier 与具体 testing skill]
 - **scenarios**：[填写：全部适用 AC、成功/失败、状态、跨任务 seam 场景]
 - **command**: `[填写：可执行最终命令]`
 - **expected exit**：0
@@ -189,6 +189,8 @@
 - **execution_contract**：当前快照运行一次；失败保留原始输出，回受影响 task，不用全量重跑掩盖局部失败。
 
 ## Dependency Graph
+
+- **order**：T001 (RED) → T002 (GREEN) → T003 (FINAL)
 
 ```text
 T001 (RED) → T002 (GREEN) → T003 (FINAL)
