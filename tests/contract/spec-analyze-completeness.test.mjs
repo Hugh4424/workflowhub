@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 import { validateSpecAnalyzeCompleteness } from "../../runtime/stage/stage-content-contracts.mjs";
@@ -14,7 +16,7 @@ const strategy = `
 const aggregateStrategy = `
 - **tier / method**：\`fullstack\` / \`fullstack-slice-testing\`
 - **scenarios**：完整回放。
-- **command**：\`npm test\`
+- **command**: \`npm test\`
 - **expected exit**：0
 - **oracle**：\`ORACLE-FINAL-001\`
 - **fixtures_services**：内存 fixture；不调用 provider。
@@ -41,6 +43,19 @@ function complete() {
 }
 
 describe("spec-analyze completeness contract", () => {
+  it("has no runtime caller that turns findings into a publication gate", () => {
+    const runtimeCallerFiles = [
+      new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url),
+      new URL("../../runtime/stage/stage-runner.mjs", import.meta.url),
+    ];
+    const callers = runtimeCallerFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+    expect(callers).not.toMatch(/validateSpecAnalyzeCompleteness/);
+    const catalog = yaml.load(readFileSync(new URL("../../skills/catalog.yaml", import.meta.url), "utf8"));
+    const entry = catalog.skills.find(({ name }) => name === "spec-analyze");
+    expect(entry.local_changes).toMatch(/report-only validator[\s\S]*(?:no|没有) runtime work gate/i);
+    expect(entry.local_changes).toMatch(/consumer[\s\S]*contract tests/i);
+  });
+
   it("accepts a fully source-bound artifact chain and complete test strategy", () => {
     const result = validateSpecAnalyzeCompleteness(complete());
     expect(result.ok, result.errors.join("; ")).toBe(true);

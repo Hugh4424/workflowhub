@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 import { buildPlanningArtifacts } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const root = process.cwd();
 const read = (file) => readFileSync(join(root, file), "utf8");
@@ -15,6 +16,27 @@ const taskCards = (markdown) => markdown.split(/^#{3,4} /m).slice(1).map((part) 
 const backtickValues = (body, label) => {
   const line = body.split("\n").find((item) => item.startsWith("- **" + label + "**：")) ?? "";
   return [...line.matchAll(/`([^`]+)`/g)].map(([, value]) => value);
+};
+// Frozen test-side mirror of the HEAD v3 readable contract. This keeps closure
+// tests independent from production runtime exports and avoids adding a runtime
+// surface just to make a test pass.
+const PLAN_SECTIONS_V3 = Object.freeze([
+  "Quick Read", "Technical Context", "Code Anchors", "Solution Design", "File Boundary",
+  "Technical Decisions", "Test Strategy", "Rollback and Recovery", "Implementation Order",
+  "Dependencies and Parallelism", "Requirement and Verification Traceability",
+  "Governance Synchronization Matrix", "Constitution Check",
+]);
+const PHASE_FIELDS_V3 = Object.freeze(["Goal", "Files", "Tasks", "Verify", "Knowledge", "STOP", "Done", "Risks and rollback"]);
+const TASK_FIELDS_V3 = Object.freeze([
+  "ID", "Phase", "goal", "design_state", "versioned_refs", "输入", "依赖", "并行",
+  "FR", "AC", "动作", "精确文件", "boundary", "输出", "Knowledge", "verification_role",
+  "paired_task", "gate_cmd", "expected_exit", "oracle", "evidence_path", "STOP", "recovery", "task risk",
+]);
+const parseRuntimeArray = (name) => {
+  const source = read("runtime/stage/stage-content-contracts.mjs");
+  const match = source.match(new RegExp(`const ${name} = Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\);`));
+  if (!match) throw new Error(`${name} is missing from the HEAD runtime source`);
+  return [...match[1].matchAll(/"([^"\n]+)"/g)].map(([, value]) => value);
 };
 
 describe("spec and plan content artifact closure", () => {
@@ -42,9 +64,13 @@ describe("spec and plan content artifact closure", () => {
   it("keeps the recovered content skills declared by their owning stage", () => {
     const buildSpec = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
+    const stageManifests = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]
+      .map((stage) => read(`workflows/${stage}/skill-deps.yaml`));
     expect(buildSpec.skills.map((item) => item.name)).toContain("spec-specify");
     expect(buildSpec.skills.map((item) => item.name)).not.toContain("spec-clarify");
     expect(buildPlan.skills.map((item) => item.name)).toEqual(expect.arrayContaining(["spec-plan", "spec-tasks"]));
+    expect(stageManifests.join("\n")).not.toMatch(/name:\s*spec-clarify/);
+    expect(stageManifests.join("\n")).not.toMatch(/name:\s*stage-step-receipts/);
     for (const item of [...buildSpec.skills, ...buildPlan.skills]) {
       if (["spec-specify", "spec-plan", "spec-tasks"].includes(item.name)) {
         expect(item.execution).toBe("inline");
@@ -71,13 +97,13 @@ describe("spec and plan content artifact closure", () => {
     }
     expect(clarify).toMatch(/十个维度/);
     for (const text of [planSkill, planTemplate]) {
-      expect(text).toMatch(/implementation solution|实现方案/i);
+      expect(text).toMatch(/implementation solution|实现方案|Quick Read/i);
       expect(text).toMatch(/boundar|边界/i);
       expect(text).toMatch(/dependenc|依赖/i);
-      expect(text).toMatch(/test plan|测试计划/i);
+      expect(text).toMatch(/test strategy|test plan|测试计划|测试策略/i);
       expect(text).toMatch(/risk|风险/i);
       expect(text).toMatch(/rollback|回滚/i);
-      expect(text).toMatch(/task mapping|任务映射/i);
+      expect(text).toMatch(/task mapping|任务映射|Requirement and Verification Traceability/i);
       expect(text).toMatch(/FR.*AC|FR\/AC/si);
     }
     for (const text of [tasksSkill, tasksTemplate]) {
@@ -91,22 +117,92 @@ describe("spec and plan content artifact closure", () => {
     }
     expect(tasksSkill).toMatch(/designs?[^.]*RED[^.]*GREEN/i);
     expect(tasksSkill).toMatch(/does not run|不得执行/i);
-    const forbidden = /TaskKernel|\bsnapshot\b|\binvocation\b|user_handoff|WorkflowHub Stage Progress|process index|comment projection|执行状态填写区/i;
+    expect(planSkill).toMatch(/Goal/);
+    expect(planSkill).toMatch(/Knowledge/);
+    expect(planSkill).toMatch(/F10/);
+    expect(tasksSkill).toMatch(/status|状态/);
+    expect(tasksSkill).toMatch(/not.*permission|不.*授权|不.*许可证/i);
+    const forbidden = /TaskKernel|ArtifactDir|StageContext|CandidateWorkspace|user_handoff|WorkflowHub Stage Progress|process index|comment projection|snapshot lineage|host bridge|review lock|retry_contract|successor|predecessor|selector/i;
     for (const text of [planSkill, planTemplate, tasksSkill, tasksTemplate]) {
       expect(text).not.toMatch(forbidden);
     }
-    const allowedCardLabels = ["目标", "依赖", "精确文件", "动作", "验证", "证据", "Trace", "STOP", "状态", "执行事实"];
-    const templateCards = tasksTemplate.split(/^## /m).slice(1);
-    expect(templateCards).toHaveLength(2);
+    const requiredCardLabels = [
+      ...TASK_FIELDS_V3.slice(0, 5),
+      "source_refs / decision_refs",
+      ...TASK_FIELDS_V3.slice(5),
+    ];
+    const templateCards = tasksTemplate.split(/^#### T\d+ /m).slice(1);
+    expect(templateCards).toHaveLength(3);
     for (const card of templateCards) {
       const labels = [...card.matchAll(/^- \*\*(.+?)\*\*：/gm)].map((match) => match[1]);
-      expect(labels).toEqual(allowedCardLabels);
+      expect(labels.slice(0, requiredCardLabels.length)).toEqual(requiredCardLabels);
+      expect(labels).toEqual(expect.arrayContaining(requiredCardLabels));
+      expect(card).toMatch(/##### 执行状态填写区（唯一完成权威）/);
+      expect(card).toMatch(/- \*\*status\*\*：`pending`/);
+      expect(card).toMatch(/- \*\*执行事实\*\*：N\/A — not started/);
     }
+    expect(planTemplate).toMatch(/## Quick Read/);
+    for (const heading of PLAN_SECTIONS_V3) {
+      expect(planTemplate).toMatch(new RegExp(`^## ${heading.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, "m"));
+    }
+    expect(planTemplate).toMatch(/## Constitution Check/);
+    expect(planTemplate).toMatch(/## Phase P1/);
+    expect(planTemplate).not.toMatch(/## 5\. Phases/);
+    expect(planTemplate).toMatch(/Risks and rollback/);
+    expect(planTemplate).toMatch(/同一 `gate_cmd`/);
+    expect(tasksTemplate).toMatch(/## Phase P1/);
+    expect(tasksTemplate).toMatch(/### Files/);
+    expect(tasksTemplate).toMatch(/### Done/);
+    const phaseBlock = tasksTemplate.split("## Phase P1")[1].split("## 4. Final current-snapshot aggregate strategy")[0];
+    expect(phaseBlock).toMatch(/### Goal/);
+    expect(phaseBlock).toMatch(/### Files/);
+    expect(phaseBlock).toMatch(/### Tasks/);
+    expect(phaseBlock).toMatch(/### Verify/);
+    expect(phaseBlock).toMatch(/### Knowledge/);
+    expect(phaseBlock).toMatch(/### STOP/);
+    expect(phaseBlock).toMatch(/### Done/);
+    expect(phaseBlock).toMatch(/### Risks and rollback/);
+    expect(parseRuntimeArray("PLAN_SECTIONS_V3")).toEqual(PLAN_SECTIONS_V3);
+    expect(parseRuntimeArray("PHASE_FIELDS_V3")).toEqual(PHASE_FIELDS_V3);
+    expect(parseRuntimeArray("TASK_FIELDS_V3")).toEqual(TASK_FIELDS_V3);
+    const planPhaseFiles = planTemplate.split("## Phase P1")[1].split("### Files")[1].split("### Tasks")[0].trim();
+    const tasksPhaseFiles = tasksTemplate.split("## Phase P1")[1].split("### Files")[1].split("### Tasks")[0].trim();
+    expect(tasksPhaseFiles).toBe(planPhaseFiles);
+    expect(planPhaseFiles).toMatch(/\*\*NEW\*\*：`[^`]+`/);
+    expect(planPhaseFiles).toMatch(/\*\*MODIFY\*\*：`[^`]+`/);
+    expect(tasksTemplate).toMatch(/## 4\. Final current-snapshot aggregate strategy/);
+    expect(tasksTemplate).toMatch(/\*\*command\*\*: `\[填写：可执行最终命令\]`/);
+    expect(tasksSkill).toMatch(/checkbox[\s\S]{0,120}status[\s\S]{0,120}agree/i);
+    expect(tasksTemplate).not.toMatch(/## Appendix A\. Legacy import/);
+    expect(tasksTemplate).not.toMatch(/## Requirement and Verification Traceability/);
     const buildPlanNames = buildPlan.skills.map((item) => item.name);
     expect(buildPlanNames).toContain("test-routing-advisor");
+    expect(buildPlanNames).toContain("testing-system-blueprint");
     expect(buildPlanNames).not.toEqual(expect.arrayContaining([
-      "testing-system-blueprint", "backend-testing", "frontend-testing", "fullstack-slice-testing",
+      "backend-testing", "frontend-testing", "fullstack-slice-testing",
     ]));
+    expect(read("workflows/build-plan/SKILL.md")).toMatch(/Do not run Talk, Clarify, or Grill here/);
+    expect(read("workflows/build-plan/SKILL.md")).toMatch(/double-solution exercise/);
+    const catalog = yaml.load(read("skills/catalog.yaml"));
+    const specPlanEntry = catalog.skills.find((item) => item.name === "spec-plan");
+    expect(specPlanEntry).not.toHaveProperty("retry_contract");
+    const specAnalyzeBundle = validateSkillBundle(root, "skills/spec-analyze/skill-bundle.json", "skills/spec-analyze/SKILL.md");
+    expect(catalog.skills.find((item) => item.name === "spec-analyze").local_bundle_hash).toBe(specAnalyzeBundle.bundleHash);
+    expect(catalog.skills.find((item) => item.name === "spec-clarify").used_by_stages).toEqual([]);
+    expect(catalog.skills.find((item) => item.name === "stage-step-receipts").used_by_stages).toEqual([]);
+    for (const item of catalog.skills.filter((entry) => entry.local_bundle_hash && entry.path)) {
+      const bundle = item.path.replace(/SKILL\.md$/, "skill-bundle.json");
+      if (!existsSync(join(root, bundle))) continue;
+      const closure = validateSkillBundle(root, bundle, item.path);
+      expect(closure.bundleHash, `${item.name} bundle hash`).toBe(item.local_bundle_hash);
+    }
+    const makeDecisionSteps = JSON.parse(read("workflows/make-decision/steps.json"));
+    expect(makeDecisionSteps.steps[10].observable_result).toMatch(/actual confirmation/i);
+    expect(makeDecisionSteps.steps[10].observable_result).toMatch(/no extra delivery-state object/i);
+    const specAnalyze = read("skills/spec-analyze/SKILL.md");
+    expect(specAnalyze).toMatch(/same task may continue writing and repairing/i);
+    expect(specAnalyze).toMatch(/before declaring the stage complete/i);
+    expect(specAnalyze).not.toMatch(/before any material is changed or work proceeds/i);
   });
 
   it("keeps the current P3 task cards source-bound and executable", () => {

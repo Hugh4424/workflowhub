@@ -1,101 +1,125 @@
 ---
 name: build-spec
-description: Turn the approved product decision into the current feature specification.
-version: 4.0.0
+description: Turn the current product decision into a complete, testable feature specification.
+version: 4.1.0
 ---
 
 # Build Spec
 
-## Responsibility
+## Responsibility and authority
 
-Turn the current `decision-log.md` into the current `spec.md`.
+Turn the current `decision-log.md` into the current `spec.md`. The four
+materials have separate responsibilities and are the only current work authority;
+old records are not a replacement authority:
 
-`decision-log.md`, `spec.md`, `plan.md`, and `tasks.md` are the current four
-materials and the only current work truth. This stage owns only `spec.md`:
+- `decision-log.md` owns original requirements, user choices, reasons, risks,
+  non-goals, and deferred direction;
+- `spec.md` owns product behavior, flows, states, FR, AC, failure boundaries,
+  and product-facing contracts;
+- `plan.md` and `tasks.md` are downstream engineering outputs and must not fill
+  a missing product decision.
 
-- `decision-log.md` is the upstream authority for product direction.
-- An existing `spec.md` is the revision target.
-- `plan.md` and `tasks.md` are downstream outputs. Never use them to fill a
-  missing decision or let implementation detail redefine the product.
-
-Do not add a new decision, implementation plan, task breakdown, or parallel
-authority. If the decision is incomplete, expose the gap instead of guessing.
+This stage owns only `spec.md`. An existing specification is revised in place;
+do not create a parallel specification. If a direction-changing decision is
+missing, expose the exact gap to `make-decision` and continue unaffected repair.
+The current `spec.md` remains the single revision target; never create a
+parallel revision target or infer a replacement from historical records.
 
 ## Portable dependencies
 
-The Stage Agent reads `workflows/build-spec/skill-deps.yaml` and directly reads
-the declared portable skill packages from their `path` and `bundle`. Apply the
-relevant content contracts in the same Stage Agent context. Their templates and
-checks guide `spec.md`; they do not create another stage or another source of
-truth.
+Read inline packages declared in `skill-deps.yaml` directly in the same Stage
+Agent context. Packages declared `execution: independent` run in their own
+independent context and return only findings; do not inline them or route them
+through a dispatcher. `spec-specify`, `simplicity-guard`, and `plan-ceo-review`
+are inline lenses; conditional design review follows its declared execution.
+They do not create extra artifacts, dispatchers, or work prerequisites.
 
-A dependency or independent reviewer may be unavailable. Record the real
-`unavailable` quality fact and continue drafting or repairing this same task.
-Never turn missing quality evidence into empty findings or stage completion.
+Quality dependencies and the independent review capability may be unavailable.
+Preserve the real unavailable/error/transport fact and keep drafting or
+repairing this same task. Never turn unavailable into empty findings or a
+completion claim, and never make it a reason to stop safe writing.
 
-`simplicity-guard` and `plan-ceo-review` are optional advisory lenses in the same
-`wh-review` packet. Include their read-only skill files when applicable; do not
-invoke them separately or create `*-facts`, invocation receipts, dispatchers, or
-independent runtimes. Their absence is a review fact, not a work prerequisite.
+Review is a quality fact, not a progression gate or permission to continue
+working. Missing or unavailable quality evidence lowers the completion claim;
+it does not block same-task drafting or repair. An unavailable review is never
+`pass`.
 
-## Work
+## Required specification content
 
-1. Read the current `decision-log.md` and existing `spec.md`, if present.
-   Extract the original requirement, confirmed choices, boundaries, non-goals,
-   risks, deferred items, and open questions. Preserve every confirmed decision.
-2. Research the codebase only when a current interface, data rule, state,
-   compatibility boundary, or operational fact is needed to make the product
-   behavior precise. Put durable conclusions in `spec.md` as facts, constraints,
-   or explicit assumptions; do not create a separate research authority.
-3. List every material ambiguity separately. For each one, state whether it can
-   change scope, acceptance, interfaces, data, security, or operations.
-   Continue all unaffected drafting and repair.
-4. When the decision material cannot support a required specification claim,
-   write one focused clarification question and return it to `make-decision`.
-   Do not run Clarify in this stage or invent the answer.
-5. Write `spec.md` directly. Use stable IDs and cover the goal, scope, non-goals,
-   user scenarios and states, success and failure behavior, functional
-   requirements, acceptance criteria, interfaces/data/operational boundaries,
-   assumptions, risks, and deferred work. Every acceptance criterion needs an
-   observable pass oracle and failure condition.
-6. Check the result against the decision log and Constitution. The specification
-   must add no accidental scope, duplicate authority, speculative mechanism, or
-   implementation plan.
-7. Ask the declared independent review capability to inspect the current decision
-   and specification. Preserve the actual findings, transport status, and
-   provenance, or the real `unavailable` result. Repair valid findings in `spec.md`;
-   explain rejected findings and unresolved risks. An `unavailable` review is
-   never `pass`; it does not block drafting or same-task repair. Review is a quality fact, not
-   permission to continue working on the task.
+Read the decision log and existing spec before researching. Preserve every
+confirmed choice and every explicit non-goal. Research only when a current
+interface, data rule, state, compatibility boundary, security condition, or
+operational fact is needed to make product behavior precise; durable findings
+belong in the relevant spec section, not a second research authority.
 
-## Completion
+The specification must make these items explicit when applicable:
 
-The content work is complete when:
+1. quick-read goal, user outcome, scope, urgency, and business impact;
+2. non-goals and deferred work, each linked to a current decision/source;
+3. user scenarios and journeys, including default, empty, loading, error,
+   cancellation, permission, boundary, and race states;
+4. state transitions and observable success, failure, recovery, and retry
+   behavior;
+5. stable IDs for scenarios, product facts, FR, AC, risks, and open questions;
+6. functional requirements, each linked to a source, scenario, and AC;
+7. acceptance criteria with method, pass oracle, failure condition, evidence
+   type, and affected user state;
+8. product-boundary interfaces, entities, data lifecycle, and compatibility
+   contracts only when they affect what users must observe;
+9. assumptions, risks, unknowns, owners, handling stage, and close condition;
+10. explicit exclusions and the next-stage handoff.
 
-- every confirmed decision is represented without adding a new decision;
-- every requirement and acceptance criterion has a stable, observable meaning;
-- scope, states, success/failure boundaries, non-goals, risks, and assumptions
-  are explicit;
-- every material ambiguity is resolved by current authority or remains plainly
-  identified as an upstream decision gap;
-- the independent review findings and transport status are truthfully recorded,
-  with important findings addressed or disclosed. If transport is unavailable,
-  the specification remains quality-incomplete even though same-task drafting
-  continues.
+List every material ambiguity separately with its possible impact on
+scope, acceptance, interface, data, security, or operations. Do not guess an
+answer from code, old records, or a plan.
+Do not run Talk, Clarify, or Grill in this stage, and do not call
+`talk-with-zhipeng` or `grill-with-docs`; those activities belong exclusively to
+`make-decision`. Do not invent the answer; a direction-changing ambiguity is
+identified as an upstream decision gap. Continue all unaffected drafting and
+repair while recording the gap plainly.
 
-An upstream decision gap prevents claiming the specification is ready, but does
-not freeze investigation or repair in the same task. Missing or unavailable
-quality evidence lowers the completion claim; it does not create a new task.
+## Boundaries
 
-## Stage end
+Do not add implementation file lists, code symbols, engineering alternatives,
+exact test commands, or task steps to `spec.md`; those belong to `plan.md` and
+`tasks.md`. Do not duplicate scenario prose in FRs, assumptions outside the
+fact section, or exclusions in several sections. Conditional contracts use one
+complete applicable subsection or one factual `N/A — reason` line.
 
-Tell the user in plain language:
+The specification must not create a second authority, status projection, or
+process summary. Quality facts may be referenced by path and source, but a
+review or test result never changes product scope automatically.
 
-- what product behavior the specification defines;
-- what is explicitly out of scope;
-- the important risks, unknowns, and review findings/transport facts;
-- what `build-plan` should do next and what it must not guess.
+## Work sequence
 
-If a real clarification, scope change, or risk decision remains, name it and
-its owning stage. Any user confirmation is human alignment, not a machine work
-permit and not authorization to commit, push, merge, archive, or clean up.
+1. Read `decision-log.md` and current `spec.md`; build a source/decision index.
+2. Identify every confirmed requirement, choice, boundary, non-goal, risk,
+   deferred item, and upstream gap.
+3. Research only the current facts needed to make the behavior precise.
+4. Draft or revise `spec.md` with stable IDs, flows, states, FR/AC, oracles,
+   failure conditions, risks, and explicit exclusions.
+5. Cross-check no decision was dropped, no new product scope was invented, and
+   every AC is observable.
+6. Use the declared independent review capability against the current decision
+   and specification. Keep provider/model/transport provenance and findings;
+   the review contract returns findings, not a pass/revise permission.
+7. Dispose each finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
+   `needs_human`. Repair valid findings in this same task and keep unresolved
+   risk visible.
+
+## Completion and handoff
+
+Content work is complete when every confirmed decision has a stable product
+meaning, every requirement and AC has an oracle and failure condition, flows
+and boundaries are explicit, and review facts/finding dispositions are honest.
+The build-spec stage is not formally complete while required quality facts are
+missing or unavailable; report `incomplete` and keep the same-task repair path
+open. Missing or unavailable quality facts lower the completion claim but do
+not block continued work: continue drafting or repairing this same task. This
+stage does not create a new task to bypass a quality or transport gap.
+
+End with plain language: what behavior `spec.md` defines, what is out of scope,
+the important risks and unknowns, review findings/transport facts, and what
+`build-plan` should do next without guessing. User confirmation is human
+alignment, not a machine work permit; it does not authorize commit, push,
+merge, archive, or cleanup.

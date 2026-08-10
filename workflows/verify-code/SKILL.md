@@ -1,7 +1,7 @@
 ---
 name: verify-code
 description: 以资深架构师视角检查需求、设计、实现和测试，并用一次修复、一次异源复核、一次收尾修复完成验证。
-version: 4.0.0
+version: 4.1.0
 ---
 
 # Verify Code：架构师验收
@@ -43,9 +43,10 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
 
 ## Portable dependency
 
-直接使用 `skill-deps.yaml` 声明的 portable dependency：打开 `wh-review` 的已声明
-`SKILL.md`，在当前 agent 上下文中执行。不要经过 dispatcher、invocation protocol 或辅助
-推进 gate。`wh-review` 负责异源独立复核；主 agent 负责验收判断和 finding 处置。
+直接使用 `skill-deps.yaml` 声明的 review adapter。该 adapter 按现有异源
+审查约定在独立 reviewer context 中返回 findings、传输状态和 provenance；
+主 agent 负责验收判断和 finding 处置。不要经过额外 dispatcher、独立运行时
+或辅助推进 gate。
 
 ## 固定流程：最多四个动作
 
@@ -65,7 +66,7 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
 
 3. **异源 findings 审查一次**
 
-   直接使用 `wh-review` 检查当前验收标准、架构师短报告、真实测试摘要、代码上下文和未决
+   直接使用声明的异源审查依赖检查当前验收标准、架构师短报告、真实测试摘要、代码上下文和未决
    风险。provider 只输出 `findings`；保留原始 provider、model、session、transport status、
    findings、error 和 provenance。timeout、invalid output、failure、`unavailable` 都按
    原样记录；`unavailable` 不改写为空 findings，也不因 finding 结果反复循环。完成标准：
@@ -77,6 +78,18 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
    逐条判断异源 findings，修复有效且影响交付的问题，记录无效、风险接受或延期项。修复后
    跑受影响测试，再执行一次 `tasks.md` 声明的最终测试/检查；不再开启新的 review 轮。
    完成标准：每个 finding 有处置，最终测试有真实结果，每个适用 AC 有最终状态。
+
+## 测试事实边界
+
+读取 `tasks.md` 声明的“当前完整测试命令”和当前完整测试事实。聚焦测试
+由 build-code 负责；verify-code 只重放风险相关路径和必要的最终检查。
+不要仅为制造绿色结果重新运行全量测试；如果当前完整测试事实缺失、过期或未绑定当前树，按 `tasks.md` 路线
+执行一次并保留真实退出码。
+
+每个适用 AC 都必须有当前 `pass`、`fail`、`unknown`、`deferred` 或
+`not_applicable` 结果和证据。`passed` 是最终交付结论，不是 provider 的
+review verdict；审查合同只返回 findings 和传输事实。缺少完整测试、AC 或
+独立审查时，只能保持 `incomplete`，不能伪造通过。
 
 ## 测试和证据
 
@@ -106,7 +119,12 @@ runtime、hash、schema 或写集合时，对该次写入 fail-loud，保留原�
 
 用大白话说明：检查了什么、修了什么、逐 AC 和测试结果、异源 review 的 findings/传输事实、finding
 如何处置、最后还剩什么风险。只让用户确认这份验收结论；该确认不授权 commit、push、
-merge、archive 或 cleanup，这些操作仍需单独明确授权。
+merge、archive 或 cleanup，这些操作仍需单独明确授权。把用户的实际回复和最终大白话
+交接追加到当前 `tasks.md` 最终 aggregate verification card 的既有 `执行事实` 字段；
+该字段是单一 append-only 事实栏，只追加带标签的人类对齐事实，不改变 `status`、
+actual_changes、executed_commands、evidence_refs、covered_ac、review_fact 或
+completed_at；不新增 handoff 字段，也不另建记录。
 
-不要求用户重复 Talk/Grill，不要求下游读取验收过程索引，不用一次全量测试绿替代 AC、
+不要求用户重复 Talk/Grill，不要求下游读取验收过程索引，不创建 another task 来绕过当前
+问题，也不用一次全量测试绿替代 AC、
 用户流程或架构判断，也不因 reviewer 没有新的 finding 而无限重审。

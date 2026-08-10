@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const compact = (value) => value.replace(/\s+/g, " ");
 const read = (...parts) => compact(readFileSync(join(root, ...parts), "utf8"));
+const readJson = (...parts) => JSON.parse(readFileSync(join(root, ...parts), "utf8"));
 const talk = read("skills", "talk-with-zhipeng", "SKILL.md");
 const grill = read("skills", "grill-with-docs", "SKILL.md");
 const makeDecision = read("workflows", "make-decision", "SKILL.md");
@@ -20,7 +22,8 @@ describe("current interaction boundary", () => {
     expect(makeDecision).toMatch(/Only the main agent may execute user-facing Talk, Grill, or Clarify/i);
     expect(makeDecision).toMatch(/Talk must cover both architecture direction and product journey or user outcome/i);
     expect(makeDecision).toMatch(/Wait for the user's actual reply before handoff/i);
-    expect(buildSpec).toMatch(/Do not run Clarify in this stage or invent the answer/i);
+    expect(buildSpec).toMatch(/Do not run Talk, Clarify, or Grill in this stage/i);
+    expect(buildSpec).toMatch(/talk-with-zhipeng.*grill-with-docs/i);
     expect(buildPlan).toMatch(/Do not run Talk, Clarify, or Grill/i);
     expect(buildSpec).not.toMatch(/obtain the user's actual reply/i);
     expect(buildPlan).toMatch(/obtain the user's actual reply[\s\S]*before claiming that build-plan itself is accepted/i);
@@ -34,6 +37,21 @@ describe("current interaction boundary", () => {
     expect(buildSpec).toMatch(/human alignment, not a machine work permit/i);
     for (const skill of [buildSpec, buildPlan]) expect(skill).not.toMatch(/handoff proof/i);
     expect(buildPlan).toMatch(/does not turn confirmation into a machine work permit/i);
+  });
+
+  it("keeps user-reply append seams informational and append-only", () => {
+    const buildPlanHandoff = readJson("workflows", "build-plan", "steps.json").steps.find((step) => step.step_slug === "publish-plan-result");
+    const verifyHandoff = readJson("workflows", "verify-code", "steps.json").steps.find((step) => step.step_slug === "approve-verification");
+    for (const observable of [buildPlanHandoff?.observable_result, verifyHandoff?.observable_result]) {
+      expect(observable).toMatch(/(?:actual reply|实际验收回复)[\s\S]*(?:执行事实|human-alignment)/i);
+      expect(observable).toMatch(/(?:does not|without changing|不改变)[\s\S]*(?:status|completion|完成)/i);
+      expect(observable).toMatch(/(?:not|不)[\s\S]*(?:work gate|工作许可证|授权 close)/i);
+    }
+    expect(buildPlan).toMatch(/append that reply to the final[\s\S]*(?:execution fact|执行事实)[\s\S]*(?:append-only|带标签)[\s\S]*(?:does not change|changes neither|不改变) `status`/i);
+    expect(read("workflows", "verify-code", "SKILL.md")).toMatch(/用户的实际回复和最终大白话\s*交接追加到当前 `tasks\.md` 最终 aggregate[\s\S]*执行事实[\s\S]*(?:append-only|单一 append-only)[\s\S]*不改变 `status`/i);
+    const catalog = yaml.load(readFileSync(join(root, "skills", "catalog.yaml"), "utf8"));
+    const decisionLog = catalog.skills.find(({ name }) => name === "decision-log");
+    expect(decisionLog.local_changes).toMatch(/唯一当前 consumer 是 make-decision[\s\S]*owner 是 make-decision[\s\S]*tests\/stage-interaction-contract\.test\.mjs/i);
   });
 
   it("lets four readable materials drive work while quality facts restrict completion", () => {
@@ -96,7 +114,6 @@ describe("current ambiguity handling", () => {
   it("keeps build-plan limited to plan and task design without executing tests", () => {
     expect(buildPlan).toMatch(/This stage owns only `plan\.md` and `tasks\.md`/i);
     expect(buildPlan).toMatch(/Do not implement code or execute RED\/GREEN/i);
-    expect(buildPlan).toMatch(/Plan test scenarios, commands, expected outcomes, and evidence for `build-code` to execute later/i);
-    expect(buildPlan).toMatch(/test work is fully designed but no RED\/GREEN execution is claimed/i);
+    expect(buildPlan).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
   });
 });
