@@ -16,7 +16,7 @@ describe("current specification contract", () => {
     expect(workflow).toMatch(/stable IDs?/i);
     expect(deps.skills.filter(({ name }) => name === "wh-review")).toHaveLength(1);
     expect(reviewSteps).toHaveLength(1);
-    expect(reviewSteps[0].observable_result).toMatch(/independent.*wh-review|独立.*wh-review/i);
+    expect(reviewSteps[0].observable_result).toMatch(/independent findings-review adapter|独立.*审查适配器/i);
     expect(workflow).toMatch(/unavailable[\s\S]{0,220}(?:never|不能|不得)[\s\S]{0,40}pass/i);
   });
 });

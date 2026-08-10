@@ -18,7 +18,7 @@ Read only `review-packet.v1` and the frozen bundle. For build-plan, use the gene
 3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
 4. Check every Phase, task, and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule.
 5. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
-6. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent must decide whether the finding is reasonable before any material is changed or work proceeds.
+6. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent classifies the finding before declaring the stage complete or handing off; the same task may continue writing and repairing its four materials while findings are being handled.
 
 ## Result
 
@@ -40,4 +40,4 @@ Coverage Summary / Metrics: Total Requirements, Total Tasks, Coverage %, Ambigui
 
 ## Next Actions
 
-Next Actions use severity guidance: resolve CRITICAL before implementation; use remediation for HIGH and MEDIUM; aggregate overflow after the 50 finding limit into a summary.
+Next Actions use severity guidance: resolve CRITICAL before declaring the stage complete; same-task implementation and repair may continue, but an unresolved CRITICAL must remain visible as a risk and cannot be described as complete. Use remediation for HIGH and MEDIUM; aggregate overflow after the 50 finding limit into a summary.

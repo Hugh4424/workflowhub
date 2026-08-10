@@ -78,7 +78,8 @@ describe("D-015 stage routing and concrete testing contract", () => {
     const skill = read("workflows/build-plan/SKILL.md");
     expect(skill).toMatch(/This stage owns only `plan\.md` and\s+`tasks\.md`/i);
     expect(skill).toMatch(/Do not implement code or execute RED\/GREEN/i);
-    expect(skill).toMatch(/test work is fully designed but no RED\/GREEN execution is claimed/i);
+    expect(skill).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
+    expect(read("workflows/build-spec/SKILL.md")).toMatch(/Do not run Talk, Clarify, or Grill in this stage/i);
     expect(json("skills/wh-review/stage-skill-plan.json").stages["build-plan"].required_skills)
       .toEqual(["review"]);
   });
@@ -150,7 +151,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").observable_result)
       .toMatch(/tasks\.md is marked completed only when actual changes, tests, AC evidence, and review dispositions support that claim/i);
     const skill = read("workflows/build-code/SKILL.md");
-    expect(skill).toMatch(/findings\s+and transport status are not a progression gate/i);
+    expect(skill).toMatch(/findings\s+and\s+transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
   });
 

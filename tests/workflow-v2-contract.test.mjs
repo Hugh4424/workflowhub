@@ -63,18 +63,19 @@ describe("five-stage current-material contract", () => {
     const plan = readStage("build-plan");
     expectConcept(plan, [/Do not run Talk, Clarify, or Grill/i], "build-plan: decision activities stay upstream");
     expectConcept(plan, [/Trace every decision, FR, and AC/i], "build-plan: implementation traceability remains");
-    expectConcept(plan, [/obtain the user's actual reply/i], "build-plan: normal confirmation remains real");
-    expectConcept(plan, [/does not turn confirmation into a machine work permit/i], "build-plan: confirmation is not work eligibility");
+    expectConcept(plan, [/obtain the user's actual reply[\s\S]{0,120}before claiming/i], "build-plan: normal confirmation remains real");
+    expect(plan).not.toMatch(/Do not invent or claim to obtain the user's actual reply/i);
+    expectConcept(plan, [/does not turn confirmation\s+into a machine work permit/i], "build-plan: confirmation is not work eligibility");
   });
 
   it("keeps one minimal task status inside tasks.md instead of a runtime ledger", () => {
     const skill = readFileSync(join(root, "skills", "spec-tasks", "SKILL.md"), "utf8");
     const template = readFileSync(join(root, "skills", "spec-tasks", "templates", "tasks-template.md"), "utf8");
-    expect(skill).toMatch(/`状态` \(`pending`, `in_progress`, or `completed`\)/);
-    expect(skill).toMatch(/authoritative `tasks\.md` material/);
+    expect(skill).toMatch(/`status`[\s\S]*`pending`, `in_progress`, or `completed`/);
+    expect(skill).toMatch(/sole current material for task-card details|authoritative `tasks\.md` material/);
     expect(skill).toMatch(/Do not add workflow summaries[\s\S]*second\s+completion ledger/i);
-    expect(template.match(/- \*\*状态\*\*：`pending`/g)).toHaveLength(2);
-    expect(template.match(/- \*\*执行事实\*\*：N\/A — not started/g)).toHaveLength(2);
+    expect(template.match(/- \*\*status\*\*：`pending`/g)).toHaveLength(3);
+    expect(template.match(/- \*\*执行事实\*\*：N\/A — not started/g)).toHaveLength(3);
   });
 
   it("records unavailable review honestly without turning it into pass", () => {
@@ -91,8 +92,8 @@ describe("five-stage current-material contract", () => {
 
   it("separates completion claims from permission to continue work", () => {
     const expectations = {
-      "make-decision": [/limit only the\s+completion claim/i, /do\s+not prevent continued Talk/i],
-      "build-spec": [/lowers the completion claim/i, /continue drafting or repairing this same task/i],
+      "make-decision": [/limit only the\s+completion claim/i, /do\s+not\s+prevent continued Talk/i],
+      "build-spec": [/lowers the completion claim/i, /continue drafting or\s+repairing this same task/i],
       "build-plan": [/lowers the completion claim/i, /continue research, planning, or repair in this\s+same task/i],
       "build-code": [/limits the completion claim/i, /still allows same-task repair and the\s+next safe work item/i],
       "verify-code": [/缺质量事实只限制完成声明/, /不限制继续验收和修复/],

@@ -1,7 +1,7 @@
 ---
 name: build-code
 description: Implement the current plan in the verified task worktree.
-version: 2.1.0
+version: 2.2.0
 ---
 
 # Build Code
@@ -46,7 +46,9 @@ or auxiliary progress gate.
   advisor is stateless and never executes tests or grants permission.
 - Use exactly one applicable concrete testing skill directly:
   `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
-- Use `wh-review` directly for independent review.
+- Use the declared independent findings capability once. Follow the portable
+  dependency and its declared adapter contract; do not add a second review
+  path or require a particular provider CLI in this skill.
 
 If a dependency is unavailable, preserve that fact and use any safe repository
 test commands already specified in `tasks.md`. The missing dependency limits the
@@ -77,8 +79,9 @@ quality or completion claim; it does not prohibit code or material repair.
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
-5. Use `wh-review` directly for one independent findings review of the completed
-   Phase. Preserve the actual findings, transport status, and provenance;
+5. Use the declared independent findings-review capability directly for one
+   review of the completed Phase. Preserve the actual findings,
+   transport status, and provenance;
    `unavailable` remains an unavailable fact. Do not re-review an unchanged change
    merely to chase an empty findings list. Completion: the review or its real
    unavailability is recorded with provenance; an unavailable attempt keeps the
@@ -91,7 +94,7 @@ quality or completion claim; it does not prohibit code or material repair.
 7. End the Phase with a plain-language handoff: delivered behavior, actual test
    layer and result, AC limits, review fact, finding disposition, unresolved
    risk, deferred work, and the next Task. In that Task card, update the one
-   `状态` field and append only facts actually produced to `执行事实`. A Task is
+   `status` field in the unique completion area and append only facts actually produced to `执行事实`. A Task is
    `completed` only when those facts cover its actual changes, commands/exits,
    affected AC results, evidence, review outcome, and handoff. Then continue
    with the next `pending` or `in_progress` Task; do not replay earlier Phases
@@ -101,14 +104,14 @@ Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
 
-A current Phase review is required as a recorded quality fact. Its findings and
-transport status are not a progression gate: an unavailable or adverse fact stays
-visible, limits the completion claim, and still allows same-task repair and the
-next safe work item.
-
-Review findings and transport status are not a progression gate. A reviewer
-verdict is not a progression gate either; the current contract records findings
-only, while serious findings are handled through explicit disposition.
+After the phase facts are recorded, a phase may be committed only when the
+user has separately authorized the irreversible operation via
+`authorize --op=commit`. The phase
+commit is a Git delivery fact and a useful review anchor; it is never required
+to start, continue, test, repair, or hand off the same task. Without that
+authorization, review the current working-tree change and leave it uncommitted.
+A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item.
+A provider verdict, where one exists, is also a recorded quality fact and never a Phase pass gate.
 
 `unavailable` is never `pass` and never a work blocker.
 

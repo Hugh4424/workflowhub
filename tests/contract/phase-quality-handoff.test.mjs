@@ -58,6 +58,9 @@ describe("Phase quality and handoff contract", () => {
     expect(buildCode).toMatch(/backend-testing.*frontend-testing.*fullstack-slice-testing/s);
     expect(buildCode).toMatch(/A current Phase review is required as a recorded quality fact/);
     expect(buildCode).toMatch(/not a progression gate/);
+    expect(buildCode).toMatch(/phase may be committed only when the\s+user has separately authorized/);
+    expect(buildCode).toMatch(/the\s+phase\s+commit[\s\S]*never\s+required\s+to start, continue, test, repair, or hand off/i);
+    expect(buildCode).not.toMatch(/phase_handoff_review:\s*pass_required/);
   });
 
   it("keeps Phase review scope host-derived instead of task-card supplied", () => {
@@ -72,11 +75,13 @@ describe("Phase quality and handoff contract", () => {
   it("preserves the four-material and task-card boundary", () => {
     const tasks = read("skills/spec-tasks/SKILL.md");
     const template = read("skills/spec-tasks/templates/tasks-template.md");
-    expect(tasks).toMatch(/only these fields/);
+    expect(tasks).toMatch(/current v3[\s\S]*structural fields/);
     expect(tasks).toMatch(/Do not add workflow summaries,[\s\S]*second\s+completion ledger/);
     expect(template).toMatch(/paired_task/);
     expect(template).toMatch(/gate_cmd/);
     expect(template).toMatch(/oracle/);
+    expect(tasks).toMatch(/status value is\s+descriptive/);
+    expect(tasks).not.toMatch(/TaskKernel|WorkflowHub Stage Progress/i);
   });
 
   it("derives committed Phase files from the commit parent and candidate tree", () => {

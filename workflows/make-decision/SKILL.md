@@ -1,7 +1,7 @@
 ---
 name: make-decision
 description: Clarify a real product direction through Talk, proportionate research, independent review, and user confirmation.
-version: 3.0.0
+version: 3.1.0
 ---
 
 # Make Decision
@@ -105,8 +105,15 @@ decision and questions to the user.
    accept or reject it and preserve the actual answer. A rejection leads to
    another bounded revision of this same task.
 
-After the user accepts the final current decision, the Stage Agent directly
-assembles exactly one immutable interaction aggregate with these fields:
+After the user confirms the final current decision, the Stage Agent directly
+assembles exactly one immutable interaction aggregate with these fields. This
+aggregate is an existing quality fact consumed by the declared make-decision
+detail-review/quality-fact contract; its owner is make-decision. The consumer,
+owner, test, and retirement condition are recorded in the existing
+`decision-log` catalog entry. It is not one of the four materials, not a status
+machine, and not a permission to start or continue work. If it is missing or unavailable, the
+formal completion claim stays incomplete while the same task can continue to
+repair the decision and its facts.
 
 ```json
 {
@@ -133,22 +140,29 @@ assembles exactly one immutable interaction aggregate with these fields:
 Serialize the aggregate once, hash those exact bytes with SHA-256, and write it
 directly to `quality/evidence/interactions/<sha256>.json`. The path hash must
 match the stored bytes. Bind only the current task, `make-decision` stage,
-snapshot, and accepted decision. Do not create a run, revision, latest pointer,
+current material context, and user-confirmed decision. The `snapshot_tree`
+field binds the current source tree for evidence integrity only; it is not
+snapshot lineage, a selector, or a delivery gate. Do not create a run,
+revision, latest pointer,
 ledger, controlled-writer protocol, per-round record, question-card archive, or
 Grill history. If the accepted decision changes before completion, assemble a
 new aggregate from the new final decision; never mutate an existing hash path.
+Retire this fact only when the named current consumers are removed or replaced
+by a separately reviewed constitutional change; do not add a replacement state
+object.
 
 ## Completion and fact writing
 
 Do not claim this stage complete until Talk and Clarify are resolved, necessary
 research ran or has a truthful outcome, Grill ran, `decision-log.md` is current,
 independent review findings and transport facts are recorded, every finding has a
-disposition, the user explicitly accepted the decision, and the content-addressed
+disposition, the user explicitly confirmed the decision, and the content-addressed
 interaction aggregate binds that accepted decision. The aggregate is a completion
 fact, not a permit to continue working.
 
-Missing or unavailable quality facts limit only the completion claim. They do
-not prevent continued Talk, decision-log revision, or finding repair. Write
+Missing or unavailable quality facts limit only the completion claim and do not
+prevent continued Talk, drafting, decision-log revision, or finding repair in
+the same task. Write
 current facts only to the task's existing fact and quality stores. If a
 structural check rejects a write, report that exact failure; never turn it into
 success or create a substitute record.

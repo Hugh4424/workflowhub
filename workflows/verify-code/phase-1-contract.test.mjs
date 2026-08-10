@@ -15,14 +15,15 @@ function assertContains(haystack, needle, label) {
 function runSkillContractAssertions() {
   const skill = readFileSync('workflows/verify-code/SKILL.md', 'utf8');
 
-  assertContains(skill, 'current complete test command', 'verification input contract');
-  assertContains(skill, 'current passing full-suite receipt', 'full-suite reuse contract');
-  assertContains(skill, 'Do not rerun the full suite', 'full-suite repetition guard');
-  assertContains(skill, 'Focused tests belong to build-code', 'focused-test ownership');
-  assertContains(skill, 'per-AC result', 'verification output contract');
-  assertContains(skill, 'Review is a quality fact, not a license', 'review boundary');
-  assertContains(skill, 'Pass candidate', 'verdict contract');
-  assertContains(skill, 'Do not create another task', 'handoff boundary');
+  assertContains(skill, '当前完整测试命令', 'verification input contract');
+  assertContains(skill, '当前完整测试事实', 'full-suite reuse contract');
+  assertContains(skill, '不要仅为制造绿色结果重新运行全量测试', 'full-suite repetition guard');
+  assert.match(skill, /聚焦测试\s*由 build-code 负责/, 'focused-test ownership');
+  assertContains(skill, '逐 AC 结果', 'verification output contract');
+  assertContains(skill, '必须记录的质量事实', 'review boundary');
+  assertContains(skill, '只返回 findings', 'findings-only contract');
+  assert.match(skill, /`passed` 是最终交付结论，不是 provider 的/, 'verdict boundary');
+  assert.match(skill, /不创建 another task 来绕过当前/, 'handoff boundary');
 }
 
 function runFreshnessAssertions() {
