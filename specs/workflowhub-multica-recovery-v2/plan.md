@@ -57,8 +57,8 @@ build-plan 只设计 RED/GREEN，不执行命令。每组 RED/GREEN 使用同一
 
 | Target | Task | Role | gate_cmd / expected_exit | Oracle / evidence_path |
 | --- | --- | --- | --- | --- |
-| AC-6/AC-10/AC-12 route | T002 | RED | `npx vitest run tests/contract/phase-quality-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism` / 非零 | `ORACLE-PHASE-ROUTE`; blueprint/route 缺失或 build-plan 执行测试的失败信号 |
-| AC-6/AC-10/AC-12 route | T003 | GREEN | 同上 / 0 | `ORACLE-PHASE-ROUTE`; blueprint、一个 concrete skill、同一命令、evidence |
+| AC-6/AC-10/AC-12 route | T002 | RED | `npx vitest run tests/contract/phase-quality-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism` / 非零 | `ORACLE-PHASE-ROUTE`; blueprint/route 缺失或 build-plan 执行测试的失败信号；concrete_skill=`backend-testing` |
+| AC-6/AC-10/AC-12 route | T003 | GREEN | 同上 / 0 | `ORACLE-PHASE-ROUTE`; blueprint、一个 concrete skill、同一命令、evidence；concrete_skill=`backend-testing` |
 | AC-11 subject/tree | T004 | RED | `npx vitest run tests/contract/phase-quality-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism` / 非零 | `ORACLE-PHASE-TREE`; caller subject 漂移或 commit/tree 绑定缺失 |
 | AC-11 subject/tree | T005 | GREEN | 同上 / 0 | `ORACLE-PHASE-TREE`; commit tree 相等、树变化后旧 review unavailable |
 | AC-2/AC-3/AC-4/AC-5/AC-12 non-gate | T006 | RED | `npx vitest run tests/contract/four-material-non-gate-contract.test.mjs tests/official-component-receipts.test.mjs --poolOptions.forks.singleFork --no-fileParallelism` / 非零 | `ORACLE-NON-GATE`; 缺质量事实冻结同 task 的失败信号 |

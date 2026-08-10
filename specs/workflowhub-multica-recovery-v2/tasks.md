@@ -13,8 +13,8 @@
 - **证据**：evidence_path=`quality/reviews/reports/phase-materials-20260810.md`; record=`材料 lint、mapping、边界审查结果`。
 - **Trace**：D-Phase-quality/D-Phase-subject → FR-9/FR-10 → AC-10/AC-11/AC-12
 - **STOP**：需要第五份当前材料、不可逆权限或新控制面时停止。
-- **状态**：`in_progress`
-- **执行事实**：已修改四材料；markdownlint exit=0。独立审查发现并已修正 RED/GREEN、exact files、FR-5/AC-6 owner 和 T1 inventory 引用；尚待本卡最终 review 事实。
+- **状态**：`completed`
+- **执行事实**：四材料 markdownlint exit=0；两个独立设计审查的阻断项已修正；Phase A `opencode/v4flash` review runtime `7ef4658c-b7d2-40b5-aa2a-93c86c3d4cd0` 无 blocking，review report 已写入 `quality/reviews/reports/recovery-v2-phase-a-opencode-v4flash-7ef4658c-pass.md`。
 
 ## T002 — RED：Phase blueprint 与 route 合同
 
@@ -26,8 +26,8 @@
 - **证据**：evidence_path=`quality/tests/T002-phase-route-red.json`; record=`失败断言、exit、输出、concrete_skill=backend-testing`。
 - **Trace**：D-Phase-quality → FR-5/FR-9 → AC-6/AC-10/AC-12
 - **STOP**：RED 因环境/命令损坏失败，或需要永久 blueprint ledger、receipt、gate、执行器时停止。
-- **状态**：`pending`
-- **执行事实**：未在实现前捕获 RED；不回溯伪造失败输出。测试合同已在 T003 实现后运行 GREEN，过程偏差保留为事实。
+- **状态**：`completed`
+- **执行事实**：在临时 detached worktree `6efd67593ef1e191a4ab929a75402905bc6b49ce` 上加入本 Phase 测试合同后运行同一命令，真实 RED exit=1，3 个目标断言失败，未发生 setup/命令错误；临时 worktree 已移除。该事实证明旧树缺少 blueprint、advisory 边界和四材料约束，不伪造为主 worktree 历史日志。
 
 ## T003 — GREEN：Phase blueprint 与 route 合同
 
@@ -39,8 +39,8 @@
 - **证据**：evidence_path=`quality/tests/T003-phase-route-green.json`; record=`实际文件、GREEN exit、concrete_skill=backend-testing、skill dependency、步骤顺序、覆盖限制`。
 - **Trace**：D-Phase-quality → FR-5/FR-9 → AC-6/AC-10/AC-12
 - **STOP**：route 依赖旧 snapshot/receipt 或需要多选具体测试技能作为 gate 时停止并回到 plan。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：主 worktree GREEN 命令 exit=0，1 file / 3 tests passed；`backend-testing` 作为本 Phase 唯一具体测试技能已按实际 portable workflow-contract 边界记录，review、finding disposition 和 handoff 已写入报告；未新增 ledger/receipt/gate。
 
 ## T004 — RED：Phase review subject 绑定
 
