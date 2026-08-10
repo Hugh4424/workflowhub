@@ -65,8 +65,8 @@
 - **证据**：evidence_path=`quality/reviews/T005-phase-subject-green.json`; record=`phase_id、baseline、changed files、candidate tree、commit_oid、parent、commit tree、review result/unavailable`。
 - **Trace**：D-Phase-subject → FR-10 → AC-11/AC-12
 - **STOP**：发现 review 仍由 caller 路径/累计 diff/旧 snapshot 选择，或需要新 control plane 时停止。
-- **状态**：`in_progress`
-- **执行事实**：已实现 host-derived Phase subject：`review-runner` 不再读取 `tasks.md.execution_file_paths`，`review-source` 从 Phase 直接 parent/candidate tree 派生 changed files，并记录 commit/parent/tree；无提交记录 `commit_oid=null`，树不一致由 `verifyFinalSubject` 识别。Phase 合同 GREEN 命令 exit=0，1 file / 7 tests passed；review-runner、schema、integration subject、review-layering 聚焦回归共 36 tests passed。首轮独立审查真实返回 `REVISE`，唯一阻断为审查包错误记录 parent tree，已修正包生成逻辑；第二轮对 `05b20b2` 返回 `PASS`，但提出残留 `phasePaths` API 与多提交覆盖两个低风险项。已删除 `phasePaths` caller 参数并补全变更文件测试；当前提交需重新异源 review 后收尾。
+- **状态**：`completed`
+- **执行事实**：已实现 host-derived Phase subject：`review-runner` 不再读取 `tasks.md.execution_file_paths`，`review-source` 从 Phase 直接 parent/candidate tree 派生 changed files，并记录 commit/parent/tree；无提交记录 `commit_oid=null`，树不一致由 `verifyFinalSubject` 识别。Phase 合同 GREEN 命令 exit=0，1 file / 7 tests passed；review-runner、schema、integration subject、review-layering 聚焦回归共 36 tests passed；删除 caller `phasePaths` 后四文件回归为 40 tests passed。最终候选提交 `2d01747` 的 `opencode/v4flash` runtime `18ff4817-4989-4a33-859c-306274c4877f` 返回 PASS、无 blocking，报告为 `quality/reviews/reports/recovery-v2-phase-b-opencode-v4flash-18ff4817-pass.md`。两次早期 review 的真实 REVISE/PASS 原文均保留为历史事实。
 
 ## T006 — RED：receipt、snapshot、历史 completion non-gate
 
@@ -78,8 +78,8 @@
 - **证据**：evidence_path=`quality/tests/T006-non-gate-red.json`; record=`失败断言、旧依赖、exit`。
 - **Trace**：D-four-materials → FR-2/FR-3/FR-4 → AC-2/AC-3/AC-4/AC-5/AC-12
 - **STOP**：出现第五份材料、new writer、successor/recovery/rebind 或把缺质量改写为 PASS 时停止。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：在 Phase C 实现前的临时 detached worktree（基于 `2d01747`）运行同一命令，`official-component-receipts` 为 31 passed，`four-material-non-gate` 为 13 项中 11 failed，整体 exit=1；失败集中在 review/gate/Runner/TaskHandle/receipt/snapshot/bridge/doctor 缺失仍冻结同 task，以及旧 runtime/legacy stage-content writer 残留。无 setup/命令错误；临时 worktree 已移除。
 
 ## T007 — GREEN：receipt、snapshot、历史 completion non-gate
 
@@ -91,8 +91,8 @@
 - **证据**：evidence_path=`quality/tests/T007-non-gate-green.json`; record=`实际文件、测试 exit、continuation、completion predicates、质量事实`。
 - **Trace**：D-four-materials → FR-2/FR-3/FR-4 → AC-2/AC-3/AC-4/AC-5/AC-12
 - **STOP**：若只能靠新增 writer/bridge/ledger 通过测试，停止并回到设计。
-- **状态**：`pending`
-- **执行事实**：N/A — not started
+- **状态**：`completed`
+- **执行事实**：当前 recovery worktree 同一命令 exit=0，2 files / 42 tests passed（`four-material-non-gate` 13、`official-component-receipts` 29）。缺质量事实保持 `unknown`/`unavailable`/`incomplete`，同 task 可继续；receipt、snapshot、历史 completion 仍保留为质量/审计事实，未新增 writer、ledger、bridge 或 gate。Phase C 实现提交与异源 review 待完成。
 
 ## T008 — RED：控制面删除闭包
 

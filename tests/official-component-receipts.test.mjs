@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeCurrentImplementationReceipt, writeCurrentOfficialComponentReceipt, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
 import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
@@ -91,19 +91,6 @@ describe("official component receipt authority", () => {
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 
-  it("publishes a current immutable implementation fact without replacing the historical receipt", () => {
-    const { task, worktree, workspace } = fixture();
-    writeFileSync(join(worktree, "tracked.txt"), "current repair\n");
-    const current = writeCurrentImplementationReceipt({ task, workspace });
-    expect(current.ref).toMatch(/^quality\/evidence\/implementation\/[a-f0-9]{64}\.json$/);
-    expect(JSON.parse(task.readRecord(current.ref))).toMatchObject({
-      stage: "build-code",
-      producer: { component: "implementation" },
-      snapshot_tree: current.value.snapshot_tree,
-    });
-    expect(() => task.readRecord("quality/evidence/implementation.json")).toThrow(/ENOENT|record/i);
-  });
-
   it("reuses a same-snapshot build-code full test receipt during verify capture", () => {
     const { task, worktree, workspace } = fixture();
     writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
@@ -133,20 +120,20 @@ describe("official component receipt authority", () => {
     expect(() => task.readRecord("quality/tests/verify-code-material.json")).toThrow(/ENOENT|record/i);
   });
 
-  it("publishes current evidence and verification facts without replacing fixed history", () => {
+  it("publishes evidence and verification facts through the single official writer", () => {
     const { task } = fixture();
-    const kernel = createTaskKernel(task), proof = "proof\n", proofRef = "evidence/proof.txt";
+    const kernel = createTaskKernel(task), proof = "proof\n", proofRef = "quality/evidence/proof.txt";
     kernel.publishCanonicalRecord(proofRef, proof);
     const proofHash = createHash("sha256").update(proof).digest("hex");
     const leafRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: proofRef, sha256: proofHash }] }, null, 2)}\n`;
-    const leafRef = "evidence/ac-1.json";
+    const leafRef = "quality/evidence/ac-1.json";
     kernel.publishCanonicalRecord(leafRef, leafRaw);
     const leaf = { ref: leafRef, sha256: createHash("sha256").update(leafRaw).digest("hex") };
-    const evidence = writeCurrentOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [leaf] } });
-    expect(evidence.ref).toMatch(/^quality\/evidence\/evidence\/[a-f0-9]{64}\.json$/);
+    const evidence = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [leaf] } });
+    expect(evidence.ref).toBe("quality/evidence/verify-evidence.json");
     expect(JSON.parse(task.readRecord(evidence.ref))).toMatchObject({ producer: { component: "evidence" }, refs: [leaf] });
     const proofBinding = { ref: proofRef, sha256: proofHash };
-    const verification = writeCurrentOfficialComponentReceipt({
+    const verification = writeOfficialComponentReceipt({
       task, stage: "verify-code", component: "verification",
       payload: {
         items: [
@@ -155,10 +142,8 @@ describe("official component receipt authority", () => {
         ].map((id) => ({ id, status: id === "browser_qa" ? "not_applicable" : "pass", evidence_refs: id === "browser_qa" ? [] : [proofBinding], reason: "fixture fact" })),
       },
     });
-    expect(verification.ref).toMatch(/^quality\/evidence\/verification\/[a-f0-9]{64}\.json$/);
+    expect(verification.ref).toBe("quality/evidence/verification.json");
     expect(JSON.parse(task.readRecord(verification.ref))).toMatchObject({ producer: { component: "verification" }, items: expect.any(Array) });
-    expect(() => task.readRecord("quality/evidence/evidence.json")).toThrow(/ENOENT|record/i);
-    expect(() => task.readRecord("quality/evidence/verification.json")).toThrow(/ENOENT|record/i);
   });
 
   it("retires component replacement and requires a new current material", () => {
@@ -178,15 +163,15 @@ describe("official component receipt authority", () => {
   it("records pass and fail acceptance facts with unique identities and closed refs", () => {
     const { task } = fixture();
     const kernel = createTaskKernel(task), output = "proof\n";
-    kernel.publishCanonicalRecord("evidence/proof.txt", output);
+    kernel.publishCanonicalRecord("quality/evidence/proof.txt", output);
     const outputHash = createHash("sha256").update(output).digest("hex");
     const publishAcceptance = (path, id, result = "pass") => {
-      const raw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: id, result, refs: [{ ref: "evidence/proof.txt", sha256: outputHash }] }, null, 2)}\n`;
+      const raw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: id, result, refs: [{ ref: "quality/evidence/proof.txt", sha256: outputHash }] }, null, 2)}\n`;
       kernel.publishCanonicalRecord(path, raw);
       return { ref: path, sha256: createHash("sha256").update(raw).digest("hex") };
     };
-    const ac1 = publishAcceptance("evidence/ac-1.json", "AC-1");
-    const ac2 = publishAcceptance("evidence/ac-2.json", "AC-2", "fail");
+    const ac1 = publishAcceptance("quality/evidence/ac-1.json", "AC-1");
+    const ac2 = publishAcceptance("quality/evidence/ac-2.json", "AC-2", "fail");
     expect(writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [ac1, ac2] } }).value.refs).toEqual([ac1, ac2]);
   });
 
@@ -195,26 +180,26 @@ describe("official component receipt authority", () => {
     ["wrong schema", { schema_version: "other.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [] }, /schema_version/],
   ])("rejects invalid acceptance evidence: %s", (_label, entity, pattern) => {
     const { task } = fixture(); const kernel = createTaskKernel(task);
-    const raw = `${JSON.stringify(entity)}\n`, ref = "evidence/ac.json";
+    const raw = `${JSON.stringify(entity)}\n`, ref = "quality/evidence/ac.json";
     kernel.publishCanonicalRecord(ref, raw);
     expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref, sha256: createHash("sha256").update(raw).digest("hex") }] } })).toThrow(pattern);
   });
 
   it("rejects duplicate acceptance criterion identities", () => {
     const { task } = fixture(); const kernel = createTaskKernel(task);
-    kernel.publishCanonicalRecord("evidence/proof.txt", "proof\n");
+    kernel.publishCanonicalRecord("quality/evidence/proof.txt", "proof\n");
     const proofHash = createHash("sha256").update("proof\n").digest("hex"), refs = [];
     for (const name of ["one", "two"]) {
-      const raw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/proof.txt", sha256: proofHash }] })}\n`;
-      const ref = `evidence/${name}.json`; kernel.publishCanonicalRecord(ref, raw); refs.push({ ref, sha256: createHash("sha256").update(raw).digest("hex") });
+      const raw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "quality/evidence/proof.txt", sha256: proofHash }] })}\n`;
+      const ref = `quality/evidence/${name}.json`; kernel.publishCanonicalRecord(ref, raw); refs.push({ ref, sha256: createHash("sha256").update(raw).digest("hex") });
     }
     expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs } })).toThrow(/duplicate acceptance_criterion_id/i);
   });
 
   it("publishes one canonical verify checklist receipt instead of trusting a completion claim", () => {
     const { task } = fixture();
-    createTaskKernel(task).publishCanonicalRecord("evidence/verification-proof.json", "{\"verified\":true}\n");
-    const proof = { ref: "evidence/verification-proof.json", sha256: createHash("sha256").update("{\"verified\":true}\n").digest("hex") };
+    createTaskKernel(task).publishCanonicalRecord("quality/evidence/verification-proof.json", "{\"verified\":true}\n");
+    const proof = { ref: "quality/evidence/verification-proof.json", sha256: createHash("sha256").update("{\"verified\":true}\n").digest("hex") };
     const receipt = writeOfficialComponentReceipt({
       task,
       stage: "verify-code",
@@ -241,7 +226,7 @@ describe("official component receipt authority", () => {
 
   it("preserves semantic requirement-replay evidence for the current verification receipt", () => {
     const { task } = fixture();
-    const kernel = createTaskKernel(task), proof = "semantic proof\n", proofRef = "evidence/semantic-proof.txt";
+    const kernel = createTaskKernel(task), proof = "semantic proof\n", proofRef = "quality/evidence/semantic-proof.txt";
     kernel.publishCanonicalRecord(proofRef, proof);
     const proofBinding = { ref: proofRef, sha256: createHash("sha256").update(proof).digest("hex") };
     const replay = {
@@ -258,7 +243,7 @@ describe("official component receipt authority", () => {
       implementation_anchor: { id: "impl-1", path: "runtime/evidence/canonical-receipt-writer.mjs", start_line: 1, end_line: 2, role: "implementation" },
       verification_anchor: { id: "test-1", path: "tests/official-component-receipts.test.mjs", start_line: 1, end_line: 2, role: "verification" },
     };
-    const verification = writeCurrentOfficialComponentReceipt({
+    const verification = writeOfficialComponentReceipt({
       task, stage: "verify-code", component: "verification",
       payload: {
         items: [

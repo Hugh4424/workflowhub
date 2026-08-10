@@ -5,8 +5,6 @@ import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
-import { createPublication, publishPublication } from "../stage/publication.mjs";
-import { evaluateFactFreshness } from "../evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 import {
@@ -14,12 +12,6 @@ import {
   deriveSeriousReviewPause,
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
-import {
-  assertRuntimeStageSkillInvocation,
-  serializeStageSkillInvocation,
-  stageSkillInvocationRef,
-} from "../../core/stage-skill-invocation.mjs";
-
 export { createQualityFact } from "../evidence/quality-fact.mjs";
 export { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 export { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
@@ -168,8 +160,6 @@ export function buildTaskKernel(taskHandle, {
 } = {}, authority) {
   const task = authority.assertTaskHandle(taskHandle);
   const createRecord = authority.createKernelRecordFor(task);
-  const replacePointer = typeof authority.replaceStageContentPointerFor === "function"
-    ? authority.replaceStageContentPointerFor(task) : null;
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const activeWorkspace = () => candidate ?? workspace;
   const artifactDir = () => artifacts === undefined
@@ -225,68 +215,30 @@ export function buildTaskKernel(taskHandle, {
       if (Buffer.isBuffer(raw)) raw = raw.toString("utf8");
       if (typeof raw !== "string" || raw.length === 0) throw new TypeError("canonical record bytes are required");
       ref(relativePath, "canonical record ref");
+      if (task.manifest.record_model === "vnext-single-write" && !relativePath.startsWith("quality/")) {
+        throw new Error(`vNext canonical records must use quality namespace: ${relativePath}`);
+      }
       if (/^(?:receipts|reviews)\//.test(relativePath)) {
         throw new Error(`vNext canonical records must use quality namespace; legacy projection is retired: ${relativePath}`);
       }
-      if (!/^(?:receipts|reviews|evidence|quality|publications)\//.test(relativePath)) {
+      if (/^evidence\/stage-content\/[a-f0-9]{64}\/[a-z0-9][a-z0-9.-]*\.latest\.json$/.test(relativePath)) {
+        throw new Error(`stage-content latest projection is retired and read-only: ${relativePath}`);
+      }
+      if (!/^(?:receipts|reviews|evidence|quality)\//.test(relativePath)) {
         throw new Error("canonical record namespace required");
       }
       return createImmutable(relativePath, raw);
-    },
-    publishStageSkillInvocation(fact) {
-      assertRuntimeStageSkillInvocation(fact);
-      if (fact.task_id !== task.identity.taskId) throw new Error("stage skill invocation task identity mismatch");
-      if (fact.workflow_run_id !== kernel.deriveStageWorkflowRunId(fact.stage)) throw new Error("stage skill invocation run identity mismatch");
-      const relativePath = stageSkillInvocationRef(fact);
-      return createImmutable(relativePath, serializeStageSkillInvocation(fact));
-    },
-    readStageSkillInvocation(stage, name, invocationKey = "default") {
-      const identity = hash(`${task.identity.taskId}\0${stageName(stage)}\0${kernel.deriveStageWorkflowRunId(stage)}`);
-      const relativePath = `evidence/invocations/${identity}/${name}/${invocationKey}.json`;
-      try {
-        const raw = task.readRecord(relativePath);
-        return Object.freeze({ ref: relativePath, hash: hash(raw), fact: JSON.parse(raw) });
-      } catch (error) {
-        if (error?.code === "ENOENT") return null;
-        throw error;
-      }
     },
     publishVNextQualityFact(stage, input = {}) {
       const name = stageName(stage);
       object(input, "vNext quality fact input");
       rejectUnknown(input, new Set(["kind", "status", "subject", "evidence"]), "vNext quality fact input");
+      if (input.evidence.some((entry) => typeof entry?.ref !== "string" || !entry.ref.startsWith("quality/"))) {
+        throw new Error("vNext quality facts must reference the quality namespace");
+      }
       const { revision, snapshot } = currentContext();
       const fact = createQualityFact({ taskId: task.identity.taskId, stage: name, materialRevision: revision.revision_id, snapshotTree: snapshot.tree, ...input, recordedAt: now() });
       return publishQualityFact({ fact, read: task.readRecord, create: (recordRef, raw) => createRecord(recordRef, raw) });
-    },
-    publishVNextPublication(stage, input = {}) {
-      const name = stageName(stage);
-      object(input, "vNext publication input");
-      rejectUnknown(input, new Set(["quality_fact_refs", "progression"]), "vNext publication input");
-      if (!Array.isArray(input.quality_fact_refs) || input.quality_fact_refs.length === 0) throw new TypeError("vNext publication requires quality_fact_refs");
-      if (input.progression?.status !== "completed"
-          || input.progression.authority !== "current-four-materials-and-plan-tasks") {
-        throw new Error("vNext publication requires current plan/tasks progress");
-      }
-      const { revision, snapshot } = currentContext();
-      const facts = input.quality_fact_refs.map((recordRef) => {
-        const raw = task.readRecord(recordRef);
-        const value = JSON.parse(raw);
-        return { ...value, value, ref: recordRef, sha256: hash(raw) };
-      });
-      const freshness = facts.map((fact) => evaluateFactFreshness(fact, { material_revision: revision.revision_id, snapshot_tree: snapshot.tree }, { read: task.readRecord }));
-      const publication = createPublication({
-        taskId: task.identity.taskId,
-        stage: name,
-        materialRevision: revision,
-        qualityFacts: facts,
-        freshness,
-        snapshotTree: snapshot.tree,
-        read: task.readRecord,
-        allowIncompleteQuality: true,
-        progression: input.progression,
-      });
-      return publishPublication({ publication, read: task.readRecord, create: (recordRef, raw) => createRecord(recordRef, raw) });
     },
     publishHumanConfirmation(stage, input = {}) {
       const name = stageName(stage);
@@ -416,10 +368,6 @@ export function buildTaskKernel(taskHandle, {
       }
       return Object.freeze({ ref: consumptionRef, hash: hash(raw), value: consumed });
     },
-    replaceStageContentLatestPointer(relativePath, raw, options = {}) {
-      if (!replacePointer) throw new Error("stage-content latest pointer replacement capability is unavailable");
-      return replacePointer(relativePath, raw, options);
-    },
     prepareMakeDecisionInteractionPublication: unsupported("make-decision interaction publication preparation"),
     completeMakeDecisionInteractionPublication: unsupported("make-decision interaction publication completion"),
     completeMakeDecisionResearch: unsupported("make-decision research publication"),
@@ -446,10 +394,12 @@ export function buildTaskKernel(taskHandle, {
       });
       if (pause.status !== "paused") return pause;
       const findings = pause.findings.map((finding) => {
-        const cardRef = `evidence/review-risk-cards/${finding.card_hash}.json`;
-        const cardRaw = `${JSON.stringify(finding, null, 2)}\n`;
+        const { card_hash: _semanticHash, ...card } = finding;
+        const cardRaw = `${JSON.stringify(card, null, 2)}\n`;
+        const cardHash = hash(cardRaw);
+        const cardRef = `quality/evidence/risk-cards/${cardHash}.json`;
         createImmutable(cardRef, cardRaw);
-        return Object.freeze({ ...finding, card_ref: cardRef });
+        return Object.freeze({ ...card, card_hash: cardHash, card_ref: cardRef });
       });
       return Object.freeze({ ...pause, findings });
     },
@@ -458,9 +408,10 @@ export function buildTaskKernel(taskHandle, {
       if (pause.status !== "paused") throw new Error("risk acceptance requires a serious review pause");
       const finding = pause.findings.find(({ finding_id: id }) => id === findingId);
       if (!finding || finding.card_ref !== cardRef || finding.card_hash !== cardHash) throw new Error("risk acceptance card does not bind the canonical pause card");
-      if (typeof replyRef !== "string" || !/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(replyRef) || replyRef.includes("..")) throw new Error("risk acceptance reply ref is invalid");
+      if (typeof replyRef !== "string" || !/^quality\/evidence\/risk-replies\/[a-f0-9]{64}\.json$/.test(replyRef) || replyRef.includes("..")) throw new Error("risk acceptance reply ref must use content-addressed quality/evidence/risk-replies/<sha256>.json");
       const replyRaw = task.readRecord(replyRef);
       if (hash(replyRaw) !== replyHash) throw new Error("risk acceptance reply ref/hash does not bind canonical reply bytes");
+      if (replyRef.slice("quality/evidence/risk-replies/".length, -".json".length) !== replyHash) throw new Error("risk acceptance reply path is not content-addressed by the canonical reply bytes");
       const acceptance = buildRiskAcceptance({
         pause,
         findingId,
@@ -473,7 +424,7 @@ export function buildTaskKernel(taskHandle, {
       });
       validateRiskAcceptance({ acceptance, pause });
       const raw = `${JSON.stringify(acceptance, null, 2)}\n`;
-      const record = createImmutable(`evidence/risk-acceptances/${hash(raw)}.json`, raw);
+      const record = createImmutable(`quality/evidence/risk-acceptances/${hash(raw)}.json`, raw);
       return Object.freeze({ risk_acceptance_ref: record.ref, risk_acceptance_hash: record.sha256, record: acceptance });
     },
     startStageRun: unsupported("stage run writer"),
@@ -487,14 +438,6 @@ export function buildTaskKernel(taskHandle, {
     confirmHistoricalAttempt: unsupported("historical attempt confirmation"),
     acceptHistoricalAttempt: unsupported("historical attempt acceptance"),
     publishHistoricalAttempt: unsupported("historical attempt writer"),
-    readReviewFlow: unsupported("review flow"),
-    readReviewFlowHistory: unsupported("review flow history"),
-    deriveReviewFlowIdentity: unsupported("review flow identity"),
-    withReviewFlowLock: unsupported("review flow lock"),
-    recordReviewAttempt: unsupported("review flow attempt"),
-    assertReviewFlowReady: unsupported("review flow readiness"),
-    advanceReviewFlow: unsupported("review flow advancement"),
-    adoptLegacyReviewRoot: unsupported("legacy review adoption"),
     activeStageRun: unsupported("stage run lookup"),
     latestHistoricalStageRun: unsupported("stage run lookup"),
   };

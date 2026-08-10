@@ -23,13 +23,14 @@ function materialIncomplete(message) {
 const RECEIPT_SCHEMA = "workflowhub-receipt.v1";
 const NAMESPACE = Object.freeze({
   decision: "quality/evidence/", spec: "quality/evidence/", plan: "quality/evidence/", tasks: "quality/evidence/",
+  interaction: "quality/evidence/interactions/",
   decision_revision: "quality/evidence/", implementation: "quality/evidence/", tests: "quality/tests/", research: "quality/tests/", grill: "quality/tests/", confirmation: "quality/confirmations/", review: "quality/reviews/results/",
   direction_review: "quality/reviews/results/", detail_review: "quality/reviews/results/",
   quality_review: "quality/reviews/results/", evidence: "quality/evidence/", verification: "quality/evidence/",
-  audit: "evidence/audits/", risk_acceptance: "evidence/risk-acceptances/",
-  direction_risk_acceptance: "evidence/risk-acceptances/",
-  detail_risk_acceptance: "evidence/risk-acceptances/",
-  quality_risk_acceptance: "evidence/risk-acceptances/",
+  audit: "quality/evidence/audits/", risk_acceptance: "quality/evidence/risk-acceptances/",
+  direction_risk_acceptance: "quality/evidence/risk-acceptances/",
+  detail_risk_acceptance: "quality/evidence/risk-acceptances/",
+  quality_risk_acceptance: "quality/evidence/risk-acceptances/",
 });
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
@@ -44,7 +45,7 @@ const COMPLETION_COPY = Object.freeze({
   "verify-code": { objective: "独立验证最终实现是否满足验收条件", approach: "复用正式实现证据并执行独立质量检查", effect: "任务获得可关闭或返回修复的明确结论", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
-  "make-decision": new Set(["decision", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
+  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
   "build-spec": new Set(["spec", "review", "risk_acceptance", "audit"]),
   "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit"]),
@@ -83,16 +84,29 @@ function boundReviewQualityFacts(entries) {
     return `${label}=${fact}`;
   }).join("；");
 }
+function completionSubjectMissingItems(result) {
+  return Object.entries(result.facts?.completion_subjects ?? {})
+    .filter(([, subject]) => subject?.status !== "passed")
+    .map(([name, subject]) => `${name} completion subject is ${subject?.status ?? "missing"}`);
+}
+
 function addCompletion(stage, result, { worker, artifacts, reviews, verification, businessFacts, audit, completionResult }) {
   const copy = COMPLETION_COPY[stage];
-  const missing = result.missing_items ?? [];
-  if (typeof worker?.readCompletionInvocationFacts !== "function") {
-    throw new Error(`${stage} completion requires authenticated invocation facts`);
-  }
-  const { declaredComponents, invocationFacts } = worker.readCompletionInvocationFacts();
-  const auditGaps = audit?.value?.completion_effect === "disclose_only" && audit.value.verdict !== "pass"
-    ? [{ kind: "audit_summary", status: "incomplete", reason: "canonical audit reports structural gaps" }]
+  const missing = [...new Set([
+    ...(result.missing_items ?? []),
+    ...completionSubjectMissingItems(result),
+  ])];
+  const declaredAuditGaps = Array.isArray(result.facts?.audit_gaps)
+    ? result.facts.audit_gaps.map((gap) => typeof gap === "string"
+      ? { kind: "audit_summary", status: "missing", reason: gap }
+      : gap)
     : [];
+  const auditGaps = [
+    ...declaredAuditGaps,
+    ...(audit?.value?.completion_effect === "disclose_only" && audit.value.verdict !== "pass"
+      ? [{ kind: "audit_summary", status: "incomplete", reason: "canonical audit reports structural gaps" }]
+      : []),
+  ];
   // Keep the canonical attempt's exact diagnostic in the stage result, but do
   // not expose provider/attempt/receipt internals through the user completion
   // view when an external review is unavailable.
@@ -111,17 +125,15 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
       scope: [`当前 ${stage} 的已声明范围`],
       non_goals: ["不扩大当前阶段范围，也不把质量事实当成交付许可"],
       phases: [stage],
-      dependencies: stage === "make-decision" ? [] : ["读取上一阶段的正式事实"],
+      dependencies: stage === "make-decision" ? [] : ["读取当前四材料"],
       tests: [verification],
       review_advice: "异源 review 是建议事实；真实 unavailable、revise_required 或 finding 必须继续保留",
       risks: userSafeMissing.length ? userSafeMissing : ["当前验证只覆盖已声明范围"],
       deferred: missing.length ? userSafeMissing : ["未在本阶段声明的工作留给后续阶段"],
-      next_stage_boundary: `下一阶段 ${copy.next_owner} 只能读取当前正式事实，不能猜测缺失需求`,
+      next_stage_boundary: `下一阶段 ${copy.next_owner} 读取当前四材料，不能猜测缺失需求`,
       expected_impact: copy.effect,
     },
     business_facts: businessFacts,
-    declared_components: declaredComponents,
-    invocation_facts: invocationFacts,
     audit_gaps: auditGaps,
     ...(stage === "verify-code" && Array.isArray(result.facts?.verification_items) && result.facts.verification_items.length > 0
       ? { verification_items: result.facts.verification_items.map((item) => ({
@@ -131,9 +143,6 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
       : {}),
     missing_items: userSafeMissing,
     risks: userSafeMissing,
-    dependencies: stage === "make-decision" ? [] : ["读取上一阶段的 publication"],
-    recovery_conditions: ["若下游证明输入无效，返回当前阶段修复后重新发布"],
-    downstream_read_rule: `只读取 publications/${stage}/ 中的正式事实`,
     next_owner: copy.next_owner,
     user_action: missing.length ? "需要处理未完成项" : "无需操作",
   });
@@ -142,10 +151,67 @@ function addCompletion(stage, result, { worker, artifacts, reviews, verification
 const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
-  if (name === "audit") return /^evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
-  if (name.endsWith("risk_acceptance")) return /^evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "interaction") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);
   return Boolean(NAMESPACE[name] && ref.startsWith(NAMESPACE[name]));
+}
+
+function subjectFact(status, evidenceRefs = [], detail = null) {
+  return Object.freeze({
+    status: new Set(["passed", "failed", "missing"]).has(status) ? status : "missing",
+    evidence_refs: Object.freeze(evidenceRefs.map(({ ref, sha256 }) => Object.freeze({ ref, sha256 }))),
+    ...(detail ? { detail } : {}),
+  });
+}
+
+function sectionHasContent(markdown, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lines = String(markdown ?? "").split(/\r?\n/);
+  const start = lines.findIndex((line) => new RegExp(`^##[ \\t]+${escaped}[ \\t]*$`, "i").test(line));
+  if (start < 0) return false;
+  const body = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##[ \\t]+/.test(lines[index])) break;
+    body.push(lines[index]);
+  }
+  return body.some((line) => {
+    const value = line.replace(/^\s*[-|]\s*/, "").replace(/[`|]/g, "").trim();
+    return value !== ""
+      && !/^[-: ]+$/.test(value)
+      && !/^(?:R-001|RISK-001)\b/.test(value)
+      && !/(?:risk\/deferred_id|风险或延期内容|触发\/后果|处理阶段\/owner)/i.test(value)
+      && !/(?:当前范围|用户流程\/结果只记索引和验收影响，细节进入 spec)\s*[:：]\s*$/.test(value);
+  });
+}
+
+function interactionAggregateFacts(worker, invocation, expected) {
+  const ref = text(object(invocation.receipts, "receipts").interaction, "interaction aggregate ref");
+  if (!validReceiptRef("interaction", ref)) throw materialIncomplete("make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
+  const record = object(worker.readReceipt(ref), "interaction aggregate record");
+  if (record.sha256 !== ref.match(/([a-f0-9]{64})\.json$/)?.[1]) throw new Error("interaction aggregate ref is not content-addressed to its immutable bytes");
+  const value = object(record.value, "interaction aggregate");
+  const allowed = new Set(["schema_version", "task_id", "stage", "snapshot_tree", "talk", "clarify", "decision_ref", "decision_hash"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`interaction aggregate has unknown fields: ${unknown.join(", ")}`);
+  if (value.schema_version !== "workflowhub-interaction-aggregate.v1"
+      || value.task_id !== worker.identity.taskId || value.stage !== "make-decision"
+      || value.snapshot_tree !== expected.snapshot_tree
+      || value.decision_ref !== expected.decision_ref || value.decision_hash !== expected.decision_hash) {
+    throw new Error("interaction aggregate does not bind the current task, snapshot, and decision");
+  }
+  const talk = object(value.talk, "interaction aggregate talk");
+  const clarify = object(value.clarify, "interaction aggregate clarify");
+  if (talk.status !== "completed" || !Number.isSafeInteger(talk.round_count) || talk.round_count < 1
+      || talk.architecture_direction_covered !== true || talk.user_outcome_covered !== true) {
+    throw new Error("interaction aggregate does not prove completed Talk coverage");
+  }
+  if (clarify.status !== "resolved" || clarify.open_direction_changing_questions !== 0
+      || !new Set(["user_reply", "no_direction_changing_ambiguity"]).has(clarify.resolved_by)) {
+    throw new Error("interaction aggregate does not prove resolved Clarify");
+  }
+  return Object.freeze({ ref, value: Object.freeze(value), evidence: Object.freeze({ ref, sha256: record.sha256 }) });
 }
 function assertCurrentNamespace(worker, ref) {
   if (/^(?:receipts|reviews)\//.test(ref)) {
@@ -177,40 +243,6 @@ function auditFacts(worker, invocation) {
   };
 }
 
-function makeDecisionInteractionAggregate(worker, audit, decision, snapshotTree) {
-  const refs = audit?.value?.content_evidence_refs?.filter(({ kind }) => kind === "interaction-completion.v1") ?? [];
-  let binding = refs.length === 1 ? refs[0] : null;
-  if (!binding && typeof worker.readInteractionAggregate === "function") {
-    const aggregate = worker.readInteractionAggregate();
-    binding = aggregate ? { ref: aggregate.ref, hash: aggregate.hash } : null;
-  }
-  if (!binding) throw materialIncomplete("make-decision interaction aggregate is missing");
-  if (typeof binding.ref !== "string" || typeof binding.hash !== "string" || !SHA256.test(binding.hash)) {
-    throw new Error("make-decision interaction aggregate audit binding is invalid");
-  }
-  const record = object(worker.readReceipt(binding.ref), "make-decision interaction aggregate");
-  const value = object(record.value, "make-decision interaction aggregate value");
-  const payload = object(value.payload, "make-decision interaction aggregate payload");
-  if (record.sha256 !== binding.hash
-      || value.schema_version !== "stage-content-evidence.v1"
-      || value.kind !== "interaction-completion.v1"
-      || value.task_id !== worker.identity.taskId
-      || value.stage !== "make-decision"
-      || value.workflow_run_id !== worker.workflowRunId
-      || value.snapshot_tree !== snapshotTree
-      || (audit && value.workflow_run_id !== audit.value.workflow_run_id)
-      || (audit && value.snapshot_tree !== audit.value.snapshot_tree)
-      || payload.interaction_type !== "aggregate"
-      || payload.workspace_tree !== snapshotTree
-      || value.content_hash !== hashText(JSON.stringify(payload))) {
-    throw new Error("make-decision interaction aggregate task/stage/run/tree/ref/hash binding mismatch");
-  }
-  if (payload.decision_ref !== decision.value.decision_ref
-      || payload.decision_hash !== decision.value.decision_hash) {
-    throw new Error("make-decision interaction aggregate decision binding differs from the official decision receipt");
-  }
-  return { ref: binding.ref, hash: binding.hash, value };
-}
 function receipt(worker, invocation, name, producerStage = worker.stage) {
   const refs = object(invocation.receipts, "receipts");
   if (typeof refs[name] !== "string" || refs[name].trim() === "") {
@@ -311,7 +343,8 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
     const refs = value.evidence_refs.map((entry, refIndex) => {
       const ref = object(entry, `acceptance_coverage ${id} evidence_refs[${refIndex}]`);
       text(ref.ref, `acceptance_coverage ${id} evidence_refs[${refIndex}].ref`);
-      if (!ref.ref.startsWith("evidence/") || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) throw new Error(`acceptance_coverage ${id} evidence reference is invalid`);
+      const currentOnly = worker.manifest?.record_model === "vnext-single-write";
+      if ((currentOnly ? !ref.ref.startsWith("quality/evidence/") : !ref.ref.startsWith("evidence/") && !ref.ref.startsWith("quality/evidence/")) || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) throw new Error(`acceptance_coverage ${id} evidence reference is invalid`);
       const record = worker.readReceipt(ref.ref);
       if (record.sha256 !== ref.sha256) throw new Error(`acceptance_coverage ${id} evidence hash mismatch`);
       return { ref: ref.ref, sha256: ref.sha256 };
@@ -386,6 +419,9 @@ function authenticateTaskCompletionEvidence(worker, entry) {
     return { ok: false, reason: "git_commit completion evidence needs an authenticated task record" };
   }
   try {
+    if (worker.manifest?.record_model === "vnext-single-write" && !entry.ref.startsWith("quality/")) {
+      return { ok: false, reason: "vNext task completion evidence must use the quality namespace" };
+    }
     const evidence = worker.readEvidence(entry.ref);
     return { ok: true, sha256: evidence.sha256 ?? hashText(evidence.bytes) };
   } catch (error) {
@@ -699,13 +735,6 @@ function requireFinalIntegrationReview(review, label) {
   }
   return null;
 }
-function requireStoredFinalIntegrationReview(review, label) {
-  if (!review || review.status === "unavailable" || review.subject_kind !== "worktree" || review.review_scope !== "integration" || review.phase_id !== null) {
-    throw new Error(`MATERIAL_INCOMPLETE: ${label} is missing the required build-code integration review scope; return to build-code`);
-  }
-  return review;
-}
-
 function riskAcceptanceForReview(worker, invocation, review, expectedTrack, receiptName, stage = worker.stage) {
   const supplied = invocation.receipts?.[receiptName];
   if (supplied === undefined) return { verified: false, evidence: [] };
@@ -1029,13 +1058,13 @@ HANDLERS.set("make-decision", async (worker, input) => {
   let audit;
   try { audit = auditFacts(worker, input); } catch { audit = null; }
   const item = receipt(worker, input, "decision");
-  const direction = reviewFacts(worker, input, "direction_review", "direction");
-  const detail = reviewFacts(worker, input, "detail_review", "detail");
+  const direction = safeReviewFacts(worker, input, "direction_review", "direction");
+  const detail = safeReviewFacts(worker, input, "detail_review", "detail");
   const research = input.receipts.research === undefined ? null : testFacts(worker, input, "research");
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
   const dispositions = findingDispositions([direction, detail], input);
-  const auditMissingItems = audit
+  const auditGaps = audit
     ? []
     : ["audit unavailable/unverified/mismatch: decision coverage audit is missing", "support:audit"];
   const decisionRefPattern = /^quality\/evidence\/[a-f0-9]{64}\.md$/;
@@ -1063,7 +1092,11 @@ HANDLERS.set("make-decision", async (worker, input) => {
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
-  const interactionAggregate = makeDecisionInteractionAggregate(worker, audit, item, snapshot.tree);
+  const interaction = input.receipts.interaction === undefined ? null : interactionAggregateFacts(worker, input, {
+      snapshot_tree: snapshot.tree,
+      decision_ref: item.value.decision_ref,
+      decision_hash: item.value.decision_hash,
+    });
   const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision" });
   const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
@@ -1076,6 +1109,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
       decision_hash: item.value.decision_hash,
       decision_artifact_ref: decisionArtifactRef,
       decision_artifact_hash: decisionArtifactHash,
+      audit_gaps: auditGaps,
+      ...(interaction ? { interaction_aggregate: { ref: interaction.ref, sha256: interaction.evidence.sha256 } } : {}),
+      completion_subjects: {
+        scope: subjectFact(sectionHasContent(currentDecisionLog, "范围") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log scope section"),
+        non_goals: subjectFact(sectionHasContent(currentDecisionLog, "非目标") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log non-goals section"),
+        risks: subjectFact(sectionHasContent(currentDecisionLog, "风险与延期交接") ? "passed" : "missing", [{ ref: decisionArtifactRef, sha256: decisionArtifactHash }], "decision-log risk handoff section"),
+        talk_clarify: subjectFact(interaction ? "passed" : "missing", interaction ? [interaction.evidence] : [], "content-addressed immutable Talk/Clarify aggregate"),
+      },
       reviews: { direction: direction.facts, detail: detail.facts },
       ...(research ? { research: research.facts } : {}),
       ...(grill ? { grill: grill.facts } : {}),
@@ -1085,17 +1126,17 @@ HANDLERS.set("make-decision", async (worker, input) => {
     },
     evidence_refs: [
       item.evidence,
+      ...(interaction ? [interaction.evidence] : []),
       { ref: item.value.decision_ref, sha256: item.value.decision_hash },
       ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
-      { ref: interactionAggregate.ref, sha256: interactionAggregate.hash },
-      direction.evidence, detail.evidence, ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
+      ...(direction.evidence ? [direction.evidence] : []), ...(detail.evidence ? [detail.evidence] : []), ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
     ],
-    missing_items: [...auditMissingItems, ...direction.missing_items, ...detail.missing_items, ...dispositions.missing_items],
+    missing_items: [...direction.missing_items, ...detail.missing_items, ...dispositions.missing_items],
   }, {
     worker,
     artifacts: [
-      { label: "当前决策材料", ref: decisionArtifactRef, hash: decisionArtifactHash, publication_lookup: "publications/make-decision/" },
-      { label: "决策质量证据", ref: item.value.decision_ref, hash: item.value.decision_hash, publication_lookup: "publications/make-decision/" },
+      { label: "当前决策材料", ref: decisionArtifactRef, hash: decisionArtifactHash },
+      { label: "决策质量证据", ref: item.value.decision_ref, hash: item.value.decision_hash },
     ],
     reviews: [direction, detail],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
@@ -1105,14 +1146,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
 });
 HANDLERS.set("build-spec", async (worker, input) => {
   let audit;
-  let auditUnavailableReason;
+  const auditGaps = [];
   try {
     audit = auditFacts(worker, input);
   } catch (error) {
     audit = null;
-    auditUnavailableReason = error.message;
+    auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
   }
-  const item = receipt(worker, input, "spec"), review = reviewFacts(worker, input);
+  const item = receipt(worker, input, "spec"), review = safeReviewFacts(worker, input);
   const dispositions = findingDispositions([review], input);
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
@@ -1123,18 +1164,25 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const after = object(worker.snapshotWorkspace(), "build-spec post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
+  const specEvidence = { ref: item.ref, sha256: item.evidence.sha256 };
   return addCompletion("build-spec", {
-    facts: { spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest, review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}) },
-    evidence_refs: [item.evidence, review.evidence, ...(audit ? [audit.evidence] : []), ...review.risk_evidence, ...bindingEvidence],
+    facts: {
+      spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest,
+      audit_gaps: auditGaps,
+      completion_subjects: {
+        zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
+      },
+      review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}),
+    },
+    evidence_refs: [item.evidence, ...(review.evidence ? [review.evidence] : []), ...(audit ? [audit.evidence] : []), ...review.risk_evidence, ...bindingEvidence],
     missing_items: [
       ...review.missing_items,
       ...dispositions.missing_items,
       ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
-      ...(audit ? [] : [`audit unavailable/unverified/mismatch: ${auditUnavailableReason}`, "support:audit"]),
     ],
   }, {
     worker,
-    artifacts: [{ label: "需求规格", ref: item.ref, hash: item.evidence.sha256, publication_lookup: "publications/build-spec/" }],
+    artifacts: [{ label: "需求规格", ref: item.ref, hash: item.evidence.sha256 }],
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
@@ -1193,30 +1241,44 @@ HANDLERS.set("build-plan", async (worker, input) => {
     evidenceRefs.push(item.evidence);
     return item;
   });
-  const audit = optional("audit unavailable/unverified/mismatch", () => auditFacts(worker, input));
-  if (!audit) missingItems.push("support:audit");
-  let review = null;
-  optional("review unavailable/unverified/mismatch", () => {
-    const candidate = reviewFacts(worker, input);
-    const result = bindFinalReview(worker, input, candidate, before.tree, { stage: "build-plan" });
-    review = candidate;
-    evidenceRefs.push(candidate.evidence, ...(candidate.risk_evidence ?? []), ...result.evidence);
-    missingItems.push(...candidate.missing_items);
-    return result;
-  });
-  const dispositions = findingDispositions(review ? [review] : [], input);
+  const auditGaps = [];
+  let audit;
+  try { audit = auditFacts(worker, input); }
+  catch (error) {
+    audit = null;
+    auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
+  }
+  const review = safeReviewFacts(worker, input);
+  const result = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
+  if (review.evidence) evidenceRefs.push(review.evidence);
+  evidenceRefs.push(...(review.risk_evidence ?? []), ...result.evidence);
+  missingItems.push(...review.missing_items);
+  const dispositions = findingDispositions([review], input);
   missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-plan Workspace changed while binding final plan review");
   const planRef = worker.artifactRef("plan.md");
   const tasksRef = worker.artifactRef("tasks.md");
+  const planEvidence = { ref: planRef, sha256: hashText(materials["plan.md"]) };
+  const tasksEvidence = { ref: tasksRef, sha256: hashText(materials["tasks.md"]) };
+  const fr = structural.facts?.fr_coverage;
+  const ac = structural.facts?.ac_coverage;
+  const deletionProofs = /(?:deletion proofs?|删除证明|不涉及删除|no deletion)/i.test(`${materials["plan.md"]}\n${materials["tasks.md"]}`);
   return addCompletion("build-plan", {
     facts: {
       plan_ref: planRef,
       tasks_ref: tasksRef,
       snapshot_tree: before.tree,
       source_digest: before.source_digest,
-      ...(review ? { review: review.facts } : {}),
+      audit_gaps: auditGaps,
+      completion_subjects: {
+        fr_coverage: subjectFact(fr?.accepted_count > 0 && fr.covered_count === fr.accepted_count ? "passed" : "missing", [planEvidence, tasksEvidence], "FR coverage from current plan/tasks"),
+        ac_coverage: subjectFact(ac?.accepted_count > 0 && ac.covered_count === ac.accepted_count ? "passed" : "missing", [planEvidence, tasksEvidence], "AC coverage from current plan/tasks"),
+        dependencies: subjectFact(structural.facts?.dependency_validation?.valid === true ? "passed" : "missing", [planEvidence, tasksEvidence], "dependency graph validation"),
+        deletion_proofs: subjectFact(deletionProofs ? "passed" : "missing", [planEvidence, tasksEvidence], "explicit deletion proof or not-applicable reason"),
+        executable_tasks: subjectFact(executable.ok && structural.facts?.command_oracle_checks?.valid === true ? "passed" : "missing", [tasksEvidence], "task command/oracle executability"),
+      },
+      review: review.facts,
       finding_dispositions: dispositions.facts,
       ...(audit ? audit.facts : {}),
     },
@@ -1225,24 +1287,25 @@ HANDLERS.set("build-plan", async (worker, input) => {
   }, {
     worker,
     artifacts: [
-      { label: "实施计划", ref: planRef, hash: hashText(materials["plan.md"]), publication_lookup: "publications/build-plan/" },
-      { label: "任务清单", ref: tasksRef, hash: hashText(materials["tasks.md"]), publication_lookup: "publications/build-plan/" },
+      { label: "实施计划", ref: planRef, hash: hashText(materials["plan.md"]) },
+      { label: "任务清单", ref: tasksRef, hash: hashText(materials["tasks.md"]) },
     ],
-    reviews: review ? [review] : [],
+    reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
-    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review ? review.facts.status ?? review.facts.verdict : "unavailable/unverified"}`,
+    verification: `四份当前材料可读，plan-task 最小可执行性检查通过；审计支持状态：${audit ? "recorded, pending publication verification" : "unavailable/unverified"}；审查状态：${review.facts.status ?? review.facts.verdict}`,
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {
   const missingItems = [];
+  const auditGaps = [];
   const audit = (() => {
     try { return auditFacts(worker, input); }
     catch (error) {
       // Audit summaries are diagnostic publication support.  A stale or
       // unavailable summary must be disclosed, but cannot block current
       // implementation, tests, AC coverage, or integration review facts.
-      missingItems.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
+      auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
       return null;
     }
   })();
@@ -1282,6 +1345,9 @@ HANDLERS.set("build-code", async (worker, input) => {
   if (!differsOnlyByTasksCompletion(worker, tests.facts.snapshot_tree, current.tree)) {
     missingItems.push("current Workspace snapshot differs from the reviewed implementation; quality warning only");
   }
+  const acceptanceComplete = coverage.accepted_criterion_ids.length > 0
+    && coverage.items.length === coverage.accepted_criterion_ids.length
+    && coverage.items.every((entry) => entry.status === "covered" && entry.evidence_refs.length > 0);
   return addCompletion("build-code", {
     facts: {
       changed: actualChangedFiles,
@@ -1290,7 +1356,11 @@ HANDLERS.set("build-code", async (worker, input) => {
       finding_dispositions: dispositions.facts,
       phase_completion: phase,
       task_boundary_audit_gaps: phase.audit_gaps ?? [],
+      audit_gaps: auditGaps,
       acceptance_coverage: coverage,
+      completion_subjects: {
+        acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
+      },
       ...(audit?.facts ?? {}),
     },
     evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
@@ -1300,7 +1370,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     ],
   }, {
     worker,
-    artifacts: [{ label: "实现结果", ref: impl.ref, hash: impl.evidence.sha256, publication_lookup: "publications/build-code/" }],
+    artifacts: [{ label: "实现结果", ref: impl.ref, hash: impl.evidence.sha256 }],
     reviews: [review],
     businessFacts: {
       content: "present",
@@ -1352,7 +1422,8 @@ HANDLERS.set("verify-code", async (worker, input) => {
     object(ref, `evidence.refs[${index}]`);
     text(ref.ref, `evidence.refs[${index}].ref`);
     text(ref.sha256, `evidence.refs[${index}].sha256`);
-    if (!(ref.ref.startsWith("evidence/") || ref.ref.startsWith("quality/evidence/")) || ref.ref.includes("..")) throw new Error("verify evidence ref must use canonical evidence namespace");
+    const currentOnly = worker.manifest?.record_model === "vnext-single-write";
+    if ((currentOnly ? !ref.ref.startsWith("quality/evidence/") : !ref.ref.startsWith("evidence/") && !ref.ref.startsWith("quality/evidence/")) || ref.ref.includes("..")) throw new Error("verify evidence ref must use canonical evidence namespace");
     const entity = object(worker.readReceipt(ref.ref), `evidence.refs[${index}] record`);
     if (entity.sha256 !== ref.sha256) throw new Error(`evidence.refs[${index}] hash mismatch`);
     const acceptance = validateAcceptanceEvidence(entity.value, `acceptance evidence schema at evidence.refs[${index}]`);
@@ -1421,8 +1492,22 @@ HANDLERS.set("verify-code", async (worker, input) => {
       mismatches.push(`verify item ${item.id} is ${item.status}: ${item.reason}`);
     }
   }
+  const acceptanceVerified = failedEvidence.length === 0
+    && expectedCriterionIds?.length > 0
+    && sameStringSet([...criterionIds], expectedCriterionIds)
+    && verificationItems.find((item) => item.id === "acceptance_criteria")?.status === "pass";
+  const exceptionsVerified = mismatches.length === 0
+    && verificationItems.filter((item) => new Set(["core_gaps", "human_handoff"]).has(item.id))
+      .every((item) => new Set(["pass", "not_applicable"]).has(item.status));
   const result = addCompletion("verify-code", {
-    facts: { tests: tests.facts, review: review.facts, quality_note: qualityReview.facts, finding_dispositions: dispositions.facts, requirement_replay: replay.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}) },
+    facts: {
+      tests: tests.facts, review: review.facts, quality_note: qualityReview.facts,
+      completion_subjects: {
+        acceptance_criteria: subjectFact(acceptanceVerified ? "passed" : "missing", evidence.value.refs, "current acceptance evidence and verification item"),
+        exceptions: subjectFact(exceptionsVerified ? "passed" : "missing", verification ? [verification.evidence] : [], "current verification exceptions and gaps"),
+      },
+      finding_dispositions: dispositions.facts, requirement_replay: replay.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}),
+    },
     evidence_refs: [tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(qualityReview.evidence ? [qualityReview.evidence] : []), ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
     missing_items: [
       ...mismatches,
@@ -1435,7 +1520,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
     ],
   }, {
     worker,
-    artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256, publication_lookup: "publications/verify-code/" }],
+    artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256 }],
     reviews: [review, qualityReview],
     businessFacts: {
       content: "present",

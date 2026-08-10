@@ -132,3 +132,17 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **第二轮复核事实**：对提交 `05b20b2` 的 `opencode/v4flash` runtime `bf6b9c67-f1df-4d83-80d3-baf601e110a6` 返回 `PASS`，无 blocking；确认修正后的错误文案、测试、tree binding、schema 与无新增控制面均成立。非阻断项为 `phasePaths` 残留 API、多提交 Phase 的测试覆盖，以及 packet 内 OID 需由 host 绑定；这些不是当前失败结论。
 - **继续收敛**：删除 `captureReviewSource` 的 `phasePaths` 参数和 pathspec 分支，改为所有 review source 都从完整 host snapshot 派生 changed files；更新合同测试，避免 caller 通过路径缩小审查对象。该代码变化会使 `05b20b2` 的 PASS 只保留为历史事实，当前 Phase B 仍待新快照审查。
 - **宪法边界**：没有新增 receipt、snapshot lineage、review lock、managed request-id、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。
+
+## 2026-08-10 Phase B 最终异源审查与交接事实
+
+- **事实**：最终候选提交 `2d017473a5257db65cb5d8593c8b81fb034f970d`（parent `05b20b253de061ea9b631b5ed12699b0f97b701b`，candidate tree `92e2cb990aceb2bee5d23c17bcbc6a4205ecc593`）由 `opencode/v4flash` runtime `18ff4817-4989-4a33-859c-306274c4877f` 独立复核，返回 `PASS`、无 blocking；完整报告写入 `quality/reviews/reports/recovery-v2-phase-b-opencode-v4flash-18ff4817-pass.md`。
+- **处置**：T005 标记 `completed`。最终 review 确认 `phasePaths`/`execution_file_paths` caller 入口已删除，Phase subject 由 host 从真实 Git parent/candidate tree 派生，commit/tree mismatch 会使旧事实失效，Phase review 只保留为质量/交接事实，不是推进 gate。
+- **保留**：首轮 compact packet 错误导致的 `REVISE`、第二轮 `05b20b2` 的 `PASS` 及其非阻断建议全部保留；新报告只绑定最终 `2d01747`，不覆盖历史 verdict。
+- **边界**：没有新增 receipt、snapshot lineage、review lock、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。Phase B 交接完成，后续进入 T006/T007 的 non-gate 回归。
+
+## 2026-08-10 Phase C RED/GREEN 事实（异源审查待完成）
+
+- **范围**：修复 receipt、snapshot、历史 completion、Runner、TaskHandle、bridge、doctor/comment 缺失时错误冻结同 task 的路径；质量事实仍必须如实记录，不能伪造完成。
+- **RED**：基于 Phase B 提交 `2d01747` 的临时 detached worktree，T006 命令 exit=1；`official-component-receipts` 31 passed，`four-material-non-gate` 13 项中 11 failed，失败为预期目标断言，不是 setup/命令错误。
+- **GREEN**：当前 recovery worktree 同一命令 exit=0，2 files / 42 tests passed；同 task continuation 与 completion truthfulness 回归成立。T007 尚未取得 Phase C 独立异源 review，不提前标记整体完成。
+- **边界**：本 Phase 只收敛既有实现和测试，不新增 receipt replacement、第二 ledger、successor/recovery/rebind、review lock、public route 或第五份材料；Phase C review 仍是质量/交接事实，不是推进 gate。
