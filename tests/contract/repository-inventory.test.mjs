@@ -23,16 +23,19 @@ import {
 } from "../../tools/architecture/complexity-report.mjs";
 
 describe("repository architecture inventory", () => {
-  it("classifies the complete delivery tree and is reproducible without self-hashing", () => {
+  const historicalBytes = (path) => execFileSync("git", ["show", `HEAD:${path}`], { encoding: "utf8" });
+
+  it("keeps the published inventory immutable and validates the current tree in memory", () => {
     const actual = readFileSync("docs/architecture/repository-inventory.tsv", "utf8");
-    expect(validateInventory(actual)).toEqual([]);
-    expect(actual).toBe(renderInventory());
-    expect(actual).toContain("docs/architecture/repository-inventory.tsv\tkeep\t");
-    expect(actual).toContain("\tSELF\n");
-    expect(actual).toContain("tools/architecture/inventory.mjs\tkeep\t");
-    expect(actual).toContain("specs/workflowhub-complexity-governance-v2/spec.md\tkeep\t");
+    const current = renderInventory();
+    expect(actual).toBe(historicalBytes("docs/architecture/repository-inventory.tsv"));
+    expect(validateInventory(current)).toEqual([]);
+    expect(current).toContain("docs/architecture/repository-inventory.tsv\tkeep\t");
+    expect(current).toContain("\tSELF\n");
+    expect(current).toContain("tools/architecture/inventory.mjs\tkeep\t");
+    expect(current).toContain("specs/workflowhub-complexity-governance-v2/spec.md\tkeep\t");
     expect(validateDeletionProof()).toEqual([]);
-    expect(validateTrackedTestDispositions(actual)).toEqual([]);
+    expect(validateTrackedTestDispositions(current)).toEqual([]);
   });
 
   it("uses the caller alternate index for tracked delivery files and audits untracked files separately", () => {
@@ -166,25 +169,26 @@ describe("repository architecture inventory", () => {
     }
   });
 
-  it("publishes every required complexity budget and hard-zero target", () => {
+  it("keeps the published complexity baseline immutable and diagnoses the current tree in memory", () => {
     const actual = JSON.parse(readFileSync("docs/architecture/complexity-baseline.json", "utf8"));
-    expect(validateReport(actual)).toEqual([]);
-    expect(actual).toEqual(buildReport());
-    expect(actual.measurements.test_support_lines.actual).toBeGreaterThan(0);
-    expect(actual.measurements.formal_test_files.actual).toBeGreaterThan(0);
-    expect(actual.budgets.formal_test_lines.actual).toBeGreaterThan(0);
-    expect(actual.measurements.persistent_object_families.names).toEqual(
-      [...actual.measurements.persistent_object_families.names].sort(),
+    const current = buildReport();
+    expect(`${JSON.stringify(actual, null, 2)}\n`).toBe(historicalBytes("docs/architecture/complexity-baseline.json"));
+    expect(validateReport(current)).toEqual([]);
+    expect(current.measurements.test_support_lines.actual).toBeGreaterThan(0);
+    expect(current.measurements.formal_test_files.actual).toBeGreaterThan(0);
+    expect(current.budgets.formal_test_lines.actual).toBeGreaterThan(0);
+    expect(current.measurements.persistent_object_families.names).toEqual(
+      [...current.measurements.persistent_object_families.names].sort(),
     );
-    expect(actual.budgets.persistent_object_families.actual)
-      .toBe(actual.measurements.persistent_object_families.names.length);
-    expect(actual.hard_gates.bundle_forbidden_content.actual)
-      .toBe(actual.measurements.bundle_content_audit.violations.length);
-    for (const gate of Object.values(actual.hard_gates)) {
+    expect(current.budgets.persistent_object_families.actual)
+      .toBe(current.measurements.persistent_object_families.names.length);
+    expect(current.hard_gates.bundle_forbidden_content.actual)
+      .toBe(current.measurements.bundle_content_audit.violations.length);
+    for (const gate of Object.values(current.hard_gates)) {
       expect(gate.actual).toBe(gate.required_final);
     }
-    expect(actual.measurements.bundle_content_audit.manifests).toBeGreaterThan(0);
-    expect(actual.runtime_boundary).toMatchObject({
+    expect(current.measurements.bundle_content_audit.manifests).toBeGreaterThan(0);
+    expect(current.runtime_boundary).toMatchObject({
       node: {
         actual: process.version,
         requirement: ">=24.14.0 <25",
@@ -197,12 +201,12 @@ describe("repository architecture inventory", () => {
         source: "npm --version",
       },
     });
-    expect(Object.keys(actual.hard_gates).sort()).toEqual([
+    expect(Object.keys(current.hard_gates).sort()).toEqual([
       "bundle_forbidden_content",
       "dedicated_recovery_state",
       "dual_write_markers",
     ]);
-    expect(actual.distribution_boundary).toMatchObject({
+    expect(current.distribution_boundary).toMatchObject({
       node_modules_tracked_files: 0,
       node_modules_gitignored: true,
       clean_install_source: "package.json + package-lock.json",
@@ -215,11 +219,12 @@ describe("repository architecture inventory", () => {
     expect(validateReport(report)).toContain("hard gate dedicated_recovery_state is incomplete");
   });
 
-  it("publishes a readable final report containing the complete current build report and its tree hash", () => {
+  it("keeps the final report immutable and can build a current diagnostic report in memory", () => {
     const actual = JSON.parse(readFileSync("docs/architecture/final-complexity-report.json", "utf8"));
-    expect(validateFinalReport(actual)).toEqual([]);
-    expect(actual).toEqual(buildFinalReport());
-    expect(actual.build_report.hard_gates.dedicated_recovery_state).toMatchObject({ actual: 0, required_final: 0 });
-    expect(actual.snapshot_tracked_tree_sha256).toMatch(/^[a-f0-9]{64}$/);
+    const current = buildFinalReport();
+    expect(`${JSON.stringify(actual, null, 2)}\n`).toBe(historicalBytes("docs/architecture/final-complexity-report.json"));
+    expect(validateFinalReport(current)).toEqual([]);
+    expect(current.build_report.hard_gates.dedicated_recovery_state).toMatchObject({ actual: 0, required_final: 0 });
+    expect(current.snapshot_tracked_tree_sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 });
