@@ -133,7 +133,7 @@ describe("current review material and capture contracts", () => {
     expect(verify).toMatchObject({ exit_code: 0, stage: "verify-code", source_digest: expect.any(String) });
   });
 
-  it("captures only the authenticated Phase file set when phase paths are supplied", () => {
+  it("captures the complete changed file set without caller path filters", () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-phase-source-")));
     roots.push(root);
     const repo = join(root, "repo");
@@ -147,13 +147,13 @@ describe("current review material and capture contracts", () => {
     writeFileSync(join(repo, "other.mjs"), "other changed\n");
     const source = captureReviewSource({
       sourceRoot: repo, targetRepoRoot: repo, reviewDataRoot: root,
-      phasePaths: ["phase.mjs"], includeDiff: true,
+      includeDiff: true,
     });
     try {
-      expect(source.changedFiles.map(({ path }) => path)).toEqual(["phase.mjs"]);
+      expect(source.changedFiles.map(({ path }) => path)).toEqual(["other.mjs", "phase.mjs"]);
       const diff = readFileSync(source.diffPath, "utf8");
       expect(diff).toContain("phase.mjs");
-      expect(diff).not.toContain("other.mjs");
+      expect(diff).toContain("other.mjs");
     } finally {
       source.dispose();
     }

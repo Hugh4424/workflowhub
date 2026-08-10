@@ -129,4 +129,6 @@ WorkflowHub 在 Multica 执行 ZHI-938、ZHI-944 时反复因 Runner、TaskHandl
 - **当前状态**：Phase B 代码与测试尚未取得最终独立 `opencode/v4flash` 结论；在审查完成前不标记 Phase B 完成，不宣称整体修复完成。
 - **首轮复核事实**：`opencode/v4flash` runtime `4ec6fbb8-7755-433e-9d09-3595a79d7e8e` 返回 `REVISE`。唯一 blocking 是本地 compact dossier 将 parent tree 生成错误，造成与 changed files/raw diff 自相矛盾；provider 同时确认实现方向、tree 失效逻辑、schema 对齐和无新增控制面无 blocking。该 review 原文保留，不改写为 PASS。
 - **修正**：改用“先解析 direct parent commit，再读取 parent^{tree}”生成审查绑定；把残留 `phase-gate` 错误文案改为“quality facts, not verify-final results”，避免把 Phase review 暗示为推进 gate。修正后必须重新取得独立结论。
+- **第二轮复核事实**：对提交 `05b20b2` 的 `opencode/v4flash` runtime `bf6b9c67-f1df-4d83-80d3-baf601e110a6` 返回 `PASS`，无 blocking；确认修正后的错误文案、测试、tree binding、schema 与无新增控制面均成立。非阻断项为 `phasePaths` 残留 API、多提交 Phase 的测试覆盖，以及 packet 内 OID 需由 host 绑定；这些不是当前失败结论。
+- **继续收敛**：删除 `captureReviewSource` 的 `phasePaths` 参数和 pathspec 分支，改为所有 review source 都从完整 host snapshot 派生 changed files；更新合同测试，避免 caller 通过路径缩小审查对象。该代码变化会使 `05b20b2` 的 PASS 只保留为历史事实，当前 Phase B 仍待新快照审查。
 - **宪法边界**：没有新增 receipt、snapshot lineage、review lock、managed request-id、bridge、successor/recovery/rebind、第二执行器、第五份材料或 public route；没有改 Multica、main、provider/model/daemon。

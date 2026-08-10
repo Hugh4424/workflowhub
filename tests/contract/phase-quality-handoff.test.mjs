@@ -64,7 +64,7 @@ describe("Phase quality and handoff contract", () => {
     const runner = read("skills/wh-review/scripts/review-runner.mjs");
     const source = read("skills/wh-review/scripts/review-source.mjs");
     expect(runner).not.toMatch(/phaseExecutionPaths|execution_file_paths/);
-    expect(source).toMatch(/phase review paths are derived from the Phase commit/);
+    expect(source).not.toMatch(/phasePaths|execution_file_paths/);
     expect(runner).toMatch(/phase review results are quality facts, not verify-final results/);
     expect(runner).not.toMatch(/phase-gate/);
   });
@@ -102,12 +102,9 @@ describe("Phase quality and handoff contract", () => {
     }
   });
 
-  it("records a dirty Phase without inventing a commit or accepting caller paths", () => {
+  it("records a dirty Phase without inventing a commit", () => {
     const { root, repo, baseCommit } = repoFixture();
     writeFileSync(join(repo, "phase.mjs"), "dirty phase\n");
-    expect(() => captureReviewSource({
-      sourceRoot: repo, targetRepoRoot: repo, baselineCommit: baseCommit, reviewDataRoot: root, phaseId: "phase-a", phasePaths: ["other.mjs"], includeDiff: true,
-    })).toThrow(/phasePaths.*derived|caller.*path/i);
     const source = captureReviewSource({ sourceRoot: repo, targetRepoRoot: repo, baselineCommit: baseCommit, reviewDataRoot: root, phaseId: "phase-a", includeDiff: true });
     try {
       const head = git(repo, ["rev-parse", "HEAD"]);
