@@ -338,10 +338,8 @@ describe("current vNext five-stage runtime", () => {
     const state = fixture("public-make-decision-no-audit");
     const decisionLog = "# public decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
     state.artifacts.writeAtomic("decision-log.md", decisionLog);
-    const decision = writeOfficialComponentReceipt({
-      task: state.task, stage: "make-decision", component: "decision",
-      payload: { decision_log: decisionLog, contract_refs: [] },
-    });
+    const decisionRef = state.artifacts.reference("decision-log.md");
+    const decisionHash = sha256(decisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const interactionValue = {
       schema_version: "workflowhub-interaction-aggregate.v1",
@@ -350,8 +348,8 @@ describe("current vNext five-stage runtime", () => {
       snapshot_tree: snapshot.tree,
       talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true },
       clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "no_direction_changing_ambiguity" },
-      decision_ref: decision.value.decision_ref,
-      decision_hash: decision.value.decision_hash,
+      decision_ref: decisionRef,
+      decision_hash: decisionHash,
     };
     const interactionRaw = `${JSON.stringify(interactionValue, null, 2)}\n`;
     const interactionRef = `quality/evidence/interactions/${sha256(interactionRaw)}.json`;
@@ -372,7 +370,7 @@ describe("current vNext five-stage runtime", () => {
     expect(confirmation.quality_fact_ref).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
     const input = join(state.root, "make-decision-input.json");
     writeFileSync(input, `${JSON.stringify({ receipts: {
-      decision: decision.ref, interaction: interactionRef, direction_review: direction.resultRef, detail_review: detail.resultRef,
+      interaction: interactionRef, direction_review: direction.resultRef, detail_review: detail.resultRef,
       confirmation: confirmation.ref,
     } })}\n`);
     const result = spawnSync(process.execPath, [
@@ -502,21 +500,19 @@ describe("current vNext five-stage runtime", () => {
     expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
-  it("uses the public run route and reports missing receipts without legacy results", () => {
+  it("uses the public run route from current materials without material receipts", () => {
     const state = fixture("public-run-missing-receipt");
-    const input = join(state.root, "run-input.json");
-    writeFileSync(input, `${JSON.stringify({ receipts: {} })}\n`);
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const result = spawnSync(process.execPath, [
       runtime, "run", "--action=execute", "--stage=build-spec", "--project=WorkflowHub",
-      `--task=${state.task.identity.taskId}`, `--input=${input}`,
+      `--task=${state.task.identity.taskId}`,
     ], {
       cwd: state.repo,
       env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
       encoding: "utf8",
     });
-    expect(result.status).not.toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toMatch(/MATERIAL_INCOMPLETE: build-spec spec receipt ref is missing/);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ stage: "build-spec", work_status: "ready", quality_status: "incomplete" });
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
 
@@ -553,12 +549,9 @@ describe("current vNext five-stage runtime", () => {
     const state = fixture("public-build-spec-through-verify-code");
     const specContent = "# Specification\n\n- FR-1: public stage execution.\n- AC-1: current quality facts are published.\n";
     state.artifacts.writeAtomic("spec.md", specContent);
-    const spec = writeOfficialComponentReceipt({
-      task: state.task, stage: "build-spec", component: "spec", payload: { content: specContent },
-    });
     const specSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
-    const specRun = publicRun(state, "build-spec", { receipts: { spec: spec.ref, review: specReview.resultRef } });
+    const specRun = publicRun(state, "build-spec", { receipts: { review: specReview.resultRef } });
     expect(specRun.status).toBe("completed");
     expect(specRun.completion.missing).not.toContain("traceability");
     expect(publicStatus(state, "build-spec")).toMatchObject({ work_status: "ready", quality_status: "completed" });
@@ -567,17 +560,11 @@ describe("current vNext five-stage runtime", () => {
     const planFixture = publicPlanFixture(planProof.sha256);
     state.artifacts.writeAtomic("plan.md", planFixture.plan);
     state.artifacts.writeAtomic("tasks.md", planFixture.tasks);
-    const plan = writeOfficialComponentReceipt({
-      task: state.task, stage: "build-plan", component: "plan", payload: { content: planFixture.plan },
-    });
-    const tasks = writeOfficialComponentReceipt({
-      task: state.task, stage: "build-plan", component: "tasks", payload: { content: planFixture.tasks },
-    });
     const planSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const planReview = writeFormalReviewFixture({ task: state.task, stage: "build-plan", snapshotTree: planSnapshot.tree });
     publicConfirm(state, "build-plan");
     const planRun = publicRun(state, "build-plan", {
-      receipts: { plan: plan.ref, tasks: tasks.ref, review: planReview.resultRef },
+      receipts: { review: planReview.resultRef },
     });
     expect(planRun.status).toBe("completed");
     expect(planRun.completion.missing).not.toContain("support:audit");

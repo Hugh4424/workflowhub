@@ -221,11 +221,13 @@ function confirmationEvidenceStatus(task, candidate) {
 
 function assertVNextSourceStable(ctx, expectedSnapshot) {
   const observed = ctx.kernel.currentVNextSnapshot();
-  if (observed.source_digest !== expectedSnapshot.source_digest) {
-    const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected ${expectedSnapshot.source_digest}, observed ${observed.source_digest}`);
+  if (observed.source_digest !== expectedSnapshot.source_digest || observed.tree !== expectedSnapshot.tree) {
+    const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected source/tree ${expectedSnapshot.source_digest}/${expectedSnapshot.tree}, observed ${observed.source_digest}/${observed.tree}`);
     error.code = "FORMAL_SNAPSHOT_MISMATCH";
     error.expected_source_digest = expectedSnapshot.source_digest;
     error.observed_source_digest = observed.source_digest;
+    error.expected_tree = expectedSnapshot.tree;
+    error.observed_tree = observed.tree;
     throw error;
   }
   return observed;
@@ -394,6 +396,10 @@ export async function runStage(stage, context, handler, publication = {}) {
 }
 
 function officialWorkerContext(ctx, publication = {}) {
+  const artifactDir = ctx.artifacts
+    ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
+      ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
+      : null);
   return Object.freeze({
     stage: ctx.stage,
     identity: ctx.identity,
@@ -434,10 +440,10 @@ function officialWorkerContext(ctx, publication = {}) {
       baselineCommit: ctx.candidateWorkspace.baselineCommit,
       captureSnapshot: () => ctx.candidateWorkspace.captureSnapshot(),
     }) } : {}),
-    ...(ctx.artifacts ? {
-      readArtifact: (name) => ctx.artifacts.read(name),
-      writeArtifact: (name, value) => ctx.artifacts.writeAtomic(name, value),
-      artifactRef: (name) => ctx.artifacts.reference(name),
+    ...(artifactDir ? {
+      readArtifact: (name) => artifactDir.read(name),
+      writeArtifact: (name, value) => artifactDir.writeAtomic(name, value),
+      artifactRef: (name) => artifactDir.reference(name),
     } : {}),
   });
 }

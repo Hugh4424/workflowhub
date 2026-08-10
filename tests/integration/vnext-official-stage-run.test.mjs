@@ -10,7 +10,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
 
@@ -249,12 +249,6 @@ describe("vNext official stage completion", () => {
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
     const kernel = createTaskKernel(state.task, { workspace, artifacts });
-    const spec = writeOfficialComponentReceipt({
-      task: state.task,
-      stage: "build-spec",
-      component: "spec",
-      payload: { content: artifacts.read("spec.md") },
-    });
     const snapshot = workspace.captureSnapshot?.() ?? state.candidate.captureSnapshot();
     const attemptId = "vnext-official-build-spec";
     const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
@@ -284,7 +278,7 @@ describe("vNext official stage completion", () => {
       stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
       workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
       workspace, artifacts,
-    }, { receipts: { spec: spec.ref, review: attemptRef } });
+    }, { receipts: { review: attemptRef } });
 
     expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
@@ -296,6 +290,48 @@ describe("vNext official stage completion", () => {
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
+  });
+
+  it("ignores a stale vNext material receipt while preserving it as read-only history", async () => {
+    const state = fixture("vnext-stale-material-receipt");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    const staleRaw = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: state.task.identity.taskId,
+      stage: "build-spec",
+      producer: { stage: "build-spec", component: "spec", version: "legacy" },
+      content: "# stale spec\n",
+      content_hash: sha256("# stale spec\n"),
+    }, null, 2)}\n`;
+    const staleRef = "quality/evidence/spec.json";
+    kernel.publishCanonicalRecord(staleRef, staleRaw);
+    const review = publishReviewFixture(state);
+    const result = await runOfficialStage("build-spec", {
+      stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
+      workspace, artifacts,
+    }, { receipts: { spec: staleRef, review: review.ref } });
+
+    expect(result).toMatchObject({ stage: "build-spec", work_status: "ready" });
+    expect(["completed", "in_progress"]).toContain(result.status);
+    expect(state.task.readRecord(staleRef)).toBe(staleRaw);
+  });
+
+  it("keeps build-code and verify-code runnable from the four materials alone", async () => {
+    const state = fixture("vnext-four-materials-only");
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { candidateWorkspace: state.candidate, artifacts });
+    for (const stage of ["build-code", "verify-code"]) {
+      const result = await runOfficialStage(stage, {
+        stage, task: state.task, kernel, identity: state.task.identity,
+        workflowRunId: kernel.deriveStageWorkflowRunId(stage), manifest: state.task.manifest,
+        candidateWorkspace: state.candidate, artifacts,
+      }, {});
+      expect(result).toMatchObject({ stage, status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+      expect(result.quality_fact_refs.length).toBeGreaterThan(0);
+    }
   });
 
   it("publishes acceptance predicates from canonical completion facts even when another quality item is open", async () => {

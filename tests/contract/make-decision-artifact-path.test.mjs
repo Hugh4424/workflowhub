@@ -11,7 +11,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
@@ -126,17 +125,10 @@ describe("make-decision current artifact path contract", () => {
     }
   });
 
-  it("rejects a current decision-log whose bytes differ from quality evidence", async () => {
+  it("uses the current decision-log without a legacy decision receipt", async () => {
     const state = fixture("p1-decision-hash");
-    const qualityDecision = "# quality decision\n";
-    state.artifacts.writeAtomic("decision-log.md", "# different current material\n");
-    const decision = writeOfficialComponentReceipt({
-      task: state.task,
-      workspace: state.context.candidateWorkspace,
-      stage: "make-decision",
-      component: "decision",
-      payload: { decision_log: qualityDecision, contract_refs: [] },
-    });
+    const decisionLog = "# current decision\n\n## 范围\n继续当前任务。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n质量事实缺失保持可见。\n";
+    state.artifacts.writeAtomic("decision-log.md", decisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
     const direction = writeFormalReviewFixture({
       task: state.task,
@@ -150,12 +142,9 @@ describe("make-decision current artifact path contract", () => {
       snapshotTree: snapshot.tree,
       reviewTrack: "detail",
     });
-    await expect(runOfficialStage("make-decision", state.context, {
-      receipts: {
-        decision: decision.ref,
-        direction_review: direction.resultRef,
-        detail_review: detail.resultRef,
-      },
-    })).rejects.toThrow(/decision-log.*artifact|current.*receipt|hash/i);
+    const result = await runOfficialStage("make-decision", state.context, {
+      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef },
+    });
+    expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
   });
 });

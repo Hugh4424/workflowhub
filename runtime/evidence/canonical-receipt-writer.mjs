@@ -18,6 +18,7 @@ const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
 const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
 const VERIFY_REVIEW_STEPS = Object.freeze(["architect_review", "main_repair_1", "independent_review", "main_repair_2"]);
+const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "decision-log", ref: "quality/evidence/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "quality/evidence/spec.json" }),
@@ -190,9 +191,13 @@ export function captureWorkspaceSnapshot(workspace) {
   return captureExecutionSnapshot(root);
 }
 
-/** Fixed registry for official non-test component receipts. */
+/** Legacy component registry; vNext current materials are ArtifactDir-owned. */
 export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf } = {}) {
   const safeTask = assertTaskHandle(task);
+  if (safeTask.manifest?.record_model === "vnext-single-write"
+      && CURRENT_MATERIAL_COMPONENTS.has(component)) {
+    throw new Error("vNext current four materials are ArtifactDir-owned; legacy material receipts are read-only");
+  }
   const registration = registrationFor(safeTask, component);
   if (!registration || registration.stage !== stage) throw new Error("component is not allowlisted for this stage");
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new TypeError("official component payload must be an object");

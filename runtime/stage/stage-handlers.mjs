@@ -16,6 +16,21 @@ import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousF
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
+const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
+function currentMaterialContent(worker, name) {
+  if (typeof worker.readArtifact !== "function" || typeof worker.artifactRef !== "function") {
+    throw materialIncomplete(`${worker.stage} requires an authenticated current ArtifactDir`);
+  }
+  const content = text(worker.readArtifact(name), `${name} content`);
+  const contentHash = hashText(content);
+  return Object.freeze({
+    ref: worker.artifactRef(name),
+    content,
+    content_hash: contentHash,
+    value: Object.freeze({ content, content_hash: contentHash }),
+    evidence: null,
+  });
+}
 function materialIncomplete(message) {
   const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
   error.code = "MATERIAL_INCOMPLETE";
@@ -1040,7 +1055,8 @@ function bindBuildSpecReview(worker, invocation, review, currentTree) {
 HANDLERS.set("make-decision", async (worker, input) => {
   let audit;
   try { audit = auditFacts(worker, input); } catch { audit = null; }
-  const item = receipt(worker, input, "decision");
+  const currentOnly = worker.manifest?.record_model === "vnext-single-write";
+  let item = currentOnly ? null : receipt(worker, input, "decision");
   const direction = safeReviewFacts(worker, input, "direction_review", "direction");
   const detail = safeReviewFacts(worker, input, "detail_review", "detail");
   const research = input.receipts.research === undefined ? null : testFacts(worker, input, "research");
@@ -1050,13 +1066,6 @@ HANDLERS.set("make-decision", async (worker, input) => {
   const auditGaps = audit
     ? []
     : ["audit unavailable/unverified/mismatch: decision coverage audit is missing", "support:audit"];
-  const decisionRefPattern = /^quality\/evidence\/[a-f0-9]{64}\.md$/;
-  if (typeof item.value.decision_ref !== "string" || !decisionRefPattern.test(item.value.decision_ref)
-      || typeof item.value.decision_hash !== "string" || item.value.content_hash !== item.value.decision_hash) {
-    throw new Error("decision-log receipt must point to the final human-readable artifact");
-  }
-  const decisionLog = worker.readEvidence(item.value.decision_ref);
-  if (decisionLog.sha256 !== item.value.decision_hash || decisionLog.bytes.trim() === "") throw new Error("decision-log content hash mismatch");
   if (typeof worker.readArtifact !== "function" || typeof worker.artifactRef !== "function") {
     throw materialIncomplete("make-decision requires an authenticated current ArtifactDir");
   }
@@ -1067,11 +1076,31 @@ HANDLERS.set("make-decision", async (worker, input) => {
     if (error?.code === "ENOENT") throw materialIncomplete("make-decision current decision-log.md artifact is missing");
     throw error;
   }
-  if (currentDecisionLog !== decisionLog.bytes) {
-    throw new Error("make-decision current decision-log artifact differs from quality evidence");
-  }
   const decisionArtifactRef = worker.artifactRef("decision-log.md");
   const decisionArtifactHash = hashText(currentDecisionLog);
+  if (currentOnly) {
+    item = {
+      ref: decisionArtifactRef,
+      value: {
+        decision_ref: decisionArtifactRef,
+        decision_hash: decisionArtifactHash,
+        content_hash: decisionArtifactHash,
+        contract_refs: [],
+      },
+      evidence: null,
+    };
+  } else {
+    const decisionRefPattern = /^quality\/evidence\/[a-f0-9]{64}\.md$/;
+    if (typeof item.value.decision_ref !== "string" || !decisionRefPattern.test(item.value.decision_ref)
+        || typeof item.value.decision_hash !== "string" || item.value.content_hash !== item.value.decision_hash) {
+      throw new Error("decision-log receipt must point to the final human-readable artifact");
+    }
+    const decisionLog = worker.readEvidence(item.value.decision_ref);
+    if (decisionLog.sha256 !== item.value.decision_hash || decisionLog.bytes.trim() === "") throw new Error("decision-log content hash mismatch");
+    if (currentDecisionLog !== decisionLog.bytes) {
+      throw new Error("make-decision current decision-log artifact differs from quality evidence");
+    }
+  }
   if (!Array.isArray(item.value.contract_refs)) throw new Error("decision-log contract refs must be an array");
   if (!worker.candidateWorkspace) throw new Error("verified CandidateWorkspace required");
   const snapshot = worker.candidateWorkspace.captureSnapshot();
@@ -1108,9 +1137,9 @@ HANDLERS.set("make-decision", async (worker, input) => {
       ...(audit?.facts ?? {}),
     },
     evidence_refs: [
-      item.evidence,
+      ...(item.evidence ? [item.evidence] : []),
       ...(interaction ? [interaction.evidence] : []),
-      { ref: item.value.decision_ref, sha256: item.value.decision_hash },
+      ...(currentOnly ? [] : [{ ref: item.value.decision_ref, sha256: item.value.decision_hash }]),
       ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
       ...(direction.evidence ? [direction.evidence] : []), ...(detail.evidence ? [detail.evidence] : []), ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
     ],
@@ -1119,7 +1148,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
     worker,
     artifacts: [
       { label: "当前决策材料", ref: decisionArtifactRef, hash: decisionArtifactHash },
-      { label: "决策质量证据", ref: item.value.decision_ref, hash: item.value.decision_hash },
+      ...(currentOnly ? [] : [{ label: "决策质量证据", ref: item.value.decision_ref, hash: item.value.decision_hash }]),
     ],
     reviews: [direction, detail],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
@@ -1136,7 +1165,9 @@ HANDLERS.set("build-spec", async (worker, input) => {
     audit = null;
     auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
   }
-  const item = receipt(worker, input, "spec"), review = safeReviewFacts(worker, input);
+  const currentOnly = worker.manifest?.record_model === "vnext-single-write";
+  const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
+  const review = safeReviewFacts(worker, input);
   const dispositions = findingDispositions([review], input);
   text(item.value.content, "spec content");
   if (item.value.content_hash !== hashText(item.value.content)) throw new Error("spec content hash mismatch");
@@ -1147,7 +1178,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   const after = object(worker.snapshotWorkspace(), "build-spec post-review Workspace snapshot");
   if (after.tree !== before.tree) throw new Error("build-spec Workspace changed while binding final spec review");
   const acceptanceDesign = validateAcceptanceDesignMinimum(item.value.content);
-  const specEvidence = { ref: item.ref, sha256: item.evidence.sha256 };
+  const specEvidence = { ref: item.ref, sha256: item.content_hash ?? item.evidence.sha256 };
   return addCompletion("build-spec", {
     facts: {
       spec_ref: worker.artifactRef("spec.md"), snapshot_tree: before.tree, source_digest: before.source_digest,
@@ -1157,7 +1188,13 @@ HANDLERS.set("build-spec", async (worker, input) => {
       },
       review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}),
     },
-    evidence_refs: [item.evidence, ...(review.evidence ? [review.evidence] : []), ...(audit ? [audit.evidence] : []), ...review.risk_evidence, ...bindingEvidence],
+    evidence_refs: [
+      ...(item.evidence ? [item.evidence] : []),
+      ...(review.evidence ? [review.evidence] : []),
+      ...(audit ? [audit.evidence] : []),
+      ...review.risk_evidence,
+      ...bindingEvidence,
+    ],
     missing_items: [
       ...review.missing_items,
       ...dispositions.missing_items,
@@ -1165,7 +1202,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
     ],
   }, {
     worker,
-    artifacts: [{ label: "需求规格", ref: item.ref, hash: item.evidence.sha256 }],
+    artifacts: [{ label: "需求规格", ref: item.ref, hash: item.content_hash ?? item.evidence.sha256 }],
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
@@ -1204,26 +1241,28 @@ HANDLERS.set("build-plan", async (worker, input) => {
       return null;
     }
   };
-  optional("plan receipt missing/unverified/mismatch", () => {
-    const item = receipt(worker, input, "plan");
-    text(item.value.content, "plan content");
-    if (item.value.content_hash !== hashText(item.value.content)
-        || materials["plan.md"] !== item.value.content) {
-      throw new Error("receipt hash/content differs from live plan.md");
-    }
-    evidenceRefs.push(item.evidence);
-    return item;
-  });
-  optional("tasks receipt missing/unverified/mismatch", () => {
-    const item = receipt(worker, input, "tasks");
-    text(item.value.content, "tasks content");
-    if (item.value.content_hash !== hashText(item.value.content)
-        || materials["tasks.md"] !== item.value.content) {
-      throw new Error("receipt hash/content differs from live tasks.md");
-    }
-    evidenceRefs.push(item.evidence);
-    return item;
-  });
+  if (worker.manifest?.record_model !== "vnext-single-write") {
+    optional("plan receipt missing/unverified/mismatch", () => {
+      const item = receipt(worker, input, "plan");
+      text(item.value.content, "plan content");
+      if (item.value.content_hash !== hashText(item.value.content)
+          || materials["plan.md"] !== item.value.content) {
+        throw new Error("receipt hash/content differs from live plan.md");
+      }
+      evidenceRefs.push(item.evidence);
+      return item;
+    });
+    optional("tasks receipt missing/unverified/mismatch", () => {
+      const item = receipt(worker, input, "tasks");
+      text(item.value.content, "tasks content");
+      if (item.value.content_hash !== hashText(item.value.content)
+          || materials["tasks.md"] !== item.value.content) {
+        throw new Error("receipt hash/content differs from live tasks.md");
+      }
+      evidenceRefs.push(item.evidence);
+      return item;
+    });
+  }
   const auditGaps = [];
   let audit;
   try { audit = auditFacts(worker, input); }
@@ -1280,6 +1319,31 @@ HANDLERS.set("build-plan", async (worker, input) => {
   });
 });
 HANDLERS.set("build-code", async (worker, input) => {
+  // Implementation and test facts describe quality; they are not the work
+  // authority.  A vNext run with only the four materials stays runnable.
+  if (worker.manifest?.record_model === "vnext-single-write"
+      && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
+    const current = currentMaterialContent(worker, "tasks.md");
+    return addCompletion("build-code", {
+      facts: {
+        changed: [],
+        completion_subjects: {
+          acceptance_criteria: subjectFact("missing", [], "implementation and test quality facts are not yet recorded"),
+        },
+        finding_dispositions: { status: "not_applicable", items: [] },
+        audit_gaps: ["current implementation/test facts are unavailable; current four materials remain the work authority"],
+      },
+      evidence_refs: [],
+      missing_items: ["current implementation/test facts are unavailable; record them when available"],
+    }, {
+      worker,
+      artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
+      reviews: [],
+      businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
+      audit: null,
+      verification: "当前四份材料可继续；实现、测试和审查质量事实尚未提供",
+    });
+  }
   const missingItems = [];
   const auditGaps = [];
   const audit = (() => {
@@ -1369,6 +1433,31 @@ HANDLERS.set("build-code", async (worker, input) => {
 });
 
 HANDLERS.set("verify-code", async (worker, input) => {
+  // Verification may disclose missing evidence, but it cannot turn missing
+  // evidence into a same-task recovery/rebind gate.
+  if (worker.manifest?.record_model === "vnext-single-write"
+      && (input.receipts.tests === undefined || input.receipts.evidence === undefined)) {
+    const current = currentMaterialContent(worker, "tasks.md");
+    return addCompletion("verify-code", {
+      facts: {
+        completion_subjects: {
+          acceptance_criteria: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
+          exceptions: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
+        },
+        finding_dispositions: { status: "not_applicable", items: [] },
+        audit_gaps: ["current verification test/evidence facts are unavailable; current four materials remain the work authority"],
+      },
+      evidence_refs: [],
+      missing_items: ["current verification test/evidence facts are unavailable; record them when available"],
+    }, {
+      worker,
+      artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
+      reviews: [],
+      businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
+      audit: null,
+      verification: "当前四份材料可继续；验证测试和证据尚未提供",
+    });
+  }
   const audit = (() => {
     try {
       const candidate = auditFacts(worker, input);
@@ -1522,4 +1611,4 @@ HANDLERS.set("verify-code", async (worker, input) => {
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const refs = object(value.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, value); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }

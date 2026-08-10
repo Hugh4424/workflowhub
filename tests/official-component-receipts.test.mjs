@@ -14,18 +14,25 @@ import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
 import { validateBuildCodePhaseEvidence } from "../runtime/stage/stage-content-contracts.mjs";
 
 const temporary = [];
-function fixture() {
+function fixture({ recordModel } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-official-receipt-"))); temporary.push(root);
   const repo = join(root, "repo"), worktree = join(root, "repo-receipt-task"); mkdirSync(repo);
   const git = (args, cwd = repo) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
   git(["init", "-q"]); git(["config", "user.email", "test@example.com"]); git(["config", "user.name", "Test"]); writeFileSync(join(repo, "tracked.txt"), "base\n"); git(["add", "tracked.txt"]); git(["commit", "-qm", "base"]);
   const baseline = git(["rev-parse", "HEAD"]); git(["worktree", "add", "-q", "-b", "task/Demo/receipt-task", worktree, baseline]);
-  const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "receipt-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
+  const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "receipt-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {}, ...(recordModel === undefined ? {} : { record_model: recordModel }) } });
   return { task, worktree, workspace: openAcceptedWorkspace(task, { facts: { worktree_root: worktree, baseline_commit: baseline } }) };
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
+  it("does not let vNext write legacy current-material receipts", () => {
+    const { task } = fixture({ recordModel: "vnext-single-write" });
+    for (const [stage, component] of [["make-decision", "decision"], ["build-spec", "spec"], ["build-plan", "plan"], ["build-plan", "tasks"]]) {
+      expect(() => writeOfficialComponentReceipt({ task, stage, component, payload: stage === "make-decision" ? { decision_log: "# decision\n", contract_refs: [] } : { content: "# material\n" } }))
+        .toThrow(/current four materials.*ArtifactDir-owned|legacy material receipts are read-only/i);
+    }
+  });
   it.each([true, false])("keeps boolean phase completion readable as legacy data: %s", (value) => {
     expect(validatePhaseCompletion(value)).toBe(value);
   });
@@ -64,18 +71,14 @@ describe("official component receipt authority", () => {
     ["build-spec", "spec"],
     ["build-plan", "plan"],
     ["build-plan", "tasks"],
-  ])("reproduces the %s/%s EEXIST accident when a draft is frozen before review", (stage, component) => {
+  ])("rejects the retired %s/%s material receipt writer", (stage, component) => {
     const { task } = fixture();
-    const first = writeOfficialComponentReceipt({ task, stage, component, payload: { content: "draft\n" } });
-    expect(() => writeOfficialComponentReceipt({ task, stage, component, payload: { content: "revised after review\n" } })).toThrow(/exist/i);
-    expect(JSON.parse(task.readRecord(first.ref))).toMatchObject({ content: "draft\n" });
+    expect(() => writeOfficialComponentReceipt({ task, stage, component, payload: { content: "draft\n" } }))
+      .toThrow(/current four materials.*ArtifactDir-owned|legacy material receipts are read-only/i);
   });
 
   it("publishes allowlisted content and derives implementation completion outside the caller payload", () => {
     const { task, worktree, workspace } = fixture();
-    const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
-    expect(spec.ref).toBe("quality/evidence/spec.json");
-    expect(writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } })).toMatchObject({ ref: spec.ref, sha256: spec.sha256, revision: false });
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
     writeFileSync(join(worktree, "new.txt"), "new\n");
@@ -88,7 +91,6 @@ describe("official component receipt authority", () => {
     });
     expect(implementation.value.changed).toEqual(["new.txt", "tracked.txt"]);
     expect(implementation.value).not.toHaveProperty("phase_completion");
-    expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 
   it("reuses a same-snapshot build-code full test receipt during verify capture", () => {
@@ -146,18 +148,16 @@ describe("official component receipt authority", () => {
     expect(JSON.parse(task.readRecord(verification.ref))).toMatchObject({ producer: { component: "verification" }, items: expect.any(Array) });
   });
 
-  it("retires component replacement and requires a new current material", () => {
+  it("retires component replacement and requires the current ArtifactDir material", () => {
     const { task } = fixture();
-    const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v1\n" } });
-    expect(first.ref).toBe("quality/evidence/plan.json");
-    expect(task.readRecord(first.ref)).toContain("# Plan v1");
-    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref })).toThrow(/REPLACEMENT_RETIRED/);
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v1\n" } }))
+      .toThrow(/current four materials.*ArtifactDir-owned|legacy material receipts are read-only/i);
   });
 
   it("rejects a revision whose deterministic content ref is bound to another source", () => {
     const { task } = fixture();
-    const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v1\n" } });
-    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: first.ref })).toThrow(/REPLACEMENT_RETIRED/);
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v1\n" }, revisionOf: "quality/evidence/tasks.json" }))
+      .toThrow(/current four materials.*ArtifactDir-owned|legacy material receipts are read-only/i);
   });
 
   it("records pass and fail acceptance facts with unique identities and closed refs", () => {

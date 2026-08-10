@@ -85,7 +85,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     if (!new Set(["commit", "push", "merge", "archive", "cleanup"]).has(values.operation)) throw new TypeError("authorize-operation requires --operation=commit|push|merge|archive|cleanup");
     if (typeof values["subject-ref"] !== "string" || values["subject-ref"].trim() === "") throw new TypeError("authorize-operation requires --subject-ref=<quality/confirmations/<sha256>.json>");
   }
-  if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
     projectName: values.project,
@@ -204,19 +203,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     });
   }
   if (command === "run") {
-    if (!input || typeof input !== "object" || Array.isArray(input)
-        || !input.receipts || typeof input.receipts !== "object" || Array.isArray(input.receipts)) {
-      throw new TypeError("run input requires a receipts object");
+    if (input !== undefined && (typeof input !== "object" || Array.isArray(input))) {
+      throw new TypeError("run input must be an object when supplied");
     }
     const allowedRunFields = new Set(values.stage === "build-code"
       ? ["receipts", "acceptance_coverage", "finding_dispositions"]
       : ["receipts", "finding_dispositions"]);
-    const unknownRunFields = Object.keys(input).filter((key) => !allowedRunFields.has(key));
+    const suppliedInput = input ?? {};
+    const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
-    if (Object.prototype.hasOwnProperty.call(input?.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
+    if (Object.prototype.hasOwnProperty.call(suppliedInput.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
     const controlledInput = {
-      ...input,
-      receipts: { ...input.receipts },
+      ...suppliedInput,
+      receipts: { ...(suppliedInput.receipts ?? {}) },
     };
     const attempt = await runOfficialStage(values.stage, context, controlledInput);
     return attempt;
