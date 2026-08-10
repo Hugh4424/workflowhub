@@ -115,9 +115,9 @@ describe("current review material and capture contracts", () => {
     expect(phaseDiffDeliveryForPath("runtime/stage/stage-runner.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("workflows/build-code/steps.json")).toBe("included");
     expect(phaseDiffDeliveryForPath("skills/spec-analyze/SKILL.md")).toBe("included");
-    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("skills/catalog.yaml")).toBe("summary");
-    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
   });
 
