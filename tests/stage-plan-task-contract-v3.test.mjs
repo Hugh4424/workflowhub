@@ -255,6 +255,18 @@ describe("plan-task.v3 structural contract", () => {
     });
   });
 
+  it("accepts named robust acceptance criterion identifiers", () => {
+    const robustSpec = spec.replaceAll("AC1", "AC-ROBUST-001");
+    const robustPlan = plan.replaceAll("AC1", "AC-ROBUST-001");
+    const robustTasks = tasks.replaceAll("AC1", "AC-ROBUST-001");
+    const result = validatePlanTaskContract({ spec: robustSpec, plan: robustPlan, tasks: robustTasks });
+    expect(result).toMatchObject({
+      ok: true,
+      errors: [],
+      facts: { ac_coverage: { accepted_ids: ["AC-ROBUST-001"], covered_ids: ["AC-ROBUST-001"] } },
+    });
+  });
+
   it("does not treat accepted history as task completion and rejects contradictory completed claims", () => {
     const contradictory = tasks
       .replace("- [ ] **任务完成**", "- [x] **任务完成**")

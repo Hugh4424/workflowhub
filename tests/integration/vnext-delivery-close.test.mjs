@@ -156,6 +156,19 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
+  it("accepts the canonical recorded status used by review quality facts", () => {
+    const state = fixture({ reviewStatus: "recorded" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
+  });
+
   it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent"])("rejects an unauthenticated test snapshot: %s", (testVariant) => {
     const state = fixture({ testVariant });
     expect(() => prepareDeliveryClosePlan({

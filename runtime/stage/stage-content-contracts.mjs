@@ -1674,7 +1674,7 @@ export function validatePlanTaskContract({
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
     const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-    const acs = identifiers(task.fields.AC ?? "", /\bAC-?\d+\b/g);
+    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID);
     return Object.freeze({
       id: task.heading_id,
       order: index,
@@ -1798,7 +1798,7 @@ export function validatePlanTaskContract({
   }
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-  const acceptedAcs = identifiers(spec, /\bAC-?\d+\b/g);
+  const acceptedAcs = identifiers(spec, ACCEPTANCE_CRITERION_ID);
   if (isV3 && acceptedFrs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted FR");
   if (isV3 && acceptedAcs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted AC");
   const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
@@ -1904,7 +1904,7 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
   if (cycleIn(rows)) errors.push("task dependency graph contains a cycle");
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-  const acceptedAcs = identifiers(spec, /\bAC-?\d+\b/g);
+  const acceptedAcs = identifiers(spec, ACCEPTANCE_CRITERION_ID);
   const referencedFrs = [...new Set(rows.flatMap(({ frs }) => frs))];
   const referencedAcs = [...new Set(rows.flatMap(({ acs }) => acs))];
   if (acceptedFrs.length === 0) errors.push("spec has no accepted FR");
@@ -1976,7 +1976,8 @@ export function buildPlanTaskContract({
 }
 
 const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
-const V2_AC = /\bAC-?\d+\b/g;
+const ACCEPTANCE_CRITERION_ID = /\bAC(?:-\d{1,3}|-ROBUST-\d{3}|\d{1,3})\b/g;
+const V2_AC = ACCEPTANCE_CRITERION_ID;
 
 function parseReferenceList(value) {
   if (Array.isArray(value)) return value;

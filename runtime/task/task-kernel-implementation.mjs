@@ -340,8 +340,24 @@ export function buildTaskKernel(taskHandle, {
         return { ref: authorizationRef, hash: authHash, raw, value };
       }).filter(Boolean);
       if (candidates.length === 0) throw new Error(`IRREVERSIBLE_AUTHORIZATION_REQUIRED: authorize --operation=${operation} with --subject-ref=${confirmation.ref} before close`);
-      if (candidates.length !== 1) throw new Error(`IRREVERSIBLE_AUTHORIZATION_AMBIGUOUS: ${operation} has multiple authorizations for ${confirmation.ref}`);
-      const authorization = candidates[0];
+
+      // A retry may reuse only the authorization consumed by this same close step.
+      const withConsumption = candidates.map((candidate) => {
+        const consumptionRef = `quality/authorizations/consumed/${candidate.hash}.json`;
+        let consumption = null;
+        try { consumption = JSON.parse(task.readRecord(consumptionRef)); }
+        catch (error) { if (error?.code !== "ENOENT") throw error; }
+        return { ...candidate, consumption };
+      });
+      const sameStep = withConsumption.filter(({ consumption }) => consumption?.plan_hash === planHash
+        && consumption.operation === operation && consumption.confirmation_ref === confirmation.ref
+        && consumption.step_id === stepId);
+      const unused = withConsumption.filter(({ consumption }) => consumption === null);
+      let authorization;
+      if (sameStep.length === 1) authorization = sameStep[0];
+      else if (sameStep.length > 1) throw new Error(`IRREVERSIBLE_AUTHORIZATION_AMBIGUOUS: ${operation} has multiple step authorizations for ${confirmation.ref}`);
+      else if (unused.length === 1) authorization = unused[0];
+      else throw new Error(`IRREVERSIBLE_AUTHORIZATION_AMBIGUOUS: ${operation} has multiple authorizations for ${confirmation.ref}`);
       const consumptionRef = `quality/authorizations/consumed/${authorization.hash}.json`;
       const consumed = {
         schema_version: "irreversible-authorization-consumption.v1",
@@ -361,7 +377,7 @@ export function buildTaskKernel(taskHandle, {
         if (error?.code !== "EEXIST") throw error;
         const existingRaw = task.readRecord(consumptionRef);
         const existing = JSON.parse(existingRaw);
-        if (existing.task_id !== consumed.task_id || existing.plan_hash !== consumed.plan_hash || existing.operation !== consumed.operation || existing.authorization_ref !== consumed.authorization_ref || existing.confirmation_ref !== consumed.confirmation_ref) {
+        if (existing.task_id !== consumed.task_id || existing.plan_hash !== consumed.plan_hash || existing.step_id !== consumed.step_id || existing.operation !== consumed.operation || existing.authorization_ref !== consumed.authorization_ref || existing.confirmation_ref !== consumed.confirmation_ref) {
           throw new Error("irreversible authorization was already consumed by a different close step");
         }
         return Object.freeze({ ref: consumptionRef, hash: hash(existingRaw), value: existing, idempotent: true });

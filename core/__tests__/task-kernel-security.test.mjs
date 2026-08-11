@@ -42,6 +42,58 @@ afterEach(() => {
 });
 
 describe("TaskKernel trust boundary", () => {
+  function authorizationFixture() {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task);
+    const planHash = "c".repeat(64);
+    const materialRevision = `revision-${"a".repeat(64)}`;
+    const snapshotTree = "b".repeat(40);
+    const confirmationValue = {
+      schema_version: "human-confirmation.v2",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
+      decision: "accepted",
+      subject_ref: `operations/close/plans/${planHash}/plan.json`,
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      confirmed_at: "2026-08-11T00:00:00.000Z",
+    };
+    const confirmationRaw = `${JSON.stringify(confirmationValue, null, 2)}\n`;
+    const confirmationHash = createHash("sha256").update(confirmationRaw).digest("hex");
+    const confirmationRef = `quality/confirmations/${confirmationHash}.json`;
+    kernel.publishCanonicalRecord(confirmationRef, confirmationRaw);
+    const authorizationValue = {
+      schema_version: "irreversible-authorization.v1",
+      task_id: task.identity.taskId,
+      operation: "commit",
+      subject_ref: confirmationRef,
+      subject_hash: confirmationHash,
+      material_revision: materialRevision,
+      snapshot_tree: snapshotTree,
+      authorized_at: "2026-08-11T00:00:01.000Z",
+    };
+    const authorizationRaw = `${JSON.stringify(authorizationValue, null, 2)}\n`;
+    const authorizationHash = createHash("sha256").update(authorizationRaw).digest("hex");
+    kernel.publishCanonicalRecord(`quality/authorizations/${authorizationHash}.json`, authorizationRaw);
+    return { kernel, confirmationRef, planHash };
+  }
+
+  it("allows the same close step to retry without consuming authorization twice", () => {
+    const state = authorizationFixture();
+    const input = { operation: "commit", confirmation_ref: state.confirmationRef, plan_hash: state.planHash, step_id: "close-step" };
+    const first = state.kernel.consumeIrreversibleAuthorization(input);
+    const retry = state.kernel.consumeIrreversibleAuthorization(input);
+    expect(retry).toMatchObject({ idempotent: true, ref: first.ref, value: { step_id: "close-step" } });
+  });
+
+  it("does not let another close step reuse a consumed authorization", () => {
+    const state = authorizationFixture();
+    const input = { operation: "commit", confirmation_ref: state.confirmationRef, plan_hash: state.planHash, step_id: "close-step" };
+    state.kernel.consumeIrreversibleAuthorization(input);
+    expect(() => state.kernel.consumeIrreversibleAuthorization({ ...input, step_id: "other-close-step" }))
+      .toThrow(/IRREVERSIBLE_AUTHORIZATION_AMBIGUOUS/);
+  });
+
   it("does not export any low-level canonical writer or authority installer", async () => {
     const publicApi = await import("../../runtime/task/task-handle.mjs");
     expect(publicApi.installTaskKernelAuthority).toBeUndefined();

@@ -50,7 +50,7 @@ function currentQualityValue(task, ref) {
         || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")
         || !["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(value.stage)
         || !["test", "review", "acceptance_criterion", "confirmation"].includes(value.kind)
-        || !["passed", "failed", "unavailable", "missing"].includes(value.status)
+        || !["passed", "failed", "recorded", "unavailable", "missing"].includes(value.status)
         || typeof value.subject !== "string" || value.subject.trim() === ""
         || !Array.isArray(value.evidence) || value.evidence.length === 0
         || !Number.isFinite(Date.parse(value.recorded_at))) return null;
