@@ -430,7 +430,13 @@ export function buildPlanningArtifacts({
   acceptanceCriteria = null,
   draftPlan = null,
   draftTasks = null,
+  deferredItems = null,
+  openItems = null,
 } = {}) {
+  const derivedDeferredItems = deferredItems
+    ?? (rawRequirementIndex && typeof rawRequirementIndex === "object" ? rawRequirementIndex.deferred_items ?? null : null);
+  const derivedOpenItems = openItems
+    ?? (rawRequirementIndex && typeof rawRequirementIndex === "object" ? rawRequirementIndex.open_items ?? null : null);
   return Object.freeze({
     schema_version: "spec-analyze-planning-artifacts.v1",
     source_artifact: "decision-log",
@@ -439,6 +445,8 @@ export function buildPlanningArtifacts({
     acceptance_criteria: acceptanceCriteria,
     draft_plan: draftPlan,
     draft_tasks: draftTasks,
+    ...(derivedDeferredItems === null ? {} : { deferred_items: derivedDeferredItems }),
+    ...(derivedOpenItems === null ? {} : { open_items: derivedOpenItems }),
     finding_disposition: "pending_main_agent_review",
   });
 }
@@ -448,6 +456,31 @@ const ruleFor = reviewRuleFor;
 function stagePlanFor(stage, track) {
   const stagePlan = skillPlan.stages[stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
+}
+
+function stageReviewFocus(stage, track, reviewScope) {
+  if (stage === "make-decision" && track === "direction") {
+    return "Focus on whether the raw requirement, user flow, boundaries, risks, and direction are complete. Do not propose or judge an implementation solution.";
+  }
+  if (stage === "make-decision" && track === "detail") {
+    return "Focus on whether the approved direction is turned into a complete flow, page scope, data states, success/failure boundaries, non-goals, and deferred handoff. Do not invent a new direction.";
+  }
+  if (stage === "build-spec") {
+    return "Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, and objective acceptance. Do not re-decide product direction or plan implementation work.";
+  }
+  if (stage === "build-plan") {
+    return "Focus on whether the plan and tasks execute the approved spec in dependency order, with real test or evidence oracles and no missing requirement. Do not add requirements or treat review as permission to proceed.";
+  }
+  if (stage === "build-code" && reviewScope === "phase") {
+    return "Focus on the complete current Phase diff, its direct consumers, tests, acceptance trace, and actionable major or blocking risks. Ignore unrelated history and do not require a provider pass.";
+  }
+  if (stage === "build-code" && reviewScope === "integration") {
+    return "Focus on the final current worktree implementation, current tests, acceptance trace, and actionable major or blocking risks. Do not replay Phase history, cumulative diffs, or require a provider pass.";
+  }
+  if (stage === "verify-code") {
+    return "Focus on the current acceptance summary, final test facts, implementation assessment, and open delivery risks. Report advice only; do not emit a provider verdict.";
+  }
+  return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null) {
@@ -462,10 +495,18 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const reviewInstruction = "This is a full review of the supplied current stage subject.";
+  const stageFocus = stageReviewFocus(stage, track, reviewScope);
   const verifyBound = stage === "verify-code"
     ? "This is one bounded post-repair architect review. Inspect the compact acceptance summary, the architect assessment, the final test summary, and open risks. Do not demand a full evidence tree, historical replay, provider pass, or another review; report only findings that can affect delivery."
     : `${blind} ${reviewInstruction}`;
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. ${verifyBound} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  const adviceBoundary = "Every stage produces heterologous advice as a quality fact only. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
+  const buildCodeBoundary = stage === "build-code"
+    ? "For build-code, a review cycle is clean only when the current trusted semantic result has no actionable major or blocking finding. If one exists, allow one focused review only after an actual repair or subject change; repeated findings, no actual change, or no trusted terminal result stop automatic continuation and remain visible as needs_human, unavailable, or incomplete."
+    : "";
+  const subjectReading = stage === "build-code" && reviewScope === "integration"
+    ? "For integration, do not look for or infer a diff; read only the final current worktree subject, current tests, AC trace, and selected context."
+    : "Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority.";
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${adviceBoundary} ${buildCodeBoundary} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -849,17 +890,28 @@ function excludedPacketMaterial(rule, stage) {
   excluded.push({ category: "changed_file_index", reason: "change_map_is_the_complete_file_and_hunk_index" });
   if (rule.source_bundle === "diff") {
     excluded.push({ category: "changed_file_context", reason: "complete_diff_is_authoritative_except_declared_outside_hunk_context" });
+    excluded.push({ category: "out_of_scope_diff_summaries", reason: "summary shards remain canonical audit material and are not provider-visible" });
   }
   excluded.push({ category: "canonical_raw_output", reason: "raw_logs_are_retained_for_audit_not_provider_delivery" });
   if (stage === "verify-code") excluded.push({ category: "canonical_acceptance_evidence_tree", reason: "reduced_to_structured_per_ac_summary" });
   return excluded;
 }
 
+function isSummaryDiffShard(bundleRoot, path) {
+  if (!path.startsWith("diff-shards/")) return false;
+  try { return JSON.parse(firstTextLine(join(bundleRoot, ...path.split("/")))).delivery === "summary"; }
+  catch { return false; }
+}
+
 function packetEntries(bundleRoot, rule) {
-  return filesUnder(bundleRoot).map((path) => {
+  return filesUnder(bundleRoot).filter((path) => !isSummaryDiffShard(bundleRoot, path)).map((path) => {
     const filePath = join(bundleRoot, ...path.split("/"));
     const bytes = statSync(filePath).size;
-    const entry = { path, bytes, ...packetAuthority(path, rule) };
+    const entry = {
+      path,
+      bytes,
+      ...packetAuthority(path, rule),
+    };
     if (path.startsWith("context/")) {
       const header = firstTextLine(filePath);
       try {
@@ -1065,12 +1117,15 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     providerMaterials = compacted;
   }
   if (stage === "build-plan") {
+    const rawRequirement = materials.raw_requirement ?? null;
     providerMaterials.planning_artifacts = buildPlanningArtifacts({
-      rawRequirementIndex: materials.raw_requirement ?? null,
+      rawRequirementIndex: rawRequirement,
       approvedSpec: materials.approved_spec ?? null,
       acceptanceCriteria: materials.acceptance_criteria ?? null,
       draftPlan: materials.draft_plan ?? null,
       draftTasks: materials.draft_tasks ?? null,
+      deferredItems: rawRequirement && typeof rawRequirement === "object" ? rawRequirement.deferred_items ?? null : null,
+      openItems: rawRequirement && typeof rawRequirement === "object" ? rawRequirement.open_items ?? null : null,
     });
   }
   if (acEvidenceSummary !== null) providerMaterials.ac_evidence_summary = acEvidenceSummary;
@@ -1146,10 +1201,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   validateDiffIndexBundle(bundleRoot);
   const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, rule });
   const payloadFiles = filesUnder(bundleRoot);
-  const entries = payloadFiles.map((path) => {
+  const fullEntries = payloadFiles.map((path) => {
     const filePath = join(bundleRoot, ...path.split("/"));
     return { path, bytes: statSync(filePath).size, sha256: sha256File(filePath) };
   });
+  const providerPaths = new Set(Object.values(packetPlan.included).flat());
+  const entries = fullEntries.filter(({ path }) => providerPaths.has(path));
   const manifest = canonicalMaterialManifest(entries);
   const materialId = sha256(Buffer.from(manifest, "utf8"));
   write(bundleRoot, "manifest.json", Buffer.from(manifest, "utf8"));
@@ -1160,7 +1217,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     throw new Error("MATERIAL_INCOMPLETE: review packet exceeds 330 KiB; provide bounded affected excerpts");
   }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
-  return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...payloadFiles, "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
+  return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...entries.map(({ path }) => path), "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
 }
 
 function freezeCanonicalEvidence({ bundleRoot, task, stage, materials }) {

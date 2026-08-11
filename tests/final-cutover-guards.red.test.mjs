@@ -382,7 +382,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(checkpointCalls).toBe(0);
   });
 
-  it("rejects a stale build-spec review that is not bound to the final spec snapshot", async () => {
+  it("retains a stale build-spec review as advice instead of forcing a rerun", async () => {
     const stage = "build-spec", content = "# Spec\n", values = {
       "quality/evidence/spec.json": canonical(stage, { producer: { stage, component: "spec", version: "1" }, content, content_hash: createHash("sha256").update(content).digest("hex") }),
       "quality/reviews/results/review.json": reviewReceipt(stage, "revise_required"),
@@ -395,12 +395,15 @@ ${task("T002", "contract GREEN", 0, "T001")}
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: () => "specs/task/spec.md",
     };
-    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "quality/evidence/spec.json", review: "quality/reviews/results/review.json", audit: worker.auditRef } }))
-      .rejects.toThrow(/current.*snapshot|snapshot.*resolution|review.*final spec|SERIOUS_REVIEW_PAUSE/i);
+    const result = await officialStageHandler(stage)(worker, { receipts: { spec: "quality/evidence/spec.json", review: "quality/reviews/results/review.json", audit: worker.auditRef } });
+    expect(result.facts.review).toMatchObject({ status: "recorded", snapshot_tree: tree });
+    expect(result.missing_items).toEqual(expect.arrayContaining([
+      expect.stringMatching(/finding disposition is missing/i),
+    ]));
     expect(checkpointCalls).toBe(0);
   });
 
-  it("accepts a stale prior review only through a verified canonical delta resolution bound to the current snapshot", async () => {
+  it("rejects a retired response-ledger even when it claims a verified canonical delta", async () => {
     const stage = "build-spec", content = "# Spec v2\n", currentTree = "c".repeat(40);
     const reviewRef = "quality/reviews/results/review.json", resolutionRef = `quality/reviews/resolutions/${"d".repeat(64)}.json`;
     const prior = reviewReceipt(stage, "revise_required");
@@ -436,7 +439,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .rejects.toThrow(/unexpected receipt fields.*review_resolution/i);
   });
 
-  it("rejects a delta resolution whose prior result hash is not exact", async () => {
+  it("rejects a retired delta-resolution input whose prior result hash is not exact", async () => {
     const stage = "build-spec", content = "# Spec v2\n", currentTree = "c".repeat(40);
     const reviewRef = "quality/reviews/results/review.json", resolutionRef = `quality/reviews/resolutions/${"d".repeat(64)}.json`;
     const prior = reviewReceipt(stage, "revise_required");
@@ -516,7 +519,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(outcome.missing_items).not.toContain(`accepted risk recorded in external wh-review audit: ${auditRef}; present it to the human confirmer`);
   });
 
-  it("consumes direction and detail resolutions only through their dedicated latest flow actions", async () => {
+  it("rejects retired direction response-ledger input instead of consuming it", async () => {
     const stage = "make-decision", currentTree = "c".repeat(40);
     const decisionLog = "# Decision\n\nGo.\n";
     const directionRef = "quality/reviews/results/direction.json";
@@ -575,7 +578,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     })).rejects.toThrow(/unexpected receipt fields.*direction_review_resolution/i);
   });
 
-  it("clears a make-decision revise finding only after verified same-flow resolution", async () => {
+  it("rejects retired make-decision response-ledger input instead of clearing a finding", async () => {
     const stage = "make-decision", currentTree = "c".repeat(40), workflowRunId = "fixture:make-decision-resolution";
     const decisionLog = "# Decision\n\nGo.\n", decisionHash = createHash("sha256").update(decisionLog).digest("hex");
     const directionRef = "quality/reviews/results/direction-resolution.json", detailRef = "quality/reviews/results/detail-resolution.json";
@@ -1096,10 +1099,10 @@ ${task("T002", "contract GREEN", 0, "T001")}
         producer: { stage, component: "verification", version: "1" },
         items: [],
         requirement_replay: [
-          { source_id: "R1", status: "pass", snapshot_tree: tree, linked_ids: ["D1"], evidence_refs: [{ ref: "evidence/replay-r1.json", sha256: sha }], reason: "当前流程已覆盖", scenario: "执行 R1 对应流程", oracle: "返回当前任务结果", actual_outcome: "当前流程可回放", coverage_limits: "仅覆盖 CLI 流程", implementation_anchor: { id: "impl-r1", path: "runtime/stage/stage-handlers.mjs", start_line: 1, end_line: 2, role: "implementation" }, verification_anchor: { id: "test-r1", path: "tests/final-cutover-guards.red.test.mjs", start_line: 1, end_line: 2, role: "verification" } },
-          { source_id: "D1", status: "pass", snapshot_tree: tree, linked_ids: ["R1"], evidence_refs: [{ ref: "evidence/replay-d1.json", sha256: sha }], reason: "决策已绑定", scenario: "读取 D1 决策", oracle: "D1 与 R1 绑定", actual_outcome: "关系存在", coverage_limits: "仅覆盖关系", implementation_anchor: { id: "impl-d1", path: "specs/task/spec.md", start_line: 1, end_line: 2, role: "implementation" }, verification_anchor: { id: "test-d1", path: "tests/final-cutover-guards.red.test.mjs", start_line: 3, end_line: 4, role: "verification" } },
-          { source_id: "INC-001", status: "deferred", snapshot_tree: tree, linked_ids: ["D1"], evidence_refs: [], reason: "延期到隔离维护任务" },
-          { source_id: "F15-1", status: "deferred", snapshot_tree: tree, linked_ids: ["D1"], evidence_refs: [], reason: "后续业务项目范围" },
+          { source_id: "R-001", status: "pass", snapshot_tree: tree, linked_ids: ["D-001"], evidence_refs: [{ ref: "evidence/replay-r1.json", sha256: sha }], reason: "当前流程已覆盖", scenario: "执行 R-001 对应流程", oracle: "返回当前任务结果", actual_outcome: "当前流程可回放", coverage_limits: "仅覆盖 CLI 流程", implementation_anchor: { id: "impl-r1", path: "runtime/stage/stage-handlers.mjs", start_line: 1, end_line: 2, role: "implementation" }, verification_anchor: { id: "test-r1", path: "tests/final-cutover-guards.red.test.mjs", start_line: 1, end_line: 2, role: "verification" } },
+          { source_id: "D-001", status: "pass", snapshot_tree: tree, linked_ids: ["R-001"], evidence_refs: [{ ref: "evidence/replay-d1.json", sha256: sha }], reason: "决策已绑定", scenario: "读取 D-001 决策", oracle: "D-001 与 R-001 绑定", actual_outcome: "关系存在", coverage_limits: "仅覆盖关系", implementation_anchor: { id: "impl-d1", path: "specs/task/spec.md", start_line: 1, end_line: 2, role: "implementation" }, verification_anchor: { id: "test-d1", path: "tests/final-cutover-guards.red.test.mjs", start_line: 3, end_line: 4, role: "verification" } },
+          { source_id: "INC-001", status: "deferred", snapshot_tree: tree, linked_ids: ["D-001"], evidence_refs: [], reason: "延期到隔离维护任务" },
+          { source_id: "F15-1", status: "deferred", snapshot_tree: tree, linked_ids: ["D-001"], evidence_refs: [], reason: "后续业务项目范围" },
         ],
       }),
       "evidence/replay-r1.json": { observed: true },
@@ -1108,13 +1111,13 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const worker = workerFor(stage, values);
     const baseReadArtifact = worker.readArtifact;
     worker.readArtifact = (name) => name === "decision-log.md"
-      ? "R1 D1 INC-001 F15-1\n"
+      ? "R-001 D-001 INC-001 F15-1\n"
       : baseReadArtifact(name);
     const result = await officialStageHandler(stage)(worker, {
       receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", verification: "quality/evidence/verification.json", audit: worker.auditRef },
     });
     expect(result.facts.requirement_replay).toMatchObject({ status: "recorded", items: expect.arrayContaining([
-      expect.objectContaining({ source_id: "R1", status: "pass" }),
+      expect.objectContaining({ source_id: "R-001", status: "pass" }),
       expect.objectContaining({ source_id: "F15-1", status: "deferred" }),
     ]) });
     expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/requirement replay is missing/i)]));
@@ -1201,7 +1204,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).toHaveLength(3);
   });
 
-  it("consumes the latest verify-code quality review resolution", async () => {
+  it("rejects retired verify-code quality review resolution input", async () => {
     const stage = "verify-code";
     const previousTree = "c".repeat(40);
     const qualityRef = "quality/reviews/results/quality.json";

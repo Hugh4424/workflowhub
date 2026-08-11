@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (path) => readFileSync(path, "utf8");
+const root = resolve(new URL("..", import.meta.url).pathname);
 
 describe("decision-log minimum content contract", () => {
   it("keeps the decision index complete without turning it into a spec copy", () => {
@@ -49,5 +51,18 @@ describe("decision-log minimum content contract", () => {
     for (const term of ["R-001", "D-015", "Grill 与用户确认", "审查处置", "质量事实", "用户可见选择"]) {
       expect(currentLog).toContain(term);
     }
+  });
+
+  it("requires a same-log append update after every make-decision step", () => {
+    const steps = JSON.parse(read(`${root}/workflows/make-decision/steps.json`)).steps;
+    expect(steps).toHaveLength(12);
+    for (const step of steps) {
+      expect(step.completion_evidence.some(({ kind, uri_or_path }) => kind === "decision_log" && uri_or_path === "decision-log.md"), step.step_slug).toBe(true);
+      expect(step.observable_result).toMatch(/existing writer|same decision-log\.md/i);
+    }
+    const skill = read("workflows/make-decision/SKILL.md");
+    expect(skill).toMatch(/same[\s\S]{0,40}`decision-log\.md` ref\/hash/);
+    expect(skill).toMatch(/actual[\s\S]{0,20}user reply or `no_new_requirement`/);
+    expect(skill).toMatch(/write failure stays incomplete/);
   });
 });

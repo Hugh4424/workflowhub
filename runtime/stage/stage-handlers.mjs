@@ -838,10 +838,10 @@ function findingDispositions(reviews, invocation) {
 function requirementReplayFacts(worker, verification, currentTree) {
   const decisionLog = worker.readArtifact("decision-log.md");
   const expected = [...new Set([
-    ...[...String(decisionLog).matchAll(/\bR\d+\b/g)].map(([id]) => id),
+    ...[...String(decisionLog).matchAll(/\bR-?\d+\b/g)].map(([id]) => id),
     ...[...String(decisionLog).matchAll(/\b(?:F15|F47|KD|F8|M08)-\d+\b/g)].map(([id]) => id),
     ...[...String(decisionLog).matchAll(/\bINC-\d+\b/g)].map(([id]) => id),
-    ...[...String(decisionLog).matchAll(/\bD\d+\b/g)].map(([id]) => id),
+    ...[...String(decisionLog).matchAll(/\bD-?\d+\b/g)].map(([id]) => id),
   ])];
   if (expected.length === 0) return { facts: { status: "not_applicable", items: [] }, missing_items: [] };
   const replay = verification?.value?.requirement_replay;
@@ -1018,6 +1018,11 @@ function authenticateReviewHead(review, expected) {
   if (expected?.snapshot_tree !== undefined && review.value.snapshot_tree !== expected.snapshot_tree) {
     throw new Error("review result does not bind the expected snapshot");
   }
+  for (const key of ["stage", "review_track", "subject_kind", "phase_id", "review_scope"]) {
+    if (Object.prototype.hasOwnProperty.call(expected ?? {}, key) && review.value?.[key] !== expected[key]) {
+      throw new Error(`review result does not bind expected ${key}`);
+    }
+  }
   return review;
 }
 
@@ -1036,7 +1041,10 @@ function bindFinalReview(worker, invocation, review, currentTree, {
     });
   }
   if (review.facts?.status === "unavailable") return { evidence: [] };
-  if (review.value.snapshot_tree !== currentTree) {
+  // Non-build-code reviews are advice about the material they actually saw.
+  // Their reviewed snapshot remains provenance, not an expiry condition. The
+  // implementation review is the only review that must bind the current tree.
+  if (stage === "build-code" && review.value.snapshot_tree !== currentTree) {
     throw new Error(`${stage} review does not bind the final current snapshot`);
   }
   return { evidence: [] };
@@ -1059,7 +1067,7 @@ HANDLERS.set("make-decision", async (worker, input) => {
   let item = currentOnly ? null : receipt(worker, input, "decision");
   const direction = safeReviewFacts(worker, input, "direction_review", "direction");
   const detail = safeReviewFacts(worker, input, "detail_review", "detail");
-  const research = input.receipts.research === undefined ? null : testFacts(worker, input, "research");
+  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
   const grill = input.receipts.grill === undefined ? null : testFacts(worker, input, "grill");
   const confirmation = input.receipts.confirmation === undefined ? null : confirmationFacts(worker, input);
   const dispositions = findingDispositions([direction, detail], input);
@@ -1109,13 +1117,14 @@ HANDLERS.set("make-decision", async (worker, input) => {
       decision_ref: item.value.decision_ref,
       decision_hash: item.value.decision_hash,
     });
-  const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision" });
-  const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision" });
+  const directionBinding = bindFinalReview(worker, input, direction, snapshot.tree, { stage: "make-decision", reviewTrack: "direction" });
+  const detailBinding = bindFinalReview(worker, input, detail, snapshot.tree, { stage: "make-decision", reviewTrack: "detail" });
   if (worker.candidateWorkspace.captureSnapshot().tree !== snapshot.tree) throw new Error("make-decision CandidateWorkspace changed while binding final reviews");
   return addCompletion("make-decision", {
     facts: {
       worktree_root: worker.candidateWorkspace.worktreeRoot,
       baseline_commit: worker.candidateWorkspace.baselineCommit,
+      target_status: worker.candidateWorkspace.targetStatus,
       snapshot_tree: snapshot.tree,
       decision_ref: item.value.decision_ref,
       decision_hash: item.value.decision_hash,
@@ -1167,6 +1176,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
   }
   const currentOnly = worker.manifest?.record_model === "vnext-single-write";
   const item = currentOnly ? currentMaterialContent(worker, "spec.md") : receipt(worker, input, "spec");
+  const research = input.receipts?.research === undefined ? null : testFacts(worker, input, "research");
   const review = safeReviewFacts(worker, input);
   const dispositions = findingDispositions([review], input);
   text(item.value.content, "spec content");
@@ -1186,11 +1196,13 @@ HANDLERS.set("build-spec", async (worker, input) => {
       completion_subjects: {
         zero_major_ambiguities: subjectFact(acceptanceDesign.ok ? "passed" : "missing", [specEvidence], acceptanceDesign.ok ? "acceptance design is explicit" : acceptanceDesign.errors.join("; ")),
       },
+      ...(research ? { research: research.facts } : {}),
       review: review.facts, finding_dispositions: dispositions.facts, ...(audit?.facts ?? {}),
     },
     evidence_refs: [
       ...(item.evidence ? [item.evidence] : []),
       ...(review.evidence ? [review.evidence] : []),
+      ...(research?.evidence ? [research.evidence] : []),
       ...(audit ? [audit.evidence] : []),
       ...review.risk_evidence,
       ...bindingEvidence,
@@ -1206,7 +1218,7 @@ HANDLERS.set("build-spec", async (worker, input) => {
     reviews: [review],
     businessFacts: { content: "present", code: "not_applicable", tests: "not_applicable", acceptance_criteria: "covered" },
     audit,
-    verification: "最终规格、工作区快照和正式审查已完成绑定检查",
+    verification: `最终规格、工作区快照和正式审查已完成绑定检查；条件调研事实：${research ? "recorded" : "no research receipt supplied"}`,
   });
 });
 HANDLERS.set("build-plan", async (worker, input) => {

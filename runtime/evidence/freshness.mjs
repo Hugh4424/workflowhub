@@ -7,6 +7,13 @@ import { validateSchema } from "../review/schema-validator.mjs";
 const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 
+// A recorded review outside build-code is advice, not implementation
+// approval. Keep its reviewed snapshot and material revision as provenance,
+// but do not expire the advice when the current task records change.
+function isAdviceReviewFact(fact) {
+  return fact?.kind === "review" && fact?.status === "recorded" && fact?.stage !== "build-code";
+}
+
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 export function bindFreshness({ ref, raw, snapshotTree }) {
@@ -74,6 +81,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
       const outputRaw = readBound({ ref: value.output_ref, sha256: value.output_hash }, read, dependencies, outputKey);
       if (outputRaw !== undefined) dependencies[outputKey] = "current";
     } else if (evidence.evidence_type === "review_result") {
+      const adviceReview = isAdviceReviewFact(fact);
       if (value.version === "wh-review-attempt.v1") {
         validateSchema("attempt", value);
         if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree || value.terminal_status !== "unavailable" || fact.status !== "unavailable") {
@@ -81,7 +89,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
         }
       } else {
         validateSchema("result", value);
-        if (value.task_id !== fact.task_id || value.stage !== reviewStage || value.snapshot_tree !== fact.snapshot_tree) {
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
         const subjectMatches = fact.subject === "integration_review"
@@ -121,9 +129,10 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
 }
 
 export function evaluateFactFreshness(fact, current, { read }) {
+  const adviceReview = isAdviceReviewFact(fact);
   const dependencies = {
-    material: fact.material_revision === current.material_revision ? "current" : "stale",
-    tree: fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
+    material: adviceReview || fact.material_revision === current.material_revision ? "current" : "stale",
+    tree: adviceReview || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
     fact: "current",
   };
   const factRaw = readBound(fact, read, dependencies, "fact");

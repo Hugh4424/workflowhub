@@ -67,9 +67,9 @@ describe("spec and plan content artifact closure", () => {
     const stageManifests = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]
       .map((stage) => read(`workflows/${stage}/skill-deps.yaml`));
     expect(buildSpec.skills.map((item) => item.name)).toContain("spec-specify");
-    expect(buildSpec.skills.map((item) => item.name)).not.toContain("spec-clarify");
+    expect(buildSpec.skills.map((item) => item.name)).toContain("spec-clarify");
     expect(buildPlan.skills.map((item) => item.name)).toEqual(expect.arrayContaining(["spec-plan", "spec-tasks"]));
-    expect(stageManifests.join("\n")).not.toMatch(/name:\s*spec-clarify/);
+    expect(stageManifests.join("\n")).toMatch(/name:\s*spec-clarify/);
     expect(stageManifests.join("\n")).not.toMatch(/name:\s*stage-step-receipts/);
     for (const item of [...buildSpec.skills, ...buildPlan.skills]) {
       if (["spec-specify", "spec-plan", "spec-tasks"].includes(item.name)) {
@@ -189,7 +189,7 @@ describe("spec and plan content artifact closure", () => {
     expect(specPlanEntry).not.toHaveProperty("retry_contract");
     const specAnalyzeBundle = validateSkillBundle(root, "skills/spec-analyze/skill-bundle.json", "skills/spec-analyze/SKILL.md");
     expect(catalog.skills.find((item) => item.name === "spec-analyze").local_bundle_hash).toBe(specAnalyzeBundle.bundleHash);
-    expect(catalog.skills.find((item) => item.name === "spec-clarify").used_by_stages).toEqual([]);
+    expect(catalog.skills.find((item) => item.name === "spec-clarify").used_by_stages).toEqual(["build-spec"]);
     expect(catalog.skills.find((item) => item.name === "stage-step-receipts").used_by_stages).toEqual([]);
     for (const item of catalog.skills.filter((entry) => entry.local_bundle_hash && entry.path)) {
       const bundle = item.path.replace(/SKILL\.md$/, "skill-bundle.json");

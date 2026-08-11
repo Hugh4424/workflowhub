@@ -124,14 +124,34 @@ describe("deterministic WorktreeManager", () => {
     })).toThrow(/baseline/i);
   });
 
-  it("fails loud on path/branch conflicts and dirty repositories", () => {
+  it("fails loud on path/branch conflicts but records dirty target diagnostics", () => {
     const first = fixture("path-conflict");
     mkdirSync(first.expectedRoot);
     expect(() => prepareTaskWorkspace(first.task)).toThrow(/path\/branch conflict/i);
 
     const second = fixture("dirty-target");
-    writeFileSync(join(second.repo, "dirty.txt"), "dirty");
-    expect(() => prepareTaskWorkspace(second.task)).toThrow(/must be clean/i);
+    writeFileSync(join(second.repo, ".gitignore"), "ignored.txt\n");
+    writeFileSync(join(second.repo, "tracked.txt"), "staged\n");
+    execFileSync("git", ["add", ".gitignore", "tracked.txt"], { cwd: second.repo });
+    writeFileSync(join(second.repo, "tracked.txt"), "staged then modified\n");
+    writeFileSync(join(second.repo, "untracked.txt"), "user file\n");
+    writeFileSync(join(second.repo, "ignored.txt"), "generated file\n");
+    const targetHead = git(second.repo, ["rev-parse", "HEAD"]);
+
+    const candidate = prepareTaskWorkspace(second.task);
+
+    expect(candidate.targetStatus).toMatchObject({
+      ref: expect.any(String),
+      head: targetHead,
+      dirty: true,
+      counts: { tracked: 2, staged: 2, unstaged: 1, untracked: 1, ignored: 1 },
+    });
+    expect(candidate.targetStatus.recommendations.join(" ")).toMatch(/不要自动提交|不要直接删除|不要.*自动/);
+    expect(candidate.targetStatus.cleanup).toMatch(/用户明确同意.*authorize cleanup/);
+    expect(git(second.repo, ["rev-parse", "HEAD"])).toBe(targetHead);
+    expect(git(second.repo, ["status", "--porcelain", "--ignored", "--untracked-files=all"])).toMatch(/tracked\.txt|untracked\.txt|ignored\.txt/);
+    expect(git(candidate.worktreeRoot, ["rev-parse", "HEAD"])).toBe(second.baseline);
+    expect(git(candidate.worktreeRoot, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
   });
 
   it("does not expose lifecycle recovery entrypoints", async () => {

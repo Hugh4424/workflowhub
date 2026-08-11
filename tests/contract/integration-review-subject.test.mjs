@@ -15,7 +15,7 @@ const { buildIntegrationReviewSubject } = await import("../../runtime/review/int
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
-function fixture() {
+function fixture({ tasks = "# tasks\n\nNo completion rows yet.\n" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-integration-subject-"));
   mkdirSync(join(root, "specs", "task"), { recursive: true });
   execFileSync("git", ["init", "-q"], { cwd: root });
@@ -25,7 +25,7 @@ function fixture() {
     "decision-log.md": "# decision\n",
     "spec.md": "# spec\n\nAC-01\n",
     "plan.md": "# plan\n",
-    "tasks.md": "# tasks\n\nNo completion rows yet.\n",
+    "tasks.md": tasks,
   };
   for (const [name, content] of Object.entries(materials)) writeFileSync(join(root, "specs", "task", name), content);
   execFileSync("git", ["add", "specs"], { cwd: root });
@@ -47,6 +47,9 @@ function fixture() {
   }));
   records.set("receipts/green.json", JSON.stringify({
     stage: "build-code", producer: { component: "build-code-test-capture" }, exit_code: 0, snapshot_tree: tree,
+  }));
+  records.set("quality/tests/T002.json", JSON.stringify({
+    stage: "build-code", producer: { component: "fixture-task" }, exit_code: 0, snapshot_tree: tree,
   }));
   const task = {
     identity: { taskId: "task" },
@@ -93,5 +96,22 @@ describe("integration review subject current-material boundary", () => {
       finalTree: f.tree,
       current_receipts: { green_ref: "receipts/green.json" },
     })).toThrow(/current implementation receipt for final snapshot is missing/);
+  });
+
+  it("reads the current task execution fields for AC traceability", () => {
+    const f = fixture({
+      tasks: "# tasks\n\n### T002 — GREEN\n- **status**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/tests/T002.json`\n- **执行事实**：GREEN receipt recorded.\n",
+    });
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+
+    expect(subject.formal_record_status.status).toBe("available");
+    expect(subject.ac_trace.entries[0].change[0].task_id).toBe("T002");
+    expect(subject.ac_trace.entries[0].change[0].evidence_refs[0].ref).toBe("quality/tests/T002.json");
   });
 });

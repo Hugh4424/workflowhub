@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { validateInteractionLifecycleContract } from "../runtime/stage/stage-content-contracts.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const compact = (value) => value.replace(/\s+/g, " ");
@@ -13,18 +14,43 @@ const makeDecision = read("workflows", "make-decision", "SKILL.md");
 const buildSpec = read("workflows", "build-spec", "SKILL.md");
 const buildPlan = read("workflows", "build-plan", "SKILL.md");
 const hostProtocol = read("skills", "workflowhub-host-protocol", "SKILL.md");
+const makeSteps = readJson("workflows", "make-decision", "steps.json").steps;
+const HASH = "a".repeat(64);
+
+function lifecycle(interaction_type, overrides = {}) {
+  const card = { card_ref: "conversation/card-1", card_hash: HASH, round: 1 };
+  const reply = { ...card, source: "user", reply_ref: "host-message://reply-1", reply_hash: "b".repeat(64) };
+  const questions = interaction_type === "talk"
+    ? [{ axis: "scope" }]
+    : [{ frontier_id: "frontier-a", independent: true }, { frontier_id: "frontier-b", independent: true }];
+  return {
+    interaction_type,
+    events: [
+      { event: "ask", ...card, questions },
+      { event: "wait", ...card, status: "waiting-for-user" },
+      { event: "reply", ...reply, ...(interaction_type === "talk"
+        ? { answer: "保留当前范围", re_ranked: true }
+        : { answers: [{ frontier_id: "frontier-a", answer: "保留" }], remaining_frontier_ids: ["frontier-b"], re_ranked: true }) },
+      { event: "resume", ...reply, status: "resumed" },
+    ],
+    ...overrides,
+  };
+}
 
 describe("current interaction boundary", () => {
   it("keeps Talk and Grill exclusively in make-decision", () => {
     expect(read("workflows", "make-decision", "skill-deps.yaml")).toMatch(
       /name: grill-with-docs, path: skills\/grill-with-docs\/SKILL\.md, execution: inline/i,
     );
-    expect(makeDecision).toMatch(/Only the main agent may execute user-facing Talk, Grill, or Clarify/i);
+    expect(makeDecision).toMatch(/Only the main agent may execute user-facing Talk or Grill/i);
     expect(makeDecision).toMatch(/Talk must cover both architecture direction and product journey or user outcome/i);
     expect(makeDecision).toMatch(/Wait for the user's actual reply before handoff/i);
-    expect(buildSpec).toMatch(/Do not run Talk, Clarify, or Grill in this stage/i);
+    expect(buildSpec).toMatch(/Do not run Talk or Grill in this stage/i);
+    expect(buildSpec).toMatch(/`spec-clarify` dependency is the one allowed Clarify flow/i);
     expect(buildSpec).toMatch(/talk-with-zhipeng.*grill-with-docs/i);
     expect(buildPlan).toMatch(/Do not run Talk, Clarify, or Grill/i);
+    expect(makeDecision).toMatch(/`build-spec` is the only owner of[\s\S]{0,80}Clarify/i);
+    expect(makeDecision).not.toMatch(/Run visible Talk and Clarify/i);
     expect(buildSpec).not.toMatch(/obtain the user's actual reply/i);
     expect(buildPlan).toMatch(/obtain the user's actual reply[\s\S]*before claiming that build-plan itself is accepted/i);
   });
@@ -71,10 +97,52 @@ describe("current interaction boundary", () => {
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
   });
 
+  it("executes the 12 steps in Talk -> direction advice -> Grill -> detail advice order", () => {
+    expect(makeSteps.map(({ step_slug }) => step_slug)).toEqual([
+      "load-context",
+      "triage-scope",
+      "talk-round-1",
+      "research-inputs",
+      "talk-round-2",
+      "direction-advice",
+      "talk-round-3",
+      "grill-with-docs",
+      "write-decision-draft",
+      "detail-advice",
+      "approve-decision",
+      "publish-decision",
+    ]);
+    expect(makeSteps.find((step) => step.step_slug === "direction-advice").order)
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "talk-round-3").order);
+    expect(makeSteps.find((step) => step.step_slug === "talk-round-3").order)
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "grill-with-docs").order);
+    expect(makeSteps.find((step) => step.step_slug === "grill-with-docs").order)
+      .toBeLessThan(makeSteps.find((step) => step.step_slug === "detail-advice").order);
+    expect(makeSteps.every((step) => step.observable_result.includes("same decision-log.md"))).toBe(true);
+  });
+
+  it("requires a real Talk and Grill ask -> wait -> reply -> resume lifecycle", () => {
+    expect(validateInteractionLifecycleContract(lifecycle("talk"))).toMatchObject({ ok: true });
+    expect(validateInteractionLifecycleContract(lifecycle("grill"))).toMatchObject({ ok: true });
+
+    const fakeReply = lifecycle("talk");
+    fakeReply.events[2].source = "agent";
+    expect(validateInteractionLifecycleContract(fakeReply)).toMatchObject({ ok: false });
+
+    const wrongCard = lifecycle("grill");
+    wrongCard.events[3].card_hash = "c".repeat(64);
+    expect(validateInteractionLifecycleContract(wrongCard).errors.join("\n")).toMatch(/exact user reply|ask card/i);
+
+    const wrongRound = lifecycle("talk");
+    wrongRound.events[2].round = 2;
+    expect(validateInteractionLifecycleContract(wrongRound).errors.join("\n")).toMatch(/round/i);
+  });
+
   it("returns only minimal interaction facts and lets the stage write one aggregate", () => {
     expect(talk).toMatch(/architecture_direction_covered: true/);
     expect(talk).toMatch(/user_outcome_covered: true/);
-    expect(talk).toMatch(/open_direction_changing_questions: 0/);
+    expect(talk).not.toMatch(/^clarify:/m);
+    expect(talk).toMatch(/Clarify 由 build-spec 的 `spec-clarify` 独占/);
     expect(talk).not.toMatch(/interaction-completion\.v1/);
     expect(talk).not.toMatch(/受控 writer/);
     expect(grill).toMatch(/最小 `grill_summary`/);
@@ -108,7 +176,7 @@ describe("current ambiguity handling", () => {
       expect(buildSpec).toContain(dimension);
     }
     expect(buildSpec).toMatch(/Continue all unaffected drafting and repair/i);
-    expect(buildSpec).toMatch(/identified as an upstream decision gap/i);
+    expect(buildSpec).toMatch(/returned to `make-decision` as an upstream decision gap/i);
   });
 
   it("keeps build-plan limited to plan and task design without executing tests", () => {

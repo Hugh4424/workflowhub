@@ -1,6 +1,6 @@
 stage: make-decision
 skills:
-  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, trigger: talk_round_1_2_3, bundle: skills/talk-with-zhipeng/skill-bundle.json, owner: stage }
+  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, trigger: talk_round_1_2_3_only, bundle: skills/talk-with-zhipeng/skill-bundle.json, owner: stage }
   - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json, owner: stage }
   - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json, owner: stage }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }

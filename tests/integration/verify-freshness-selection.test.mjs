@@ -85,4 +85,55 @@ describe("verify selects facts by freshness", () => {
       snapshot_tree: snapshotTree,
     }, { read: io.read }).status).toBe("stale");
   });
+
+  it("keeps non-build-code advice current after the task snapshot changes", () => {
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "advice-fact",
+      task_id: "task",
+      stage: "make-decision",
+      material_revision: "revision-old",
+      snapshot_tree: "old-tree",
+      kind: "review",
+      subject: "direction_review",
+      status: "recorded",
+      ref: "advice-fact.json",
+      sha256: "",
+      evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-new",
+      snapshot_tree: "new-tree",
+    }, { read: io.read })).toMatchObject({
+      status: "current",
+      dependencies: { material: "current", tree: "current", fact: "current" },
+    });
+  });
+
+  it("keeps build-code review freshness strict", () => {
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "implementation-review-fact",
+      task_id: "task",
+      stage: "build-code",
+      material_revision: "revision-old",
+      snapshot_tree: "old-tree",
+      kind: "review",
+      subject: "integration_review",
+      status: "recorded",
+      ref: "implementation-review-fact.json",
+      sha256: "",
+      evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-new",
+      snapshot_tree: "new-tree",
+    }, { read: io.read }).status).toBe("stale");
+  });
 });

@@ -8,20 +8,29 @@ description: Grilling session that challenges your plan against the existing dom
 先核实，再提问。沿设计依赖逐项检查计划，但不要把能从代码、文档或已确认事实得到的
 答案重新问用户。只有仍会改变方向的关键问题才进入对话。
 
-Ask the questions one at a time, waiting for feedback on each question before continuing.
+Ask one batch only when the remaining frontier questions are independent. Each
+question in that batch must be answerable without the answer to another question;
+dependent questions stay out of the batch and are re-ranked after the reply.
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
 发现会改变目标、方向、范围、方案、风险或长期规则的决策轴时，必须执行
-`ask → wait/pause → real reply → re-rank`：发布一张单轴卡后当前调用立即暂停，只有宿主
-返回与该卡绑定的真实回复才可恢复并重排剩余问题。Agent 生成、默认、旧回复或文档自报
-都不能替代 reply。纯事实核实或机械文档修正可以零问题，但必须记录“不提问”的事实理由。
+`ask → wait/pause → real reply → resume → re-rank`：发布一个独立 frontier 问题批次后
+当前调用立即暂停，只有宿主返回与该批次绑定的真实回复才可恢复并重排剩余问题。
+Agent 生成、默认、旧回复或文档自报都不能替代 reply。用户只回答部分问题时保留已答
+部分，并把未答 frontier 重新排序。纯事实核实或机械文档修正可以零问题，但必须记录
+“不提问”的事实理由。
 
-需要用户决定时使用大白话单轴决策卡，每张卡只问一个决策轴：只写当前状态（`grill-with-docs`、问题序号和
-当前总数）、问题、影响范围、2～3 个互斥选项、推荐项与理由，以及每项的直接后果和
-主要风险。不得添加“刚完成”“下一步”“需要你处理吗”等重复段落，不得展示内部
+需要用户决定时使用大白话 frontier 批次卡：每个问题仍只问一个决策轴，但同一张卡只
+允许放互相独立的问题；写清当前状态（`grill-with-docs`、问题序号和当前总数）、问题、
+影响范围、2～3 个互斥选项、推荐项与理由，以及每项的直接后果和主要风险。不得添加
+“刚完成”“下一步”“需要你处理吗”等重复段落，不得展示内部
 ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式填空。多个决策轴按
-依赖逐个处理，每次真实回答后重新核对剩余问题。
+依赖拆开，每次真实回答后重新核对剩余问题。
+
+Grill 的临时交互事实必须能回放为 `ask`、`wait`、`reply`、`resume` 四个事件：`ask`
+绑定正整数 `round`；`reply` 必须来自用户并绑定同一张卡和同一 `round`，允许是部分答案；
+`resume` 必须使用同一张卡、同一 `round` 和同一回复后才可重排。Grill 只是交互式思考，绝不调用 wh-review、生成 review finding 或写 review fact。
 
 **Failure contract**: skill 读取、代码核实或文档写入失败时，先自行诊断并做安全重试。
 只有仍缺少会改变方向的事实、且 Agent 无法自行核实时，才用大白话决策卡请用户决定。
@@ -68,7 +77,7 @@ grill_summary:
     - 只保留应写进 decision-log.md 的结论、风险、冲突处置或开放问题
 ```
 
-候选队列、问题卡、ask/reply/re-rank、完整问答和 Grill 历史只在当前会话内使用，不形成
+候选队列、问题卡、ask/reply/resume/re-rank、完整问答和 Grill 历史只在当前会话内使用，不形成
 run、revision、latest、ledger 或独立持久记录。本技能不填写 task、stage、snapshot、
 decision ref/hash、文件路径或内容 hash，也不调用受控 writer。父 Stage Agent 只把
 `decision_updates` 和必要的 CONTEXT/ADR 结果写进 `decision-log.md`；当前

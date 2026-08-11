@@ -89,10 +89,14 @@ function completedTasks(task, taskText) {
     const status = /^-\s+\*\*(?:状态|status)\*\*\s*[:：]\s*`?(completed|passed)`?\s*$/mi.exec(body)?.[1];
     if (!status) continue;
     const traceLine = /^-\s+\*\*(?:Trace|追踪)\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "";
-    const acLine = traceLine;
+    const coveredAcLine = /^-\s+\*\*(?:covered_ac|覆盖 AC)\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "";
+    const acLine = coveredAcLine || traceLine || (/^-\s+\*\*AC\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "");
     const acceptanceIds = ids(acLine);
+    const evidenceRefsLine = /^-\s+\*\*(?:evidence_refs|证据引用)\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "";
     const evidenceLine = /^-\s+\*\*(?:证据|evidence)\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "";
-    const refs = [...evidenceLine.matchAll(/(?:evidence_path|ref)\s*[=:]\s*`([^`]+)`/gi)].map((match) => match[1]);
+    const legacyEvidencePathLine = /^-\s+\*\*evidence_path\*\*\s*[:：]\s*([^\n]+)$/mi.exec(body)?.[1] ?? "";
+    const evidenceText = evidenceRefsLine || evidenceLine || legacyEvidencePathLine;
+    const refs = [...evidenceText.matchAll(/`((?:quality\/)?(?:evidence|tests)\/[^`]+)`/gi)].map((match) => match[1].startsWith("quality/") ? match[1] : `quality/${match[1]}`);
     if (acceptanceIds.length === 0 || refs.length === 0) incomplete(`completed ${taskId} lacks Trace AC ids or evidence_path`);
     const evidenceBindings = refs.map((ref) => {
       if (!/^quality\/(?:evidence|tests)\//.test(ref)) incomplete(`${taskId} evidence path is outside quality namespaces: ${ref}`);
@@ -115,7 +119,7 @@ function completedTasks(task, taskText) {
 
 function finalSnapshotImplementationAnchors({ sourceRoot, baseTree, finalTree }) {
   const changed = git(sourceRoot, ["diff", "--name-only", baseTree, finalTree, "--", ".", ":(exclude)node_modules"], "final snapshot changed files")
-    .split("\n").map((path) => path.trim()).filter((path) => /^(?:runtime|skills|tools|workflows|tests)\//.test(path));
+    .split("\n").map((path) => path.trim()).filter((path) => /^(?:core|runtime|skills|tools|workflows|tests)\//.test(path));
   const anchors = [];
   for (const path of changed) {
     const patch = git(sourceRoot, ["diff", "--unified=16", baseTree, finalTree, "--", path], `final snapshot diff for ${path}`);

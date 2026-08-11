@@ -41,7 +41,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 87961a81e4ca775d1630c715604228147e432d92009c389e2469af069617d49c
+    local_bundle_hash: 60eb8cdcb81538d8b2bab68e86eed356a89e5bc1a2d8bdfb3fdd6cd4e8cc10ce
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -83,7 +83,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 024ad59eb4ca93d3469b01056b1a248d47f1836e7914552d4c74a54c4159f716
+    local_bundle_hash: 45f1533e38d2a20c228bb664decd37acbde2adbcfef7912ca067dc77c5fc3b3a
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -101,7 +101,7 @@ skills:
     status: native
     purpose: 规划前形成内存研究材料
     design_idea: 冻结输入、内存交接、不新增正式产物
-    used_by_stages: [build-plan]
+    used_by_stages: [build-spec, build-plan]
     upstream: []
     local_changes: workflowhub 原生实现
     dependency_closure: [skills/spec-research]
@@ -129,9 +129,9 @@ skills:
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
-    local_changes: 保留可独立搬运的十维歧义扫描合同；当前由 make-decision 的 Talk/Clarify 交互与 spec 内容合同消费，不作为 build-spec 阶段依赖；closure test 只确认它没有被重新接入；当这些历史/内容合同不再需要时移除
+    local_changes: 保留可独立搬运的十维歧义扫描合同；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
@@ -169,14 +169,14 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b3eee07035b7a0bffac171e318b99c97e5ce5e7f3acd38c8cf3feaaa66dd80aa
+    local_bundle_hash: f635d49f8c02e0d9536e7cf98a71504f6e39689b2c8431e00e4e43ca76643a96
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
     design_idea: report-only packet lens
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；当前 consumer 是 build-plan 的 planning_artifacts packet projection、contract tests 和历史材料复核，owner 是 review-materials.mjs 与 runtime/stage/stage-content-contracts.mjs；没有 runtime work gate；当 build-plan 移除该 report step 且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；当前 consumer 是 build-plan 在 findings disposition 和最后一次 plan/tasks 修订之后、publish 前实际调用的 planning_artifacts packet projection，结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff，contract tests 覆盖 sibling-field 借用反例；owner 是 review-materials.mjs 与 runtime/stage/stage-content-contracts.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当 build-plan 移除该 report step 且无历史材料引用时删除
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
   - name: stage-step-receipts
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 56fe3e513cb7ba0025210944df40128a5e06e9a2b721518483188f15feaab31e
+    local_bundle_hash: 1813e0530a4f29b2eb66dda324a2fa3535f8915f68dd0599ec650345ccbe644e
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

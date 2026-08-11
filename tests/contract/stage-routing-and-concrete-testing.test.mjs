@@ -35,10 +35,20 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps build-spec direct order and wh-review as the only provider reviewer", () => {
     expect(names("build-spec")).toEqual([
-      "spec-specify", "simplicity-guard", "plan-ceo-review",
+      "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
       "plan-design-review", "wh-review",
     ]);
-    expect(stepSlugs("build-spec")).not.toContain("spec-clarify");
+    expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
+      "conditional-spec-research", "spec-clarify", "spec-specify",
+    ]));
+    expect(stepSlugs("build-spec").indexOf("conditional-spec-research"))
+      .toBeLessThan(stepSlugs("build-spec").indexOf("spec-clarify"));
+    expect(stepSlugs("build-spec").indexOf("spec-clarify"))
+      .toBeLessThan(stepSlugs("build-spec").indexOf("spec-specify"));
+    expect(deps("build-spec").find(({ name }) => name === "spec-research"))
+      .toMatchObject({ execution: "independent", trigger: "conditional_research", owner: "stage" });
+    expect(deps("build-spec").find(({ name }) => name === "spec-clarify"))
+      .toMatchObject({ execution: "inline", trigger: "spec_ambiguity", owner: "stage" });
     expect(deps("build-spec").find(({ name }) => name === "plan-design-review"))
       .toMatchObject({ execution: "independent", trigger: "ui_scope", owner: "stage" });
     expect(names("build-spec")).not.toContain("spec-analyze");
@@ -79,7 +89,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(skill).toMatch(/This stage owns only `plan\.md` and\s+`tasks\.md`/i);
     expect(skill).toMatch(/Do not implement code or execute RED\/GREEN/i);
     expect(skill).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
-    expect(read("workflows/build-spec/SKILL.md")).toMatch(/Do not run Talk, Clarify, or Grill in this stage/i);
+    expect(read("workflows/build-spec/SKILL.md")).toMatch(/Do not run Talk or Grill in this stage/i);
     expect(json("skills/wh-review/stage-skill-plan.json").stages["build-plan"].required_skills)
       .toEqual(["review"]);
   });
@@ -153,6 +163,12 @@ describe("D-015 stage routing and concrete testing contract", () => {
     const skill = read("workflows/build-code/SKILL.md");
     expect(skill).toMatch(/findings\s+and\s+transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
+    expect(skill).toMatch(/final tests[\s\S]*AC trace[\s\S]*integration review/i);
+    expect(skill).toMatch(/no important findings/i);
+    expect(skill).toMatch(/never.*provider.*pass/i);
+    const finalReview = buildCodeSteps.find((step) => step.step_slug === "final-integration-review");
+    expect(finalReview).toBeDefined();
+    expect(finalReview.order).toBeGreaterThan(buildCodeSteps.find((step) => step.step_slug === "run-tests").order);
   });
 
   it("allows an explicitly explained non-code route without pretending a concrete skill ran", () => {

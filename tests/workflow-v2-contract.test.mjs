@@ -52,13 +52,21 @@ describe("five-stage current-material contract", () => {
     expectConcept(verify, [/不能冻结.*同 task 修复/s], "verify-code: old facts cannot freeze repair");
   });
 
-  it("keeps Talk, Clarify, research, and Grill owned by make-decision", () => {
+  it("keeps Talk, research, and Grill in make-decision while Clarify stays downstream", () => {
     const decision = readStage("make-decision");
     for (const dependency of ["talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review"]) {
       expect(decision).toContain(dependency);
     }
     expectConcept(decision, [/Do not invent user answers/i], "make-decision: confirmation is real");
-    expectConcept(decision, [/Research only when the answer could materially change/i], "make-decision: research is proportional");
+    expectConcept(decision, [/Research runs only when its answer could materially change/i], "make-decision: research is proportional");
+    expectConcept(decision, [/`build-spec` is the only owner of[\s\S]{0,80}Clarify/i], "Clarify has one downstream owner");
+
+    const stepSlugs = JSON.parse(readFileSync(join(root, "workflows", "make-decision", "steps.json"), "utf8"))
+      .steps.map(({ step_slug }) => step_slug);
+    expect(stepSlugs.slice(2, 10)).toEqual([
+      "talk-round-1", "research-inputs", "talk-round-2", "direction-advice",
+      "talk-round-3", "grill-with-docs", "write-decision-draft", "detail-advice",
+    ]);
 
     const plan = readStage("build-plan");
     expectConcept(plan, [/Do not run Talk, Clarify, or Grill/i], "build-plan: decision activities stay upstream");
