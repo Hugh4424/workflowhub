@@ -8,6 +8,7 @@ import { createTask } from "../../../../runtime/task/task-handle.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
+function git(cwd, args) { return String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim(); }
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
@@ -95,7 +96,7 @@ describe("wh-review production CLI", () => {
     }
   });
 
-  it("reconstructs an authenticated make-decision CandidateWorkspace from the TaskHandle", async () => {
+  it("opens only an existing make-decision Workspace and never prepares one", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-decision-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
@@ -103,14 +104,20 @@ describe("wh-review production CLI", () => {
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
     const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
+    const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
     const { resolveTrustedReviewSubject } = await import(cli.href);
+    expect(() => resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" }))
+      .toThrow(/current task Workspace|registered|ENOENT/i);
+    expect(git(repo, ["worktree", "list", "--porcelain"]).split("\n").filter((line) => line.startsWith("worktree "))).toHaveLength(1);
+    const { prepareTaskWorkspace } = await import("../../../../runtime/task/workspace.mjs");
+    prepareTaskWorkspace(task);
     const subject = resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
-    expect(subject.candidateWorkspace.worktreeRoot).toBe(`${repo}-task`);
+    expect(subject.workspace.worktreeRoot).toBe(`${repo}-task`);
+    expect(subject.candidateWorkspace).toBeUndefined();
     expect(subject).not.toHaveProperty("sourceRoot");
   });
 
-  it("returns unavailable and writes an immutable attempt when the run route is missing", () => {
+  it("returns unavailable and writes an immutable attempt when the run route is missing", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-route-missing-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
@@ -119,6 +126,8 @@ describe("wh-review production CLI", () => {
     execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
     const taskPath = join(root, "Projects", "Demo", "tasks", "task");
     const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
+    const { prepareTaskWorkspace } = await import("../../../../runtime/task/workspace.mjs");
+    prepareTaskWorkspace(task);
 
     const home = join(root, "home");
     const configDir = join(home, ".config", "workflowhub"); mkdirSync(configDir, { recursive: true });

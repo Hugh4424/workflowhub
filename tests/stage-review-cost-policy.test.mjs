@@ -12,6 +12,7 @@ describe("non-code review policy", () => {
     const buildCode = yaml.load(readFileSync(new URL("../workflows/build-code/skill-deps.yaml", import.meta.url), "utf8"));
     const verifyCode = yaml.load(readFileSync(new URL("../workflows/verify-code/skill-deps.yaml", import.meta.url), "utf8"));
     expect(buildSpec.skills.map((entry) => entry.name)).toEqual([
+      "spec-research", "spec-clarify",
       "spec-specify", "simplicity-guard", "plan-ceo-review",
       "plan-design-review", "wh-review",
     ]);

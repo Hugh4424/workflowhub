@@ -13,22 +13,24 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | make-decision | 3 | talk-round-1 | S2 | ask only direction-changing questions |
 | make-decision | 4 | research-inputs | S1/S3 | no real question: record skipped |
 | make-decision | 5 | talk-round-2 | S4 | preserve user choices and risks |
-| make-decision | 6 | blind-direction-review | S5 | wh-review owns the provider |
+| make-decision | 6 | direction-advice | S5 | wh-review owns the provider |
 | make-decision | 7 | talk-round-3 | S7 | clarify only unresolved direction items |
 | make-decision | 8 | grill-with-docs | S7 | main agent communicates with user |
 | make-decision | 9 | write-decision-draft | S7 | write the current decision log |
-| make-decision | 10 | review-decision-detail | S7 | retain advisory findings |
+| make-decision | 10 | detail-advice | S7 | retain advisory findings |
 | make-decision | 11 | approve-decision | S9 | only real user confirmation counts |
 | make-decision | 12 | publish-decision | S10 | publish the current artifact snapshot |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
-| build-spec | 2 | spec-specify | spec generation | generate spec.md from decision-log |
-| build-spec | 3 | simplicity-guard | simplicity lens | delete, narrow, or reuse before lock |
-| build-spec | 4 | plan-ceo-review | product lens | record advisory product findings |
-| build-spec | 5 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
-| build-spec | 6 | freeze-spec | material freeze | freeze before independent review |
-| build-spec | 7 | review-frozen-spec | wh-review | one advisory异源 review |
-| build-spec | 8 | main-agent-disposes-findings | disposition | inspect every finding |
-| build-spec | 9 | publish-spec-result | handoff | publish spec and facts |
+| build-spec | 2 | conditional-spec-research | research | real question only; else skipped |
+| build-spec | 3 | spec-clarify | clarification | unique build-spec clarification owner |
+| build-spec | 4 | spec-specify | spec generation | generate spec.md from decision-log |
+| build-spec | 5 | simplicity-guard | simplicity lens | delete, narrow, or reuse before lock |
+| build-spec | 6 | plan-ceo-review | product lens | record advisory product findings |
+| build-spec | 7 | conditional-plan-design-review | UI-only design lens | otherwise record skipped |
+| build-spec | 8 | freeze-spec | material freeze | freeze before independent review |
+| build-spec | 9 | review-frozen-spec | wh-review | one advisory异源 review |
+| build-spec | 10 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-spec | 11 | publish-spec-result | handoff | publish spec and facts |
 | build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |
@@ -37,9 +39,9 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-plan | 6 | plan-eng-review | engineering lens | inspect boundaries and failure paths |
 | build-plan | 7 | test-routing-advisor | test routing | preselect tier and concrete skill |
 | build-plan | 8 | spec-tasks | task generation | record commands, oracle, evidence |
-| build-plan | 9 | spec-analyze | cross-material trace | check original requirement through evidence |
-| build-plan | 10 | review-plan | wh-review | one advisory异源 review |
-| build-plan | 11 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-plan | 9 | review-plan | wh-review | one advisory异源 review |
+| build-plan | 10 | main-agent-disposes-findings | disposition | inspect every finding |
+| build-plan | 11 | final-spec-analyze | final cross-material trace | report-only check before publish |
 | build-plan | 12 | publish-plan-result | handoff | publish plan/tasks and facts |
 | build-code | 1 | read-current-task-documents | pre-read | read all four current materials |
 | build-code | 2 | write-red-tests | TDD RED | record real RED or unknown |
@@ -52,7 +54,9 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 9 | analyze-review-findings | disposition | main agent assesses every finding |
 | build-code | 10 | capture-implementation | evidence | bind evidence to current snapshot |
 | build-code | 11 | authenticate-current-task-completion | task audit | retain incomplete facts honestly |
-| build-code | 12 | publish-code-result | handoff | after all Phase and final facts |
+| build-code | 12 | run-final-aggregate-and-ac-trace | final tests and AC trace | run final aggregate before integration review |
+| build-code | 13 | final-integration-review | integration review | existing phase_id=null review after tests |
+| build-code | 14 | publish-code-result | handoff | after all Phase and final facts |
 | verify-code | 1 | read-current-materials-and-code | pre-read | read all four current materials and implementation |
 | verify-code | 2 | architect-acceptance-review | architecture check | reverse-check requirements, Design, and full user flow |
 | verify-code | 3 | main-agent-repair-batch-1 | repair | fix only valid delivery findings |

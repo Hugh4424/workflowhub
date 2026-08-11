@@ -148,3 +148,16 @@ WorkflowHub 只在报告投影层分类，不改 provider 的原始 attempt/resu
 - 未知错误码归 `UNKNOWN` 并告警。
 
 失败 attempt 的耗时单独统计，不进入有效审查质量分母；失败不会自动重试。
+
+## WorkflowHub 处置边界
+
+所有 stage 都只消费可信异源 advice。provider 不输出 `pass`、stage verdict 或完成结论；WorkflowHub
+也不能因为缺少 `pass`、空 findings 或 transport 成功而伪造通过。没有最终文本的
+`PROCESS_DEAD`、`SIGTERM`、timeout、路径错误、坏 JSON、协议错误和其他 transport failure
+只能保留为 `unavailable`/`incomplete` 事实，不能进入 findings、不能变成“没有重要问题”。
+
+build-code 的 review cycle 复用现有 `actionable` 和 `major|blocking` 分类：当前可信语义结果没有
+这类 finding 才是该 cycle 的 clean 结束；有重要 finding 时，只有真实修复或被审主题真实变化后
+才允许一次 focused review。相同 finding、没有实际变化或 provider 没有可信终态时停止自动继续，
+保留 `needs_human`、`unavailable` 或 `incomplete`。这不新增 loop controller、持久状态对象或
+WorkflowHub quality gate。

@@ -27,8 +27,9 @@ are facts, not work permits. Missing, stale, failed, or unavailable auxiliary
 facts never require a new task and never freeze implementation or same-task
 repair.
 
-`make-decision` exclusively owns Talk, Clarify, necessary research, Grill, and
-`decision-log.md`. Build-code does not replay them or ask the user to reconstruct
+`make-decision` exclusively owns Talk, Grill, and `decision-log.md`.
+`build-spec` exclusively owns conditional specification research and
+`spec-clarify`. Build-code does not replay them or ask the user to reconstruct
 the decision process. If implementation exposes a direction-changing gap, keep
 the same task and return that decision to `make-decision`. Build-code does not
 author or rewrite the four current materials: a correction to `spec.md` belongs
@@ -117,8 +118,8 @@ user has separately authorized the irreversible operation via
 commit is a Git delivery fact and a useful review anchor; it is never required
 to start, continue, test, repair, or hand off the same task. Without that
 authorization, review the current working-tree change and leave it uncommitted.
-A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item.
-A provider verdict, where one exists, is also a recorded quality fact and never a Phase pass gate.
+A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
+Never require a provider pass.
 
 `unavailable` is never `pass` and never a work blocker.
 
@@ -127,8 +128,19 @@ A provider verdict, where one exists, is also a recorded quality fact and never 
 After all implementation Tasks, use the dedicated final Task/Phase card from
 `tasks.md`. Recheck its route against the full actual change, run the recorded
 final aggregate strategy once, and record its command, oracle, result, limits,
-and per-AC impact. The final full test is a build-code handoff fact; verify-code
-independently replays the risky paths and complete user flow.
+and per-AC impact. After the final tests and AC trace, run the existing
+`phase_id=null` integration review against the current implementation. Build-code
+is strictly complete only when that current review has no important findings:
+no actionable `major|blocking` finding with a valid evidence anchor; minor
+advice remains advice. If an important finding is real, repair the same task and run one
+focused review only after an actual repair/topic change. A repeated finding,
+unchanged snapshot, no terminal provider output, or transport failure stops the
+automatic loop and remains visible as incomplete/unavailable. This is a review
+fact, not a provider pass gate. Verify-code independently replays the risky
+paths and complete user flow.
+
+The final full test is a build-code handoff fact; it is not a provider pass or
+a new quality gate.
 
 Build-code does not run the aggregate regression command after each Task.
 Focused tests belong to each Phase; the recorded final command belongs to the

@@ -9,6 +9,7 @@ let validateDecisionEntry;
 let validateDecisionLogContract;
 let validateDecisionCorrectionAppendix;
 let buildDecisionCorrectionAppendix;
+let validateDecisionLogStepUpdateContract;
 let moduleLoadError;
 
 beforeAll(async () => {
@@ -18,6 +19,7 @@ beforeAll(async () => {
       validateDecisionLogContract,
       validateDecisionCorrectionAppendix,
       buildDecisionCorrectionAppendix,
+      validateDecisionLogStepUpdateContract,
     } = await import("../runtime/stage/stage-content-contracts.mjs"));
   } catch (error) {
     moduleLoadError = error;
@@ -33,6 +35,7 @@ function requireApi() {
   expect(validateDecisionLogContract).toBeTypeOf("function");
   expect(validateDecisionCorrectionAppendix).toBeTypeOf("function");
   expect(buildDecisionCorrectionAppendix).toBeTypeOf("function");
+  expect(validateDecisionLogStepUpdateContract).toBeTypeOf("function");
 }
 
 function decisionEntry(overrides = {}) {
@@ -294,5 +297,53 @@ describe("CF-2 append-only D1-D7 decision corrections", () => {
       validateDecisionCorrectionAppendix(appendix),
       /does_not_rewrite_upstream|must be true|不得改写/i,
     );
+  });
+});
+
+describe("make-decision step completion writes", () => {
+  function stepUpdate(step_id, overrides = {}) {
+    return {
+      stage: "make-decision",
+      step_id,
+      decision_log_ref: "decision-log.md",
+      decision_log_hash: HASH_A,
+      writer: { owner: "make-decision", artifact: "decision-log.md", mode: "append-only" },
+      coverage_disposition: "no_new_requirement",
+      outcome: `step ${step_id} recorded`,
+      write_status: "written",
+      ...overrides,
+    };
+  }
+
+  it("requires every step to append to the same decision-log binding", () => {
+    requireApi();
+    const result = validateDecisionLogStepUpdateContract({ updates: Array.from({ length: 12 }, (_, index) => stepUpdate(index + 1)) });
+    expect(result).toMatchObject({ ok: true, facts: { step_ids: Array.from({ length: 12 }, (_, index) => index + 1) } });
+  });
+
+  it("accepts the four requirement dispositions in their document spelling", () => {
+    requireApi();
+    for (const coverage_disposition of ["current", "deferred", "non-goal", "evidence-only"]) {
+      expect(validateDecisionLogStepUpdateContract(stepUpdate(1, { coverage_disposition })) ).toMatchObject({ ok: true });
+    }
+  });
+
+  it("rejects a second log binding or a missing real writer", () => {
+    requireApi();
+    const updates = [stepUpdate(1), stepUpdate(2, {
+      decision_log_hash: HASH_B,
+      writer: { owner: "fake-writer", artifact: "decision-log.md", mode: "append-only" },
+    })];
+    expectRejected(validateDecisionLogStepUpdateContract({ updates }), /same decision-log ref\/hash|existing make-decision append-only writer/i);
+  });
+
+  it("keeps a write failure incomplete instead of claiming step completion", () => {
+    requireApi();
+    const result = validateDecisionLogStepUpdateContract(stepUpdate(1, {
+      write_status: "incomplete",
+      write_error: "writer refused wrong task binding",
+    }));
+    expect(result).toMatchObject({ ok: false, facts: { write_status: "incomplete" } });
+    expect(result.errors.join("\n")).toMatch(/incomplete|failure|claim step completion/i);
   });
 });

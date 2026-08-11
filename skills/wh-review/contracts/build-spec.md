@@ -40,6 +40,10 @@ provider 调用。
 `accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
 provider findings 转成“审查通过”。
 
+## 处置边界
+
+build-spec 只消费可信异源 advice，不要求 provider `pass` 或 findings=[]。无最终文本、timeout、路径/协议错误、坏 JSON 和其他 transport failure 只能记录为 `unavailable`/`incomplete`，不能变成空 findings 或通过。普通规格修复不自动追求二审；只有被审主题真实变化且确需新意见时才产生新的普通 attempt，记录性材料变化不强制重审。
+
 ## 审查重点
 
 - 每项原始需求和批准决策是否进入 spec。

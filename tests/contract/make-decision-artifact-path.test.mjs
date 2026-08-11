@@ -147,4 +147,33 @@ describe("make-decision current artifact path contract", () => {
     });
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
   });
+
+  it("keeps direction and detail advice after a later decision-log snapshot", async () => {
+    const state = fixture("p1-advice-snapshot");
+    const original = "# current decision\n\n## 范围\n继续当前任务。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n质量事实缺失保持可见。\n";
+    state.artifacts.writeAtomic("decision-log.md", original);
+    const reviewedSnapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
+    const direction = writeFormalReviewFixture({
+      task: state.task,
+      stage: "make-decision",
+      snapshotTree: reviewedSnapshot.tree,
+      reviewTrack: "direction",
+    });
+    const detail = writeFormalReviewFixture({
+      task: state.task,
+      stage: "make-decision",
+      snapshotTree: reviewedSnapshot.tree,
+      reviewTrack: "detail",
+    });
+
+    state.artifacts.writeAtomic("decision-log.md", `${original}\n补充当前决策记录，不改变被审主题。\n`);
+    const currentSnapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
+    expect(currentSnapshot.tree).not.toBe(reviewedSnapshot.tree);
+    const result = await runOfficialStage("make-decision", state.context, {
+      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef },
+    });
+
+    expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
+    expect(result.quality_warnings ?? []).not.toContain(expect.stringContaining("review does not bind the final current snapshot"));
+  });
 });

@@ -114,6 +114,10 @@ provider 无法形成 semantic findings 时，认证的 `unavailable` attempt �
 `major|blocking` serious finding 时，按精确 finding/card/reply 绑定要求修复或显式接受
 风险；不为取得空 findings 无限重复审查。
 
+## Review cycle 终止边界
+
+build-code 不要求 provider `pass`。Phase 和最终 integration 的 review cycle 只有在当前可信 semantic result 没有 `actionable` 的 `major|blocking` finding 时才算 clean；`minor`/`nonblocking_minor` 仍可作为 advice 保留。重要 finding 出现后，只有真实修复或被审主题真实变化才允许一次 focused review；同一 finding 再次出现、没有实际变化或 provider 没有可信终态时停止自动继续，保留 `needs_human`、`unavailable` 或 `incomplete`。这些是 review fact 和停止事实，不新增循环控制器、持久状态对象或新的质量 gate。
+
 ## 输出
 
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

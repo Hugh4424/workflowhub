@@ -4,27 +4,27 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "cb2d8f5e9291a4407d68d3d1fd88d512b3ca75ee401bc5bed7e7d9ccb783ddfc"
+      "sha256": "66b89eb2abead58a9d7dba76a89bf03f39aa03150f121b5b1a0f4b9411bfccdf"
     },
     {
       "path": "contracts/build-code.md",
-      "sha256": "dcdd0a8b569ea9673946b137974e09d6b447392fc37828fdaae9fd5b1e46faf9"
+      "sha256": "757f9c775ef4e5c060cbac8252e7ed7b5bba4f2247a02c7ef52b95e63e10beb5"
     },
     {
       "path": "contracts/build-plan.md",
-      "sha256": "9f8dd65a5b3821f8dfe5f73a5e0b804a49757c651bf79b086491276509c212a6"
+      "sha256": "bc711f55010f90630c628b1d6259cf63c514c719248c83bb4cbe4c04dd38808d"
     },
     {
       "path": "contracts/build-spec.md",
-      "sha256": "75ba9b5bdaff284219927a2a275919df175bf123dd7dd9857589e5a009f32692"
+      "sha256": "91a3d8a58dddf749f67280a57a11cdb9a6260d997f59504b28106ffda810b9f1"
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "b1d0950f24c7a7e9ea645990572cccf05ad3f169c1dbae879b46d4ea9604d44c"
+      "sha256": "e7c567994963c249408ca9e4d190095882a74e850db2e3c3d771bf23284b7ea7"
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "495394b66563745aa3bfcffe69e89b4f70ba4ca90648e16ae3a7211a9ea58b2e"
+      "sha256": "590d07d55e68d6d9effbd2bdb00eca155135be9900f890abc96826487aef2889"
     },
     {
       "path": "contracts/verify-code.md",
@@ -52,7 +52,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "078c975bcf9cfae4ea2595b6a542e3b5236e9f57d4601773965feb017ce09f38"
+      "sha256": "437ca434de08c16c489e40d72c7c2d09b943a7678bfc0a4f531c23f81eb5aa36"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -72,7 +72,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "ea9ef48039cbfe75d63ed9efb86bd057d5643d4029ae3be64bf9ac27159670a9"
+      "sha256": "a28a5be3dc5a8769c7ff7ea7d21483783a627ca12b2d4e525e24aa67361b6ddf"
     },
     {
       "path": "scripts/review-source.mjs",
@@ -88,7 +88,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "a69fa5d0d47f2b9a47df7aab41146e15116e07a1e798a76005e86c1fb6d39f2a"
+      "sha256": "948b4f17f29ae8468ed4a69fa5cef0b2208a8012d29c3a70bfb618db6a373de9"
     },
     {
       "path": "stage-skill-plan.json",

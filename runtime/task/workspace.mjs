@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
@@ -127,6 +128,56 @@ function deterministicWorkspace(task) {
   return { targetRepoRoot, branch, worktreeRoot };
 }
 
+function inspectTargetStatus(targetRepoRoot) {
+  const head = gitValue(targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
+  const branch = gitValue(targetRepoRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "target repository branch");
+  const raw = String(execFileSync("git", ["status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
+    cwd: targetRepoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }));
+  const entries = raw.split("\0").filter(Boolean).map((field) => {
+    const status = field.slice(0, 2);
+    const path = field.slice(3);
+    const category = status === "??"
+      ? "untracked"
+      : status === "!!"
+        ? "ignored"
+        : "tracked";
+    return Object.freeze({ status, path, category });
+  });
+  const staged = entries.filter(({ status, category }) => category === "tracked" && status[0] !== " ").length;
+  const unstaged = entries.filter(({ status, category }) => category === "tracked" && status[1] !== " ").length;
+  const counts = Object.freeze({
+    tracked: entries.filter(({ category }) => category === "tracked").length,
+    staged,
+    unstaged,
+    untracked: entries.filter(({ category }) => category === "untracked").length,
+    ignored: entries.filter(({ category }) => category === "ignored").length,
+  });
+  const recommendations = [];
+  if (counts.tracked > 0 || counts.staged > 0 || counts.unstaged > 0) {
+    recommendations.push("先查看已修改或已暂存内容，确认是否属于当前任务；不要自动提交或覆盖");
+  }
+  if (counts.untracked > 0) {
+    recommendations.push("先确认未跟踪文件是用户文件还是生成物；不要直接删除");
+  }
+  if (counts.ignored > 0) {
+    recommendations.push("先确认被忽略文件是否可重建；不要把 ignored 文件自动当成可清理对象");
+  }
+  if (recommendations.length === 0) recommendations.push("没有需要清理的 dirty 内容");
+  return Object.freeze({
+    ref: branch,
+    head,
+    dirty: entries.length > 0,
+    status_digest: createHash("sha256").update(raw).digest("hex"),
+    counts,
+    entries: Object.freeze(entries),
+    recommendations: Object.freeze(recommendations),
+    cleanup: "只在用户明确同意具体路径后使用现有 authorize cleanup",
+  });
+}
+
 function acceptedWorkspaceExpectation(task) {
   return deterministicWorkspace(task);
 }
@@ -136,10 +187,7 @@ function workspaceForCreation(task) {
   const { targetRepoRoot } = expected;
   const baselineCommit = gitValue(targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
   if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("target repository HEAD must be a full Git commit OID");
-  if (gitValue(targetRepoRoot, ["status", "--porcelain", "--untracked-files=all"], "target repository status") !== "") {
-    throw new Error("target repository must be clean before creating the task worktree");
-  }
-  return { ...expected, baselineCommit };
+  return { ...expected, baselineCommit, targetStatus: inspectTargetStatus(targetRepoRoot) };
 }
 
 function registeredWorktree(targetRepoRoot, worktreeRoot) {
@@ -226,7 +274,12 @@ function validateCandidate(task, expected, facts = {
     }
     return true;
   };
-  const candidate = { baselineCommit: expected.baselineCommit, targetRepoRoot: expected.targetRepoRoot, branch: expected.branch };
+  const candidate = {
+    baselineCommit: expected.baselineCommit,
+    targetRepoRoot: expected.targetRepoRoot,
+    branch: expected.branch,
+    targetStatus: expected.targetStatus ?? inspectTargetStatus(expected.targetRepoRoot),
+  };
   Object.defineProperty(candidate, "worktreeRoot", { enumerable: true, get() { validate(); return realWorktree; } });
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
   Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
@@ -277,13 +330,14 @@ export function prepareTaskWorkspace(taskHandle) {
     }
     return validateCandidate(task, expected);
   }
+  const targetStatus = inspectTargetStatus(deterministic.targetRepoRoot);
   const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task worktree HEAD");
   if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task worktree HEAD must be a full Git commit OID");
   const targetCommit = gitValue(deterministic.targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
   if (!isAncestor(deterministic.targetRepoRoot, baselineCommit, targetCommit)) {
     throw new Error("existing task worktree HEAD is not an ancestor of target repository HEAD; refusing fallback or baseline rebinding");
   }
-  return validateCandidate(task, { ...deterministic, baselineCommit });
+  return validateCandidate(task, { ...deterministic, baselineCommit, targetStatus });
 }
 
 /** Revalidate attempt facts against the deterministic worktree before acceptance. */

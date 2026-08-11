@@ -115,4 +115,85 @@ describe("spec-analyze completeness contract", () => {
       expect.objectContaining({ type: "material_hash_binding_gap", target_artifact: "plan" }),
     ]));
   });
+
+  it("requires every DEFER and OPEN item to have owner, trigger, handoff, and close condition downstream", () => {
+    const broken = complete();
+    broken.deferredItems = [{ id: "DEFER-001", owner: "build-code", trigger: "P1 ready", handoff: "T001", close_condition: "focused tests" }];
+    broken.openItems = [{ id: "OPEN-001", owner: "build-plan", trigger: "plan review", handoff: "T002", close_condition: "analyzer confirms" }];
+    broken.decisionLog = `${broken.decisionLog}\nDEFER-001 OPEN-001`;
+
+    const missing = validateSpecAnalyzeCompleteness(broken);
+    expect(missing.ok).toBe(false);
+    expect(missing.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "deferred_open_handoff_gap", id: "DEFER-001" }),
+      expect.objectContaining({ type: "deferred_open_handoff_gap", id: "OPEN-001" }),
+    ]));
+
+    const covered = complete();
+    covered.deferredItems = broken.deferredItems;
+    covered.openItems = broken.openItems;
+    covered.decisionLog = `${covered.decisionLog}\nDEFER-001 owner build-code trigger P1 ready handoff T001 close focused tests\nOPEN-001 owner build-plan trigger plan review handoff T002 close analyzer confirms`;
+    covered.spec += "\nDEFER-001 OPEN-001 owner trigger handoff close";
+    covered.plan += "\nDEFER-001 OPEN-001 owner build-code build-plan trigger handoff close";
+    covered.tasks += "\nDEFER-001 OPEN-001 owner build-code build-plan trigger handoff close";
+    const completeResult = validateSpecAnalyzeCompleteness(covered);
+    expect(completeResult.ok, completeResult.errors.join("; ")).toBe(true);
+  });
+
+  it("does not let one deferred item borrow a sibling item's field", () => {
+    const source = complete();
+    const itemOne = "DEFER-001 owner build-code trigger phase-one handoff T001 close focused tests";
+    const itemTwo = "DEFER-002 trigger phase-two handoff T002 close integration review";
+    source.deferredItems = [{ id: "DEFER-001" }, { id: "DEFER-002" }];
+    source.decisionLog += "\nDEFER-001\nDEFER-002";
+    source.spec = `${source.spec}\n${itemOne}\n${itemTwo}`;
+    source.plan = `${source.plan}\n${itemOne}\n${itemTwo}`;
+    source.tasks = `${source.tasks}\n${itemOne}\n${itemTwo}`;
+
+    const result = validateSpecAnalyzeCompleteness(source);
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "deferred_open_handoff_gap", id: "DEFER-002" }),
+    ]));
+    expect(result.findings).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "deferred_open_handoff_gap", id: "DEFER-001" }),
+    ]));
+  });
+
+  it("does not treat deferred/open table headers as populated handoff fields", () => {
+    const source = complete();
+    const emptyRow = [
+      "| ID | owner | trigger | handoff | close_condition |",
+      "| --- | --- | --- | --- | --- |",
+      "| DEFER-001 |  |  |  |  |",
+    ].join("\n");
+    source.deferredItems = [{ id: "DEFER-001" }];
+    source.decisionLog += "\nDEFER-001";
+    source.spec += `\n${emptyRow}`;
+    source.plan += `\n${emptyRow}`;
+    source.tasks += `\n${emptyRow}`;
+
+    const result = validateSpecAnalyzeCompleteness(source);
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "deferred_open_handoff_gap", id: "DEFER-001" }),
+    ]));
+  });
+
+  it("places the strict final analyzer after findings disposition and before publish", () => {
+    const steps = JSON.parse(readFileSync(new URL("../../workflows/build-plan/steps.json", import.meta.url), "utf8")).steps;
+    const disposition = steps.find(({ step_slug }) => step_slug === "main-agent-disposes-findings");
+    const analyze = steps.find(({ step_slug }) => step_slug === "final-spec-analyze");
+    const publish = steps.find(({ step_slug }) => step_slug === "publish-plan-result");
+    expect(disposition).toBeDefined();
+    expect(analyze).toMatchObject({ completion_evidence: expect.arrayContaining([
+      { kind: "plan", uri_or_path: "plan.md" },
+      { kind: "tasks", uri_or_path: "tasks.md" },
+      { kind: "quality_facts", uri_or_path: "quality/evidence/" },
+    ]) });
+    expect(publish).toBeDefined();
+    expect(disposition.order).toBeLessThan(analyze.order);
+    expect(analyze.order).toBeLessThan(publish.order);
+    expect(analyze.observable_result).toMatch(/DEFER|OPEN|report-only|strict/i);
+  });
 });

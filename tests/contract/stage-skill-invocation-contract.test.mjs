@@ -14,6 +14,8 @@ const stageSkills = Object.freeze({
     "wh-review",
   ],
   "build-spec": [
+    "spec-research",
+    "spec-clarify",
     "spec-specify",
     "simplicity-guard",
     "plan-ceo-review",

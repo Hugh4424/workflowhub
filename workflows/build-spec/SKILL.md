@@ -30,9 +30,12 @@ parallel revision target or infer a replacement from historical records.
 Read inline packages declared in `skill-deps.yaml` directly in the same Stage
 Agent context. Packages declared `execution: independent` run in their own
 independent context and return only findings; do not inline them or route them
-through a dispatcher. `spec-specify`, `simplicity-guard`, and `plan-ceo-review`
-are inline lenses; conditional design review follows its declared execution.
-They do not create extra artifacts, dispatchers, or work prerequisites.
+through a dispatcher. `spec-research` is the conditional independent research
+owner for this stage; `spec-clarify` is the only specification-clarification
+owner. They return facts to this same stage and do not create extra artifacts,
+dispatchers, or work prerequisites. `spec-specify`, `simplicity-guard`, and
+`plan-ceo-review` are inline lenses; conditional design review follows its
+declared execution.
 
 Quality dependencies and the review dependency declared in `skill-deps.yaml`
 may be unavailable.
@@ -48,10 +51,13 @@ it does not block same-task drafting or repair. An unavailable review is never
 ## Required specification content
 
 Read the decision log and existing spec before researching. Preserve every
-confirmed choice and every explicit non-goal. Research only when a current
-interface, data rule, state, compatibility boundary, security condition, or
-operational fact is needed to make product behavior precise; durable findings
-belong in the relevant spec section, not a second research authority.
+confirmed choice and every explicit non-goal. Run the `spec-research`
+dependency only when a current interface, data rule, state, compatibility
+boundary, security condition, or operational fact is needed to make product
+behavior precise. If the existing facts already answer it, record `skipped`
+with the reason; if the capability cannot run, record `unavailable` with the
+real cause. Durable findings belong in the relevant spec section, not a second
+research authority.
 
 The specification must make these items explicit when applicable:
 
@@ -73,11 +79,16 @@ The specification must make these items explicit when applicable:
 List every material ambiguity separately with its possible impact on
 scope, acceptance, interface, data, security, or operations. Do not guess an
 answer from code, old records, or a plan.
-Do not run Talk, Clarify, or Grill in this stage, and do not call
+Do not run Talk or Grill in this stage, and do not call
 `talk-with-zhipeng` or `grill-with-docs`; those activities belong exclusively to
-`make-decision`. Do not invent the answer; a direction-changing ambiguity is
-identified as an upstream decision gap. Continue all unaffected drafting and
-repair while recording the gap plainly.
+`make-decision`. The `spec-clarify` dependency is the one allowed Clarify flow:
+it asks one material specification question, waits for the real user reply,
+resumes with that reply, and writes the answer back to `spec.md`. A missing
+reply, wrong card, stale hash, or interrupted resume stays `incomplete`; it is
+never inferred or replaced by a second Clarify implementation. A
+direction-changing ambiguity is returned to `make-decision` as an upstream
+decision gap. Continue all unaffected drafting and repair while recording the
+gap plainly.
 
 ## Boundaries
 
@@ -96,15 +107,18 @@ review or test result never changes product scope automatically.
 1. Read `decision-log.md` and current `spec.md`; build a source/decision index.
 2. Identify every confirmed requirement, choice, boundary, non-goal, risk,
    deferred item, and upstream gap.
-3. Research only the current facts needed to make the behavior precise.
-4. Draft or revise `spec.md` with stable IDs, flows, states, FR/AC, oracles,
+3. Run conditional `spec-research` when the current facts are insufficient;
+   otherwise record why it was skipped, and preserve unavailable facts.
+4. Run the unique `spec-clarify` flow for one material spec ambiguity at a time;
+   resume only from the matching real user reply.
+5. Draft or revise `spec.md` with stable IDs, flows, states, FR/AC, oracles,
    failure conditions, risks, and explicit exclusions.
-5. Cross-check no decision was dropped, no new product scope was invented, and
+6. Cross-check no decision was dropped, no new product scope was invented, and
    every AC is observable.
-6. Use the review dependency declared in `skill-deps.yaml` against the current decision
+7. Use the review dependency declared in `skill-deps.yaml` against the current decision
    and specification. Keep provider/model/transport provenance and findings;
    the review contract returns findings, not a pass/revise permission.
-7. Dispose each finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
+8. Dispose each finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
    `needs_human`. Repair valid findings in this same task and keep unresolved
    risk visible.
 

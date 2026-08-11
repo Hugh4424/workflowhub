@@ -106,6 +106,17 @@ not new workflow stages and not gates.
    actual provider/model/transport/provenance and findings. Dispose findings as
    `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`; repair valid
    findings in this same task.
+8. After findings disposition and the last authored plan/tasks revision, actually
+   invoke the existing `spec-analyze` lens once as the strict final
+   cross-document check before `publish-plan-result` (the user may call this
+   `speckit-analyze`). Its current packet must cover the raw requirement
+   source, decision-log-derived facts, spec, plan, tasks, flow/state/boundary/
+   non-goal coverage, every `DEFER-*`/`OPEN-*` owner/trigger/handoff/close
+   condition, and every task oracle. Record the returned lens result in the
+   existing quality-fact path; a prose claim that it ran is not execution
+   evidence. The result is report-only: retain findings or
+   `incomplete`/`unavailable` honestly, do not create a fifth material, and do
+   not turn it into a new quality gate or provider pass.
 
 ## Plan and phase contract
 
@@ -131,6 +142,9 @@ Review, test, research, and evidence are quality facts. `unknown`,
 they do not stop same-task repair. A review cannot grant a pass or block the
 next safe work item. Do not claim the plan is ready when a source/FR/AC/task
 mapping, command, boundary, or serious finding is unexplained.
+The final `spec-analyze` is the last report-only consistency fact before
+publish; it does not replace the independent `wh-review` advice or authorize
+publication by itself.
 
 End in plain language: what will be built, how phases and files are split, how
 testing will prove it, key risks/unknowns, review findings and dispositions, and

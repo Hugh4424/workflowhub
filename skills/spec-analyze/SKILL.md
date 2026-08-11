@@ -9,7 +9,7 @@ Mode: `lens-only`. Delivery: `file_only`.
 
 ## Input boundary
 
-Read only `review-packet.v1` and the frozen bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet.
+Read only `review-packet.v1` and the frozen bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet.
 
 ## Check
 
@@ -17,8 +17,9 @@ Read only `review-packet.v1` and the frozen bundle. For build-plan, use the gene
 2. Check that all original requirements, FRs, ACs, user-flow/state/boundary/non-goal/deferred facts, and confirmed constraints are represented consistently across decision-log, spec, plan, and tasks.
 3. Find inconsistency, duplication, ambiguity, scope drift, orphan tasks, uncovered FR/ACs, missing source refs, and under-defined test strategy.
 4. Check every Phase, task, and final aggregate for tier (`simple|feature|fullstack`), concrete testing skill, scenarios, command, expected exit, oracle, fixtures/services, evidence path, coverage limit, and STOP rule.
-5. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
-6. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent classifies the finding before declaring the stage complete or handing off; the same task may continue writing and repairing its four materials while findings are being handled.
+5. For every `DEFER-*` and `OPEN-*` item visible in the source facts or current excerpts, require a downstream owner, trigger, handoff/consumer, and close/retain condition in `decision-log`-derived facts, `spec`, `plan`, and `tasks`. Missing any one is a real `deferred_open_handoff_gap` finding; do not invent a task or owner.
+6. Distinguish packet evidence from reviewer inference. Missing packet input is `material_incomplete`, not a semantic finding.
+7. Return every finding with supplied artifact anchor, rule, evidence, impact, focused correction, and `disposition: pending_main_agent_review`. The main agent classifies the finding before declaring the stage complete or handing off; the same task may continue writing and repairing its four materials while findings are being handled.
 
 ## Result
 
@@ -26,7 +27,7 @@ Return a concise `lens-only` result for `skillResults`. This lens evaluates only
 
 ## Review semantics
 
-This report-only lens is read-only and 不阻断. Scan categories: inconsistency, duplicate, ambiguity, underdefined, and constitution-alignment. Constitution alignment is record-only, 不阻断.
+This report-only lens is read-only and 不阻断. In build-plan it is actually invoked once after findings disposition and the last plan/tasks revision, immediately before publish. The caller records the returned lens result in the existing quality-fact path before handoff; a prose declaration that the check happened is not execution evidence. Scan categories: inconsistency, duplicate, ambiguity, underdefined, deferred/open handoff, and constitution-alignment. Constitution alignment is record-only, 不阻断. It is never a provider review, `pass` predicate, or new quality gate.
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, `line_or_anchor`, `impact`, `suggested_correction`, and `disposition`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 

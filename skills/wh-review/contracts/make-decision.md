@@ -80,3 +80,7 @@ findings、传输状态和材料绑定都是异源 review 的质量事实，不�
 通过/不通过。make-decision 使用 `single_round`：初次 findings 结果后不再调用 provider
 追求空 findings；finding 处理和最终快照变化属于业务材料变更。材料变化后的新 attempt
 仍完整交付当前材料；旧 findings 不被改写，也不生成独立 resolution action。
+
+## 处置边界
+
+direction 和 detail 都只获取异源 advice，不要求 provider `pass` 或 findings=[]。没有最终文本、路径失败、timeout、`PROCESS_DEAD`、坏 JSON 或其他 transport failure 时，attempt 必须保持 `unavailable`/`incomplete`，不能写成 findings、没有问题或通过。decision-log 的决定和 finding 处置仍由 WorkflowHub 阶段负责；review 不成为阶段推进 gate。

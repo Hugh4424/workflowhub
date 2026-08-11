@@ -1,7 +1,7 @@
 ---
 name: make-decision
 description: Clarify a real product direction through Talk, proportionate research, independent review, and user confirmation.
-version: 3.1.0
+version: 3.2.0
 ---
 
 # Make Decision
@@ -9,9 +9,10 @@ version: 3.1.0
 ## Purpose
 
 Turn the original requirement into one readable, user-confirmed direction in
-`decision-log.md`. This stage exclusively owns user-facing Talk, Clarify,
-necessary research, Grill, and the decision log. Downstream stages consume the
-result; they do not replay these activities or infer missing decisions.
+`decision-log.md`. This stage exclusively owns user-facing Talk, necessary
+research, Grill, and the decision log. `build-spec` is the only owner of
+Clarify; make-decision must not run a second Clarify. Downstream stages consume
+the result; they do not replay these activities or infer missing decisions.
 
 ## Authority
 
@@ -45,12 +46,12 @@ dependency's declared `SKILL.md` and follow it in the current agent context. Do
 not route them through a dispatcher, invocation protocol, or auxiliary progress
 gate.
 
-- `talk-with-zhipeng`: user-facing Talk and Clarify.
+- `talk-with-zhipeng`: user-facing Talk only; Clarify belongs to build-spec.
 - `grill-with-docs`: challenge the chosen direction against current facts.
 - `decision-log`: write the decision record.
 - `wh-review`: obtain independent review evidence.
 
-Only the main agent may execute user-facing Talk, Grill, or Clarify. Research
+Only the main agent may execute user-facing Talk or Grill. Research
 may use an independent agent or search provider, but the main agent presents the
 decision and questions to the user.
 
@@ -60,50 +61,53 @@ decision and questions to the user.
    direction-changing ambiguity, non-goals, and deferred work. Completion:
    every part of the original requirement is represented or explicitly marked
    unresolved.
-2. Run visible Talk and Clarify. Talk must cover both architecture direction and
-   product journey or user outcome. Ask only questions whose answers could
-   change direction, one at a time when practical. Offer 2-3 meaningful choices
-   with plain-language consequences and risks. Do not invent user answers.
-   Keep the dependency's candidate queues and question cards in the current
-   conversation only. Accept only its minimal `talk`, `clarify`, and
-   `decision_updates` result. Completion: `talk` truthfully reports architecture
-   and user-outcome coverage, while `clarify.open_direction_changing_questions`
-   is `0` after a real reply or because no direction-changing ambiguity exists.
-3. Research only when the answer could materially change the direction. Use a
-   narrow, non-sensitive question and report only findings that change scope,
-   constraints, feasibility, or risk. Otherwise record a short skip reason.
-   Completion: every necessary research question has a finding or a truthful
-   `unavailable`; unnecessary research has a reason for skipping.
-4. Use `grill-with-docs` once the direction is stable. Present its useful
-   challenge in plain language: options, consequences, risks, conflicts, and
-   disposition. Fold its minimal `grill_summary.decision_updates` and necessary
-   CONTEXT/ADR outcome into `decision-log.md`, then discard the session history;
-   do not pass Grill facts downstream or store a separate Grill record.
-   Completion: every direction-changing challenge is resolved or remains visible
-   as an unresolved risk in `decision-log.md`.
-5. Use `decision-log` to write `decision-log.md`. For every load-bearing
-   decision record the original source, facts and constraints, choice and
-   rationale, affected scope, consequences, risks, rejected alternatives,
-   non-goals, unresolved items, and deferred work. Completion: the record is
-   readable without reconstructing the Talk history and does not claim an
-   answer the user did not give.
-6. Use `wh-review` directly for independent findings on the current requirement
-   and decision. An `unavailable` review is never `pass`; it remains a truthful
-   quality fact and does not block same-task work. Review context maps are optional; provide them only when they
-   improve the review. Preserve actual provider, model, session, transport status,
-   findings, error, and provenance. `MATERIAL_INCOMPLETE`, failure, timeout, and
-   `unavailable` remain review facts. Completion: one real independent review
-   attempt is recorded or its real unavailability is recorded. A real
-   unavailable fact is not a pass and does not make the stage formally complete.
-7. Dispose every finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
-   `needs_human`. Repair valid findings in this task; reject invalid findings
-   with evidence; ask the user before accepting a concrete serious risk. Do not
-   repeat an unchanged review merely to manufacture empty findings. Completion: no
-   finding is unexplained.
-8. Present a short decision card: direction, scope, non-goals, success criteria,
-   main risks, review fact, unresolved items, and deferred work. Ask the user to
-   accept or reject it and preserve the actual answer. A rejection leads to
-   another bounded revision of this same task.
+2. Execute the existing 12-step manifest in order. Every step completion first
+   uses the existing make-decision writer to append one update to the same
+   `decision-log.md` ref/hash. The update records the step outcome, the actual
+   user reply or `no_new_requirement`, and the current/deferred/non-goal/open
+   disposition. A write failure stays incomplete with its error; it is never
+   replaced by a final aggregate claim or a second log.
+3. The Talk flow uses steps 3, 4, 5, and 7: Talk round 1, proportionate
+   research input, Talk round 2, then Talk round 3 after direction advice.
+   Research is an input to Talk, not a review.
+   Research runs only when its answer could materially change direction;
+   otherwise record why it was skipped. Do not invent user answers.
+   Ask only questions whose answers could change direction. Talk must cover both
+   architecture direction and product journey or user outcome. Talk asks exactly
+   one decision axis at a time, with 2-3 meaningful choices
+   and plain-language consequences and risks. Use the real
+   `ask -> wait/pause -> user reply -> resume -> re-rank` seam; never invent a
+   reply. Do not run Clarify here; `build-spec` owns the only Clarify flow.
+4. Only after Talk round 2 has resumed and converged, run the direction advice
+   review (step 6). It is independent advice, not a `pass` gate. Preserve the
+   actual provider, transport status, findings, and provenance; unavailable,
+   failure, timeout, and `MATERIAL_INCOMPLETE` remain facts. Dispose each
+   finding; do not re-review unchanged material just to manufacture empty
+   findings. An unavailable review is never `pass` and never becomes an empty
+   findings claim.
+5. After direction advice, resume Talk round 3 (step 7) so the user can address
+   blind-review findings, contradictions, key assumptions, and remaining risks.
+   Only after that, run `grill-with-docs` (step 8). Grill is
+   interactive thinking, never review. It may present one batch only when the
+   questions are independent frontier questions; dependent questions are split
+   and re-ranked. It uses the real `ask -> wait/pause -> user reply -> resume`
+   seam and may preserve a partial reply. It must not call wh-review or create
+   a review fact. Fold only its minimal `grill_summary.decision_updates` and
+   necessary CONTEXT/ADR outcome into `decision-log.md`.
+6. Write the decision draft after Grill (step 9), then run the detail advice
+   review (step 10). This is also advice-only, not a `pass` gate. The detail
+   review must happen after Grill and the draft, never before. Preserve real
+   transport and finding facts and stop rather than loop on unchanged material.
+7. Present the final plain-language decision card at steps 11-12: direction,
+   scope, non-goals, success criteria, risks, advice facts, unresolved items,
+   and deferred work. Ask for the user's actual confirmation and preserve it.
+   A rejection leads to a bounded revision of the same task; it does not create
+   a successor task.
+
+The old interaction aggregate still has a compatibility `clarify` slot because
+its existing runtime validator is owned by the later build-spec handoff. In
+this stage that slot is not a make-decision Clarify execution or confirmation;
+P3 must move its active ownership to build-spec without adding a new object.
 
 After the user confirms the final current decision, the Stage Agent directly
 assembles exactly one immutable interaction aggregate with these fields. This
@@ -153,8 +157,8 @@ object.
 
 ## Completion and fact writing
 
-Do not claim this stage complete until Talk and Clarify are resolved, necessary
-research ran or has a truthful outcome, Grill ran, `decision-log.md` is current,
+Do not claim this stage complete until Talk is resolved, necessary research ran
+or has a truthful outcome, Grill ran, `decision-log.md` is current,
 independent review findings and transport facts are recorded, every finding has a
 disposition, the user explicitly confirmed the decision, and the content-addressed
 interaction aggregate binds that accepted decision. The aggregate is a completion

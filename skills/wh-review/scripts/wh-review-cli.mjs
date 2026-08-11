@@ -6,8 +6,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { recordMissingRouteUnavailable, runReview, verifyFinal } from "./review-runner.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
-import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../runtime/stage/stage-context.mjs";
+import { bootstrapStage, assertWorkspace } from "../../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -31,12 +32,12 @@ export function resolveTrustedReviewSubject(input) {
     runnerRoot: RUNNER_ROOT,
   });
   if (stage === "make-decision") {
-    context = prepareMakeDecisionWorkspace(context);
+    const workspace = openCurrentTaskWorkspace(context.task);
     return {
       taskId,
       task: context.task,
       kernel: context.kernel,
-      candidateWorkspace: context.candidateWorkspace,
+      workspace,
     };
   }
   const workspace = assertWorkspace(context.workspace);

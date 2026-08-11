@@ -7,7 +7,7 @@ import { parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults, classifyAttempt, classificationSummary } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { buildReviewMaterials, phaseDiffDeliveryForPath, requirementIds, reviewInstructionsFor } from "../review-materials.mjs";
-import { runReview, runReviewFixture, verifyFinalSubject } from "../review-runner.mjs";
+import { actionableSeriousFindings, reviewCycleDecision, runReview, runReviewFixture, verifyFinalSubject } from "../review-runner.mjs";
 import { createTask } from "../../../../runtime/task/task-handle.mjs";
 
 const materialId = "a".repeat(64);
@@ -120,6 +120,49 @@ describe("review output and facts", () => {
       { provider: "opencode/v4flash", review: null },
     ], 2);
     expect(result).toMatchObject({ status: "unavailable", valid: [{ provider: "kimi/k3" }] });
+  });
+
+  it("keeps build-code serious finding closure bounded without a provider pass", () => {
+    const serious = { id: "F-serious", severity: "major", disposition: "actionable", path: "a.js", line: 1, issue: "unsafe branch" };
+    const current = { findings: [serious], adjudication: { clusters: [serious] } };
+    expect(actionableSeriousFindings(current)).toEqual([serious]);
+    expect(reviewCycleDecision({ stage: "build-code", result: current })).toMatchObject({ status: "needs_human", action: "stop" });
+    expect(reviewCycleDecision({ stage: "build-code", result: current, actualRepair: true })).toMatchObject({ status: "focused_review_required", action: "review_once" });
+    expect(reviewCycleDecision({ stage: "build-code", result: current, previousResult: current, actualRepair: true })).toMatchObject({ status: "needs_human", reason: "same_important_finding_repeated_after_focused_review" });
+    expect(reviewCycleDecision({ stage: "build-code", result: { findings: [], adjudication: { clusters: [] } } })).toMatchObject({ status: "clean_current_review", action: "stop" });
+    expect(reviewCycleDecision({ stage: "build-code", result: { status: "unavailable" } })).toMatchObject({ status: "incomplete", action: "stop" });
+  });
+
+  it("makes each stage prompt explicit about its focus and advice-only boundary", () => {
+    expect(reviewInstructionsFor("make-decision", "direction")).toMatch(/raw requirement.*user flow/i);
+    expect(reviewInstructionsFor("build-spec")).toMatch(/approved decision.*acceptance/i);
+    expect(reviewInstructionsFor("build-plan")).toMatch(/plan and tasks.*dependency order/i);
+    expect(reviewInstructionsFor("build-code", null, false, "phase")).toMatch(/current Phase diff.*actionable major or blocking/i);
+    expect(reviewInstructionsFor("build-code", null, false, "integration")).toMatch(/final current worktree.*actionable major or blocking/i);
+    expect(reviewInstructionsFor("build-code", null, false, "phase")).toMatch(/changes\.diff/i);
+    expect(reviewInstructionsFor("build-code", null, false, "integration")).not.toMatch(/changes\.diff/i);
+    expect(reviewInstructionsFor("verify-code")).toMatch(/advice only/i);
+    for (const prompt of [
+      reviewInstructionsFor("make-decision", "direction"),
+      reviewInstructionsFor("build-spec"),
+      reviewInstructionsFor("build-plan"),
+      reviewInstructionsFor("build-code", null, false, "integration"),
+      reviewInstructionsFor("verify-code"),
+    ]) expect(prompt).toMatch(/unavailable.*not advice.*not empty findings.*not pass/i);
+  });
+
+  it("gives the broker a bounded manifest-first reading contract", async () => {
+    const calls = [];
+    const { attachmentRoot, task } = fixture("review-bounded-prompt-");
+    await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: groupClient([publicProvider("kimi")], calls), captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toMatch(/manifest\.json.*packet-plan\.json/i);
+    expect(calls[0].prompt).toMatch(/only manifest entries marked required/i);
+    expect(calls[0].prompt).toMatch(/canonical archives.*out-of-scope summary shards/i);
+    expect(calls[0].prompt).not.toMatch(/complete frozen bundle/i);
   });
 });
 
@@ -241,6 +284,26 @@ describe("broker boundary", () => {
     });
     expect(result).toMatchObject({ status: "unavailable", resultRef: null });
     expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({ terminal_status: "unavailable", error: { code: "AUTH" } });
+  });
+
+  it("preserves failed provider transport facts without turning a sibling result into pass", async () => {
+    const { attachmentRoot, task } = fixture("review-partial-transport-");
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-plan", hostProvider: "codex", providers: ["kimi", "opencode"],
+      providerClient: groupClient([
+        publicProvider("kimi"),
+        publicProvider("opencode", { status: "failed", output: pass, error: { code: "PROCESS_DEAD", message: "provider received SIGTERM" } }),
+      ]), captureSource: () => source, buildMaterials: materialBuilder(),
+    });
+    expect(result.status).toBe("available");
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    const semantic = JSON.parse(task.readRecord(result.resultRef));
+    expect(attempt).toMatchObject({ terminal_status: "semantic", coverage: { selected_profiles: ["kimi", "opencode"], valid_provider_count: 1 } });
+    expect(attempt.provider_attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "opencode", status: "failed", error: { code: "PROCESS_DEAD", message: "provider received SIGTERM" } }),
+    ]));
+    expect(semantic.provider_results).toEqual([{ provider: "kimi", output: { findings: [] } }]);
+    expect(semantic).not.toHaveProperty("verdict");
   });
 
   it("does not parse semantic output when transport carries a nonzero error", async () => {

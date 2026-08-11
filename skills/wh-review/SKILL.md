@@ -9,10 +9,10 @@ description: Freeze current materials, ask the configured 3rd-review broker for 
 
 ## Main path
 
-1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks.
+1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks. The stage matrix is the allowlist; do not add a whole repository or a historical review bundle.
 2. Add any applicable `simplicity-guard` and `plan-ceo-review` files as read-only advisory lenses in this same packet. Do not invoke either lens as a separate skill or create a second output path.
 3. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
-4. Resolve provider/model from trusted 3rd-review configuration. Call the broker once through its public request contract and request findings only.
+4. Resolve provider/model from trusted 3rd-review configuration. Call the broker once through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary.
 5. Preserve the broker's real public result and provenance, including findings and transport status, as an immutable review fact.
 6. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
 
@@ -82,7 +82,7 @@ fact, not a prerequisite for continuing the same task.
 
 An `unavailable` result is never `pass`.
 
-Transport success is not a clean review. Empty findings are quality advice, not stage completion.
+Transport success is not a clean review. Empty findings are quality advice, not stage completion or provider `pass`.
 `unavailable` remains an unavailable fact and is never rewritten as empty findings or `pass`.
 It may leave the quality claim incomplete, but it does not block same-task work.
 
@@ -92,7 +92,9 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 
 - Keep every original finding and source attribution.
 - The Stage Agent records one disposition per finding: fixed, rejected with reason, accepted risk with authority, or needs human decision.
-- Review only a changed material/snapshot or a specifically repaired risk. Never rerun an unchanged review merely to obtain an empty findings list.
+- Review only a changed material/snapshot or a specifically repaired risk. Record-only changes to decision-log, plan/task facts, receipts, or other provenance do not force a non-build-code advice review. Never rerun an unchanged review merely to obtain an empty findings list.
+- Every stage is advice-only. The provider never supplies a WorkflowHub stage verdict, and the absence of a provider `pass` is not a failure.
+- For build-code, the current review cycle is clean only when the trusted semantic result has no actionable `major` or `blocking` finding. After an actual repair or subject change, one focused review is allowed; a repeated finding, no real change, or no trusted terminal result stops automatic continuation and stays visible as `needs_human`, `unavailable`, or `incomplete`. This is a pure review fact, not a new state object or quality gate.
 - Same-adapter profiles are not multiple independent sources. Aggregation keeps actual adapter independence and concrete anchors visible.
 - A valid direct or machine anchor may support a major finding. Inferred evidence from one source remains uncorroborated rather than becoming blocking truth.
 

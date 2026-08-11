@@ -1,6 +1,6 @@
 ---
 name: talk-with-zhipeng
-description: 通用对话式收敛技能。把已有调研摆给人看，按"对方向影响"排序一次只问一个问题、每答重排、到阈值即收敛，并在同一场对话里完成范围四维判定与歧义校正。
+description: 通用对话式收敛技能。把已有调研摆给人看，按"对方向影响"排序一次只问一个问题、每答重排、到阈值即收敛，并在同一场对话里完成范围四维判定；不执行 build-spec 的 Clarify。
 ---
 
 # talk-with-zhipeng
@@ -24,7 +24,8 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
   - Round 2：方向、范围、非目标、关键取舍和风险；
   - Round 3：盲审发现、矛盾、关键假设和剩余风险。
 
-若输入缺失，不直接提问，先进入输入充分性护栏并说明缺什么。
+若输入缺失，不直接提问，先进入输入充分性护栏并说明缺什么。本技能只负责 Talk；
+Clarify 由 build-spec 的 `spec-clarify` 独占，不能在这里补一套。
 
 ## 执行协议
 
@@ -76,10 +77,14 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 
 ### 3. 每答重排
 
-每题必须严格执行 `ask → wait/pause → real reply → re-rank`：提问交给宿主可见会话后，
+每题必须严格执行 `ask → wait/pause → real reply → resume → re-rank`：提问交给宿主可见会话后，
 当前调用立即暂停；只有宿主返回与这张卡、当前 Round 和题号绑定的真实回复，恢复调用
 才可继续。Agent 生成的答案、默认选择、旧回复或 decision-log 自报都不能充当 reply，
 也不能据此进入下一题、改稿或审查。
+
+真实生命周期至少要能回放为四个临时事件：`ask` 发布一张带正整数 `round` 的卡，`wait` 明确等待用户，
+`reply` 带用户真实回复的来源、hash 和同一 `round`，`resume` 绑定同一张卡、同一 `round` 和同一回复后才继续。
+Talk 的 `ask.questions` 必须恰好一个问题；聚合结果存在不等于已经收到 reply。
 
 只把用户真实回复视为答案。每收到一个回答，都必须：
 
@@ -176,17 +181,12 @@ talk:
   round_count: 3
   architecture_direction_covered: true
   user_outcome_covered: true
-clarify:
-  status: resolved
-  open_direction_changing_questions: 0
-  resolved_by: user_reply | no_direction_changing_ambiguity
 decision_updates:
   - 只保留需要写进 decision-log.md 的结论、依据、风险或未决项
 ```
 
 `architecture_direction_covered` 与 `user_outcome_covered` 只有在本轮真实覆盖后才能为
-`true`。仍有会改变方向的问题时，`clarify.status` 不能写 `resolved`，也不能把
-`open_direction_changing_questions` 写成 `0`。本技能不填写 task、stage、snapshot、
+`true`。仍有会改变方向的问题时，本轮不能写 `status: completed`。本技能不填写 task、stage、snapshot、
 decision ref/hash、文件路径或内容 hash；这些绑定由父 Stage Agent 在最终决策完成时组装。
 
 不得返回或持久化完整候选队列、完整问题卡、逐轮问答历史、Grill 历史、secret、token、
@@ -213,7 +213,7 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 核心层产出的是「调研入 / 最小决策事实出」的纯逻辑。薄适配层只做两件事：
 
 1. **读调研**：从当前 workflowhub 任务约定的相对路径读取调研、规格、计划或测试证据，整理成初始咨询材料。
-2. **返回事实**：把最小 `talk`、`clarify` 和 `decision_updates` 返回父 Stage Agent；本技能
+2. **返回事实**：把最小 `talk` 和 `decision_updates` 返回父 Stage Agent；本技能
    不直接写工作流文件或质量记录。
 
 适配层只负责「从哪读、往哪写」，不含对话收敛判断逻辑。换一个工作流只需换这一层，核心层不动。

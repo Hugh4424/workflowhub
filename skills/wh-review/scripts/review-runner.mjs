@@ -14,7 +14,11 @@ import { validateSchema } from "./schema-validator.mjs";
 const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
 // Providers run from a writable wrapper directory; sealed review material is
 // deliberately exposed beneath `bundle/`, never at that directory's root.
-const providerPrompt = "Read bundle/review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
+// Keep the provider on the bounded, provider-visible view. The canonical
+// archives and out-of-scope summaries remain audit material, but asking the
+// model to enumerate the complete bundle makes large Phase reviews spend
+// their budget on transport/tool traversal before semantic review.
+const providerPrompt = "Read bundle/review-instructions.md first, then bundle/manifest.json and bundle/packet-plan.json. Read only manifest entries marked required plus the explicitly selected files under context/ needed by the maps; summary diff shards are navigation metadata and are not required to read. Use direct file reads only: do not call Grep, Glob, Bash, shell, directory listing, or recursive search, and do not enumerate or read canonical archives, full-diff archives, or out-of-scope summary shards unless the instructions explicitly require them. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 const reviewRootFor = () => "quality/reviews";
@@ -48,6 +52,53 @@ function subjectRecord(source, stage, phaseId, integrationSubject = null) {
     base_tree: integrationSubject?.base_tree ?? source.baseTree,
     candidate_tree: source.snapshotTree,
   };
+}
+
+function findingSignature(finding) {
+  return `${finding?.id ?? ""}\u0000${finding?.path ?? ""}\u0000${finding?.line ?? ""}\u0000${String(finding?.issue ?? "").trim().toLocaleLowerCase("en")}`;
+}
+
+/**
+ * Serious means the existing adjudication says the finding is actionable and
+ * the existing severity is major or blocking. Transport failures and
+ * non-actionable advice are deliberately not treated as clean findings.
+ */
+export function actionableSeriousFindings(result) {
+  const findings = Array.isArray(result?.findings)
+    ? result.findings
+    : Array.isArray(result?.adjudication?.clusters) ? result.adjudication.clusters : [];
+  return findings.filter((finding) => finding?.disposition === "actionable" && ["major", "blocking"].includes(finding?.severity));
+}
+
+/**
+ * Return a review-cycle fact without creating a loop controller or persisted
+ * state. Callers may use it to decide whether the current review is advice,
+ * needs human handling, or permits one focused review after real change.
+ */
+export function reviewCycleDecision({ stage, result, previousResult = null, actualRepair = false, subjectChanged = false } = {}) {
+  if (stage !== "build-code") {
+    return Object.freeze({ stage, status: "advice_only", action: "stop", reason: "non_build_code_advice_only", important_findings: [] });
+  }
+  if (!result || result.status === "unavailable" || result.terminal_status === "unavailable") {
+    return Object.freeze({ stage, status: "incomplete", action: "stop", reason: "provider_no_trusted_terminal_result", important_findings: [] });
+  }
+  if (!Array.isArray(result.findings) && !Array.isArray(result?.adjudication?.clusters)) {
+    return Object.freeze({ stage, status: "incomplete", action: "stop", reason: "semantic_review_result_required", important_findings: [] });
+  }
+  const importantFindings = actionableSeriousFindings(result);
+  if (importantFindings.length === 0) {
+    return Object.freeze({ stage, status: "clean_current_review", action: "stop", reason: "no_current_actionable_major_or_blocking_finding", important_findings: [] });
+  }
+  const changed = actualRepair === true || subjectChanged === true;
+  if (!changed) {
+    return Object.freeze({ stage, status: "needs_human", action: "stop", reason: "important_finding_without_actual_repair_or_subject_change", important_findings: importantFindings });
+  }
+  const previousImportant = new Set(actionableSeriousFindings(previousResult).map(findingSignature));
+  const repeated = importantFindings.filter((finding) => previousImportant.has(findingSignature(finding)));
+  if (repeated.length > 0) {
+    return Object.freeze({ stage, status: "needs_human", action: "stop", reason: "same_important_finding_repeated_after_focused_review", important_findings: importantFindings, repeated_findings: repeated });
+  }
+  return Object.freeze({ stage, status: "focused_review_required", action: "review_once", reason: "actual_repair_or_subject_change", important_findings: importantFindings });
 }
 
 function integrationMaterialFacts(integrationSubject) {
@@ -141,11 +192,10 @@ function hashCanonical(value) {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) {
-  if (!policy) return null;
-  const selectedProfiles = [...policy.eligible_profiles];
+function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles = [] }) {
+  const selectedProfiles = policy ? [...policy.eligible_profiles] : [...requestedProfiles];
   return {
-    mode: stage === "build-code" && policy.mode === "full_only" && selectedProfiles.length === 1 ? "single_external" : "parallel_external",
+    mode: stage === "build-code" && policy?.mode === "full_only" && selectedProfiles.length === 1 ? "single_external" : "parallel_external",
     selected_profiles: selectedProfiles,
     selected_count: selectedProfiles.length,
     valid_provider_count: aggregation.valid.length,
@@ -203,7 +253,8 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
     ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: materialId,
     report_ref: refs.reportRef, provider_attempts: [], terminal_status: "unavailable", error: diagnostic,
-    ...(policy ? { review_policy: policy, policy_snapshot_hash: policyFingerprint, coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) } : {}),
+    ...(policy ? { review_policy: policy, policy_snapshot_hash: policyFingerprint } : {}),
+    coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles: policy?.requested_profiles ?? [] }),
   };
   validateSchema("attempt", attempt);
   writeAttempt(task, refs.attemptRef, attempt);
@@ -306,10 +357,14 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     throw new TypeError("reviewPolicy requested_profiles must equal broker reviewer group");
   }
   if (stage === "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
-    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision review forbids naked source/target paths; use CandidateWorkspace");
-    const candidate = assertCandidateWorkspace(candidateWorkspace);
-    sourceRoot = candidate.worktreeRoot;
-    targetRepoRoot = candidate.targetRepoRoot;
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision review forbids naked source/target paths; use the existing Workspace");
+    if (candidateWorkspace !== undefined) {
+      const candidate = assertCandidateWorkspace(candidateWorkspace);
+      sourceRoot = candidate.worktreeRoot;
+      targetRepoRoot = candidate.targetRepoRoot;
+    } else {
+      workspace = assertWorkspace(workspace);
+    }
   } else if (stage !== "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree review forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);
@@ -375,7 +430,8 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     report_ref: refs.reportRef, provider_attempts: providerAttempts,
     terminal_status: aggregation.status === "available" ? "semantic" : "unavailable",
     error: aggregation.status === "available" ? null : (() => { const error = primaryError(reviewed); return { code: error.code, message: `${error.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }; })(),
-    ...(policy ? { review_policy: policy, policy_snapshot_hash: hashCanonical(policy), coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation }) } : {}),
+    ...(policy ? { review_policy: policy, policy_snapshot_hash: hashCanonical(policy) } : {}),
+    coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles: providers }),
   };
   validateSchema("attempt", attempt);
   writeAttempt(taskHandle, refs.attemptRef, attempt);
@@ -408,8 +464,12 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
   const diagnostic = { code: "REVIEW_ROUTE_UNAVAILABLE", message: `workflowhub host wh_review route is unavailable for ${stage}${reviewTrack ? `.${reviewTrack}` : ""}` };
   let source;
   if (stage === "make-decision") {
-    const candidate = assertCandidateWorkspace(candidateWorkspace);
-    source = captureSource({ sourceRoot: candidate.worktreeRoot, targetRepoRoot: candidate.targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false });
+    if (candidateWorkspace !== undefined) {
+      const candidate = assertCandidateWorkspace(candidateWorkspace);
+      source = captureSource({ sourceRoot: candidate.worktreeRoot, targetRepoRoot: candidate.targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false });
+    } else {
+      source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false });
+    }
   } else source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false });
   try {
     return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
@@ -453,10 +513,14 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
   if (stage !== null && result.stage !== stage) throw new Error("RESULT_REF_INVALID: stage does not match result");
   if (reviewTrack !== undefined && result.review_track !== reviewTrack) throw new Error("RESULT_REF_INVALID: review track does not match result");
   if (result.stage === "make-decision") {
-    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision verification forbids naked source/target paths; use CandidateWorkspace");
-    const candidate = assertCandidateWorkspace(candidateWorkspace);
-    sourceRoot = candidate.worktreeRoot;
-    targetRepoRoot = candidate.targetRepoRoot;
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision verification forbids naked source/target paths; use Workspace");
+    if (candidateWorkspace !== undefined) {
+      const candidate = assertCandidateWorkspace(candidateWorkspace);
+      sourceRoot = candidate.worktreeRoot;
+      targetRepoRoot = candidate.targetRepoRoot;
+    } else {
+      workspace = assertWorkspace(workspace);
+    }
   } else if (captureSource === captureSourceDefault) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree verification forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);

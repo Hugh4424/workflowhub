@@ -159,6 +159,182 @@ export function validateInteractionQuestionProgress(value) {
   });
 }
 
+const INTERACTION_LIFECYCLE = Object.freeze(["ask", "wait", "reply", "resume"]);
+const DECISION_LOG_STEP_DISPOSITIONS = new Set([
+  "current",
+  "deferred",
+  "non_goal",
+  "non-goal",
+  "open",
+  "no_new_requirement",
+  "no-new-requirement",
+  "evidence_only",
+  "evidence-only",
+  "historical",
+]);
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function validHash(value) {
+  return HASH.test(value ?? "");
+}
+
+function validInteractionRound(value) {
+  return Number.isSafeInteger(value) && value >= 1;
+}
+
+/**
+ * Validate the host-visible lifecycle used by Talk and Grill.
+ *
+ * The events are an in-memory interaction fact, not a new persisted object.
+ * Both skills must expose a real ask -> wait -> user reply -> resume seam;
+ * the validator deliberately rejects an aggregate that merely claims it
+ * completed.
+ */
+export function validateInteractionLifecycleContract(value) {
+  const errors = [];
+  if (!object(value)) return Object.freeze({ ok: false, errors: Object.freeze(["interaction lifecycle must be an object"]), facts: Object.freeze({}) });
+
+  const interactionType = value.interaction_type ?? value.kind;
+  if (!new Set(["talk", "grill"]).has(interactionType)) errors.push("interaction lifecycle kind must be talk or grill");
+  if (!Array.isArray(value.events) || value.events.length !== INTERACTION_LIFECYCLE.length) {
+    errors.push("interaction lifecycle must contain ask -> wait -> reply -> resume events");
+  }
+  const events = Array.isArray(value.events) ? value.events : [];
+  for (const [index, expected] of INTERACTION_LIFECYCLE.entries()) {
+    if (events[index]?.event !== expected) errors.push(`interaction lifecycle event ${index + 1} must be ${expected}`);
+  }
+
+  const [ask, wait, reply, resume] = events;
+  if (!nonEmptyString(ask?.card_ref) || !validHash(ask?.card_hash) || !validInteractionRound(ask?.round)) {
+    errors.push("ask must bind a card ref, hash, and positive round");
+  }
+  if (wait?.card_ref !== ask?.card_ref || wait?.card_hash !== ask?.card_hash
+      || wait?.round !== ask?.round || wait?.status !== "waiting-for-user") {
+    errors.push("wait must pause on the exact ask card and round until the user replies");
+  }
+  if (reply?.card_ref !== ask?.card_ref || reply?.card_hash !== ask?.card_hash
+      || reply?.round !== ask?.round
+      || reply?.source !== "user" || !nonEmptyString(reply?.reply_ref) || !validHash(reply?.reply_hash)) {
+    errors.push("reply must be a real user reply bound to the ask card and round");
+  }
+  if (resume?.card_ref !== ask?.card_ref || resume?.card_hash !== ask?.card_hash
+      || resume?.round !== ask?.round
+      || resume?.reply_ref !== reply?.reply_ref || resume?.reply_hash !== reply?.reply_hash
+      || resume?.status !== "resumed") {
+    errors.push("resume must bind the exact user reply, ask card, and round");
+  }
+
+  if (interactionType === "talk") {
+    if (!Array.isArray(ask?.questions) || ask.questions.length !== 1) {
+      errors.push("Talk ask must contain exactly one decision axis");
+    }
+    if (!nonEmptyString(reply?.answer) || reply?.re_ranked !== true) {
+      errors.push("Talk reply must contain the user answer and re-rank the remaining questions");
+    }
+  }
+
+  if (interactionType === "grill") {
+    const questions = ask?.questions;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      errors.push("Grill ask must contain at least one frontier question");
+    } else {
+      const frontierIds = questions.map((question) => question?.frontier_id);
+      if (frontierIds.some((id) => !nonEmptyString(id)) || new Set(frontierIds).size !== frontierIds.length) {
+        errors.push("Grill frontier questions must have unique ids");
+      }
+      if (questions.some((question) => question?.independent !== true || question?.review === true)) {
+        errors.push("Grill may batch only independent frontier questions, never review work");
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "review_fact") || value.produces_review_fact === true
+        || Object.prototype.hasOwnProperty.call(reply ?? {}, "review_fact")) {
+      errors.push("Grill must not produce a review fact");
+    }
+    if (!Array.isArray(reply?.answers) || reply.answers.length === 0 || reply?.re_ranked !== true
+        || !Array.isArray(reply?.remaining_frontier_ids)) {
+      errors.push("Grill reply must preserve the reply, partial answers, and re-rank remaining frontiers");
+    }
+  }
+
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({
+      interaction_type: interactionType,
+      lifecycle: Object.freeze([...INTERACTION_LIFECYCLE]),
+      card_ref: ask?.card_ref ?? null,
+      round: ask?.round ?? null,
+      user_reply_ref: reply?.reply_ref ?? null,
+    }),
+  });
+}
+
+/**
+ * Validate one or more append-only updates made by the existing decision-log
+ * writer when a make-decision step completes. This is a contract over facts;
+ * it does not create a writer, ledger, status machine, or additional material.
+ */
+export function validateDecisionLogStepUpdateContract(value) {
+  const errors = [];
+  const updates = Array.isArray(value) ? value : value?.updates ?? (object(value) ? [value] : []);
+  if (updates.length === 0) return Object.freeze({ ok: false, errors: Object.freeze(["decision-log step updates are required"]), facts: Object.freeze({}) });
+
+  const seenSteps = new Set();
+  let ref = null;
+  let hash = null;
+  for (const update of updates) {
+    const stepId = update?.step_id;
+    if (update?.stage !== "make-decision") errors.push("decision-log step update stage must be make-decision");
+    if (!Number.isInteger(stepId) || stepId < 1 || stepId > 12) errors.push("decision-log step update step_id must be 1..12");
+    if (seenSteps.has(stepId)) errors.push(`decision-log step ${stepId} was updated more than once in one batch`);
+    seenSteps.add(stepId);
+    if (!nonEmptyString(update?.decision_log_ref) || !validHash(update?.decision_log_hash)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must bind decision-log ref/hash`);
+    }
+    if (ref === null) ref = update?.decision_log_ref;
+    if (hash === null) hash = update?.decision_log_hash;
+    if (update?.decision_log_ref !== ref || update?.decision_log_hash !== hash) {
+      errors.push("all make-decision step updates must bind the same decision-log ref/hash");
+    }
+    if (update?.writer?.owner !== "make-decision" || update?.writer?.artifact !== "decision-log.md"
+        || update?.writer?.mode !== "append-only") {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must use the existing make-decision append-only writer`);
+    }
+    if (!DECISION_LOG_STEP_DISPOSITIONS.has(update?.coverage_disposition)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} must record a requirement disposition`);
+    }
+    if (!nonEmptyString(update?.outcome)) errors.push(`decision-log step ${stepId ?? "unknown"} outcome is required`);
+    if (!new Set(["written", "incomplete"]).has(update?.write_status)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} write_status must be written or incomplete`);
+    }
+    if (update?.write_status === "incomplete" && !nonEmptyString(update?.write_error)) {
+      errors.push(`decision-log step ${stepId ?? "unknown"} incomplete write must preserve the error`);
+    }
+  }
+
+  const sortedSteps = [...seenSteps].sort((left, right) => left - right);
+  if (updates.length > 1 && sortedSteps.some((step, index) => step !== sortedSteps[0] + index)) {
+    errors.push("a multi-step decision-log update batch must cover contiguous steps");
+  }
+  const incomplete = updates.some((update) => update?.write_status === "incomplete");
+  return Object.freeze({
+    ok: errors.length === 0 && !incomplete,
+    errors: Object.freeze(incomplete && errors.length === 0
+      ? ["decision-log write is incomplete; preserve the failure and do not claim step completion"]
+      : errors),
+    facts: Object.freeze({
+      stage: "make-decision",
+      step_ids: Object.freeze(sortedSteps),
+      decision_log_ref: ref,
+      decision_log_hash: hash,
+      write_status: incomplete ? "incomplete" : "written",
+    }),
+  });
+}
+
 export function validateDecisionEntry(value) {
   return result(validateEntrySchema(value) ? [] : schemaErrors(validateEntrySchema));
 }
@@ -995,6 +1171,18 @@ const SPEC_ANALYZE_DECISION_ID = /\bD-[0-9]{3}\b/g;
 const SPEC_ANALYZE_FR_ID = /\bFR-[A-Z0-9]+(?:-[0-9]{3})?\b/g;
 const SPEC_ANALYZE_AC_ID = /\bAC(?:-[A-Z0-9]+(?:-[0-9]{2,3})?|[0-9]+)\b/g;
 const SPEC_ANALYZE_TASK_ID = /\bT[0-9]{3}\b/g;
+const SPEC_ANALYZE_DEFERRED_OPEN_ID = /\b(?:DEFER|OPEN)-[0-9]{3}\b/g;
+const SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT = /^(?:DEFER|OPEN)-[0-9]{3}$/;
+
+const SPEC_ANALYZE_DEFERRED_FIELDS = Object.freeze({
+  // The current four-material handoff index uses its phase/task routing
+  // columns as the explicit owner/trigger carrier. These aliases are only
+  // accepted inside the item-specific row/block above, never document-wide.
+  owner: Object.freeze([/\bowner\b/i, /负责人|责任人|处理阶段|owner\/阶段|任务\/阶段|处理 Stage|plan\/tasks 去向/i]),
+  trigger: Object.freeze([/\btrigger\b|\bwhen\b/i, /触发|条件|前置|依赖|进入阶段|进入 build-|spec 承接|plan\/tasks 去向|owner\/阶段|任务\/阶段/i]),
+  handoff: Object.freeze([/\bhandoff\b|\bconsumer\b/i, /交接|去向|plan\/tasks|下游|消费者|输出|下一步|paired_task/i]),
+  close_condition: Object.freeze([/\bclose(?: condition)?\b|\bacceptance\b/i, /关闭|验收|结果边界|完成条件|通过条件|失败条件|保留边界|验证|oracle|STOP|Done/i]),
+});
 
 function analyzeIds(value, pattern) {
   return [...new Set(String(value ?? "").match(pattern) ?? [])];
@@ -1013,6 +1201,194 @@ function containsAnalyzedId(value, id) {
     const low = Math.min(Number(start), Number(end));
     const high = Math.max(Number(start), Number(end));
     return target >= low && target <= high;
+  });
+}
+
+function normalizeAnalyzeTrackedItems(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      if (typeof entry === "string") return { id: entry };
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      return { ...entry, id: entry.id ?? entry.item_id };
+    }).filter((entry) => typeof entry?.id === "string" && SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(entry.id));
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.entries(value).map(([id, entry]) => ({
+      ...(entry && typeof entry === "object" && !Array.isArray(entry) ? entry : {}),
+      id: entry && typeof entry === "object" && !Array.isArray(entry) ? (entry.id ?? id) : id,
+    })).filter((entry) => typeof entry.id === "string" && SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(entry.id));
+  }
+  return [];
+}
+
+function analyzeTrackedDeferredOpenItems({ decisionText, specText, planText, tasksText, raw, deferredItems, openItems }) {
+  const byId = new Map();
+  const add = (entry) => {
+    const id = entry?.id;
+    if (typeof id !== "string" || !SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT.test(id)) return;
+    byId.set(id, Object.freeze({ ...(byId.get(id) ?? {}), ...entry, id }));
+  };
+  for (const entry of [
+    ...normalizeAnalyzeTrackedItems(deferredItems),
+    ...normalizeAnalyzeTrackedItems(openItems),
+    ...normalizeAnalyzeTrackedItems(raw?.deferred_items),
+    ...normalizeAnalyzeTrackedItems(raw?.open_items),
+  ]) add(entry);
+  for (const document of [decisionText, specText, planText, tasksText]) {
+    for (const id of analyzeIds(document, SPEC_ANALYZE_DEFERRED_OPEN_ID)) add({ id });
+  }
+  return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function isAnalyzeMarkdownTableLine(line) {
+  return /^\s*\|.*\|\s*$/.test(String(line ?? ""));
+}
+
+function isAnalyzeMarkdownHeading(line) {
+  return /^\s*#{1,6}\s+/.test(String(line ?? ""));
+}
+
+function containsOtherDeferredOpenId(line, id) {
+  return analyzeIds(line, SPEC_ANALYZE_DEFERRED_OPEN_ID).some((candidate) => candidate !== id);
+}
+
+function analyzeMarkdownTableCells(line) {
+  const value = String(line ?? "").trim();
+  if (!value.startsWith("|")) return [];
+  return value
+    .replace(/^\|/, "")
+    .replace(/\|\s*$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function analyzeTableRowContext(headerLine, rowLine) {
+  const headers = analyzeMarkdownTableCells(headerLine);
+  const cells = analyzeMarkdownTableCells(rowLine);
+  return headers.map((header, index) => {
+    const cell = cells[index] ?? "";
+    return cell === "" ? "" : `- **${header}**: ${cell}`;
+  }).filter(Boolean).join("\n");
+}
+
+function analyzeReferenceBlock(documentLines, index, kind) {
+  const marker = kind === "source"
+    ? /^#{3,4}\s+/
+    : /^(?:\s*-\s+\*\*(?:RISK|PLAN-RISK|F-|风险)|#{1,6}\s+)/i;
+  let start = index;
+  while (start > 0 && !marker.test(documentLines[start - 1])) start -= 1;
+  let end = index + 1;
+  while (end < documentLines.length && !marker.test(documentLines[end])) end += 1;
+  return documentLines.slice(start, end).join("\n");
+}
+
+function analyzeDocumentContexts(document, id) {
+  const lines = String(document ?? "").split(/\r?\n/);
+  const contexts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!containsAnalyzedId(line, id)) continue;
+
+    // A table row gets its own header and row only. This makes a grouped
+    // handoff row usable for the IDs named in that row, without allowing a
+    // different row elsewhere in the document to lend it fields.
+    if (isAnalyzeMarkdownTableLine(line)) {
+      let tableStart = index;
+      while (tableStart > 0 && isAnalyzeMarkdownTableLine(lines[tableStart - 1])) tableStart -= 1;
+      let tableEnd = index;
+      while (tableEnd + 1 < lines.length && isAnalyzeMarkdownTableLine(lines[tableEnd + 1])) tableEnd += 1;
+      const separator = lines.slice(tableStart, tableEnd + 1)
+        .findIndex((candidate) => /^\s*\|\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(candidate));
+      const header = separator > 0 ? tableStart + separator - 1 : tableStart;
+      const normalized = separator > 0 ? analyzeTableRowContext(lines[header], line) : "";
+      contexts.push(normalized || lines.slice(header, index + 1).join("\n"));
+      continue;
+    }
+
+    // A source/affected-ID reference is only evidence that the item is
+    // mentioned. It is not a handoff contract and must not absorb fields from
+    // the rest of its task/risk section.
+    if (/(?:source_refs|decision_refs)/i.test(line)) {
+      contexts.push(analyzeReferenceBlock(lines, index, "source"));
+      continue;
+    }
+    if (/(?:受影响 ID|affected IDs)/i.test(line)) {
+      contexts.push(analyzeReferenceBlock(lines, index, "affected"));
+      continue;
+    }
+
+    // For prose bullets, keep the contiguous item block. A blank line,
+    // heading, or the next DEFER/OPEN item is a hard boundary. This covers
+    // an item's owner/trigger/handoff/close lines while preventing a sibling
+    // item's fields from satisfying it.
+    let end = index + 1;
+    while (end < lines.length
+      && !/^\s*$/.test(lines[end])
+      && !isAnalyzeMarkdownHeading(lines[end])
+      && !isAnalyzeMarkdownTableLine(lines[end])
+      && !containsOtherDeferredOpenId(lines[end], id)) {
+      end += 1;
+    }
+    contexts.push(lines.slice(index, end).join("\n"));
+  }
+  return [...new Set(contexts)];
+}
+
+function analyzeDocumentHasField(document, id, patterns) {
+  return analyzeDocumentContexts(document, id)
+    .some((context) => patterns.some((pattern) => pattern.test(context)));
+}
+
+function analyzeDeferredOpenHandoff({ decisionText, specText, planText, tasksText, raw, deferredItems, openItems, findings, errors }) {
+  const items = analyzeTrackedDeferredOpenItems({
+    decisionText,
+    specText,
+    planText,
+    tasksText,
+    raw,
+    deferredItems,
+    openItems,
+  });
+  const documents = [
+    ...(decisionText.trim() ? [{ name: "decision-log", text: decisionText }] : []),
+    { name: "spec", text: specText },
+    { name: "plan", text: planText },
+    { name: "tasks", text: tasksText },
+  ];
+  const downstreamDocuments = documents.filter(({ name }) => name !== "decision-log");
+  const missingByItem = new Map();
+  for (const item of items) {
+    const missing = [];
+    if (decisionText.trim() && !decisionText.includes(item.id)) missing.push("id missing in decision-log");
+    for (const { name, text } of downstreamDocuments) {
+      if (!String(text ?? "").includes(item.id)) missing.push(`id missing in ${name}`);
+    }
+    for (const [field, patterns] of Object.entries(SPEC_ANALYZE_DEFERRED_FIELDS)) {
+      const absentFrom = downstreamDocuments.filter(({ text }) => !analyzeDocumentHasField(text, item.id, patterns)).map(({ name }) => name);
+      if (absentFrom.length > 0) missing.push(`${field} missing in ${absentFrom.join(",")}`);
+    }
+    if (missing.length > 0) {
+      missingByItem.set(item.id, Object.freeze([...missing]));
+      const targetArtifact = missing[0].split(" missing in ")[1] ?? "planning_artifacts";
+      const finding = analyzeFinding({
+        type: "deferred_open_handoff_gap",
+        sourceArtifact: "decision-log",
+        targetArtifact,
+        id: item.id,
+        anchor: `${item.id}:${missing.join(";")}`,
+        impact: "延期/未决事项可能在下游材料中静默丢失，后续阶段会自行猜测",
+        correction: `补齐 ${item.id} 的 owner、触发、去向和关闭条件，并传播到 spec、plan、tasks；不能由 build-code 猜测`,
+      });
+      findings.push(Object.freeze({ ...finding, id: item.id }));
+      errors.push(`${item.id} deferred/open handoff gap: ${missing.join("; ")}`);
+    }
+  }
+  return Object.freeze({
+    ids: Object.freeze(items.map(({ id }) => id)),
+    coverage: Object.freeze({
+      checked: items.length,
+      missing: Object.freeze([...missingByItem.keys()]),
+    }),
   });
 }
 
@@ -1248,6 +1624,8 @@ export function validateSpecAnalyzeCompleteness({
   spec,
   plan,
   tasks,
+  deferredItems,
+  openItems,
 } = {}) {
   const source = planningArtifacts && object(planningArtifacts) ? planningArtifacts : {};
   const raw = rawRequirementIndex ?? source.raw_requirement_index;
@@ -1397,6 +1775,18 @@ export function validateSpecAnalyzeCompleteness({
     errors,
   });
 
+  const deferredOpen = analyzeDeferredOpenHandoff({
+    decisionText,
+    specText,
+    planText,
+    tasksText,
+    raw,
+    deferredItems: deferredItems ?? source.deferred_items,
+    openItems: openItems ?? source.open_items,
+    findings,
+    errors,
+  });
+
   const aggregateStart = String(tasksText).search(/^##\s+(?:4\.\s+)?Final current-snapshot aggregate strategy\b/im);
   if (aggregateStart < 0) {
     addAnalyzeFinding(findings, errors, analyzeFinding({
@@ -1432,6 +1822,8 @@ export function validateSpecAnalyzeCompleteness({
       spec_ac_ids: Object.freeze(specAcs),
       task_ids: Object.freeze(taskIds),
       plan_task_ids: Object.freeze(planTaskIds),
+      deferred_open_ids: deferredOpen.ids,
+      deferred_open_coverage: deferredOpen.coverage,
       strategy: Object.freeze({
         task_count: taskRows.length,
         final_aggregate_present: aggregateStart >= 0,
