@@ -56,11 +56,11 @@ function renderPlanTemplate() {
     )
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
     .replace(/### Verify\n\n__TEMPLATE_FILL__/, "### Verify\n\nORACLE-FINAL — npx vitest run tests/demo.test.mjs")
+    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
     .replaceAll(templateFiller, "verified contract fact");
   return plan
     .replace("### NEW\n\n- `verified contract fact`\n\n### MODIFY\n\n- `verified contract fact`\n\n### DO NOT TOUCH\n\n- `verified contract fact`", globalFiles)
-    .replace("- **NEW**：`verified contract fact`\n- **MODIFY**：`verified contract fact`\n- **DO NOT TOUCH**：`verified contract fact`", phaseFiles)
-    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`");
+    .replace("- **NEW**：`verified contract fact`\n- **MODIFY**：`verified contract fact`\n- **DO NOT TOUCH**：`verified contract fact`", phaseFiles);
 }
 
 const taskShapes = {
@@ -167,13 +167,16 @@ describe("filled v3 planning sample", () => {
     expect(tasks.split("## Phase P1")[1].split("### Tasks")[0].trim()).toBe(
       plan.split("## Phase P1")[1].split("### Tasks")[0].trim(),
     );
+    expect(plan).toMatch(/### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`/);
   });
 
   it("keeps the final route identical between T003 and the aggregate", () => {
     const finalCard = tasks.split("#### T003")[1].split("## 4.")[0];
     const aggregate = tasks.split("## 4. Final current-snapshot aggregate strategy")[1];
     const value = (text, label) => text.match(new RegExp(`\\*\\*${label}\\*\\*[:：]\\s*` + "`([^`]+)`"))?.[1];
+    const plainValue = (text, label) => text.match(new RegExp(`\\*\\*${label}\\*\\*[:：]\\s*([^\\n]+)`))?.[1]?.trim();
     expect(value(finalCard, "gate_cmd")).toBe(value(aggregate, "command"));
+    expect(plainValue(finalCard, "oracle")).toBe(plainValue(aggregate, "oracle"));
     expect(aggregate).toMatch(/\*\*oracle\*\*：ORACLE-FINAL/);
   });
 

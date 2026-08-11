@@ -75,7 +75,7 @@ describe("Phase quality and handoff contract", () => {
   it("preserves the four-material and task-card boundary", () => {
     const tasks = read("skills/spec-tasks/SKILL.md");
     const template = read("skills/spec-tasks/templates/tasks-template.md");
-    expect(tasks).toMatch(/current v3[\s\S]*structural fields/);
+    expect(tasks).toMatch(/current v3[\s\S]*design contract fields/);
     expect(tasks).toMatch(/Do not add workflow summaries,[\s\S]*second\s+completion ledger/);
     expect(template).toMatch(/paired_task/);
     expect(template).toMatch(/gate_cmd/);

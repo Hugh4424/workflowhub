@@ -153,7 +153,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: fb7e5f2050c59fc4abbbc4af284750826a9e80b03cff3aa8bf6e53657dd640c5
+    local_bundle_hash: 1353493d1456088113b94ed0695c525f91ad8e3b46c374420cda3e4f34707096
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务

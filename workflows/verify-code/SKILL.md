@@ -25,8 +25,10 @@ Talk、Clarify、必要调研、Grill 和 `decision-log.md` 只属于 make-decis
 结论，不要求用户重讲过程，也不要求过程索引。发现原始方向真的变化时，保持同一 task，
 交给 make-decision 更新决定；发现四份材料本身的问题时，记录具体缺口并交回对应的
 authoring stage（`spec.md` → build-spec；`plan.md`/`tasks.md` → build-plan），不在 verify-code
-中改写材料。实现、task facts、quality facts 和验证发现仍在同一 task 修复，不新建
-successor、recovery、rebind 或 continuation task。
+中改写材料。当前 `tasks.md` 任务卡既有 `执行状态填写区` 除外：verify-code
+只能在其中追加实际产生的、带标签的人类对齐或验收事实，不新增字段、不改变
+status 或其他完成事实。这是 task-fact 记录，不是材料重新编写。实现、task facts、quality
+facts 和验证发现仍在同一 task 修复，不新建 successor、recovery、rebind 或 continuation task。
 
 ## 验收范围
 

@@ -18,13 +18,19 @@ or evidence store.
 ## Card contract
 
 Each task has one stable heading and one card containing the current v3
-structural fields in this order: `ID`, `Phase`, `goal`, `design_state`,
+design contract fields in this order: `ID`, `Phase`, `goal`, `design_state`,
 `versioned_refs`, `source_refs / decision_refs`, `输入`, `依赖`, `并行`, `FR`, `AC`, `动作`, `精确文件`,
 `boundary`, `输出`, `Knowledge`, `verification_role`, `paired_task`,
 `gate_cmd`, `expected_exit`, `oracle`, `evidence_path`, `STOP`, `recovery`,
 and `task risk`. Every card also requires its test-design fields: `test tier /
-test method`, scenarios, fixtures, and coverage limits. These are facts for
-execution, not another authority.
+test method`, scenarios, fixtures, and coverage limits. These design fields are
+authored by build-plan and are not a second authority.
+
+The card also contains one execution fact recording area below the design
+fields: `status`, actual changed files, commands and exits, evidence refs,
+covered ACs, review fact, completion time, and `执行事实`. These fields record
+what the executor actually did; they are not planning fields, runtime state, or
+another completion ledger.
 
 The card ends with one `执行状态填写区（唯一完成权威）` containing `status`,
 actual changed files, commands and exits, evidence refs, covered ACs, review

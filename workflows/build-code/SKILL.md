@@ -32,10 +32,13 @@ repair.
 the decision process. If implementation exposes a direction-changing gap, keep
 the same task and return that decision to `make-decision`. Build-code does not
 author or rewrite the four current materials: a correction to `spec.md` belongs
-to `build-spec`, while a correction to `plan.md` or `tasks.md` belongs to
-`build-plan`. Record the concrete material gap and continue safe code, task-fact,
-or quality-fact repair in the same task; do not silently change the material
-owner or invent a new task.
+to `build-spec`, while a correction to the authored parts of `plan.md` or
+`tasks.md` belongs to `build-plan`. The existing task card's
+`执行状态填写区` is the one same-task exception: the executor may update its
+`status` and append facts actually produced by the executor. This is task-fact
+recording, not a second material authoring path. Record the concrete material
+gap and continue safe code, task-fact, or quality-fact repair in the same task;
+do not silently change the material owner or invent a new task.
 
 ## Portable dependencies
 
