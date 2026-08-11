@@ -30,8 +30,15 @@ repair.
 `make-decision` exclusively owns Talk, Clarify, necessary research, Grill, and
 `decision-log.md`. Build-code does not replay them or ask the user to reconstruct
 the decision process. If implementation exposes a direction-changing gap, keep
-the same task and return that decision to `make-decision`. Corrections that stay
-inside the confirmed direction may update `spec.md`, `plan.md`, and `tasks.md`.
+the same task and return that decision to `make-decision`. Build-code does not
+author or rewrite the four current materials: a correction to `spec.md` belongs
+to `build-spec`, while a correction to the authored parts of `plan.md` or
+`tasks.md` belongs to `build-plan`. The existing task card's
+`执行状态填写区` is the one same-task exception: the executor may update its
+`status` and append facts actually produced by the executor. This is task-fact
+recording, not a second material authoring path. Record the concrete material
+gap and continue safe code, task-fact, or quality-fact repair in the same task;
+do not silently change the material owner or invent a new task.
 
 ## Portable dependencies
 
@@ -46,7 +53,7 @@ or auxiliary progress gate.
   advisor is stateless and never executes tests or grants permission.
 - Use exactly one applicable concrete testing skill directly:
   `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
-- Use the declared independent findings capability once. Follow the portable
+- Use the review dependency declared in `skill-deps.yaml` once. Follow the portable
   dependency and its declared adapter contract; do not add a second review
   path or require a particular provider CLI in this skill.
 
@@ -79,7 +86,7 @@ quality or completion claim; it does not prohibit code or material repair.
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
-5. Use the declared independent findings-review capability directly for one
+5. Use the review dependency declared in `skill-deps.yaml` directly for one
    review of the completed Phase. Preserve the actual findings,
    transport status, and provenance;
    `unavailable` remains an unavailable fact. Do not re-review an unchanged change

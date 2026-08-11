@@ -122,7 +122,7 @@ describe("spec and plan content artifact closure", () => {
     expect(planSkill).toMatch(/F10/);
     expect(tasksSkill).toMatch(/status|状态/);
     expect(tasksSkill).toMatch(/not.*permission|不.*授权|不.*许可证/i);
-    const forbidden = /TaskKernel|ArtifactDir|StageContext|CandidateWorkspace|user_handoff|WorkflowHub Stage Progress|process index|comment projection|snapshot lineage|host bridge|review lock|retry_contract|successor|predecessor|selector/i;
+    const forbidden = /TaskKernel|ArtifactDir|StageContext|CandidateWorkspace|user_handoff|WorkflowHub Stage Progress|process index|comment projection|snapshot lineage|host bridge|review lock|retry_contract|successor|predecessor|selector|\breceipts?\b|\binvocation\b/i;
     for (const text of [planSkill, planTemplate, tasksSkill, tasksTemplate]) {
       expect(text).not.toMatch(forbidden);
     }
@@ -171,6 +171,7 @@ describe("spec and plan content artifact closure", () => {
     expect(planPhaseFiles).toMatch(/\*\*NEW\*\*：`[^`]+`/);
     expect(planPhaseFiles).toMatch(/\*\*MODIFY\*\*：`[^`]+`/);
     expect(tasksTemplate).toMatch(/## 4\. Final current-snapshot aggregate strategy/);
+    expect(tasksTemplate).toMatch(/- \*\*tier \/ method\*\*：\[填写：最终 tier 与具体 testing skill\]/);
     expect(tasksTemplate).toMatch(/\*\*command\*\*: `\[填写：可执行最终命令\]`/);
     expect(tasksSkill).toMatch(/checkbox[\s\S]{0,120}status[\s\S]{0,120}agree/i);
     expect(tasksTemplate).not.toMatch(/## Appendix A\. Legacy import/);

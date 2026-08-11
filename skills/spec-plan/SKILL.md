@@ -68,6 +68,13 @@ Wildcards and directory-wide ownership are not valid. Every phase file list is
 an exact subset of the global boundary. Every task file list is an exact subset
 of its phase boundary.
 
+For a small single-behavior change, use the minimum profile: one Phase, one
+RED/GREEN pair, and one FINAL aggregate card. Keep the structural headings and
+fields, but write `N/A — reason` for genuinely inapplicable product or
+integration sections. Do not manufacture extra phases, cards, dependencies,
+or architecture just to fill space. Use the full profile only when the real
+flow, integration, or risk requires it.
+
 Record alternatives and trade-offs, including why the selected solution is
 simple enough, what complexity it adds, what it deliberately does not solve,
 and how it can be rolled back. Do not create another storage or progress

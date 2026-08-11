@@ -138,7 +138,7 @@ describe("canonical step manifest", () => {
         expect.objectContaining({ kind: "portable_skill_package", uri_or_path: `workflows/${stage}/SKILL.md` }),
         expect.objectContaining({ kind: "portable_skill_dependencies", uri_or_path: `workflows/${stage}/skill-deps.yaml` }),
       ]));
-      expect(item.steps.at(-1).observable_result).toMatch(/plain-language handoff|大白话交接/i);
+      expect(item.steps.at(-1).observable_result).toMatch(/plain-language handoff|大白话交接|验收通知/i);
 
       for (const stepItem of item.steps) {
         for (const evidence of [...stepItem.entry_conditions, ...stepItem.completion_evidence]) {

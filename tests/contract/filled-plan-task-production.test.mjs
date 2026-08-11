@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  validateTasksOnlyCompletionSeam,
   validateExecutablePlanTaskMinimum,
   validatePlanTaskContract,
   validateSpecAnalyzeCompleteness,
@@ -10,6 +12,7 @@ import {
 
 const root = process.cwd();
 const read = (file) => readFileSync(join(root, file), "utf8");
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const templateFiller = "__TEMPLATE_FILL__";
 
 const replaceLine = (text, label, value) => text.replace(
@@ -42,7 +45,6 @@ function renderPlanTemplate() {
   let plan = fillPlaceholders(read("skills/spec-plan/templates/plan-template.md"));
   plan = plan
     .replace(/^- \*\*Non-goals\*\*[:：].*$/m, "- **Non-goals**：不改无关运行时。来源：R-001 / D-001")
-    .replace(/## File Boundary[\s\S]*?(?=## Technical Decisions)/, `## File Boundary\n\n${globalFiles}\n\n`)
     .replace(/- \*\*Constitution binding\*\*[:：].*$/m, `- **Constitution binding**：${constitutionBinding}`)
     .replace(/## Implementation Order\n\n__TEMPLATE_FILL__/, "## Implementation Order\n\nP1：T001 RED → T002 GREEN → T003 FINAL。")
     .replace(/- \*\*Dependencies\*\*[:：].*$/m, "- **Dependencies**：T001 → T002 → T003。")
@@ -53,11 +55,12 @@ function renderPlanTemplate() {
       "| R-001 / D-001 | FR-DEMO-001 | AC1 | P1/T001,T002,T003 | none | `tests/demo.test.mjs` | `npx vitest run tests/demo.test.mjs` / ORACLE-FINAL |",
     )
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
-    .replace(/### Files[\s\S]*?(?=### Tasks)/, `### Files\n\n${phaseFiles}\n\n`)
-    .replace(/### Tasks\n\n- `__TEMPLATE_FILL__`/, "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
     .replace(/### Verify\n\n__TEMPLATE_FILL__/, "### Verify\n\nORACLE-FINAL — npx vitest run tests/demo.test.mjs")
+    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`")
     .replaceAll(templateFiller, "verified contract fact");
-  return plan;
+  return plan
+    .replace("### NEW\n\n- `verified contract fact`\n\n### MODIFY\n\n- `verified contract fact`\n\n### DO NOT TOUCH\n\n- `verified contract fact`", globalFiles)
+    .replace("- **NEW**：`verified contract fact`\n- **MODIFY**：`verified contract fact`\n- **DO NOT TOUCH**：`verified contract fact`", phaseFiles);
 }
 
 const taskShapes = {
@@ -76,8 +79,8 @@ function renderTasksTemplate() {
   let tasks = fillPlaceholders(read("skills/spec-tasks/templates/tasks-template.md"));
   tasks = tasks
     .replace(/## Phase P1 — __TEMPLATE_FILL__/g, "## Phase P1 — Contract")
-    .replace(/### Files[\s\S]*?(?=### Tasks)/, `### Files\n\n${phaseFiles}\n\n`)
-    .replace(/### Tasks\n\n- `__TEMPLATE_FILL__`/, "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`");
+    .replace("- **NEW**：`__TEMPLATE_FILL__`\n- **MODIFY**：`__TEMPLATE_FILL__`\n- **DO NOT TOUCH**：`__TEMPLATE_FILL__`", phaseFiles)
+    .replace("### Tasks\n\n- `__TEMPLATE_FILL__`", "### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`");
 
   for (const [id, shape] of Object.entries(taskShapes)) {
     const cardPattern = new RegExp(`(#### ${id} \\—[\\s\\S]*?)(?=\\n#### T\\d+ \\—|\\n## 4\\.)`);
@@ -111,12 +114,8 @@ function renderTasksTemplate() {
     .replace(/\*\*command\*\*[:：]\s*`__TEMPLATE_FILL__`/, "**command**: `npm test`")
     .replace(/\*\*expected exit\*\*[:：]\s*__TEMPLATE_FILL__/, "**expected exit**：0")
     .replace(/\*\*oracle\*\*[:：]\s*__TEMPLATE_FILL__/, "**oracle**：ORACLE-FINAL — 当前 AC 的同一事实判定")
+    .replace(/\*\*tier \/ method\*\*[:：]\s*__TEMPLATE_FILL__/, "**tier / method**：fullstack / fullstack-slice-testing")
     .replace(/\*\*execution_contract\*\*[:：]\s*__TEMPLATE_FILL__/, "**execution_contract**：当前快照运行一次；失败保留原始输出，回受影响 task，不用全量重跑掩盖局部失败。")
-    .replace(/T001 \(RED\) __TEMPLATE_FILL__ → T002 \(GREEN\) __TEMPLATE_FILL__ → T003 \(FINAL\) __TEMPLATE_FILL__/, "T001 (RED) → T002 (GREEN) → T003 (FINAL)")
-    .replace(
-      /## Dependency Graph[\s\S]*?(?=## Final Boundary Check)/,
-      "## Dependency Graph\n\n- **order**：T001 → T002 → T003\n\n",
-    )
     .replaceAll(templateFiller, "verified contract fact");
 }
 
@@ -136,6 +135,21 @@ const rawRequirementIndex = {
   entries: [{ id: "R-001", decision_ids: ["D-001"], summary: "source-bound demo decision" }],
 };
 
+const updateTaskCard = (markdown, taskId, update) => markdown.replace(
+  new RegExp(`(#### ${taskId} \\—[\\s\\S]*?)(?=\\n#### T\\d+ \\—|\\n## 4\\.)`),
+  (card) => update(card),
+);
+
+const completeTaskCard = (markdown, taskId, evidenceHash = "a".repeat(64)) => updateTaskCard(markdown, taskId, (card) => card
+  .replace("- [ ] **任务完成**", "- [x] **任务完成**")
+  .replace("- **status**：`pending`", "- **status**：`completed`")
+  .replace("- **actual_changes**：N/A — not started", "- **actual_changes**：tests/demo.test.mjs")
+  .replace("- **executed_commands**：N/A — not started", "- **executed_commands**：npm test; exit 0")
+  .replace("- **evidence_refs**：N/A — not started", "- **evidence_refs**：`[{\"ref\":\"quality/tests/T003.json\",\"sha256\":\"" + evidenceHash + "\"}]`")
+  .replace("- **covered_ac**：N/A — not started", "- **covered_ac**：AC1")
+  .replace("- **review_fact**：N/A — final aggregate not executed", "- **review_fact**：reviews/results/phase-1.json")
+  .replace("- **completed_at**：N/A — not completed", "- **completed_at**：2026-08-11T12:00:00.000Z"));
+
 describe("filled v3 planning sample", () => {
   it("renders the restored templates and passes production validators", () => {
     const analysis = validateSpecAnalyzeCompleteness({ rawRequirementIndex, decisionLog: "R-001 D-001", spec, plan, tasks });
@@ -153,13 +167,16 @@ describe("filled v3 planning sample", () => {
     expect(tasks.split("## Phase P1")[1].split("### Tasks")[0].trim()).toBe(
       plan.split("## Phase P1")[1].split("### Tasks")[0].trim(),
     );
+    expect(plan).toMatch(/### Tasks\n\n- `T001 RED`\n- `T002 GREEN`\n- `T003 FINAL`/);
   });
 
   it("keeps the final route identical between T003 and the aggregate", () => {
     const finalCard = tasks.split("#### T003")[1].split("## 4.")[0];
     const aggregate = tasks.split("## 4. Final current-snapshot aggregate strategy")[1];
     const value = (text, label) => text.match(new RegExp(`\\*\\*${label}\\*\\*[:：]\\s*` + "`([^`]+)`"))?.[1];
+    const plainValue = (text, label) => text.match(new RegExp(`\\*\\*${label}\\*\\*[:：]\\s*([^\\n]+)`))?.[1]?.trim();
     expect(value(finalCard, "gate_cmd")).toBe(value(aggregate, "command"));
+    expect(plainValue(finalCard, "oracle")).toBe(plainValue(aggregate, "oracle"));
     expect(aggregate).toMatch(/\*\*oracle\*\*：ORACLE-FINAL/);
   });
 
@@ -174,5 +191,28 @@ describe("filled v3 planning sample", () => {
     const executable = validateExecutablePlanTaskMinimum({ spec, plan: weakPlan, tasks: weakTasks });
     expect(executable.ok).toBe(false);
     expect(executable.errors.join("; ")).toMatch(/gate_cmd|task|coverage/i);
+  });
+
+  it("allows human alignment to append only to the completed FINAL execution fact", () => {
+    const evidenceRaw = "final aggregate evidence\n";
+    const completed = completeTaskCard(tasks, "T003", sha256(evidenceRaw));
+    const aligned = updateTaskCard(completed, "T003", (card) => card.replace(
+      "- **执行事实**：N/A — not started",
+      "- **执行事实**：N/A — not started；human-alignment: user confirmed the handoff was understood.",
+    ));
+    const completionEvidence = ({ ref }) => ref === "quality/tests/T003.json" ? evidenceRaw : undefined;
+    expect(validateTasksOnlyCompletionSeam({
+      before: completed,
+      after: aligned,
+      taskId: "T003",
+      completionEvidence,
+    })).toMatchObject({ ok: true, changed_task_ids: ["T003"], requires_repeat_review: false });
+
+    expect(validateTasksOnlyCompletionSeam({
+      before: completed,
+      after: aligned.replace("- **status**：`completed`", "- **status**：`in_progress`"),
+      taskId: "T003",
+      completionEvidence,
+    })).toMatchObject({ ok: false });
   });
 });

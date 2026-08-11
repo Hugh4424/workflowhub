@@ -43,17 +43,19 @@ function complete() {
 }
 
 describe("spec-analyze completeness contract", () => {
-  it("has no runtime caller that turns findings into a publication gate", () => {
+  it("has a report-only planning consumer and no runtime publication gate", () => {
     const runtimeCallerFiles = [
       new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url),
       new URL("../../runtime/stage/stage-runner.mjs", import.meta.url),
     ];
     const callers = runtimeCallerFiles.map((file) => readFileSync(file, "utf8")).join("\n");
     expect(callers).not.toMatch(/validateSpecAnalyzeCompleteness/);
+    const planningReview = readFileSync(new URL("../../skills/wh-review/scripts/review-materials.mjs", import.meta.url), "utf8");
+    expect(planningReview).toMatch(/buildPlanningArtifacts/);
     const catalog = yaml.load(readFileSync(new URL("../../skills/catalog.yaml", import.meta.url), "utf8"));
     const entry = catalog.skills.find(({ name }) => name === "spec-analyze");
     expect(entry.local_changes).toMatch(/report-only validator[\s\S]*(?:no|没有) runtime work gate/i);
-    expect(entry.local_changes).toMatch(/consumer[\s\S]*contract tests/i);
+    expect(entry.local_changes).toMatch(/build-plan[\s\S]*planning_artifacts[\s\S]*contract tests/i);
   });
 
   it("accepts a fully source-bound artifact chain and complete test strategy", () => {

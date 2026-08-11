@@ -34,7 +34,8 @@ through a dispatcher. `spec-specify`, `simplicity-guard`, and `plan-ceo-review`
 are inline lenses; conditional design review follows its declared execution.
 They do not create extra artifacts, dispatchers, or work prerequisites.
 
-Quality dependencies and the independent review capability may be unavailable.
+Quality dependencies and the review dependency declared in `skill-deps.yaml`
+may be unavailable.
 Preserve the real unavailable/error/transport fact and keep drafting or
 repairing this same task. Never turn unavailable into empty findings or a
 completion claim, and never make it a reason to stop safe writing.
@@ -100,7 +101,7 @@ review or test result never changes product scope automatically.
    failure conditions, risks, and explicit exclusions.
 5. Cross-check no decision was dropped, no new product scope was invented, and
    every AC is observable.
-6. Use the declared independent review capability against the current decision
+6. Use the review dependency declared in `skill-deps.yaml` against the current decision
    and specification. Keep provider/model/transport provenance and findings;
    the review contract returns findings, not a pass/revise permission.
 7. Dispose each finding as `fixed`, `rejected_invalid`, `accepted_risk`, or
