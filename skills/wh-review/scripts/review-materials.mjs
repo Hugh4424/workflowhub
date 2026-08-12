@@ -416,6 +416,12 @@ export function canonicalMaterialManifest(entries) {
 }
 
 export function reviewMaterialBytes(key, value) {
+  // AC traces are reviewer-facing structured evidence. Keep them pretty
+  // printed so line-oriented providers can inspect bounded anchors; the
+  // canonical object itself remains the source of truth.
+  if (key === "ac_trace" && value && typeof value === "object" && !Buffer.isBuffer(value)) {
+    return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+  }
   return materialBytes(value);
 }
 

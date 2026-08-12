@@ -1,6 +1,7 @@
 import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { isMonitoringFact, validateMonitoringFact } from "../evidence/monitoring-facts.mjs";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
@@ -188,7 +189,8 @@ export function readTaskFacts(taskRoot) {
   return raw.trimEnd().split("\n").map((line, index) => {
     let value;
     try { value = JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
-    validateFact(value, identity.taskId);
+    if (!isMonitoringFact(value)) validateFact(value, identity.taskId);
+    else if (value.task_id !== identity.taskId) throw new Error(`monitoring fact task identity mismatch on line ${index + 1}`);
     return value;
   });
 }
@@ -248,6 +250,50 @@ export function appendTaskFact(taskRoot, input, options = {}) {
       throw error;
     }
     return Object.freeze({ ref, sha256: sha256(lineRaw), value: Object.freeze(record) });
+  });
+}
+
+export function appendMonitoringFacts(taskRoot, { task_id: taskId, records } = {}, options = {}) {
+  const identity = assertRoot(taskRoot, taskId);
+  if (!Array.isArray(records) || records.length === 0) throw new TypeError("monitoring records must be a non-empty array");
+  records.forEach((record) => {
+    validateMonitoringFact(record);
+    if (record.task_id !== identity.taskId) throw new Error("monitoring fact task identity mismatch");
+  });
+  return withStoreLock(identity.root, () => {
+    const factsPath = safeRecordPath(identity.root, "facts.jsonl");
+    const oldFactsRaw = readFileSync(factsPath, "utf8");
+    const oldRecords = oldFactsRaw === "" ? [] : oldFactsRaw.trimEnd().split("\n").map((line) => JSON.parse(line));
+    const existingIds = new Set(oldRecords.filter((item) => isMonitoringFact(item)).map((item) => item.fact_id));
+    const incomingIds = new Set();
+    for (const record of records) {
+      if (existingIds.has(record.fact_id)) throw new Error(`monitoring fact id already exists: ${record.fact_id}`);
+      if (incomingIds.has(record.fact_id)) throw new Error(`duplicate monitoring fact id in batch: ${record.fact_id}`);
+      incomingIds.add(record.fact_id);
+    }
+    const lines = records.map((record) => `${JSON.stringify(record)}\n`);
+    const separator = oldFactsRaw === "" || oldFactsRaw.endsWith("\n") ? "" : "\n";
+    const nextFactsRaw = oldFactsRaw + separator + lines.join("");
+    const oldIndex = readTaskIndex(identity.root);
+    const nextIndex = structuredClone(oldIndex);
+    const startingLine = oldFactsRaw === "" ? 1 : oldFactsRaw.trimEnd().split("\n").length + 1;
+    records.forEach((record, offset) => {
+      const lineRaw = lines[offset];
+      const ref = `facts.jsonl#${startingLine + offset}`;
+      nextIndex.facts.push(indexRef({
+        ref, sha256: sha256(lineRaw), schema: "monitoring-fact.v1", task_id: identity.taskId, stage: record.stage ?? undefined,
+        logical_ref: ref, content_hash: sha256(JSON.stringify(record)), version: "v1", related_task_id: identity.taskId,
+        external_raw_ref: record.source.ref, external_governance_archive_ref: null,
+      }));
+    });
+    try {
+      atomicWrite(identity.root, "facts.jsonl", nextFactsRaw, { testHooks: options.testHooks, hookName: "beforeFactsRename" });
+      atomicWrite(identity.root, "index.json", `${JSON.stringify(nextIndex, null, 2)}\n`, { testHooks: options.indexTestHooks, hookName: "beforeIndexRename" });
+    } catch (error) {
+      try { atomicWrite(identity.root, "facts.jsonl", oldFactsRaw); } catch {}
+      throw error;
+    }
+    return Object.freeze({ refs: Object.freeze(records.map((_, offset) => `facts.jsonl#${startingLine + offset}`)), records: Object.freeze(records) });
   });
 }
 

@@ -22,11 +22,11 @@
     },
     "history_inventory": {
       "ref": "docs/architecture/history-inventory.json",
-      "content_hash": "f8c514a8a4f4fb52306f9a859930dd2b8a819af07030d241a420658546ca8788"
+      "content_hash": "943421545ebed7cf7fa0ab2331977a5ec38b50ed4bed7cbff5672ded23ab971a"
     },
     "move_map": {
       "ref": "docs/architecture/move-map.json",
-      "content_hash": "be816bba4b846b2c42add68bc2570ed635f25d980ac4f2c79028d024af23b0c6"
+      "content_hash": "d0748e19a31cfa68fc1e5a5bb2107aa0bf48cc569545ebc4760fab08dbe6d6f9"
     }
   },
   "history_verification": "tools/architecture/history-inventory.mjs verify-unchanged",

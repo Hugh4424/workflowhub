@@ -198,19 +198,44 @@ function manualCleanupObservation(task, kernel) {
   }
 }
 
-/** Record business delivery without claiming WorkflowHub formal acceptance. */
-export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel, sourceRef, sourceHash, now = () => new Date().toISOString() } = {}) {
+/**
+ * Close the business delivery with an explicitly accepted quality risk.
+ *
+ * This is intentionally distinct from task-close-completed.v1: it closes the
+ * task's delivery status, while keeping physical Git operations and missing
+ * verification facts visible and unfinished.
+ */
+export function recordManualDeliveryClose({
+  task: taskHandle,
+  kernel: taskKernel,
+  sourceRef,
+  sourceHash,
+  riskAccepted = false,
+  riskReason,
+  deferredItems = [],
+  now = () => new Date().toISOString(),
+} = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("manual delivery close TaskHandle/TaskKernel mismatch");
   if (typeof sourceRef !== "string" || sourceRef.trim() === "") throw new TypeError("manual delivery close sourceRef is required");
+  if (riskAccepted !== true) throw new Error("manual close requires explicit risk acceptance (--risk-accepted=true)");
+  if (typeof riskReason !== "string" || riskReason.trim() === "") throw new TypeError("manual close riskReason is required");
+  if (!Array.isArray(deferredItems) || deferredItems.some((item) => typeof item !== "string" || item.trim() === "")) {
+    throw new TypeError("manual close deferredItems must be an array of non-empty strings");
+  }
   if (typeof now !== "function") throw new TypeError("manual delivery close now must be a function");
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   const sourceRaw = task.readRecord(sourceRef);
   const actualSourceHash = sha256(sourceRaw);
   if (sourceHash !== undefined && sourceHash !== actualSourceHash) throw new Error("manual delivery close source ref hash is stale");
   const cleanup = manualCleanupObservation(task, kernel);
-  const invocationId = `manual-delivery-close:${sha256(canonical({ source_ref: sourceRef, source_hash: actualSourceHash }))}`;
+  const invocationId = `manual-risk-close:${sha256(canonical({
+    source_ref: sourceRef,
+    source_hash: actualSourceHash,
+    risk_reason: riskReason,
+    deferred_items: deferredItems,
+  }))}`;
   const facts = readTaskFacts(task.taskPath);
   const existingFactIndex = facts.findIndex((fact) => fact.invocation_id === invocationId);
   const existingFact = existingFactIndex === -1 ? undefined : facts[existingFactIndex];
@@ -220,10 +245,16 @@ export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel
   }
   const recordedAt = now();
   const payload = {
-    schema_version: "manual-delivery-close.v1",
+    schema_version: "manual-risk-close.v1",
     task_id: task.identity.taskId,
     business_status: "delivered",
-    formal_status: "blocked",
+    formal_status: "closed_with_risk",
+    status: "completed_with_risk",
+    risk_accepted: true,
+    risk_reason: riskReason,
+    deferred_items: [...deferredItems],
+    physical_actions_completed: false,
+    deferred_operations: ["commit", "push", "merge", "archive", "cleanup"],
     source_ref: sourceRef,
     source_hash: actualSourceHash,
     source_digest: actualSourceHash,
@@ -233,7 +264,10 @@ export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel
   };
   const payloadRaw = `${JSON.stringify(payload, null, 2)}\n`;
   const payloadHash = sha256(payloadRaw);
-  const outputRef = `quality/evidence/manual-delivery-close/${payloadHash}.json`;
+  // vNext canonical records must stay in the quality namespace. This is a
+  // formal risk-close evidence record, not the physical operations close
+  // completion record.
+  const outputRef = `quality/evidence/manual-risk-close/${payloadHash}.json`;
   const existingOutput = readOptional(task, outputRef);
   if (existingOutput !== undefined && existingOutput !== payloadRaw) {
     throw new Error(`manual delivery close evidence conflicts with immutable record: ${outputRef}`);
@@ -251,8 +285,8 @@ export function recordManualDeliveryClose({ task: taskHandle, kernel: taskKernel
     material_digest: inspectMaterialWorkspace(task.manifest.target_repo_root).material_digest,
     source_digest: actualSourceHash,
     invocation_id: invocationId,
-    source: "task-close/manual-delivery-close",
-    status: "manual_delivery_close",
+    source: "task-close/manual-risk-close",
+    status: "manual_risk_close",
     content_hash: payloadHash,
     created_at: recordedAt,
     output_ref: outputRef,

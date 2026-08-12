@@ -114,4 +114,13 @@ describe("integration review subject current-material boundary", () => {
     expect(subject.ac_trace.entries[0].change[0].task_id).toBe("T002");
     expect(subject.ac_trace.entries[0].change[0].evidence_refs[0].ref).toBe("quality/tests/T002.json");
   });
+
+  it("includes named and typed acceptance IDs, including AC-E2E-001", () => {
+    const f = fixture();
+    f.artifacts.read = (name) => name === "spec.md" ? "# spec\n\nAC-001 AC-SOURCE-001 AC-E2E-001\n" : ({
+      "decision-log.md": "# decision\n", "plan.md": "# plan\n", "tasks.md": "# tasks\n",
+    }[name]);
+    const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree, current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" } });
+    expect(subject.ac_trace.acceptance_ids).toEqual(expect.arrayContaining(["AC-001", "AC-SOURCE-001", "AC-E2E-001"]));
+  });
 });

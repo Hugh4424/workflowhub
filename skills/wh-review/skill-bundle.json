@@ -52,7 +52,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "437ca434de08c16c489e40d72c7c2d09b943a7678bfc0a4f531c23f81eb5aa36"
+      "sha256": "2504e907845fb333163a21279eb026fff591475a54b8c4158be05c4c55c4764f"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",

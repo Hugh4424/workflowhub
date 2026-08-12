@@ -185,6 +185,16 @@ function currentImplementationReceipt({ task, workspace, version }) {
   };
 }
 
+/** Publish a create-only implementation snapshot under its content-addressed ref. */
+export function writeCurrentImplementationReceipt({ task, workspace, version = "1.0.0" } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
+  const raw = canonicalJson(value);
+  const ref = `quality/evidence/implementation/${sha256(raw)}.json`;
+  publishIdempotently({ task: safeTask, write: createTaskKernel(safeTask).publishCanonicalRecord, ref, raw, label: "implementation snapshot receipt" });
+  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
+}
+
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
   const root = assertWorkspace(workspace).worktreeRoot;

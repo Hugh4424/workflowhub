@@ -147,7 +147,9 @@ export function bootstrapStage(
   const task = validateTaskId(taskId);
 
   let resolvedTaskPath;
+  let storageRoot;
   if (mode === "launcher") {
+    storageRoot = resolveStorageRoot({ env, home });
     resolvedTaskPath = launcherTaskPath({ projectName: project, taskId: task, taskPath, env, home });
   } else if (mode === "sidecar") {
     if (typeof taskPath !== "string" || !isAbsolute(taskPath)) {
@@ -188,6 +190,7 @@ export function bootstrapStage(
     manifest: taskHandle.manifest,
     kernel,
     workflowRunId: kernel.deriveStageWorkflowRunId(normalizedStage),
+    ...(storageRoot ? { storageRoot } : {}),
   };
 
   if (normalizedStage === "make-decision") {
