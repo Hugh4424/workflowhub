@@ -1561,6 +1561,105 @@
       "status": "deleted-final-cleanup",
       "reason": "tested deleted receipt-writer facade; audit aggregator has independent focused coverage",
       "content_change": "removed in R007; retained audit-aggregator tests cover the live owner"
+    },
+    {
+      "source": "runtime/evidence/monitoring-facts.mjs",
+      "destination": "runtime/evidence/monitoring-facts.mjs",
+      "status": "add",
+      "owner": "M15 monitoring facts producer",
+      "consumer": "M15 diagnostics/projector only",
+      "delete_condition": "remove with M15 monitoring sidecar when its consumer is retired",
+      "content_change": "new typed monitoring fact validator and append contract"
+    },
+    {
+      "source": "runtime/evidence/codex-transcript-adapter.mjs",
+      "destination": "runtime/evidence/codex-transcript-adapter.mjs",
+      "status": "add",
+      "owner": "registered source adapter",
+      "consumer": "M15 monitoring facts collector",
+      "delete_condition": "remove when registered source contract is retired",
+      "content_change": "new explicit binding adapter; no native session discovery"
+    },
+    {
+      "source": "runtime/schemas/monitoring-fact.v1.json",
+      "destination": "runtime/schemas/monitoring-fact.v1.json",
+      "status": "add",
+      "owner": "M15 monitoring facts contract",
+      "consumer": "monitoring-facts validator and task-store reader",
+      "delete_condition": "remove with monitoring-fact.v1 contract retirement",
+      "content_change": "new versioned schema"
+    },
+    {
+      "source": "runtime/evidence/monitoring-diagnostics.mjs",
+      "destination": "runtime/evidence/monitoring-diagnostics.mjs",
+      "status": "add",
+      "owner": "M15 diagnostics producer",
+      "consumer": "M15 project projector",
+      "delete_condition": "remove with M15 diagnostics consumer retirement",
+      "content_change": "new deterministic stage/step/skill and cost diagnostic derivation"
+    },
+    {
+      "source": "runtime/schemas/monitoring-projection.v1.json",
+      "destination": "runtime/schemas/monitoring-projection.v1.json",
+      "status": "add",
+      "owner": "M15 projection contract",
+      "consumer": "monitoring projector and static monitoring view",
+      "delete_condition": "remove with the derived monitoring projection retirement",
+      "content_change": "new versioned derived projection schema"
+    },
+    {
+      "source": "runtime/evidence/monitoring-projector.mjs",
+      "destination": "runtime/evidence/monitoring-projector.mjs",
+      "status": "add",
+      "owner": "M15 derived monitoring projector",
+      "consumer": "static monitoring HTML and data.js bundle",
+      "delete_condition": "remove when the static view is replaced by an explicitly authorized consumer",
+      "content_change": "new task projection and globally rebuilt static bundle; never a canonical task source"
+    },
+    {
+      "source": "tests/m15-monitoring-facts.test.mjs",
+      "destination": "tests/m15-monitoring-facts.test.mjs",
+      "status": "add",
+      "owner": "M15 fact contract tests",
+      "consumer": "M15 build-code verification",
+      "delete_condition": "remove with monitoring-fact.v1 retirement",
+      "content_change": "focused fact contract and compatibility coverage"
+    },
+    {
+      "source": "tests/m15-codex-transcript-adapter.test.mjs",
+      "destination": "tests/m15-codex-transcript-adapter.test.mjs",
+      "status": "add",
+      "owner": "M15 source adapter tests",
+      "consumer": "M15 build-code verification",
+      "delete_condition": "remove with registered source adapter retirement",
+      "content_change": "focused registered Codex source coverage"
+    },
+    {
+      "source": "tests/m15-monitoring-diagnostics.test.mjs",
+      "destination": "tests/m15-monitoring-diagnostics.test.mjs",
+      "status": "add",
+      "owner": "M15 diagnostics tests",
+      "consumer": "M15 build-code verification",
+      "delete_condition": "remove with diagnostics retirement",
+      "content_change": "focused diagnostic and aggregation oracle coverage"
+    },
+    {
+      "source": "tests/m15-monitoring-projector.test.mjs",
+      "destination": "tests/m15-monitoring-projector.test.mjs",
+      "status": "add",
+      "owner": "M15 projector tests",
+      "consumer": "M15 build-code verification",
+      "delete_condition": "remove with projector retirement",
+      "content_change": "projection, bundle, HTML and atomic publication coverage"
+    },
+    {
+      "source": "tests/m15-monitoring-integration.test.mjs",
+      "destination": "tests/m15-monitoring-integration.test.mjs",
+      "status": "add",
+      "owner": "M15 runtime integration tests",
+      "consumer": "M15 build-code and verify-code evidence",
+      "delete_condition": "remove with stage sidecar retirement",
+      "content_change": "private source seam and stage sidecar integration coverage"
     }
   ]
 }

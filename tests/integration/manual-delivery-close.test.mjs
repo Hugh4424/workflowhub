@@ -34,21 +34,35 @@ function fixture() {
 }
 
 describe("manual delivery close", () => {
-  it("records delivered business status without formal acceptance", () => {
+  it("records a risk-accepted formal close without claiming physical delivery actions", () => {
     const state = fixture();
-    const result = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
-    expect(result).toMatchObject({ business_status: "delivered", formal_status: "blocked" });
-    expect(result.output_ref).toMatch(/^quality\/evidence\/manual-delivery-close\/[a-f0-9]{64}\.json$/);
+    const result = recordManualDeliveryClose({
+      task: state.task,
+      kernel: state.kernel,
+      sourceRef: "quality/evidence/delivery.json",
+      riskAccepted: true,
+      riskReason: "真实 Codex E2E 延期到用户后续真实任务验证",
+      deferredItems: ["真实 Codex host binding", "独立 review 终态"],
+    });
+    expect(result).toMatchObject({ business_status: "delivered", formal_status: "closed_with_risk", status: "completed_with_risk", risk_accepted: true, physical_actions_completed: false });
+    expect(result.output_ref).toMatch(/^quality\/evidence\/manual-risk-close\/[a-f0-9]{64}\.json$/);
     expect(JSON.parse(state.task.readRecord(result.output_ref))).toMatchObject({
-      schema_version: "manual-delivery-close.v1", business_status: "delivered", formal_status: "blocked",
+      schema_version: "manual-risk-close.v1", business_status: "delivered", formal_status: "closed_with_risk", status: "completed_with_risk",
     });
     expect(() => state.task.readRecord("results/verify-code/accepted.json")).toThrow(/ENOENT/);
+    expect(() => state.task.readRecord("operations/close/completed.json")).toThrow(/ENOENT/);
   });
 
   it("is idempotent for the same source bytes", () => {
     const state = fixture();
-    const first = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
-    const second = recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json" });
+    const input = { task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json", riskAccepted: true, riskReason: "用户明确批准带风险正式 close", deferredItems: ["真实 E2E"] };
+    const first = recordManualDeliveryClose(input);
+    const second = recordManualDeliveryClose(input);
     expect(second.output_ref).toBe(first.output_ref);
+  });
+
+  it("requires explicit risk acceptance", () => {
+    const state = fixture();
+    expect(() => recordManualDeliveryClose({ task: state.task, kernel: state.kernel, sourceRef: "quality/evidence/delivery.json", riskReason: "缺失真实 E2E" })).toThrow(/risk acceptance/i);
   });
 });

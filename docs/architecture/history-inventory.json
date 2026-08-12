@@ -1112,6 +1112,26 @@
       "sha256": "4a36a9fa64ac0064d6bc2333cd08f49be78d6a4d811ab5698f53328b88847139"
     },
     {
+      "path": "specs/archive/wh-review-execution-flow-improvement/decision-log.md",
+      "bytes": 108367,
+      "sha256": "78a34a4c8fc3459aa4b135103813e11d7fedea0126f8db442b2f012ae3f66eba"
+    },
+    {
+      "path": "specs/archive/wh-review-execution-flow-improvement/plan.md",
+      "bytes": 64255,
+      "sha256": "a0ab7a0fcea2a33cda9b842ffd6ecacf120075a6cc50b7bab60f352a7e6ee117"
+    },
+    {
+      "path": "specs/archive/wh-review-execution-flow-improvement/spec.md",
+      "bytes": 80861,
+      "sha256": "5d3828e7d53eca7ffab19128576e00cf453f31cd5594f1a034f97e70e2039ba9"
+    },
+    {
+      "path": "specs/archive/wh-review-execution-flow-improvement/tasks.md",
+      "bytes": 76275,
+      "sha256": "0f64087dd6a32c8982cb40d754a0887de3bb10b9b6169dd692375638179b834c"
+    },
+    {
       "path": "specs/archive/wh-review-materials-v3-abandoned/plan.md",
       "bytes": 14285,
       "sha256": "b919eb5470dbef4879e8fcc4d4a79ee1f0c2d07b8e185fe4decad2808a8b7f52"
@@ -2312,5 +2332,5 @@
       "sha256": "b33a6e8313cf1bcb4c22aeb8ace4f499b3dd1e53aef3361e6747b3c3e4867d30"
     }
   ],
-  "file_count": 461
+  "file_count": 465
 }

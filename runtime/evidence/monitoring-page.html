@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkflowHub · 任务执行情况</title>
+  <style>
+    :root {
+      --wh-bg: #0f0f1a;
+      --wh-panel: #1b1c2e;
+      --wh-panel-2: #202135;
+      --wh-panel-hover: #262844;
+      --wh-inset: #14141f;
+      --wh-border: #3a4063;
+      --wh-border-soft: #2c3150;
+      --wh-text: #f6f8fe;
+      --wh-text-dim: #cdd2e6;
+      --wh-text-muted: #a6accb;
+      --wh-text-faint: #838aab;
+      --wh-accent: #85acff;
+      --wh-accent-soft: rgba(133, 172, 255, .2);
+      --wh-accent-track: rgba(133, 172, 255, .16);
+      --wh-success: #62d59f;
+      --wh-success-soft: rgba(98, 213, 159, .18);
+      --wh-warn: #ecb85e;
+      --wh-warn-soft: rgba(236, 184, 94, .18);
+      --wh-danger: #f08585;
+      --wh-danger-soft: rgba(240, 133, 133, .18);
+      --wh-neutral: #808aa8;
+      --wh-track: #262a42;
+      --radius: 5px;
+    }
+    * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+    *:hover { scrollbar-color: var(--wh-border) transparent; }
+    *::-webkit-scrollbar { width: 9px; height: 9px; }
+    *::-webkit-scrollbar-thumb { background: transparent; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+    *:hover::-webkit-scrollbar-thumb { background: var(--wh-border); background-clip: padding-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; color: var(--wh-text); background: var(--wh-bg); font: 13px/1.45 Inter, "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-feature-settings: "tnum" 1; }
+    .topbar { height: 46px; background: var(--wh-panel); border-bottom: 1px solid var(--wh-border); }
+    .topbar-inner { width: min(1600px, calc(100% - 40px)); height: 100%; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #fff; background: var(--wh-accent); font-size: 0; }
+    .brand-sub, .top-meta { color: var(--wh-text-muted); font-size: 12px; }
+    .top-meta { text-align: right; }
+    .page { width: min(1600px, calc(100% - 48px)); margin: auto; padding: 20px 0 48px; }
+    .app-grid { display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
+    .sidebar { position: sticky; top: 14px; min-height: calc(100vh - 90px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
+    .sidebar-head { padding: 14px 14px 12px; border-bottom: 1px solid var(--wh-border-soft); }
+    .eyebrow { color: var(--wh-accent); font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    .sidebar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0; }
+    .sidebar-head p { margin: 2px 0 0; color: var(--wh-text-faint); font-size: 11px; }
+    .sidebar-tools { padding: 12px 14px; background: var(--wh-panel-2); border-bottom: 1px solid var(--wh-border-soft); }
+    .search, .tool-row select { background: var(--wh-inset); border: 1px solid var(--wh-border); border-radius: var(--radius); color: var(--wh-text-dim); }
+    .search { width: 100%; padding: 7px 10px; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11.5px; outline: 0; }
+    .search:focus { border-color: var(--wh-accent); box-shadow: 0 0 0 3px rgba(133,172,255,.15); }
+    .tool-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .tool-row select { min-width: 0; padding: 6px 8px; font-size: 11.5px; appearance: none; cursor: pointer; }
+    .task-list { padding: 0; border-top: 1px solid var(--wh-border-soft); max-height: calc(100vh - 236px); overflow-y: auto; }
+    .task-item { position: relative; width: 100%; display: block; padding: 9px 15px 9px 16px; border: 0; border-bottom: 1px solid var(--wh-border-soft); border-radius: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
+    .task-item:hover { background: var(--wh-panel-hover); }
+    .task-item.selected { background: var(--wh-accent-soft); }
+    .task-item.selected::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--wh-accent); }
+    .task-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .task-item strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-item-top strong { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; color: var(--wh-text-dim); font-size: 12.5px; font-weight: 600; }
+    .task-item.selected .task-item-top strong { color: var(--wh-text); }
+    .task-project { display: block; margin: 4px 0 0; overflow: hidden; color: var(--wh-text-muted); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    .task-item-meta { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-top: 5px; color: var(--wh-text-muted); font-size: 11px; }
+    .task-item-meta strong { display: inline; color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; }
+    .sidebar-foot { margin: 0; padding: 10px 14px; border-radius: 0; border-top: 1px solid var(--wh-border-soft); color: var(--wh-text-faint); background: transparent; font-size: 10.5px; line-height: 1.5; }
+    .main { min-width: 0; display: grid; gap: 12px; padding: 0 24px; }
+    .fatal { padding: 20px; border: 1px solid var(--wh-danger); border-radius: var(--radius); color: var(--wh-danger); background: var(--wh-danger-soft); }
+    .banner { padding: 11px 15px; border-radius: var(--radius); font-size: 11.5px; line-height: 1.45; }
+    .banner strong { display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; }
+    .banner ul { margin: 6px 0 0; padding-left: 18px; }
+    .banner ul li { margin-bottom: 2px; }
+    .task-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
+    .task-head h2 { margin: 3px 0 0; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 24px; font-weight: 700; letter-spacing: 0; line-height: 1.2; overflow-wrap: anywhere; }
+    .task-head p { margin: 5px 0 0; color: var(--wh-text-muted); font-size: 11.5px; }
+    .task-head-right { display: grid; justify-items: end; gap: 7px; color: var(--wh-text-muted); font-size: 11px; white-space: nowrap; }
+    .status { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 3px 8px 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 650; white-space: nowrap; line-height: 1; }
+    .status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+    .status-current, .status-present, .status-executed, .status-completed { color: var(--wh-success); background: var(--wh-success-soft); }
+    .status-partial, .status-unknown, .status-missing, .status-pending, .status-evidence_gap, .status-out_of_order, .status-insufficient_samples, .status-mismatch, .status-unavailable { color: var(--wh-warn); background: var(--wh-warn-soft); }
+    .status-fatal, .status-conflict, .status-failed { color: var(--wh-danger); background: var(--wh-danger-soft); }
+    .status-not_applicable, .status-skipped { color: var(--wh-accent); background: var(--wh-accent-soft); }
+    .raw-code { display: none; }
+    .summary-section { margin-top: 2px; }
+    .summary-section-title, .stage-section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 0 8px; border-bottom: 1px solid var(--wh-border-soft); }
+    .summary-section-title h3, .stage-section-title h3 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--wh-text); }
+    .summary-section-title p, .stage-section-title p { margin: 0; color: var(--wh-text-faint); font-size: 10.5px; }
+    .summary-section-body { padding-top: 8px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; border: 1px solid var(--wh-border); border-radius: var(--radius); background: var(--wh-panel); }
+    .summary-card { min-width: 0; padding: 11px 16px; border-left: 1px solid var(--wh-border-soft); background: transparent; }
+    .summary-card:first-child { border-left: 0; }
+    .summary-card label { display: block; color: var(--wh-text-muted); font-size: 10.5px; }
+    .summary-card strong { display: block; margin-top: 3px; color: var(--wh-text); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 21px; font-weight: 600; line-height: 1.15; }
+    .summary-card strong.unavailable { color: var(--wh-warn); font-size: 18px; }
+    .summary-card span { display: block; margin-top: 2px; color: var(--wh-text-faint); font-size: 10.5px; }
+    .insight-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 12px; }
+    .insight-section { min-width: 0; border: 1px solid var(--wh-border); border-radius: 6px; background: var(--wh-panel); overflow: hidden; }
+    .insight-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 16px; margin: 0; border-bottom: 1px solid var(--wh-border-soft); }
+    .insight-title h3 { margin: 0; font-size: 13px; font-weight: 700; color: var(--wh-text); }
+    .insight-title p { margin: 0; color: var(--wh-text-faint); font-size: 10.5px; }
+    .cost-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid var(--wh-border-soft); }
+    .cost-card { min-width: 0; padding: 10px 16px; border-right: 1px solid var(--wh-border-soft); border-bottom: 0; background: transparent; }
+    .cost-card:last-child { border-right: 0; }
+    .cost-card label { display: block; color: var(--wh-text-muted); font-size: 10.5px; }
+    .cost-card strong { display: block; margin-top: 2px; color: var(--wh-text); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 16px; font-weight: 600; }
+    .cost-card strong.unavailable { color: var(--wh-warn); }
+    .breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+    .breakdown-card { padding: 11px 16px 13px; border-top: 1px solid var(--wh-border-soft); }
+    .breakdown-card:nth-child(odd) { border-right: 1px solid var(--wh-border-soft); }
+    .breakdown-card:nth-child(-n+2) { border-top: 0; }
+    .breakdown-card h4 { margin: 0 0 9px; color: var(--wh-text-dim); font-size: 11.5px; font-weight: 600; }
+    .breakdown-row { display: block; margin-top: 8px; color: var(--wh-text-dim); font-size: 11.5px; }
+    .breakdown-row .row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .breakdown-row .row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .breakdown-row .row-values { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
+    .breakdown-row .row-values strong { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; color: var(--wh-text); }
+    .breakdown-row .row-values strong.unavailable { color: var(--wh-warn); font-size: 11px; }
+    .breakdown-row .row-values span { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; color: var(--wh-text-faint); }
+    .breakdown-row .row-bar { height: 6px; background: var(--wh-track); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+    .breakdown-row .row-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--wh-accent); min-width: 3px; }
+    .problem-list { display: grid; gap: 0; }
+    .problem-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-left: 0; border-bottom: 1px solid var(--wh-border-soft); background: transparent; }
+    .problem-row:last-child { border-bottom: 0; }
+    .problem-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .problem-row .copy { min-width: 0; flex: 1; }
+    .problem-row strong { display: block; color: var(--wh-text); font-size: 12.5px; font-weight: 600; }
+    .problem-row span { display: block; color: var(--wh-text-faint); font-size: 10.5px; }
+    .problem-row .count { flex-shrink: 0; text-align: right; }
+    .problem-row .count strong { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 15px; font-weight: 600; }
+    .problem-row .count span { font-size: 10px; }
+    .snapshot-strip { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 9px 16px; border: 0; border-top: 1px solid var(--wh-border-soft); border-radius: 0; color: var(--wh-text-faint); background: transparent; font-size: 10.5px; }
+    .snapshot-strip strong { color: var(--wh-text); }
+    .stage-section { padding-top: 2px; }
+    .stage-section-body { padding-top: 8px; }
+    .stage-list { display: grid; gap: 8px; }
+    .stage-block { border: 1px solid var(--wh-border-soft); border-radius: 6px; background: var(--wh-panel-2); overflow: hidden; }
+    .stage-block.open { border-color: var(--wh-border); background: var(--wh-panel); }
+    .stage-toggle { width: 100%; display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; align-items: center; gap: 14px; height: 62px; padding: 0 16px; border: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
+    .stage-toggle:hover { background: var(--wh-panel-hover); }
+    .stage-block.open .stage-toggle { border-bottom: 1px solid var(--wh-border-soft); background: var(--wh-accent-soft); }
+    .stage-index { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; color: var(--wh-text-dim); font-size: 14px; font-weight: 600; }
+    .stage-name strong { display: block; font-size: 14.5px; font-weight: 600; color: var(--wh-text); }
+    .stage-name small { display: none; color: var(--wh-text-faint); font-size: 10px; }
+    .stage-cell { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .stage-cell label { color: var(--wh-text-faint); font-size: 9.5px; }
+    .stage-cell strong, .stage-cell span { font-size: 12px; }
+    .stage-cell strong { color: var(--wh-text); font-weight: 600; }
+    .stage-cell .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; }
+    .stage-cell .gap-warn { color: var(--wh-warn); font-weight: 750; }
+    .stage-cell .gap-ok { color: var(--wh-success); }
+    .stage-summary-meta { display: flex; align-items: flex-start; gap: 12px; }
+    .stage-summary-meta > div { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; white-space: nowrap; }
+    .stage-summary-meta label { color: var(--wh-text-faint); font-size: 9.5px; }
+    .stage-summary-meta .wh-mono { white-space: nowrap; }
+    .metric-bar { display: inline-flex; align-items: center; gap: 8px; }
+    .metric-track { width: 48px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--wh-track); flex-shrink: 0; }
+    .metric-fill { display: block; height: 100%; border-radius: 3px; background: var(--wh-accent); min-width: 3px; }
+    .metric-fill.time { background: var(--wh-success); }
+    .metric-value { color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11.5px; }
+    .metric-value.unavailable { color: var(--wh-warn); }
+    .stage-caret { display: flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--wh-text-faint); font-size: 11px; white-space: nowrap; }
+    .stage-caret .chevron { font-size: 15px; transition: transform .15s ease; }
+    .stage-block.open .stage-caret .chevron { transform: rotate(90deg); }
+    .stage-body { padding: 0; background: var(--wh-panel); }
+    .subheading { display: flex; align-items: baseline; justify-content: space-between; margin: 0; padding: 9px 16px 6px; }
+    .subheading h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--wh-text-dim); }
+    .subheading span { color: var(--wh-text-faint); font-size: 10.5px; }
+    .fact-grid { display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; gap: 14px; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--wh-border-soft); }
+    .fact-grid.header { min-height: 30px; background: var(--wh-inset); }
+    .fact-grid.header span { color: var(--wh-text-faint); font-size: 10.5px; letter-spacing: .03em; }
+    .fact-grid:nth-child(even) { background: rgba(255,255,255,.015); }
+    .fact-grid.step-row { min-height: 33px; }
+    .fact-grid.skill-row { min-height: 38px; }
+    .fact-grid .fact-name { color: var(--wh-text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .fact-outcome { color: var(--wh-text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .fact-outcome.warn { color: var(--wh-warn); }
+    .fact-grid .fact-outcome.danger { color: var(--wh-danger); }
+    .fact-grid .fact-trigger { color: var(--wh-text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .stage-index { color: var(--wh-text-faint); font-size: 11px; font-weight: 600; }
+    .fact-grid .stage-index.step { color: var(--wh-text-muted); }
+    .fact-grid .stage-index.skill { color: var(--wh-accent); }
+    .unavailable { color: var(--wh-warn); font-size: 11px; }
+    .reason { display: block; margin-top: 2px; color: var(--wh-text-faint); font-size: 9.5px; }
+    .refs { display: flex; flex-wrap: wrap; gap: 4px; }
+    .ref-chip { padding: 1px 6px; border: 1px solid rgba(111,158,255,.28); border-radius: 4px; color: var(--wh-accent); background: var(--wh-accent-soft); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; }
+    .ref-chip:hover { background: rgba(111,158,255,.28); }
+    .empty { padding: 18px 16px; color: var(--wh-text-faint); text-align: center; font-size: 12px; }
+    .empty button { margin-top: 10px; padding: 7px 14px; border: 1px solid var(--wh-border); border-radius: 6px; color: var(--wh-text); background: var(--wh-panel-2); }
+    #evidence-panel { display: none; margin-top: 14px; padding: 16px 19px; border: 1px solid var(--wh-accent); border-left: 4px solid var(--wh-accent); border-radius: var(--radius); background: #18213a; }
+    #evidence-panel.visible { display: block; }
+    #evidence-panel h3 { margin: 0 0 4px; font-size: 15px; color: var(--wh-text); }
+    #evidence-panel p { margin: 0 0 8px; color: var(--wh-text-muted); font-size: 12px; }
+    #evidence-panel code { display: block; overflow-wrap: anywhere; padding: 9px; border-radius: 5px; color: #d5e2ff; background: #101827; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; }
+    @media (max-width: 1100px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } }
+    @media (max-width: 760px) { .topbar-inner, .page { width: calc(100% - 24px); } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner"><div class="brand"><span class="brand-mark">W</span><span>WorkflowHub</span><span class="brand-sub">任务执行监控</span></div><div class="top-meta" id="top-meta">正在读取本地快照</div></div></header>
+  <div class="page"><div class="app-grid">
+    <aside class="sidebar" aria-label="任务列表">
+      <div class="sidebar-head"><div class="eyebrow">任务监控</div><h1>最近任务</h1><p id="task-count">读取中</p></div>
+      <div class="sidebar-tools"><input class="search" id="search" type="search" placeholder="搜索项目或任务" aria-label="搜索项目或任务"><div class="tool-row"><select id="project-filter" aria-label="项目筛选"><option value="">全部项目</option></select><select id="status-filter" aria-label="状态筛选"><option value="">全部状态</option></select></div></div>
+      <div class="task-list" id="task-list"></div><div class="sidebar-foot" id="sidebar-foot"></div>
+    </aside>
+    <main class="main" id="main"><div class="empty">正在读取本地快照，请稍候。</div></main>
+  </div><aside id="evidence-panel" aria-live="polite"></aside></div>
+  <script src="workflowhub-monitor-data.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const data = globalThis.__WH_MONITOR_DATA__;
+    const $ = (selector) => document.querySelector(selector);
+    const stageOrder = ['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code'];
+    const stageLabels = { 'make-decision': '做决定', 'build-spec': '规格设计', 'build-plan': '执行计划', 'build-code': '开发实现', 'verify-code': '验收检查' };
+    const skillLabels = { 'talk-with-zhipeng': 'Talk 对话', 'grill-with-docs': '文档质询', 'decision-log': '决策记录', 'wh-review': '独立审查', 'spec-research': '规格调研', 'spec-clarify': '规格澄清', 'spec-specify': '规格编写', 'simplicity-guard': '简洁性检查', 'plan-ceo-review': '目标审查', 'plan-design-review': '设计审查', 'spec-plan': '计划编写', 'plan-eng-review': '工程审查', 'testing-system-blueprint': '测试蓝图', 'test-routing-advisor': '测试路由', 'spec-tasks': '任务拆分', 'spec-analyze': '规格分析', 'backend-testing': '后端测试', 'frontend-testing': '前端测试', 'fullstack-slice-testing': '全栈切片测试' };
+    const statusLabels = { current: '当前', partial: '部分可见', stale: '已过期', fatal: '不可用', empty: '暂无事实', present: '已记录', executed: '已执行', completed: '已完成', missing: '未记录', unknown: '无法判断', pending: '待开始', evidence_gap: '证据断链', out_of_order: '顺序异常', conflict: '来源冲突', failed: '失败', not_applicable: '不适用', skipped: '已跳过', insufficient_samples: '样本不足', mismatch: '口径不兼容', unavailable: '不可用' };
+    const reasonLabels = { step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据' };
+    const domainLabels = { transcript: '会话来源', review: '审查', verify: '验收', artifact_missing: '产物缺失', task_dir: '任务目录', worktree: '工作区', handoff: '交接', skill_missing: '技能缺失', token_waste: 'Token 重复计数', unknown: '未归类问题' };
+    const gapStatuses = new Set(['missing', 'unknown', 'evidence_gap', 'out_of_order', 'partial', 'conflict', 'fatal', 'failed', 'unavailable']);
+    const doneStatuses = new Set(['present', 'executed', 'completed', 'skipped', 'not_applicable']);
+    const safeRef = (value) => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.startsWith('~') && !value.includes('\\') && !value.split('/').includes('..');
+    const statusSet = new Set(Object.keys(statusLabels));
+    const validCoverage = (value) => value && Number.isInteger(value.observed) && value.observed >= 0 && (value.expected === null || (Number.isInteger(value.expected) && value.expected >= 0 && value.observed <= value.expected));
+    const recordValid = (record) => record && typeof record.project_name === 'string' && typeof record.task_id === 'string' && statusSet.has(record.status) && typeof record.stale === 'boolean' && Number.isFinite(Date.parse(record.generated_at)) && validCoverage(record.coverage) && Array.isArray(record.errors) && Array.isArray(record.source_refs) && record.source_refs.every(safeRef) && record.diagnostics && Array.isArray(record.diagnostics.stage) && Array.isArray(record.diagnostics.steps) && Array.isArray(record.diagnostics.skills);
+    const text = (tag, value, className) => { const node = document.createElement(tag); node.textContent = String(value ?? '未采集'); if (className) node.className = className; return node; };
+    const status = (value) => { const node = document.createElement('span'); node.className = 'status status-' + String(value || 'unknown'); node.textContent = statusLabels[value] || '无法判断'; return node; };
+    const statusWithCode = (value) => { const wrap = document.createElement('span'); wrap.appendChild(status(value)); if (value && statusLabels[value]) wrap.appendChild(text('span', value, 'raw-code')); return wrap; };
+    const keyOf = (record) => record.project_name + '::' + record.task_id;
+    const readableTime = (iso) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+    const relativeTime = (iso) => { const diff = Math.max(0, Date.now() - Date.parse(iso)); const mins = Math.floor(diff / 60000); if (mins < 1) return '刚刚'; if (mins < 60) return mins + ' 分钟前'; const hours = Math.floor(mins / 60); if (hours < 24) return hours + ' 小时前'; return Math.floor(hours / 24) + ' 天前'; };
+    const main = $('#main');
+    if (!data || data.schema_version !== 'monitoring-snapshot.v1' || !Array.isArray(data.records) || !data.records.every(recordValid)) {
+      main.textContent = ''; $('#top-meta').textContent = '快照不可用';
+      main.appendChild(text('div', '监控快照不可用：数据缺失、合同不兼容或来源身份无法校验。请让上游重新发布兼容快照后，用浏览器刷新本页。', 'fatal'));
+      return;
+    }
+    const records = [...data.records].sort((a, b) => Date.parse(b.generated_at) - Date.parse(a.generated_at));
+    const filters = { project: '', status: '', search: '' };
+    let selectedKey = records[0] ? keyOf(records[0]) : '';
+    let openStages = new Set();
+    const stagesFor = (record) => { const map = new Map((record.diagnostics.stage || []).map((entry) => [entry.id, entry])); return stageOrder.map((id) => map.get(id) || { id, status: 'unknown', coverage: { observed: 0, expected: 1 }, errors: [], source_refs: [] }); };
+    const stepsFor = (record, stage) => (record.diagnostics.steps || []).filter((entry) => entry.stage === stage);
+    const skillsFor = (record, stage) => (record.diagnostics.skills || []).filter((entry) => entry.stage === stage);
+    const problemsFor = (record) => record.diagnostics.problems || [];
+    const filteredRecords = () => records.filter((record) => (!filters.project || record.project_name === filters.project) && (!filters.status || record.status === filters.status) && (!filters.search || (record.project_name + ' ' + record.task_id).toLowerCase().includes(filters.search.toLowerCase())));
+    const countDone = (entries) => entries.filter((entry) => doneStatuses.has(entry.status)).length;
+    const countGap = (entries) => entries.filter((entry) => gapStatuses.has(entry.status)).length;
+    const skillLabel = (id) => skillLabels[id] || id;
+    const currentStageId = (record) => stagesFor(record).slice().reverse().find((entry) => ['present', 'executed', 'partial', 'fatal', 'conflict', 'failed', 'evidence_gap'].includes(entry.status))?.id || stagesFor(record)[0]?.id || '';
+    function setOptions(select, values, labelFor) { const current = select.value; [...select.querySelectorAll('option:not(:first-child)')].forEach((option) => option.remove()); values.forEach((value) => { const option = document.createElement('option'); option.value = value; option.textContent = labelFor ? labelFor(value) : value; select.appendChild(option); }); if (values.includes(current)) select.value = current; }
+    function setupFilters() { setOptions($('#project-filter'), [...new Set(records.map((record) => record.project_name))].sort()); setOptions($('#status-filter'), [...new Set(records.map((record) => record.status))].sort(), (value) => statusLabels[value] || '无法判断'); $('#search').addEventListener('input', (event) => { filters.search = event.target.value; render(); }); $('#project-filter').addEventListener('change', (event) => { filters.project = event.target.value; render(); }); $('#status-filter').addEventListener('change', (event) => { filters.status = event.target.value; render(); }); }
+    function addRefs(parent, refs) { if (!Array.isArray(refs) || !refs.length) return; const wrap = document.createElement('div'); wrap.className = 'refs'; refs.slice(0, 5).forEach((ref, index) => { const button = text('button', '来源 ' + (index + 1), 'ref-chip'); button.type = 'button'; button.dataset.ref = ref; button.title = '查看受控来源引用'; wrap.appendChild(button); }); parent.appendChild(wrap); }
+    function reason(value) { return reasonLabels[value] || (value ? '存在未展开的记录原因' : ''); }
+    function metricValue(value, suffix = '') { return value === null || value === undefined ? '未采集' : String(value) + suffix; }
+    function stageToken(record, id) { const value = record.diagnostics.cost?.breakdown?.stage?.[id]; return value === undefined ? null : value; }
+    function skillToken(record, id) { const found = Object.entries(record.diagnostics.cost?.breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
+    function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = new Set([currentStageId(record)]); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); const stageRows = stagesFor(record); const latest = stageRows.slice().reverse().find((entry) => ['present', 'partial', 'fatal', 'conflict', 'failed', 'evidence_gap'].includes(entry.status)); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const doneStages = stageRows.filter((entry) => ['present', 'completed', 'executed'].includes(entry.status)).length; const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', doneStages + ' / 5')); meta.appendChild(text('span', '事实 ')); meta.lastChild.appendChild(text('strong', (record.coverage.observed ?? '未采集') + ' / ' + (record.coverage.expected ?? '未采集'))); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
+    function renderBanner(record) {
+      const problems = [];
+      if (record.status === 'partial') problems.push('当前任务是部分可见（partial）：部分来源缺失或损坏，下面只展示已核实的合法事实，缺口会逐项标明。');
+      if (record.status === 'stale' || record.stale) problems.push('当前任务快照已过期（stale）：上游投影尚未重新发布，浏览器刷新不能修复，需要等上游恢复后再刷新。');
+      if (record.status === 'fatal') problems.push('当前任务存在致命来源错误（fatal）：以下事实可能不完整，不能当作执行成功。');
+      if (data.status === 'stale') problems.push('全局快照已过期（stale）：存在无法通过合同校验的投影记录，已整体保留上一份完整快照。');
+      else if (data.status === 'partial') problems.push('全局快照为部分可见（partial）：部分 project/task 记录不完整。');
+      const errors = [...(record.errors || []), ...(data.errors || [])];
+      if (!problems.length && !errors.length) return null;
+      const box = document.createElement('div');
+      const tone = (record.status === 'stale' || record.stale || record.status === 'fatal' || data.status === 'stale') ? 'danger' : 'warn';
+      box.className = 'banner';
+      box.style.border = '1px solid ' + (tone === 'danger' ? 'var(--wh-danger)' : 'var(--wh-warn)');
+      box.style.background = tone === 'danger' ? 'var(--wh-danger-soft)' : 'var(--wh-warn-soft)';
+      box.style.color = 'var(--wh-text)';
+      const title = text('strong', problems[0] || '存在来源错误，以下事实可能不完整。');
+      title.style.color = tone === 'danger' ? 'var(--wh-danger)' : 'var(--wh-warn)';
+      box.appendChild(title);
+      problems.slice(1).forEach((line) => box.appendChild(text('div', line)));
+      if (errors.length) { const list = document.createElement('ul'); errors.slice(0, 6).forEach((error) => list.appendChild(text('li', error))); box.appendChild(list); }
+      box.appendChild(text('div', '上游任务或投影更新后，用浏览器手动刷新本页才能读到新快照。'));
+      return box;
+    }
+    function renderHeader(record) {
+      const head = document.createElement('section');
+      head.className = 'task-head';
+      const copy = document.createElement('div');
+      copy.appendChild(text('div', record.project_name, 'eyebrow'));
+      copy.appendChild(text('h2', record.task_id));
+      copy.appendChild(text('p', '最近快照：' + readableTime(record.generated_at) + ' · 页面只读，更新数据后请使用浏览器刷新'));
+      head.appendChild(copy);
+      const right = document.createElement('div');
+      right.className = 'task-head-right';
+      right.appendChild(status(record.status));
+      right.appendChild(text('span', '覆盖 ' + (record.coverage.observed ?? '未采集') + ' / ' + (record.coverage.expected ?? '未采集')));
+      head.appendChild(right);
+      return head;
+    }
+    function renderSummary(record) {
+      const wrap = document.createElement('section');
+      wrap.className = 'summary-section';
+      const head = document.createElement('div');
+      head.className = 'summary-section-title';
+      const copy = document.createElement('div');
+      copy.appendChild(text('h3', '任务基本信息与统计'));
+      copy.appendChild(text('p', '只统计有明确来源的事实；未采集不会显示为 0'));
+      head.appendChild(copy);
+      wrap.appendChild(head);
+      const body = document.createElement('div');
+      body.className = 'summary-section-body';
+      const grid = document.createElement('div');
+      grid.className = 'summary-grid';
+      const stageRows = stagesFor(record);
+      const steps = record.diagnostics.steps || [];
+      const skills = record.diagnostics.skills || [];
+      const cost = record.diagnostics.cost || {};
+      const automation = record.diagnostics.automation || {};
+      const autoText = automation.rate?.status === 'present' && automation.rate.value !== null ? Math.round(automation.rate.value * 100) + '%' : '无法判断';
+      const cards = [
+        ['当前状态', statusLabels[record.status] || '无法判断', '快照状态'],
+        ['阶段记录', stageRows.filter((entry) => entry.status === 'present').length + ' / 5', stageRows.some((entry) => entry.status === 'evidence_gap') ? '存在证据断链' : '固定五阶段'],
+        ['步骤结果', steps.length ? countDone(steps) + ' / ' + steps.length : '无法判断', steps.length ? (countGap(steps) ? countGap(steps) + ' 项遗漏或异常' : '没有已知缺口') : '没有步骤拓扑事实'],
+        ['技能结果', skills.length ? countDone(skills) + ' / ' + skills.length : '无法判断', skills.length ? (countGap(skills) ? countGap(skills) + ' 项遗漏或异常' : '没有已知缺口') : '没有技能拓扑事实'],
+        ['Token', metricValue(cost.token_count), cost.token_count === null ? '未采集，不按 0 处理' : '按消息去重统计'],
+        ['自动化率', autoText, '分母不全则无法判断'],
+      ];
+      cards.forEach(([label, value, help]) => { const card = document.createElement('div'); card.className = 'summary-card'; card.appendChild(text('label', label)); const v = text('strong', value); if (value === '未采集' || value === '无法判断' || value === '不可用') v.classList.add('unavailable'); card.appendChild(v); card.appendChild(text('span', help)); grid.appendChild(card); });
+      body.appendChild(grid);
+      wrap.appendChild(body);
+      return wrap;
+    }
+    function parseToken(s) { if (s === null || s === undefined || s === '未采集' || s === '未拆分' || s === '—') return null; const n = Number(String(s).replace(/[^0-9.]/g, '')); return Number.isFinite(n) && n >= 0 ? n : null; }
+    function renderCost(record) {
+      const cost = record.diagnostics.cost || {};
+      const section = document.createElement('section');
+      section.className = 'insight-section';
+      const title = document.createElement('div');
+      title.className = 'insight-title';
+      title.appendChild(text('h3', '成本归因'));
+      title.appendChild(text('p', '有明确来源才统计；高成本不等于浪费'));
+      section.appendChild(title);
+      const body = document.createElement('div');
+      const cards = document.createElement('div');
+      cards.className = 'cost-grid';
+      [['Token', cost.token_count, ''], ['工具调用', cost.tool_use_count, ''], ['重试', cost.retry_count, ''], ['耗时', cost.duration_ms, ' ms']].forEach(([label, value, suffix]) => { const card = document.createElement('div'); card.className = 'cost-card'; card.appendChild(text('label', label)); const v = text('strong', metricValue(value, suffix)); if (value === null || value === undefined) v.classList.add('unavailable'); card.appendChild(v); cards.appendChild(card); });
+      body.appendChild(cards);
+      const breakdown = document.createElement('div');
+      breakdown.className = 'breakdown';
+      [['按阶段', 'stage'], ['按技能', 'skill'], ['按会话', 'session'], ['按子代理', 'subagent']].forEach(([label, key]) => {
+        const card = document.createElement('div');
+        card.className = 'breakdown-card';
+        card.appendChild(text('h4', label + ' Token'));
+        const values = Object.entries(cost.breakdown?.[key] || {}).sort((a, b) => b[1] - a[1]);
+        if (!values.length) card.appendChild(text('p', '未采集', 'unavailable'));
+        const max = values.length ? Math.max(...values.map(([, value]) => value)) : 1;
+        values.slice(0, 8).forEach(([name, value]) => {
+          const row = document.createElement('div');
+          row.className = 'breakdown-row';
+          const labelText = stageLabels[name] || (key === 'skill' ? (skillLabels[name.split('+')[1]] || name.split('+')[1] || name) : name);
+          const top = document.createElement('div');
+          top.className = 'row-top';
+          top.appendChild(text('span', labelText, 'row-label'));
+          const vals = document.createElement('span');
+          vals.className = 'row-values';
+          vals.appendChild(text('strong', value));
+          vals.appendChild(text('span', 'tok'));
+          top.appendChild(vals);
+          row.appendChild(top);
+          const bar = document.createElement('div');
+          bar.className = 'row-bar';
+          const fill = document.createElement('span');
+          fill.style.width = Math.max(3, (value / max) * 100) + '%';
+          bar.appendChild(fill);
+          row.appendChild(bar);
+          card.appendChild(row);
+        });
+        breakdown.appendChild(card);
+      });
+      body.appendChild(breakdown);
+      const note = text('div', '');
+      note.className = 'snapshot-strip';
+      note.appendChild(text('span', '来源冲突：' + (cost.conflicts ?? '未采集')));
+      note.appendChild(text('span', '重复计数浪费：' + (cost.token_waste?.status === 'present' ? cost.token_waste.value + ' 次' : '无法证明')));
+      note.appendChild(text('span', '只有机械可证的重复计数才标记浪费'));
+      body.appendChild(note);
+      section.appendChild(body);
+      return section;
+    }
+    function toneForProblem(problem) { const code = String(problem.error_code || '').toLowerCase(); const domain = String(problem.domain || '').toLowerCase(); if (code.includes('failed') || code.includes('fatal') || code.includes('conflict') || code.includes('out_of_order') || domain === 'token_waste') return 'danger'; return 'warn'; }
+    function renderProblems(record) {
+      const section = document.createElement('section');
+      section.className = 'insight-section';
+      const title = document.createElement('div');
+      title.className = 'insight-title';
+      title.appendChild(text('h3', '问题与趋势'));
+      title.appendChild(text('p', '只按事实聚合，不自动给修复建议'));
+      section.appendChild(title);
+      const body = document.createElement('div');
+      const list = document.createElement('div');
+      list.className = 'problem-list';
+      const problems = problemsFor(record);
+      if (!problems.length) list.appendChild(text('div', '当前快照没有已记录问题。这不等于没有问题：事实缺失时以各阶段的未采集标记为准。', 'empty'));
+      problems.forEach((problem) => {
+        const tone = toneForProblem(problem);
+        const row = document.createElement('div');
+        row.className = 'problem-row';
+        const dot = document.createElement('span');
+        dot.className = 'problem-dot';
+        dot.style.background = tone === 'danger' ? 'var(--wh-danger)' : 'var(--wh-warn)';
+        row.appendChild(dot);
+        const copy = document.createElement('div');
+        copy.className = 'copy';
+        copy.appendChild(text('strong', (domainLabels[problem.domain] || '流程问题') + (problem.common ? '（常见）' : '')));
+        copy.appendChild(text('span', (problem.friction_type || '未分类') + ' · ' + (problem.error_code || '无错误码')));
+        addRefs(copy, problem.source_refs);
+        row.appendChild(copy);
+        const count = document.createElement('div');
+        count.className = 'count';
+        count.appendChild(text('strong', '×' + (problem.count ?? '未采集')));
+        count.appendChild(text('span', '受控来源 ' + (problem.source_refs?.length || 0)));
+        row.appendChild(count);
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+      const trend = record.diagnostics.trends || {};
+      const automation = record.diagnostics.automation || {};
+      const note = text('div', '');
+      note.className = 'snapshot-strip';
+      const trendLabel = document.createElement('span');
+      trendLabel.appendChild(text('span', '趋势状态：'));
+      trendLabel.appendChild(status(trend.status || 'unknown'));
+      note.appendChild(trendLabel);
+      note.appendChild(text('span', '自动化率：' + (automation.rate?.status === 'present' && automation.rate.value !== null ? Math.round(automation.rate.value * 100) + '%' : '无法判断')));
+      note.appendChild(text('span', '人工介入：' + (automation.human_intervention?.status === 'present' && automation.human_intervention.value !== null ? automation.human_intervention.value + ' 次' : '无法判断')));
+      note.appendChild(text('span', '样本不足时不做趋势判断'));
+      body.appendChild(note);
+      section.appendChild(body);
+      return section;
+    }
+    function unavailableCell(label) { return text('span', label || '未采集', 'unavailable'); }
+    function skillTriggerLabel(entry) {
+      if (entry.status === 'not_applicable') return '未触发 · 合法跳过';
+      if (entry.status === 'skipped') return '未触发 · 已跳过';
+      if (entry.status === 'partial') return '未触发 · 缺少理由';
+      if (entry.status === 'executed') return '已触发 · 已执行';
+      if (entry.status === 'present' || entry.status === 'completed') return '已触发 · 已有结果';
+      if (entry.status === 'missing') return '应触发 · 未记录';
+      if (entry.status === 'unavailable') return '触发状态 · 来源不可用';
+      if (entry.status === 'unknown') return '触发未知 · 无技能事实';
+      return '触发与状态';
+    }
+    function factRow(entry, kind, record, options = {}) {
+      const { index = 0, stageIndex = 1, maxToken = 1, maxTime = 1 } = options;
+      const tr = document.createElement('div');
+      tr.className = 'fact-grid ' + (kind === 'step' ? 'step-row' : 'skill-row');
+      const num = String(stageIndex) + '.' + (index + 1);
+      const serial = text('span', kind === 'step' ? num : 'S' + num, 'stage-index ' + kind);
+      tr.appendChild(serial);
+      tr.appendChild(text('span', kind === 'step' ? '步骤 ' + entry.id : skillLabel(entry.id), 'fact-name'));
+      const state = document.createElement('div');
+      state.appendChild(statusWithCode(entry.status));
+      if (entry.reason) state.appendChild(text('span', reason(entry.reason), 'reason'));
+      tr.appendChild(state);
+      const outcome = document.createElement('div');
+      outcome.className = 'fact-outcome' + (entry.status === 'failed' ? ' danger' : gapStatuses.has(entry.status) ? ' warn' : '');
+      outcome.textContent = ['present', 'completed'].includes(entry.status) ? '已有结果记录' : entry.status === 'executed' ? '已有执行记录' : entry.status === 'skipped' ? '已跳过（有结果登记）' : entry.status === 'not_applicable' ? '不适用（有理由登记）' : entry.status === 'missing' ? '应执行但未记录' : entry.status === 'out_of_order' ? '执行顺序与契约不符' : entry.status === 'failed' ? '执行失败' : entry.status === 'unavailable' ? '来源不可用，无法核实' : entry.status === 'unknown' ? '证据不足，无法判断' : statusLabels[entry.status] || '未采集';
+      if (kind === 'skill') {
+        const trigger = text('div', skillTriggerLabel(entry), 'fact-trigger');
+        outcome.appendChild(trigger);
+      }
+      tr.appendChild(outcome);
+      const costCell = document.createElement('div');
+      const tokenValue = kind === 'skill' ? skillToken(record, entry.id) : null;
+      if (tokenValue === null) costCell.appendChild(unavailableCell('未拆分'));
+      else {
+        const bar = document.createElement('span');
+        bar.className = 'metric-bar';
+        const track = document.createElement('span'); track.className = 'metric-track';
+        const fill = document.createElement('span'); fill.className = 'metric-fill'; fill.style.width = Math.max(3, (tokenValue / maxToken) * 100) + '%'; track.appendChild(fill);
+        bar.appendChild(track); bar.appendChild(text('span', tokenValue, 'metric-value'));
+        costCell.appendChild(bar);
+      }
+      tr.appendChild(costCell);
+      const durationCell = document.createElement('div');
+      durationCell.appendChild(unavailableCell('未拆分'));
+      tr.appendChild(durationCell);
+      const refs = document.createElement('div');
+      if (entry.source_refs?.length) addRefs(refs, entry.source_refs); else refs.appendChild(unavailableCell('未采集'));
+      tr.appendChild(refs);
+      return tr;
+    }
+    function renderFactsTable(title, entries, kind, record, options = {}) {
+      const { stageIndex = 1 } = options;
+      const wrap = document.createElement('div');
+      const heading = document.createElement('div');
+      heading.className = 'subheading';
+      heading.appendChild(text('h4', title));
+      heading.appendChild(text('span', entries.length ? '共 ' + entries.length + ' 项 · ' + countGap(entries) + ' 项需关注' : '没有这类记录'));
+      wrap.appendChild(heading);
+      if (!entries.length) { wrap.appendChild(text('div', '当前快照没有该类事实。空白代表未采集，不代表执行成功。', 'empty')); return wrap; }
+      const maxToken = Math.max(1, ...entries.map((entry) => kind === 'skill' ? (skillToken(record, entry.id) || 0) : 0));
+      const scroll = document.createElement('div');
+      scroll.className = 'table-scroll';
+      const header = document.createElement('div');
+      header.className = 'fact-grid header';
+      ['#', kind === 'step' ? '步骤名称' : '技能名称', kind === 'step' ? '状态' : '触发与状态', '结果', 'Token', '耗时', '证据'].forEach((label) => header.appendChild(text('span', label)));
+      scroll.appendChild(header);
+      entries.forEach((entry, index) => scroll.appendChild(factRow(entry, kind, record, { index, stageIndex, maxToken, maxTime: 1 })));
+      wrap.appendChild(scroll);
+      return wrap;
+    }
+    function renderStages(record) {
+      const section = document.createElement('section');
+      section.className = 'stage-section';
+      const head = document.createElement('div');
+      head.className = 'stage-section-title';
+      const copy = document.createElement('div');
+      copy.appendChild(text('h3', '五个固定阶段 · 步骤与技能'));
+      copy.appendChild(text('p', '固定五阶段连续展示；当前阶段默认展开，其余折叠'));
+      head.appendChild(copy);
+      section.appendChild(head);
+      const body = document.createElement('div');
+      body.className = 'stage-section-body';
+      const list = document.createElement('div');
+      list.className = 'stage-list';
+      const current = currentStageId(record);
+      const maxStageToken = Math.max(1, ...stagesFor(record).map((stage) => stageToken(record, stage.id) || 0));
+      stagesFor(record).forEach((stage, stageIndex) => {
+        const isOpen = openStages.size ? openStages.has(stage.id) : stage.id === current;
+        const steps = stepsFor(record, stage.id);
+        const skills = skillsFor(record, stage.id);
+        const details = document.createElement('details');
+        details.className = 'stage-block' + (isOpen ? ' open' : '');
+        if (isOpen) details.open = true;
+        details.addEventListener('toggle', () => {
+          details.classList.toggle('open', details.open);
+          if (details.open) openStages.add(stage.id); else openStages.delete(stage.id);
+        });
+        const summary = document.createElement('summary');
+        summary.className = 'stage-toggle';
+        summary.style.cursor = 'pointer';
+        summary.style.listStyle = 'none';
+        summary.appendChild(text('span', String(stageOrder.indexOf(stage.id) + 1).padStart(2, '0'), 'stage-index'));
+        const name = document.createElement('div');
+        name.className = 'stage-name';
+        name.appendChild(text('strong', stageLabels[stage.id] || stage.id));
+        summary.appendChild(name);
+        const stateCell = document.createElement('div');
+        stateCell.className = 'stage-cell';
+        stateCell.appendChild(text('label', '状态'));
+        stateCell.appendChild(status(stage.status));
+        summary.appendChild(stateCell);
+        const meta = document.createElement('div');
+        meta.className = 'stage-summary-meta';
+        const covCell = document.createElement('div');
+        covCell.className = 'stage-cell';
+        covCell.appendChild(text('label', '覆盖'));
+        covCell.appendChild(text('strong', (stage.coverage?.observed ?? '未采集') + ' / ' + (stage.coverage?.expected ?? '未采集'), 'wh-mono'));
+        meta.appendChild(covCell);
+        const stepCell = document.createElement('div');
+        stepCell.className = 'stage-cell';
+        stepCell.appendChild(text('label', '步骤'));
+        const stepGap = steps.length ? steps.length - countDone(steps) : 0;
+        const stepVal = document.createElement('span');
+        stepVal.className = 'wh-mono';
+        stepVal.innerHTML = (steps.length ? countDone(steps) : '未采集') + ' <span style="color:var(--wh-text-faint);font-weight:400;">/ ' + (steps.length || '—') + '</span>' + (stepGap > 0 ? ' <span style="color:var(--wh-warn);font-size:9.5px;font-weight:600;">缺 ' + stepGap + '</span>' : '');
+        stepCell.appendChild(stepVal);
+        meta.appendChild(stepCell);
+        const skillCell = document.createElement('div');
+        skillCell.className = 'stage-cell';
+        skillCell.appendChild(text('label', '技能'));
+        const skillGap = skills.length ? skills.length - countDone(skills) : 0;
+        const skillVal = document.createElement('span');
+        skillVal.className = 'wh-mono';
+        skillVal.innerHTML = (skills.length ? countDone(skills) : '未采集') + ' <span style="color:var(--wh-text-faint);font-weight:400;">/ ' + (skills.length || '—') + '</span>' + (skillGap > 0 ? ' <span style="color:var(--wh-warn);font-size:9.5px;font-weight:600;">缺 ' + skillGap + '</span>' : '');
+        skillCell.appendChild(skillVal);
+        meta.appendChild(skillCell);
+        summary.appendChild(meta);
+        const tokenCell = document.createElement('div');
+        tokenCell.className = 'stage-cell';
+        tokenCell.appendChild(text('label', 'Token'));
+        const token = stageToken(record, stage.id);
+        const tokenBar = document.createElement('span');
+        tokenBar.className = 'metric-bar';
+        const tokenTrack = document.createElement('span'); tokenTrack.className = 'metric-track';
+        const tokenFill = document.createElement('span'); tokenFill.className = 'metric-fill'; tokenFill.style.width = token === null ? '0%' : Math.max(3, (token / maxStageToken) * 100) + '%'; tokenTrack.appendChild(tokenFill);
+        tokenBar.appendChild(tokenTrack); tokenBar.appendChild(token === null ? text('span', '未拆分', 'metric-value unavailable') : text('span', token, 'metric-value'));
+        tokenCell.appendChild(tokenBar);
+        summary.appendChild(tokenCell);
+        const timeCell = document.createElement('div');
+        timeCell.className = 'stage-cell';
+        timeCell.appendChild(text('label', '耗时'));
+        const timeBar = document.createElement('span'); timeBar.className = 'metric-bar';
+        const timeTrack = document.createElement('span'); timeTrack.className = 'metric-track';
+        const timeFill = document.createElement('span'); timeFill.className = 'metric-fill time'; timeFill.style.width = '0%'; timeTrack.appendChild(timeFill);
+        timeBar.appendChild(timeTrack); timeBar.appendChild(text('span', '未拆分', 'metric-value unavailable')); timeCell.appendChild(timeBar);
+        summary.appendChild(timeCell);
+        const caret = document.createElement('span');
+        caret.className = 'stage-caret';
+        caret.appendChild(text('span', isOpen ? '收起' : '展开'));
+        const chevron = text('span', '›', 'chevron');
+        caret.appendChild(chevron);
+        summary.appendChild(caret);
+        details.appendChild(summary);
+        const stageBody = document.createElement('div');
+        stageBody.className = 'stage-body';
+        if (Array.isArray(stage.errors) && stage.errors.length) {
+          const errBox = text('div', '', 'snapshot-strip');
+          stage.errors.slice(0, 4).forEach((error) => errBox.appendChild(text('span', error)));
+          stageBody.appendChild(errBox);
+        }
+        stageBody.appendChild(renderFactsTable('步骤', steps, 'step', record, { stageIndex: stageIndex + 1 }));
+        stageBody.appendChild(renderFactsTable('技能', skills, 'skill', record, { stageIndex: stageIndex + 1 }));
+        details.appendChild(stageBody);
+        list.appendChild(details);
+      });
+      body.appendChild(list);
+      section.appendChild(body);
+      return section;
+    }
+    function showEvidence(ref) {
+      const panel = $('#evidence-panel');
+      panel.textContent = '';
+      panel.classList.add('visible');
+      panel.appendChild(text('h3', '受控来源引用'));
+      panel.appendChild(text('p', '只读展示快照内登记的相对路径引用，不拼接绝对路径、不访问文件系统。'));
+      panel.appendChild(text('code', ref));
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function render() {
+      renderSidebar();
+      main.textContent = '';
+      const visible = filteredRecords();
+      const record = visible.find((entry) => keyOf(entry) === selectedKey) || visible[0];
+      if (!record) {
+        $('#top-meta').textContent = '快照：' + readableTime(data.generated_at);
+        main.appendChild(text('div', '没有匹配的任务。请调整筛选条件。', 'empty'));
+        return;
+      }
+      selectedKey = keyOf(record);
+      $('#top-meta').textContent = '快照：' + readableTime(data.generated_at) + ' · 共 ' + records.length + ' 个任务';
+      const banner = renderBanner(record);
+      if (banner) main.appendChild(banner);
+      main.appendChild(renderHeader(record));
+      main.appendChild(renderSummary(record));
+      const insights = document.createElement('div');
+      insights.className = 'insight-grid';
+      insights.appendChild(renderCost(record));
+      insights.appendChild(renderProblems(record));
+      main.appendChild(insights);
+      main.appendChild(renderStages(record));
+    }
+    document.addEventListener('click', (event) => {
+      const chip = event.target.closest('.ref-chip');
+      if (chip && chip.dataset.ref) showEvidence(chip.dataset.ref);
+    });
+    setupFilters();
+    render();
+  })();
+  </script>
+</body>
+</html>

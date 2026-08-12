@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub://runtime/schemas/monitoring-projection.v1.json",
+  "title": "WorkflowHub M15 project monitoring projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_name", "task_id", "generated_at", "status", "stale", "coverage", "errors", "source_refs", "facts_summary", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": "monitoring-projection.v1" },
+    "project_name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["current", "partial", "stale", "fatal", "empty"] },
+    "stale": { "type": "boolean" },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "errors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "source_refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+    "facts_summary": { "type": "object", "additionalProperties": false, "required": ["count", "statuses"], "properties": { "count": { "type": "integer", "minimum": 0 }, "statuses": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } } } },
+    "diagnostics": { "$ref": "#/$defs/diagnostics" }
+  },
+  "$defs": {
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "x-relational-constraints": [{ "left": "observed", "operator": "<=", "right": "expected", "when": "expected is not null" }],
+      "properties": {
+        "expected": { "type": ["integer", "null"], "minimum": 0 },
+        "observed": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "expected": { "type": "integer" } }, "required": ["expected"] },
+          "then": { "properties": { "observed": { "maximum": { "$data": "1/expected" } } } }
+        }
+      ]
+    },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!~)(?!.*\\\\)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:+/-]*$" },
+    "diagnosticEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "coverage", "errors", "source_refs"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "domain": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "errors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "source_refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "reason": { "type": ["string", "null"] },
+        "friction_type": { "type": ["string", "null"] },
+        "error_code": { "type": ["string", "null"] },
+        "count": { "type": "integer", "minimum": 0 },
+        "common": { "type": "boolean" }
+      }
+    },
+    "trendMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "buckets", "usable_buckets", "numerator", "denominator", "samples"],
+      "properties": {
+        "status": { "type": "string", "minLength": 1 },
+        "buckets": { "type": "integer", "minimum": 0 },
+        "usable_buckets": { "type": "integer", "minimum": 0 },
+        "numerator": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 0 },
+        "samples": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["numerator", "denominator"], "properties": { "numerator": { "type": "integer", "minimum": 0 }, "denominator": { "type": "integer", "minimum": 0 } } } }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "steps", "skills", "failures", "cost", "automation", "problems", "trends", "compatibility"],
+      "properties": {
+        "stage": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "skills": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "failures": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["token_count", "tool_use_count", "retry_count", "duration_ms", "conflicts", "token_waste", "breakdown"],
+          "properties": {
+            "token_count": { "type": ["integer", "null"], "minimum": 0 },
+            "tool_use_count": { "type": ["integer", "null"], "minimum": 0 },
+            "retry_count": { "type": ["integer", "null"], "minimum": 0 },
+            "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+            "conflicts": { "type": "integer", "minimum": 0 },
+            "token_waste": { "type": "object", "additionalProperties": false, "required": ["status", "value", "reason"], "properties": { "status": { "type": "string", "enum": ["present", "unknown"] }, "value": { "type": ["integer", "null"], "minimum": 0 }, "reason": { "type": "string", "minLength": 1 } } },
+            "breakdown": { "type": "object", "additionalProperties": false, "required": ["stage", "skill", "session", "subagent"], "properties": { "stage": { "$ref": "#/$defs/countMap" }, "skill": { "$ref": "#/$defs/countMap" }, "session": { "$ref": "#/$defs/countMap" }, "subagent": { "$ref": "#/$defs/countMap" } } }
+          }
+        },
+        "automation": { "type": "object", "additionalProperties": false, "required": ["rate", "human_intervention"], "properties": { "rate": { "$ref": "#/$defs/rate" }, "human_intervention": { "$ref": "#/$defs/rate" } } },
+        "problems": { "type": "array", "items": { "$ref": "#/$defs/problem" } },
+        "trends": { "type": "object", "additionalProperties": false, "required": ["status", "metrics"], "properties": { "status": { "type": "string", "minLength": 1 }, "metrics": { "type": "object", "additionalProperties": { "$ref": "#/$defs/trendMetric" } } } },
+        "compatibility": { "type": "object", "additionalProperties": false, "required": ["schema_version", "source_ids", "skill_keys", "grains", "coverage"], "properties": { "schema_version": { "type": "string", "minLength": 1 }, "source_ids": { "type": "array", "items": { "$ref": "#/$defs/ref" } }, "skill_keys": { "type": "array", "items": { "$ref": "#/$defs/ref" } }, "grains": { "type": "array", "items": { "$ref": "#/$defs/ref" } }, "coverage": { "$ref": "#/$defs/coverage" } } }
+      }
+    },
+    "countMap": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+    "rate": { "type": "object", "additionalProperties": false, "required": ["status", "value"], "properties": { "status": { "type": "string", "minLength": 1 }, "value": { "type": ["number", "integer", "null"], "minimum": 0 }, "numerator": { "type": "integer", "minimum": 0 }, "denominator": { "type": "integer", "minimum": 0 }, "excluded_unknown": { "type": "integer", "minimum": 0 } } },
+    "problem": { "type": "object", "additionalProperties": false, "required": ["domain", "friction_type", "error_code", "count", "source_refs"], "properties": { "domain": { "type": "string", "minLength": 1 }, "friction_type": { "type": ["string", "null"] }, "error_code": { "type": ["string", "null"] }, "count": { "type": "integer", "minimum": 0 }, "common": { "type": "boolean" }, "source_refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } } } }
+  }
+}

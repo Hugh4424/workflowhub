@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { extname } from "node:path";
 import { assertArtifactDir } from "../../core/artifact-dir.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
@@ -67,7 +68,20 @@ function binding(task, item, label) {
   return Object.freeze({ ref: item.ref, sha256: item.sha256, value });
 }
 
-function ids(text) { return [...new Set((text.match(/\bAC-\d+\b/g) ?? []))]; }
+function ids(text) {
+  const found = new Set([
+    ...(text.match(/\bAC-\d+\b/g) ?? []),
+    ...(text.match(/\bAC-[A-Z][A-Z0-9-]*-\d+\b/g) ?? []),
+  ]);
+  for (const match of text.matchAll(/\bAC-(\d+)\s*[—–-]\s*(?:AC-)?(\d+)\b/g)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start || end - start > 100) continue;
+    const width = Math.max(match[1].length, match[2].length);
+    for (let value = start; value <= end; value += 1) found.add(`AC-${String(value).padStart(width, "0")}`);
+  }
+  return [...found];
+}
 
 function lineFor(text, token) {
   const line = text.split("\n").findIndex((value) => value.includes(token));
@@ -76,6 +90,11 @@ function lineFor(text, token) {
 
 function acceptanceLineFor(text, acceptanceId) {
   const escaped = acceptanceId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const alias = new RegExp(`\\b${escaped}\\s*=\\s*(AC-[A-Za-z]+-\\d+)\\b`).exec(text)?.[1];
+  if (alias) {
+    const detailed = text.split("\n").findIndex((value) => value.includes(`**${alias}**`));
+    if (detailed >= 0) return detailed + 1;
+  }
   const matcher = new RegExp(`^\\s*-\\s*\\[[ xX]\\]\\s*\\*\\*${escaped}\\*\\*\\b`, "m");
   const match = matcher.exec(text);
   return match ? text.slice(0, match.index).split("\n").length : lineFor(text, acceptanceId);
@@ -111,7 +130,8 @@ function completedTasks(task, taskText) {
     const actualChanges = /^-\s+\*\*(?:执行事实|execution facts?)\*\*\s*[:：][ \t]*([^\n]*)$/mi.exec(body)?.[1]?.trim();
     if (!actualChanges || /^(?:N\/A|none|not started|未开始)\b/i.test(actualChanges)) incomplete(`completed ${taskId} lacks execution facts`);
     const bodyOffset = found.index + whole.indexOf(body);
-    const line = taskText.slice(0, bodyOffset).split("\n").length;
+    const firstContentOffset = body.search(/\S/);
+    const line = taskText.slice(0, bodyOffset + Math.max(0, firstContentOffset)).split("\n").length;
     output.push(Object.freeze({ task_id: taskId, acceptance_ids: acceptanceIds, evidence: evidenceBindings, summary: actualChanges, line }));
   }
   return output;
@@ -119,7 +139,8 @@ function completedTasks(task, taskText) {
 
 function finalSnapshotImplementationAnchors({ sourceRoot, baseTree, finalTree }) {
   const changed = git(sourceRoot, ["diff", "--name-only", baseTree, finalTree, "--", ".", ":(exclude)node_modules"], "final snapshot changed files")
-    .split("\n").map((path) => path.trim()).filter((path) => /^(?:core|runtime|skills|tools|workflows|tests)\//.test(path));
+    .split("\n").map((path) => path.trim()).filter((path) => /^(?:core|runtime|skills|tools|workflows|tests|evaluation-assets)\//.test(path)
+      || [".c", ".cc", ".cpp", ".css", ".go", ".h", ".hpp", ".java", ".js", ".jsx", ".json", ".mjs", ".py", ".rb", ".rs", ".sh", ".sql", ".swift", ".ts", ".tsx", ".vue"].includes(extname(path).toLowerCase()));
   const anchors = [];
   for (const path of changed) {
     const patch = git(sourceRoot, ["diff", "--unified=16", baseTree, finalTree, "--", path], `final snapshot diff for ${path}`);
@@ -135,6 +156,7 @@ function finalSnapshotImplementationAnchors({ sourceRoot, baseTree, finalTree })
     for (const [index, range] of ranges.entries()) anchors.push(Object.freeze({
       id: `implementation-${path.replaceAll("/", "__")}-${index + 1}`,
       path, start_line: range.start, end_line: range.end, role: "implementation",
+      outside_diff_reason: "Integration review uses bounded final-snapshot excerpts; it intentionally omits the cumulative diff.",
       reason: "current final-snapshot implementation excerpt selected from the changed source hunk",
     }));
   }
@@ -207,7 +229,7 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
       change: Object.freeze(items.length ? items.map((item) => ({ task_id: item.task_id, summary: item.summary, evidence_refs: Object.freeze(item.evidence.map(({ ref, sha256 }) => ({ ref, sha256 }))) })) : [{ task_id: null, summary: "current implementation receipt and GREEN receipt" }]),
       test: Object.freeze([{ receipt_ref: green.ref, receipt_hash: green.sha256 }]),
       evidence: Object.freeze([{ ref: implementation.ref, sha256: implementation.sha256 }]),
-      anchors: Object.freeze(items.length ? items.map((item) => ({ id: `${item.task_id}:${id}`, path: materials.tasks_ref, start_line: item.line, end_line: item.line, role: "completion", reason: "current task completion evidence" })) : [{ id: `current-spec:${id}`, path: materials.spec_ref, start_line: acceptanceLineFor(materials.texts["spec.md"], id), end_line: acceptanceLineFor(materials.texts["spec.md"], id), role: "acceptance", reason: "current specification acceptance criterion" }]),
+      anchors: Object.freeze(items.length ? items.map((item) => ({ id: `${item.task_id}:${id}`, path: materials.tasks_ref, start_line: item.line, end_line: item.line, role: "completion", outside_diff_reason: "Integration review reads the current task fact; it intentionally omits the cumulative diff.", reason: "current task completion evidence" })) : [{ id: `current-spec:${id}`, path: materials.spec_ref, start_line: acceptanceLineFor(materials.texts["spec.md"], id), end_line: acceptanceLineFor(materials.texts["spec.md"], id), role: "acceptance", outside_diff_reason: "Integration review reads the current specification; it intentionally omits the cumulative diff.", reason: "current specification acceptance criterion" }]),
     });
   });
   return Object.freeze({

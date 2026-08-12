@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub://runtime/schemas/monitoring-fact.v1.json",
+  "title": "WorkflowHub M15 monitoring fact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "fact_id", "task_id", "project_name", "fact_type", "stage", "step_id", "skill_id",
+    "session_id", "subagent_id", "run_id", "attempt_id", "status", "value", "reason", "error", "observed_at",
+    "source", "coverage", "contract_version", "collector_version", "adapter_version", "skill_version", "evidence_refs"
+  ],
+  "x-field-contracts": [
+    { "field": "schema_version", "owner": "contract", "source": "monitoring-fact.v1", "view": "all", "version": "schema.v1" },
+    { "field": "fact_id", "owner": "producer", "source": "fact producer", "view": "all", "version": "collector.v1" },
+    { "field": "task_id", "owner": "launcher", "source": "task manifest", "view": "all", "version": "fact.v1" },
+    { "field": "project_name", "owner": "launcher", "source": "task manifest", "view": "all", "version": "fact.v1" },
+    { "field": "fact_type", "owner": "producer", "source": "typed producer", "view": "all", "version": "fact.v1" },
+    { "field": "stage", "owner": "stage runtime", "source": "stage manifest", "view": "overview/diagnostics", "version": "fact.v1" },
+    { "field": "step_id", "owner": "stage runtime", "source": "step manifest", "view": "diagnostics", "version": "fact.v1" },
+    { "field": "skill_id", "owner": "skill runtime", "source": "skill manifest", "view": "diagnostics/cost", "version": "fact.v1" },
+    { "field": "session_id", "owner": "source adapter", "source": "registered source", "view": "cost/evidence", "version": "adapter.v1" },
+    { "field": "subagent_id", "owner": "source adapter", "source": "registered source", "view": "cost", "version": "adapter.v1" },
+    { "field": "run_id", "owner": "launcher", "source": "binding", "view": "all", "version": "fact.v1" },
+    { "field": "attempt_id", "owner": "stage runtime", "source": "attempt identity", "view": "cost/diagnostics", "version": "fact.v1" },
+    { "field": "status", "owner": "producer", "source": "source observation", "view": "all", "version": "fact.v1" },
+    { "field": "value", "owner": "typed producer", "source": "fact-specific source", "view": "diagnostics/cost", "version": "fact.v1" },
+    { "field": "reason", "owner": "producer", "source": "source error", "view": "all", "version": "fact.v1" },
+    { "field": "error", "owner": "producer", "source": "source error", "view": "all", "version": "fact.v1" },
+    { "field": "observed_at", "owner": "producer", "source": "event time", "view": "trend", "version": "fact.v1" },
+    { "field": "source", "owner": "producer", "source": "registered binding", "view": "all", "version": "source.v1" },
+    { "field": "coverage", "owner": "collector", "source": "collection accounting", "view": "all", "version": "collector.v1" },
+    { "field": "contract_version", "owner": "contract", "source": "released contract", "view": "compatibility", "version": "contract.v1" },
+    { "field": "collector_version", "owner": "collector", "source": "collector release", "view": "compatibility", "version": "collector.v1" },
+    { "field": "adapter_version", "owner": "adapter", "source": "adapter release", "view": "compatibility", "version": "adapter.v1" },
+    { "field": "skill_version", "owner": "skill runtime", "source": "skill release", "view": "compatibility", "version": "skill.v1" },
+    { "field": "evidence_refs", "owner": "producer", "source": "supporting evidence", "view": "evidence", "version": "evidence.v1" }
+  ],
+  "x-value-contracts": {
+    "stage": { "required": ["outcome"], "fields": { "outcome": "non-empty string", "reason": "non-empty string" } },
+    "step": { "required": ["outcome"], "fields": { "outcome": "non-empty string", "reason": "non-empty string" } },
+    "skill": { "required": ["trigger"], "fields": { "trigger": "boolean", "executed": "boolean", "reason": "non-empty string", "version": "non-empty string" } },
+    "session": { "required": [], "fields": { "duration_ms": "non-negative integer", "retry_id": "non-empty string", "event_id": "non-empty string", "event": "start|end", "timestamp": "date-time" } },
+    "subagent": { "required": [], "fields": { "parent_id": "non-empty string", "origin": "non-empty string", "duration_ms": "non-negative integer" } },
+    "token": { "required": ["message_id", "grain"], "one_of": ["input_tokens", "output_tokens", "total_tokens", "tokens"], "fields": { "message_id": "non-empty string", "input_tokens": "non-negative integer", "output_tokens": "non-negative integer", "total_tokens": "non-negative integer", "tokens": "non-negative integer", "retry_id": "non-empty string", "grain": "opaque ref" } },
+    "tool_use": { "required": ["tool_use_id", "name", "grain"], "fields": { "tool_use_id": "non-empty string", "name": "string|null", "retry_id": "non-empty string", "grain": "opaque ref" } },
+    "duration": { "required": ["duration_ms"], "fields": { "duration_ms": "non-negative integer", "event_id": "non-empty string", "grain": "non-empty string" } },
+    "retry": { "required": ["retry_count"], "fields": { "retry_id": "non-empty string", "retry_count": "non-negative integer", "attempt_id": "non-empty string", "grain": "non-empty string" } },
+    "review": { "required": [], "fields": { "invoked": "boolean", "independent": "boolean", "outcome": "non-empty string", "freshness": "non-empty string", "source_ref": "opaque ref" } },
+    "test": { "required": [], "fields": { "invoked": "boolean", "independent": "boolean", "outcome": "non-empty string", "freshness": "non-empty string", "source_ref": "opaque ref" } },
+    "verify": { "required": [], "fields": { "invoked": "boolean", "fresh": "boolean", "outcome": "non-empty string", "source_ref": "opaque ref" } },
+    "artifact": { "required": [], "fields": { "record_kind": "non-empty string", "ref": "opaque ref", "hash": "non-empty string", "name": "non-empty string" } },
+    "health": { "required": ["domain"], "fields": { "domain": "non-empty string", "status": "non-empty string", "friction_type": "non-empty string", "error_code": "non-empty string", "configured": "boolean", "used": "boolean", "expected": "scalar|null", "actual": "scalar|null", "mismatch": "boolean" } },
+    "automation": { "required": ["origin"], "fields": { "origin": "non-empty string", "action": "non-empty string", "retry_id": "non-empty string", "approval": "boolean", "override": "boolean" } },
+    "human_intervention": { "required": ["origin"], "fields": { "origin": "non-empty string", "action": "non-empty string", "reply": "non-empty string", "request": "non-empty string", "approval": "boolean", "override": "boolean" } },
+    "source_status": { "required": ["source_id", "registration_id", "required"], "fields": { "source_id": "opaque ref", "registration_id": "opaque ref", "required": "boolean" } },
+    "transcript_event": { "required": ["event_id", "event_type"], "fields": { "event_id": "non-empty string", "event_type": "non-empty string", "timestamp": "date-time" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "text": { "type": "string", "minLength": 1 },
+    "nullableText": { "type": ["string", "null"], "minLength": 1 },
+    "count": { "type": "integer", "minimum": 0 },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "expected"],
+      "x-relational-constraints": [{ "left": "observed", "operator": "<=", "right": "expected", "when": "expected is not null" }],
+      "properties": {
+        "observed": { "type": "integer", "minimum": 0 },
+        "expected": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "expected": { "type": "integer" } }, "required": ["expected"] },
+          "then": { "properties": { "observed": { "maximum": { "$data": "1/expected" } } } }
+        }
+      ]
+    },
+    "stageValue": { "type": "object", "additionalProperties": false, "required": ["outcome"], "properties": { "outcome": { "$ref": "#/$defs/text" }, "reason": { "$ref": "#/$defs/text" } } },
+    "skillValue": { "type": "object", "additionalProperties": false, "required": ["trigger"], "properties": { "trigger": { "type": "boolean" }, "executed": { "type": "boolean" }, "reason": { "$ref": "#/$defs/text" }, "version": { "$ref": "#/$defs/text" } } },
+    "sessionValue": { "type": "object", "additionalProperties": false, "properties": { "duration_ms": { "$ref": "#/$defs/count" }, "retry_id": { "$ref": "#/$defs/text" }, "event_id": { "$ref": "#/$defs/text" }, "event": { "type": "string", "enum": ["start", "end"] }, "timestamp": { "type": "string", "format": "date-time" } } },
+    "subagentValue": { "type": "object", "additionalProperties": false, "properties": { "parent_id": { "$ref": "#/$defs/text" }, "origin": { "$ref": "#/$defs/text" }, "duration_ms": { "$ref": "#/$defs/count" } } },
+    "tokenValue": { "type": "object", "additionalProperties": false, "required": ["message_id", "grain"], "properties": { "message_id": { "$ref": "#/$defs/id" }, "input_tokens": { "$ref": "#/$defs/count" }, "output_tokens": { "$ref": "#/$defs/count" }, "total_tokens": { "$ref": "#/$defs/count" }, "tokens": { "$ref": "#/$defs/count" }, "retry_id": { "$ref": "#/$defs/text" }, "grain": { "$ref": "#/$defs/id" } }, "anyOf": [{ "required": ["input_tokens", "output_tokens"] }, { "required": ["total_tokens"] }, { "required": ["tokens"] }] },
+    "toolUseValue": { "type": "object", "additionalProperties": false, "required": ["tool_use_id", "name", "grain"], "properties": { "tool_use_id": { "$ref": "#/$defs/id" }, "name": { "type": ["string", "null"] }, "retry_id": { "$ref": "#/$defs/text" }, "grain": { "$ref": "#/$defs/id" } } },
+    "durationValue": { "type": "object", "additionalProperties": false, "required": ["duration_ms"], "properties": { "duration_ms": { "$ref": "#/$defs/count" }, "event_id": { "$ref": "#/$defs/text" }, "grain": { "$ref": "#/$defs/id" } } },
+    "retryValue": { "type": "object", "additionalProperties": false, "required": ["retry_count"], "properties": { "retry_id": { "$ref": "#/$defs/text" }, "retry_count": { "$ref": "#/$defs/count" }, "attempt_id": { "$ref": "#/$defs/text" }, "grain": { "$ref": "#/$defs/id" } } },
+    "reviewValue": { "type": "object", "additionalProperties": false, "properties": { "invoked": { "type": "boolean" }, "independent": { "type": "boolean" }, "outcome": { "$ref": "#/$defs/text" }, "freshness": { "$ref": "#/$defs/text" }, "source_ref": { "type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:/-]*$" } } },
+    "testValue": { "type": "object", "additionalProperties": false, "properties": { "invoked": { "type": "boolean" }, "independent": { "type": "boolean" }, "outcome": { "$ref": "#/$defs/text" }, "freshness": { "$ref": "#/$defs/text" }, "source_ref": { "type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:/-]*$" } } },
+    "verifyValue": { "type": "object", "additionalProperties": false, "properties": { "invoked": { "type": "boolean" }, "fresh": { "type": "boolean" }, "outcome": { "$ref": "#/$defs/text" }, "source_ref": { "type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:/-]*$" } } },
+    "artifactValue": { "type": "object", "additionalProperties": false, "properties": { "record_kind": { "$ref": "#/$defs/text" }, "ref": { "type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:/-]*$" }, "hash": { "$ref": "#/$defs/text" }, "name": { "$ref": "#/$defs/text" } } },
+    "healthValue": { "type": "object", "additionalProperties": false, "required": ["domain"], "properties": { "domain": { "$ref": "#/$defs/text" }, "status": { "$ref": "#/$defs/text" }, "friction_type": { "$ref": "#/$defs/text" }, "error_code": { "$ref": "#/$defs/text" }, "configured": { "type": "boolean" }, "used": { "type": "boolean" }, "expected": { "type": ["string", "number", "boolean", "null"] }, "actual": { "type": ["string", "number", "boolean", "null"] }, "mismatch": { "type": "boolean" } } },
+    "automationValue": { "type": "object", "additionalProperties": false, "required": ["origin"], "properties": { "origin": { "$ref": "#/$defs/text" }, "action": { "$ref": "#/$defs/text" }, "retry_id": { "$ref": "#/$defs/text" }, "approval": { "type": "boolean" }, "override": { "type": "boolean" } } },
+    "humanValue": { "type": "object", "additionalProperties": false, "required": ["origin"], "properties": { "origin": { "$ref": "#/$defs/text" }, "action": { "$ref": "#/$defs/text" }, "reply": { "$ref": "#/$defs/text" }, "request": { "$ref": "#/$defs/text" }, "approval": { "type": "boolean" }, "override": { "type": "boolean" } } },
+    "sourceStatusValue": { "type": "object", "additionalProperties": false, "required": ["source_id", "registration_id", "required"], "properties": { "source_id": { "$ref": "#/$defs/id" }, "registration_id": { "$ref": "#/$defs/id" }, "required": { "type": "boolean" } } },
+    "transcriptEventValue": { "type": "object", "additionalProperties": false, "required": ["event_id", "event_type"], "properties": { "event_id": { "$ref": "#/$defs/id" }, "event_type": { "$ref": "#/$defs/text" }, "timestamp": { "type": "string", "format": "date-time" } } }
+  },
+  "properties": {
+    "schema_version": { "const": "monitoring-fact.v1" },
+    "fact_id": { "$ref": "#/$defs/id" },
+    "task_id": { "$ref": "#/$defs/id" },
+    "project_name": { "$ref": "#/$defs/id" },
+    "fact_type": { "type": "string", "enum": ["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"] },
+    "stage": { "type": ["string", "null"], "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code", null] },
+    "step_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "skill_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "session_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "subagent_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "run_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "attempt_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+    "status": { "type": "string", "enum": ["present", "missing", "unknown", "partial", "fatal", "conflict"] },
+    "value": { "type": ["object", "null"] },
+    "reason": { "type": ["string", "null"] },
+    "error": { "type": ["string", "null"] },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "source_id", "source_version"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["stage", "registered_codex", "task", "fact", "quality", "derived", "unknown"] },
+        "ref": { "type": "string", "minLength": 1, "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+        "source_id": { "$ref": "#/$defs/id" },
+        "source_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "contract_version": { "type": "string", "minLength": 1 },
+    "collector_version": { "type": "string", "minLength": 1 },
+    "adapter_version": { "type": ["string", "null"] },
+    "skill_version": { "type": ["string", "null"] },
+    "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!~)(?!.*\\\\)(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._:/-]*$" } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "present" } }, "required": ["status"] },
+      "then": { "properties": { "value": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["missing", "unknown", "partial", "fatal", "conflict"] } }, "required": ["status"] },
+      "then": {
+        "properties": { "value": { "type": "null" } },
+        "anyOf": [
+          { "properties": { "reason": { "type": "string", "minLength": 1 } }, "required": ["reason"] },
+          { "properties": { "error": { "type": "string", "minLength": 1 } }, "required": ["error"] }
+        ]
+      }
+    },
+    { "if": { "properties": { "fact_type": { "const": "stage" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/stageValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "step" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/stageValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "skill" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/skillValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "session" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/sessionValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "subagent" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/subagentValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "token" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/tokenValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "tool_use" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/toolUseValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "duration" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/durationValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "retry" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/retryValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "review" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/reviewValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "test" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/testValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "verify" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/verifyValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "artifact" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/artifactValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "health" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/healthValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "automation" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/automationValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "human_intervention" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/humanValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "source_status" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/sourceStatusValue" } } } },
+    { "if": { "properties": { "fact_type": { "const": "transcript_event" }, "status": { "const": "present" } }, "required": ["fact_type", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/transcriptEventValue" } } } }
+  ]
+}

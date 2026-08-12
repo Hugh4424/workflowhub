@@ -77,6 +77,8 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["core/runtime-mode.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/evidence/write-boundary-preflight.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/evidence/invocation-identity.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["runtime/evidence/monitoring-diagnostics.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["runtime/evidence/monitoring-projector.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["runtime/stage/step-manifest.mjs", new Set(["cwd identity discovery"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", new Set(["cwd identity discovery"])],
@@ -93,6 +95,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["runtime/evidence/quality-store.mjs", "quality fact storage authority"],
   ["core/artifact-dir.mjs", "ArtifactDir product authority"],
   ["runtime/evidence/canonical-receipt-writer.mjs", "canonical evidence authority"],
+  ["runtime/evidence/monitoring-projector.mjs", "derived monitoring projection authority"],
   ["runtime/task/git-worktree-snapshot.mjs", "private Git snapshot temp index"],
   ["workflows/build-code/diff-scanner.mjs", "private Git diff scan temp file"],
   ["core/task-close.mjs", "confirmed plan-bound delivery close authority"],
@@ -216,7 +219,10 @@ function checkRuntimeContracts() {
 function checkUniqueTaskPathDerivation() {
   const failures = [];
   const roots = ["core", "runtime", "scripts", "workflows", "skills"];
-  const allowed = new Set(["runtime/task/task-identity.mjs"]);
+  // The monitoring projector may enumerate only its derived
+  // Projects/*/monitoring/tasks namespace. It never derives canonical task
+  // identity; the narrow exception is intentionally limited to this module.
+  const allowed = new Set(["runtime/task/task-identity.mjs", "runtime/evidence/monitoring-projector.mjs"]);
   const literalTasksJoin = /\b(?:join|resolve)\s*\([^;\n]*(?:"tasks"|'tasks'|`tasks`)/g;
   for (const root of roots) {
     for (const file of walk(resolve(repoRoot, root))) {

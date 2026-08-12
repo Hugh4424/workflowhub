@@ -86,6 +86,20 @@ make-decision 的完整决策记录；逐题保存问题、最终选择、推荐
 **已登记来源（registered source）**：
 由受控 launcher 明确登记格式、版本和读取权限的事实来源；它是采集成本、会话归属和自动化信息的唯一入口。
 
+**监控来源证据（monitoring source evidence）**：
+写在受控 `taskPath` 的 `quality/evidence/monitoring/` 内，用来支撑 `facts.jsonl` 运行事实的原始机器证据。
+它不是第二套事实源；缺少或不支持的来源保持 `missing`/`unknown`，不得从 cwd、时间或目录扫描推测。
+provider 私有 session、raw output 和 broker state 不属于监控来源。
+
+**项目监控投影（project monitoring projection）**：
+由 launcher 侧 projector 从任务监控事实重建的每任务派生文件。它只供监控页面聚合，可陈旧、可删除、可重建，
+不得用于发现 task、恢复 task 身份或反向写入执行核心。
+
+**全局监控快照（global monitoring snapshot）**：
+launcher 侧 projector 在全局锁内全量重建并原子替换的 derived 全局 JSONL 与
+`workflowhub-monitor-data.js`。JSONL 保留跨 task/version 的扁平指标输出，data.js 是固定静态 HTML 的无服务读取格式；
+两者来自同一批已校验记录，必须暴露生成时间、覆盖率、错误和陈旧状态，不是真相源，也不是全局 task index。
+
 **缺失（missing）**：
 契约要求的来源或对象没有登记、或已登记后读取时找不到。
 

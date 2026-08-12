@@ -70,6 +70,11 @@ export function createTranscriptSourceReader(read) {
   return reader;
 }
 
+/** Check a launcher-issued reader without exposing the private path it closes over. */
+export function isTranscriptSourceReader(reader) {
+  return READERS.has(reader);
+}
+
 /** Validate and brand the complete, closed transcript-source registry. */
 export function createTranscriptSourceRegistry(entries) {
   if (!Array.isArray(entries)) throw new TypeError("transcript registry entries must be an array");
@@ -605,7 +610,7 @@ export function buildArtifactProjection(preflight) {
   })) for (const name of names) {
     const ref = `materials/${name}`;
     candidates.push(createArtifactRecord({
-      record_kind: "material", id: ref, stage, status: "present", ref, required: true,
+      record_kind: "artifact", id: ref, stage, status: "present", ref, required: true,
       content_hash: sha256(preflight.materials[name]), source_ref: name,
     }));
   }

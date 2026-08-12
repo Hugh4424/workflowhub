@@ -66,7 +66,7 @@ function usage() {
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... --plan-hash=...",
-    "  task-close.mjs manual-close --task-path=... --project=... --task=... --source-ref=... [--source-hash=...]",
+    "  task-close.mjs manual-close --task-path=... --project=... --task=... --source-ref=... --risk-accepted=true --risk-reason=... [--source-hash=...] [--deferred-items=a,b]",
   ].join("\n");
 }
 
@@ -97,6 +97,11 @@ async function main() {
       task,
       kernel,
       sourceRef: required(values, "source-ref"),
+      riskAccepted: values["risk-accepted"] === "true",
+      riskReason: required(values, "risk-reason"),
+      deferredItems: values["deferred-items"] === undefined
+        ? []
+        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
       ...(values["source-hash"] === undefined ? {} : { sourceHash: values["source-hash"] }),
     });
     return finish(result, result.output_ref);
