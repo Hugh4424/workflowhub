@@ -110,7 +110,11 @@ function latestAttempts(attempt) {
 const FAILURE_CATEGORIES = Object.freeze({
   completed: "completed",
   OUTPUT_INVALID: "output_invalid",
+  PROVIDER_OUTPUT_INVALID: "provider_output_invalid",
+  PROVIDER_NO_TERMINAL_RESULT: "provider_no_terminal_result",
   PROVIDER_UNAVAILABLE: "provider_unavailable",
+  RATE_LIMITED: "rate_limited",
+  CANCELLED: "cancelled",
   TIMEOUT: "timeout",
   SAME_SOURCE: "same_source",
   PUBLIC_RESULT_INVALID: "public_result_invalid",
@@ -125,7 +129,11 @@ const FAILURE_CATEGORIES = Object.freeze({
 // collapsed into UNKNOWN in the report.
 const ATTEMPT_CLASS_CODES = new Set([
   "OUTPUT_INVALID",
+  "PROVIDER_OUTPUT_INVALID",
+  "PROVIDER_NO_TERMINAL_RESULT",
   "PROVIDER_UNAVAILABLE",
+  "RATE_LIMITED",
+  "CANCELLED",
   "TIMEOUT",
   "SAME_SOURCE",
   "PUBLIC_RESULT_INVALID",

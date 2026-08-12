@@ -52,7 +52,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "2504e907845fb333163a21279eb026fff591475a54b8c4158be05c4c55c4764f"
+      "sha256": "e7a6f66a7d5c9de2b1665cfa3a38da6ce06613430638ddadc742f73b197ca0fa"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -68,7 +68,7 @@
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "9cc74deebf4e74d77d8e8d952aad209e3540fd1839e90c8655614fb4af3aaa96"
+      "sha256": "1ae654c9af97669c7777c847703d6f0f842cb3772d5091edcf1d3f932a2febd4"
     },
     {
       "path": "scripts/review-runner.mjs",

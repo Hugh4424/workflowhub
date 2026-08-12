@@ -425,6 +425,36 @@ export function reviewMaterialBytes(key, value) {
   return materialBytes(value);
 }
 
+function originalRequirementSection(decisionLog) {
+  if (typeof decisionLog !== "string") return null;
+  const lines = decisionLog.replaceAll("\r\n", "\n").split("\n");
+  const start = lines.findIndex((line) => /^##[ \t]+原始需求(?:[ \t（(]|$)/.test(line));
+  if (start < 0) return null;
+  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+\S/.test(line));
+  const end = nextHeading < 0 ? lines.length : nextHeading;
+  const section = lines.slice(start, end).join("\n").trim();
+  return section.length > 0 ? `${section}\n` : null;
+}
+
+function deduplicateDecisionMaterials(materials) {
+  if (!("raw_requirement" in materials) || !("approved_decision" in materials)) return materials;
+  const comparableMarkdown = (value, key) => typeof value === "string"
+    ? value.replaceAll("\r\n", "\n").replace(/[ \t]+$/gm, "").trimEnd()
+    : reviewMaterialBytes(key, value);
+  const rawComparable = comparableMarkdown(materials.raw_requirement, "raw_requirement");
+  const decisionComparable = comparableMarkdown(materials.approved_decision, "approved_decision");
+  const duplicates = Buffer.isBuffer(rawComparable)
+    ? Buffer.isBuffer(decisionComparable) && rawComparable.equals(decisionComparable)
+    : rawComparable === decisionComparable;
+  if (!duplicates) return materials;
+
+  const derivedRawRequirement = originalRequirementSection(materials.approved_decision);
+  if (derivedRawRequirement === null) {
+    throw new Error("MATERIAL_INCOMPLETE: raw_requirement duplicates approved_decision and no original requirement section can be derived");
+  }
+  return { ...materials, raw_requirement: derivedRawRequirement };
+}
+
 /**
  * Build-plan's spec-analyze input is a packet projection, not another current
  * material. The raw requirement index is carried from decision-log so the
@@ -1093,7 +1123,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const acEvidenceSummary = stage === "verify-code" && materials.acceptance_evidence
     ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
     : null;
-  let providerMaterials = Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence"));
+  let providerMaterials = deduplicateDecisionMaterials(
+    Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence")),
+  );
   const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
   if (selectedContextDelivery) {
     const compacted = { ...providerMaterials };

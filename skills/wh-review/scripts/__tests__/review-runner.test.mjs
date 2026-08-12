@@ -108,6 +108,26 @@ describe("review output and facts", () => {
     });
   });
 
+  it.each([
+    "PROVIDER_OUTPUT_INVALID",
+    "PROVIDER_NO_TERMINAL_RESULT",
+    "RATE_LIMITED",
+    "CANCELLED",
+  ])("keeps broker failure code %s out of UNKNOWN", (code) => {
+    const providerAttempt = {
+      provider: "opencode/v4flash",
+      status: "failed",
+      error: { code },
+      execution: { timing: { duration_ms: 20 } },
+    };
+
+    expect(classifyAttempt(providerAttempt)).toBe(code);
+    expect(classificationSummary({ provider_attempts: [providerAttempt] })).toMatchObject({
+      attempt: { [code]: 1, UNKNOWN: 0 },
+      failure_taxonomy: { [code]: { code, count: 1 } },
+    });
+  });
+
   it("aggregates direct evidence without turning one invalid anchor into a pass finding", () => {
     const direct = { provider: "kimi/coding", review: { findings: [{ severity: "major", path: "a.js", line: 1, issue: "x", recommendation: "fix", evidence_kind: "direct", evidence: "a.js:1", root_cause: "unsafe branch" }] }, final: { status: "completed" }, calls: [], evidenceAnchors: [true] };
     const invalid = { provider: "opencode/v4flash", review: direct.review, final: { status: "completed" }, calls: [], evidenceAnchors: [false] };
@@ -367,6 +387,81 @@ describe("material and workspace boundaries", () => {
     });
     expect(bundle.files).toEqual(expect.arrayContaining(["changes.diff", "change-map.json", "requirements/approved_spec.md", "requirements/acceptance_criteria.md", "requirements/test_evidence.json"]));
     expect(bundle.files).not.toContain("requirements/review_delta.json");
+  });
+
+  it("derives raw_requirement from the decision-log original requirement section instead of duplicating the full decision", () => {
+    const { attachmentRoot, task } = fixture("review-build-spec-materials-");
+    const approvedDecision = [
+      "# Decision Log",
+      "",
+      "## 原始需求",
+      "",
+      "必须修复 wh-review 可靠性。",
+      "",
+      "### 原始限制",
+      "",
+      "不能降低交付质量。",
+      "",
+      "## 决定",
+      "",
+      "采用最小修复。",
+    ].join("\n");
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: attachmentRoot,
+      attachmentRoot,
+      source,
+      task,
+      taskId: "task",
+      stage: "build-spec",
+      materials: {
+        raw_requirement: approvedDecision,
+        approved_decision: approvedDecision,
+        draft_spec: "# Spec\n\n修复 packet 与错误分类。",
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    });
+
+    const rawRequirement = readFileSync(join(bundle.bundleRoot, "requirements/raw_requirement.md"), "utf8");
+    const frozenDecision = readFileSync(join(bundle.bundleRoot, "requirements/approved_decision.md"), "utf8");
+    expect(rawRequirement).toContain("必须修复 wh-review 可靠性。");
+    expect(rawRequirement).toContain("### 原始限制");
+    expect(rawRequirement).not.toContain("## 决定");
+    expect(rawRequirement).not.toBe(frozenDecision);
+  });
+
+  it("deduplicates equivalent decision material with CRLF and trailing whitespace differences", () => {
+    const { attachmentRoot, task } = fixture("review-build-spec-normalized-materials-");
+    const approvedDecision = "# Decision Log\n\n## 原始需求\n\n必须保留实际语义。\n\n## 决定\n\n采用最小修复。\n";
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: attachmentRoot, attachmentRoot, source, task, taskId: "task", stage: "build-spec",
+      materials: {
+        raw_requirement: approvedDecision.replaceAll("\n", "\r\n").replace("实际语义。", "实际语义。   "),
+        approved_decision: approvedDecision,
+        draft_spec: "# Spec\n",
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    });
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/raw_requirement.md"), "utf8")).toBe("## 原始需求\n\n必须保留实际语义。\n");
+  });
+
+  it("fails before packet delivery when duplicate decision material has no original requirement section", () => {
+    const { attachmentRoot, task } = fixture("review-build-spec-duplicate-");
+    const decisionWithoutSource = "# Decision Log\n\n## 决定\n\n采用最小修复。\n";
+
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: attachmentRoot,
+      attachmentRoot,
+      source,
+      task,
+      taskId: "task",
+      stage: "build-spec",
+      materials: {
+        raw_requirement: decisionWithoutSource,
+        approved_decision: decisionWithoutSource,
+        draft_spec: "# Spec\n\n修复 packet 与错误分类。",
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    })).toThrow(/MATERIAL_INCOMPLETE.*duplicates approved_decision.*original requirement section/);
   });
 
   it("does not dispatch a provider when source capture fails", async () => {
