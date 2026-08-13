@@ -2,9 +2,17 @@ import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import yaml from "js-yaml";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
+import { loadStageManifest } from "./step-manifest.mjs";
+import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -20,6 +28,314 @@ const UPSTREAM_INPUT = Object.freeze({
   "build-code": "build_plan",
   "verify-code": null,
 });
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
+const OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable"]);
+const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
+const SHA256 = /^[a-f0-9]{64}$/;
+
+function outcomeError(message) {
+  const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
+  error.code = "MATERIAL_INCOMPLETE";
+  return error;
+}
+
+function outcomeObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw outcomeError(`${label} must be an object`);
+  return value;
+}
+
+function outcomeText(value, label) {
+  if (typeof value !== "string" || value.trim() === "") throw outcomeError(`${label} must be non-empty`);
+  return value;
+}
+
+function outcomeHash(value, label) {
+  if (!SHA256.test(value ?? "")) throw outcomeError(`${label} must be a sha256`);
+  return value;
+}
+
+function outcomeEvidence(ctx, entry, label, binding) {
+  const value = outcomeObject(entry, label);
+  const ref = outcomeText(value.ref, `${label}.ref`);
+  const sha256 = outcomeHash(value.sha256, `${label}.sha256`);
+  if (!ref.startsWith("quality/") || ref.includes("..")) throw outcomeError(`${label}.ref is outside the quality namespace`);
+  let raw;
+  try { raw = ctx.task.readRecord(ref); }
+  catch (error) { throw outcomeError(`${label}.ref is unavailable: ${error.message}`); }
+  const actual = createHash("sha256").update(raw).digest("hex");
+  if (actual !== sha256) throw outcomeError(`${label}.ref hash mismatch`);
+  let evidence;
+  try { evidence = JSON.parse(raw); }
+  catch { throw outcomeError(`${label}.ref must contain structured semantic evidence`); }
+  if (evidence?.schema_version !== "workflowhub-stage-outcome-evidence.v1") {
+    throw outcomeError(`${label}.ref has an invalid evidence schema`);
+  }
+  for (const [key, expected] of Object.entries({
+    task_id: binding.taskId,
+    stage: binding.stage,
+    snapshot_tree: binding.snapshotTree,
+    material_revision: binding.materialRevision,
+    subject_kind: binding.subjectKind,
+    subject_id: binding.subjectId,
+    outcome_status: binding.outcomeStatus,
+    result_summary: binding.resultSummary,
+  })) {
+    if (evidence[key] !== expected) throw outcomeError(`${label}.ref semantic binding mismatch: ${key}`);
+  }
+  return { ref, sha256 };
+}
+
+function validateOutcomeCost(value, label) {
+  const cost = outcomeObject(value, label);
+  const allowed = new Set(["duration_ms", "tokens", "status", "reason"]);
+  const unknown = Object.keys(cost).filter((key) => !allowed.has(key));
+  if (unknown.length) throw outcomeError(`${label} has unknown fields: ${unknown.join(", ")}`);
+  for (const key of ["duration_ms", "tokens"]) {
+    if (cost[key] !== null && cost[key] !== undefined
+      && (!Number.isSafeInteger(cost[key]) || cost[key] < 0)) throw outcomeError(`${label}.${key} must be a non-negative integer or null`);
+  }
+  const status = outcomeText(cost.status, `${label}.status`);
+  if (!["recorded", "unavailable"].includes(status)) throw outcomeError(`${label}.status must be recorded or unavailable`);
+  if (status === "recorded" && (cost.duration_ms === null || cost.tokens === null)) {
+    throw outcomeError(`${label} recorded cost must include duration_ms and tokens`);
+  }
+  if (status === "unavailable") {
+    if (cost.duration_ms !== null || cost.tokens !== null) {
+      throw outcomeError(`${label} unavailable cost must leave duration_ms and tokens null`);
+    }
+    outcomeText(cost.reason, `${label}.reason`);
+  }
+  return cost;
+}
+
+function validateStepOutcome(ctx, stage, actual, expected, index, binding) {
+  const value = outcomeObject(actual, `step_outcomes[${index}]`);
+  if (value.step_id !== expected.step_id || value.step_slug !== expected.step_slug || value.order !== expected.order) {
+    throw outcomeError(`step_outcomes[${index}] does not match manifest order/identity`);
+  }
+  if (!OUTCOME_STATUSES.has(value.status)) throw outcomeError(`step_outcomes[${index}].status is invalid`);
+  if (!Array.isArray(value.input_refs)) throw outcomeError(`step_outcomes[${index}].input_refs must be an array`);
+  value.input_refs.forEach((ref, refIndex) => outcomeText(ref, `step_outcomes[${index}].input_refs[${refIndex}]`));
+  outcomeText(value.result_summary, `step_outcomes[${index}].result_summary`);
+  if (!Array.isArray(value.evidence_refs)) throw outcomeError(`step_outcomes[${index}].evidence_refs must be an array`);
+  const evidence = value.evidence_refs.map((entry, refIndex) => outcomeEvidence(ctx, entry, `step_outcomes[${index}].evidence_refs[${refIndex}]`, {
+    ...binding,
+    subjectKind: "step",
+    subjectId: value.step_slug,
+    outcomeStatus: value.status,
+    resultSummary: value.result_summary,
+  }));
+  if (value.status === "completed" && evidence.length === 0) throw outcomeError(`completed step ${value.step_slug} must provide evidence`);
+  if (value.status !== "completed") outcomeText(value.reason ?? value.error, `step_outcomes[${index}].reason`);
+  validateOutcomeCost(value.cost, `step_outcomes[${index}].cost`);
+  return { ...value, evidence_refs: evidence };
+}
+
+function validateSkillOutcome(ctx, actual, expected, index, binding) {
+  const value = outcomeObject(actual, `skill_outcomes[${index}]`);
+  if (value.skill_id !== expected.name) throw outcomeError(`skill_outcomes[${index}] does not match manifest order/identity`);
+  if (!OUTCOME_STATUSES.has(value.status)) throw outcomeError(`skill_outcomes[${index}].status is invalid`);
+  if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
+    throw outcomeError(`skill_outcomes[${index}] requires boolean trigger and executed`);
+  }
+  outcomeText(value.version, `skill_outcomes[${index}].version`);
+  outcomeText(value.result_summary, `skill_outcomes[${index}].result_summary`);
+  if (!Array.isArray(value.evidence_refs)) throw outcomeError(`skill_outcomes[${index}].evidence_refs must be an array`);
+  const evidence = value.evidence_refs.map((entry, refIndex) => outcomeEvidence(ctx, entry, `skill_outcomes[${index}].evidence_refs[${refIndex}]`, {
+    ...binding,
+    subjectKind: "skill",
+    subjectId: value.skill_id,
+    outcomeStatus: value.status,
+    resultSummary: value.result_summary,
+  }));
+  if (value.status === "completed" && evidence.length === 0) throw outcomeError(`completed skill ${value.skill_id} must provide evidence`);
+  if (value.status !== "completed") outcomeText(value.reason ?? value.error, `skill_outcomes[${index}].reason`);
+  validateOutcomeCost(value.cost, `skill_outcomes[${index}].cost`);
+  return { ...value, evidence_refs: evidence };
+}
+
+function currentMaterialBinding(ctx) {
+  const artifactDir = ctx.artifacts
+    ?? ((ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot)
+      ? ArtifactDir.open(ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace.worktreeRoot, ctx.task)
+      : null);
+  if (!artifactDir) throw outcomeError("stage outcome requires an authenticated ArtifactDir");
+  const values = CURRENT_MATERIAL_FILES.map((file) => {
+    try { return [file, artifactDir.read(file)]; }
+    catch (error) {
+      if (error?.code === "ENOENT") return [file, null];
+      throw outcomeError(`cannot read current material ${file}: ${error.message}`);
+    }
+  });
+  const revision = `revision-${createHash("sha256").update(JSON.stringify(values)).digest("hex")}`;
+  return { values, revision, hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : createHash("sha256").update(content).digest("hex")])) };
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function materialTextMap(materials) {
+  return Object.fromEntries(materials.values.map(([file, content]) => [file, content]));
+}
+
+function analyzerQualityBinding(ctx, entry, label, snapshot) {
+  const value = outcomeObject(entry, label);
+  const ref = outcomeText(value.ref, `${label}.ref`);
+  const sha256 = outcomeHash(value.sha256, `${label}.sha256`);
+  if (!ref.startsWith("quality/") || ref.includes("..")) throw outcomeError(`${label}.ref is outside the quality namespace`);
+  let raw;
+  try { raw = ctx.task.readRecord(ref); }
+  catch (error) { throw outcomeError(`${label}.ref is unavailable: ${error.message}`); }
+  if (createHash("sha256").update(raw).digest("hex") !== sha256) throw outcomeError(`${label}.ref hash mismatch`);
+  let evidence;
+  try { evidence = JSON.parse(raw); }
+  catch { throw outcomeError(`${label}.ref must contain structured evidence`); }
+  if (evidence?.snapshot_tree !== snapshot.tree) {
+    throw outcomeError(`${label}.ref is not bound to the current snapshot`);
+  }
+  return { ref, sha256, snapshot_tree: snapshot.tree };
+}
+
+function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, snapshot, stage) {
+  const bindings = outcomeObject(analyzer.material_bindings, `${stage} spec_analyze.material_bindings`);
+  const evidenceBindings = outcomeObject(analyzer.evidence_bindings, `${stage} spec_analyze.evidence_bindings`);
+  const actualMaterials = materialTextMap(materials);
+  const sourceByMaterial = {
+    original_requirement: "decision-log.md",
+    decision_log: "decision-log.md",
+    spec: "spec.md",
+    plan: "plan.md",
+    tasks: "tasks.md",
+  };
+  const normalizedEvidence = {};
+  for (const requiredRef of profile.required_evidence) {
+    const packetEvidence = Array.isArray(packet.evidence)
+      ? packet.evidence.find((entry) => entry?.ref === requiredRef)
+      : null;
+    const binding = outcomeObject(evidenceBindings[requiredRef], `${stage} spec_analyze.evidence_bindings.${requiredRef}`);
+    const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.evidence_bindings.${requiredRef}`, snapshot);
+    if (!packetEvidence || packetEvidence.hash !== verified.sha256 || packetEvidence.snapshot_tree !== snapshot.tree) {
+      throw outcomeError(`${stage} spec_analyze evidence ${requiredRef} is not bound to the authenticated quality record`);
+    }
+    normalizedEvidence[requiredRef] = verified;
+  }
+  for (const requiredMaterial of profile.required_materials) {
+    const binding = outcomeObject(bindings[requiredMaterial], `${stage} spec_analyze.material_bindings.${requiredMaterial}`);
+    if (requiredMaterial === "implementation") {
+      const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.material_bindings.${requiredMaterial}`, snapshot);
+      if (binding.material_sha256 !== createHash("sha256").update(String(packet.materials?.[requiredMaterial] ?? "")).digest("hex")) {
+        throw outcomeError(`${stage} spec_analyze implementation material binding does not match the packet`);
+      }
+      continue;
+    }
+    const expectedSource = sourceByMaterial[requiredMaterial];
+    if (binding.source_ref !== expectedSource) {
+      throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} must bind ${expectedSource}`);
+    }
+    const actual = actualMaterials[expectedSource];
+    if (typeof actual !== "string") throw outcomeError(`${stage} spec_analyze material ${expectedSource} is unavailable`);
+    const actualHash = createHash("sha256").update(actual).digest("hex");
+    if (binding.sha256 !== actualHash || binding.snapshot_tree !== snapshot.tree) {
+      throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} hash is not current`);
+    }
+    if (packet.materials?.[requiredMaterial] !== actual) {
+      throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} does not contain the current material bytes`);
+    }
+  }
+  return Object.freeze({ materials: Object.freeze({ ...bindings }), evidence: Object.freeze(normalizedEvidence) });
+}
+
+function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialRevision, materials, manifest, skillManifest) {
+  const analyzer = outcomeObject(record.spec_analyze, "stage outcome spec_analyze");
+  if (analyzer.schema_version !== "workflowhub-spec-analyze-stage-outcome.v1") {
+    throw outcomeError("stage outcome spec_analyze schema_version is invalid");
+  }
+  if (analyzer.stage !== stage || analyzer.snapshot_tree !== snapshot.tree || analyzer.material_revision !== materialRevision) {
+    throw outcomeError("stage outcome spec_analyze is not bound to the current stage snapshot and materials");
+  }
+  const analyzerStep = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
+  if (!analyzerStep || analyzer.step_slug !== analyzerStep.step_slug) {
+    throw outcomeError("stage outcome spec_analyze is not bound to the declared stage-end analyzer step");
+  }
+  if (analyzer.skill_id !== "spec-analyze") throw outcomeError("stage outcome spec_analyze must bind the spec-analyze skill");
+  const analyzerSkill = skillManifest.skills?.find((skill) => skill.name === "spec-analyze");
+  if (!analyzerSkill) throw outcomeError(`${stage} manifest must declare the spec-analyze skill`);
+  const analyzerSkillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === "spec-analyze");
+  const analyzerStepOutcome = record.step_outcomes.find((entry) => entry?.step_slug === analyzerStep.step_slug);
+  if (!analyzerSkillOutcome?.trigger || analyzerSkillOutcome.executed !== true) {
+    throw outcomeError(`${stage} stage-end analyzer skill was not executed`);
+  }
+  if (!analyzerStepOutcome) throw outcomeError(`${stage} stage-end analyzer step outcome is missing`);
+
+  const analysis = validateStageSpecAnalyzeProfile({ stage, packet: analyzer.packet });
+  const profileDefinition = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage);
+  const supplied = outcomeObject(analyzer.result, "stage outcome spec_analyze.result");
+  for (const key of ["status", "errors", "findings", "summary", "facts"]) {
+    if (!sameJson(supplied[key], analysis[key])) throw outcomeError(`stage outcome spec_analyze.result.${key} does not match the semantic validator`);
+  }
+  if (record.status === "completed" && analyzerStepOutcome.status !== "completed") {
+    throw outcomeError(`${stage} completed stage must mark the stage-end analyzer step completed`);
+  }
+  return Object.freeze({ analyzer, analysis });
+}
+
+function authenticateStageOutcome(ctx, stage, input) {
+  const ref = input?.receipts?.stage_outcomes;
+  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the Stage Agent`);
+  const match = STAGE_OUTCOME_REF.exec(ref);
+  if (!match || match[1] !== stage) throw outcomeError(`stage outcome ref must be content-addressed for ${stage}`);
+  let raw;
+  try { raw = ctx.task.readRecord(ref); }
+  catch (error) { throw outcomeError(`stage outcome receipt is unavailable: ${error.message}`); }
+  const actualHash = createHash("sha256").update(raw).digest("hex");
+  if (actualHash !== match[2]) throw outcomeError("stage outcome receipt hash does not match its ref");
+  let value;
+  try { value = JSON.parse(raw); }
+  catch { throw outcomeError("stage outcome receipt must be valid JSON"); }
+  const record = outcomeObject(value, "stage outcome receipt");
+  if (record.schema_version !== "workflowhub-stage-outcomes.v1") throw outcomeError("stage outcome schema_version is invalid");
+  if (record.task_id !== ctx.identity.taskId || record.stage !== stage) throw outcomeError("stage outcome task/stage identity mismatch");
+  outcomeText(record.attempt_id, "stage outcome attempt_id");
+  if (!STAGE_OUTCOME_STATUSES.has(record.status)) throw outcomeError("stage outcome status is invalid");
+  const snapshot = ctx.kernel.currentVNextSnapshot();
+  if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot_tree is stale");
+  const materials = currentMaterialBinding(ctx);
+  if (record.material_revision !== materials.revision) throw outcomeError("stage outcome material_revision is stale");
+  if (JSON.stringify(record.material_hashes) !== JSON.stringify(materials.hashes)) {
+    throw outcomeError(`stage outcome material_hashes do not match current materials: ${CURRENT_MATERIAL_FILES.join(", ")}`);
+  }
+  const stepsRef = `workflows/${stage}/steps.json`;
+  const skillsRef = `workflows/${stage}/skill-deps.yaml`;
+  if (record.steps_manifest_ref !== stepsRef || record.skills_manifest_ref !== skillsRef) throw outcomeError("stage outcome manifest refs are not canonical");
+  const stepsRaw = readFileSync(join(REPOSITORY_ROOT, stepsRef), "utf8");
+  const skillsRaw = readFileSync(join(REPOSITORY_ROOT, skillsRef), "utf8");
+  if (record.steps_manifest_hash !== createHash("sha256").update(stepsRaw).digest("hex")
+    || record.skills_manifest_hash !== createHash("sha256").update(skillsRaw).digest("hex")) throw outcomeError("stage outcome manifest hash is stale");
+  const manifest = loadStageManifest(stage, REPOSITORY_ROOT);
+  const skillManifest = yaml.load(skillsRaw);
+  if (!Array.isArray(record.step_outcomes) || record.step_outcomes.length !== manifest.steps.length) throw outcomeError("stage outcome must contain every declared step exactly once");
+  if (!Array.isArray(record.skill_outcomes) || record.skill_outcomes.length !== (skillManifest?.skills?.length ?? 0)) throw outcomeError("stage outcome must contain every declared skill exactly once");
+  const binding = {
+    taskId: ctx.identity.taskId,
+    stage,
+    snapshotTree: snapshot.tree,
+    materialRevision: materials.revision,
+  };
+  const stepOutcomes = record.step_outcomes.map((entry, index) => validateStepOutcome(ctx, stage, entry, manifest.steps[index], index, binding));
+  const skillOutcomes = record.skill_outcomes.map((entry, index) => validateSkillOutcome(ctx, entry, skillManifest.skills[index], index, binding));
+  const specAnalyze = validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materials.revision, materials, manifest, skillManifest);
+  return Object.freeze({
+    ref,
+    sha256: actualHash,
+    value: Object.freeze({ ...record, step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes, spec_analyze: specAnalyze.analyzer }),
+    step_outcomes: stepOutcomes,
+    skill_outcomes: skillOutcomes,
+    spec_analyze: specAnalyze.analyzer,
+  });
+}
 
 function upstreamForStage(ctx, stage) {
   const slot = UPSTREAM_INPUT[stage];
@@ -90,6 +406,19 @@ function currentMaterialTexts(ctx) {
       throw error;
     }
   }));
+}
+
+function specAnalyzeDisclosure(value) {
+  if (!value || typeof value !== "object") return null;
+  return Object.freeze({
+    schema_version: value.schema_version,
+    stage: value.stage,
+    snapshot_tree: value.snapshot_tree,
+    material_revision: value.material_revision,
+    step_slug: value.step_slug,
+    skill_id: value.skill_id,
+    result: value.result,
+  });
 }
 
 function evidenceCandidate(result, kind, subject, stage) {
@@ -241,6 +570,14 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
   const qualityFactRefs = [];
   let allPassed = true;
   const qualityWarnings = [];
+  const analyzerResult = result.spec_analyze?.result;
+  // Semantic findings are quality facts. They are deliberately not an
+  // execution/progression gate: the same stage can publish the finding so
+  // the Stage Agent repairs it in place instead of silently handing it down.
+  if (analyzerResult?.status && analyzerResult.status !== "consistent") {
+    allPassed = false;
+    qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult.status}`);
+  }
   for (const [subject, kind] of Object.entries(STAGE_PREDICATES[ctx.stage])) {
       const candidate = evidenceCandidate(result, kind, subject, ctx.stage)
       ?? (kind === "confirmation" ? currentConfirmationCandidate(ctx, snapshot.tree) : null);
@@ -353,6 +690,17 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx));
   const completion = deriveStageCompletion(ctx.stage, observations);
+  const stageOutcomeSummary = typeof result.stage_outcome_ref === "string"
+    ? summarizeStageOutcome({
+      stage: ctx.stage,
+      stageOutcomeRef: result.stage_outcome_ref,
+      stageOutcomeHash: result.stage_outcome_hash,
+      stageOutcomeStatus: result.stage_outcome_status,
+      stepOutcomes: result.step_outcomes,
+      skillOutcomes: result.skill_outcomes,
+      specAnalyze: analyzerResult,
+    })
+    : null;
   return Object.freeze({
     schema_version: "stage-runtime-result.vnext",
     stage: ctx.stage,
@@ -369,6 +717,15 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       ]),
     }),
     quality_fact_refs: Object.freeze(qualityFactRefs),
+    ...(typeof result.stage_outcome_ref === "string" ? {
+      stage_outcome_ref: result.stage_outcome_ref,
+      stage_outcome_hash: result.stage_outcome_hash,
+      stage_outcome_status: result.stage_outcome_status,
+      step_outcomes: Object.freeze([...(result.step_outcomes ?? [])]),
+      skill_outcomes: Object.freeze([...(result.skill_outcomes ?? [])]),
+      spec_analyze: result.spec_analyze,
+      stage_outcome_summary: stageOutcomeSummary,
+    } : {}),
     ...(result.missing_items?.length ? { missing_items: [...result.missing_items] } : {}),
   });
 }
@@ -479,11 +836,21 @@ export function runOfficialStage(stage, context, invocation, publication) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
+  const stageOutcome = authenticateStageOutcome(ctx, stage, input);
   return runStage(
     stage,
     ctx,
     async () => {
-      return verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input));
+      const result = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input));
+      return {
+        ...result,
+        stage_outcome_ref: stageOutcome.ref,
+        stage_outcome_hash: stageOutcome.sha256,
+        stage_outcome_status: stageOutcome.value.status,
+        step_outcomes: stageOutcome.step_outcomes,
+        skill_outcomes: stageOutcome.skill_outcomes,
+        spec_analyze: specAnalyzeDisclosure(stageOutcome.spec_analyze),
+      };
     },
     publication,
   );

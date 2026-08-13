@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { validateSpecAnalyzeCompleteness } from "../../runtime/stage/stage-content-contracts.mjs";
+import { validateSpecAnalyze, validateSpecAnalyzeCompleteness, validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { buildPlanningArtifacts } from "../../skills/wh-review/scripts/review-materials.mjs";
 
 const strategy = `
@@ -27,6 +27,10 @@ const aggregateStrategy = `
 
 function complete() {
   return {
+    original_requirements: [
+      { id: "R-001", summary: "第一条原始要求" },
+      { id: "R-002", summary: "第二条原始要求" },
+    ],
     rawRequirementIndex: {
       schema_version: "raw-requirement-index.v1",
       source_artifact: "decision-log",
@@ -43,7 +47,7 @@ function complete() {
 }
 
 describe("spec-analyze completeness contract", () => {
-  it("has a report-only planning consumer and no runtime publication gate", () => {
+  it("has report-only planning and five-stage consumers without a runtime publication gate", () => {
     const runtimeCallerFiles = [
       new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url),
       new URL("../../runtime/stage/stage-runner.mjs", import.meta.url),
@@ -58,10 +62,203 @@ describe("spec-analyze completeness contract", () => {
     expect(entry.local_changes).toMatch(/build-plan[\s\S]*planning_artifacts[\s\S]*contract tests/i);
   });
 
+  it("checks semantic behavior and evidence, not only identifiers or document presence", () => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior: "用户真实需求语义",
+      actual_behavior: "文件存在",
+      semantic_match: false,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "第一条原始要求" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [
+      { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+    ];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
+    ]));
+  });
+
+  it.each([
+    ["文件存在并完整", "文件存在"],
+    ["文档存在且可用", "文档存在"],
+    ["路径存在并覆盖需求", "路径存在"],
+    ["文档已检查但没有行为证据", "文档已检查"],
+    ["删除", "删除文件后保留副本"],
+  ])("rejects compound existence claims as semantic coverage (%s)", (actual_behavior) => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior: "需求文档完整",
+      actual_behavior,
+      semantic_match: true,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "第一条原始要求" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [
+      { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+    ];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
+    ]));
+  });
+
+  it("requires fresh evidence to bind to the current snapshot", () => {
+    const source = complete();
+    source.evidence = [
+      { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64) },
+      { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+    ];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/stale evidence: decision-log/);
+  });
+
+  it("accepts a real behavior statement that mentions ordinary existence", () => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior: "支持批量提问",
+      actual_behavior: "支持批量提问且存在重试机制",
+      semantic_match: true,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "第一条原始要求" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [
+      { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+    ];
+    expect(validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source }).ok).toBe(true);
+  });
+
+  it.each([
+    ["支持批量提问", "支持批量提问，测试通过"],
+    ["实现批量提问", "已实现批量提问并完成验证"],
+  ])("accepts behavior that ends with a verification note (%s)", (expected_behavior, actual_behavior) => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior,
+      actual_behavior,
+      semantic_match: true,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "第一条原始要求" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [
+      { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+    ];
+    expect(validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source }).ok).toBe(true);
+  });
+
+  it.each([
+    ["已检查", "减少无谓阻塞已检查"],
+    ["支持批量提问", "不支持批量提问"],
+    ["支持批量提问", "不再支持批量提问"],
+    ["支持批量提问", "不能支持批量提问"],
+    ["支持批量提问", "不能满足批量提问"],
+    ["支持批量提问", "不满足批量提问"],
+    ["支持批量提问", "不符合批量提问要求"],
+    ["支持批量提问", "不会支持批量提问"],
+    ["支持批量提问", "不要支持批量提问"],
+    ["支持批量提问", "不必支持批量提问"],
+    ["支持批量提问", "没法支持批量提问"],
+    ["支持批量提问", "取消批量提问"],
+    ["支持批量提问", "移除批量提问"],
+    ["支持批量提问", "支持批量回答"],
+  ])("rejects verification-only or negated semantic claims (%s)", (expected_behavior, actual_behavior) => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior,
+      actual_behavior,
+      semantic_match: true,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [{ ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) }];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
+    ]));
+  });
+
+  it("rejects unknown and duplicate coverage rows instead of using order-dependent results", () => {
+    const source = complete();
+    const base = {
+      ...source,
+      materials: { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks },
+      evidence: [
+        { ref: "decision-log", kind: "decision", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+        { ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+        { ref: "plan", kind: "plan", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+        { ref: "tasks", kind: "tasks", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) },
+      ],
+    };
+    const coverage = {
+      requirement_id: "R-001", expected_behavior: "第一条原始要求", actual_behavior: "第一条原始要求已实现",
+      semantic_match: true, scenario_refs: ["SCN-001"], oracle_refs: ["ORACLE-001"], artifact_refs: ["spec"], evidence_refs: ["spec"], status: "covered",
+    };
+    const unknown = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: { ...base, coverage: [{ ...coverage, requirement_id: "R-999" }] } });
+    expect(unknown.ok).toBe(false);
+    expect(unknown.errors.join("; ")).toMatch(/unknown requirement coverage/);
+    const duplicate = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: { ...base, coverage: [coverage, { ...coverage, actual_behavior: "第一条原始要求已完成" }] } });
+    expect(duplicate.ok).toBe(false);
+    expect(duplicate.errors.join("; ")).toMatch(/duplicate requirement coverage/);
+  });
+
   it("accepts a fully source-bound artifact chain and complete test strategy", () => {
     const result = validateSpecAnalyzeCompleteness(complete());
     expect(result.ok, result.errors.join("; ")).toBe(true);
     expect(result.findings).toEqual([]);
+  });
+
+  it("routes the unified entry by profile and reports a missing stage packet clearly", () => {
+    expect(validateSpecAnalyze({ profile: "build-plan", packet: { original_requirements: [], coverage: [] } }).stage).toBe("build-plan");
+    expect(() => validateSpecAnalyze({ profile: "build-plan" })).toThrow(/requires packet/);
+    expect(validateSpecAnalyze(complete())).toMatchObject({ ok: true });
   });
 
   it("uses the required decision-log source index without inventing a full decision-log excerpt", () => {
@@ -195,5 +392,20 @@ describe("spec-analyze completeness contract", () => {
     expect(disposition.order).toBeLessThan(analyze.order);
     expect(analyze.order).toBeLessThan(publish.order);
     expect(analyze.observable_result).toMatch(/DEFER|OPEN|report-only|strict/i);
+  });
+
+  it("places a stage-end spec-analyze step before publish in every stage", () => {
+    for (const stage of ["make-decision", "build-spec", "build-code", "verify-code"]) {
+      const steps = JSON.parse(readFileSync(new URL(`../../workflows/${stage}/steps.json`, import.meta.url), "utf8")).steps;
+      const analyze = steps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze");
+      const publish = steps.find(({ step_slug }) => step_slug.startsWith("publish-") && step_slug !== "publish-verification-attempt");
+      expect(analyze, stage).toBeDefined();
+      expect(publish, stage).toBeDefined();
+      expect(analyze.order).toBeLessThan(publish.order);
+      expect(analyze.completion_evidence).toEqual(expect.arrayContaining([
+        { kind: "quality_facts", uri_or_path: "quality/evidence/" },
+      ]));
+      expect(analyze.observable_result).toMatch(/original requirement|原始需求/i);
+    }
   });
 });

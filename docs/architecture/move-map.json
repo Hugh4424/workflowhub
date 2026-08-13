@@ -1660,6 +1660,168 @@
       "consumer": "M15 build-code and verify-code evidence",
       "delete_condition": "remove with stage sidecar retirement",
       "content_change": "private source seam and stage sidecar integration coverage"
+    },
+    {
+      "source": "docs/standard-workflow.md",
+      "destination": "docs/standard-workflow.md",
+      "status": "add",
+      "owner": "WorkflowHub workflow governance",
+      "consumer": "five workflow stage agents and task authors",
+      "delete_condition": "remove only when an approved replacement standard is the sole consumer",
+      "content_change": "human-readable five-stage execution, evidence, repair, and handoff contract"
+    },
+    {
+      "source": "docs/adr/0013-mini-task-compact-delivery-flow.md",
+      "destination": "docs/adr/0013-mini-task-compact-delivery-flow.md",
+      "status": "add",
+      "owner": "WorkflowHub architecture governance",
+      "consumer": "mini-task design and implementation maintainers",
+      "delete_condition": "remove when mini-task is retired and its decision is archived",
+      "content_change": "thin mini-task boundary and reuse decision"
+    },
+    {
+      "source": "skills/mini-task/SKILL.md",
+      "destination": "skills/mini-task/SKILL.md",
+      "status": "add",
+      "owner": "mini-task skill",
+      "consumer": "mini-task runner",
+      "delete_condition": "remove when mini-task has no supported consumer",
+      "content_change": "portable compact delivery skill"
+    },
+    {
+      "source": "skills/mini-task/scripts/mini-task-runner.mjs",
+      "destination": "skills/mini-task/scripts/mini-task-runner.mjs",
+      "status": "add",
+      "owner": "mini-task skill",
+      "consumer": "mini-task delivery and same-task resume",
+      "delete_condition": "remove with mini-task skill retirement",
+      "content_change": "thin orchestration over existing task/workspace/review/close APIs"
+    },
+    {
+      "source": "skills/mini-task/skill-bundle.json",
+      "destination": "skills/mini-task/skill-bundle.json",
+      "status": "add",
+      "owner": "skill bundle closure",
+      "consumer": "local skill resolver and release builder",
+      "delete_condition": "remove with mini-task skill retirement",
+      "content_change": "declared portable skill closure"
+    },
+    {
+      "source": "skills/wh-review/contracts/mini-task-design.md",
+      "destination": "skills/wh-review/contracts/mini-task-design.md",
+      "status": "add",
+      "owner": "wh-review material profiles",
+      "consumer": "mini-task design review packet",
+      "delete_condition": "remove with mini-task design review retirement",
+      "content_change": "design review material contract"
+    },
+    {
+      "source": "skills/wh-review/contracts/mini-task-implementation.md",
+      "destination": "skills/wh-review/contracts/mini-task-implementation.md",
+      "status": "add",
+      "owner": "wh-review material profiles",
+      "consumer": "mini-task implementation review packet",
+      "delete_condition": "remove with mini-task implementation review retirement",
+      "content_change": "implementation review material contract"
+    },
+    {
+      "source": "tests/contract/stage-interaction-batching.test.mjs",
+      "destination": "tests/contract/stage-interaction-batching.test.mjs",
+      "status": "add",
+      "owner": "interaction contract tests",
+      "consumer": "build-code focused and final aggregate verification",
+      "delete_condition": "remove with batched interaction contract retirement",
+      "content_change": "Talk/Grill/Clarify batch and rerank coverage"
+    },
+    {
+      "source": "tests/contract/five-stage-spec-analyze-wiring.test.mjs",
+      "destination": "tests/contract/five-stage-spec-analyze-wiring.test.mjs",
+      "status": "add",
+      "owner": "stage consistency contract tests",
+      "consumer": "five-stage spec-analyze profile verification",
+      "delete_condition": "remove with stage-end analyzer retirement",
+      "content_change": "profile and summary contract coverage"
+    },
+    {
+      "source": "tests/contract/workflow-quality-regression.test.mjs",
+      "destination": "tests/contract/workflow-quality-regression.test.mjs",
+      "status": "add",
+      "owner": "workflow quality regression tests",
+      "consumer": "historical replay and governance verification",
+      "delete_condition": "remove when the three historical replay contracts are retired",
+      "content_change": "semantic historical replay, governance, and cost honesty coverage"
+    },
+    {
+      "source": "tests/fixtures/workflow-quality-cost-sample.json",
+      "destination": "tests/fixtures/workflow-quality-cost-sample.json",
+      "status": "add",
+      "owner": "workflow quality regression tests",
+      "consumer": "cost comparison contract test",
+      "delete_condition": "remove with observation-only cost comparison contract retirement",
+      "content_change": "same-input same-case-set cost comparison fixture"
+    },
+    {
+      "source": "tests/helpers/stage-outcome.mjs",
+      "destination": "tests/helpers/stage-outcome.mjs",
+      "status": "add",
+      "owner": "stage outcome contract tests",
+      "consumer": "official stage outcome integration fixtures",
+      "delete_condition": "remove with stage outcome evidence contract retirement",
+      "content_change": "authenticated step/skill/spec-analyze outcome producer fixture"
+    },
+    {
+      "source": "tests/integration/mini-task-delivery.test.mjs",
+      "destination": "tests/integration/mini-task-delivery.test.mjs",
+      "status": "add",
+      "owner": "mini-task integration tests",
+      "consumer": "mini-task implementation verification",
+      "delete_condition": "remove with mini-task delivery retirement",
+      "content_change": "design/implementation review and delivery coverage"
+    },
+    {
+      "source": "tests/integration/mini-task-a-resume.test.mjs",
+      "destination": "tests/integration/mini-task-a-resume.test.mjs",
+      "status": "add",
+      "owner": "mini-task integration tests",
+      "consumer": "mini-task same-task resume verification",
+      "delete_condition": "remove with mini-task resume retirement",
+      "content_change": "A-task dependency and resume coverage"
+    },
+    {
+      "source": "specs/workflowhub-delivery-flow-quality-v1/decision-log.md",
+      "destination": "specs/workflowhub-delivery-flow-quality-v1/decision-log.md",
+      "status": "add",
+      "owner": "current task decision record",
+      "consumer": "make-decision and all downstream stage agents",
+      "delete_condition": "retain with the task record; remove only with task archival policy",
+      "content_change": "original requirement, decision, source replay, and handoff facts"
+    },
+    {
+      "source": "specs/workflowhub-delivery-flow-quality-v1/spec.md",
+      "destination": "specs/workflowhub-delivery-flow-quality-v1/spec.md",
+      "status": "add",
+      "owner": "current task specification record",
+      "consumer": "build-spec, build-plan, build-code, and verify-code",
+      "delete_condition": "retain with the task record; remove only with task archival policy",
+      "content_change": "frozen behavior, user flow, boundaries, and acceptance criteria"
+    },
+    {
+      "source": "specs/workflowhub-delivery-flow-quality-v1/plan.md",
+      "destination": "specs/workflowhub-delivery-flow-quality-v1/plan.md",
+      "status": "add",
+      "owner": "current task plan record",
+      "consumer": "build-plan, build-code, and verify-code",
+      "delete_condition": "retain with the task record; remove only with task archival policy",
+      "content_change": "phase order, task boundaries, oracle, recovery, and final test strategy"
+    },
+    {
+      "source": "specs/workflowhub-delivery-flow-quality-v1/tasks.md",
+      "destination": "specs/workflowhub-delivery-flow-quality-v1/tasks.md",
+      "status": "add",
+      "owner": "current task execution record",
+      "consumer": "build-code and verify-code execution facts",
+      "delete_condition": "retain with the task record; remove only with task archival policy",
+      "content_change": "phase task cards, RED/GREEN evidence, AC trace, and append-only execution facts"
     }
   ]
 }

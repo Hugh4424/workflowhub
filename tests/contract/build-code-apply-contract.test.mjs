@@ -54,16 +54,16 @@ describe("build-code apply quality contract", () => {
     expect(route.completion_evidence.map((item) => item.kind)).not.toContain("skill_invocation");
     expect(route.observable_result).toMatch(/actual changed files/i);
     const concrete = steps.steps.find((step) => step.step_slug === "invoke-concrete-testing-skill");
-    expect(concrete.completion_evidence.map((item) => item.kind)).toEqual(["test_strategy"]);
+    expect(concrete.completion_evidence.map((item) => item.kind)).toEqual(["test_strategy", "stage_outcome"]);
     expect(concrete.observable_result).toMatch(/backend\/frontend\/fullstack/);
     const runTests = steps.steps.find((step) => step.step_slug === "run-tests");
     expect(runTests.entry_conditions.map((item) => item.kind)).toEqual(["test_strategy"]);
     expect(runTests.completion_evidence.map((item) => item.kind)).toContain("test");
     expect(runTests.observable_result).toMatch(/concrete testing strategy/);
     const publish = steps.steps.find((step) => step.step_slug === "publish-code-result");
-    expect(publish.completion_evidence.map((item) => item.kind)).toEqual(["tasks", "test", "review"]);
+    expect(publish.completion_evidence.map((item) => item.kind)).toEqual(["tasks", "test", "review", "stage_outcome"]);
     expect(publish.completion_evidence.map((item) => item.uri_or_path)).toEqual([
-      "tasks.md", "quality/tests/", "quality/reviews/",
+      "tasks.md", "quality/tests/", "quality/reviews/", "quality/evidence/stage-outcomes/build-code/<sha256>.json",
     ]);
     expect(publish.observable_result).toMatch(/plain-language handoff/);
   });

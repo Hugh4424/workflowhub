@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const projectName = "WorkflowHub";
@@ -132,7 +134,16 @@ describe("interrupted same-task recovery", () => {
     });
 
     const runInput = join(firstCall.storageRoot, "build-plan-run.json");
-    writeFileSync(runInput, `${JSON.stringify({ receipts: {} })}\n`);
+    const reopenedKernel = createTaskKernel(reopened, { workspace: reopenedWorkspace, artifacts: reopenedArtifacts });
+    const outcome = writeStageOutcomeFixture({
+      task: reopened,
+      kernel: reopenedKernel,
+      artifacts: reopenedArtifacts,
+      workspace: reopenedWorkspace,
+      stage: "build-plan",
+      attemptId: "attempt-interrupted-reopen",
+    });
+    writeFileSync(runInput, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
     const runCall = publicCall(firstCall, [
       "run", "--action=execute", "--stage=build-plan", `--project=${projectName}`, `--task=${taskId}`,
       `--input=${runInput}`,

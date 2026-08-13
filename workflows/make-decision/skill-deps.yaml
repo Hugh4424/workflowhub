@@ -4,6 +4,7 @@ skills:
   - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json, owner: stage }
   - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json, owner: stage }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

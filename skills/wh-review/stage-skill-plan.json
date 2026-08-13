@@ -54,5 +54,25 @@
       "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     }
+  },
+  "mini_task": {
+    "design": {
+      "review_kind": "mini_task.design",
+      "logical_skill_id": "wh-review/mini-task-design",
+      "required_skills": ["review"],
+      "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
+      "delivery_mode": "file_only"
+    },
+    "implementation": {
+      "review_kind": "mini_task.implementation",
+      "logical_skill_id": "wh-review/mini-task-implementation",
+      "required_skills": ["simplicity-guard", "review"],
+      "review_mode": "lens-only",
+      "lens_owner": "wh-review",
+      "lens_dispatch": "delegated",
+      "delivery_mode": "file_only"
+    }
   }
 }

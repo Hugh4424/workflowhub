@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "66b89eb2abead58a9d7dba76a89bf03f39aa03150f121b5b1a0f4b9411bfccdf"
+      "sha256": "8bfe62f1bdcea5d9c7add044de59f6b15f12e666c04843084af8a03d59785462"
     },
     {
       "path": "contracts/build-code.md",
@@ -23,8 +23,16 @@
       "sha256": "e7c567994963c249408ca9e4d190095882a74e850db2e3c3d771bf23284b7ea7"
     },
     {
+      "path": "contracts/mini-task-design.md",
+      "sha256": "71d219f19dfc04f3bd0f9948bb3667dd0d4a0e4cacb8255fb1832a67e9e91725"
+    },
+    {
+      "path": "contracts/mini-task-implementation.md",
+      "sha256": "86e7c852057cf8059c7c035df97ad6ab41d909fc3b1d761780783ecf1ee9f018"
+    },
+    {
       "path": "contracts/provider-protocol.md",
-      "sha256": "590d07d55e68d6d9effbd2bdb00eca155135be9900f890abc96826487aef2889"
+      "sha256": "2b143069c77cbaa0c8d3d1810c6426fe687717010cad372d7a0e17ded734d1d5"
     },
     {
       "path": "contracts/verify-code.md",
@@ -52,7 +60,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "e7a6f66a7d5c9de2b1665cfa3a38da6ce06613430638ddadc742f73b197ca0fa"
+      "sha256": "8b96fc16ba7b104446a957fe7d5cd192f49aefd4abb3b3d12d1c4876922953b9"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -72,7 +80,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "a28a5be3dc5a8769c7ff7ea7d21483783a627ca12b2d4e525e24aa67361b6ddf"
+      "sha256": "874158050060fb1e5aa4e36a14171d64fe3c6d5ff210a96e75a58c409484038e"
     },
     {
       "path": "scripts/review-source.mjs",
@@ -84,15 +92,15 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "d6d8d9ca12c6be6fe34d9bf7f4d39506eca65c23ed3027868e5025214be3938a"
+      "sha256": "04dd6aa78d2fc5dfe9e159561251addfc7096ed106ce0c31debac97f8e2bd4a4"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "948b4f17f29ae8468ed4a69fa5cef0b2208a8012d29c3a70bfb618db6a373de9"
+      "sha256": "5a286b5df4f8d64fe2e65c38ca45e11508a8daa89b6e78273d021f5ab6bfcf59"
     },
     {
       "path": "stage-skill-plan.json",
-      "sha256": "9fe1eb7264d2ee288da63871c28f121728bf982869f7830e7baae7ded32f2e52"
+      "sha256": "6a54b969fc66eb0befdc803e601f8ff20e3517c69e8f9a501f7a078bf69019f7"
     }
   ]
 }

@@ -58,7 +58,7 @@ describe('M15 stage sidecar integration', () => {
     await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-b' }, stageOutcome: { status: 'completed' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:01.000Z') });
     const stageFacts = readTaskFacts(task.taskPath).filter((fact) => fact.fact_type === 'stage' && fact.stage === 'build-code');
     expect(stageFacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ attempt_id: 'attempt-a', value: { outcome: 'failed' } }),
+      expect.objectContaining({ attempt_id: 'attempt-a', status: 'unknown', value: null, reason: 'stage_outcome_failed' }),
       expect.objectContaining({ attempt_id: 'attempt-b', value: { outcome: 'completed' } }),
     ]));
     expect(stageFacts).toHaveLength(2);

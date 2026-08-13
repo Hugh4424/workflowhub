@@ -5,6 +5,7 @@ skills:
   - { name: frontend-testing, path: skills/frontend-testing/SKILL.md, execution: independent, trigger: actual_frontend_test, bundle: skills/frontend-testing/skill-bundle.json, owner: stage }
   - { name: fullstack-slice-testing, path: skills/fullstack-slice-testing/SKILL.md, execution: independent, trigger: actual_fullstack_test, bundle: skills/fullstack-slice-testing/skill-bundle.json, owner: stage }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

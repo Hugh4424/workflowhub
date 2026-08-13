@@ -36,7 +36,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("keeps build-spec direct order and wh-review as the only provider reviewer", () => {
     expect(names("build-spec")).toEqual([
       "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
-      "plan-design-review", "wh-review",
+      "plan-design-review", "wh-review", "spec-analyze",
     ]);
     expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
       "conditional-spec-research", "spec-clarify", "spec-specify",
@@ -51,7 +51,9 @@ describe("D-015 stage routing and concrete testing contract", () => {
       .toMatchObject({ execution: "inline", trigger: "spec_ambiguity", owner: "stage" });
     expect(deps("build-spec").find(({ name }) => name === "plan-design-review"))
       .toMatchObject({ execution: "independent", trigger: "ui_scope", owner: "stage" });
-    expect(names("build-spec")).not.toContain("spec-analyze");
+    expect(names("build-spec")).toContain("spec-analyze");
+    expect(deps("build-spec").find(({ name }) => name === "spec-analyze"))
+      .toMatchObject({ execution: "inline", trigger: "stage_end_consistency", owner: "stage" });
     expect(evidenceKinds("build-spec")).not.toContain("skill_invocation");
     expect(json("skills/wh-review/stage-skill-plan.json").stages["build-spec"].required_skills)
       .toEqual(["review"]);
@@ -59,7 +61,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps Talk and Grill owned exclusively by make-decision", () => {
     expect(names("make-decision")).toEqual([
-      "talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review",
+      "talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review", "spec-analyze",
     ]);
     expect(stepSlugs("make-decision")).toEqual(expect.arrayContaining([
       "talk-round-1", "talk-round-2", "talk-round-3", "grill-with-docs",
@@ -142,7 +144,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("routes build-code against actual scope and directly uses one concrete testing package", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
-      "fullstack-slice-testing", "wh-review",
+      "fullstack-slice-testing", "wh-review", "spec-analyze",
     ]);
     expect(stepSlugs("build-code")).toContain("inspect-and-route-actual-tests");
     expect(stepSlugs("build-code")).toContain("invoke-concrete-testing-skill");
@@ -155,7 +157,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
   it("declares real build-code route facts while quality limits completion", () => {
     const buildCodeSteps = steps("build-code");
     expect(buildCodeSteps.find((step) => step.step_slug === "inspect-and-route-actual-tests")
-      .completion_evidence.map(({ kind }) => kind)).toEqual(["changed_files", "test_routing"]);
+      .completion_evidence.map(({ kind }) => kind)).toEqual(["changed_files", "test_routing", "stage_outcome"]);
     expect(buildCodeSteps.find((step) => step.step_slug === "run-tests")
       .completion_evidence.map(({ kind }) => kind)).toContain("test");
     expect(buildCodeSteps.find((step) => step.step_slug === "authenticate-current-task-completion").observable_result)
@@ -169,6 +171,18 @@ describe("D-015 stage routing and concrete testing contract", () => {
     const finalReview = buildCodeSteps.find((step) => step.step_slug === "final-integration-review");
     expect(finalReview).toBeDefined();
     expect(finalReview.order).toBeGreaterThan(buildCodeSteps.find((step) => step.step_slug === "run-tests").order);
+    expect(stepSlugs("build-code").indexOf("stage-end-spec-analyze")).toBeGreaterThan(stepSlugs("build-code").indexOf("final-integration-review"));
+  });
+
+  it("declares a stage-outcome evidence binding on every step", () => {
+    for (const stage of STAGES) {
+      for (const step of steps(stage)) {
+        const outcome = step.completion_evidence.find(({ kind }) => kind === "stage_outcome");
+        expect(outcome, `${stage}/${step.step_slug} must declare stage outcome evidence`).toMatchObject({
+          uri_or_path: `quality/evidence/stage-outcomes/${stage}/<sha256>.json`,
+        });
+      }
+    }
   });
 
   it("allows an explicitly explained non-code route without pretending a concrete skill ran", () => {

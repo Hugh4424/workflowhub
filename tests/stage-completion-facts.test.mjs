@@ -4,6 +4,7 @@ import {
   createStageCompletionFacts,
   renderSystemCompletion,
   renderUserCompletion,
+  summarizeStageOutcome,
 } from "../runtime/evidence/stage-completion-facts.mjs";
 
 const HASH = "a".repeat(64);
@@ -64,6 +65,46 @@ function fixture(overrides = {}) {
 }
 
 describe("stage completion facts", () => {
+  it("summarizes authenticated stage outcomes without changing quality completion", () => {
+    const summary = summarizeStageOutcome({
+      stage: "build-code",
+      stageOutcomeRef: "quality/evidence/stage-outcomes/build-code/" + HASH + ".json",
+      stageOutcomeHash: HASH,
+      stageOutcomeStatus: "completed",
+      stepOutcomes: [
+        { step_slug: "implement-change", status: "completed", cost: { status: "recorded", duration_ms: 3, tokens: 5 } },
+        { step_slug: "review-change", status: "unavailable", reason: "provider unavailable", cost: { status: "unavailable", duration_ms: null, tokens: null, reason: "provider unavailable" } },
+      ],
+      skillOutcomes: [
+        { skill_id: "backend-testing", status: "skipped", cost: { status: "unavailable", duration_ms: null, tokens: null, reason: "not applicable" } },
+      ],
+    });
+    expect(summary).toMatchObject({
+      schema_version: "stage-outcome-summary.v1",
+      stage: "build-code",
+      status: "partial",
+      declared_status: "completed",
+      steps: { total: 2, completed: 1, unavailable: 1 },
+      skills: { total: 1, skipped: 1 },
+      cost: { status: "unavailable", duration_ms: null, tokens: null },
+    });
+    expect(summary.disclosure).toMatch(/不改变/);
+  });
+
+  it("does not let the execution summary replace a quality predicate", () => {
+    const summary = summarizeStageOutcome({
+      stage: "build-spec",
+      stageOutcomeRef: "quality/evidence/stage-outcomes/build-spec/" + HASH + ".json",
+      stageOutcomeHash: HASH,
+      stageOutcomeStatus: "completed",
+      stepOutcomes: [{ step_slug: "publish-spec-result", status: "completed", cost: { status: "unavailable", duration_ms: null, tokens: null, reason: "not exposed" } }],
+      skillOutcomes: [],
+    });
+    expect(summary.status).toBe("completed");
+    expect(summary).not.toHaveProperty("quality_status");
+    expect(summary).not.toHaveProperty("completion");
+  });
+
   it("rejects an artifact without a content hash", () => {
     expect(() => fixture({ artifacts: [{ label: "实现结果", ref: "quality/evidence/implementation.json", hash: "missing" }] }))
       .toThrow(/artifact hash must be sha256/);

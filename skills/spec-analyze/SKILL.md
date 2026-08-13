@@ -7,9 +7,24 @@ description: Report-only packet lens for consistency between supplied specificat
 
 Mode: `lens-only`. Delivery: `file_only`.
 
+The same skill is reused at the end of every stage through five narrow profiles. The Stage Agent invokes the profile on the current stage packet, and the runtime authenticates the resulting semantic packet and validator result inside the existing stage-outcome evidence. This is an evidence check, not a second workflow engine or progression gate:
+
+- `make-decision`: original requirement + `decision-log.md`;
+- `build-spec`: the above + `spec.md`;
+- `build-plan`: the above + `plan.md` + `tasks.md`;
+- `build-code`: the above + implementation, tests, and acceptance evidence;
+- `verify-code`: the above + review, runtime, and delivery evidence.
+
+The profile checks actual behavior meaning, state/scenario/boundary coverage,
+artifact references, and fresh evidence. IDs and existing files are only
+bindings, never proof. Missing input returns `material_incomplete`; semantic
+drift or stale evidence returns a finding for repair in the current stage.
+The analyzer is report-only: it does not write any of the four materials,
+call a provider, create a review verdict, or become a progression permit.
+
 ## Input boundary
 
-Read only `review-packet.v1` and the frozen bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet.
+Read only the stage packet supplied by the Stage Agent and the frozen skill bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet. The stage outcome must bind the packet and validator result to the current stage snapshot, material revision, declared analyzer step, and `spec-analyze` skill outcome.
 
 ## Check
 
@@ -25,9 +40,21 @@ Read only `review-packet.v1` and the frozen bundle. For build-plan, use the gene
 
 Return a concise `lens-only` result for `skillResults`. This lens evaluates only the packet and does not create artifacts.
 
+Every successful profile analysis returns this six-part plain-language
+summary, generated from current facts:
+
+1. 当前阶段做了什么（`stage_work`）；
+2. 原始需求覆盖到什么程度（`requirement_coverage`）；
+3. 与上游产物、实际语义和证据是否一致（`upstream_alignment`）；
+4. 当前阶段当场修复了什么（`current_stage_repairs`）；
+5. 剩余风险、未决和延期（`remaining_risks`）；
+6. 下游可以直接消费什么、不能自行猜什么（`next_stage_boundary`）。
+
+发现问题时，当前 stage 先修复，再复查受影响范围；不能把问题静默交给下游。
+
 ## Review semantics
 
-This report-only lens is read-only and 不阻断. In build-plan it is actually invoked once after findings disposition and the last plan/tasks revision, immediately before publish. The caller records the returned lens result in the existing quality-fact path before handoff; a prose declaration that the check happened is not execution evidence. Scan categories: inconsistency, duplicate, ambiguity, underdefined, deferred/open handoff, and constitution-alignment. Constitution alignment is record-only, 不阻断. It is never a provider review, `pass` predicate, or new quality gate.
+This report-only lens is read-only and 不阻断. At every stage it is invoked after findings disposition and the last stage-material revision, immediately before publish or handoff. The Stage Agent records the returned lens result in the existing stage-outcome evidence; a manifest entry or prose declaration that the check happened is not execution evidence. Scan categories: inconsistency, duplicate, ambiguity, underdefined, deferred/open handoff, and constitution-alignment. Constitution alignment is record-only, 不阻断. It is never a provider review, `pass` predicate, or new quality gate. A missing analyzer outcome is a missing step/evidence fact and fails closed as a silent-step-loss error; a returned `inconsistent` or `material_incomplete` result remains a quality fact for same-stage repair and cannot be relabeled as consistent.
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, `line_or_anchor`, `impact`, `suggested_correction`, and `disposition`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 

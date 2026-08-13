@@ -19,7 +19,7 @@ const validCycle = () => ({
 describe("verify-code bounded architect acceptance", () => {
   it("declares one independent review between two bounded repair opportunities", () => {
     const deps = yaml.load(read("workflows/verify-code/skill-deps.yaml"));
-    expect(deps.skills.map(({ name }) => name)).toEqual(["wh-review"]);
+    expect(deps.skills.map(({ name }) => name)).toEqual(["wh-review", "spec-analyze"]);
     const steps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
     const evidenceKind = (step, kind) => step.completion_evidence.some((entry) => entry.kind === kind);
     const reviewIndexes = steps.flatMap((step, index) => evidenceKind(step, "review") ? [index] : []);

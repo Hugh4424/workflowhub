@@ -61,7 +61,7 @@ decision and questions to the user.
    direction-changing ambiguity, non-goals, and deferred work. Completion:
    every part of the original requirement is represented or explicitly marked
    unresolved.
-2. Execute the existing 12-step manifest in order. Every step completion first
+2. Execute the manifest in order. Every step completion first
    uses the existing make-decision writer to append one update to the same
    `decision-log.md` ref/hash. The update records the step outcome, the actual
    user reply or `no_new_requirement`, and the current/deferred/non-goal/open
@@ -98,7 +98,7 @@ decision and questions to the user.
    review (step 10). This is also advice-only, not a `pass` gate. The detail
    review must happen after Grill and the draft, never before. Preserve real
    transport and finding facts and stop rather than loop on unchanged material.
-7. Present the final plain-language decision card at steps 11-12: direction,
+7. Present the final plain-language decision card at the approval/publish steps: direction,
    scope, non-goals, success criteria, risks, advice facts, unresolved items,
    and deferred work. Ask for the user's actual confirmation and preserve it.
    A rejection leads to a bounded revision of the same task; it does not create
@@ -181,3 +181,16 @@ that reply keep the stage `in_progress`/`pending` and do not claim completion.
 
 Downstream stages read this summary and the four materials. They must not ask the
 user to repeat Talk or Grill, and they need no index of the decision process.
+
+## Stage-end consistency
+
+Run `stage-end-spec-analyze` after detail advice and before the user's final
+confirmation. Invoke the existing `spec-analyze` skill on the original requirement, the current
+`decision-log.md`, the requirements-preparation facts, and all evidence actually
+produced in this stage. Check semantic coverage and real outcome evidence, not
+IDs, paths, hashes, or document existence alone. Repair any finding in
+make-decision before asking for confirmation; do not move it to build-spec. Only
+after the user confirms this checked decision may `publish-decision` run. End
+with the shared six-part plain-language summary: current stage work,
+requirement coverage, upstream alignment, repairs made here, remaining risks,
+and the next stage boundary.

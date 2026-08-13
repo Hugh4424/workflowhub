@@ -133,3 +133,9 @@ completed_at；不新增 handoff 字段，也不另建记录。
 不要求用户重复 Talk/Grill，不要求下游读取验收过程索引，不创建 another task 来绕过当前
 问题，也不用一次全量测试绿替代 AC、
 用户流程或架构判断，也不因 reviewer 没有新的 finding 而无限重审。
+
+在 `publish-verification-result` 前执行声明的 `stage-end-spec-analyze`。它把原始需求、四份
+当前材料、真实代码、测试、AC、review、verify 和交付事实逐项对齐，检查实际语义和产物证据，
+不能只看编号、路径、hash 或文件存在。属于 verify 的缺口在本阶段修复；属于 spec/plan/tasks
+的缺口记录并回到对应 owner，不把前面漏掉的产品决策伪装成验收通过。最后输出共享六项大白话
+摘要：当前阶段工作、需求覆盖、上游一致性、本阶段修复、剩余风险、下一阶段边界。

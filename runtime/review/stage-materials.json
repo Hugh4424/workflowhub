@@ -1,5 +1,5 @@
 {
-  "version": "wh-review-stage-materials.v1",
+  "version": "wh-review-stage-materials.v2",
   "stages": {
     "make-decision": {
       "tracks": {
@@ -68,6 +68,26 @@
       "required": ["acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "review_instructions"],
       "optional": ["acceptance_evidence", "context_map", "evidence_map"],
       "generated": ["review_instructions"],
+      "forbidden": [],
+      "minimum_reviewers": 1,
+      "v2_required_maps": []
+    }
+  },
+  "mini_task": {
+    "design": {
+      "source_bundle": "none",
+      "required": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "review_instructions"],
+      "optional": ["objective_facts", "context_map", "evidence_map"],
+      "generated": ["review_instructions"],
+      "forbidden": ["changes_diff", "changed_files", "test_evidence", "ac_trace", "user_result"],
+      "minimum_reviewers": 1,
+      "v2_required_maps": []
+    },
+    "implementation": {
+      "source_bundle": "diff",
+      "required": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "review_instructions"],
+      "optional": ["context_map", "evidence_map"],
+      "generated": ["review_instructions", "change_map", "test_summary"],
       "forbidden": [],
       "minimum_reviewers": 1,
       "v2_required_maps": []

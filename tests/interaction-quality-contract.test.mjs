@@ -89,10 +89,10 @@ describe("current-material workflow contracts", () => {
     expect(stage("verify-code")).toMatch(/回同一 task 修复，不新建任务/);
   });
 
-  it("keeps Talk one-at-a-time while Grill batches only independent frontier questions", () => {
+  it("keeps Talk and Clarify batches independent while Grill batches independent frontier questions", () => {
     const talk = readFileSync(join(root, "skills", "talk-with-zhipeng", "SKILL.md"), "utf8");
     const grill = readFileSync(join(root, "skills", "grill-with-docs", "SKILL.md"), "utf8");
-    expect(talk).toMatch(/Talk 的 `ask\.questions` 必须恰好一个问题/);
+    expect(talk).toMatch(/Talk 的 `ask\.questions` 可以是一组问题/);
     expect(grill).toMatch(/batch only when the remaining frontier questions are independent/i);
     expect(grill).toMatch(/绝不调用 wh-review、生成 review finding 或写 review fact/);
     expect(grill).toMatch(/允许是部分答案/);
@@ -102,10 +102,17 @@ describe("current-material workflow contracts", () => {
       interaction_type: "grill",
       events: [
         { event: "ask", card_ref: "card", card_hash: "a".repeat(64), round: 1, questions: [
-          { frontier_id: "a", independent: true }, { frontier_id: "b", independent: true },
+          { question_id: "a", frontier_id: "a", independent: true, options: [
+            { number: 1, label: "保守", meaning: "少做", consequence: "范围小", risk: "收益慢" },
+            { number: 2, label: "推荐", meaning: "直接做", consequence: "解决问题", risk: "改动较多" },
+          ], recommended_option: 2, recommendation_reason: "当前事实支持" },
+          { question_id: "b", frontier_id: "b", independent: true, options: [
+            { number: 1, label: "保守", meaning: "少做", consequence: "范围小", risk: "收益慢" },
+            { number: 2, label: "推荐", meaning: "直接做", consequence: "解决问题", risk: "改动较多" },
+          ], recommended_option: 2, recommendation_reason: "当前事实支持" },
         ] },
         { event: "wait", card_ref: "card", card_hash: "a".repeat(64), round: 1, status: "waiting-for-user" },
-        { event: "reply", card_ref: "card", card_hash: "a".repeat(64), round: 1, source: "user", reply_ref: "reply", reply_hash: "b".repeat(64), answers: [{ frontier_id: "a", answer: "保留" }], remaining_frontier_ids: ["b"], re_ranked: true },
+        { event: "reply", card_ref: "card", card_hash: "a".repeat(64), round: 1, source: "user", reply_ref: "reply", reply_hash: "b".repeat(64), answers: [{ frontier_id: "a", answer: "保留", number: 1 }], remaining_frontier_ids: ["b"], re_ranked: true },
         { event: "resume", card_ref: "card", card_hash: "a".repeat(64), round: 1, reply_ref: "reply", reply_hash: "b".repeat(64), status: "resumed" },
       ],
     };

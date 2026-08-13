@@ -24,10 +24,11 @@ the exact completion condition back to build-spec for repair. Do not ask the
 user to invent a fourth option.
 
 Identify only unresolved ambiguities that materially change scope, acceptance,
-interfaces, data, security, or operations. Handle one decision axis at a time;
-order multiple axes by dependency and reclassify the remainder after each real
-answer. Never combine output shape, input transformation, field membership, or
-another independent concern into one “complete contract” question.
+interfaces, data, security, or operations. Put independent axes into one batch;
+dependent axes stay out of that batch and are re-ranked after the real answer.
+Each question still contains only one decision axis. Never combine output shape,
+input transformation, field membership, or another independent concern into one
+“complete contract” question.
 
 Use the independent-variation test before publishing a card: if two behaviors
 could be chosen separately, they are two decision axes even when they concern
@@ -35,17 +36,18 @@ the same field or feature. Options that pair two independently variable
 behaviors are forbidden. Split them into separate cards, obtain one real answer,
 then reclassify and ask the next axis only if it is still material.
 
-Publishing a card ends the current invocation. Return control to the invoking
-host immediately and do not publish another card, revise `spec.md`, start
-review, or infer an answer in the same invocation. A later invocation may
-continue only after it receives the new real user reply bound to that card.
-Multiple unresolved axes therefore require multiple visible ask → wait → resume
-cycles; posting several cards before the first reply is forbidden.
+Publishing a batch card ends the current invocation. Return control to the
+invoking host immediately and do not publish another batch, revise `spec.md`,
+start review, or infer an answer in the same invocation. A later invocation may
+continue only after it receives the new real user reply bound to that batch.
+Dependent unresolved axes require later visible ask → wait → resume cycles;
+posting a dependent card before the first reply is forbidden.
 
-For a material decision, present a plain-language card containing only current
-status (`spec-clarify`, question number, current ambiguity count), the question,
-affected scope, and 2～3 mutually exclusive valid options. State each option's
-direct consequence and main risk, plus one recommended option and its reason.
+For material decisions, present one plain-language batch card containing only
+current status (`spec-clarify`, batch number, current ambiguity count), a group
+of independent questions, affected scope, and 2～3 mutually exclusive valid
+options per question. State each option's direct consequence and main risk, plus
+one recommended option and its reason for each question. 用户直接回答选项编号。
 Do not add completed-work, next-step, or generic user-action sections. No
 open-ended fill-in questions are allowed. Do not show internal IDs, hashes,
 receipts, attempts, or runner details. Keep formal evidence references out of

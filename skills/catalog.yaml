@@ -41,7 +41,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 60eb8cdcb81538d8b2bab68e86eed356a89e5bc1a2d8bdfb3fdd6cd4e8cc10ce
+    local_bundle_hash: 68434dc1bbb639526a4590de8f8f28d0f0f47346f8947242a029ef443d024342
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -51,7 +51,7 @@ skills:
       - { <<: *matt, path: "skills/engineering/grill-with-docs/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md" }
       - { <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }
       - { <<: *matt, path: "skills/productivity/grilling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md" }
-    local_changes: 保留四项退出记录；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
+    local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure: [skills/grill-with-docs]
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
   - name: intake-decision-review
@@ -83,14 +83,14 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 45f1533e38d2a20c228bb664decd37acbde2adbcfef7912ca067dc77c5fc3b3a
+    local_bundle_hash: a7146d90bce5239669883ba7437a067e1a03394229a2d53bfe8926e1afdc0599
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
-    design_idea: 一次一问，按影响重排，达到阈值即收敛
+    design_idea: 一次一组独立问题，按影响重排，达到阈值即收敛
     used_by_stages: [make-decision]
     upstream: []
-    local_changes: workflowhub 原生实现
+    local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序
     dependency_closure: [skills/talk-with-zhipeng]
     update_policy: 随 make-decision 交互合同变更审查
   - name: spec-research
@@ -123,7 +123,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 406404dfbe179aabd897554d320e3eb9c7168d472209090cb2bacb3ca28e8bae
+    local_bundle_hash: 6d27d6345f2df29a4f488aa6dc7b8c10fa71fe92842d599ea8494b7069ac511d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
@@ -131,7 +131,7 @@ skills:
     standalone: true
     used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
-    local_changes: 保留可独立搬运的十维歧义扫描合同；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属
+    local_changes: 保留可独立搬运的十维歧义扫描合同和批量问题卡；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
@@ -169,14 +169,14 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f635d49f8c02e0d9536e7cf98a71504f6e39689b2c8431e00e4e43ca76643a96
+    local_bundle_hash: 0d7e50546eeec770dc0218ccfc8b98f5f211470bf253ac0c0691896bca107926
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
     design_idea: report-only packet lens
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；当前 consumer 是 build-plan 在 findings disposition 和最后一次 plan/tasks 修订之后、publish 前实际调用的 planning_artifacts packet projection，结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff，contract tests 覆盖 sibling-field 借用反例；owner 是 review-materials.mjs 与 runtime/stage/stage-content-contracts.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当 build-plan 移除该 report step 且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，五个 stage 结尾由 Stage Agent 调用，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；owner 是 review-materials.mjs、runtime/stage/stage-content-contracts.mjs 与 stage-runner.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当现有 consumer 移除且无历史材料引用时删除
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
   - name: stage-step-receipts
@@ -224,7 +224,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: fdcb3dd41334e46d8d8d4487c62e9ed5562e390fd1465693edc526a548af3179
+    local_bundle_hash: c865b9161b6baf978ecdaf593cc36ad70fcd6a6dc0401811206fa2787a1fdda2
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 20aafc3a91a7a3f257b3ef211017abc9ae9126a2a94ecce5c80aee03e4642771
+    local_bundle_hash: d7e96dc3ed8ed7a1c909e7d1a4f523c3564ecff2f518857505c2af77d1d59a76
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -262,6 +262,20 @@ skills:
     local_changes: 只冻结材料并调用一次新的 3rd-review 公共 run；不发起 continuation/session 恢复，删除 scope_revision、本地协调锁、provider polling 和第二 timeout，保留路径安全与 broker 返回的原始 provenance
     dependency_closure: [skills/wh-review]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
+  - name: mini-task
+    path: skills/mini-task/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: b3a5a8da880e09d37f0b6a25c542c1d81be36bbb6f422f0afbb5ca703cc12671
+    last_reviewed_at: "2026-07-14"
+    status: native
+    purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
+    design_idea: 复用四材料、两类专用审查、真实结果和唯一 task-close
+    standalone: true
+    used_by_stages: []
+    upstream: []
+    local_changes: 薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge
+    dependency_closure: [skills/mini-task]
+    update_policy: 随 mini-task 四材料、审查和 task-close 合同人工比较
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0

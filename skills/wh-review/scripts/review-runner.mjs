@@ -242,7 +242,7 @@ function undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, 
     : { version: "wh-review-undispatched-unavailable.v1", kind, stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint });
 }
 
-async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
+async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack, reviewKind = null, subject, source, policy, diagnostic, materialFingerprint = null }) {
   const materialId = undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
@@ -250,7 +250,7 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
   const attemptId = randomUUID();
   const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
   const attempt = {
-    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
+    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: materialId,
     report_ref: refs.reportRef, provider_attempts: [], terminal_status: "unavailable", error: diagnostic,
     ...(policy ? { review_policy: policy, policy_snapshot_hash: policyFingerprint } : {}),
@@ -345,7 +345,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials 
   });
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -397,7 +397,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const diagnostic = materialPreflightDiagnostic(error);
     const preflightSubject = subject ?? subjectRecord(source, stage, phaseId);
     return await recordUndispatchedUnavailable({
-      task: taskHandle, taskId, stage, reviewTrack, subject: preflightSubject, source, policy, diagnostic,
+      task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: preflightSubject, source, policy, diagnostic,
       materialFingerprint: hashCanonical(materials ?? null),
     });
   } finally {
@@ -425,7 +425,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
   const aggregation = aggregateProviderResults(assessed, minimumReviewers, { profilePriority: policy?.requested_profiles ?? providers });
   const attempt = {
-    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
+    version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     report_ref: refs.reportRef, provider_attempts: providerAttempts,
     terminal_status: aggregation.status === "available" ? "semantic" : "unavailable",
@@ -442,7 +442,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const findings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const result = {
-    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject,
+    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind, ...subject,
     source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
     findings,
@@ -458,7 +458,7 @@ export async function runReview(options = {}) {
   return runReviewOnce(options);
 }
 
-export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, workspace, candidateWorkspace, captureSource = captureSourceDefault } = {}) {
+export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, workspace, candidateWorkspace, captureSource = captureSourceDefault } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage)) throw new TypeError("missing-route unavailable review inputs are required");
   const diagnostic = { code: "REVIEW_ROUTE_UNAVAILABLE", message: `workflowhub host wh_review route is unavailable for ${stage}${reviewTrack ? `.${reviewTrack}` : ""}` };
@@ -472,7 +472,7 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
     }
   } else source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false });
   try {
-    return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
+    return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
   } finally { source.dispose?.(); }
 }
 

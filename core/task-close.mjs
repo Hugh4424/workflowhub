@@ -735,13 +735,17 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
   if (typeof now !== "function") throw new TypeError("close now must be a function");
   return task.withRecordLock("locks/close.execution.lock", async () => {
+    const consumedOperations = new Set();
     for (const step of plan.steps) {
+      const operation = DELIVERY_AUTHORIZATIONS[step.operation];
+      if (consumedOperations.has(operation)) continue;
       kernel.consumeIrreversibleAuthorization({
-        operation: DELIVERY_AUTHORIZATIONS[step.operation],
+        operation,
         confirmation_ref: confirmation.human_confirmation_ref,
         plan_hash: planHash,
         step_id: step.step_id,
       });
+      consumedOperations.add(operation);
     }
     const existing = readOptional(task, "operations/close/completed.json");
     if (existing !== undefined) {
@@ -994,15 +998,20 @@ export async function executeClosePlan(options = {}) {
       acceptedCompletion = completed;
     }
 
+    const consumedOperations = new Set();
     for (const step of plan.steps) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
-      kernel.consumeIrreversibleAuthorization({
-        operation: DELIVERY_AUTHORIZATIONS[step.operation],
-        confirmation_ref: confirmation.human_confirmation_ref,
-        plan_hash: planHash,
-        step_id: step.step_id,
-      });
+      const operation = DELIVERY_AUTHORIZATIONS[step.operation];
+      if (!consumedOperations.has(operation)) {
+        kernel.consumeIrreversibleAuthorization({
+          operation,
+          confirmation_ref: confirmation.human_confirmation_ref,
+          plan_hash: planHash,
+          step_id: step.step_id,
+        });
+        consumedOperations.add(operation);
+      }
       const priorRaw = readOptional(task, recordPath);
       const before = await probeSatisfied(executor, step, priorRaw === undefined ? "initial" : "reconcile");
       if (priorRaw !== undefined) {

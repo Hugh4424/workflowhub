@@ -22,7 +22,7 @@ import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtim
 import { deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
-import { appendMonitoringFacts, readTaskFacts } from "../../runtime/task/task-store.mjs";
+import { appendMonitoringFacts, initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
 import { parseRegisteredCodexTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
@@ -86,13 +86,32 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
     source,
     observed_at: now().toISOString(),
   };
+  const stageOutcomeStatus = typeof stageOutcome?.stage_outcome_status === "string"
+    ? stageOutcome.stage_outcome_status
+    : stageOutcome?.status;
+  const stageFactStatus = stageOutcomeStatus === "incomplete"
+    ? "partial"
+    : stageOutcomeStatus === "unavailable" || stageOutcomeStatus === "failed"
+      ? "unknown"
+      : "present";
+  const stageFactReason = stageOutcomeStatus === "incomplete"
+    ? "stage_outcome_incomplete"
+    : stageOutcomeStatus === "unavailable"
+      ? "stage_outcome_unavailable"
+      : stageOutcomeStatus === "failed"
+        ? "stage_outcome_failed"
+        : null;
   const records = [createMonitoringFact({
     ...task,
     fact_id: `stage:${factIdentity}:${stage ?? "unknown"}`,
     fact_type: "stage",
-    status: "present",
-    value: { outcome: typeof stageOutcome?.status === "string" ? stageOutcome.status : "published" },
+    status: stageFactStatus,
+    value: stageFactStatus === "partial" || stageFactStatus === "unknown"
+      ? null
+      : { outcome: typeof stageOutcome?.stage_outcome_status === "string" ? stageOutcome.stage_outcome_status : (typeof stageOutcome?.status === "string" ? stageOutcome.status : "published") },
+    reason: stageFactReason,
     coverage: { observed: 1, expected: 1 },
+    evidence_refs: typeof stageOutcome?.stage_outcome_ref === "string" ? [stageOutcome.stage_outcome_ref] : [],
   })];
   if (!stage) return records;
   const stageTopology = (topology?.stages ?? []).find((entry) => entry.id === stage) ?? { steps: [], skills: [] };
@@ -102,11 +121,15 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   for (const step of stageTopology.steps ?? []) {
     const id = String(step.id);
     const outcome = stepOutcomes.get(id);
-    let status = MONITORING_STATUSES.has(outcome?.status) ? outcome.status : "missing";
+    const semanticStatus = outcome?.status;
+    let status = semanticStatus === "completed" || semanticStatus === "skipped" ? "present"
+      : semanticStatus === "incomplete" ? "partial"
+        : semanticStatus === "unavailable" ? "unknown" : "missing";
     let value = null;
     let reason = outcome?.reason ?? "step_outcome_unavailable";
     if (status === "present") {
       value = {};
+      if (typeof outcome.status === "string" && outcome.status.trim()) value.outcome = outcome.status;
       if (typeof outcome.outcome === "string" && outcome.outcome.trim()) value.outcome = outcome.outcome;
       if (typeof outcome.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
       if (!Object.keys(value).length && outcome.value && typeof outcome.value === "object" && !Array.isArray(outcome.value)) {
@@ -124,6 +147,7 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
       reason: status === "present" ? null : reason,
       error: status === "present" ? null : (outcome?.error ?? null),
       coverage: { observed: status === "present" ? 1 : 0, expected: 1 },
+      evidence_refs: Array.isArray(outcome?.evidence_refs) ? outcome.evidence_refs.map((entry) => entry.ref).filter((ref) => typeof ref === "string") : [],
     }));
   }
   const skillOutcomes = new Map((Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [])
@@ -132,7 +156,10 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   for (const skill of stageTopology.skills ?? []) {
     const id = String(skill.id);
     const outcome = skillOutcomes.get(id);
-    let status = MONITORING_STATUSES.has(outcome?.status) ? outcome.status : "unknown";
+    const semanticStatus = outcome?.status;
+    let status = semanticStatus === "completed" || semanticStatus === "skipped" ? "present"
+      : semanticStatus === "incomplete" ? "partial"
+        : semanticStatus === "unavailable" ? "unknown" : "unknown";
     let value = null;
     let reason = outcome?.reason ?? "skill_outcome_unavailable";
     let skillVersion = typeof outcome?.skill_version === "string" ? outcome.skill_version : null;
@@ -156,6 +183,7 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
       reason: status === "present" ? null : reason,
       error: status === "present" ? null : (outcome?.error ?? null),
       coverage: { observed: status === "present" ? 1 : 0, expected: 1 },
+      evidence_refs: Array.isArray(outcome?.evidence_refs) ? outcome.evidence_refs.map((entry) => entry.ref).filter((ref) => typeof ref === "string") : [],
     }));
   }
   return records;
@@ -558,7 +586,46 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
     };
-    const attempt = await runOfficialStage(values.stage, context, controlledInput);
+    let attempt;
+    try {
+      attempt = await runOfficialStage(values.stage, context, controlledInput);
+    } catch (error) {
+      // A missing or stale Stage Agent outcome is an execution fact, not a
+      // reason to hide the gap. Preserve the fail-loud run error and publish
+      // the existing monitoring facts as unknown so status cannot look green.
+      if (error?.code === "MATERIAL_INCOMPLETE"
+          && CANONICAL_STAGE_SLUGS.includes(values.stage)
+          && services.monitoring !== false
+          && context.storageRoot
+          && context.task?.taskPath) {
+        try {
+          // Some hosts create the task handle before initializing the facts
+          // store. Initialize the existing store only so this missing-outcome
+          // fact can be recorded; the original run error remains authoritative.
+          initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
+          await runMonitoringSidecar({
+            context,
+            services,
+            stageOutcome: {
+              attempt_id: `missing-stage-outcome-${values.stage}`,
+              stage_outcome_status: "unavailable",
+              step_outcomes: [],
+              skill_outcomes: [],
+              quality_fact_refs: [],
+            },
+          });
+        } catch (monitoringError) {
+          const message = `monitoring missing-outcome fact failed: ${monitoringError instanceof Error ? monitoringError.message : String(monitoringError)}`;
+          try {
+            if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error: monitoringError });
+            else process.emitWarning(message, { code: "WORKFLOWHUB_MONITORING_MISSING_OUTCOME" });
+          } catch (warningError) {
+            process.emitWarning(`monitoring missing-outcome warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
+          }
+        }
+      }
+      throw error;
+    }
     if (CANONICAL_STAGE_SLUGS.includes(values.stage) && services.monitoring !== false && context.storageRoot && context.task?.taskPath) {
       try { await runMonitoringSidecar({ context, services, stageOutcome: attempt }); }
       catch (error) {

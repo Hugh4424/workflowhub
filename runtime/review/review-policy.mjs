@@ -1,6 +1,13 @@
 import matrix from "./stage-materials.json" with { type: "json" };
 
 export function reviewRuleFor(stage, track = null, reviewScope = null) {
+  if (stage === "mini_task.design" || stage === "mini_task.implementation") {
+    if (track !== null && track !== undefined) throw new Error("MATERIAL_INCOMPLETE: mini-task review kind does not use review_track");
+    if (reviewScope !== null && reviewScope !== undefined) throw new Error("MATERIAL_INCOMPLETE: mini-task review kind does not use review_scope");
+    const rule = matrix.mini_task?.[stage.split(".")[1]];
+    if (!rule) throw new Error(`MATERIAL_INCOMPLETE: unknown mini-task review kind ${stage}`);
+    return rule;
+  }
   const stageRule = matrix.stages[stage];
   if (!stageRule) throw new Error(`MATERIAL_INCOMPLETE: unknown stage ${stage}`);
   if (stage === "make-decision") {

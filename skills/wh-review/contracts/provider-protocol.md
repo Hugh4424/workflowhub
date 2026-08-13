@@ -14,7 +14,7 @@
 
 ## 3rd-review 公共结果：workflowhub-result.v2
 
-WorkflowHub 只发起一次同步 public request：
+每一轮 `wh-review` attempt 只发起一次同步 public request：
 
 ```text
 3rd-review run --request -> terminal workflowhub-result.v2 group
@@ -40,6 +40,14 @@ WorkflowHub 不实现 advisory lock、process flight、polling、poll interval�
 broker 返回 terminal group；exit code `3` 的 stdout 仍是合法的 unavailable terminal
 group，必须按公开协议读取，不能丢弃或改写为空 findings。每个候选都必须有一条
 公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没有 finding 或悄悄丢弃。
+
+当这一轮的终态是明确的 route、认证或 provider 不可用时，外层
+`runReviewRecovery` 可以在同一个冻结 `snapshot_tree`/`material_id` 上，在首次请求之外最多发起三次
+新的 public request。每次都是新的 attempt，不复用 session、runtime、continuation
+或隐藏 retry；每次 attempt 的原始失败事实都必须保留。材料不完整/安全拒绝和真实
+semantic finding 不计入这三次恢复请求，而应在当前 stage 修复或按事实结束。三次恢复请求仍
+没有有效异源语义结果时，宿主可以调用当前 provider 的独立子代理；结果必须记录为
+`SAME_SOURCE`、`incomplete`，不能覆盖前三次 unavailable，也不能冒充异源审查完成。
 
 每个 provider 的公开结果最少包含：
 
@@ -132,12 +140,13 @@ profile，只取配置优先级最高的一条作为该 adapter 的代表；优�
 这使具体、可复核证据可以由一个异源 reviewer 报告，同时不会把 transient model
 质量波动、品牌或成本当作裁决依据。
 
-每个冻结 snapshot 只允许一次语义 findings 审查。修改后生成新 snapshot 时，才开始
-一次新的初始审查；旧结果只作为历史质量事实。`build-code` 永远是完整 phase/integration
+每个冻结 snapshot 的每一轮 public request 只允许一次语义 findings 审查；恢复请求只
+针对 terminal unavailable，不得用同一个 snapshot 重放真实 finding。修改后生成新
+snapshot 时，才开始一次新的初始审查；旧结果只作为历史质量事实。`build-code` 永远是完整 phase/integration
 审查，`verify-code` 还要绑定新鲜测试和独立审查。response ledger、resolution record
 和旧 namespace 不属于当前生产审查输入。
 
-不要求 reviewer 输出 checklist、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都保持为失败事实；后续正式调用只能是新的普通 review 请求，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
+不要求 reviewer 输出 checklist、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都保持为失败事实；外层恢复只按上一段的 terminal-unavailable 分类创建新的普通 public request，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。
 
 ## 失败分类
 
@@ -147,7 +156,8 @@ WorkflowHub 只在报告投影层分类，不改 provider 的原始 attempt/resu
 - finding：有效、`invalid_anchor`、重复、未采纳；
 - 未知错误码归 `UNKNOWN` 并告警。
 
-失败 attempt 的耗时单独统计，不进入有效审查质量分母；失败不会自动重试。
+失败 attempt 的耗时单独统计，不进入有效审查质量分母。单次 public request 不自动
+重试；首次请求之外最多三次恢复请求的边界、分类和 same-source 结果按上文保存并可回放。
 
 ## WorkflowHub 处置边界
 
