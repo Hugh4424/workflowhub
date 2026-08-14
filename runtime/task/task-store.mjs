@@ -1,7 +1,7 @@
 import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { isMonitoringFact, validateMonitoringFact } from "../evidence/monitoring-facts.mjs";
+import { isHistoricalMonitoringFact, isMonitoringFact, validateMonitoringFact } from "../evidence/monitoring-facts.mjs";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
@@ -110,6 +110,24 @@ function initialIndex(taskId, verifyHash = null) {
   };
 }
 
+function parseFactRecords(raw, taskId, projectName) {
+  if (raw === "") return [];
+  return raw.trimEnd().split("\n").map((line, index) => {
+    let value;
+    try { value = JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
+    if (isMonitoringFact(value) || isHistoricalMonitoringFact(value)) {
+      if (value.task_id !== taskId) throw new Error(`monitoring fact task identity mismatch on line ${index + 1}`);
+      if (value.project_name !== projectName) throw new Error(`monitoring fact project identity mismatch on line ${index + 1}`);
+      return Object.freeze({ kind: "monitoring", value });
+    }
+    if (["quality-fact.v1", "quality-verify.v1"].includes(value?.schema_version)) {
+      throw new Error(`quality facts must be stored under quality/facts, not facts.jsonl line ${index + 1}`);
+    }
+    validateFact(value, taskId);
+    return Object.freeze({ kind: "task", value });
+  });
+}
+
 function indexRef(value) {
   return {
     ref: value.ref,
@@ -185,14 +203,16 @@ export function initializeTaskStore(taskRoot, { taskId } = {}) {
 export function readTaskFacts(taskRoot) {
   const identity = assertRoot(taskRoot);
   const raw = readFileSync(safeRecordPath(identity.root, "facts.jsonl"), "utf8");
-  if (raw === "") return [];
-  return raw.trimEnd().split("\n").map((line, index) => {
-    let value;
-    try { value = JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
-    if (!isMonitoringFact(value)) validateFact(value, identity.taskId);
-    else if (value.task_id !== identity.taskId) throw new Error(`monitoring fact task identity mismatch on line ${index + 1}`);
-    return value;
-  });
+  return parseFactRecords(raw, identity.taskId, identity.projectName).map(({ value }) => value);
+}
+
+/** Read only monitoring facts; legacy task facts remain outside this consumer's contract. */
+export function readMonitoringFacts(taskRoot) {
+  const identity = assertRoot(taskRoot);
+  const raw = readFileSync(safeRecordPath(identity.root, "facts.jsonl"), "utf8");
+  return parseFactRecords(raw, identity.taskId, identity.projectName)
+    .filter(({ kind }) => kind === "monitoring")
+    .map(({ value }) => value);
 }
 
 export function readTaskIndex(taskRoot) {
@@ -259,27 +279,48 @@ export function appendMonitoringFacts(taskRoot, { task_id: taskId, records } = {
   records.forEach((record) => {
     validateMonitoringFact(record);
     if (record.task_id !== identity.taskId) throw new Error("monitoring fact task identity mismatch");
+    if (record.project_name !== identity.projectName) throw new Error("monitoring fact project identity mismatch");
   });
   return withStoreLock(identity.root, () => {
     const factsPath = safeRecordPath(identity.root, "facts.jsonl");
     const oldFactsRaw = readFileSync(factsPath, "utf8");
-    const oldRecords = oldFactsRaw === "" ? [] : oldFactsRaw.trimEnd().split("\n").map((line) => JSON.parse(line));
-    const existingIds = new Set(oldRecords.filter((item) => isMonitoringFact(item)).map((item) => item.fact_id));
-    const incomingIds = new Set();
-    for (const record of records) {
-      if (existingIds.has(record.fact_id)) throw new Error(`monitoring fact id already exists: ${record.fact_id}`);
-      if (incomingIds.has(record.fact_id)) throw new Error(`duplicate monitoring fact id in batch: ${record.fact_id}`);
-      incomingIds.add(record.fact_id);
+    const parsedRecords = parseFactRecords(oldFactsRaw, identity.taskId, identity.projectName);
+    const existingById = new Map();
+    for (const [index, entry] of parsedRecords.entries()) {
+      if (isMonitoringFact(entry.value) || isHistoricalMonitoringFact(entry.value)) existingById.set(entry.value.fact_id, { value: entry.value, ref: `facts.jsonl#${index + 1}` });
     }
-    const lines = records.map((record) => `${JSON.stringify(record)}\n`);
+    const incomingById = new Map();
+    const batchIds = new Set();
+    const newRecords = [];
+    for (const record of records) {
+      if (batchIds.has(record.fact_id)) throw new Error(`duplicate monitoring fact id in batch: ${record.fact_id}`);
+      batchIds.add(record.fact_id);
+      const prior = existingById.get(record.fact_id);
+      if (prior) {
+        if (canonical(prior.value) !== canonical(record)) throw new Error(`monitoring fact id conflict: ${record.fact_id}`);
+        continue;
+      }
+      const pending = { value: record, ref: null };
+      incomingById.set(record.fact_id, pending);
+      newRecords.push(record);
+    }
+    if (newRecords.length === 0) {
+      return Object.freeze({
+        refs: Object.freeze(records.map((record) => existingById.get(record.fact_id)?.ref ?? incomingById.get(record.fact_id)?.ref)),
+        records: Object.freeze(records),
+        idempotent: true,
+      });
+    }
+    const lines = newRecords.map((record) => `${JSON.stringify(record)}\n`);
     const separator = oldFactsRaw === "" || oldFactsRaw.endsWith("\n") ? "" : "\n";
     const nextFactsRaw = oldFactsRaw + separator + lines.join("");
     const oldIndex = readTaskIndex(identity.root);
     const nextIndex = structuredClone(oldIndex);
     const startingLine = oldFactsRaw === "" ? 1 : oldFactsRaw.trimEnd().split("\n").length + 1;
-    records.forEach((record, offset) => {
+    newRecords.forEach((record, offset) => {
       const lineRaw = lines[offset];
       const ref = `facts.jsonl#${startingLine + offset}`;
+      incomingById.get(record.fact_id).ref = ref;
       nextIndex.facts.push(indexRef({
         ref, sha256: sha256(lineRaw), schema: "monitoring-fact.v1", task_id: identity.taskId, stage: record.stage ?? undefined,
         logical_ref: ref, content_hash: sha256(JSON.stringify(record)), version: "v1", related_task_id: identity.taskId,
@@ -293,7 +334,11 @@ export function appendMonitoringFacts(taskRoot, { task_id: taskId, records } = {
       try { atomicWrite(identity.root, "facts.jsonl", oldFactsRaw); } catch {}
       throw error;
     }
-    return Object.freeze({ refs: Object.freeze(records.map((_, offset) => `facts.jsonl#${startingLine + offset}`)), records: Object.freeze(records) });
+    return Object.freeze({
+      refs: Object.freeze(records.map((record) => existingById.get(record.fact_id)?.ref ?? incomingById.get(record.fact_id)?.ref)),
+      records: Object.freeze(records),
+      idempotent: false,
+    });
   });
 }
 

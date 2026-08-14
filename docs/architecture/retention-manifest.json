@@ -26,7 +26,7 @@
     },
     "move_map": {
       "ref": "docs/architecture/move-map.json",
-      "content_hash": "d0748e19a31cfa68fc1e5a5bb2107aa0bf48cc569545ebc4760fab08dbe6d6f9"
+      "content_hash": "44e874b06f0481a535babb6151e7a614b0a9f00f729e375cf14f7ff54edaeb45"
     }
   },
   "history_verification": "tools/architecture/history-inventory.mjs verify-unchanged",
@@ -66,6 +66,11 @@
       "path": "tools/cli/check-task-record-paths.mjs",
       "disposition": "KEEP",
       "reason": "live npm check contract keeps the stage path boundary fail-loud"
+    },
+    {
+      "path": "tools/host/workflowhub-stage-agent-bridge.mjs",
+      "disposition": "KEEP",
+      "reason": "private external-host consumer for the canonical Stage Agent outcome adapter"
     },
     {
       "path": "runtime/review/stage-review-disposition.mjs",

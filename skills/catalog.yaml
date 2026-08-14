@@ -224,7 +224,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: c865b9161b6baf978ecdaf593cc36ad70fcd6a6dc0401811206fa2787a1fdda2
+    local_bundle_hash: 836e40a2553fe2753b0d3e4f1e0c52a37bafb5f0da09dba09057714469fec08b
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true

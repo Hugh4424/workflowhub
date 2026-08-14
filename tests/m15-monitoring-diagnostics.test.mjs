@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveMonitoringDiagnostics } from '../runtime/evidence/monitoring-diagnostics.mjs';
+import { deriveMonitoringDiagnostics, deriveMonitoringViewReadiness } from '../runtime/evidence/monitoring-diagnostics.mjs';
 
 const fact = (overrides = {}) => ({
   schema_version: 'monitoring-fact.v1', fact_id: overrides.fact_id ?? `f-${Math.random()}`,
@@ -77,7 +77,7 @@ describe('M15 diagnostics', () => {
       stages: [{ id: 'build-code', steps: [], skills: [{ id: 'skip-without-reason', trigger: false }] }],
     }, facts: [] });
     expect(result.skills).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'skip-without-reason', status: 'partial', reason: 'skill_skip_reason_unavailable' }),
+      expect.objectContaining({ id: 'skip-without-reason', status: 'incomplete', reason: 'skill_skip_reason_unavailable' }),
     ]));
   });
 
@@ -118,6 +118,101 @@ describe('M15 diagnostics', () => {
     expect(result.stage).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'build-code', status: 'present' })]));
     expect(result.stage).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'build-code', status: 'conflict' })]));
     expect(result.steps).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'bc-1', status: 'completed' })]));
+  });
+
+  it('keeps the latest attempt for every stage visible when stages ran separately', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'build-stage', fact_type: 'stage', stage: 'build-code', run_id: 'run-build', attempt_id: 'attempt-build', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:00:00.000Z' }),
+      fact({ fact_id: 'build-step', fact_type: 'step', stage: 'build-code', step_id: 'bc-1', run_id: 'run-build', attempt_id: 'attempt-build', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:00:00.000Z' }),
+      fact({ fact_id: 'verify-stage', fact_type: 'stage', stage: 'verify-code', run_id: 'run-verify', attempt_id: 'attempt-verify', status: 'incomplete', value: { outcome: 'incomplete' }, observed_at: '2026-08-12T00:01:00.000Z' }),
+      fact({ fact_id: 'verify-step', fact_type: 'step', stage: 'verify-code', step_id: 'vc-1', run_id: 'run-verify', attempt_id: 'attempt-verify', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:01:00.000Z' }),
+    ] });
+    expect(result.current.selection).toBe('latest_attempt_per_stage');
+    expect(result.current.run_id).toBeNull();
+    expect(result.current.attempt_id).toBeNull();
+    expect(result.current.run_ids).toEqual(['run-build', 'run-verify']);
+    expect(result.current.attempt_ids).toEqual(['attempt-build', 'attempt-verify']);
+    expect(result.current.stage_attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', run_id: 'run-build', attempt_id: 'attempt-build', fact_count: 2 }),
+      expect.objectContaining({ stage: 'verify-code', run_id: 'run-verify', attempt_id: 'attempt-verify', fact_count: 2 }),
+    ]));
+    expect(result.stage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'build-code', status: 'present', run_id: 'run-build', attempt_id: 'attempt-build' }),
+      expect.objectContaining({ id: 'verify-code', status: 'incomplete', run_id: 'run-verify', attempt_id: 'attempt-verify' }),
+    ]));
+    expect(result.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'completed' }),
+      expect.objectContaining({ stage: 'verify-code', id: 'vc-1', status: 'completed' }),
+    ]));
+  });
+
+  it('uses the latest attempt for source and overview readiness without deleting old gaps', () => {
+    const facts = [
+      fact({ fact_id: 'source-old', fact_type: 'source_status', run_id: 'run-1', attempt_id: 'attempt-old', status: 'missing', source: { ...fact().source, source_id: 'codex-source' }, value: null, reason: 'no_registered_source', observed_at: '2026-08-12T00:00:00.000Z' }),
+      fact({ fact_id: 'stage-old', fact_type: 'stage', stage: 'build-code', run_id: 'run-1', attempt_id: 'attempt-old', value: { outcome: 'failed' }, observed_at: '2026-08-12T00:00:00.000Z' }),
+      fact({ fact_id: 'source-new', fact_type: 'source_status', run_id: 'run-1', attempt_id: 'attempt-new', status: 'present', source: { ...fact().source, source_id: 'codex-thread' }, value: { source_id: 'codex-rollout' }, observed_at: '2026-08-12T00:01:00.000Z' }),
+      fact({ fact_id: 'stage-new', fact_type: 'stage', stage: 'build-code', run_id: 'run-1', attempt_id: 'attempt-new', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:01:00.000Z' }),
+    ];
+    const readiness = deriveMonitoringViewReadiness({ facts, topology, inScopeTaskCount: 1 });
+    expect(readiness.task_overview.field_coverage.task_id.status).toBe('present');
+    expect(readiness.task_overview.field_coverage.run_id.status).toBe('present');
+    expect(readiness.task_overview.field_coverage.attempt_id.status).toBe('present');
+    expect(readiness.task_overview.field_coverage['stage.value.outcome'].status).toBe('present');
+    expect(readiness.task_overview.field_coverage['source.status']).toMatchObject({ status: 'present', observed: 1 });
+    expect(deriveMonitoringDiagnostics({ topology, facts }).stage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'build-code', status: 'present' }),
+    ]));
+  });
+
+  it('lets a later present source status recover an earlier missing marker in the same attempt', () => {
+    const facts = [
+      fact({ fact_id: 'source-missing', fact_type: 'source_status', stage: 'build-code', run_id: 'run-1', attempt_id: 'attempt-1', status: 'missing', source: { ...fact().source, kind: 'unknown', source_id: 'codex-source-missing' }, value: null, reason: 'no_registered_source', observed_at: '2026-08-12T00:00:00.000Z' }),
+      fact({ fact_id: 'source-present', fact_type: 'source_status', stage: 'build-code', run_id: 'run-1', attempt_id: 'attempt-1', status: 'present', source: { ...fact().source, kind: 'registered_codex', source_id: 'codex-thread' }, value: { source_id: 'codex-thread', registration_id: 'registration-1', required: true, scope: 'stage', capabilities: ['step', 'skill'] }, observed_at: '2026-08-12T00:01:00.000Z' }),
+      fact({ fact_id: 'stage-current', fact_type: 'stage', stage: 'build-code', run_id: 'run-1', attempt_id: 'attempt-1', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:01:00.000Z' }),
+    ];
+    const readiness = deriveMonitoringViewReadiness({ facts, topology, inScopeTaskCount: 1 });
+    expect(readiness.task_overview.field_coverage['source.status']).toMatchObject({ status: 'present', observed: 1 });
+    expect(deriveMonitoringDiagnostics({ topology, facts }).steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'missing' }),
+    ]));
+  });
+
+  it('does not treat quality evidence gaps as transcript collection gaps', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'codex-present', fact_type: 'source_status', stage: 'build-code', status: 'present', source: { ...fact().source, kind: 'registered_codex', source_id: 'codex-thread' }, value: { source_id: 'codex-thread', registration_id: 'codex-thread', required: true, scope: 'stage', capabilities: ['step', 'skill'] } }),
+      fact({ fact_id: 'quality-missing', fact_type: 'source_status', status: 'unsupported', source: { ...fact().source, kind: 'quality', source_id: 'quality-owner' }, value: null, reason: 'quality_fact_unsupported' }),
+    ] });
+    expect(result.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'missing' }),
+    ]));
+    expect(result.failures).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ domain: 'transcript', status: 'unsupported' }),
+    ]));
+  });
+
+  it('does not call undeclared step or skill capabilities workflow degradation', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'codex-present-undeclared', fact_type: 'source_status', status: 'present', source: { ...fact().source, kind: 'registered_codex', source_id: 'codex-thread' }, value: { source_id: 'codex-thread', registration_id: 'codex-thread', required: true } }),
+    ] });
+    expect(result.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'unknown' }),
+    ]));
+    expect(result.skills).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'skill-a', status: 'unknown' }),
+    ]));
+  });
+
+  it('does not apply a stage-less source status from one stage to another stage', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'verify-source-missing', fact_type: 'source_status', stage: null, run_id: 'run-verify', attempt_id: 'attempt-verify', status: 'missing', value: null, reason: 'no_registered_source', observed_at: '2026-08-12T00:01:00.000Z' }),
+      fact({ fact_id: 'build-stage', fact_type: 'stage', stage: 'build-code', run_id: 'run-build', attempt_id: 'attempt-build', value: { outcome: 'completed' }, observed_at: '2026-08-12T00:00:00.000Z' }),
+    ] });
+    expect(result.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'unknown', reason: 'source_unknown' }),
+    ]));
+    expect(result.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ domain: 'transcript', status: 'missing' }),
+    ]));
   });
 
   it('uses controlled failure domains and never emits score or solution', () => {
@@ -167,6 +262,16 @@ describe('M15 diagnostics', () => {
     expect(result.trends.status).toBe('insufficient_samples');
   });
 
+  it('binds step cost to the manifest slug and carries cost evidence to the step row', () => {
+    const result = deriveMonitoringDiagnostics({ topology: {
+      stages: [{ id: 'build-code', steps: [{ id: 'bc-1', slug: 'implement-change', order: 1 }], skills: [] }],
+    }, facts: [fact({ fact_id: 'token-bound', fact_type: 'token', stage: 'build-code', step_id: 'bc-1', step_slug: 'implement-change', evidence_refs: ['quality/evidence/token-bound'], value: { message_id: 'm-bound', total_tokens: 7, grain: 'message' } })] });
+    expect(result.cost.breakdown.step['build-code+implement-change']).toBe(7);
+    expect(result.cost.breakdown_evidence.step['build-code+implement-change']).toContain('quality/evidence/token-bound');
+    expect(result.steps[0]).toMatchObject({ step_slug: 'implement-change', status: 'unknown' });
+    expect(result.steps[0].source_refs).toContain('quality/evidence/token-bound');
+  });
+
   it('counts the producer token shape and exposes mechanically proven duplicate waste', () => {
     const result = deriveMonitoringDiagnostics({ topology, facts: [
       fact({ fact_id: 't1', fact_type: 'token', value: { message_id: 'm1', input_tokens: 2, output_tokens: 3, total_tokens: 5, grain: 'message' }, stage: 'build-code' }),
@@ -183,6 +288,15 @@ describe('M15 diagnostics', () => {
     ] });
     expect(result.cost.token_count).toBe(5);
     expect(result.cost.breakdown.stage['build-code']).toBe(5);
+  });
+
+  it('does not double count one duration exposed by token and duration facts', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'token-duration', fact_type: 'token', stage: 'build-code', value: { message_id: 'm-duration', total_tokens: 4, event_id: 'event-duration', duration_ms: 125, grain: 'session' } }),
+      fact({ fact_id: 'explicit-duration', fact_type: 'duration', stage: 'build-code', value: { event_id: 'event-duration', duration_ms: 125, grain: 'session' } }),
+    ] });
+    expect(result.cost.duration_ms).toBe(125);
+    expect(result.cost.duration_breakdown.stage['build-code']).toBe(125);
   });
 
   it('does not silently choose or add same-grain token facts from different sources', () => {
@@ -205,15 +319,15 @@ describe('M15 diagnostics', () => {
     expect(result.cost.conflicts).toBe(1);
   });
 
-  it('keeps token and tool ids from distinct attempts as separate cost grains', () => {
+  it('shows cost for the current attempt instead of mixing older attempts into the task view', () => {
     const result = deriveMonitoringDiagnostics({ topology, facts: [
       fact({ fact_id: 'token-a', fact_type: 'token', run_id: 'run-1', attempt_id: 'attempt-a', value: { message_id: 'm-reused', total_tokens: 5, grain: 'message' }, stage: 'build-code' }),
       fact({ fact_id: 'token-b', fact_type: 'token', run_id: 'run-1', attempt_id: 'attempt-b', value: { message_id: 'm-reused', total_tokens: 5, grain: 'message' }, stage: 'build-code' }),
       fact({ fact_id: 'tool-a', fact_type: 'tool_use', run_id: 'run-1', attempt_id: 'attempt-a', value: { tool_use_id: 'tool-reused', name: 'Read', grain: 'tool_use' }, stage: 'build-code' }),
       fact({ fact_id: 'tool-b', fact_type: 'tool_use', run_id: 'run-1', attempt_id: 'attempt-b', value: { tool_use_id: 'tool-reused', name: 'Read', grain: 'tool_use' }, stage: 'build-code' }),
     ] });
-    expect(result.cost.token_count).toBe(10);
-    expect(result.cost.tool_use_count).toBe(2);
+    expect(result.cost.token_count).toBe(5);
+    expect(result.cost.tool_use_count).toBe(1);
     expect(result.cost.conflicts).toBe(0);
   });
 
@@ -224,8 +338,32 @@ describe('M15 diagnostics', () => {
       fact({ fact_id: 'f1', fact_type: 'health', value: { domain: 'review', friction_type: 'missing', error_code: 'E1' } }),
       fact({ fact_id: 'f2', fact_type: 'health', value: { domain: 'review', friction_type: 'missing', error_code: 'E1' } }),
     ] });
-    expect(result.automation.rate).toMatchObject({ status: 'present', numerator: 1, denominator: 1, excluded_unknown: 1 });
+    expect(result.automation.rate).toMatchObject({ status: 'unknown', value: null, numerator: 1, denominator: 2, excluded_unknown: 1 });
     expect(result.problems).toEqual([expect.objectContaining({ count: 2, common: true, domain: 'review', friction_type: 'missing', error_code: 'E1' })]);
+  });
+
+  it('does not turn source collection gaps into common workflow problems', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'source-unavailable', fact_type: 'source_status', status: 'unavailable', value: null, reason: 'read_error', coverage: { observed: 0, expected: null } }),
+      fact({ fact_id: 'source-unsupported', fact_type: 'source_status', status: 'unsupported', value: null, reason: 'format_not_supported', coverage: { observed: 0, expected: null } }),
+    ] });
+    expect(result.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ domain: 'transcript', status: 'unavailable' }),
+      expect.objectContaining({ domain: 'transcript', status: 'unsupported' }),
+    ]));
+    expect(result.problems).toEqual([]);
+  });
+
+  it('does not call an applicable step missing when its source is not registered', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'source-missing', fact_type: 'source_status', stage: 'build-code', status: 'missing', value: null, reason: 'no_registered_source', coverage: { observed: 0, expected: null } }),
+    ] });
+    expect(result.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'unavailable' }),
+    ]));
+    expect(result.steps).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'build-code', id: 'bc-1', status: 'missing' }),
+    ]));
   });
 
   it('keeps metric-specific trends and unavailable skill evidence explicit', () => {
@@ -264,12 +402,21 @@ describe('M15 diagnostics', () => {
     expect(result.trends.metrics.review_invoked).toMatchObject({ status: 'insufficient_samples', buckets: 2, usable_buckets: 0, numerator: 0, denominator: 0 });
   });
 
-  it('keeps retries from distinct attempts separate even when retry_id repeats', () => {
+  it('uses distinct tasks as trend denominators and counts compatible date buckets', () => {
+    const result = deriveMonitoringDiagnostics({ topology, facts: [
+      fact({ fact_id: 'review-a-1', task_id: 'task-a', fact_type: 'review', value: { invoked: true }, observed_at: '2026-08-10T00:00:00.000Z' }),
+      fact({ fact_id: 'review-a-2', task_id: 'task-a', fact_type: 'review', value: { invoked: true }, observed_at: '2026-08-10T01:00:00.000Z' }),
+      fact({ fact_id: 'review-b-1', task_id: 'task-b', fact_type: 'review', value: { invoked: false }, observed_at: '2026-08-11T00:00:00.000Z' }),
+    ] });
+    expect(result.trends.metrics.review_invoked).toMatchObject({ buckets: 2, usable_buckets: 2, numerator: 1, denominator: 2, status: 'present' });
+  });
+
+  it('shows retries from the current attempt instead of mixing older attempts into the task view', () => {
     const result = deriveMonitoringDiagnostics({ topology, facts: [
       fact({ fact_id: 'retry-a', fact_type: 'retry', attempt_id: 'attempt-a', value: { retry_id: 'retry-1', retry_count: 1, attempt_id: 'attempt-a', grain: 'session' } }),
       fact({ fact_id: 'retry-b', fact_type: 'retry', attempt_id: 'attempt-b', value: { retry_id: 'retry-1', retry_count: 1, attempt_id: 'attempt-b', grain: 'session' } }),
     ] });
-    expect(result.cost.retry_count).toBe(2);
+    expect(result.cost.retry_count).toBe(1);
   });
 
   it('keeps unobserved cost dimensions unknown instead of zero-filling them', () => {
@@ -282,11 +429,13 @@ describe('M15 diagnostics', () => {
 
   it('does not double count explicit duration with the same event start/end pair', () => {
     const result = deriveMonitoringDiagnostics({ topology, facts: [
-      fact({ fact_id: 'duration-explicit', fact_type: 'duration', value: { event_id: 'event-1', duration_ms: 100, grain: 'session' } }),
-      fact({ fact_id: 'session-start', fact_type: 'session', value: { event_id: 'event-1', event: 'start', timestamp: '2026-08-12T00:00:00.000Z' } }),
-      fact({ fact_id: 'session-end', fact_type: 'session', value: { event_id: 'event-1', event: 'end', timestamp: '2026-08-12T00:00:02.000Z' } }),
+      fact({ fact_id: 'duration-explicit', fact_type: 'duration', stage: 'build-code', value: { event_id: 'event-1', duration_ms: 100, grain: 'session' } }),
+      fact({ fact_id: 'session-start', fact_type: 'session', stage: 'build-code', value: { event_id: 'event-1', event: 'start', timestamp: '2026-08-12T00:00:00.000Z' } }),
+      fact({ fact_id: 'session-end', fact_type: 'session', stage: 'build-code', value: { event_id: 'event-1', event: 'end', timestamp: '2026-08-12T00:00:02.000Z' } }),
     ] });
     expect(result.cost.duration_ms).toBe(100);
+    expect(result.cost.duration_breakdown.stage['build-code']).toBe(100);
+    expect(result.cost.duration_breakdown.session.s1).toBe(100);
   });
 
   it('does not double count session explicit duration with the same event start/end pair', () => {

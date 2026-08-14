@@ -174,7 +174,9 @@ function currentImplementationReceipt({ task, workspace, version }) {
   const snapshot = captureWorkspaceSnapshot(safeWorkspace);
   const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
   const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
-  const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
+  const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n")
+    .filter(Boolean)
+    .filter((path) => !path.startsWith(".multica/") && !path.startsWith("quality/"));
   const changed = normalizeRuntimeOnlyPaths([...new Set([...tracked, ...untracked])]);
   const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
   const diffHash = sha256(diff), diffRef = `quality/evidence/implementation/${diffHash}.diff`;

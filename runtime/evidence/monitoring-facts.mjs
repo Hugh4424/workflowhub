@@ -2,15 +2,22 @@ import { createHash } from "node:crypto";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"]);
-const STATUSES = new Set(["present", "missing", "unknown", "partial", "fatal", "conflict"]);
+// These are event facts, not page/readiness states.  "partial" and "fatal"
+// belong to derived diagnostics and projections; keeping them out here
+// prevents an unavailable or incomplete observation from masquerading as a
+// product outcome.
+const STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
 const SOURCE_KINDS = new Set(["stage", "registered_codex", "task", "fact", "quality", "derived", "unknown"]);
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const KEYS = Object.freeze([
-  "schema_version", "fact_id", "task_id", "project_name", "fact_type", "stage", "step_id", "skill_id",
+  "schema_version", "fact_id", "task_id", "project_name", "fact_type", "stage", "step_id", "step_slug", "skill_id",
   "session_id", "subagent_id", "run_id", "attempt_id", "status", "value", "reason", "error", "observed_at",
   "source", "coverage", "contract_version", "collector_version", "adapter_version", "skill_version", "evidence_refs",
 ]);
+const KEY_SET = new Set(KEYS);
+const LEGACY_KEYS = new Set(KEYS.filter((key) => key !== "step_slug"));
+const HISTORICAL_MONITORING_STATUSES = new Set(["partial", "fatal"]);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -33,7 +40,7 @@ export function validateMonitoringFact(value) {
   if (!plain(value)) throw new TypeError("monitoring fact must be an object");
   const unknown = Object.keys(value).filter((key) => !KEYS.includes(key));
   if (unknown.length) throw new Error(`monitoring fact contains unsupported fields: ${unknown.join(", ")}`);
-  if (Object.keys(value).length !== KEYS.length) throw new Error("monitoring fact is missing required fields");
+  if (Object.keys(value).length !== KEYS.length && !(Object.keys(value).length === LEGACY_KEYS.size && Object.keys(value).every((key) => LEGACY_KEYS.has(key)))) throw new Error("monitoring fact is missing required fields");
   if (value.schema_version !== "monitoring-fact.v1") throw new Error("monitoring fact schema_version is invalid");
   for (const [key, label] of [["fact_id", "fact_id"], ["task_id", "task_id"], ["project_name", "project_name"]]) {
     text(value[key], label);
@@ -41,7 +48,8 @@ export function validateMonitoringFact(value) {
   }
   if (!FACT_TYPES.has(value.fact_type)) throw new Error("monitoring fact fact_type is invalid");
   if (value.stage !== null && !STAGES.has(value.stage)) throw new Error("monitoring fact stage is invalid");
-  for (const key of ["step_id", "skill_id", "session_id", "subagent_id", "run_id", "attempt_id"]) {
+  for (const key of ["step_id", "step_slug", "skill_id", "session_id", "subagent_id", "run_id", "attempt_id"]) {
+    if (!(key in value)) continue;
     nullableText(value[key], key);
     if (value[key] !== null && !SAFE_REF.test(value[key])) throw new Error(`${key} must be an opaque identifier`);
   }
@@ -70,14 +78,14 @@ export function validateMonitoringFact(value) {
     catch { throw new Error("monitoring fact evidence_refs is invalid"); }
   }
   const allowedValueKeys = {
-    stage: ["outcome", "reason"], step: ["outcome", "reason"], skill: ["trigger", "reason", "executed", "version"],
+    stage: ["outcome", "reason", "result_summary"], step: ["outcome", "reason", "result_summary"], skill: ["trigger", "reason", "executed", "version", "result_summary"],
     session: ["duration_ms", "retry_id", "event_id", "event", "timestamp"], subagent: ["parent_id", "origin", "duration_ms"], duration: ["duration_ms", "event_id", "grain"], retry: ["retry_id", "retry_count", "attempt_id", "grain"],
     token: ["message_id", "input_tokens", "output_tokens", "total_tokens", "tokens", "retry_id", "grain"],
     tool_use: ["tool_use_id", "name", "retry_id", "grain"], review: ["invoked", "independent", "outcome", "freshness", "source_ref"],
     test: ["invoked", "independent", "outcome", "freshness", "source_ref"], verify: ["invoked", "fresh", "outcome", "source_ref"], artifact: ["record_kind", "ref", "hash", "name"],
     health: ["domain", "status", "friction_type", "error_code", "configured", "used", "expected", "actual", "mismatch"],
     automation: ["origin", "action", "retry_id"], human_intervention: ["origin", "action", "reply", "approval", "override", "request"],
-    source_status: ["source_id", "registration_id", "required"], transcript_event: ["event_id", "event_type", "timestamp"],
+    source_status: ["source_id", "registration_id", "required", "scope", "capabilities"], transcript_event: ["event_id", "event_type", "timestamp"],
   };
   if (value.status === "present") {
     const keys = Object.keys(value.value);
@@ -110,6 +118,7 @@ export function validateMonitoringFact(value) {
       case "stage":
       case "step":
         optionalText("reason");
+        optionalText("result_summary");
         if (!("outcome" in value.value)) throw new Error(`monitoring fact ${value.fact_type}.outcome is required`);
         text(value.value.outcome, `${value.fact_type}.outcome`);
         break;
@@ -118,6 +127,7 @@ export function validateMonitoringFact(value) {
         optionalBoolean("executed");
         optionalText("reason");
         optionalText("version");
+        optionalText("result_summary");
         break;
       case "session":
         optionalNonNegativeInteger("duration_ms");
@@ -194,6 +204,8 @@ export function validateMonitoringFact(value) {
         if (!SAFE_REF.test(value.value.source_id)) throw new Error("monitoring fact source_status.source_id must be an opaque identifier");
         if (!SAFE_REF.test(value.value.registration_id)) throw new Error("monitoring fact source_status.registration_id must be an opaque identifier");
         if (typeof value.value.required !== "boolean") throw new Error("monitoring fact source_status.required must be boolean");
+        if ("scope" in value.value && !["task", "stage"].includes(value.value.scope)) throw new Error("monitoring fact source_status.scope must be task or stage");
+        if ("capabilities" in value.value && (!Array.isArray(value.value.capabilities) || value.value.capabilities.some((item) => !SAFE_REF.test(item)) || new Set(value.value.capabilities).size !== value.value.capabilities.length)) throw new Error("monitoring fact source_status.capabilities must be unique opaque identifiers");
         break;
       case "transcript_event":
         text(value.value.event_id, "transcript_event.event_id");
@@ -216,6 +228,7 @@ export function createMonitoringFact(input = {}) {
     fact_type: input.fact_type,
     stage: input.stage ?? null,
     step_id: input.step_id ?? null,
+    step_slug: input.step_slug ?? null,
     skill_id: input.skill_id ?? null,
     session_id: input.session_id ?? null,
     subagent_id: input.subagent_id ?? null,
@@ -245,6 +258,22 @@ export function monitoringFactHash(value) {
 
 export function isMonitoringFact(value) {
   try { validateMonitoringFact(value); return true; } catch { return false; }
+}
+
+/**
+ * Read-only compatibility predicate for monitoring rows written before
+ * partial/fatal were removed from the event-fact contract. These rows remain
+ * immutable historical evidence; current writers still reject those states.
+ */
+export function isHistoricalMonitoringFact(value) {
+  if (!plain(value) || value.schema_version !== "monitoring-fact.v1" || !HISTORICAL_MONITORING_STATUSES.has(value.status)) return false;
+  if (Object.keys(value).some((key) => !KEY_SET.has(key)) || (Object.keys(value).length !== KEYS.length && !(Object.keys(value).length === LEGACY_KEYS.size && Object.keys(value).every((key) => LEGACY_KEYS.has(key))))) return false;
+  try {
+    validateMonitoringFact({ ...value, status: "unknown" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export { FACT_TYPES, STAGES, STATUSES };

@@ -14,7 +14,7 @@ describe("non-code review policy", () => {
     expect(buildSpec.skills.map((entry) => entry.name)).toEqual([
       "spec-research", "spec-clarify",
       "spec-specify", "simplicity-guard", "plan-ceo-review",
-      "plan-design-review", "wh-review",
+      "plan-design-review", "wh-review", "spec-analyze",
     ]);
     expect(buildPlan.skills.map((entry) => entry.name)).toEqual([
       "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
@@ -23,9 +23,9 @@ describe("non-code review policy", () => {
     ]);
     expect(buildCode.skills.map((entry) => entry.name)).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
-      "fullstack-slice-testing", "wh-review",
+      "fullstack-slice-testing", "wh-review", "spec-analyze",
     ]);
-    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["wh-review"]);
+    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["wh-review", "spec-analyze"]);
     for (const manifest of [buildSpec, buildPlan, buildCode, verifyCode]) {
       expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
       expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);

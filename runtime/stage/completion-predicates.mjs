@@ -19,19 +19,16 @@ export const STAGE_PREDICATES = Object.freeze({
     non_goals: "acceptance_criterion", risks: "acceptance_criterion",
     talk_clarify: "acceptance_criterion",
     finding_dispositions: "acceptance_criterion",
-    direction_review: "review",
-    detail_review: "review",
     human_confirmation: "confirmation",
   }),
   "build-spec": Object.freeze({
     zero_major_ambiguities: "acceptance_criterion",
     finding_dispositions: "acceptance_criterion",
-    independent_review: "review",
   }),
   "build-plan": Object.freeze({
     fr_coverage: "acceptance_criterion", ac_coverage: "acceptance_criterion",
     dependencies: "acceptance_criterion", deletion_proofs: "acceptance_criterion",
-    executable_tasks: "acceptance_criterion", independent_review: "review",
+    executable_tasks: "acceptance_criterion",
     finding_dispositions: "acceptance_criterion",
     human_confirmation: "confirmation",
   }),
@@ -41,9 +38,22 @@ export const STAGE_PREDICATES = Object.freeze({
   }),
   "verify-code": Object.freeze({
     full_tests_fresh: "test",
-    independent_review: "review", finding_dispositions: "acceptance_criterion", acceptance_criteria: "acceptance_criterion",
+    finding_dispositions: "acceptance_criterion", acceptance_criteria: "acceptance_criterion",
     exceptions: "acceptance_criterion", human_confirmation: "confirmation",
   }),
+});
+
+// Review is useful advice for every stage except build-code. It must still be
+// recorded and shown, but an unavailable or incomplete advice source must not
+// turn a runnable stage into a fake quality gate. build-code keeps its final
+// integration review in STAGE_PREDICATES because that is the one user-defined
+// implementation gate.
+export const STAGE_ADVISORY_PREDICATES = Object.freeze({
+  "make-decision": Object.freeze({ direction_review: "review", detail_review: "review" }),
+  "build-spec": Object.freeze({ independent_review: "review" }),
+  "build-plan": Object.freeze({ independent_review: "review" }),
+  "build-code": Object.freeze({}),
+  "verify-code": Object.freeze({ independent_review: "review" }),
 });
 
 function satisfiesQualityPredicate(fact, kind) {

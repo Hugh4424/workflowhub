@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import yaml from "js-yaml";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
-import { deriveStageCompletion, deriveStageProgress, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
@@ -165,7 +165,10 @@ function currentMaterialBinding(ctx) {
     try { return [file, artifactDir.read(file)]; }
     catch (error) {
       if (error?.code === "ENOENT") return [file, null];
-      throw outcomeError(`cannot read current material ${file}: ${error.message}`);
+      // Preserve real filesystem failures. Only a missing future material is
+      // represented as an incomplete material set; permission, I/O, and
+      // other non-ENOENT failures must remain directly diagnosable.
+      throw error;
     }
   });
   const revision = `revision-${createHash("sha256").update(JSON.stringify(values)).digest("hex")}`;
@@ -282,7 +285,7 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
   return Object.freeze({ analyzer, analysis });
 }
 
-function authenticateStageOutcome(ctx, stage, input) {
+function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   const ref = input?.receipts?.stage_outcomes;
   if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the Stage Agent`);
   const match = STAGE_OUTCOME_REF.exec(ref);
@@ -298,11 +301,16 @@ function authenticateStageOutcome(ctx, stage, input) {
   const record = outcomeObject(value, "stage outcome receipt");
   if (record.schema_version !== "workflowhub-stage-outcomes.v1") throw outcomeError("stage outcome schema_version is invalid");
   if (record.task_id !== ctx.identity.taskId || record.stage !== stage) throw outcomeError("stage outcome task/stage identity mismatch");
+  if (record.run_id !== undefined && record.run_id !== null && record.run_id !== ctx.workflowRunId) throw outcomeError("stage outcome workflow run identity mismatch");
   outcomeText(record.attempt_id, "stage outcome attempt_id");
+  if (input.attempt_id !== undefined && input.attempt_id !== record.attempt_id) throw outcomeError("stage outcome attempt identity mismatch");
   if (!STAGE_OUTCOME_STATUSES.has(record.status)) throw outcomeError("stage outcome status is invalid");
-  const snapshot = ctx.kernel.currentVNextSnapshot();
+  const snapshot = expectedBinding?.snapshot ?? ctx.kernel.currentVNextSnapshot();
   if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot_tree is stale");
   const materials = currentMaterialBinding(ctx);
+  if (expectedBinding?.materials && (materials.revision !== expectedBinding.materials.revision || !sameJson(materials.hashes, expectedBinding.materials.hashes))) {
+    throw outcomeError("current materials changed after stage invocation was claimed");
+  }
   if (record.material_revision !== materials.revision) throw outcomeError("stage outcome material_revision is stale");
   if (JSON.stringify(record.material_hashes) !== JSON.stringify(materials.hashes)) {
     throw outcomeError(`stage outcome material_hashes do not match current materials: ${CURRENT_MATERIAL_FILES.join(", ")}`);
@@ -436,6 +444,12 @@ function evidenceCandidate(result, kind, subject, stage) {
     : facts[subject]
       ?? (kind === "test" ? facts.tests : null)
       ?? (kind === "confirmation" ? facts.human_confirmation : null);
+  // verify-code's independent review is a distinct quality subject. If the
+  // handler did not publish its dedicated quality_note, a generic review ref
+  // (usually build-code's review) must not be reused as a false binding.
+  if (kind === "review" && stage === "verify-code" && subject === "independent_review" && !subjectFact) {
+    return null;
+  }
   if (kind === "review" && ["direction_review", "detail_review"].includes(subject) && !subjectFact) {
     return null;
   }
@@ -562,14 +576,20 @@ function assertVNextSourceStable(ctx, expectedSnapshot) {
   return observed;
 }
 
-function publishVNextStage(ctx, result, preflightSnapshot) {
+function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
   // second coordination control plane, not a source-of-truth requirement.
   const snapshot = assertVNextSourceStable(ctx, preflightSnapshot);
+  const materials = currentMaterialBinding(ctx);
+  if (preflightMaterials && (materials.revision !== preflightMaterials.revision || !sameJson(materials.hashes, preflightMaterials.hashes))) {
+    throw outcomeError("current materials changed before stage publication");
+  }
   const qualityFactRefs = [];
+  const qualityAdvisoryFactRefs = [];
   let allPassed = true;
   const qualityWarnings = [];
+  const qualityAdvisories = [];
   const analyzerResult = result.spec_analyze?.result;
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
@@ -578,7 +598,11 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
     allPassed = false;
     qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult.status}`);
   }
-  for (const [subject, kind] of Object.entries(STAGE_PREDICATES[ctx.stage])) {
+  const predicateEntries = [
+    ...Object.entries(STAGE_PREDICATES[ctx.stage]).map(([subject, kind]) => ({ subject, kind, gating: true })),
+    ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}).map(([subject, kind]) => ({ subject, kind, gating: false })),
+  ];
+  for (const { subject, kind, gating } of predicateEntries) {
       const candidate = evidenceCandidate(result, kind, subject, ctx.stage)
       ?? (kind === "confirmation" ? currentConfirmationCandidate(ctx, snapshot.tree) : null);
     const acceptanceSubject = kind === "acceptance_criterion"
@@ -609,9 +633,11 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
         ? "missing"
         : "passed";
     const qualityPredicatePassed = kind === "review" ? status === "recorded" : status === "passed";
-    if (!qualityPredicatePassed) {
+    if (!qualityPredicatePassed && gating) {
       allPassed = false;
       qualityWarnings.push(`${subject}:${status}`);
+    } else if (!qualityPredicatePassed) {
+      qualityAdvisories.push(`${subject}:${status}`);
     }
     const evidenceType = { test: "test_receipt", review: "review_result", acceptance_criterion: "acceptance_evidence", confirmation: "human_confirmation" }[kind];
     let factEvidenceRef = kind === "acceptance_criterion" ? undefined : candidate?.ref;
@@ -675,6 +701,7 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       evidence: factEvidence.map(({ ref, sha256 }) => ({ ref, sha256, evidence_type: evidenceType })),
     });
     qualityFactRefs.push(fact.ref);
+    if (!gating) qualityAdvisoryFactRefs.push(fact.ref);
   }
   // The stage is source-bound at entry and rechecked once after publication
   // writes. Re-capturing a multi-gigabyte worktree for every AC does not add
@@ -717,6 +744,8 @@ function publishVNextStage(ctx, result, preflightSnapshot) {
       ]),
     }),
     quality_fact_refs: Object.freeze(qualityFactRefs),
+    quality_advisory_fact_refs: Object.freeze(qualityAdvisoryFactRefs),
+    ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
     ...(typeof result.stage_outcome_ref === "string" ? {
       stage_outcome_ref: result.stage_outcome_ref,
       stage_outcome_hash: result.stage_outcome_hash,
@@ -746,10 +775,14 @@ export async function runStage(stage, context, handler, publication = {}) {
 
   const upstream = upstreamForStage(ctx, stage);
   const vNextPreflightSnapshot = ctx.kernel.currentVNextSnapshot();
-  const result = plainResult(await handler(workerContext(ctx, publication), upstream));
+  const vNextPreflightMaterials = currentMaterialBinding(ctx);
+  const result = plainResult(await handler(workerContext(ctx, publication), upstream, {
+    snapshot: vNextPreflightSnapshot,
+    materials: vNextPreflightMaterials,
+  }));
 
   if (!publication || typeof publication !== "object" || Array.isArray(publication)) throw new TypeError("stage publication options must be an object");
-  return publishVNextStage(ctx, result, vNextPreflightSnapshot);
+  return publishVNextStage(ctx, result, vNextPreflightSnapshot, vNextPreflightMaterials);
 }
 
 function officialWorkerContext(ctx, publication = {}) {
@@ -836,12 +869,17 @@ export function runOfficialStage(stage, context, invocation, publication) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
-  const stageOutcome = authenticateStageOutcome(ctx, stage, input);
+  const handlerInput = structuredClone(input);
+  // attempt_id is a runtime binding claim, not a stage-handler input. Keep it
+  // visible to outcome authentication while keeping the handler contract
+  // limited to receipts and quality disclosures.
+  delete handlerInput.attempt_id;
   return runStage(
     stage,
     ctx,
-    async () => {
-      const result = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), input));
+    async (_worker, _upstream, preflight) => {
+      const stageOutcome = authenticateStageOutcome(ctx, stage, input, preflight);
+      const result = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), handlerInput));
       return {
         ...result,
         stage_outcome_ref: stageOutcome.ref,

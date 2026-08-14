@@ -1,0 +1,36 @@
+{
+  "phase": "M15 page and fact-detail repair",
+  "goal": "让固定五阶段、步骤名称、受控证据摘要和未拆分原因在真实静态监控页中可见；保留缺失事实，不补造执行数据。",
+  "boundary": [
+    "runtime/evidence/monitoring-page.html",
+    "runtime/evidence/monitoring-diagnostics.mjs",
+    "runtime/evidence/monitoring-projector.mjs",
+    "runtime/evidence/monitoring-facts.mjs",
+    "runtime/schemas/monitoring-fact.v1.json",
+    "runtime/schemas/monitoring-projection.v1.json",
+    "tools/cli/stage-runtime.mjs"
+  ],
+  "routing": {
+    "advisor": "test-routing-advisor",
+    "tier": "fullstack",
+    "reason": "canonical facts -> projection -> static data.js -> HTML -> browser 是同一条用户可见链路；本阶段同时改页面消费和事实细节保留。"
+  },
+  "red": {
+    "command": "npx vitest run tests/m15-monitoring-projector.test.mjs --passWithNoTests=false",
+    "result": "failed",
+    "reason": "旧页面没有‘展开全部阶段’控件，新增可见性合同先失败。"
+  },
+  "green": {
+    "commands": [
+      "npx vitest run tests/m15-monitoring-projector.test.mjs tests/m15-monitoring-diagnostics.test.mjs --passWithNoTests=false",
+      "npx vitest run tests/m15-monitoring-integration.test.mjs -t \"preserves authenticated\" --passWithNoTests=false"
+    ],
+    "result": "passed"
+  },
+  "stop_conditions": [
+    "不改历史 canonical facts.jsonl",
+    "不读取、修改或打包 Multica",
+    "不把 unavailable/unknown/missing 改成成功",
+    "未完成浏览器读回、派生重建和正式质量事实前，不宣称任务收口"
+  ]
+}

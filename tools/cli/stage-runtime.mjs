@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { homedir } from "node:os";
+import { basename, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
@@ -22,9 +24,10 @@ import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtim
 import { deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
-import { appendMonitoringFacts, initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
+import { appendMonitoringFacts, initializeTaskStore, readMonitoringFacts } from "../../runtime/task/task-store.mjs";
 import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
-import { parseRegisteredCodexTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
 
@@ -36,7 +39,157 @@ const DESIGN_ARTIFACTS = Object.freeze({
 const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
-const MONITORING_STATUSES = new Set(["present", "missing", "unknown", "partial", "fatal", "conflict"]);
+const MONITORING_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
+const CODEX_THREAD_ID = /^[A-Za-z0-9._:-]{8,128}$/;
+const CODEX_ROLLOUT_STARTED_AT = "WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT";
+
+function safeRolloutId(value) {
+  return String(value).replace(/[^A-Za-z0-9._:-]/g, "_");
+}
+
+function rolloutTimestamp(record) {
+  const timestamp = record?.timestamp ?? record?.payload?.timestamp ?? record?.payload?.info?.timestamp;
+  const parsed = Date.parse(typeof timestamp === "string" ? timestamp : "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isSafeCodexRolloutPath(candidate, { home, threadId }) {
+  const sessionsRoot = resolve(home, ".codex", "sessions");
+  const target = resolve(candidate);
+  return target.startsWith(`${sessionsRoot}/`)
+    && basename(target).endsWith(`-${threadId}.jsonl`)
+    && existsSync(target)
+    && statSync(target).isFile()
+    ? target
+    : null;
+}
+
+function locateCodexRollout({ env = process.env, home = homedir() } = {}) {
+  const threadId = env.CODEX_THREAD_ID;
+  if (typeof threadId !== "string" || !CODEX_THREAD_ID.test(threadId)) return null;
+  const explicit = env.CODEX_ROLLOUT_PATH ?? env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+  if (typeof explicit !== "string" || explicit.trim() === "") return null;
+  const target = isSafeCodexRolloutPath(explicit, { home, threadId });
+  if (!target) throw new Error("CODEX_ROLLOUT_PATH must point to the current .codex/sessions rollout for CODEX_THREAD_ID");
+  return { threadId, target };
+}
+
+function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
+  const raw = env[CODEX_ROLLOUT_STARTED_AT];
+  if (raw === undefined || raw === null || String(raw).trim() === "") return now;
+  const text = String(raw).trim();
+  const numeric = /^\d+$/.test(text) ? Number(text) : Date.parse(text);
+  if (!Number.isSafeInteger(numeric) || numeric < 0) {
+    throw new TypeError(`${CODEX_ROLLOUT_STARTED_AT} must be Unix milliseconds or an RFC3339 timestamp`);
+  }
+  return numeric;
+}
+
+function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAtMs }) {
+  const records = [];
+  for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    let outer;
+    try { outer = JSON.parse(line); } catch { continue; }
+    if (!outer || typeof outer !== "object" || !outer.payload || typeof outer.payload !== "object") continue;
+    const occurredAt = rolloutTimestamp(outer);
+    if (occurredAt !== null && occurredAt < startedAtMs) continue;
+    const payload = outer.payload;
+    const payloadType = typeof payload.type === "string" ? payload.type : "unknown";
+    const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${index}-${payloadType}`);
+    const common = {
+      task_id: taskId,
+      run_id: runId,
+      stage,
+      ...(attemptId ? { attempt_id: attemptId } : {}),
+    };
+    if (outer.type === "event_msg" && payloadType === "token_count") {
+      // Codex records usage as event_msg/token_count rather than as a
+      // response_item/message.  Keep the per-turn usage (not the cumulative
+      // total) so the monitoring adapter can deduplicate and aggregate it as
+      // an ordinary token fact without inventing step or skill attribution.
+      const usage = payload.info?.last_token_usage ?? payload.info?.total_token_usage;
+      const inputTokens = usage?.input_tokens;
+      const outputTokens = usage?.output_tokens;
+      const totalTokens = usage?.total_tokens;
+      if (Number.isInteger(inputTokens) && inputTokens >= 0
+          && Number.isInteger(outputTokens) && outputTokens >= 0
+          && Number.isInteger(totalTokens) && totalTokens >= 0) {
+        records.push(JSON.stringify({
+          id: `message-${sourceEventId}`,
+          type: "message",
+          ...common,
+          usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens },
+          grain: "message",
+        }));
+      } else {
+        records.push(JSON.stringify({
+          id: `message-${sourceEventId}`,
+          type: "message",
+          ...common,
+          usage: {},
+          grain: "message",
+        }));
+      }
+      continue;
+    }
+    if (outer.type === "response_item" && payloadType === "custom_tool_call") {
+      const toolId = safeRolloutId(payload.id ?? `${index}-tool`);
+      records.push(JSON.stringify({
+        id: `tool-${toolId}`,
+        type: "tool_use",
+        ...common,
+        tool_use: { id: `tool-${toolId}`, name: typeof payload.name === "string" ? payload.name : null },
+        grain: "stage",
+      }));
+      continue;
+    }
+    const eventType = `${outer.type ?? "rollout"}/${payloadType}`;
+    records.push(JSON.stringify({
+      id: `event-${sourceEventId}`,
+      type: "transcript_event",
+      fact_type: "transcript_event",
+      ...common,
+      value: {
+        event_id: `event-${sourceEventId}`,
+        event_type: eventType,
+        ...(occurredAt === null ? {} : { timestamp: new Date(occurredAt).toISOString() }),
+      },
+    }));
+  }
+  return records.join("\n");
+}
+
+/**
+ * The launcher owns the host path and turns it into a private reader capability.
+ * Runtime facts only receive the opaque thread reference and normalized events.
+ */
+export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, startedAtMs = Date.now(), env = process.env, home = homedir() } = {}) {
+  const located = locateCodexRollout({ env, home });
+  if (!located) return null;
+  const sourceRef = `codex-rollout-${safeRolloutId(located.threadId)}`;
+  return createRegisteredCodexSource({
+    source_id: `codex-thread-${safeRolloutId(located.threadId)}`,
+    source_ref: sourceRef,
+    registration_id: `launcher-${safeRolloutId(located.threadId)}`,
+    required: true,
+    task_id: task_id ?? context?.identity?.taskId,
+    run_id: run_id ?? context?.workflowRunId,
+    session_id: safeRolloutId(located.threadId),
+    source_format: "jsonl",
+    source_version: "v1",
+    cli_version: env.CODEX_CLI_VERSION ?? "codex-host",
+    adapter_version: "codex-rollout-adapter.v1",
+    capabilities: ["transcript_event", "token", "tool_use"],
+    reader: createTranscriptSourceReader(() => normalizeCodexRollout(readFileSync(located.target, "utf8"), {
+      taskId: task_id ?? context?.identity?.taskId,
+      runId: run_id ?? context?.workflowRunId,
+      attemptId: attempt_id ?? context?.attempt_id ?? null,
+      stage: context?.stage ?? null,
+      startedAtMs,
+    })),
+  });
+}
 
 export function monitoringTopology(repoRoot = RUNNER_ROOT) {
   return {
@@ -67,6 +220,49 @@ function deriveMonitoringAttemptId(context, stageOutcome) {
     : qualityRefs.length ? `attempt-${sha256(JSON.stringify(qualityRefs)).slice(0, 32)}` : null;
 }
 
+function bindStageOutcomeAttemptId(context, stageOutcome) {
+  if (!stageOutcome || typeof stageOutcome !== "object" || stageOutcome.attempt_id || typeof stageOutcome.stage_outcome_ref !== "string") return stageOutcome;
+  try {
+    const record = JSON.parse(context.task.readRecord(stageOutcome.stage_outcome_ref));
+    return typeof record?.attempt_id === "string" && record.attempt_id.trim()
+      ? { ...stageOutcome, attempt_id: record.attempt_id }
+      : stageOutcome;
+  } catch {
+    return stageOutcome;
+  }
+}
+
+function normalizeOutcomeStatus(outcome, kind) {
+  const semanticStatus = typeof outcome?.status === "string" ? outcome.status : null;
+  if (semanticStatus === "completed" || semanticStatus === "failed") {
+    const value = { outcome: semanticStatus };
+    if (typeof outcome?.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
+    return { status: "present", value, reason: null, error: null };
+  }
+  if (semanticStatus === "skipped" || semanticStatus === "not_applicable") {
+    return { status: semanticStatus, value: null, reason: outcome.reason ?? `${kind}_outcome_${semanticStatus}`, error: outcome.error ?? null };
+  }
+  if (semanticStatus === "incomplete" || semanticStatus === "unavailable" || semanticStatus === "unknown") {
+    return { status: semanticStatus, value: null, reason: outcome.reason ?? `${kind}_outcome_${semanticStatus}`, error: outcome.error ?? null };
+  }
+  return {
+    status: semanticStatus === null ? "unavailable" : "unsupported",
+    value: null,
+    reason: `${kind}_outcome_${semanticStatus ?? "unavailable"}`,
+    error: semanticStatus === null ? null : "UNSUPPORTED_OUTCOME_STATUS",
+  };
+}
+
+function normalizeEvidenceRefs(value) {
+  return Array.isArray(value)
+    ? value.map((entry) => typeof entry === "string" ? entry : entry?.ref).filter((ref) => typeof ref === "string" && ref.trim())
+    : [];
+}
+
+function outcomeCoverage(status) {
+  return { observed: ["unknown", "unavailable"].includes(status) ? 0 : 1, expected: 1 };
+}
+
 function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   const stage = typeof context.stage === "string" ? context.stage : null;
   const attemptId = deriveMonitoringAttemptId(context, stageOutcome);
@@ -89,101 +285,75 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   const stageOutcomeStatus = typeof stageOutcome?.stage_outcome_status === "string"
     ? stageOutcome.stage_outcome_status
     : stageOutcome?.status;
-  const stageFactStatus = stageOutcomeStatus === "incomplete"
-    ? "partial"
-    : stageOutcomeStatus === "unavailable" || stageOutcomeStatus === "failed"
-      ? "unknown"
-      : "present";
-  const stageFactReason = stageOutcomeStatus === "incomplete"
-    ? "stage_outcome_incomplete"
-    : stageOutcomeStatus === "unavailable"
-      ? "stage_outcome_unavailable"
-      : stageOutcomeStatus === "failed"
-        ? "stage_outcome_failed"
-        : null;
+  const stageState = normalizeOutcomeStatus(
+    stageOutcomeStatus === undefined ? null : { status: stageOutcomeStatus },
+    "stage",
+  );
   const records = [createMonitoringFact({
     ...task,
     fact_id: `stage:${factIdentity}:${stage ?? "unknown"}`,
     fact_type: "stage",
-    status: stageFactStatus,
-    value: stageFactStatus === "partial" || stageFactStatus === "unknown"
-      ? null
-      : { outcome: typeof stageOutcome?.stage_outcome_status === "string" ? stageOutcome.stage_outcome_status : (typeof stageOutcome?.status === "string" ? stageOutcome.status : "published") },
-    reason: stageFactReason,
-    coverage: { observed: 1, expected: 1 },
+    status: stageState.status,
+    value: stageState.value,
+    reason: stageState.reason,
+    error: stageState.error,
+    coverage: outcomeCoverage(stageState.status),
     evidence_refs: typeof stageOutcome?.stage_outcome_ref === "string" ? [stageOutcome.stage_outcome_ref] : [],
   })];
   if (!stage) return records;
   const stageTopology = (topology?.stages ?? []).find((entry) => entry.id === stage) ?? { steps: [], skills: [] };
-  const stepOutcomes = new Map((Array.isArray(stageOutcome?.step_outcomes) ? stageOutcome.step_outcomes : [])
-    .filter((entry) => entry && entry.step_id !== undefined && entry.step_id !== null)
-    .map((entry) => [String(entry.step_id), entry]));
-  for (const step of stageTopology.steps ?? []) {
-    const id = String(step.id);
-    const outcome = stepOutcomes.get(id);
-    const semanticStatus = outcome?.status;
-    let status = semanticStatus === "completed" || semanticStatus === "skipped" ? "present"
-      : semanticStatus === "incomplete" ? "partial"
-        : semanticStatus === "unavailable" ? "unknown" : "missing";
-    let value = null;
-    let reason = outcome?.reason ?? "step_outcome_unavailable";
-    if (status === "present") {
-      value = {};
-      if (typeof outcome.status === "string" && outcome.status.trim()) value.outcome = outcome.status;
-      if (typeof outcome.outcome === "string" && outcome.outcome.trim()) value.outcome = outcome.outcome;
-      if (typeof outcome.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
-      if (!Object.keys(value).length && outcome.value && typeof outcome.value === "object" && !Array.isArray(outcome.value)) {
-        for (const key of ["outcome", "reason"]) if (typeof outcome.value[key] === "string" && outcome.value[key].trim()) value[key] = outcome.value[key];
-      }
-      if (!Object.keys(value).length) { status = "partial"; reason = "step_outcome_unavailable"; value = null; }
-    }
+  const declaredStepIds = new Set((stageTopology.steps ?? []).map((step) => String(step.id)));
+  const stepOutcomes = Array.isArray(stageOutcome?.step_outcomes) ? stageOutcome.step_outcomes : [];
+  for (const outcome of stepOutcomes) {
+    if (!outcome || outcome.step_id === undefined || outcome.step_id === null) continue;
+    const id = String(outcome.step_id);
+    if (!declaredStepIds.has(id)) continue;
+    const state = normalizeOutcomeStatus(outcome, "step");
     records.push(createMonitoringFact({
       ...task,
       fact_id: `step:${factIdentity}:${stage}:${id}`,
       fact_type: "step",
       step_id: id,
-      status,
-      value,
-      reason: status === "present" ? null : reason,
-      error: status === "present" ? null : (outcome?.error ?? null),
-      coverage: { observed: status === "present" ? 1 : 0, expected: 1 },
-      evidence_refs: Array.isArray(outcome?.evidence_refs) ? outcome.evidence_refs.map((entry) => entry.ref).filter((ref) => typeof ref === "string") : [],
+      step_slug: typeof outcome.step_slug === "string" ? outcome.step_slug : null,
+      status: state.status,
+      value: state.value,
+      reason: state.reason,
+      error: state.error,
+      coverage: outcomeCoverage(state.status),
+      evidence_refs: normalizeEvidenceRefs(outcome.evidence_refs),
     }));
   }
-  const skillOutcomes = new Map((Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [])
-    .filter((entry) => entry && typeof entry.skill_id === "string")
-    .map((entry) => [entry.skill_id, entry]));
-  for (const skill of stageTopology.skills ?? []) {
-    const id = String(skill.id);
-    const outcome = skillOutcomes.get(id);
-    const semanticStatus = outcome?.status;
-    let status = semanticStatus === "completed" || semanticStatus === "skipped" ? "present"
-      : semanticStatus === "incomplete" ? "partial"
-        : semanticStatus === "unavailable" ? "unknown" : "unknown";
-    let value = null;
-    let reason = outcome?.reason ?? "skill_outcome_unavailable";
-    let skillVersion = typeof outcome?.skill_version === "string" ? outcome.skill_version : null;
-    if (status === "present") {
+  const declaredSkillIds = new Set((stageTopology.skills ?? []).map((skill) => String(skill.id)));
+  const skillOutcomes = Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [];
+  for (const outcome of skillOutcomes) {
+    if (!outcome || typeof outcome.skill_id !== "string" || !declaredSkillIds.has(outcome.skill_id)) continue;
+    const id = outcome.skill_id;
+    let state = normalizeOutcomeStatus(outcome, "skill");
+    let value = state.value;
+    if (state.status === "present") {
       value = {};
       if (typeof outcome.trigger === "boolean") value.trigger = outcome.trigger;
       if (typeof outcome.executed === "boolean") value.executed = outcome.executed;
       if (typeof outcome.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
       if (typeof outcome.version === "string" && outcome.version.trim()) value.version = outcome.version;
-      if (!Object.keys(value).length) { status = "partial"; reason = "skill_outcome_unavailable"; value = null; }
-      if (status === "present" && value.trigger === false && !value.reason) { status = "partial"; reason = "skill_skip_reason_unavailable"; value = null; }
+      if (typeof outcome.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
+      if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
+        state = { status: "unavailable", value: null, reason: "skill_outcome_unavailable", error: null };
+        value = null;
+      }
     }
     records.push(createMonitoringFact({
       ...task,
       fact_id: `skill:${factIdentity}:${stage}:${id}`,
       fact_type: "skill",
       skill_id: id,
-      skill_version: skillVersion,
-      status,
+      skill_version: typeof outcome.version === "string" ? outcome.version : null,
+      status: state.status,
       value,
-      reason: status === "present" ? null : reason,
-      error: status === "present" ? null : (outcome?.error ?? null),
-      coverage: { observed: status === "present" ? 1 : 0, expected: 1 },
-      evidence_refs: Array.isArray(outcome?.evidence_refs) ? outcome.evidence_refs.map((entry) => entry.ref).filter((ref) => typeof ref === "string") : [],
+      reason: state.reason,
+      error: state.error,
+      coverage: outcomeCoverage(state.status),
+      evidence_refs: normalizeEvidenceRefs(outcome.evidence_refs),
     }));
   }
   return records;
@@ -204,18 +374,22 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
     source_version: sourceVersion,
   });
   const unavailableQualityFact = (ref, error, evidenceRef = ref) => {
-    const missing = error?.code === "ENOENT";
+    const code = error?.code;
+    const missing = code === "ENOENT";
+    const unsupported = ["INVALID_QUALITY_FACT_REF", "UNSUPPORTED_QUALITY_FACT_KIND"].includes(code);
+    const bindingConflict = ["QUALITY_FACT_TASK_MISMATCH", "QUALITY_FACT_STAGE_MISMATCH"].includes(code);
+    const status = missing ? "missing" : unsupported ? "unsupported" : bindingConflict ? "conflict" : "unavailable";
     return createMonitoringFact({
       task_id: context.identity.taskId,
       project_name: context.identity.projectName,
       stage: context.stage ?? null,
       run_id: context.workflowRunId ?? null,
       attempt_id: attemptId,
-      fact_id: `quality:fact:${missing ? "missing" : "unavailable"}:${attemptId ?? "default"}:${sha256(ref).slice(0, 32)}`,
+      fact_id: `quality:fact:${status}:${attemptId ?? "default"}:${sha256(ref).slice(0, 32)}`,
       fact_type: "source_status",
-      status: missing ? "missing" : "unknown",
+      status,
       value: null,
-      reason: missing ? "quality_fact_record_missing" : "quality_fact_record_unavailable",
+      reason: missing ? "quality_fact_record_missing" : unsupported ? "quality_fact_unsupported" : bindingConflict ? "quality_fact_binding_conflict" : "quality_fact_record_unavailable",
       error: missing ? null : (error?.code ? String(error.code) : "INVALID_QUALITY_FACT"),
       source: qualitySource(ref),
       observed_at: now().toISOString(),
@@ -248,6 +422,17 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
       records.push(unavailableQualityFact(ref, Object.assign(new Error("invalid quality fact"), { code: bindingError })));
       continue;
     }
+    const qualityStatus = (valueStatus, present) => {
+      if (present) return "present";
+      if (valueStatus === "missing") return "missing";
+      if (valueStatus === "skipped") return "skipped";
+      if (valueStatus === "not_applicable") return "not_applicable";
+      if (valueStatus === "conflict") return "conflict";
+      if (valueStatus === "unsupported") return "unsupported";
+      if (valueStatus === "incomplete") return "incomplete";
+      if (valueStatus === "unknown") return "unknown";
+      return "unavailable";
+    };
     const source = qualitySource(ref, value.schema_version ?? "quality-fact.v1");
     const common = {
       task_id: context.identity.taskId,
@@ -265,7 +450,7 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
         ...common,
         fact_id: `quality:review:${attemptId ?? "default"}:${sha256(ref)}`,
         fact_type: "review",
-        status: present ? "present" : value.status === "missing" ? "missing" : "unknown",
+        status: qualityStatus(value.status, present),
         value: present ? {
           invoked: true,
           independent: independentReviewSubjects.has(value.subject),
@@ -282,7 +467,7 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
         ...common,
         fact_id: `quality:test:${attemptId ?? "default"}:${sha256(ref)}`,
         fact_type: "test",
-        status: present ? "present" : value.status === "missing" ? "missing" : "unknown",
+        status: qualityStatus(value.status, present),
         value: present ? {
           invoked: true,
           outcome: value.status,
@@ -329,7 +514,7 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
         attempt_id: attemptId,
         fact_id: `quality:verify:${attemptId ?? "default"}:${verifyDigest}`,
         fact_type: "verify",
-        status: present ? "present" : verify.status === "missing" ? "missing" : incomplete ? "partial" : "unknown",
+        status: present ? "present" : bindingConflict ? "conflict" : verify.status === "missing" ? "missing" : incomplete ? "incomplete" : verify.status === "unknown" ? "unknown" : "unavailable",
         value: verifyValue,
         reason: present ? null : bindingConflict ? "verify_binding_conflict" : verify.status === "missing" ? "quality_verify_record_missing" : incomplete ? "verify_incomplete" : "verify_freshness_unavailable",
         error: bindingConflict ? "VERIFY_SOURCE_BINDING_MISMATCH" : null,
@@ -342,7 +527,7 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
       records.push(createMonitoringFact({
         ...commonVerify,
         fact_id: `quality:verify:unavailable:${attemptId ?? "default"}:${sha256(String(error?.code ?? error?.message ?? "read_error")).slice(0, 32)}`,
-        status: error?.code === "ENOENT" ? "missing" : "unknown",
+        status: error?.code === "ENOENT" ? "missing" : "unavailable",
         value: null,
         reason: error?.code === "ENOENT" ? "quality_verify_record_missing" : "quality_verify_record_unavailable",
         error: error?.code && error.code !== "ENOENT" ? String(error.code) : null,
@@ -392,28 +577,33 @@ function parseArgs(argv) {
 
 export async function runMonitoringSidecar({ context, services = {}, stageOutcome = null, now = () => new Date() } = {}) {
   if (!context?.task || !context?.storageRoot) throw new TypeError("launcher context with storageRoot is required for monitoring sidecar");
+  const boundStageOutcome = bindStageOutcomeAttemptId(context, stageOutcome);
+  const attemptId = deriveMonitoringAttemptId(context, boundStageOutcome);
+  const monitoringContext = attemptId === (context.attempt_id ?? null) ? context : { ...context, attempt_id: attemptId };
   const binding = typeof services.resolveMonitoringSource === "function"
-    ? await services.resolveMonitoringSource({ context, taskPath: context.task.taskPath, task_id: context.identity.taskId, run_id: context.workflowRunId })
+    ? await services.resolveMonitoringSource({ context: monitoringContext, taskPath: context.task.taskPath, task_id: context.identity.taskId, run_id: context.workflowRunId })
     : null;
   const parsed = parseRegisteredCodexTranscript(binding, {
-    project_name: context.identity.projectName,
-    task_id: context.identity.taskId,
-    attempt_id: context.attempt_id ?? null,
+    project_name: monitoringContext.identity.projectName,
+    task_id: monitoringContext.identity.taskId,
+    stage: monitoringContext.stage ?? null,
+    run_id: monitoringContext.workflowRunId ?? null,
+    attempt_id: attemptId,
     now,
   });
-  const existing = new Set(readTaskFacts(context.task.taskPath).map((record) => record?.fact_id).filter(Boolean));
+  const existing = new Set(readMonitoringFacts(monitoringContext.task.taskPath).map((record) => record?.fact_id).filter(Boolean));
   const topology = services.monitoringTopology ?? monitoringTopology(RUNNER_ROOT);
-  const stageFacts = stageMonitoringFacts({ context, stageOutcome, topology, now });
-  const qualityFacts = qualityMonitoringFacts({ context, stageOutcome, now });
+  const stageFacts = stageMonitoringFacts({ context: monitoringContext, stageOutcome: boundStageOutcome, topology, now });
+  const qualityFacts = qualityMonitoringFacts({ context: monitoringContext, stageOutcome: boundStageOutcome, now });
   const freshRecords = [...parsed.records, ...qualityFacts, ...stageFacts].filter((record) => !existing.has(record.fact_id));
-  if (freshRecords.length) appendMonitoringFacts(context.task.taskPath, { task_id: context.identity.taskId, records: freshRecords });
-  const facts = readTaskFacts(context.task.taskPath);
-  const projectionStatus = { present: "current", missing: "partial", unknown: "partial", partial: "partial", fatal: "fatal" }[parsed.status] ?? "partial";
-  const projectionErrors = parsed.status === "fatal"
+  if (freshRecords.length) appendMonitoringFacts(monitoringContext.task.taskPath, { task_id: monitoringContext.identity.taskId, records: freshRecords });
+  const facts = readMonitoringFacts(monitoringContext.task.taskPath);
+  const projectionStatus = { present: "current", missing: "partial", skipped: "partial", not_applicable: "partial", unknown: "partial", unavailable: "partial", unsupported: "partial", incomplete: "partial", conflict: "fatal" }[parsed.status] ?? "partial";
+  const projectionErrors = parsed.status === "conflict"
     ? ["monitoring source binding conflict"]
     : parsed.status === "present" ? [] : [`monitoring source status: ${parsed.status}`];
-  const projection = publishTaskMonitoringProjection({ storageRoot: context.storageRoot, projectName: context.identity.projectName, taskId: context.identity.taskId, facts, topology, generatedAt: now().toISOString(), status: projectionStatus, errors: projectionErrors });
-  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: context.storageRoot, generatedAt: now().toISOString() });
+  const projection = publishTaskMonitoringProjection({ storageRoot: monitoringContext.storageRoot, projectName: monitoringContext.identity.projectName, taskId: monitoringContext.identity.taskId, facts, topology, generatedAt: now().toISOString(), status: projectionStatus, errors: projectionErrors });
+  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: monitoringContext.storageRoot, generatedAt: now().toISOString(), topology });
   return Object.freeze({ status: parsed.status, fact_refs: projection.value.source_refs, projection_ref: projection.path, global_snapshot: snapshot.outputData, diagnostics: projection.value.diagnostics });
 }
 
@@ -421,7 +611,7 @@ export function publishStaleMonitoringSnapshot({ context, services = {}, message
   if (!context?.task || !context.storageRoot || !context.identity) throw new TypeError('launcher context with task, identity, and storageRoot is required');
   if (typeof message !== 'string' || !message.trim()) throw new TypeError('monitoring stale message is required');
   const generatedAt = now().toISOString();
-  const facts = readTaskFacts(context.task.taskPath);
+  const facts = readMonitoringFacts(context.task.taskPath);
   const topology = services.monitoringTopology ?? monitoringTopology(RUNNER_ROOT);
   const projection = publishTaskMonitoringProjection({
     storageRoot: context.storageRoot,
@@ -433,7 +623,7 @@ export function publishStaleMonitoringSnapshot({ context, services = {}, message
     status: 'stale',
     errors: [message],
   });
-  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: context.storageRoot, generatedAt });
+  const snapshot = rebuildGlobalMonitoringSnapshot({ storageRoot: context.storageRoot, generatedAt, topology, preferDerived: true });
   return Object.freeze({ projection, snapshot });
 }
 
@@ -576,8 +766,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       throw new TypeError("run input must be an object when supplied");
     }
     const allowedRunFields = new Set(values.stage === "build-code"
-      ? ["receipts", "acceptance_coverage", "finding_dispositions"]
-      : ["receipts", "finding_dispositions"]);
+      ? ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions"]
+      : ["receipts", "attempt_id", "finding_dispositions"]);
     const suppliedInput = input ?? {};
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
@@ -586,6 +776,20 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
     };
+    // The Stage Agent runs before this public delivery command.  A plain
+    // Date.now() here starts the window too late and drops the real agent's
+    // transcript and token events.  The host records the agent start before
+    // launching it and passes that boundary through this private env var.
+    const monitoringStartedAt = resolveRolloutStartedAt(process.env);
+    const monitoringServices = services.monitoring === false
+      ? services
+      : {
+        ...services,
+        resolveMonitoringSource: services.resolveMonitoringSource ?? ((sourceInput) => resolveDefaultMonitoringSource({
+          ...sourceInput,
+          startedAtMs: monitoringStartedAt,
+        })),
+      };
     let attempt;
     try {
       attempt = await runOfficialStage(values.stage, context, controlledInput);
@@ -603,9 +807,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           // store. Initialize the existing store only so this missing-outcome
           // fact can be recorded; the original run error remains authoritative.
           initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
-          await runMonitoringSidecar({
+          const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
+          await runSidecar({
             context,
-            services,
+            services: monitoringServices,
             stageOutcome: {
               attempt_id: `missing-stage-outcome-${values.stage}`,
               stage_outcome_status: "unavailable",
@@ -627,7 +832,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       throw error;
     }
     if (CANONICAL_STAGE_SLUGS.includes(values.stage) && services.monitoring !== false && context.storageRoot && context.task?.taskPath) {
-      try { await runMonitoringSidecar({ context, services, stageOutcome: attempt }); }
+      try {
+        // A successful official run may be the first writer for this task.
+        // Establish the canonical facts store before the single monitoring
+        // sidecar reads or appends it; the sidecar must not depend on a prior
+        // failed run having created the file.
+        initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
+        const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
+        await runSidecar({ context, services: monitoringServices, stageOutcome: bindStageOutcomeAttemptId(context, attempt) });
+      }
       catch (error) {
         const message = `monitoring sidecar failed: ${error instanceof Error ? error.message : String(error)}`;
         try {
@@ -636,15 +849,26 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         } catch (warningError) {
           process.emitWarning(`monitoring warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
         }
+        let fallbackError = null;
         try {
-          publishStaleMonitoringSnapshot({ context, services, message });
-        } catch (fallbackError) {
+          const publishStale = services.publishStaleMonitoringSnapshot ?? publishStaleMonitoringSnapshot;
+          publishStale({ context, services: monitoringServices, message });
+        } catch (candidateError) {
+          fallbackError = candidateError;
           try {
-            if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error: fallbackError });
-            else process.emitWarning(`monitoring stale fallback failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`, { code: "WORKFLOWHUB_MONITORING_FALLBACK" });
+            if (typeof services.onMonitoringWarning === "function") await services.onMonitoringWarning({ context, error: candidateError });
+            else process.emitWarning(`monitoring stale fallback failed: ${candidateError instanceof Error ? candidateError.message : String(candidateError)}`, { code: "WORKFLOWHUB_MONITORING_FALLBACK" });
           } catch (warningError) {
             process.emitWarning(`monitoring fallback warning callback failed: ${warningError instanceof Error ? warningError.message : String(warningError)}`, { code: "WORKFLOWHUB_MONITORING_WARNING" });
           }
+        }
+        if (fallbackError) {
+          const publicationError = new Error(
+            `${message}; stale fallback also failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+            { cause: fallbackError },
+          );
+          publicationError.code = "WORKFLOWHUB_MONITORING_PUBLICATION_FAILED";
+          throw publicationError;
         }
       }
     }

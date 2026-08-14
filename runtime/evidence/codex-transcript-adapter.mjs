@@ -2,8 +2,10 @@ import { createMonitoringFact, safePublicRef } from "./monitoring-facts.mjs";
 import { isTranscriptSourceReader } from "./fact-collector.mjs";
 
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const TYPED_FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "review", "test", "verify", "artifact", "health", "automation", "human_intervention"]);
-const FACT_STATUSES = new Set(["present", "missing", "unknown", "partial", "fatal", "conflict"]);
+const TYPED_FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "review", "test", "verify", "artifact", "health", "automation", "human_intervention", "transcript_event"]);
+const CAPABILITY_FACT_TYPES = new Set([...TYPED_FACT_TYPES, "token", "tool_use", "duration", "retry"]);
+const FACT_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
+const REGISTERED_SOURCES = new WeakSet();
 
 function text(value, label) {
   if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be a non-empty string`);
@@ -17,7 +19,7 @@ function publicRef(value) {
 }
 
 export function createRegisteredCodexSource(input = {}) {
-  const allowed = new Set(["source_id", "source_ref", "registration_id", "required", "task_id", "run_id", "session_id", "source_format", "source_version", "cli_version", "adapter_version", "reader"]);
+  const allowed = new Set(["source_id", "source_ref", "registration_id", "required", "task_id", "run_id", "session_id", "source_format", "source_version", "cli_version", "adapter_version", "capabilities", "reader"]);
   const unknown = Object.keys(input).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`registered source contains unsupported fields: ${unknown.join(", ")}`);
   publicRef(input.source_ref);
@@ -27,8 +29,19 @@ export function createRegisteredCodexSource(input = {}) {
   }
   if (typeof input.required !== "boolean") throw new TypeError("registered Codex source required semantic is required");
   if (input.source_format !== "jsonl" || input.source_version !== "v1") throw new Error("registered Codex source format is unsupported");
+  if (input.capabilities !== undefined && input.capabilities !== null) {
+    if (!Array.isArray(input.capabilities) || input.capabilities.some((value) => typeof value !== "string" || !CAPABILITY_FACT_TYPES.has(value))) throw new TypeError("registered Codex source capabilities are invalid");
+    if (new Set(input.capabilities).size !== input.capabilities.length) throw new TypeError("registered Codex source capabilities contain duplicates");
+  }
   if (!isTranscriptSourceReader(input.reader)) throw new TypeError("launcher-issued transcript reader capability required");
-  return Object.freeze({ ...input });
+  const source = Object.freeze({ ...input, capabilities: input.capabilities === undefined ? null : input.capabilities });
+  REGISTERED_SOURCES.add(source);
+  return source;
+}
+
+function sourceShape(source) {
+  return source && typeof source === "object" && !Array.isArray(source)
+    && REGISTERED_SOURCES.has(source);
 }
 
 function fact(source, options, value) {
@@ -46,8 +59,10 @@ function fact(source, options, value) {
   });
 }
 
-function effectiveAttemptId(options, payload) {
-  return payload?.attempt_id ?? options.attempt_id ?? null;
+function effectiveAttemptId(options) {
+  // The launcher owns the attempt boundary. A transcript line may describe an
+  // attempt, but it must not move its facts into another attempt.
+  return options.attempt_id ?? null;
 }
 
 function eventFactId(source, options, kind, id, payload = null) {
@@ -55,12 +70,47 @@ function eventFactId(source, options, kind, id, payload = null) {
   return `${kind}:${source.session_id}:${attemptId ? `${attemptId}:` : ""}${id}`;
 }
 
+function sourceStatusFactId(source, options, status, reason) {
+  const runId = options.run_id ?? source.run_id ?? "run-unknown";
+  const attemptId = options.attempt_id ?? source.attempt_id ?? "attempt-unknown";
+  return `source:${source.source_id}:status:${runId}:${attemptId}:${status}:${reason ?? "none"}`;
+}
+
 function statusFact(source, options, status, reason, error = null, observed = 0, expected = null) {
-  const effectiveReason = reason ?? (status === "partial" ? "source_records_partial" : null);
+  const effectiveReason = reason ?? ({
+    unavailable: "source_unavailable",
+    unsupported: "source_records_unsupported",
+    incomplete: "source_records_incomplete",
+  }[status] ?? null);
   return fact(source, options, {
-    fact_id: `source:${source.source_id}:status:${status}:${effectiveReason ?? "none"}`,
-    fact_type: "source_status", status, value: status === "present" ? { source_id: source.source_id, registration_id: source.registration_id, required: source.required } : null,
+    fact_id: sourceStatusFactId(source, options, status, effectiveReason),
+    fact_type: "source_status", stage: options.stage ?? null, status, value: status === "present" ? {
+      source_id: source.source_id, registration_id: source.registration_id, required: source.required,
+      ...(options.stage ? { scope: "stage" } : {}),
+      ...(source.capabilities === null ? {} : { capabilities: source.capabilities }),
+    } : null,
     reason: effectiveReason, error, coverage: { observed, expected },
+  });
+}
+
+function contextualSourceStatus(options, source, status, reason, error = null) {
+  const sourceValue = sourceShape(source)
+    ? { kind: "registered_codex", ref: source.source_ref, source_id: source.source_id, source_version: source.source_version }
+    : { kind: "unknown", ref: "codex-source-invalid", source_id: "codex-source", source_version: "v1" };
+  return createMonitoringFact({
+    fact_id: `source:codex:binding:${options.run_id ?? "run-unknown"}:${options.attempt_id ?? "attempt-unknown"}:${status}:${reason ?? "none"}`,
+    task_id: options.task_id ?? source?.task_id ?? "unknown-task",
+    project_name: options.project_name ?? "workflowhub",
+    stage: options.stage ?? null,
+    run_id: options.run_id ?? source?.run_id ?? null,
+    attempt_id: options.attempt_id ?? null,
+    fact_type: "source_status",
+    status,
+    value: null,
+    reason,
+    error,
+    source: sourceValue,
+    coverage: { observed: 0, expected: 1 },
   });
 }
 
@@ -91,14 +141,14 @@ function tokenRecord(source, options, line, payload) {
   if (!hasPair && !hasAggregate) {
     return fact(source, options, {
       fact_id: eventFactId(source, options, "token", payload.id, payload),
-      fact_type: "token", stage: payload.stage ?? null, attempt_id: attemptId,
-      status: "partial", value: null, reason: "usage_tokens_unavailable", error: null,
+      fact_type: "token", stage: payload.stage ?? null, step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null, attempt_id: attemptId,
+      status: "unavailable", value: null, reason: "usage_tokens_unavailable", error: null,
       coverage: { observed: 0, expected: 1 },
     });
   }
   return fact(source, options, {
     fact_id: eventFactId(source, options, "token", payload.id, payload),
-    fact_type: "token", stage: payload.stage ?? null, step_id: payload.step_id ?? null,
+    fact_type: "token", stage: payload.stage ?? null, step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null,
     skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null, attempt_id: attemptId,
     status: "present", value: {
       message_id: payload.id,
@@ -113,7 +163,7 @@ function toolRecord(source, options, payload, tool) {
   const attemptId = effectiveAttemptId(options, payload);
   return fact(source, options, {
     fact_id: eventFactId(source, options, "tool", tool.id, payload),
-    fact_type: "tool_use", stage: payload.stage ?? null, step_id: payload.step_id ?? null,
+    fact_type: "tool_use", stage: payload.stage ?? null, step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null,
     skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null, attempt_id: attemptId,
     status: "present", value: { tool_use_id: tool.id, name: tool.name ?? null, grain: payload.grain ?? "tool_use" }, coverage: { observed: 1, expected: 1 },
   });
@@ -127,7 +177,7 @@ function typedRecord(source, options, payload) {
   const status = explicitStatus === undefined ? "present" : explicitStatus;
   if (!FACT_STATUSES.has(status)) {
     return fact(source, options, {
-      fact_id: `${eventFactId(source, options, factType, payload.id, payload)}:status`, fact_type: "source_status", status: "unknown", value: null,
+      fact_id: `${eventFactId(source, options, factType, payload.id, payload)}:status`, fact_type: "source_status", status: "unsupported", value: null,
       reason: "unsupported_status", error: "INVALID_FACT_STATUS", coverage: { observed: 0, expected: 1 },
     });
   }
@@ -135,15 +185,15 @@ function typedRecord(source, options, payload) {
   if (status === "present" && (!value || typeof value !== "object" || Array.isArray(value))) {
     return fact(source, options, {
       fact_id: eventFactId(source, options, factType, payload.id, payload), fact_type: factType, stage: payload.stage ?? null,
-      step_id: payload.step_id ?? null, skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null,
-      attempt_id: attemptId, status: "partial", value: null, reason: "typed_value_unavailable",
+      step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null, skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null,
+      attempt_id: attemptId, status: "unavailable", value: null, reason: "typed_value_unavailable",
       coverage: { observed: 0, expected: 1 },
     });
   }
   return fact(source, options, {
     fact_id: eventFactId(source, options, factType, payload.id, payload), fact_type: factType, stage: payload.stage ?? null,
-    step_id: payload.step_id ?? null, skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null,
-    attempt_id: attemptId, status, value, reason: status === "present" ? null : (payload.reason ?? "typed_fact_unavailable"),
+    step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null, skill_id: payload.skill_id ?? null, subagent_id: payload.subagent_id ?? null,
+    attempt_id: attemptId, status, value, reason: status === "present" ? null : (payload.reason ?? `typed_fact_${status}`),
     error: status === "present" ? null : (payload.error ?? null), coverage: { observed: status === "present" ? 1 : 0, expected: 1 },
     skill_version: payload.skill_version ?? null,
   });
@@ -151,12 +201,24 @@ function typedRecord(source, options, payload) {
 
 export function parseRegisteredCodexTranscript(source, options = {}) {
   if (source === null || source === undefined) {
-    return { status: "missing", records: [createMonitoringFact({ fact_id: "source:codex:missing", task_id: options.task_id ?? "unknown-task", project_name: options.project_name ?? "workflowhub", fact_type: "source_status", status: "missing", reason: "no_registered_source", source: { kind: "unknown", ref: "codex-source-missing", source_id: "codex-source", source_version: "v1" }, coverage: { observed: 0, expected: null } })] };
+    const runId = options.run_id ?? "run-unknown";
+    const attemptId = options.attempt_id ?? "attempt-unknown";
+    return { status: "missing", records: [createMonitoringFact({ fact_id: `source:codex:missing:${runId}:${attemptId}`, task_id: options.task_id ?? "unknown-task", project_name: options.project_name ?? "workflowhub", stage: options.stage ?? null, run_id: options.run_id ?? null, attempt_id: options.attempt_id ?? null, fact_type: "source_status", status: "missing", reason: "no_registered_source", source: { kind: "unknown", ref: "codex-source-missing", source_id: "codex-source", source_version: "v1" }, coverage: { observed: 0, expected: null } })] };
+  }
+  if (!sourceShape(source)) {
+    return { status: "unsupported", records: [contextualSourceStatus(options, source, "unsupported", "source_not_registered", "SOURCE_REGISTRATION_INVALID")] };
+  }
+  const sourceBinding = [
+    ["task_id", options.task_id],
+    ["run_id", options.run_id],
+  ].find(([key, expected]) => typeof expected === "string" && source[key] !== expected);
+  if (sourceBinding) {
+    return { status: "conflict", records: [contextualSourceStatus(options, source, "conflict", "source_binding_conflict", `${sourceBinding[0].toUpperCase()}_BINDING_MISMATCH`)] };
   }
   let raw;
   try { raw = source.reader.read(); }
   catch (error) {
-    const status = error?.code === "ENOENT" ? "missing" : "unknown";
+    const status = error?.code === "ENOENT" ? "missing" : "unavailable";
     return { status, records: [statusFact(source, options, status, error?.code === "ENOENT" ? "not_found" : "read_error", error?.code ?? "READ_ERROR")] };
   }
   const records = [statusFact(source, options, "present", null, null, 0, null)];
@@ -167,7 +229,7 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
   const retries = new Map();
   let malformed = false;
   let conflict = false;
-  let fatalBinding = false;
+  let bindingConflict = false;
   let degraded = false;
   let observed = 0;
   for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
@@ -176,7 +238,7 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
     try { payload = JSON.parse(line); if (!payload || typeof payload !== "object" || typeof payload.id !== "string") throw new Error("invalid transcript record"); }
     catch {
       malformed = true;
-      records.push(fact(source, options, { fact_id: `source:${source.source_id}:line:${index + 1}:malformed`, fact_type: "source_status", status: "unknown", value: null, reason: "malformed_line", error: "MALFORMED_LINE", coverage: { observed: 0, expected: null } }));
+      records.push(fact(source, options, { fact_id: eventFactId(source, options, "source_status", `line:${index + 1}:malformed`), fact_type: "source_status", status: "unsupported", value: null, reason: "malformed_line", error: "MALFORMED_LINE", coverage: { observed: 0, expected: null } }));
       continue;
     }
     try {
@@ -188,10 +250,12 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
           ? ['SESSION_ID_MISMATCH', 'session_id']
           : Object.prototype.hasOwnProperty.call(payload, 'source_id') && payload.source_id !== source.source_id
             ? ['SOURCE_ID_MISMATCH', 'source_id']
+            : Object.prototype.hasOwnProperty.call(payload, 'attempt_id') && options.attempt_id !== undefined && payload.attempt_id !== options.attempt_id
+              ? ['ATTEMPT_ID_MISMATCH', 'attempt_id']
             : null;
     if (bindingMismatch) {
-      fatalBinding = true;
-      records.push(fact(source, options, { fact_id: `source:${source.source_id}:line:${index + 1}:binding`, fact_type: "source_status", status: "fatal", value: null, reason: "binding_conflict", error: bindingMismatch[0], coverage: { observed: 0, expected: null } }));
+      bindingConflict = true;
+      records.push(fact(source, options, { fact_id: eventFactId(source, options, "source_status", `line:${index + 1}:binding`), fact_type: "source_status", status: "conflict", value: null, reason: "binding_conflict", error: bindingMismatch[0], coverage: { observed: 0, expected: null } }));
       continue;
     }
     const attemptId = effectiveAttemptId(options, payload);
@@ -212,6 +276,7 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
           fact_type: factType,
           stage: payload.stage ?? null,
           step_id: payload.step_id ?? null,
+          step_slug: payload.step_slug ?? null,
           skill_id: payload.skill_id ?? null,
           subagent_id: payload.subagent_id ?? null,
           attempt_id: attemptId,
@@ -224,7 +289,7 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
       } else if (!prior) {
         typedEvents.set(identity, signature);
         records.push(typed);
-        if (typed.status !== "present") degraded = true;
+        if (["unknown", "unavailable", "unsupported", "incomplete"].includes(typed.status)) degraded = true;
         else observed += 1;
       }
     } else if (payload.type === "message") {
@@ -264,7 +329,7 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
         durations.set(durationKey, signature);
         if (!Number.isInteger(durationValue) || durationValue < 0) {
           degraded = true;
-          records.push(fact(source, options, { fact_id: eventFactId(source, options, "duration", durationId, payload), fact_type: "duration", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "partial", value: null, reason: "duration_unavailable", coverage: { observed: 0, expected: 1 } }));
+          records.push(fact(source, options, { fact_id: eventFactId(source, options, "duration", durationId, payload), fact_type: "duration", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "unavailable", value: null, reason: "duration_unavailable", coverage: { observed: 0, expected: 1 } }));
         } else {
           records.push(fact(source, options, { fact_id: eventFactId(source, options, "duration", durationId, payload), fact_type: "duration", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "present", value: { duration_ms: durationValue, event_id: durationId, grain: payload.grain ?? "session" }, coverage: { observed: 1, expected: 1 } }));
           observed += 1;
@@ -283,26 +348,26 @@ export function parseRegisteredCodexTranscript(source, options = {}) {
         retries.set(retryKey, signature);
         if (!Number.isInteger(retryValue) || retryValue < 0) {
           degraded = true;
-          records.push(fact(source, options, { fact_id: eventFactId(source, options, "retry", retryId, payload), fact_type: "retry", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "partial", value: null, reason: "retry_count_unavailable", coverage: { observed: 0, expected: 1 } }));
+          records.push(fact(source, options, { fact_id: eventFactId(source, options, "retry", retryId, payload), fact_type: "retry", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "unavailable", value: null, reason: "retry_count_unavailable", coverage: { observed: 0, expected: 1 } }));
         } else {
           records.push(fact(source, options, { fact_id: eventFactId(source, options, "retry", retryId, payload), fact_type: "retry", stage: payload.stage ?? null, session_id: source.session_id, attempt_id: attemptId, status: "present", value: { retry_id: retryId, retry_count: retryValue, attempt_id: attemptId, grain: payload.grain ?? "session" }, coverage: { observed: 1, expected: 1 } }));
           observed += 1;
         }
       }
     } else {
-      records.push(fact(source, options, { fact_id: eventFactId(source, options, "event", payload.id, payload), fact_type: "transcript_event", stage: payload.stage ?? null, step_id: payload.step_id ?? null, skill_id: payload.skill_id ?? null, status: "present", value: { event_id: payload.id, event_type: payload.type ?? "unknown" }, coverage: { observed: 1, expected: 1 } }));
+      records.push(fact(source, options, { fact_id: eventFactId(source, options, "event", payload.id, payload), fact_type: "transcript_event", stage: payload.stage ?? null, step_id: payload.step_id ?? null, step_slug: payload.step_slug ?? null, skill_id: payload.skill_id ?? null, status: "present", value: { event_id: payload.id, event_type: payload.type ?? "unknown" }, coverage: { observed: 1, expected: 1 } }));
       observed += 1;
     }
     } catch (error) {
       malformed = true;
       records.push(fact(source, options, {
-        fact_id: `source:${source.source_id}:line:${index + 1}:unsupported`, fact_type: "source_status", status: "unknown",
+        fact_id: eventFactId(source, options, "source_status", `line:${index + 1}:unsupported`), fact_type: "source_status", status: "unsupported",
         value: null, reason: "unsupported_record", error: error?.message ?? "UNSUPPORTED_RECORD", coverage: { observed: 0, expected: null },
       }));
     }
   }
-  const overallStatus = fatalBinding ? "fatal" : (malformed || conflict || degraded ? "partial" : "present");
-  const bindingError = records.find((record) => record.status === "fatal" && record.error)?.error ?? null;
-  records[0] = statusFact(source, options, overallStatus, fatalBinding ? "binding_conflict" : null, bindingError, observed, null);
+  const overallStatus = bindingConflict || conflict ? "conflict" : malformed ? "unsupported" : degraded ? "incomplete" : "present";
+  const bindingError = records.find((record) => record.status === "conflict" && record.error)?.error ?? null;
+  records[0] = statusFact(source, options, overallStatus, bindingConflict ? "binding_conflict" : null, bindingError, observed, null);
   return { status: overallStatus, records };
 }

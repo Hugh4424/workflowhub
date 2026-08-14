@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 
 function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
@@ -18,15 +18,18 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("research");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("decision_coverage");
     expect(STAGE_PREDICATES["build-spec"]).not.toHaveProperty("traceability");
-    expect(STAGE_PREDICATES["make-decision"].direction_review).toBe("review");
-    expect(STAGE_PREDICATES["make-decision"].detail_review).toBe("review");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("direction_review");
+    expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("detail_review");
+    expect(STAGE_ADVISORY_PREDICATES["make-decision"].direction_review).toBe("review");
+    expect(STAGE_ADVISORY_PREDICATES["make-decision"].detail_review).toBe("review");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("independent_review");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");
     expect(STAGE_PREDICATES["build-code"].risk_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"].full_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
-    expect(STAGE_PREDICATES["verify-code"].independent_review).toBe("review");
+    expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
+    expect(STAGE_ADVISORY_PREDICATES["verify-code"].independent_review).toBe("review");
   });
 
   for (const stage of Object.keys(STAGE_PREDICATES)) {

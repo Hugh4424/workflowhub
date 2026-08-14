@@ -18,8 +18,9 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | make-decision | 8 | grill-with-docs | S7 | main agent communicates with user |
 | make-decision | 9 | write-decision-draft | S7 | write the current decision log |
 | make-decision | 10 | detail-advice | S7 | retain advisory findings |
-| make-decision | 11 | approve-decision | S9 | only real user confirmation counts |
-| make-decision | 12 | publish-decision | S10 | publish the current artifact snapshot |
+| make-decision | 11 | stage-end-spec-analyze | S8.5 | report-only consistency check before publish |
+| make-decision | 12 | approve-decision | S9 | only real user confirmation counts |
+| make-decision | 13 | publish-decision | S10 | publish the current artifact snapshot |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
 | build-spec | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-spec | 3 | spec-clarify | clarification | unique build-spec clarification owner |
@@ -30,7 +31,8 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-spec | 8 | freeze-spec | material freeze | freeze before independent review |
 | build-spec | 9 | review-frozen-spec | wh-review | one advisory异源 review |
 | build-spec | 10 | main-agent-disposes-findings | disposition | inspect every finding |
-| build-spec | 11 | publish-spec-result | handoff | publish spec and facts |
+| build-spec | 11 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
+| build-spec | 12 | publish-spec-result | handoff | publish spec and facts |
 | build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |
@@ -56,7 +58,8 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 11 | authenticate-current-task-completion | task audit | retain incomplete facts honestly |
 | build-code | 12 | run-final-aggregate-and-ac-trace | final tests and AC trace | run final aggregate before integration review |
 | build-code | 13 | final-integration-review | integration review | existing phase_id=null review after tests |
-| build-code | 14 | publish-code-result | handoff | after all Phase and final facts |
+| build-code | 14 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
+| build-code | 15 | publish-code-result | handoff | after all Phase and final facts |
 | verify-code | 1 | read-current-materials-and-code | pre-read | read all four current materials and implementation |
 | verify-code | 2 | architect-acceptance-review | architecture check | reverse-check requirements, Design, and full user flow |
 | verify-code | 3 | main-agent-repair-batch-1 | repair | fix only valid delivery findings |
@@ -66,7 +69,8 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | verify-code | 7 | run-final-check-and-handoff | handoff | run final check and preserve unknown |
 | verify-code | 8 | publish-verification-attempt | verification facts | retain unknown/failure facts |
 | verify-code | 9 | approve-verification | confirmation | record actual user conclusion |
-| verify-code | 10 | publish-verification-result | handoff | close remains separate authorization |
+| verify-code | 10 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
+| verify-code | 11 | publish-verification-result | handoff | close remains separate authorization |
 
 ## P0 boundary
 

@@ -55,6 +55,8 @@ describe("execution snapshot evidence isolation", () => {
       const before = captureExecutionSnapshot(root);
       mkdirSync(resolve(root, "evidence/phase-1"), { recursive: true });
       writeFileSync(resolve(root, "evidence/phase-1/final-gates.json"), "{\"status\":\"pass\"}\n");
+      mkdirSync(resolve(root, "quality/tests"), { recursive: true });
+      writeFileSync(resolve(root, "quality/tests/final.json"), "{\"status\":\"pass\"}\n");
       expect(captureExecutionSnapshot(root).tree).toBe(before.tree);
       expect(captureGitWorktreeSnapshot(root).tree).not.toBe(before.tree);
 

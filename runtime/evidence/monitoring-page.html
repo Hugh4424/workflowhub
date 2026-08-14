@@ -46,19 +46,24 @@
     .brand-mark { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #fff; background: var(--wh-accent); font-size: 0; }
     .brand-sub, .top-meta { color: var(--wh-text-muted); font-size: 12px; }
     .top-meta { text-align: right; }
-    .page { width: min(1600px, calc(100% - 48px)); margin: auto; padding: 20px 0 48px; }
-    .app-grid { display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
-    .sidebar { position: sticky; top: 14px; min-height: calc(100vh - 90px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
+    .page { width: 100%; margin: 0; padding: 0 0 48px; }
+    .app-grid { min-height: calc(100vh - 46px); display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
+    .sidebar { position: static; min-height: calc(100vh - 46px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
     .sidebar-head { padding: 14px 14px 12px; border-bottom: 1px solid var(--wh-border-soft); }
     .eyebrow { color: var(--wh-accent); font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
     .sidebar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0; }
     .sidebar-head p { margin: 2px 0 0; color: var(--wh-text-faint); font-size: 11px; }
+    .view-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 10px 14px; border-bottom: 1px solid var(--wh-border-soft); background: var(--wh-panel-2); }
+    .view-tab { min-width: 0; padding: 6px 5px; border: 1px solid transparent; border-radius: 5px; color: var(--wh-text-muted); background: transparent; font-size: 10.5px; }
+    .view-tab:hover { color: var(--wh-text); background: var(--wh-panel-hover); }
+    .view-tab.active { border-color: var(--wh-accent); color: var(--wh-text); background: var(--wh-accent-soft); }
     .sidebar-tools { padding: 12px 14px; background: var(--wh-panel-2); border-bottom: 1px solid var(--wh-border-soft); }
     .search, .tool-row select { background: var(--wh-inset); border: 1px solid var(--wh-border); border-radius: var(--radius); color: var(--wh-text-dim); }
     .search { width: 100%; padding: 7px 10px; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11.5px; outline: 0; }
     .search:focus { border-color: var(--wh-accent); box-shadow: 0 0 0 3px rgba(133,172,255,.15); }
-    .tool-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .tool-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
     .tool-row select { min-width: 0; padding: 6px 8px; font-size: 11.5px; appearance: none; cursor: pointer; }
+    .filter-contract { grid-column: 1 / -1; color: var(--wh-text-faint); font-size: 10px; }
     .task-list { padding: 0; border-top: 1px solid var(--wh-border-soft); max-height: calc(100vh - 236px); overflow-y: auto; }
     .task-item { position: relative; width: 100%; display: block; padding: 9px 15px 9px 16px; border: 0; border-bottom: 1px solid var(--wh-border-soft); border-radius: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
     .task-item:hover { background: var(--wh-panel-hover); }
@@ -72,7 +77,7 @@
     .task-item-meta { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-top: 5px; color: var(--wh-text-muted); font-size: 11px; }
     .task-item-meta strong { display: inline; color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; }
     .sidebar-foot { margin: 0; padding: 10px 14px; border-radius: 0; border-top: 1px solid var(--wh-border-soft); color: var(--wh-text-faint); background: transparent; font-size: 10.5px; line-height: 1.5; }
-    .main { min-width: 0; display: grid; gap: 12px; padding: 0 24px; }
+    .main { min-width: 0; display: grid; gap: 12px; padding: 20px 24px 48px; }
     .fatal { padding: 20px; border: 1px solid var(--wh-danger); border-radius: var(--radius); color: var(--wh-danger); background: var(--wh-danger-soft); }
     .banner { padding: 11px 15px; border-radius: var(--radius); font-size: 11.5px; line-height: 1.45; }
     .banner strong { display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; }
@@ -84,8 +89,8 @@
     .task-head-right { display: grid; justify-items: end; gap: 7px; color: var(--wh-text-muted); font-size: 11px; white-space: nowrap; }
     .status { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 3px 8px 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 650; white-space: nowrap; line-height: 1; }
     .status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
-    .status-current, .status-present, .status-executed, .status-completed { color: var(--wh-success); background: var(--wh-success-soft); }
-    .status-partial, .status-unknown, .status-missing, .status-pending, .status-evidence_gap, .status-out_of_order, .status-insufficient_samples, .status-mismatch, .status-unavailable { color: var(--wh-warn); background: var(--wh-warn-soft); }
+    .status-ready, .status-current, .status-present, .status-executed, .status-completed, .status-sufficient { color: var(--wh-success); background: var(--wh-success-soft); }
+    .status-loading, .status-empty_valid, .status-partial, .status-unknown, .status-insufficient, .status-missing, .status-pending, .status-evidence_gap, .status-out_of_order, .status-insufficient_samples, .status-mismatch, .status-unavailable, .status-unsupported, .status-incomplete { color: var(--wh-warn); background: var(--wh-warn-soft); }
     .status-fatal, .status-conflict, .status-failed { color: var(--wh-danger); background: var(--wh-danger-soft); }
     .status-not_applicable, .status-skipped { color: var(--wh-accent); background: var(--wh-accent-soft); }
     .raw-code { display: none; }
@@ -137,13 +142,17 @@
     .problem-row .count strong { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 15px; font-weight: 600; }
     .problem-row .count span { font-size: 10px; }
     .snapshot-strip { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 9px 16px; border: 0; border-top: 1px solid var(--wh-border-soft); border-radius: 0; color: var(--wh-text-faint); background: transparent; font-size: 10.5px; }
+    .snapshot-strip span { min-width: 0; overflow-wrap: anywhere; }
     .snapshot-strip strong { color: var(--wh-text); }
+    .readiness-fields { display: grid; gap: 3px; margin-top: 8px; }
+    .readiness-field { display: flex; justify-content: space-between; gap: 8px; color: var(--wh-text-faint); font-size: 10px; }
+    .readiness-field span:last-child { color: var(--wh-text-muted); text-align: right; }
     .stage-section { padding-top: 2px; }
     .stage-section-body { padding-top: 8px; }
     .stage-list { display: grid; gap: 8px; }
     .stage-block { border: 1px solid var(--wh-border-soft); border-radius: 6px; background: var(--wh-panel-2); overflow: hidden; }
     .stage-block.open { border-color: var(--wh-border); background: var(--wh-panel); }
-    .stage-toggle { width: 100%; display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; align-items: center; gap: 14px; height: 62px; padding: 0 16px; border: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
+    .stage-toggle { width: 100%; display: grid; grid-template-columns: 52px minmax(180px, 1.35fr) 112px minmax(160px, 1.4fr) 110px 100px minmax(100px, 1fr); align-items: center; gap: 8px; height: 78px; padding: 0 16px; border: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
     .stage-toggle:hover { background: var(--wh-panel-hover); }
     .stage-block.open .stage-toggle { border-bottom: 1px solid var(--wh-border-soft); background: var(--wh-accent-soft); }
     .stage-index { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; color: var(--wh-text-dim); font-size: 14px; font-weight: 600; }
@@ -153,19 +162,25 @@
     .stage-cell label { color: var(--wh-text-faint); font-size: 9.5px; }
     .stage-cell strong, .stage-cell span { font-size: 12px; }
     .stage-cell strong { color: var(--wh-text); font-weight: 600; }
-    .stage-cell .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; }
+    .stage-cell .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
     .stage-cell .gap-warn { color: var(--wh-warn); font-weight: 750; }
     .stage-cell .gap-ok { color: var(--wh-success); }
-    .stage-summary-meta { display: flex; align-items: flex-start; gap: 12px; }
-    .stage-summary-meta > div { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; white-space: nowrap; }
+    .stage-summary-meta { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 2px 8px; }
+    .stage-summary-meta > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; white-space: normal; }
+    .stage-summary-meta > div:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 5px; }
     .stage-summary-meta label { color: var(--wh-text-faint); font-size: 9.5px; }
-    .stage-summary-meta .wh-mono { white-space: nowrap; }
+    .stage-summary-meta .wh-mono { white-space: normal; overflow-wrap: anywhere; }
     .metric-bar { display: inline-flex; align-items: center; gap: 8px; }
     .metric-track { width: 48px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--wh-track); flex-shrink: 0; }
     .metric-fill { display: block; height: 100%; border-radius: 3px; background: var(--wh-accent); min-width: 3px; }
     .metric-fill.time { background: var(--wh-success); }
     .metric-value { color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11.5px; }
     .metric-value.unavailable { color: var(--wh-warn); }
+    .metric-unavailable { display: grid; gap: 1px; }
+    .metric-unavailable .metric-note { color: var(--wh-text-faint); font-size: 9.5px; line-height: 1.2; }
+    .stage-controls { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+    .stage-control { padding: 4px 8px; border: 1px solid var(--wh-border); border-radius: 4px; color: var(--wh-text-muted); background: var(--wh-panel-2); font-size: 10.5px; }
+    .stage-control:hover { color: var(--wh-text); border-color: var(--wh-accent); background: var(--wh-accent-soft); }
     .stage-caret { display: flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--wh-text-faint); font-size: 11px; white-space: nowrap; }
     .stage-caret .chevron { font-size: 15px; transition: transform .15s ease; }
     .stage-block.open .stage-caret .chevron { transform: rotate(90deg); }
@@ -173,17 +188,20 @@
     .subheading { display: flex; align-items: baseline; justify-content: space-between; margin: 0; padding: 9px 16px 6px; }
     .subheading h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--wh-text-dim); }
     .subheading span { color: var(--wh-text-faint); font-size: 10.5px; }
-    .fact-grid { display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; gap: 14px; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--wh-border-soft); }
+    .fact-grid { display: grid; grid-template-columns: 44px minmax(180px, 1.35fr) 110px minmax(140px, 1.4fr) 100px 100px minmax(110px, 1fr); gap: 8px; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--wh-border-soft); }
     .fact-grid.header { min-height: 30px; background: var(--wh-inset); }
     .fact-grid.header span { color: var(--wh-text-faint); font-size: 10.5px; letter-spacing: .03em; }
     .fact-grid:nth-child(even) { background: rgba(255,255,255,.015); }
     .fact-grid.step-row { min-height: 33px; }
     .fact-grid.skill-row { min-height: 38px; }
-    .fact-grid .fact-name { color: var(--wh-text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .fact-grid .fact-outcome { color: var(--wh-text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .fact-name { color: var(--wh-text-dim); font-size: 12px; overflow-wrap: anywhere; line-height: 1.3; }
+    .fact-grid .fact-outcome { color: var(--wh-text-muted); font-size: 11.5px; overflow-wrap: anywhere; line-height: 1.3; }
     .fact-grid .fact-outcome.warn { color: var(--wh-warn); }
     .fact-grid .fact-outcome.danger { color: var(--wh-danger); }
-    .fact-grid .fact-trigger { color: var(--wh-text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .fact-detail { display: block; margin-top: 3px; color: var(--wh-text-dim); font-size: 10.5px; line-height: 1.3; overflow-wrap: anywhere; }
+    .fact-grid .fact-trigger { color: var(--wh-text-faint); font-size: 10px; overflow-wrap: anywhere; line-height: 1.25; }
+    .fact-grid .evidence-cell { min-width: 0; display: grid; gap: 3px; }
+    .fact-grid .evidence-summary { color: var(--wh-text-faint); font-size: 10px; overflow-wrap: anywhere; line-height: 1.25; }
     .fact-grid .stage-index { color: var(--wh-text-faint); font-size: 11px; font-weight: 600; }
     .fact-grid .stage-index.step { color: var(--wh-text-muted); }
     .fact-grid .stage-index.skill { color: var(--wh-accent); }
@@ -194,13 +212,14 @@
     .ref-chip:hover { background: rgba(111,158,255,.28); }
     .empty { padding: 18px 16px; color: var(--wh-text-faint); text-align: center; font-size: 12px; }
     .empty button { margin-top: 10px; padding: 7px 14px; border: 1px solid var(--wh-border); border-radius: 6px; color: var(--wh-text); background: var(--wh-panel-2); }
-    #evidence-panel { display: none; margin-top: 14px; padding: 16px 19px; border: 1px solid var(--wh-accent); border-left: 4px solid var(--wh-accent); border-radius: var(--radius); background: #18213a; }
+    #evidence-panel { display: none; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--wh-accent); border-radius: var(--radius); background: #18213a; }
     #evidence-panel.visible { display: block; }
     #evidence-panel h3 { margin: 0 0 4px; font-size: 15px; color: var(--wh-text); }
     #evidence-panel p { margin: 0 0 8px; color: var(--wh-text-muted); font-size: 12px; }
     #evidence-panel code { display: block; overflow-wrap: anywhere; padding: 9px; border-radius: 5px; color: #d5e2ff; background: #101827; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; }
-    @media (max-width: 1100px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } }
-    @media (max-width: 760px) { .topbar-inner, .page { width: calc(100% - 24px); } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
+    .table-scroll { overflow-x: auto; }
+    @media (max-width: 1100px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 20px 16px 48px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } }
+    @media (max-width: 760px) { .topbar-inner { width: calc(100% - 24px); } .page { width: 100%; } .main { padding: 16px 12px 36px; } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -208,10 +227,11 @@
   <div class="page"><div class="app-grid">
     <aside class="sidebar" aria-label="任务列表">
       <div class="sidebar-head"><div class="eyebrow">任务监控</div><h1>最近任务</h1><p id="task-count">读取中</p></div>
-      <div class="sidebar-tools"><input class="search" id="search" type="search" placeholder="搜索项目或任务" aria-label="搜索项目或任务"><div class="tool-row"><select id="project-filter" aria-label="项目筛选"><option value="">全部项目</option></select><select id="status-filter" aria-label="状态筛选"><option value="">全部状态</option></select></div></div>
+      <nav class="view-nav" aria-label="监控分区"><button type="button" class="view-tab active" data-view="overview">任务总览</button><button type="button" class="view-tab" data-view="degradation">流程退化</button><button type="button" class="view-tab" data-view="cost">成本归因</button><button type="button" class="view-tab" data-view="problems">常见问题与趋势</button></nav>
+      <div class="sidebar-tools"><input class="search" id="search" type="search" placeholder="搜索项目或任务" aria-label="搜索项目或任务"><div class="tool-row"><select id="global-filter" aria-label="全局筛选"><option value="">全部范围</option></select><select id="project-filter" aria-label="项目筛选"><option value="">全部项目</option></select><select id="task-filter" aria-label="任务筛选"><option value="">全部任务</option></select><select id="stage-filter" aria-label="阶段筛选"><option value="">全部阶段</option></select><select id="skill-filter" aria-label="技能筛选"><option value="">全部技能</option></select><select id="version-filter" aria-label="版本筛选"><option value="">全部版本</option></select><select id="time-filter" aria-label="时间范围筛选"><option value="">全部时间</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select><span class="filter-contract" aria-hidden="true">七类筛选</span></div></div>
       <div class="task-list" id="task-list"></div><div class="sidebar-foot" id="sidebar-foot"></div>
     </aside>
-    <main class="main" id="main"><div class="empty">正在读取本地快照，请稍候。</div></main>
+    <main class="main" id="main" aria-live="polite"><div class="empty status-loading" data-ui-state="loading">正在读取本地快照，请稍候。</div></main>
   </div><aside id="evidence-panel" aria-live="polite"></aside></div>
   <script src="workflowhub-monitor-data.js"></script>
   <script>
@@ -222,55 +242,122 @@
     const stageOrder = ['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code'];
     const stageLabels = { 'make-decision': '做决定', 'build-spec': '规格设计', 'build-plan': '执行计划', 'build-code': '开发实现', 'verify-code': '验收检查' };
     const skillLabels = { 'talk-with-zhipeng': 'Talk 对话', 'grill-with-docs': '文档质询', 'decision-log': '决策记录', 'wh-review': '独立审查', 'spec-research': '规格调研', 'spec-clarify': '规格澄清', 'spec-specify': '规格编写', 'simplicity-guard': '简洁性检查', 'plan-ceo-review': '目标审查', 'plan-design-review': '设计审查', 'spec-plan': '计划编写', 'plan-eng-review': '工程审查', 'testing-system-blueprint': '测试蓝图', 'test-routing-advisor': '测试路由', 'spec-tasks': '任务拆分', 'spec-analyze': '规格分析', 'backend-testing': '后端测试', 'frontend-testing': '前端测试', 'fullstack-slice-testing': '全栈切片测试' };
-    const statusLabels = { current: '当前', partial: '部分可见', stale: '已过期', fatal: '不可用', empty: '暂无事实', present: '已记录', executed: '已执行', completed: '已完成', missing: '未记录', unknown: '无法判断', pending: '待开始', evidence_gap: '证据断链', out_of_order: '顺序异常', conflict: '来源冲突', failed: '失败', not_applicable: '不适用', skipped: '已跳过', insufficient_samples: '样本不足', mismatch: '口径不兼容', unavailable: '不可用' };
-    const reasonLabels = { step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据' };
+    const statusLabels = { loading: '读取中', ready: '就绪', empty_valid: '合法为空', current: '当前', partial: '部分可见', stale: '已过期', fatal: '不可用', empty: '合法为空', sufficient: '样本充足', insufficient: '样本不足', present: '已记录', executed: '已执行', completed: '已完成', missing: '未记录', unknown: '无法判断', pending: '待开始', evidence_gap: '证据断链', out_of_order: '顺序异常', conflict: '来源冲突', failed: '失败', not_applicable: '不适用', skipped: '已跳过', insufficient_samples: '样本不足', mismatch: '口径不兼容', unavailable: '不可用', unsupported: '格式不支持', incomplete: '记录不完整' };
+    const reasonLabels = { step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据', automation_opportunity_denominator_unavailable: '没有可核实的自动化机会分母', expected_topology_unavailable: '没有拿到本次任务的固定流程清单', compatible_time_buckets_insufficient: '兼容的时间样本少于两段', run_id_missing: '事实没有绑定运行编号', attempt_id_missing: '事实没有绑定尝试编号', 'source.status_missing': '没有登记来源状态' };
     const domainLabels = { transcript: '会话来源', review: '审查', verify: '验收', artifact_missing: '产物缺失', task_dir: '任务目录', worktree: '工作区', handoff: '交接', skill_missing: '技能缺失', token_waste: 'Token 重复计数', unknown: '未归类问题' };
-    const gapStatuses = new Set(['missing', 'unknown', 'evidence_gap', 'out_of_order', 'partial', 'conflict', 'fatal', 'failed', 'unavailable']);
+    const gapStatuses = new Set(['missing', 'unknown', 'evidence_gap', 'out_of_order', 'partial', 'conflict', 'fatal', 'failed', 'unavailable', 'unsupported', 'incomplete']);
     const doneStatuses = new Set(['present', 'executed', 'completed', 'skipped', 'not_applicable']);
     const safeRef = (value) => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.startsWith('~') && !value.includes('\\') && !value.split('/').includes('..');
-    const statusSet = new Set(Object.keys(statusLabels));
+    const projectionStatusSet = new Set(['current', 'partial', 'stale', 'fatal', 'unknown']);
+    const snapshotStatusSet = new Set([...projectionStatusSet, 'empty']);
     const validCoverage = (value) => value && Number.isInteger(value.observed) && value.observed >= 0 && (value.expected === null || (Number.isInteger(value.expected) && value.expected >= 0 && value.observed <= value.expected));
-    const recordValid = (record) => record && typeof record.project_name === 'string' && typeof record.task_id === 'string' && statusSet.has(record.status) && typeof record.stale === 'boolean' && Number.isFinite(Date.parse(record.generated_at)) && validCoverage(record.coverage) && Array.isArray(record.errors) && Array.isArray(record.source_refs) && record.source_refs.every(safeRef) && record.diagnostics && Array.isArray(record.diagnostics.stage) && Array.isArray(record.diagnostics.steps) && Array.isArray(record.diagnostics.skills);
+    const viewKeys = ['task_overview', 'process_degradation', 'cost_attribution', 'problems_trends'];
+    const fieldStatusSet = new Set(['present', 'missing', 'unknown', 'unavailable', 'unsupported', 'conflict', 'incomplete', 'insufficient_samples']);
+    const validFieldCoverage = (value) => value && fieldStatusSet.has(value.status) && Number.isInteger(value.expected) && value.expected >= 0 && Number.isInteger(value.observed) && value.observed >= 0 && value.observed <= value.expected && (value.reason === null || typeof value.reason === 'string') && Array.isArray(value.source_refs) && value.source_refs.every(safeRef);
+    const validView = (view) => view && Array.isArray(view.required_fields) && view.required_fields.length > 0 && ['sufficient', 'insufficient', 'empty_valid', 'unknown'].includes(view.sample_sufficiency) && (view.reason === null || typeof view.reason === 'string') && Array.isArray(view.source_refs) && view.source_refs.every(safeRef) && view.field_coverage && view.required_fields.every((field) => validFieldCoverage(view.field_coverage[field]));
+    const validViews = (views) => views && viewKeys.every((key) => validView(views[key]));
+    const validErrors = (errors) => Array.isArray(errors) && errors.every((error) => typeof error === 'string' && error.length > 0);
+    const recordValid = (record) => record && typeof record.project_name === 'string' && typeof record.task_id === 'string' && projectionStatusSet.has(record.status) && typeof record.stale === 'boolean' && record.stale === (record.status === 'stale') && Number.isFinite(Date.parse(record.generated_at)) && validCoverage(record.coverage) && (record.in_scope_task_count === null || Number.isInteger(record.in_scope_task_count)) && validViews(record.views) && validErrors(record.errors) && Array.isArray(record.source_refs) && record.source_refs.every(safeRef) && record.diagnostics && Array.isArray(record.diagnostics.stage) && Array.isArray(record.diagnostics.steps) && Array.isArray(record.diagnostics.skills);
+    const snapshotValid = (value) => value && value.schema_version === 'monitoring-snapshot.v1' && snapshotStatusSet.has(value.status) && typeof value.stale === 'boolean' && value.stale === (value.status === 'stale') && Number.isFinite(Date.parse(value.generated_at)) && validCoverage(value.coverage) && (value.in_scope_task_count === null || Number.isInteger(value.in_scope_task_count)) && validViews(value.views) && validErrors(value.errors) && Array.isArray(value.records) && value.records.every(recordValid);
     const text = (tag, value, className) => { const node = document.createElement(tag); node.textContent = String(value ?? '未采集'); if (className) node.className = className; return node; };
-    const status = (value) => { const node = document.createElement('span'); node.className = 'status status-' + String(value || 'unknown'); node.textContent = statusLabels[value] || '无法判断'; return node; };
+    const status = (value) => { const displayValue = value === 'empty' ? 'empty_valid' : (statusLabels[value] ? value : 'unknown'); const node = document.createElement('span'); node.className = 'status status-' + displayValue; node.textContent = statusLabels[value] || statusLabels[displayValue] || '无法判断'; return node; };
     const statusWithCode = (value) => { const wrap = document.createElement('span'); wrap.appendChild(status(value)); if (value && statusLabels[value]) wrap.appendChild(text('span', value, 'raw-code')); return wrap; };
     const keyOf = (record) => record.project_name + '::' + record.task_id;
     const readableTime = (iso) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+    const compactId = (value) => typeof value === 'string' && value.length > 20 ? value.slice(0, 8) + '…' + value.slice(-8) : value;
     const relativeTime = (iso) => { const diff = Math.max(0, Date.now() - Date.parse(iso)); const mins = Math.floor(diff / 60000); if (mins < 1) return '刚刚'; if (mins < 60) return mins + ' 分钟前'; const hours = Math.floor(mins / 60); if (hours < 24) return hours + ' 小时前'; return Math.floor(hours / 24) + ' 天前'; };
+    const uiStateFor = (record) => {
+      if (data.status === 'fatal' || record?.status === 'fatal') return 'fatal';
+      if (data.status === 'stale' || record?.status === 'stale' || record?.stale) return 'stale';
+      if (data.status === 'partial' || data.status === 'unknown' || record?.status === 'partial' || record?.status === 'unknown') return 'partial';
+      if (data.in_scope_task_count === null || (record && record.in_scope_task_count === null)) return 'partial';
+      if (data.status === 'empty' || !record || record.in_scope_task_count === 0 || data.in_scope_task_count === 0) return 'empty_valid';
+      return 'ready';
+    };
+    const viewLabels = { task_overview: '任务总览', process_degradation: '流程退化', cost_attribution: '成本归因', problems_trends: '常见问题与趋势' };
     const main = $('#main');
-    if (!data || data.schema_version !== 'monitoring-snapshot.v1' || !Array.isArray(data.records) || !data.records.every(recordValid)) {
-      main.textContent = ''; $('#top-meta').textContent = '快照不可用';
-      main.appendChild(text('div', '监控快照不可用：数据缺失、合同不兼容或来源身份无法校验。请让上游重新发布兼容快照后，用浏览器刷新本页。', 'fatal'));
+    if (!snapshotValid(data)) {
+      main.textContent = ''; main.dataset.uiState = 'fatal'; $('#top-meta').textContent = '快照不可用';
+      const fatal = document.createElement('div');
+      fatal.className = 'fatal';
+      fatal.appendChild(text('strong', '监控快照不可用'));
+      fatal.appendChild(text('p', 'data.js 缺失、合同不兼容、重建失败或来源安全校验失败。页面不会把未知内容当成数字或成功。'));
+      fatal.appendChild(text('p', '请让上游重新发布兼容快照后，用浏览器原生刷新本页。'));
+      const fatalMeta = document.createElement('div');
+      fatalMeta.className = 'snapshot-strip';
+      fatalMeta.appendChild(text('span', '生成时间：无法判断'));
+      fatalMeta.appendChild(text('span', '覆盖：无法判断'));
+      fatalMeta.appendChild(text('span', '范围内任务：无法判断'));
+      fatalMeta.appendChild(text('span', '错误：快照合同校验失败'));
+      fatal.appendChild(fatalMeta);
+      main.appendChild(fatal);
       return;
     }
-    const records = [...data.records].sort((a, b) => Date.parse(b.generated_at) - Date.parse(a.generated_at));
-    const filters = { project: '', status: '', search: '' };
-    let selectedKey = records[0] ? keyOf(records[0]) : '';
-    let openStages = new Set();
+    const records = (data.status === 'fatal' ? [] : [...data.records]).sort((a, b) => Date.parse(b.generated_at) - Date.parse(a.generated_at));
+    const filters = { global: '', project: '', task: '', stage: '', skill: '', version: '', time_window: '', search: '' };
+    let activeView = 'overview';
+    let selectedKey = '';
+    let openStages = new Set(stageOrder);
     const stagesFor = (record) => { const map = new Map((record.diagnostics.stage || []).map((entry) => [entry.id, entry])); return stageOrder.map((id) => map.get(id) || { id, status: 'unknown', coverage: { observed: 0, expected: 1 }, errors: [], source_refs: [] }); };
     const stepsFor = (record, stage) => (record.diagnostics.steps || []).filter((entry) => entry.stage === stage);
     const skillsFor = (record, stage) => (record.diagnostics.skills || []).filter((entry) => entry.stage === stage);
     const problemsFor = (record) => record.diagnostics.problems || [];
-    const filteredRecords = () => records.filter((record) => (!filters.project || record.project_name === filters.project) && (!filters.status || record.status === filters.status) && (!filters.search || (record.project_name + ' ' + record.task_id).toLowerCase().includes(filters.search.toLowerCase())));
+    const errorCountFor = (record) => (record.errors || []).length + (data.errors || []).length;
+    // stagesFor() fills the fixed five-stage view with synthetic unknown rows.
+    // Those rows describe the display shape, not an observed stage. Filtering
+    // must use only real stage/step/skill facts.
+    const hasObservedEntry = (entry) => (entry.coverage?.observed ?? 0) > 0 || (entry.source_refs || []).length > 0;
+    const preferredRecord = records.filter((record) => (record.diagnostics?.current?.fact_count ?? 0) > 0).sort((a, b) => Date.parse(b.diagnostics.current.observed_at || '') - Date.parse(a.diagnostics.current.observed_at || ''))[0]
+      || records.find((record) => (record.coverage?.observed ?? 0) > 0)
+      || records[0];
+    selectedKey = preferredRecord ? keyOf(preferredRecord) : '';
+    const recordHasStage = (record, stage) => (record.diagnostics.stage || []).some((entry) => entry.id === stage && entry.status !== 'pending' && hasObservedEntry(entry))
+      || (record.diagnostics.steps || []).some((entry) => entry.stage === stage && hasObservedEntry(entry))
+      || (record.diagnostics.skills || []).some((entry) => entry.stage === stage && hasObservedEntry(entry));
+    const openObservedStages = () => new Set(stageOrder);
+    if (preferredRecord) openStages = openObservedStages(preferredRecord);
+    const recordHasSkill = (record, skill) => (record.diagnostics.skills || []).some((entry) => entry.id === skill) || (record.diagnostics.compatibility?.skill_keys || []).some((key) => key.includes('+' + skill + '+'));
+    const recordHasVersion = (record, version) => (record.diagnostics.compatibility?.skill_keys || []).some((key) => key.endsWith('+' + version));
+    const recordInTimeWindow = (record, days) => { if (!days) return true; const generated = Date.parse(record.generated_at); return Number.isFinite(generated) && Date.now() - generated <= Number(days) * 86400000; };
+    const filteredRecords = () => records.filter((record) => (!filters.global || record.status === filters.global || data.status === filters.global) && (!filters.project || record.project_name === filters.project) && (!filters.task || record.task_id === filters.task) && (!filters.stage || recordHasStage(record, filters.stage)) && (!filters.skill || recordHasSkill(record, filters.skill)) && (!filters.version || recordHasVersion(record, filters.version)) && recordInTimeWindow(record, filters.time_window) && (!filters.search || (record.project_name + ' ' + record.task_id).toLowerCase().includes(filters.search.toLowerCase())));
     const countDone = (entries) => entries.filter((entry) => doneStatuses.has(entry.status)).length;
     const countGap = (entries) => entries.filter((entry) => gapStatuses.has(entry.status)).length;
     const skillLabel = (id) => skillLabels[id] || id;
-    const currentStageId = (record) => stagesFor(record).slice().reverse().find((entry) => ['present', 'executed', 'partial', 'fatal', 'conflict', 'failed', 'evidence_gap'].includes(entry.status))?.id || stagesFor(record)[0]?.id || '';
-    function setOptions(select, values, labelFor) { const current = select.value; [...select.querySelectorAll('option:not(:first-child)')].forEach((option) => option.remove()); values.forEach((value) => { const option = document.createElement('option'); option.value = value; option.textContent = labelFor ? labelFor(value) : value; select.appendChild(option); }); if (values.includes(current)) select.value = current; }
-    function setupFilters() { setOptions($('#project-filter'), [...new Set(records.map((record) => record.project_name))].sort()); setOptions($('#status-filter'), [...new Set(records.map((record) => record.status))].sort(), (value) => statusLabels[value] || '无法判断'); $('#search').addEventListener('input', (event) => { filters.search = event.target.value; render(); }); $('#project-filter').addEventListener('change', (event) => { filters.project = event.target.value; render(); }); $('#status-filter').addEventListener('change', (event) => { filters.status = event.target.value; render(); }); }
-    function addRefs(parent, refs) { if (!Array.isArray(refs) || !refs.length) return; const wrap = document.createElement('div'); wrap.className = 'refs'; refs.slice(0, 5).forEach((ref, index) => { const button = text('button', '来源 ' + (index + 1), 'ref-chip'); button.type = 'button'; button.dataset.ref = ref; button.title = '查看受控来源引用'; wrap.appendChild(button); }); parent.appendChild(wrap); }
+    const currentStageId = (record) => stagesFor(record).slice().reverse().find((entry) => ['present', 'executed', 'partial', 'fatal', 'conflict', 'failed', 'evidence_gap', 'unavailable', 'unsupported', 'incomplete'].includes(entry.status))?.id || stagesFor(record)[0]?.id || '';
+    function setOptions(select, values, labelFor) { if (!select) return; const current = select.value; [...select.querySelectorAll('option:not(:first-child)')].forEach((option) => option.remove()); values.forEach((value) => { const option = document.createElement('option'); option.value = value; option.textContent = labelFor ? labelFor(value) : value; select.appendChild(option); }); if (values.includes(current)) select.value = current; }
+    function setupFilters() {
+      setOptions($('#global-filter'), [...new Set([data.status, ...records.map((record) => record.status)].filter(Boolean))].sort(), (value) => statusLabels[value] || '当前快照');
+      setOptions($('#project-filter'), [...new Set(records.map((record) => record.project_name))].sort());
+      setOptions($('#task-filter'), [...new Set(records.map((record) => record.task_id))].sort());
+      setOptions($('#stage-filter'), [...new Set(records.flatMap((record) => stagesFor(record).map((entry) => entry.id)))].sort(), (value) => stageLabels[value] || value);
+      setOptions($('#skill-filter'), [...new Set(records.flatMap((record) => (record.diagnostics.skills || []).map((entry) => entry.id)))].sort(), skillLabel);
+      setOptions($('#version-filter'), [...new Set(records.flatMap((record) => (record.diagnostics.compatibility?.skill_keys || []).map((key) => key.split('+').at(-1)).filter(Boolean)))].sort());
+      $('#search').addEventListener('input', (event) => { filters.search = event.target.value; render(); });
+      for (const [id, key] of [['global-filter', 'global'], ['project-filter', 'project'], ['task-filter', 'task'], ['stage-filter', 'stage'], ['skill-filter', 'skill'], ['version-filter', 'version'], ['time-filter', 'time_window']]) $('#' + id).addEventListener('change', (event) => { filters[key] = event.target.value; render(); });
+      document.querySelectorAll('.view-tab').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; document.querySelectorAll('.view-tab').forEach((tab) => tab.classList.toggle('active', tab === button)); render(); }));
+    }
+    function addRefs(parent, refs, detail = '') { const safeRefs = Array.isArray(refs) ? refs.filter(safeRef) : []; if (!safeRefs.length) return; const wrap = document.createElement('div'); wrap.className = 'refs'; safeRefs.slice(0, 5).forEach((ref, index) => { const button = text('button', '来源 ' + (index + 1), 'ref-chip'); button.type = 'button'; button.dataset.ref = ref; if (detail) button.dataset.detail = detail; button.title = '查看受控来源和这条记录的摘要'; wrap.appendChild(button); }); parent.appendChild(wrap); }
     function reason(value) { return reasonLabels[value] || (value ? '存在未展开的记录原因' : ''); }
     function metricValue(value, suffix = '') { return value === null || value === undefined ? '未采集' : String(value) + suffix; }
     function stageToken(record, id) { const value = record.diagnostics.cost?.breakdown?.stage?.[id]; return value === undefined ? null : value; }
+    function stepToken(record, stage, slug) { const value = record.diagnostics.cost?.breakdown?.step?.[stage + '+' + slug]; return value === undefined ? null : value; }
     function skillToken(record, id) { const found = Object.entries(record.diagnostics.cost?.breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
-    function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = new Set([currentStageId(record)]); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); const stageRows = stagesFor(record); const latest = stageRows.slice().reverse().find((entry) => ['present', 'partial', 'fatal', 'conflict', 'failed', 'evidence_gap'].includes(entry.status)); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const doneStages = stageRows.filter((entry) => ['present', 'completed', 'executed'].includes(entry.status)).length; const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', doneStages + ' / 5')); meta.appendChild(text('span', '事实 ')); meta.lastChild.appendChild(text('strong', (record.coverage.observed ?? '未采集') + ' / ' + (record.coverage.expected ?? '未采集'))); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
+    function stageDuration(record, id) { const value = record.diagnostics.cost?.duration_breakdown?.stage?.[id]; return Number.isFinite(value) ? value : null; }
+    function stepDuration(record, stage, slug) { const value = record.diagnostics.cost?.duration_breakdown?.step?.[stage + '+' + slug]; return Number.isFinite(value) ? value : null; }
+    function skillDuration(record, id) { const direct = record.diagnostics.cost?.duration_breakdown?.skill?.[id]; if (Number.isFinite(direct)) return direct; const found = Object.entries(record.diagnostics.cost?.duration_breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
+    function evidenceSummary(entry) { return [entry.evidence_summary, entry.source_kind ? '来源类型=' + entry.source_kind : null, entry.source_id ? '来源ID=' + entry.source_id : null, entry.observed_at ? '采集时间=' + readableTime(entry.observed_at) : null, '覆盖=' + (entry.coverage?.observed ?? '未采集') + ' / ' + (entry.coverage?.expected ?? '未采集')].filter(Boolean).join('；'); }
+    function currentCoverage(record) { const current = record.diagnostics?.current || {}; return { stages: current.stage_coverage || { observed: 0, expected: 5 }, steps: current.step_coverage || { observed: 0, expected: 0 }, skills: current.skill_coverage || { observed: 0, expected: 0 } }; }
+    function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = openObservedStages(record); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const coverage = currentCoverage(record); const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', coverage.stages.observed + ' / ' + coverage.stages.expected)); meta.appendChild(text('span', '步骤 ')); meta.lastChild.appendChild(text('strong', coverage.steps.observed + ' / ' + coverage.steps.expected)); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
     function renderBanner(record) {
       const problems = [];
       if (record.status === 'partial') problems.push('当前任务是部分可见（partial）：部分来源缺失或损坏，下面只展示已核实的合法事实，缺口会逐项标明。');
-      if (record.status === 'stale' || record.stale) problems.push('当前任务快照已过期（stale）：上游投影尚未重新发布，浏览器刷新不能修复，需要等上游恢复后再刷新。');
+      if (record.status === 'unknown') problems.push('当前任务无法判断（unknown）：来源能力或绑定信息不完整，不能把它当成成功或流程退化。');
+      if (record.status === 'stale' || record.stale) problems.push('当前任务快照已过期（stale）：原始事实已经更新，但页面投影还没重新发布；浏览器刷新不能修复，需要等上游恢复后再刷新。');
       if (record.status === 'fatal') problems.push('当前任务存在致命来源错误（fatal）：以下事实可能不完整，不能当作执行成功。');
       if (data.status === 'stale') problems.push('全局快照已过期（stale）：存在无法通过合同校验的投影记录，已整体保留上一份完整快照。');
       else if (data.status === 'partial') problems.push('全局快照为部分可见（partial）：部分 project/task 记录不完整。');
+      else if (data.status === 'unknown') problems.push('全局快照无法判断（unknown）：范围或来源身份不完整，不能把空白当作零。');
+      else if (data.status === 'fatal') problems.push('全局快照不可用（fatal）：不展示未经核实的任务数字。');
       const errors = [...(record.errors || []), ...(data.errors || [])];
       if (!problems.length && !errors.length) return null;
       const box = document.createElement('div');
@@ -293,14 +380,70 @@
       const copy = document.createElement('div');
       copy.appendChild(text('div', record.project_name, 'eyebrow'));
       copy.appendChild(text('h2', record.task_id));
-      copy.appendChild(text('p', '最近快照：' + readableTime(record.generated_at) + ' · 页面只读，更新数据后请使用浏览器刷新'));
+      const current = record.diagnostics?.current || {};
+      const selectionLabel = current.selection === 'latest_attempt_per_stage' ? '按阶段取各自最近一次尝试' : '单次尝试';
+      const recentRunLabel = current.run_id || (current.run_ids?.length ? '各阶段不相同' : '未采集');
+      const recentAttemptLabel = current.attempt_id || (current.attempt_ids?.length ? '各阶段不相同' : '未采集');
+      copy.appendChild(text('p', '最近快照：' + readableTime(record.generated_at) + ' · 监控基准：' + selectionLabel + ' · 运行：' + recentRunLabel + ' · 尝试：' + recentAttemptLabel));
       head.appendChild(copy);
       const right = document.createElement('div');
       right.className = 'task-head-right';
-      right.appendChild(status(record.status));
-      right.appendChild(text('span', '覆盖 ' + (record.coverage.observed ?? '未采集') + ' / ' + (record.coverage.expected ?? '未采集')));
+      right.appendChild(status(uiStateFor(record)));
+      right.appendChild(text('span', '记录层：' + (statusLabels[record.status] || '无法判断')));
+      const coverage = currentCoverage(record);
+      right.appendChild(text('span', '当前结构化覆盖：阶段 ' + coverage.stages.observed + ' / ' + coverage.stages.expected + ' · 步骤 ' + coverage.steps.observed + ' / ' + coverage.steps.expected + ' · 技能 ' + coverage.skills.observed + ' / ' + coverage.skills.expected));
+      right.appendChild(text('span', '当前运行事实 ' + (current.fact_count ?? '未采集')));
+      right.appendChild(text('span', '错误：' + errorCountFor(record)));
       head.appendChild(right);
       return head;
+    }
+    function renderReadiness(record) {
+      const section = document.createElement('section');
+      section.className = 'summary-section';
+      const head = document.createElement('div');
+      head.className = 'summary-section-title';
+      head.appendChild(text('h3', '数据完整度'));
+      head.appendChild(text('p', '范围、字段和来源都由投影提供；页面不自行补数字'));
+      section.appendChild(head);
+      const body = document.createElement('div');
+      body.className = 'summary-section-body';
+      const intro = document.createElement('div');
+      intro.className = 'snapshot-strip';
+      intro.appendChild(text('span', '范围内任务：' + (record.in_scope_task_count === null ? '无法判断' : record.in_scope_task_count)));
+      intro.appendChild(text('span', '页面状态：' + (statusLabels[uiStateFor(record)] || '无法判断')));
+      intro.appendChild(text('span', '生成时间：' + readableTime(record.generated_at)));
+      intro.appendChild(text('span', '错误：' + errorCountFor(record)));
+      body.appendChild(intro);
+      const grid = document.createElement('div');
+      grid.className = 'summary-grid readiness-grid';
+      viewKeys.forEach((key) => {
+        const view = record.views?.[key];
+        const card = document.createElement('div');
+        card.className = 'summary-card readiness-card';
+        card.appendChild(text('label', viewLabels[key]));
+        card.appendChild(status(view?.sample_sufficiency || 'unknown'));
+        const fields = Object.values(view?.field_coverage || {});
+        const expected = fields.reduce((sum, entry) => sum + (Number.isInteger(entry.expected) ? entry.expected : 0), 0);
+        const observed = fields.reduce((sum, entry) => sum + (Number.isInteger(entry.observed) ? entry.observed : 0), 0);
+        const incomplete = fields.find((entry) => entry.status !== 'present');
+        card.appendChild(text('span', '字段覆盖：' + observed + ' / ' + expected));
+        card.appendChild(text('span', incomplete ? '字段状态：' + (statusLabels[incomplete.status] || '无法判断') : (view?.reason ? reason(view.reason) : '字段与来源满足当前判断')));
+        const detail = document.createElement('div');
+        detail.className = 'readiness-fields';
+        Object.entries(view?.field_coverage || {}).slice(0, 8).forEach(([field, entry]) => {
+          const row = document.createElement('div');
+          row.className = 'readiness-field';
+          row.appendChild(text('span', field));
+          row.appendChild(text('span', (entry.observed ?? '未采集') + ' / ' + (entry.expected ?? '未采集') + ' · ' + (statusLabels[entry.status] || '无法判断')));
+          detail.appendChild(row);
+        });
+        card.appendChild(detail);
+        if (view?.source_refs?.length) addRefs(card, view.source_refs);
+        grid.appendChild(card);
+      });
+      body.appendChild(grid);
+      section.appendChild(body);
+      return section;
     }
     function renderSummary(record) {
       const wrap = document.createElement('section');
@@ -324,7 +467,7 @@
       const autoText = automation.rate?.status === 'present' && automation.rate.value !== null ? Math.round(automation.rate.value * 100) + '%' : '无法判断';
       const cards = [
         ['当前状态', statusLabels[record.status] || '无法判断', '快照状态'],
-        ['阶段记录', stageRows.filter((entry) => entry.status === 'present').length + ' / 5', stageRows.some((entry) => entry.status === 'evidence_gap') ? '存在证据断链' : '固定五阶段'],
+        ['阶段事实', stageRows.filter(hasObservedEntry).length + ' / 5', stageRows.some((entry) => entry.status === 'evidence_gap') ? '存在证据断链' : '固定五阶段'],
         ['步骤结果', steps.length ? countDone(steps) + ' / ' + steps.length : '无法判断', steps.length ? (countGap(steps) ? countGap(steps) + ' 项遗漏或异常' : '没有已知缺口') : '没有步骤拓扑事实'],
         ['技能结果', skills.length ? countDone(skills) + ' / ' + skills.length : '无法判断', skills.length ? (countGap(skills) ? countGap(skills) + ' 项遗漏或异常' : '没有已知缺口') : '没有技能拓扑事实'],
         ['Token', metricValue(cost.token_count), cost.token_count === null ? '未采集，不按 0 处理' : '按消息去重统计'],
@@ -332,6 +475,16 @@
       ];
       cards.forEach(([label, value, help]) => { const card = document.createElement('div'); card.className = 'summary-card'; card.appendChild(text('label', label)); const v = text('strong', value); if (value === '未采集' || value === '无法判断' || value === '不可用') v.classList.add('unavailable'); card.appendChild(v); card.appendChild(text('span', help)); grid.appendChild(card); });
       body.appendChild(grid);
+      const drill = document.createElement('div');
+      drill.className = 'snapshot-strip';
+      drill.appendChild(text('span', '继续查看：'));
+      [['degradation', '流程退化'], ['cost', '成本归因']].forEach(([view, label]) => {
+        const button = text('button', label, 'ref-chip');
+        button.type = 'button';
+        button.addEventListener('click', () => { activeView = view; filters.project = record.project_name; filters.task = record.task_id; const projectSelect = $('#project-filter'); if (projectSelect) projectSelect.value = record.project_name; const taskSelect = $('#task-filter'); if (taskSelect) taskSelect.value = record.task_id; document.querySelectorAll('.view-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.view === view)); render(); });
+        drill.appendChild(button);
+      });
+      body.appendChild(drill);
       wrap.appendChild(body);
       return wrap;
     }
@@ -346,13 +499,18 @@
       title.appendChild(text('p', '有明确来源才统计；高成本不等于浪费'));
       section.appendChild(title);
       const body = document.createElement('div');
+      const sourceStrip = text('div', '');
+      sourceStrip.className = 'snapshot-strip';
+      sourceStrip.appendChild(text('span', '成本聚合来源：'));
+      if (record.source_refs?.length) addRefs(sourceStrip, record.source_refs); else sourceStrip.appendChild(unavailableCell('未采集'));
+      body.appendChild(sourceStrip);
       const cards = document.createElement('div');
       cards.className = 'cost-grid';
       [['Token', cost.token_count, ''], ['工具调用', cost.tool_use_count, ''], ['重试', cost.retry_count, ''], ['耗时', cost.duration_ms, ' ms']].forEach(([label, value, suffix]) => { const card = document.createElement('div'); card.className = 'cost-card'; card.appendChild(text('label', label)); const v = text('strong', metricValue(value, suffix)); if (value === null || value === undefined) v.classList.add('unavailable'); card.appendChild(v); cards.appendChild(card); });
       body.appendChild(cards);
       const breakdown = document.createElement('div');
       breakdown.className = 'breakdown';
-      [['按阶段', 'stage'], ['按技能', 'skill'], ['按会话', 'session'], ['按子代理', 'subagent']].forEach(([label, key]) => {
+      [['按阶段', 'stage'], ['按步骤', 'step'], ['按技能', 'skill'], ['按会话', 'session'], ['按子代理', 'subagent']].forEach(([label, key]) => {
         const card = document.createElement('div');
         card.className = 'breakdown-card';
         card.appendChild(text('h4', label + ' Token'));
@@ -362,7 +520,7 @@
         values.slice(0, 8).forEach(([name, value]) => {
           const row = document.createElement('div');
           row.className = 'breakdown-row';
-          const labelText = stageLabels[name] || (key === 'skill' ? (skillLabels[name.split('+')[1]] || name.split('+')[1] || name) : name);
+          const labelText = stageLabels[name] || (key === 'skill' ? (skillLabels[name.split('+')[1]] || name.split('+')[1] || name) : key === 'step' ? ((stageLabels[name.split('+')[0]] || name.split('+')[0]) + ' · ' + (name.split('+')[1] || name)) : name);
           const top = document.createElement('div');
           top.className = 'row-top';
           top.appendChild(text('span', labelText, 'row-label'));
@@ -383,6 +541,44 @@
         breakdown.appendChild(card);
       });
       body.appendChild(breakdown);
+      const durationTitle = text('div', '');
+      durationTitle.className = 'snapshot-strip';
+      durationTitle.appendChild(text('strong', '耗时拆分'));
+      durationTitle.appendChild(text('span', '只有带稳定身份的 duration 才进入拆分；缺失显示未采集'));
+      body.appendChild(durationTitle);
+      const durationBreakdown = document.createElement('div');
+      durationBreakdown.className = 'breakdown';
+      [['按阶段', 'stage'], ['按步骤', 'step'], ['按技能', 'skill'], ['按会话', 'session'], ['按子代理', 'subagent']].forEach(([label, key]) => {
+        const card = document.createElement('div');
+        card.className = 'breakdown-card';
+        card.appendChild(text('h4', label + '耗时'));
+        const values = Object.entries(cost.duration_breakdown?.[key] || {}).sort((a, b) => b[1] - a[1]);
+        if (!values.length) card.appendChild(text('p', '未采集', 'unavailable'));
+        const max = values.length ? Math.max(...values.map(([, value]) => value)) : 1;
+        values.slice(0, 8).forEach(([name, value]) => {
+          const row = document.createElement('div');
+          row.className = 'breakdown-row';
+          const top = document.createElement('div');
+          top.className = 'row-top';
+          top.appendChild(text('span', stageLabels[name] || (key === 'skill' ? (skillLabels[name.split('+')[1]] || name.split('+')[1] || name) : key === 'step' ? ((stageLabels[name.split('+')[0]] || name.split('+')[0]) + ' · ' + (name.split('+')[1] || name)) : name), 'row-label'));
+          const vals = document.createElement('span');
+          vals.className = 'row-values';
+          vals.appendChild(text('strong', value));
+          vals.appendChild(text('span', 'ms'));
+          top.appendChild(vals);
+          row.appendChild(top);
+          const bar = document.createElement('div');
+          bar.className = 'row-bar';
+          const fill = document.createElement('span');
+          fill.style.width = Math.max(3, (value / max) * 100) + '%';
+          fill.style.background = 'var(--wh-success)';
+          bar.appendChild(fill);
+          row.appendChild(bar);
+          card.appendChild(row);
+        });
+        durationBreakdown.appendChild(card);
+      });
+      body.appendChild(durationBreakdown);
       const note = text('div', '');
       note.className = 'snapshot-strip';
       note.appendChild(text('span', '来源冲突：' + (cost.conflicts ?? '未采集')));
@@ -398,7 +594,7 @@
       section.className = 'insight-section';
       const title = document.createElement('div');
       title.className = 'insight-title';
-      title.appendChild(text('h3', '问题与趋势'));
+      title.appendChild(text('h3', '常见问题与趋势'));
       title.appendChild(text('p', '只按事实聚合，不自动给修复建议'));
       section.appendChild(title);
       const body = document.createElement('div');
@@ -443,7 +639,22 @@
       section.appendChild(body);
       return section;
     }
+    function countSummary(done, total, gap) {
+      const wrap = document.createElement('span');
+      wrap.className = 'wh-mono';
+      wrap.appendChild(text('span', done));
+      const denominator = text('span', ' / ' + total, 'count-denominator');
+      wrap.appendChild(denominator);
+      if (gap > 0) wrap.appendChild(text('span', ' 缺 ' + gap, 'gap-warn'));
+      return wrap;
+    }
     function unavailableCell(label) { return text('span', label || '未采集', 'unavailable'); }
+    function unavailableMetric() {
+      const wrap = document.createElement('span');
+      wrap.className = 'metric-unavailable';
+      wrap.appendChild(text('span', '未拆分：没有稳定归属来源', 'metric-value unavailable'));
+      return wrap;
+    }
     function skillTriggerLabel(entry) {
       if (entry.status === 'not_applicable') return '未触发 · 合法跳过';
       if (entry.status === 'skipped') return '未触发 · 已跳过';
@@ -462,7 +673,7 @@
       const num = String(stageIndex) + '.' + (index + 1);
       const serial = text('span', kind === 'step' ? num : 'S' + num, 'stage-index ' + kind);
       tr.appendChild(serial);
-      tr.appendChild(text('span', kind === 'step' ? '步骤 ' + entry.id : skillLabel(entry.id), 'fact-name'));
+      tr.appendChild(text('span', kind === 'step' ? (entry.step_slug || '步骤 ' + entry.id) : skillLabel(entry.id), 'fact-name'));
       const state = document.createElement('div');
       state.appendChild(statusWithCode(entry.status));
       if (entry.reason) state.appendChild(text('span', reason(entry.reason), 'reason'));
@@ -470,14 +681,15 @@
       const outcome = document.createElement('div');
       outcome.className = 'fact-outcome' + (entry.status === 'failed' ? ' danger' : gapStatuses.has(entry.status) ? ' warn' : '');
       outcome.textContent = ['present', 'completed'].includes(entry.status) ? '已有结果记录' : entry.status === 'executed' ? '已有执行记录' : entry.status === 'skipped' ? '已跳过（有结果登记）' : entry.status === 'not_applicable' ? '不适用（有理由登记）' : entry.status === 'missing' ? '应执行但未记录' : entry.status === 'out_of_order' ? '执行顺序与契约不符' : entry.status === 'failed' ? '执行失败' : entry.status === 'unavailable' ? '来源不可用，无法核实' : entry.status === 'unknown' ? '证据不足，无法判断' : statusLabels[entry.status] || '未采集';
+      if (entry.result_summary) outcome.appendChild(text('span', entry.result_summary, 'fact-detail'));
       if (kind === 'skill') {
         const trigger = text('div', skillTriggerLabel(entry), 'fact-trigger');
         outcome.appendChild(trigger);
       }
       tr.appendChild(outcome);
       const costCell = document.createElement('div');
-      const tokenValue = kind === 'skill' ? skillToken(record, entry.id) : null;
-      if (tokenValue === null) costCell.appendChild(unavailableCell('未拆分'));
+      const tokenValue = kind === 'skill' ? skillToken(record, entry.id) : kind === 'step' ? stepToken(record, entry.stage, entry.step_slug) : null;
+      if (tokenValue === null) costCell.appendChild(unavailableMetric());
       else {
         const bar = document.createElement('span');
         bar.className = 'metric-bar';
@@ -488,10 +700,21 @@
       }
       tr.appendChild(costCell);
       const durationCell = document.createElement('div');
-      durationCell.appendChild(unavailableCell('未拆分'));
+      const durationValue = kind === 'skill' ? skillDuration(record, entry.id) : kind === 'step' ? stepDuration(record, entry.stage, entry.step_slug) : null;
+      if (durationValue === null) durationCell.appendChild(unavailableMetric());
+      else {
+        const bar = document.createElement('span');
+        bar.className = 'metric-bar';
+        const track = document.createElement('span'); track.className = 'metric-track';
+        const fill = document.createElement('span'); fill.className = 'metric-fill time'; fill.style.width = Math.max(3, (durationValue / maxTime) * 100) + '%'; track.appendChild(fill);
+        bar.appendChild(track); bar.appendChild(text('span', durationValue + ' ms', 'metric-value'));
+        durationCell.appendChild(bar);
+      }
       tr.appendChild(durationCell);
       const refs = document.createElement('div');
-      if (entry.source_refs?.length) addRefs(refs, entry.source_refs); else refs.appendChild(unavailableCell('未采集'));
+      refs.className = 'evidence-cell';
+      if (entry.source_refs?.length) addRefs(refs, entry.source_refs, evidenceSummary(entry)); else refs.appendChild(unavailableCell(entry.evidence_summary || '无可回指来源'));
+      refs.appendChild(text('span', '证据摘要：' + (evidenceSummary(entry) || '无可回指来源'), 'evidence-summary'));
       tr.appendChild(refs);
       return tr;
     }
@@ -504,14 +727,15 @@
       heading.appendChild(text('span', entries.length ? '共 ' + entries.length + ' 项 · ' + countGap(entries) + ' 项需关注' : '没有这类记录'));
       wrap.appendChild(heading);
       if (!entries.length) { wrap.appendChild(text('div', '当前快照没有该类事实。空白代表未采集，不代表执行成功。', 'empty')); return wrap; }
-      const maxToken = Math.max(1, ...entries.map((entry) => kind === 'skill' ? (skillToken(record, entry.id) || 0) : 0));
+      const maxToken = Math.max(1, ...entries.map((entry) => kind === 'skill' ? (skillToken(record, entry.id) || 0) : kind === 'step' ? (stepToken(record, entry.stage, entry.step_slug) || 0) : 0));
+      const maxTime = Math.max(1, ...entries.map((entry) => kind === 'skill' ? (skillDuration(record, entry.id) || 0) : kind === 'step' ? (stepDuration(record, entry.stage, entry.step_slug) || 0) : 0));
       const scroll = document.createElement('div');
       scroll.className = 'table-scroll';
       const header = document.createElement('div');
       header.className = 'fact-grid header';
       ['#', kind === 'step' ? '步骤名称' : '技能名称', kind === 'step' ? '状态' : '触发与状态', '结果', 'Token', '耗时', '证据'].forEach((label) => header.appendChild(text('span', label)));
       scroll.appendChild(header);
-      entries.forEach((entry, index) => scroll.appendChild(factRow(entry, kind, record, { index, stageIndex, maxToken, maxTime: 1 })));
+      entries.forEach((entry, index) => scroll.appendChild(factRow(entry, kind, record, { index, stageIndex, maxToken, maxTime })));
       wrap.appendChild(scroll);
       return wrap;
     }
@@ -522,17 +746,28 @@
       head.className = 'stage-section-title';
       const copy = document.createElement('div');
       copy.appendChild(text('h3', '五个固定阶段 · 步骤与技能'));
-      copy.appendChild(text('p', '固定五阶段连续展示；当前阶段默认展开，其余折叠'));
+      copy.appendChild(text('p', '步骤和技能名称来自固定流程清单；状态、证据和成本来自当前任务事实；没有事实不会当成成功'));
       head.appendChild(copy);
+      const controls = document.createElement('div');
+      controls.className = 'stage-controls';
+      const expand = text('button', '展开全部阶段', 'stage-control');
+      expand.type = 'button';
+      expand.addEventListener('click', () => { openStages = new Set(stageOrder); render(); });
+      controls.appendChild(expand);
+      const collapse = text('button', '收起全部阶段', 'stage-control');
+      collapse.type = 'button';
+      collapse.addEventListener('click', () => { openStages = new Set(); render(); });
+      controls.appendChild(collapse);
+      head.appendChild(controls);
       section.appendChild(head);
       const body = document.createElement('div');
       body.className = 'stage-section-body';
       const list = document.createElement('div');
       list.className = 'stage-list';
-      const current = currentStageId(record);
       const maxStageToken = Math.max(1, ...stagesFor(record).map((stage) => stageToken(record, stage.id) || 0));
+      const maxStageDuration = Math.max(1, ...stagesFor(record).map((stage) => stageDuration(record, stage.id) || 0));
       stagesFor(record).forEach((stage, stageIndex) => {
-        const isOpen = openStages.size ? openStages.has(stage.id) : stage.id === current;
+        const isOpen = openStages.has(stage.id);
         const steps = stepsFor(record, stage.id);
         const skills = skillsFor(record, stage.id);
         const details = document.createElement('details');
@@ -563,24 +798,25 @@
         covCell.appendChild(text('label', '覆盖'));
         covCell.appendChild(text('strong', (stage.coverage?.observed ?? '未采集') + ' / ' + (stage.coverage?.expected ?? '未采集'), 'wh-mono'));
         meta.appendChild(covCell);
-        const stepCell = document.createElement('div');
-        stepCell.className = 'stage-cell';
-        stepCell.appendChild(text('label', '步骤'));
-        const stepGap = steps.length ? steps.length - countDone(steps) : 0;
-        const stepVal = document.createElement('span');
-        stepVal.className = 'wh-mono';
-        stepVal.innerHTML = (steps.length ? countDone(steps) : '未采集') + ' <span style="color:var(--wh-text-faint);font-weight:400;">/ ' + (steps.length || '—') + '</span>' + (stepGap > 0 ? ' <span style="color:var(--wh-warn);font-size:9.5px;font-weight:600;">缺 ' + stepGap + '</span>' : '');
-        stepCell.appendChild(stepVal);
-        meta.appendChild(stepCell);
-        const skillCell = document.createElement('div');
-        skillCell.className = 'stage-cell';
-        skillCell.appendChild(text('label', '技能'));
-        const skillGap = skills.length ? skills.length - countDone(skills) : 0;
-        const skillVal = document.createElement('span');
-        skillVal.className = 'wh-mono';
-        skillVal.innerHTML = (skills.length ? countDone(skills) : '未采集') + ' <span style="color:var(--wh-text-faint);font-weight:400;">/ ' + (skills.length || '—') + '</span>' + (skillGap > 0 ? ' <span style="color:var(--wh-warn);font-size:9.5px;font-weight:600;">缺 ' + skillGap + '</span>' : '');
-        skillCell.appendChild(skillVal);
-        meta.appendChild(skillCell);
+         const stepCell = document.createElement('div');
+         stepCell.className = 'stage-cell';
+         stepCell.appendChild(text('label', '步骤'));
+         const stepGap = steps.length ? steps.length - countDone(steps) : 0;
+         stepCell.appendChild(countSummary(steps.length ? countDone(steps) : '未采集', steps.length || '—', stepGap));
+         meta.appendChild(stepCell);
+         const skillCell = document.createElement('div');
+         skillCell.className = 'stage-cell';
+         skillCell.appendChild(text('label', '技能'));
+         const skillGap = skills.length ? skills.length - countDone(skills) : 0;
+         skillCell.appendChild(countSummary(skills.length ? countDone(skills) : '未采集', skills.length || '—', skillGap));
+         meta.appendChild(skillCell);
+        const attemptCell = document.createElement('div');
+        attemptCell.className = 'stage-cell';
+        attemptCell.appendChild(text('label', '本阶段尝试'));
+        const attemptValue = text('span', stage.attempt_id ? compactId(stage.attempt_id) : '未采集', stage.attempt_id ? 'wh-mono' : 'unavailable');
+        if (stage.attempt_id) attemptValue.title = stage.attempt_id;
+        attemptCell.appendChild(attemptValue);
+         meta.appendChild(attemptCell);
         summary.appendChild(meta);
         const tokenCell = document.createElement('div');
         tokenCell.className = 'stage-cell';
@@ -590,7 +826,7 @@
         tokenBar.className = 'metric-bar';
         const tokenTrack = document.createElement('span'); tokenTrack.className = 'metric-track';
         const tokenFill = document.createElement('span'); tokenFill.className = 'metric-fill'; tokenFill.style.width = token === null ? '0%' : Math.max(3, (token / maxStageToken) * 100) + '%'; tokenTrack.appendChild(tokenFill);
-        tokenBar.appendChild(tokenTrack); tokenBar.appendChild(token === null ? text('span', '未拆分', 'metric-value unavailable') : text('span', token, 'metric-value'));
+        tokenBar.appendChild(tokenTrack); tokenBar.appendChild(token === null ? unavailableMetric() : text('span', token, 'metric-value'));
         tokenCell.appendChild(tokenBar);
         summary.appendChild(tokenCell);
         const timeCell = document.createElement('div');
@@ -598,8 +834,9 @@
         timeCell.appendChild(text('label', '耗时'));
         const timeBar = document.createElement('span'); timeBar.className = 'metric-bar';
         const timeTrack = document.createElement('span'); timeTrack.className = 'metric-track';
-        const timeFill = document.createElement('span'); timeFill.className = 'metric-fill time'; timeFill.style.width = '0%'; timeTrack.appendChild(timeFill);
-        timeBar.appendChild(timeTrack); timeBar.appendChild(text('span', '未拆分', 'metric-value unavailable')); timeCell.appendChild(timeBar);
+        const stageTime = stageDuration(record, stage.id);
+        const timeFill = document.createElement('span'); timeFill.className = 'metric-fill time'; timeFill.style.width = stageTime === null ? '0%' : Math.max(3, (stageTime / maxStageDuration) * 100) + '%'; timeTrack.appendChild(timeFill);
+        timeBar.appendChild(timeTrack); timeBar.appendChild(stageTime === null ? unavailableMetric() : text('span', stageTime + ' ms', 'metric-value')); timeCell.appendChild(timeBar);
         summary.appendChild(timeCell);
         const caret = document.createElement('span');
         caret.className = 'stage-caret';
@@ -610,6 +847,11 @@
         details.appendChild(summary);
         const stageBody = document.createElement('div');
         stageBody.className = 'stage-body';
+        const identityStrip = text('div', '', 'snapshot-strip');
+        identityStrip.appendChild(text('span', '本阶段运行：' + (stage.run_id || '未采集')));
+        identityStrip.appendChild(text('span', '本阶段尝试：' + (stage.attempt_id || '未采集')));
+        identityStrip.appendChild(text('span', '每个阶段只取该阶段最近尝试，避免把旧尝试混进来'));
+        stageBody.appendChild(identityStrip);
         if (Array.isArray(stage.errors) && stage.errors.length) {
           const errBox = text('div', '', 'snapshot-strip');
           stage.errors.slice(0, 4).forEach((error) => errBox.appendChild(text('span', error)));
@@ -624,14 +866,60 @@
       section.appendChild(body);
       return section;
     }
-    function showEvidence(ref) {
+    function showEvidence(ref, detail = '') {
       const panel = $('#evidence-panel');
       panel.textContent = '';
       panel.classList.add('visible');
       panel.appendChild(text('h3', '受控来源引用'));
-      panel.appendChild(text('p', '只读展示快照内登记的相对路径引用，不拼接绝对路径、不访问文件系统。'));
+      panel.appendChild(text('p', '这是当前任务事实绑定的来源摘要；页面只读，不拼接绝对路径、不访问文件系统。'));
+      panel.appendChild(text('h4', '证据摘要'));
+      panel.appendChild(text('p', detail || '当前没有可回指的结构化摘要。'));
+      panel.appendChild(text('h4', '受控引用'));
       panel.appendChild(text('code', ref));
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function renderNoRecord() {
+      const state = uiStateFor(null);
+      main.dataset.uiState = state;
+      const box = document.createElement('div');
+      box.className = state === 'fatal' ? 'fatal' : 'empty';
+      box.appendChild(status(state));
+      box.appendChild(text('h3', state === 'fatal' ? '监控快照不可用' : state === 'empty_valid' ? '当前范围没有任务' : '当前范围没有可显示任务'));
+      box.appendChild(text('p', state === 'empty_valid' ? '这是合法空结果，不把空白当成成功，也不补造数字。' : '页面只展示已经通过快照合同校验的事实。'));
+      const meta = document.createElement('div');
+      meta.className = 'snapshot-strip';
+      meta.appendChild(text('span', '生成时间：' + readableTime(data.generated_at)));
+      meta.appendChild(text('span', '覆盖：' + (data.coverage.observed ?? '未采集') + ' / ' + (data.coverage.expected ?? '未采集')));
+      meta.appendChild(text('span', '范围内任务：' + (data.in_scope_task_count === null ? '无法判断' : data.in_scope_task_count)));
+      box.appendChild(meta);
+      if (data.errors.length) {
+        const list = document.createElement('ul');
+        data.errors.slice(0, 8).forEach((error) => list.appendChild(text('li', error)));
+        box.appendChild(list);
+      }
+      return box;
+    }
+    function renderFatalRecord(record) {
+      const box = document.createElement('div');
+      box.className = 'fatal';
+      box.appendChild(status('fatal'));
+      box.appendChild(text('h2', record.project_name + ' · ' + record.task_id));
+      box.appendChild(text('p', '这个任务的来源或投影校验失败，页面不展示未经核实的数字。'));
+      const meta = document.createElement('div');
+      meta.className = 'snapshot-strip';
+      meta.appendChild(text('span', '生成时间：' + readableTime(record.generated_at)));
+      meta.appendChild(text('span', '覆盖：无法判断（fatal）'));
+      meta.appendChild(text('span', '范围内任务：无法判断（fatal）'));
+      meta.appendChild(text('span', '错误：' + errorCountFor(record)));
+      box.appendChild(meta);
+      const errors = [...(record.errors || []), ...(data.errors || [])];
+      if (errors.length) {
+        const list = document.createElement('ul');
+        errors.slice(0, 8).forEach((error) => list.appendChild(text('li', error)));
+        box.appendChild(list);
+      }
+      box.appendChild(text('p', '请让上游修复来源或重新生成兼容投影，再用浏览器原生刷新。'));
+      return box;
     }
     function render() {
       renderSidebar();
@@ -640,25 +928,34 @@
       const record = visible.find((entry) => keyOf(entry) === selectedKey) || visible[0];
       if (!record) {
         $('#top-meta').textContent = '快照：' + readableTime(data.generated_at);
-        main.appendChild(text('div', '没有匹配的任务。请调整筛选条件。', 'empty'));
+        main.appendChild(renderNoRecord());
         return;
       }
       selectedKey = keyOf(record);
+      main.dataset.uiState = uiStateFor(record);
+      if (main.dataset.uiState === 'fatal') {
+        main.appendChild(renderFatalRecord(record));
+        return;
+      }
       $('#top-meta').textContent = '快照：' + readableTime(data.generated_at) + ' · 共 ' + records.length + ' 个任务';
       const banner = renderBanner(record);
       if (banner) main.appendChild(banner);
       main.appendChild(renderHeader(record));
-      main.appendChild(renderSummary(record));
-      const insights = document.createElement('div');
-      insights.className = 'insight-grid';
-      insights.appendChild(renderCost(record));
-      insights.appendChild(renderProblems(record));
-      main.appendChild(insights);
-      main.appendChild(renderStages(record));
+      if (activeView !== 'overview') main.appendChild(renderReadiness(record));
+      if (activeView === 'overview') {
+        main.appendChild(renderSummary(record));
+        main.appendChild(renderStages(record));
+      } else if (activeView === 'degradation') {
+        main.appendChild(renderStages(record));
+      } else if (activeView === 'cost') {
+        main.appendChild(renderCost(record));
+      } else if (activeView === 'problems') {
+        main.appendChild(renderProblems(record));
+      }
     }
     document.addEventListener('click', (event) => {
       const chip = event.target.closest('.ref-chip');
-      if (chip && chip.dataset.ref) showEvidence(chip.dataset.ref);
+      if (chip && chip.dataset.ref) showEvidence(chip.dataset.ref, chip.dataset.detail || '');
     });
     setupFilters();
     render();

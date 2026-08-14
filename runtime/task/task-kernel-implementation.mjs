@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import factsContract from "../../contracts/facts-subschema.json" with { type: "json" };
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { deriveStageCompletion } from "../stage/completion-predicates.mjs";
@@ -185,7 +185,7 @@ export function buildTaskKernel(taskHandle, {
       material_digest: materialDigest,
       source: "current-four-materials",
     };
-    return { revision, snapshot: captureGitWorktreeSnapshot(active.worktreeRoot) };
+    return { revision, snapshot: captureExecutionSnapshot(active.worktreeRoot) };
   };
   const readInput = (slot) => {
     const input = task.manifest.inputs?.[slot];

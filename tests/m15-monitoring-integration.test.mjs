@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { ArtifactDir } from '../core/artifact-dir.mjs';
 import { createTask } from '../runtime/task/task-handle.mjs';
+import { createTaskKernel } from '../runtime/task/task-handle.mjs';
 import { initializeTaskStore, readTaskFacts } from '../runtime/task/task-store.mjs';
-import { createRegisteredCodexSource } from '../runtime/evidence/codex-transcript-adapter.mjs';
+import { prepareTaskWorkspace } from '../runtime/task/workspace.mjs';
+import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from '../runtime/evidence/codex-transcript-adapter.mjs';
 import { createTranscriptSourceReader } from '../runtime/evidence/fact-collector.mjs';
 import { createQualityFact } from '../runtime/evidence/quality-fact.mjs';
 import { publishVerifySummary } from '../runtime/evidence/quality-store.mjs';
-import { publishStaleMonitoringSnapshot, runMonitoringSidecar } from '../tools/cli/stage-runtime.mjs';
+import { publishStaleMonitoringSnapshot, resolveDefaultMonitoringSource, runMonitoringSidecar } from '../tools/cli/stage-runtime.mjs';
 import { monitoringTopology, stageRuntimeCliMain } from '../tools/cli/stage-runtime.mjs';
+import { writeStageOutcomeFixture } from './helpers/stage-outcome.mjs';
 
 function fixture() {
   const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-integration-')));
@@ -21,17 +26,337 @@ function fixture() {
   return { storageRoot, task };
 }
 
+function publicRunFixture() {
+  const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-public-run-')));
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-public-run-repo-')));
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: repo });
+  execFileSync('git', ['config', 'user.name', 'WorkflowHub Tests'], { cwd: repo });
+  execFileSync('git', ['config', 'user.email', 'tests@workflowhub.local'], { cwd: repo });
+  writeFileSync(join(repo, 'README.md'), 'm15 public run\n');
+  execFileSync('git', ['add', 'README.md'], { cwd: repo });
+  execFileSync('git', ['commit', '-qm', 'baseline'], { cwd: repo });
+  const task = createTask({ storageRoot, manifest: {
+    schema_version: '1.0.0', project_name: 'workflowhub', task_id: 'm15-public-run', created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
+  } });
+  const candidate = prepareTaskWorkspace(task);
+  const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
+  for (const file of ['decision-log.md', 'spec.md', 'plan.md', 'tasks.md']) artifacts.writeAtomic(file, `# ${file}\n`);
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, artifacts });
+  return { storageRoot, repo, task, candidate, artifacts, kernel };
+}
+
+function isolatedPublicRuntimeEnv({ home, taskDir, source = {} } = {}) {
+  const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: taskDir };
+  for (const key of ['CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
+  return { ...env, ...source };
+}
+
 describe('M15 stage sidecar integration', () => {
+  it('binds the public launcher to the current Codex rollout without exposing its path', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-codex-home-')));
+    const rolloutDir = join(home, '.codex', 'sessions', '2026', '08', '13');
+    const threadId = 'thread-m15-real-source';
+    const rolloutPath = join(rolloutDir, `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    const raw = JSON.stringify({ timestamp: '2026-08-13T00:00:01.000Z', type: 'event_msg', payload: { type: 'agent_message' } });
+    try {
+      mkdirSync(rolloutDir, { recursive: true });
+      writeFileSync(rolloutPath, `${raw}\n`);
+      const source = resolveDefaultMonitoringSource({
+        task_id: 'm15-real-source',
+        run_id: 'run-real-source',
+        attempt_id: 'attempt-real-source',
+        context: { stage: 'build-code' },
+        env: { CODEX_THREAD_ID: threadId, CODEX_ROLLOUT_PATH: rolloutPath, CODEX_CLI_VERSION: 'test-cli' },
+        home,
+        startedAtMs: 0,
+      });
+      expect(source.source_ref).toBe(`codex-rollout-${threadId}`);
+      expect(source.source_ref).not.toContain('/');
+      const parsed = parseRegisteredCodexTranscript(source, {
+        project_name: 'workflowhub', task_id: 'm15-real-source', run_id: 'run-real-source', attempt_id: 'attempt-real-source',
+      });
+      expect(parsed.status).toBe('present');
+      expect(parsed.records).toEqual(expect.arrayContaining([
+        expect.objectContaining({ fact_type: 'transcript_event', status: 'present', run_id: 'run-real-source', attempt_id: 'attempt-real-source' }),
+      ]));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('converts Codex token_count events into per-turn token facts without guessing step attribution', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-codex-token-home-')));
+    const rolloutDir = join(home, '.codex', 'sessions', '2026', '08', '13');
+    const threadId = 'thread-m15-token-source';
+    const rolloutPath = join(rolloutDir, `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    const raw = JSON.stringify({
+      timestamp: '2026-08-13T00:00:01.000Z',
+      type: 'event_msg',
+      payload: {
+        type: 'token_count',
+        info: {
+          total_token_usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 },
+          last_token_usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 },
+        },
+      },
+    });
+    try {
+      mkdirSync(rolloutDir, { recursive: true });
+      writeFileSync(rolloutPath, `${raw}\n`);
+      const source = resolveDefaultMonitoringSource({
+        task_id: 'm15-token-source',
+        run_id: 'run-token-source',
+        attempt_id: 'attempt-token-source',
+        context: { stage: 'build-code' },
+        env: { CODEX_THREAD_ID: threadId, CODEX_ROLLOUT_PATH: rolloutPath, CODEX_CLI_VERSION: 'test-cli' },
+        home,
+        startedAtMs: 0,
+      });
+      const parsed = parseRegisteredCodexTranscript(source, {
+        project_name: 'workflowhub', task_id: 'm15-token-source', run_id: 'run-token-source', attempt_id: 'attempt-token-source',
+      });
+      expect(parsed.status).toBe('present');
+      expect(parsed.records).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          fact_type: 'token',
+          status: 'present',
+          stage: 'build-code',
+          attempt_id: 'attempt-token-source',
+          value: { input_tokens: 7, output_tokens: 3, total_tokens: 10, message_id: expect.any(String), grain: 'message' },
+        }),
+      ]));
+      expect(parsed.records.find((record) => record.fact_type === 'token').step_id).toBeNull();
+      expect(parsed.records.find((record) => record.fact_type === 'token').skill_id).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('records facts when the public stage-runtime success path starts without a facts store', () => {
+    const state = publicRunFixture();
+    try {
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: 'build-spec',
+        attemptId: 'attempt-public-run-1',
+        status: 'completed',
+      });
+      const inputPath = join(state.storageRoot, 'public-run-input.json');
+      writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+      const runtime = join(process.cwd(), 'tools', 'cli', 'stage-runtime.mjs');
+      const result = spawnSync(process.execPath, [
+        runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
+      ], {
+        cwd: process.cwd(),
+        env: isolatedPublicRuntimeEnv({ home: state.storageRoot, taskDir: state.storageRoot }),
+        encoding: 'utf8',
+      });
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ stage: 'build-spec' });
+      const facts = readTaskFacts(state.task.taskPath);
+      expect(facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ task_id: 'm15-public-run', run_id: expect.any(String), attempt_id: 'attempt-public-run-1', stage: 'build-spec', fact_type: 'stage' }),
+        expect.objectContaining({ task_id: 'm15-public-run', run_id: expect.any(String), attempt_id: 'attempt-public-run-1', fact_type: 'source_status', status: 'missing', reason: 'no_registered_source' }),
+      ]));
+    } finally {
+      try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
+      rmSync(state.storageRoot, { recursive: true, force: true });
+      rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves authenticated Stage Agent result summaries through facts, diagnostics, and the page bundle', async () => {
+    const state = publicRunFixture();
+    try {
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: 'build-spec',
+        attemptId: 'attempt-result-summary',
+        status: 'completed',
+      });
+      initializeTaskStore(state.task.taskPath, { taskId: 'm15-public-run' });
+      const result = await runMonitoringSidecar({
+        context: { storageRoot: state.storageRoot, task: state.task, identity: state.task.identity, workflowRunId: 'run-result-summary', stage: 'build-spec', attempt_id: 'attempt-result-summary' },
+        stageOutcome: {
+          status: outcome.value.status,
+          stage_outcome_ref: outcome.ref,
+          step_outcomes: outcome.value.step_outcomes,
+          skill_outcomes: outcome.value.skill_outcomes,
+        },
+        services: { resolveMonitoringSource: async () => null },
+        now: () => new Date('2026-08-12T00:02:00.000Z'),
+      });
+      const facts = readTaskFacts(state.task.taskPath);
+      expect(facts.find((fact) => fact.fact_type === 'step' && fact.status === 'present')?.value.result_summary).toMatch(/^executed /);
+      expect(result.diagnostics.steps.find((entry) => entry.result_summary)?.result_summary).toMatch(/^executed /);
+      expect(readFileSync(result.global_snapshot, 'utf8')).toContain('executed read-decision-log');
+    } finally {
+      try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
+      rmSync(state.storageRoot, { recursive: true, force: true });
+      rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
+  it('fails the public run when both monitoring publication and stale fallback fail', async () => {
+    const state = publicRunFixture();
+    const previousHome = process.env.HOME;
+    const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
+    try {
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: 'build-spec',
+        attemptId: 'attempt-public-monitoring-failure',
+        status: 'completed',
+      });
+      const inputPath = join(state.storageRoot, 'public-monitoring-failure-input.json');
+      writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+      process.env.HOME = state.storageRoot;
+      process.env.WORKFLOWHUB_TASK_DIR = state.storageRoot;
+      await expect(stageRuntimeCliMain([
+        'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
+      ], {
+        services: {
+          runMonitoringSidecar: async () => { throw new Error('injected sidecar failure'); },
+          publishStaleMonitoringSnapshot: () => { throw new Error('injected stale fallback failure'); },
+        },
+      })).rejects.toMatchObject({ code: 'WORKFLOWHUB_MONITORING_PUBLICATION_FAILED' });
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+      if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
+      try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
+      rmSync(state.storageRoot, { recursive: true, force: true });
+      rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
+  it('records a real host transcript through the default public run seam', () => {
+    const state = publicRunFixture();
+    const threadId = 'thread-m15-public-source';
+    const rolloutPath = join(state.storageRoot, '.codex', 'sessions', '2026', '08', '13', `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    try {
+      mkdirSync(join(state.storageRoot, '.codex', 'sessions', '2026', '08', '13'), { recursive: true });
+      writeFileSync(rolloutPath, `${JSON.stringify({ type: 'event_msg', payload: { type: 'agent_message' } })}\n`);
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: 'build-spec',
+        attemptId: 'attempt-public-real-source',
+        status: 'completed',
+      });
+      const inputPath = join(state.storageRoot, 'public-real-source-input.json');
+      writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+      const runtime = join(process.cwd(), 'tools', 'cli', 'stage-runtime.mjs');
+      const result = spawnSync(process.execPath, [
+        runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
+      ], {
+        cwd: process.cwd(),
+        env: isolatedPublicRuntimeEnv({
+          home: state.storageRoot,
+          taskDir: state.storageRoot,
+          source: { CODEX_THREAD_ID: threadId, CODEX_ROLLOUT_PATH: rolloutPath },
+        }),
+        encoding: 'utf8',
+      });
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(readTaskFacts(state.task.taskPath)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ fact_type: 'source_status', status: 'present' }),
+        expect.objectContaining({ fact_type: 'transcript_event', status: 'present', attempt_id: 'attempt-public-real-source' }),
+      ]));
+    } finally {
+      try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
+      rmSync(state.storageRoot, { recursive: true, force: true });
+      rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the host execution start boundary so real pre-delivery Codex events are retained', () => {
+    const state = publicRunFixture();
+    const threadId = 'thread-m15-window-source';
+    const rolloutDir = join(state.storageRoot, '.codex', 'sessions', '2026', '08', '13');
+    const rolloutPath = join(rolloutDir, `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    const start = '2026-08-13T00:00:01.000Z';
+    const raw = [
+      { id: 'before-stage', timestamp: '2026-08-13T00:00:00.500Z', type: 'response_item', payload: { type: 'custom_tool_call', id: 'before-tool', name: 'old-work' } },
+      { id: 'during-stage', timestamp: '2026-08-13T00:00:02.000Z', type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { input_tokens: 11, output_tokens: 4, total_tokens: 15 } } } },
+    ].map((entry) => JSON.stringify(entry)).join('\n');
+    try {
+      mkdirSync(rolloutDir, { recursive: true });
+      writeFileSync(rolloutPath, `${raw}\n`);
+      const outcome = writeStageOutcomeFixture({
+        task: state.task,
+        kernel: state.kernel,
+        artifacts: state.artifacts,
+        candidateWorkspace: state.candidate,
+        stage: 'build-spec',
+        attemptId: 'attempt-public-window-source',
+        status: 'completed',
+      });
+      const inputPath = join(state.storageRoot, 'public-window-source-input.json');
+      writeFileSync(inputPath, `${JSON.stringify({ receipts: { stage_outcomes: outcome.ref } })}\n`);
+      const runtime = join(process.cwd(), 'tools', 'cli', 'stage-runtime.mjs');
+      const result = spawnSync(process.execPath, [
+        runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
+      ], {
+        cwd: process.cwd(),
+        env: isolatedPublicRuntimeEnv({
+          home: state.storageRoot,
+          taskDir: state.storageRoot,
+          source: {
+            CODEX_THREAD_ID: threadId,
+            CODEX_ROLLOUT_PATH: rolloutPath,
+            WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT: start,
+          },
+        }),
+        encoding: 'utf8',
+      });
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      const facts = readTaskFacts(state.task.taskPath);
+      expect(facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ fact_type: 'token', status: 'present', attempt_id: 'attempt-public-window-source', value: expect.objectContaining({ total_tokens: 15 }) }),
+      ]));
+      expect(facts.some((fact) => fact.fact_type === 'tool_use' && fact.value?.tool_use_id === 'tool-before')).toBe(false);
+      expect(facts.find((fact) => fact.fact_type === 'source_status' && fact.status === 'present')?.value.capabilities).toEqual(expect.arrayContaining(['token']));
+    } finally {
+      try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
+      rmSync(state.storageRoot, { recursive: true, force: true });
+      rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
   it('runs after publication with a registered source and reaches projection/global data', async () => {
     const { storageRoot, task } = fixture();
     const source = createRegisteredCodexSource({ source_id: 'codex-test', source_ref: 'codex-test-ref', registration_id: 'registration-1', required: true, task_id: 'm15-integration', run_id: 'run-1', session_id: 'session-1', source_format: 'jsonl', source_version: 'v1', cli_version: 'test', adapter_version: 'test-v1', reader: createTranscriptSourceReader(() => JSON.stringify({ id: 'm1', type: 'message', run_id: 'run-1', stage: 'build-code', usage: { input_tokens: 2, output_tokens: 3 } })) });
     const result = await runMonitoringSidecar({ context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:00.000Z') });
     expect(result.status).toBe('present');
     expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'token' && fact.value.total_tokens === 5)).toBe(true);
-    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'step' && fact.status === 'missing')).toBe(true);
-    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'skill' && fact.status === 'unknown')).toBe(true);
+    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'step')).toBe(false);
+    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'skill')).toBe(false);
     expect(readFileSync(result.global_snapshot, 'utf8')).toContain('globalThis.__WH_MONITOR_DATA__');
     expect(result.diagnostics?.skills ?? []).toBeDefined();
+  });
+
+  it('does not turn topology entries without an outcome into happened step or skill events', async () => {
+    const { storageRoot, task } = fixture();
+    await runMonitoringSidecar({
+      context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-no-events', stage: 'build-code' },
+      stageOutcome: { status: 'completed', step_outcomes: [], skill_outcomes: [] },
+      services: { resolveMonitoringSource: async () => null },
+      now: () => new Date('2026-08-12T00:00:00.000Z'),
+    });
+    const facts = readTaskFacts(task.taskPath);
+    expect(facts.filter((fact) => fact.fact_type === 'step')).toHaveLength(0);
+    expect(facts.filter((fact) => fact.fact_type === 'skill')).toHaveLength(0);
   });
 
   it('loads declared skill trigger topology instead of silently publishing an empty skill dimension', () => {
@@ -58,7 +383,7 @@ describe('M15 stage sidecar integration', () => {
     await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-b' }, stageOutcome: { status: 'completed' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:01.000Z') });
     const stageFacts = readTaskFacts(task.taskPath).filter((fact) => fact.fact_type === 'stage' && fact.stage === 'build-code');
     expect(stageFacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ attempt_id: 'attempt-a', status: 'unknown', value: null, reason: 'stage_outcome_failed' }),
+      expect.objectContaining({ attempt_id: 'attempt-a', status: 'present', value: { outcome: 'failed' } }),
       expect.objectContaining({ attempt_id: 'attempt-b', value: { outcome: 'completed' } }),
     ]));
     expect(stageFacts).toHaveLength(2);
@@ -76,6 +401,20 @@ describe('M15 stage sidecar integration', () => {
       expect.objectContaining({ attempt_id: 'attempt-b', value: expect.objectContaining({ message_id: 'm1' }) }),
     ]));
     expect(new Set(tokenFacts.map((record) => record.fact_id)).size).toBe(2);
+  });
+
+  it('keeps source status facts bound to each rerun attempt', async () => {
+    const { storageRoot, task } = fixture();
+    const source = createRegisteredCodexSource({ source_id: 'codex-test', source_ref: 'codex-test-ref', registration_id: 'registration-1', required: true, task_id: 'm15-integration', run_id: 'run-1', session_id: 'session-1', source_format: 'jsonl', source_version: 'v1', cli_version: 'test', adapter_version: 'test-v1', reader: createTranscriptSourceReader(() => '') });
+    const base = { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code' };
+    await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-a' }, stageOutcome: { status: 'completed' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:00.000Z') });
+    await runMonitoringSidecar({ context: { ...base, attempt_id: 'attempt-b' }, stageOutcome: { status: 'completed' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:01.000Z') });
+    const sourceFacts = readTaskFacts(task.taskPath).filter((fact) => fact.fact_type === 'source_status' && fact.status === 'present');
+    expect(sourceFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ attempt_id: 'attempt-a' }),
+      expect.objectContaining({ attempt_id: 'attempt-b' }),
+    ]));
+    expect(new Set(sourceFacts.map((record) => record.fact_id)).size).toBe(2);
   });
 
   it('uses one derived attempt identity for stage and quality monitoring facts', async () => {
@@ -198,7 +537,7 @@ describe('M15 stage sidecar integration', () => {
     ]));
   });
 
-  it('keeps incomplete verify evidence partial instead of treating it as current', async () => {
+  it('keeps incomplete verify evidence incomplete instead of treating it as current', async () => {
     const { storageRoot, task } = fixture();
     publishVerifySummary(task.taskPath, { status: 'incomplete', fresh: true });
     await runMonitoringSidecar({
@@ -208,7 +547,7 @@ describe('M15 stage sidecar integration', () => {
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
     expect(readTaskFacts(task.taskPath)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fact_type: 'verify', status: 'partial', reason: 'verify_incomplete', value: null }),
+      expect.objectContaining({ fact_type: 'verify', status: 'incomplete', reason: 'verify_incomplete', value: null }),
     ]));
   });
 
@@ -226,7 +565,7 @@ describe('M15 stage sidecar integration', () => {
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
     expect(readTaskFacts(task.taskPath)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fact_type: 'verify', status: 'unknown', reason: 'verify_binding_conflict', error: 'VERIFY_SOURCE_BINDING_MISMATCH', value: null }),
+      expect.objectContaining({ fact_type: 'verify', status: 'conflict', reason: 'verify_binding_conflict', error: 'VERIFY_SOURCE_BINDING_MISMATCH', value: null }),
     ]));
   });
 
@@ -257,8 +596,8 @@ describe('M15 stage sidecar integration', () => {
       services: { resolveMonitoringSource: async () => null },
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
-    const invalid = readTaskFacts(task.taskPath).find((fact) => fact.reason === 'quality_fact_record_unavailable');
-    expect(invalid).toMatchObject({ fact_type: 'source_status', status: 'unknown', evidence_refs: [expect.stringMatching(/^quality-ref:/)] });
+    const invalid = readTaskFacts(task.taskPath).find((fact) => fact.reason === 'quality_fact_unsupported');
+    expect(invalid).toMatchObject({ fact_type: 'source_status', status: 'unsupported', evidence_refs: [expect.stringMatching(/^quality-ref:/)] });
     expect(invalid.evidence_refs[0]).not.toContain('private');
   });
 
@@ -288,7 +627,7 @@ describe('M15 stage sidecar integration', () => {
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
     const status = readTaskFacts(task.taskPath).find((fact) => fact.error === 'UNSUPPORTED_QUALITY_FACT_KIND' || fact.error === 'QUALITY_FACT_STAGE_MISMATCH');
-    expect(status).toMatchObject({ fact_type: 'source_status', status: 'unknown', evidence_refs: [unsupported.ref] });
+    expect(status).toMatchObject({ fact_type: 'source_status', status: 'unsupported', evidence_refs: [unsupported.ref] });
   });
 
   it('keeps quality observations from repeated attempts when the ref is unchanged', async () => {
@@ -334,6 +673,27 @@ describe('M15 stage sidecar integration', () => {
     const result = await runMonitoringSidecar({ context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code' }, now: () => new Date('2026-08-12T00:00:00.000Z') });
     expect(result.status).toBe('missing');
     expect(readTaskFacts(task.taskPath)[0]).toMatchObject({ fact_type: 'source_status', status: 'missing', reason: 'no_registered_source' });
+  });
+
+  it('records a resolver binding conflict without reading or importing another task source', async () => {
+    const { storageRoot, task } = fixture();
+    let reads = 0;
+    const source = createRegisteredCodexSource({
+      source_id: 'codex-other-task', source_ref: 'codex-other-task-ref', registration_id: 'registration-1', required: true,
+      task_id: 'other-task', run_id: 'other-run', session_id: 'session-other', source_format: 'jsonl', source_version: 'v1',
+      cli_version: 'test', adapter_version: 'test-v1', reader: createTranscriptSourceReader(() => { reads += 1; return ''; }),
+    });
+    const result = await runMonitoringSidecar({
+      context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code', attempt_id: 'attempt-1' },
+      services: { resolveMonitoringSource: async () => source },
+      now: () => new Date('2026-08-12T00:00:00.000Z'),
+    });
+    expect(result.status).toBe('conflict');
+    expect(reads).toBe(0);
+    expect(readTaskFacts(task.taskPath)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: 'source_status', status: 'conflict', reason: 'source_binding_conflict' }),
+    ]));
+    expect(readTaskFacts(task.taskPath).every((fact) => fact.task_id === task.identity.taskId)).toBe(true);
   });
 
   it('rebuilds the global bundle when a sidecar fallback publishes stale state', () => {

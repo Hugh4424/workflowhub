@@ -55,7 +55,7 @@ describe("decision-log minimum content contract", () => {
 
   it("requires a same-log append update after every make-decision step", () => {
     const steps = JSON.parse(read(`${root}/workflows/make-decision/steps.json`)).steps;
-    expect(steps).toHaveLength(12);
+    expect(steps).toHaveLength(13);
     for (const step of steps) {
       expect(step.completion_evidence.some(({ kind, uri_or_path }) => kind === "decision_log" && uri_or_path === "decision-log.md"), step.step_slug).toBe(true);
       expect(step.observable_result).toMatch(/existing writer|same decision-log\.md/i);

@@ -1,7 +1,23 @@
 const STAGES = Object.freeze(['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code']);
 const FAILURE_DOMAINS = new Set(['task_dir', 'worktree', 'review', 'verify', 'handoff', 'transcript', 'skill_missing', 'artifact_missing', 'token_waste']);
-const CONTROLLED_DIAGNOSTIC_STATUSES = new Set(['present', 'missing', 'unknown', 'partial', 'fatal', 'conflict', 'pending', 'evidence_gap', 'out_of_order', 'executed', 'not_applicable', 'unavailable', 'insufficient_samples', 'failed', 'started', 'running', 'completed', 'skipped']);
+const CONTROLLED_DIAGNOSTIC_STATUSES = new Set(['present', 'missing', 'unknown', 'partial', 'fatal', 'conflict', 'pending', 'evidence_gap', 'out_of_order', 'executed', 'not_applicable', 'unavailable', 'unsupported', 'incomplete', 'insufficient_samples', 'failed', 'started', 'running', 'completed', 'skipped']);
 const HEALTH_STATUS_ALIASES = new Map([['mismatch', 'partial'], ['stale', 'partial']]);
+const NON_PRESENT_FACT_STATUSES = new Set(['missing', 'unknown', 'unavailable', 'unsupported', 'conflict', 'incomplete']);
+const VIEW_REQUIRED_FIELDS = Object.freeze({
+  task_overview: Object.freeze(['task_id', 'project_name', 'run_id', 'attempt_id', 'stage.value.outcome', 'source.status', 'coverage']),
+  process_degradation: Object.freeze([
+    'expected_topology',
+    'stage.status', 'stage.reason/error', 'stage.coverage', 'stage.evidence_refs',
+    'step.status', 'step.reason/error', 'step.coverage', 'step.evidence_refs',
+    'skill.status', 'skill.reason/error', 'skill.coverage', 'skill.evidence_refs',
+    'artifact.status', 'artifact.reason/error', 'artifact.coverage', 'artifact.evidence_refs',
+    'health.status', 'health.reason/error', 'health.coverage', 'health.evidence_refs',
+    'review.status', 'review.reason/error', 'review.coverage', 'review.evidence_refs',
+    'verify.status', 'verify.reason/error', 'verify.coverage', 'verify.evidence_refs',
+  ]),
+  cost_attribution: Object.freeze(['session_id', 'subagent_id', 'stage', 'skill_id', 'token.message_id', 'tool_use.tool_use_id', 'duration.duration_ms', 'retry.retry_id', 'source', 'attempt_id']),
+  problems_trends: Object.freeze(['health.domain', 'health.friction_type', 'health.error_code', 'observed_at', 'coverage', 'source_refs', 'compatible_time_buckets', 'denominator']),
+});
 
 const asArray = (value) => Array.isArray(value) ? value : [];
 const evidenceRefs = (fact) => [...new Set([...(fact?.evidence_refs ?? []), fact?.source?.ref].filter(Boolean))];
@@ -17,6 +33,60 @@ const factStatus = (fact, fallback = 'unknown') => {
   if (fact.status === 'present') return 'present';
   return fact.status ?? fallback;
 };
+function isTranscriptSourceFact(fact) {
+  return fact?.fact_type === 'source_status' && fact?.source?.kind !== 'quality';
+}
+
+function latestTranscriptSourceFacts(facts) {
+  const rows = asArray(facts).filter(isTranscriptSourceFact);
+  if (!rows.length) return [];
+  const attempts = new Map();
+  for (const [index, row] of rows.entries()) {
+    const key = attemptIdentity(row);
+    const group = attempts.get(key) ?? [];
+    group.push({ row, index });
+    attempts.set(key, group);
+  }
+  return [...attempts.values()].map((group) => group.reduce((latest, candidate) => {
+    if (!latest) return candidate;
+    const latestTime = Date.parse(latest.row.observed_at ?? '');
+    const candidateTime = Date.parse(candidate.row.observed_at ?? '');
+    if ((!Number.isFinite(latestTime) && Number.isFinite(candidateTime))
+      || (Number.isFinite(candidateTime) && candidateTime > latestTime)
+      || (candidateTime === latestTime && candidate.index > latest.index)) return candidate;
+    return latest;
+  }, null).row);
+}
+
+function sourceCollectionStatus(facts, stage = null) {
+  const rows = latestTranscriptSourceFacts(facts).filter((fact) => stage === null || fact.stage === stage || fact.value?.scope === 'task');
+  if (!rows.length) return 'unknown';
+  const statuses = new Set(rows.map((fact) => fact.status).filter(Boolean));
+  for (const status of ['conflict', 'unavailable', 'unsupported', 'incomplete', 'unknown', 'missing']) if (statuses.has(status)) return status;
+  return statuses.has('present') ? 'present' : 'unknown';
+}
+function sourceCapabilities(facts, stage = null) {
+  const rows = latestTranscriptSourceFacts(facts).filter((fact) => stage === null || fact.stage === stage || fact.value?.scope === 'task');
+  const values = rows.map((fact) => fact.value?.capabilities).filter(Array.isArray);
+  return values.length === rows.length && values.length > 0 ? new Set(values.flat()) : null;
+}
+function eventFallbackForSource(sourceStatus, factType, facts, stage = null) {
+  if (sourceStatus === 'present') {
+    const capabilities = sourceCapabilities(facts, stage);
+    if (!capabilities) return 'unknown';
+    return capabilities.has(factType) ? 'missing' : 'unsupported';
+  }
+  if (sourceStatus === 'missing') return 'unavailable';
+  return sourceStatus;
+}
+function guardedEventStatus(source, sourceStatus, factType, facts, stage = null) {
+  if (!source) return eventFallbackForSource(sourceStatus, factType, facts, stage);
+  if (['stage', 'quality'].includes(source.source?.kind)) return factStatus(source);
+  if (source?.status === 'present') return factStatus(source);
+  if (source && sourceStatus === 'present') return factStatus(source);
+  if (sourceStatus !== 'present') return eventFallbackForSource(sourceStatus, factType, facts, stage);
+  return factStatus(source, 'missing');
+}
 function resolveIdentityFacts(facts, keyFn) {
   const groups = new Map();
   for (const fact of asArray(facts)) {
@@ -38,6 +108,121 @@ function attemptIdentity(fact) {
   return `${fact?.run_id ?? 'default'}:${fact?.attempt_id ?? 'default'}`;
 }
 
+function selectCurrentAttempt(facts) {
+  const rows = asArray(facts);
+  let winner = null;
+  rows.forEach((fact, index) => {
+    if (!fact || (fact.run_id == null && fact.attempt_id == null)) return;
+    const observedAt = Date.parse(fact.observed_at ?? '');
+    if (!winner
+      || (!Number.isFinite(winner.observedAt) && Number.isFinite(observedAt))
+      || (Number.isFinite(observedAt) && observedAt > winner.observedAt)
+      || (observedAt === winner.observedAt && index > winner.index)) {
+      winner = { fact, index, observedAt };
+    }
+  });
+  if (!winner) return { run_id: null, attempt_id: null, observed_at: null, facts: rows };
+  const identity = attemptIdentity(winner.fact);
+  const currentFacts = rows.filter((fact) => attemptIdentity(fact) === identity);
+  const observedTimes = currentFacts.map((fact) => Date.parse(fact?.observed_at ?? '')).filter(Number.isFinite);
+  return {
+    run_id: winner.fact.run_id ?? null,
+    attempt_id: winner.fact.attempt_id ?? null,
+    observed_at: observedTimes.length ? new Date(Math.max(...observedTimes)).toISOString() : null,
+    facts: currentFacts,
+  };
+}
+
+// A task may have one attempt per stage (for example, build-code and
+// verify-code can be invoked separately). Selecting one global attempt makes
+// the page hide otherwise valid stage details. Keep attempts isolated within
+// each stage, then use the newest attempt for that stage. This is deliberately
+// a stage-scoped snapshot, not a claim that all stages share one run.
+function selectCurrentStageAttempts(facts) {
+  const rows = asArray(facts);
+  const global = selectCurrentAttempt(rows);
+  const byStage = new Map();
+  for (const [index, fact] of rows.entries()) {
+    if (!fact?.stage || !STAGES.includes(fact.stage)) continue;
+    const key = attemptIdentity(fact);
+    const group = byStage.get(fact.stage) ?? new Map();
+    const attempt = group.get(key) ?? { facts: [], latestIndex: index, latestObservedAt: -Infinity };
+    attempt.facts.push(fact);
+    const observedAt = Date.parse(fact.observed_at ?? '');
+    if ((Number.isFinite(observedAt) && observedAt > attempt.latestObservedAt)
+      || (observedAt === attempt.latestObservedAt && index > attempt.latestIndex)) {
+      attempt.latestObservedAt = Number.isFinite(observedAt) ? observedAt : attempt.latestObservedAt;
+      attempt.latestIndex = index;
+    }
+    group.set(key, attempt);
+    byStage.set(fact.stage, group);
+  }
+  const stageAttempts = new Map();
+  const selected = [];
+  for (const [stage, attempts] of byStage.entries()) {
+    const winner = [...attempts.values()].reduce((current, candidate) => {
+      if (!current) return candidate;
+      if (candidate.latestObservedAt > current.latestObservedAt) return candidate;
+      if (candidate.latestObservedAt === current.latestObservedAt && candidate.latestIndex > current.latestIndex) return candidate;
+      return current;
+    }, null);
+    if (!winner) continue;
+    selected.push(...winner.facts);
+    const representative = winner.facts.reduce((current, candidate) => {
+      if (!current) return candidate;
+      const currentTime = Date.parse(current.observed_at ?? '');
+      const candidateTime = Date.parse(candidate.observed_at ?? '');
+      return (!Number.isFinite(currentTime) && Number.isFinite(candidateTime)) || candidateTime > currentTime ? candidate : current;
+    }, null);
+    stageAttempts.set(stage, {
+      run_id: representative?.run_id ?? null,
+      attempt_id: representative?.attempt_id ?? null,
+      observed_at: Number.isFinite(winner.latestObservedAt) ? new Date(winner.latestObservedAt).toISOString() : null,
+    });
+  }
+  // Source/quality facts without a stage still belong to the newest global
+  // attempt. Keep only those facts; never use them to overwrite a stage's
+  // selected attempt.
+  const globalIdentity = `${global.run_id ?? 'default'}:${global.attempt_id ?? 'default'}`;
+  selected.push(...rows.filter((fact) => !fact?.stage && attemptIdentity(fact) === globalIdentity));
+  return {
+    facts: selected,
+    stageAttempts,
+    global,
+    scope: 'latest_attempt_per_stage',
+  };
+}
+
+function evidenceDetails(fact) {
+  if (!fact) return { source_kind: null, source_id: null, observed_at: null, evidence_summary: null };
+  const value = fact.value && typeof fact.value === 'object' ? fact.value : {};
+  const summary = [
+    typeof value.outcome === 'string' ? `结果=${value.outcome}` : null,
+    typeof value.result_summary === 'string' ? `执行说明=${value.result_summary}` : null,
+    typeof value.trigger === 'boolean' ? `触发=${value.trigger ? '是' : '否'}` : null,
+    typeof value.executed === 'boolean' ? `执行=${value.executed ? '是' : '否'}` : null,
+    typeof fact.reason === 'string' ? `原因=${fact.reason}` : null,
+    typeof fact.error === 'string' ? `错误=${fact.error}` : null,
+  ].filter(Boolean).join('；');
+  return {
+    source_kind: typeof fact.source?.kind === 'string' ? fact.source.kind : null,
+    source_id: typeof fact.source?.source_id === 'string' ? fact.source.source_id : null,
+    observed_at: typeof fact.observed_at === 'string' ? fact.observed_at : null,
+    result_summary: typeof value.result_summary === 'string' ? value.result_summary : null,
+    evidence_summary: summary || `状态=${fact.status ?? 'unknown'}`,
+  };
+}
+
+function attributionIdentity(fact) {
+  return [fact?.task_id, fact?.project_name, fact?.run_id, fact?.attempt_id]
+    .map((value) => typeof value === 'string' && value ? value : 'unknown')
+    .join('|');
+}
+
+function sourceIdentity(fact) {
+  return typeof fact?.source?.source_id === 'string' && fact.source.source_id ? fact.source.source_id : null;
+}
+
 function resolveLatestIdentityFacts(facts, identityFn, baseFn) {
   const grouped = resolveIdentityFacts(facts, identityFn);
   const latest = new Map();
@@ -52,7 +237,7 @@ function resolveLatestIdentityFacts(facts, identityFn, baseFn) {
   return latest;
 }
 
-function stageDiagnostics(topology, facts) {
+function stageDiagnostics(topology, facts, stageAttempts = new Map()) {
   const observed = resolveLatestIdentityFacts(asArray(facts).filter((f) => f?.fact_type === 'stage' && f.stage), (f) => `${f.stage}:${attemptIdentity(f)}`, (f) => f.stage);
   const lastObserved = Math.max(...STAGES.map((id) => observed.has(id) ? STAGES.indexOf(id) : -1));
   return STAGES.map((id, index) => {
@@ -64,11 +249,12 @@ function stageDiagnostics(topology, facts) {
         : factStatus(source)
       : 'pending';
     if (!source && index < lastObserved) status = 'evidence_gap';
-    return { id, status, coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], reason: source?.reason ?? null, source_refs: evidenceRefs(source) };
+    const identity = stageAttempts.get(id);
+    return { id, run_id: identity?.run_id ?? source?.run_id ?? null, attempt_id: identity?.attempt_id ?? source?.attempt_id ?? null, status, coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], reason: source?.reason ?? null, source_refs: evidenceRefs(source), ...evidenceDetails(source) };
   });
 }
 
-function stepDiagnostics(topology, facts) {
+function stepDiagnostics(topology, facts, cost = null) {
   const stepFacts = asArray(facts).filter((f) => f?.fact_type === 'step' && f.step_id !== null && f.step_id !== undefined);
   const byKey = resolveLatestIdentityFacts(stepFacts, (f) => `${f.stage ?? ''}:${String(f.step_id)}:${attemptIdentity(f)}`, (f) => `${f.stage ?? ''}:${String(f.step_id)}`);
   const outOfOrder = new Set();
@@ -88,7 +274,11 @@ function stepDiagnostics(topology, facts) {
     const key = `${stage.id}:${String(step.id)}`;
     const source = byKey.get(key);
     const id = String(step.id);
-    return { id, stage: stage.id, status: source && outOfOrder.has(key) ? 'out_of_order' : factStatus(source, 'missing'), coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], reason: source?.reason ?? null, source_refs: evidenceRefs(source) };
+    const expectedSlug = typeof step.slug === 'string' ? step.slug : null;
+    const identityConflict = source && source.step_slug !== null && source.step_slug !== undefined && source.step_slug !== expectedSlug;
+    const costKey = expectedSlug ? `${stage.id}+${expectedSlug}` : null;
+    const sourceStatus = sourceCollectionStatus(facts, stage.id);
+    return { id, stage: stage.id, step_slug: expectedSlug, step_order: Number.isInteger(step.order) ? step.order : null, status: identityConflict ? 'conflict' : source && outOfOrder.has(key) ? 'out_of_order' : guardedEventStatus(source, sourceStatus, 'step', facts, stage.id), coverage: identityConflict ? { expected: 1, observed: 0 } : source?.coverage ?? { expected: 1, observed: 0 }, errors: identityConflict ? ['STEP_MANIFEST_IDENTITY_MISMATCH'] : source?.error ? [source.error] : [], reason: identityConflict ? 'step_slug_does_not_match_manifest' : source?.reason ?? (source ? null : sourceStatus === 'present' ? null : `source_${sourceStatus}`), source_refs: [...new Set([...evidenceRefs(source), ...(costKey ? cost?.breakdown_evidence?.step?.[costKey] ?? [] : [])])], ...evidenceDetails(source) };
   }));
 }
 
@@ -97,15 +287,16 @@ function skillDiagnostics(topology, facts) {
   return asArray(topology?.stages).flatMap((stage) => asArray(stage.skills).map((skill) => {
     const source = byId.get(`${stage.id}:${skill.id}`);
     const value = source?.value ?? {};
-    let status = factStatus(source, skill.trigger === false ? 'partial' : skill.trigger === null ? 'unknown' : 'missing');
+    const sourceStatus = sourceCollectionStatus(facts, stage.id);
+    let status = source ? guardedEventStatus(source, sourceStatus, 'skill', facts, stage.id) : skill.trigger === false ? 'incomplete' : eventFallbackForSource(sourceStatus, 'skill', facts, stage.id);
     const fallbackReason = !source && skill.trigger === false ? 'skill_skip_reason_unavailable' : null;
     if (value.trigger === false && typeof value.reason === 'string' && value.reason.trim()) status = 'not_applicable';
-    else if (value.trigger === false) status = 'partial';
+    else if (value.trigger === false) status = 'incomplete';
     else if (value.trigger === true && value.executed === true) status = 'executed';
     else if (value.trigger === true) status = 'missing';
     else if (skill.trigger === true && source?.status === 'unknown' && source.reason === 'unavailable') status = 'unavailable';
-    else if (skill.trigger === true && !source) status = 'missing';
-    return { id: skill.id, stage: stage.id, status, reason: value.reason ?? source?.reason ?? fallbackReason, coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], source_refs: evidenceRefs(source) };
+    else if (skill.trigger === true && !source) status = eventFallbackForSource(sourceStatus, 'skill', facts, stage.id);
+    return { id: skill.id, stage: stage.id, status, reason: value.reason ?? source?.reason ?? (value.trigger === false ? 'skill_skip_reason_unavailable' : fallbackReason), coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], source_refs: evidenceRefs(source), ...evidenceDetails(source) };
   }));
 }
 
@@ -119,7 +310,7 @@ function failureDiagnostics(facts) {
   ]);
   const structured = asArray(facts).filter((f) =>
     f?.fact_type === 'health'
-      || (f?.fact_type === 'source_status' && f.status !== 'present')
+      || (isTranscriptSourceFact(f) && f.status !== 'present')
       || (qualityDomains.has(f?.fact_type) && (f.status !== 'present' || f.value?.outcome === 'failed' || f.value?.fresh === false)))
     .map((f) => ({ fact: f, value: f.value ?? {} }))
     .map(({ fact: f, value }) => ({
@@ -138,12 +329,38 @@ function failureDiagnostics(facts) {
   return [...structured, ...provenWaste];
 }
 
-function costDiagnostics(facts) {
-  const tokens = new Map(), tokenRows = new Map(), tokenGroups = new Map(), toolRows = new Map(), toolGroups = new Map(), retryGroups = new Map(), retryRows = new Map(), retries = new Set(), durationGroups = new Map(), durationRows = new Map(), durations = [];
-  const breakdown = { stage: {}, skill: {}, session: {}, subagent: {} };
+function costDiagnostics(facts, topology = { stages: [] }) {
+  const tokens = new Map(), tokenRows = new Map(), tokenGroups = new Map(), toolRows = new Map(), toolGroups = new Map(), retryGroups = new Map(), retryRows = new Map(), retries = new Set(), durationGroups = new Map(), durationRows = new Map(), durationEntries = new Map(), durationConflicts = new Set();
+  const breakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
+  const durationBreakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
+  const breakdownEvidence = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
+  const declaredSteps = new Map(asArray(topology?.stages).flatMap((stage) => asArray(stage.steps).map((step) => [`${stage.id}:${String(step.id)}`, step])));
+  const stepKey = (row) => {
+    if (!row?.stage || row.step === null || row.step === undefined) return null;
+    const declared = declaredSteps.get(`${row.stage}:${String(row.step)}`);
+    return declared && typeof row.step_slug === 'string' && row.step_slug === declared.slug
+      ? `${row.stage}+${row.step_slug}`
+      : null;
+  };
+  const addBreakdown = (dimension, key, amount, refs) => {
+    if (typeof key !== 'string' || !key) return;
+    breakdownEvidence[dimension][key] = [...new Set([...(breakdownEvidence[dimension][key] ?? []), ...(refs ?? [])])];
+    return amount;
+  };
   const starts = new Map(), ends = new Map(), explicitDurations = new Set();
   let conflicts = 0;
   let tokenConflicts = 0;
+  const recordDuration = (key, row) => {
+    if (durationConflicts.has(key)) return;
+    const prior = durationEntries.get(key);
+    if (prior && (prior.duration_ms !== row.duration_ms || prior.grain !== row.grain)) {
+      durationConflicts.add(key);
+      durationEntries.delete(key);
+      conflicts += 1;
+      return;
+    }
+    if (!prior) durationEntries.set(key, row);
+  };
   for (const fact of asArray(facts)) {
     const value = fact?.value ?? {};
     if (fact?.status === 'conflict') {
@@ -161,8 +378,9 @@ function costDiagnostics(facts) {
       if (Number.isFinite(amount)) {
         const grain = typeof value.grain === 'string' && value.grain ? value.grain : 'message';
         const attempt = fact.attempt_id ?? fact.run_id ?? 'default';
-        const identity = `${value.message_id}|${grain}|${attempt}`;
-        const sourceId = typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown';
+        const identity = `${attributionIdentity(fact)}|${value.message_id}|${grain}|${attempt}`;
+        const sourceId = sourceIdentity(fact);
+        if (!sourceId) { conflicts += 1; continue; }
         const rowKey = `${sourceId}|${identity}`;
         const prior = tokenRows.get(rowKey);
         if (prior) {
@@ -172,13 +390,14 @@ function costDiagnostics(facts) {
         const group = tokenGroups.get(identity) ?? { sources: new Set(), rows: [], conflict: false };
         if (group.sources.size && !group.sources.has(sourceId)) group.conflict = true;
         group.sources.add(sourceId); group.rows.push(rowKey); tokenGroups.set(identity, group);
-        tokenRows.set(rowKey, { identity, amount, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id });
+        tokenRows.set(rowKey, { identity, amount, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
       }
     }
     if (fact?.fact_type === 'tool_use' && fact.status === 'present' && typeof value.tool_use_id === 'string') {
-      const sourceId = typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown';
+      const sourceId = sourceIdentity(fact);
+      if (!sourceId) { conflicts += 1; continue; }
       const attempt = fact.attempt_id ?? fact.run_id ?? 'default';
-      const identity = `${value.tool_use_id}|${typeof value.grain === 'string' && value.grain ? value.grain : 'tool_use'}|${attempt}`;
+      const identity = `${attributionIdentity(fact)}|${value.tool_use_id}|${typeof value.grain === 'string' && value.grain ? value.grain : 'tool_use'}|${attempt}`;
       const rowKey = `${sourceId}|${identity}`;
       const prior = toolRows.get(rowKey);
       if (prior) {
@@ -187,28 +406,39 @@ function costDiagnostics(facts) {
         const group = toolGroups.get(identity) ?? { sources: new Set(), rows: [], conflict: false };
         if (group.sources.size && !group.sources.has(sourceId)) group.conflict = true;
         group.sources.add(sourceId); group.rows.push(rowKey); toolGroups.set(identity, group);
-        toolRows.set(rowKey, { value, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id });
+        toolRows.set(rowKey, { value, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
       }
     }
     if (fact?.fact_type === 'duration' && fact.status === 'present' && Number.isFinite(value.duration_ms)) {
-      if (!value.event_id) durations.push(value.duration_ms);
+      const sourceId = sourceIdentity(fact);
+      if (!sourceId) { conflicts += 1; continue; }
+      if (!value.event_id && !fact.fact_id) {
+        conflicts += 1;
+      } else if (!value.event_id) {
+        const rowKey = `${sourceId}|${attributionIdentity(fact)}|fact:${fact.fact_id}`;
+        const row = { duration_ms: value.duration_ms, grain: value.grain, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) };
+        if (!durationRows.has(rowKey)) durationRows.set(rowKey, row);
+        recordDuration(rowKey, row);
+      }
       else {
-        const sourceId = typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown';
         const attempt = fact.attempt_id ?? fact.run_id ?? 'default';
-        const identity = `${value.event_id}|${attempt}`;
+        const identity = `${attributionIdentity(fact)}|${attempt}|${value.event_id}`;
         const rowKey = `${sourceId}|${identity}`;
-        explicitDurations.add(`${sourceId}|${attempt}|${value.event_id}`);
+        explicitDurations.add(rowKey);
         const group = durationGroups.get(identity) ?? { sources: new Set(), rows: [], conflict: false };
         const prior = durationRows.get(rowKey);
         if (prior && (prior.duration_ms !== value.duration_ms || prior.grain !== value.grain)) group.conflict = true;
+        const implicitPrior = durationEntries.get(rowKey);
+        if (implicitPrior && (implicitPrior.duration_ms !== value.duration_ms || implicitPrior.grain !== value.grain)) group.conflict = true;
         if (group.sources.size && !group.sources.has(sourceId)) group.conflict = true;
-        if (!prior) { group.sources.add(sourceId); group.rows.push(rowKey); durationRows.set(rowKey, { duration_ms: value.duration_ms, grain: value.grain }); }
+        if (!prior) { group.sources.add(sourceId); group.rows.push(rowKey); durationRows.set(rowKey, { duration_ms: value.duration_ms, grain: value.grain, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) }); }
         durationGroups.set(identity, group);
       }
     }
     if (fact?.fact_type === 'retry' && fact.status === 'present' && (typeof (value.retry_id ?? fact.attempt_id) === 'string' || typeof (value.attempt_id ?? fact.attempt_id) === 'string')) {
-      const identity = `${value.retry_id ?? ''}|${value.attempt_id ?? fact.attempt_id ?? ''}`;
-      const sourceId = typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown';
+      const sourceId = sourceIdentity(fact);
+      if (!sourceId) { conflicts += 1; continue; }
+      const identity = `${attributionIdentity(fact)}|${value.retry_id ?? ''}|${value.attempt_id ?? fact.attempt_id ?? ''}`;
       const rowKey = `${sourceId}|${identity}`;
       const group = retryGroups.get(identity) ?? { sources: new Set(), rows: [], conflict: false };
       const prior = retryRows.get(rowKey);
@@ -218,29 +448,55 @@ function costDiagnostics(facts) {
       retries.add(rowKey);
     }
     if (fact?.fact_type === 'token' || fact?.fact_type === 'tool_use' || fact?.fact_type === 'session') {
-      if (typeof value.retry_id === 'string') retries.add(`${typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown'}|${value.retry_id}|${value.attempt_id ?? fact.attempt_id ?? ''}`);
-      const sourceId = typeof fact.source?.source_id === 'string' ? fact.source.source_id : 'unknown';
+      const sourceId = sourceIdentity(fact);
+      if (!sourceId) continue;
+      if (typeof value.retry_id === 'string') retries.add(`${sourceId}|${attributionIdentity(fact)}|${value.retry_id}|${value.attempt_id ?? fact.attempt_id ?? ''}`);
       const attempt = fact.attempt_id ?? fact.run_id ?? 'default';
       if (typeof value.duration_ms === 'number' && Number.isFinite(value.duration_ms)) {
-        durations.push(value.duration_ms);
-        if (typeof value.event_id === 'string') explicitDurations.add(`${sourceId}|${attempt}|${value.event_id}`);
+        const rowKey = typeof value.event_id === 'string'
+          ? `${sourceId}|${attributionIdentity(fact)}|${attempt}|${value.event_id}`
+          : `${sourceId}|${attributionIdentity(fact)}|fact:${fact.fact_id}`;
+        const row = { duration_ms: value.duration_ms, grain: value.grain, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) };
+        if (typeof value.event_id === 'string') {
+          explicitDurations.add(rowKey);
+          const explicitPrior = durationRows.get(rowKey);
+          if (explicitPrior && (explicitPrior.duration_ms !== row.duration_ms || explicitPrior.grain !== row.grain)) {
+            const identity = `${attributionIdentity(fact)}|${attempt}|${value.event_id}`;
+            const group = durationGroups.get(identity);
+            if (group) group.conflict = true;
+          }
+        }
+        recordDuration(rowKey, row);
       }
-      if (typeof value.event_id === 'string' && value.event === 'start') starts.set(`${sourceId}|${attempt}|${value.event_id}`, value.timestamp ?? fact.observed_at);
-      if (typeof value.event_id === 'string' && value.event === 'end') ends.set(`${sourceId}|${attempt}|${value.event_id}`, value.timestamp ?? fact.observed_at);
+      if (typeof value.event_id === 'string' && value.event === 'start') starts.set(`${sourceId}|${attributionIdentity(fact)}|${attempt}|${value.event_id}`, { timestamp: value.timestamp ?? fact.observed_at, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
+      if (typeof value.event_id === 'string' && value.event === 'end') ends.set(`${sourceId}|${attributionIdentity(fact)}|${attempt}|${value.event_id}`, { timestamp: value.timestamp ?? fact.observed_at, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
     }
   }
   for (const [identity, group] of tokenGroups) {
     if (group.conflict || group.sources.size > 1) { conflicts += 1; continue; }
     const row = tokenRows.get(group.rows[0]);
     tokens.set(group.rows[0], row.amount);
-    for (const [key, field] of [['stage', row.stage], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
-      if (typeof field === 'string' && field) breakdown[key][field] = (breakdown[key][field] ?? 0) + row.amount;
+    for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
+      if (typeof field === 'string' && field) {
+        breakdown[key][field] = (breakdown[key][field] ?? 0) + row.amount;
+        addBreakdown(key, field, row.amount, row.evidence_refs);
+      }
     }
   }
   for (const group of toolGroups.values()) if (group.conflict || group.sources.size > 1) conflicts += 1;
   for (const group of durationGroups.values()) {
-    if (group.conflict || group.sources.size > 1) { conflicts += 1; for (const rowKey of group.rows) durationRows.delete(rowKey); }
-    else for (const rowKey of group.rows) durations.push(durationRows.get(rowKey).duration_ms);
+    if (group.conflict || group.sources.size > 1) {
+      conflicts += 1;
+      for (const rowKey of group.rows) {
+        durationRows.delete(rowKey);
+        durationEntries.delete(rowKey);
+        durationConflicts.add(rowKey);
+      }
+    }
+    else for (const rowKey of group.rows) {
+      const row = durationRows.get(rowKey);
+      recordDuration(rowKey, row);
+    }
   }
   for (const group of retryGroups.values()) if (group.conflict || group.sources.size > 1) { conflicts += 1; for (const rowKey of group.rows) retries.delete(rowKey); }
   const usableToolGroups = [...toolGroups.values()].filter((group) => !group.conflict && group.sources.size === 1).length;
@@ -248,23 +504,64 @@ function costDiagnostics(facts) {
   for (const [id, start] of starts) {
     if (explicitDurations.has(id)) continue;
     const end = ends.get(id);
-    if (end) { const duration = Date.parse(end) - Date.parse(start); if (Number.isFinite(duration) && duration >= 0) durations.push(duration); }
+    if (end) {
+      const duration = Date.parse(end.timestamp) - Date.parse(start.timestamp);
+      if (Number.isFinite(duration) && duration >= 0) recordDuration(id, { duration_ms: duration, stage: start.stage, step: start.step, step_slug: start.step_slug, skill: start.skill, session: start.session, subagent: start.subagent, evidence_refs: [...new Set([...(start.evidence_refs ?? []), ...(end.evidence_refs ?? [])])] });
+    }
   }
-  return { token_count: tokens.size ? [...tokens.values()].reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durations.length ? durations.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown };
+  const durationAttributions = [...durationEntries.values()];
+  const durations = durationAttributions.map((row) => row.duration_ms);
+  for (const row of durationAttributions) for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
+    if (typeof field === 'string' && field) {
+      durationBreakdown[key][field] = (durationBreakdown[key][field] ?? 0) + row.duration_ms;
+      addBreakdown(key, field, row.duration_ms, row.evidence_refs);
+    }
+  }
+  return { token_count: tokens.size ? [...tokens.values()].reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durations.length ? durations.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown, duration_breakdown: durationBreakdown, breakdown_evidence: breakdownEvidence };
 }
 
 function automationDiagnostics(facts) {
   const rows = asArray(facts).filter((f) => f?.fact_type === 'automation' || f?.fact_type === 'human_intervention');
-  const verified = rows.filter((f) => ['agent', 'human', 'automation'].includes(f.value?.origin));
-  if (!verified.length) return { rate: { status: 'unknown', value: null }, human_intervention: { status: 'unknown', value: null } };
-  const automated = verified.filter((f) => ['agent', 'automation'].includes(f.value.origin)).length;
-  const human = verified.filter((f) => f.value.origin === 'human').length;
-  return { rate: { status: 'present', value: automated / verified.length, numerator: automated, denominator: verified.length, excluded_unknown: rows.length - verified.length }, human_intervention: { status: 'present', value: human, denominator: verified.length, excluded_unknown: rows.length - verified.length } };
+  const opportunities = new Map();
+  for (const fact of rows) {
+    const value = fact.value ?? {};
+    const opportunity = value.opportunity_id ?? value.action ?? fact.fact_id;
+    if (typeof opportunity !== 'string' || !opportunity) continue;
+    const key = `${attributionIdentity(fact)}|${fact.stage ?? 'unknown'}|${fact.step_id ?? 'unknown'}|${fact.skill_id ?? 'unknown'}|${opportunity}`;
+    const group = opportunities.get(key) ?? { origins: new Set() };
+    group.origins.add(value.origin);
+    opportunities.set(key, group);
+  }
+  const denominator = opportunities.size;
+  if (!denominator) return { rate: { status: 'unknown', value: null, numerator: 0, denominator: 0, excluded_unknown: 0, reason: 'automation_opportunity_denominator_unavailable' }, human_intervention: { status: 'unknown', value: null, numerator: 0, denominator: 0, excluded_unknown: 0, reason: 'automation_opportunity_denominator_unavailable' } };
+  const verified = [...opportunities.values()].filter((group) => group.origins.size === 1 && ['agent', 'human', 'automation'].includes([...group.origins][0]));
+  const automated = verified.filter((group) => ['agent', 'automation'].includes([...group.origins][0])).length;
+  const human = verified.filter((group) => [...group.origins][0] === 'human').length;
+  const unknown = denominator - verified.length;
+  const status = unknown ? 'unknown' : 'present';
+  return {
+    rate: { status, value: status === 'present' ? automated / denominator : null, numerator: automated, denominator, excluded_unknown: unknown },
+    human_intervention: { status, value: status === 'present' ? human : null, numerator: human, denominator, excluded_unknown: unknown },
+  };
 }
 
 function problemDiagnostics(facts) {
   const groups = new Map();
-  for (const entry of failureDiagnostics(facts)) {
+  const seen = new Set();
+  for (const fact of asArray(facts).filter((entry) => entry?.fact_type === 'health' && entry.status === 'present')) {
+    if (fact.fact_id && seen.has(fact.fact_id)) continue;
+    if (fact.fact_id) seen.add(fact.fact_id);
+    const value = fact.value ?? {};
+    const valueStatus = controlledHealthStatus(value.status, 'present');
+    const domain = value.domain === 'taskPath' ? 'task_dir' : value.domain;
+    if (!FAILURE_DOMAINS.has(domain) || !['present'].includes(valueStatus)) continue;
+    if (!((typeof value.friction_type === 'string' && value.friction_type.trim()) || (typeof value.error_code === 'string' && value.error_code.trim()))) continue;
+    const entry = { domain, friction_type: value.friction_type ?? null, error_code: value.error_code ?? null, source_refs: evidenceRefs(fact) };
+    const key = JSON.stringify([entry.domain, entry.friction_type, entry.error_code]);
+    const current = groups.get(key) ?? { domain: entry.domain, friction_type: entry.friction_type, error_code: entry.error_code, count: 0, source_refs: [] };
+    current.count += 1; current.source_refs.push(...entry.source_refs); groups.set(key, current);
+  }
+  for (const entry of failureDiagnostics(facts).filter((candidate) => candidate.domain === 'token_waste' && candidate.status === 'conflict')) {
     const key = JSON.stringify([entry.domain, entry.friction_type, entry.error_code]);
     const current = groups.get(key) ?? { domain: entry.domain, friction_type: entry.friction_type, error_code: entry.error_code, count: 0, source_refs: [] };
     current.count += 1; current.source_refs.push(...entry.source_refs); groups.set(key, current);
@@ -283,6 +580,7 @@ function trendDiagnostics(facts) {
   // version and grain match. Keep incompatible buckets separate instead of
   // silently blending unlike producers into one trend line.
   const metrics = {};
+  const seenRows = new Set();
   for (const fact of asArray(facts)) {
     const dateBucket = typeof fact?.observed_at === 'string' ? fact.observed_at.slice(0, 10) : null;
     if (!dateBucket) continue;
@@ -300,13 +598,21 @@ function trendDiagnostics(facts) {
         ? typeof value === 'boolean'
         : ['agent', 'human', 'automation'].includes(value);
       if (!usable) continue;
+      const rowIdentity = `${metric}|${fact.task_id ?? 'unknown'}|${fact.project_name ?? 'unknown'}|${fact.run_id ?? 'unknown'}|${fact.attempt_id ?? 'unknown'}|${fact.source?.source_id ?? 'unknown'}|${fact.fact_id ?? JSON.stringify(value)}|${dateBucket}`;
+      if (seenRows.has(rowIdentity)) continue;
+      seenRows.add(rowIdentity);
       const buckets = metrics[metric] ?? new Map();
       const bucket = `${compatibility}|${dateBucket}`;
-      const sample = buckets.get(bucket) ?? { numerator: 0, denominator: 0, compatibility, date: dateBucket };
-      sample.denominator += 1;
-      sample.numerator += ['review_invoked', 'verify_fresh'].includes(metric)
+      const numerator = ['review_invoked', 'verify_fresh'].includes(metric)
         ? (value === true ? 1 : 0)
         : (metric === 'automation' ? (['agent', 'automation'].includes(value) ? 1 : 0) : (value === 'human' ? 1 : 0));
+      const sample = buckets.get(bucket) ?? { numerator: 0, denominator: 0, compatibility, date: dateBucket, tasks: new Map() };
+      const taskKey = `${fact.project_name}|${fact.task_id}`;
+      const prior = sample.tasks.get(taskKey);
+      const observedAt = Date.parse(fact.observed_at ?? '') || 0;
+      if (!prior || observedAt >= prior.observedAt) sample.tasks.set(taskKey, { numerator, observedAt });
+      sample.denominator = sample.tasks.size;
+      sample.numerator = [...sample.tasks.values()].reduce((sum, task) => sum + task.numerator, 0);
       buckets.set(bucket, sample);
       metrics[metric] = buckets;
     }
@@ -328,7 +634,7 @@ function trendDiagnostics(facts) {
     output[metric] = {
       status: usableGroups.length > 0 ? 'present' : 'insufficient_samples',
       buckets: buckets.size,
-      usable_buckets: usableSamples.length,
+      usable_buckets: new Set(usableSamples.map((sample) => `${sample.compatibility}|${sample.date}`)).size,
       numerator: usableSamples.reduce((sum, sample) => sum + sample.numerator, 0),
       denominator: usableSamples.reduce((sum, sample) => sum + sample.denominator, 0),
       samples,
@@ -338,16 +644,204 @@ function trendDiagnostics(facts) {
   return { status: statuses.length > 0 && statuses.every((status) => status === 'present') ? 'present' : 'insufficient_samples', metrics: output };
 }
 
+function refsForFacts(facts) {
+  return [...new Set(asArray(facts).flatMap((fact) => evidenceRefs(fact)))].sort();
+}
+
+function currentRunSummary(topology, current, selected, stages, steps, skills) {
+  const expectedSteps = asArray(topology?.stages).reduce((sum, stage) => sum + asArray(stage.steps).length, 0);
+  const expectedSkills = asArray(topology?.stages).reduce((sum, stage) => sum + asArray(stage.skills).length, 0);
+  const observed = (entries) => entries.filter((entry) => (entry.coverage?.observed ?? 0) > 0).length;
+  const runIds = [...new Set(selected.facts.map((fact) => fact?.run_id).filter((value) => typeof value === 'string' && value.length > 0))].sort();
+  const attemptIds = [...new Set(selected.facts.map((fact) => fact?.attempt_id).filter((value) => typeof value === 'string' && value.length > 0))].sort();
+  const stageAttempts = STAGES.map((stage) => {
+    const identity = selected.stageAttempts.get(stage);
+    return {
+      stage,
+      run_id: identity?.run_id ?? null,
+      attempt_id: identity?.attempt_id ?? null,
+      observed_at: identity?.observed_at ?? null,
+      fact_count: selected.facts.filter((fact) => fact?.stage === stage).length,
+    };
+  });
+  const singleIdentity = runIds.length === 1 && attemptIds.length === 1;
+  return {
+    run_id: singleIdentity ? runIds[0] : null,
+    attempt_id: singleIdentity ? attemptIds[0] : null,
+    observed_at: current.observed_at,
+    fact_count: selected.facts.length,
+    selection: selected.scope,
+    run_ids: runIds,
+    attempt_ids: attemptIds,
+    stage_attempts: stageAttempts,
+    stage_coverage: { expected: STAGES.length, observed: observed(stages) },
+    step_coverage: { expected: expectedSteps, observed: observed(steps) },
+    skill_coverage: { expected: expectedSkills, observed: observed(skills) },
+  };
+}
+
+function taskKey(fact) {
+  return `${fact?.project_name ?? 'unknown'}|${fact?.task_id ?? 'unknown'}`;
+}
+
+function fieldEntry(field, candidates, valuePredicate = () => true, expectedCount = 1, requirePresent = false) {
+  const rows = asArray(candidates);
+  const groups = new Map();
+  for (const row of rows) {
+    const key = taskKey(row);
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  const expected = Math.max(expectedCount, groups.size);
+  const outcomes = [...groups.values()].map((group) => {
+    const blocked = group.find((fact) => NON_PRESENT_FACT_STATUSES.has(fact?.status));
+    const matching = group.filter((fact) => (requirePresent
+      ? fact?.status === 'present'
+      : !NON_PRESENT_FACT_STATUSES.has(fact?.status)) && valuePredicate(fact));
+    if (blocked && !matching.length) return { status: blocked.status, reason: blocked.reason ?? `${field}_${blocked.status}`, source_refs: evidenceRefs(blocked) };
+    if (!matching.length) return { status: 'missing', reason: `${field}_missing`, source_refs: refsForFacts(group) };
+    if (blocked) return { status: 'incomplete', reason: `${field}_incomplete`, source_refs: refsForFacts(group) };
+    return { status: 'present', reason: null, source_refs: refsForFacts(group) };
+  });
+  while (outcomes.length < expected) outcomes.push({ status: 'missing', reason: `${field}_missing`, source_refs: [] });
+  const status = outcomes.some((entry) => entry.status === 'unknown' || entry.status === 'conflict')
+    ? 'unknown'
+    : outcomes.find((entry) => entry.status !== 'present')?.status ?? 'present';
+  return {
+    status,
+    expected,
+    observed: outcomes.filter((entry) => entry.status === 'present').length,
+    reason: outcomes.find((entry) => entry.status !== 'present')?.reason ?? null,
+    source_refs: [...new Set(outcomes.flatMap((entry) => entry.source_refs ?? []))].sort(),
+  };
+}
+
+function anyFieldEntry(field, candidates, valuePredicate, expectedCount = 1) {
+  return fieldEntry(field, candidates, valuePredicate, expectedCount, true);
+}
+
+function validFactCoverage(fact) {
+  return fact?.coverage && Number.isInteger(fact.coverage.observed) && fact.coverage.observed >= 0
+    && (fact.coverage.expected === null || (Number.isInteger(fact.coverage.expected) && fact.coverage.expected >= fact.coverage.observed));
+}
+
+function processViewFields(facts, topology, expectedCount) {
+  const output = {};
+  output.expected_topology = Array.isArray(topology?.stages) && topology.stages.length > 0
+    ? { status: 'present', expected: expectedCount, observed: expectedCount, reason: null, source_refs: [] }
+    : { status: 'unknown', expected: expectedCount, observed: 0, reason: 'expected_topology_unavailable', source_refs: [] };
+  for (const type of ['stage', 'step', 'skill', 'artifact', 'health', 'review', 'verify']) {
+    const rows = asArray(facts).filter((fact) => fact?.fact_type === type);
+    output[`${type}.status`] = fieldEntry(`${type}.status`, rows, () => true, expectedCount);
+    output[`${type}.reason/error`] = fieldEntry(`${type}.reason/error`, rows, (fact) => Object.hasOwn(fact, 'reason') && Object.hasOwn(fact, 'error'), expectedCount);
+    output[`${type}.coverage`] = fieldEntry(`${type}.coverage`, rows, validFactCoverage, expectedCount);
+    output[`${type}.evidence_refs`] = fieldEntry(`${type}.evidence_refs`, rows, (fact) => Array.isArray(fact.evidence_refs), expectedCount);
+  }
+  return output;
+}
+
+function costViewFields(facts, expectedCount) {
+  const costFacts = asArray(facts).filter((fact) => ['token', 'tool_use', 'duration', 'retry', 'session'].includes(fact?.fact_type));
+  const byType = (type) => costFacts.filter((fact) => fact.fact_type === type);
+  const output = {};
+  for (const key of ['session_id', 'subagent_id', 'stage', 'skill_id']) output[key] = anyFieldEntry(key, costFacts, (fact) => typeof fact[key] === 'string' && fact[key].length > 0, expectedCount);
+  output.source = fieldEntry('source', costFacts, (fact) => fact.source && typeof fact.source.source_id === 'string' && typeof fact.source.ref === 'string', expectedCount);
+  output.attempt_id = fieldEntry('attempt_id', costFacts, (fact) => typeof fact.attempt_id === 'string' && fact.attempt_id.length > 0, expectedCount);
+  output['token.message_id'] = fieldEntry('token.message_id', byType('token'), (fact) => typeof fact.value?.message_id === 'string', expectedCount);
+  output['tool_use.tool_use_id'] = fieldEntry('tool_use.tool_use_id', byType('tool_use'), (fact) => typeof fact.value?.tool_use_id === 'string', expectedCount);
+  output['duration.duration_ms'] = fieldEntry('duration.duration_ms', byType('duration'), (fact) => Number.isInteger(fact.value?.duration_ms) && fact.value.duration_ms >= 0, expectedCount);
+  output['retry.retry_id'] = fieldEntry('retry.retry_id', byType('retry'), (fact) => typeof fact.value?.retry_id === 'string', expectedCount);
+  return output;
+}
+
+function problemsViewFields(facts, diagnostics, expectedCount) {
+  const health = asArray(facts).filter((fact) => fact?.fact_type === 'health');
+  const output = {};
+  output['health.domain'] = fieldEntry('health.domain', health, (fact) => typeof fact.value?.domain === 'string' && FAILURE_DOMAINS.has(fact.value.domain === 'taskPath' ? 'task_dir' : fact.value.domain), expectedCount);
+  output['health.friction_type'] = fieldEntry('health.friction_type', health, (fact) => typeof fact.value?.friction_type === 'string' && fact.value.friction_type.length > 0, expectedCount);
+  output['health.error_code'] = fieldEntry('health.error_code', health, (fact) => typeof fact.value?.error_code === 'string' && fact.value.error_code.length > 0, expectedCount);
+  output.observed_at = fieldEntry('observed_at', health, (fact) => typeof fact.observed_at === 'string' && Number.isFinite(Date.parse(fact.observed_at)), expectedCount);
+  output.coverage = fieldEntry('coverage', health, validFactCoverage, expectedCount);
+  output.source_refs = fieldEntry('source_refs', health, (fact) => Array.isArray(fact.evidence_refs) && typeof fact.source?.ref === 'string', expectedCount);
+  const trendMetrics = Object.values(diagnostics?.trends?.metrics ?? {});
+  const trend = trendMetrics.find((metric) => metric.status === 'present')
+    ? { status: 'present', expected: expectedCount, observed: expectedCount, reason: null, source_refs: [] }
+    : trendMetrics.find((metric) => metric.status === 'insufficient_samples')
+      ? { status: 'insufficient_samples', expected: expectedCount, observed: 0, reason: 'compatible_time_buckets_insufficient', source_refs: [] }
+      : { status: 'missing', expected: expectedCount, observed: 0, reason: 'compatible_time_buckets_missing', source_refs: [] };
+  output.compatible_time_buckets = trend;
+  output.denominator = trend.status === 'present'
+    ? { status: 'present', expected: expectedCount, observed: expectedCount, reason: null, source_refs: [] }
+    : { status: trend.status, expected: expectedCount, observed: 0, reason: trend.reason, source_refs: [] };
+  return output;
+}
+
+function readinessStatus(inScopeTaskCount, fields) {
+  if (inScopeTaskCount === 0) return 'empty_valid';
+  if (inScopeTaskCount === null) return 'unknown';
+  const statuses = Object.values(fields).map((entry) => entry.status);
+  if (statuses.some((status) => ['unknown', 'conflict'].includes(status))) return 'unknown';
+  if (statuses.some((status) => status !== 'present')) return 'insufficient';
+  return 'sufficient';
+}
+
+function viewReadiness(requiredFields, fields, inScopeTaskCount) {
+  const sourceRefs = [...new Set(Object.values(fields).flatMap((entry) => entry.source_refs ?? []))].sort();
+  const firstNotReady = Object.entries(fields).find(([, entry]) => entry.status !== 'present');
+  return {
+    required_fields: [...requiredFields],
+    field_coverage: fields,
+    sample_sufficiency: readinessStatus(inScopeTaskCount, fields),
+    reason: firstNotReady ? firstNotReady[1].reason : null,
+    source_refs: sourceRefs,
+  };
+}
+
+export function deriveMonitoringViewReadiness({ facts = [], topology = { stages: [] }, diagnostics = null, inScopeTaskCount = undefined } = {}) {
+  const safeFacts = asArray(facts);
+  const currentFacts = selectCurrentStageAttempts(safeFacts).facts;
+  const currentPresentFacts = currentFacts.filter((fact) => fact?.status === 'present');
+  const count = inScopeTaskCount === undefined ? (safeFacts.length ? 1 : 0) : inScopeTaskCount;
+  const overviewFields = {
+    task_id: fieldEntry('task_id', currentPresentFacts, (fact) => typeof fact.task_id === 'string' && fact.task_id.length > 0, count),
+    project_name: fieldEntry('project_name', currentPresentFacts, (fact) => typeof fact.project_name === 'string' && fact.project_name.length > 0, count),
+    run_id: fieldEntry('run_id', currentPresentFacts, (fact) => typeof fact.run_id === 'string' && fact.run_id.length > 0, count),
+    attempt_id: fieldEntry('attempt_id', currentPresentFacts, (fact) => typeof fact.attempt_id === 'string' && fact.attempt_id.length > 0, count),
+    'stage.value.outcome': fieldEntry('stage.value.outcome', currentFacts.filter((fact) => fact.fact_type === 'stage'), (fact) => typeof fact.value?.outcome === 'string', count),
+    'source.status': fieldEntry('source.status', latestTranscriptSourceFacts(currentFacts), () => true, count),
+    coverage: fieldEntry('coverage', currentFacts, validFactCoverage, count),
+  };
+  const processFields = processViewFields(currentFacts, topology, count);
+  const costFields = costViewFields(currentFacts, count);
+  const problemFields = problemsViewFields(safeFacts, diagnostics, count);
+  return {
+    task_overview: viewReadiness(VIEW_REQUIRED_FIELDS.task_overview, overviewFields, count),
+    process_degradation: viewReadiness(VIEW_REQUIRED_FIELDS.process_degradation, processFields, count),
+    cost_attribution: viewReadiness(VIEW_REQUIRED_FIELDS.cost_attribution, costFields, count),
+    problems_trends: viewReadiness(VIEW_REQUIRED_FIELDS.problems_trends, problemFields, count),
+  };
+}
+
+export { VIEW_REQUIRED_FIELDS };
+
 export function deriveMonitoringDiagnostics({ topology = { stages: [] }, facts = [] } = {}) {
   const safeFacts = asArray(facts);
+  const current = selectCurrentAttempt(safeFacts);
+  const selected = selectCurrentStageAttempts(safeFacts);
+  const stages = stageDiagnostics(topology, selected.facts, selected.stageAttempts);
+  const cost = costDiagnostics(selected.facts, topology);
+  const steps = stepDiagnostics(topology, selected.facts, cost);
+  const skills = skillDiagnostics(topology, selected.facts);
   return Object.freeze({
-    stage: stageDiagnostics(topology, safeFacts),
-    steps: stepDiagnostics(topology, safeFacts),
-    skills: skillDiagnostics(topology, safeFacts),
-    failures: failureDiagnostics(safeFacts),
-    cost: costDiagnostics(safeFacts),
-    automation: automationDiagnostics(safeFacts),
-    problems: problemDiagnostics(safeFacts),
+    current: currentRunSummary(topology, current, selected, stages, steps, skills),
+    stage: stages,
+    steps,
+    skills,
+    failures: failureDiagnostics(selected.facts),
+    cost,
+    automation: automationDiagnostics(selected.facts),
+    problems: problemDiagnostics(selected.facts),
     trends: trendDiagnostics(safeFacts),
   });
 }

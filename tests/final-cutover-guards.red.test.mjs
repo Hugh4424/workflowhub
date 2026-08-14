@@ -626,7 +626,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.verification_failure).toBe(true);
     expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
     expect(result.missing_items).toEqual(expect.arrayContaining([
-      expect.stringMatching(/actionable serious review findings require disposition/i),
+      expect.stringMatching(/finding disposition is missing/i),
     ]));
     expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
   });
@@ -673,10 +673,10 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result).toMatchObject({
       facts: { review: { status: "unavailable" } },
     });
-    expect(result.missing_items.join("\n")).toMatch(/build-code integration review is unavailable/i);
+    expect(result.missing_items.join("\n")).not.toMatch(/build-code integration review is unavailable/i);
     expect(result.completion.system.verification.conclusion).toMatch(/build-code final=unavailable.*verify-code independent=recorded/i);
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
-    expect(result.missing_items.join("\n")).toMatch(/unavailable|integration review/i);
+    expect(result.missing_items.join("\n")).not.toMatch(/unavailable|integration review/i);
   });
 
   it("describes revise_required as a bound quality fact instead of review pass", async () => {
@@ -940,7 +940,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
     })).resolves.toMatchObject({
       completion: { system: { result: "incomplete" } },
-      missing_items: expect.arrayContaining([expect.stringMatching(/integration review.*revise_required|review findings require/i)]),
+      missing_items: expect.arrayContaining([expect.stringMatching(/finding disposition is missing/i)]),
     });
   });
 
@@ -1014,7 +1014,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
     })).resolves.toMatchObject({
       facts: { review: { status: "unavailable" } },
-      missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable/i)]),
+      missing_items: [],
       completion: { system: { result: "incomplete" } },
     });
   });

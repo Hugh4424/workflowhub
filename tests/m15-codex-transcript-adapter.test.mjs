@@ -59,6 +59,16 @@ describe("M15 registered Codex transcript adapter", () => {
     expect(result.records.find((item) => item.fact_type === "tool_use")).toMatchObject({ stage: "build-code", step_id: "bc-1", skill_id: "wh-review", subagent_id: "worker-1" });
   });
 
+  it("does not let a transcript payload move facts into another launcher attempt", () => {
+    const result = parseRegisteredCodexTranscript(source(JSON.stringify({
+      id: "stale-attempt-message", type: "message", run_id: "run-1", attempt_id: "stale-attempt",
+      stage: "build-code", usage: { input_tokens: 2, output_tokens: 3 },
+    })), { attempt_id: "current-attempt" });
+    expect(result.status).toBe("conflict");
+    expect(result.records.some((item) => item.error === "ATTEMPT_ID_MISMATCH")).toBe(true);
+    expect(result.records.some((item) => item.fact_type === "token" && item.status === "present")).toBe(false);
+  });
+
   it("marks token and tool duplicates with changed attribution metadata as conflicts", () => {
     const text = [
       JSON.stringify({ id: "m1", type: "message", run_id: "run-1", stage: "build-code", attempt_id: "attempt-a", grain: "message", usage: { input_tokens: 2, output_tokens: 3 } }),
@@ -67,8 +77,8 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "t2", type: "tool_use", run_id: "run-1", stage: "verify-code", attempt_id: "attempt-a", grain: "session", tool_use: { id: "tool-1", name: "Read" } }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
-    expect(result.records.filter((item) => item.status === "conflict")).toHaveLength(2);
+    expect(result.status).toBe("conflict");
+    expect(result.records.filter((item) => item.status === "conflict" && item.fact_type !== "source_status")).toHaveLength(2);
     expect(result.records.filter((item) => item.fact_type === "token" && item.status === "present")).toHaveLength(1);
     expect(result.records.filter((item) => item.fact_type === "tool_use" && item.status === "present")).toHaveLength(1);
   });
@@ -79,7 +89,7 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "review-1", type: "review", run_id: "run-1", stage: "verify-code", attempt_id: "attempt-a", value: { invoked: false, independent: true, outcome: "unavailable" } }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("conflict");
     expect(result.records.filter((item) => item.fact_type === "review" && item.status === "present")).toHaveLength(1);
     expect(result.records.filter((item) => item.fact_type === "review" && item.status === "conflict")).toHaveLength(1);
   });
@@ -91,31 +101,82 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "m1", type: "message", run_id: "run-1", usage: { input_tokens: 4, output_tokens: 4 } }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("conflict");
     expect(result.records.some((item) => item.reason === "malformed_line")).toBe(true);
     expect(result.records.some((item) => item.status === "conflict")).toBe(true);
   });
 
   it("keeps missing usage and binding mismatch explicit instead of zero or partial success", () => {
     const missingUsage = parseRegisteredCodexTranscript(source(JSON.stringify({ id: "m-missing", type: "message", run_id: "run-1", usage: {} })));
-    expect(missingUsage.status).toBe("partial");
-    expect(missingUsage.records.find((item) => item.fact_type === "token")).toMatchObject({ status: "partial", reason: "usage_tokens_unavailable", value: null });
+    expect(missingUsage.status).toBe("incomplete");
+    expect(missingUsage.records.find((item) => item.fact_type === "token")).toMatchObject({ status: "unavailable", reason: "usage_tokens_unavailable", value: null });
     const fatal = parseRegisteredCodexTranscript(source(JSON.stringify({ id: "m-fatal", type: "message", run_id: "other-run", usage: { input_tokens: 1, output_tokens: 1 } })));
-    expect(fatal.status).toBe("fatal");
-    expect(fatal.records.some((item) => item.status === "fatal" && item.error === "RUN_ID_MISMATCH")).toBe(true);
+    expect(fatal.status).toBe("conflict");
+    expect(fatal.records.some((item) => item.status === "conflict" && item.error === "RUN_ID_MISMATCH")).toBe(true);
+  });
+
+  it("keeps event applicability and source conflicts in the canonical fact states", () => {
+    const skipped = parseRegisteredCodexTranscript(source(JSON.stringify({
+      id: "step-skipped", type: "step", fact_type: "step", run_id: "run-1", stage: "build-code",
+      status: "skipped", reason: "trigger_not_met",
+    })));
+    expect(skipped.records.find((item) => item.fact_type === "step")).toMatchObject({
+      status: "skipped", value: null, reason: "trigger_not_met",
+    });
+
+    const conflict = parseRegisteredCodexTranscript(source(JSON.stringify({
+      id: "m-conflict", type: "message", run_id: "other-run", usage: { input_tokens: 1, output_tokens: 1 },
+    })));
+    expect(conflict.status).toBe("conflict");
+    expect(conflict.records.some((item) => item.status === "conflict" && item.error === "RUN_ID_MISMATCH")).toBe(true);
   });
 
   it("rejects records bound to another task or session", () => {
     const result = parseRegisteredCodexTranscript(source(JSON.stringify({ id: "wrong", type: "message", task_id: "other-task", session_id: "other-session", run_id: "run-1", usage: { input_tokens: 1, output_tokens: 1 } })));
-    expect(result.status).toBe("fatal");
+    expect(result.status).toBe("conflict");
     expect(result.records.some((item) => item.error === "TASK_ID_MISMATCH")).toBe(true);
     expect(result.records.some((item) => item.fact_type === "token")).toBe(false);
   });
 
   it("rejects explicitly empty binding fields instead of treating them as absent", () => {
     const result = parseRegisteredCodexTranscript(source(JSON.stringify({ id: "empty-binding", type: "message", task_id: "", run_id: "run-1", session_id: "session-1", usage: { input_tokens: 1, output_tokens: 1 } })));
-    expect(result.status).toBe("fatal");
+    expect(result.status).toBe("conflict");
     expect(result.records.some((item) => item.error === "TASK_ID_MISMATCH")).toBe(true);
+  });
+
+  it("rejects a resolver result that is not a launcher-registered source", () => {
+    const result = parseRegisteredCodexTranscript({
+      source_id: "codex-test",
+      source_ref: "codex-test-ref",
+      registration_id: "registration-1",
+      required: true,
+      task_id: "m15-facts",
+      run_id: "run-1",
+      session_id: "session-1",
+      source_format: "jsonl",
+      source_version: "v1",
+      cli_version: "x",
+      adapter_version: "y",
+      reader: { read: () => "" },
+    }, { project_name: "workflowhub", task_id: "m15-facts", run_id: "run-1", attempt_id: "attempt-1" });
+    expect(result).toMatchObject({ status: "unsupported" });
+    expect(result.records[0]).toMatchObject({ fact_type: "source_status", status: "unsupported", reason: "source_not_registered", error: "SOURCE_REGISTRATION_INVALID" });
+  });
+
+  it("rejects a registered source bound to a different task or run before reading it", () => {
+    let reads = 0;
+    const registered = createRegisteredCodexSource({
+      ...source(""),
+      task_id: "other-task",
+      run_id: "other-run",
+      reader: createTranscriptSourceReader(() => { reads += 1; return ""; }),
+    });
+    const result = parseRegisteredCodexTranscript(registered, {
+      project_name: "workflowhub", task_id: "m15-facts", run_id: "run-1", attempt_id: "attempt-1",
+    });
+    expect(result).toMatchObject({ status: "conflict" });
+    expect(result.records[0]).toMatchObject({ fact_type: "source_status", status: "conflict", reason: "source_binding_conflict" });
+    expect(reads).toBe(0);
   });
 
   it("does not publish empty duration/retry values and deduplicates repeated event ids", () => {
@@ -126,10 +187,10 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "r1", type: "retry", run_id: "run-1" }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
-    expect(result.records.find((item) => item.fact_id.includes(":d1"))).toMatchObject({ status: "partial", reason: "duration_unavailable", value: null });
+    expect(result.status).toBe("incomplete");
+    expect(result.records.find((item) => item.fact_id.includes(":d1"))).toMatchObject({ status: "unavailable", reason: "duration_unavailable", value: null });
     expect(result.records.filter((item) => item.fact_type === "duration" && item.status === "present")).toHaveLength(1);
-    expect(result.records.find((item) => item.fact_id.includes(":r1"))).toMatchObject({ status: "partial", reason: "retry_count_unavailable", value: null });
+    expect(result.records.find((item) => item.fact_id.includes(":r1"))).toMatchObject({ status: "unavailable", reason: "retry_count_unavailable", value: null });
   });
 
   it("marks duration and retry re-attribution conflicts instead of keeping the first row", () => {
@@ -140,8 +201,8 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "r-reused", type: "retry", run_id: "run-1", stage: "verify-code", skill_id: "skill-b", retry_count: 1 }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
-    expect(result.records.filter((item) => item.status === "conflict")).toHaveLength(2);
+    expect(result.status).toBe("conflict");
+    expect(result.records.filter((item) => item.status === "conflict" && item.fact_type !== "source_status")).toHaveLength(2);
   });
 
   it("isolates unsupported transcript fields and keeps later legal lines", () => {
@@ -150,7 +211,7 @@ describe("M15 registered Codex transcript adapter", () => {
       JSON.stringify({ id: "good-stage", type: "message", run_id: "run-1", stage: "build-code", usage: { input_tokens: 2, output_tokens: 2 } }),
     ].join("\n");
     const result = parseRegisteredCodexTranscript(source(text));
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("unsupported");
     expect(result.records.some((item) => item.reason === "unsupported_record")).toBe(true);
     expect(result.records.some((item) => item.fact_type === "token" && item.value?.message_id === "good-stage")).toBe(true);
   });
@@ -172,7 +233,7 @@ describe("M15 registered Codex transcript adapter", () => {
   it("reports unsupported source versions and non-not-found read errors", () => {
     expect(() => createRegisteredCodexSource({ ...source(""), source_format: "txt" })).toThrow(/unsupported/i);
     const broken = createRegisteredCodexSource({ ...source(""), reader: createTranscriptSourceReader(() => { const error = new Error("permission"); error.code = "EACCES"; throw error; }) });
-    expect(parseRegisteredCodexTranscript(broken).status).toBe("unknown");
+    expect(parseRegisteredCodexTranscript(broken).status).toBe("unavailable");
   });
 
   it("keeps source unavailable as missing instead of an empty success", () => {

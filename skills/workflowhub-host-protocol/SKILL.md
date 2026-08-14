@@ -31,7 +31,7 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 - `build-code`：四材料可读即可在任务 worktree 实现、测试和修复。
 - `verify-code`：四材料可读即可做需求回放、逐 AC、风险测试、异源 review 和最终判断。
 
-任何阶段都可以继续修复自己的材料或代码。缺测试、逐 AC、异源 review、finding 处置或交接时，只能把完成状态记为 `incomplete` 或真实 `unavailable`，不能假绿，也不能阻止同一 task 修复。
+任何阶段都可以继续修复自己的材料或代码。缺测试、逐 AC、finding 处置或交接时，只能把完成状态记为 `incomplete` 或真实 `unavailable`，不能假绿，也不能阻止同一 task 修复。`build-code` 之外的异源 review 只是建议事实：必须照实记录，不把 unavailable 追成 pass，也不把它当阶段完成门槛。
 
 ## 宿主调度
 
@@ -64,6 +64,16 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 - 生成完成后把该内容寻址 ref 放进 `tools/cli/stage-runtime.mjs run` 的
   `receipts.stage_outcomes`。缺失或不匹配时正式 run 明确失败，并由 monitoring 保留 missing/unknown 事实；不能把 caller 自报的 facts 当执行证明。
 - 阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate、工作就绪、Git 或 close 状态。
+
+### Multica 宿主的实际接线
+
+这不是“测试里调用一下 adapter”就算接通。生产宿主必须在同一个真实任务上做到下面几件事：
+
+1. 用一份显式绑定文件按 Multica Issue ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用本次 claim 的 Multica `task.ID` 替代；`attempt_id` 可留空并由宿主生成当前 claim 的稳定标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
+2. 启动 Stage Agent 前，把当前绑定、宿主专用的 outcome 文件路径和正式 run 输入文件路径注入它：`WORKFLOWHUB_STAGE_OUTCOME_PATH` 写 Stage Agent 的 `execution`，`WORKFLOWHUB_STAGE_RUN_INPUT_PATH` 写正式 run 所需的真实 receipts、AC 覆盖和 finding 处置。Agent 执行完后，必须自己写出这两份结构化结果，不能由宿主根据最终评论反推步骤、技能或质量事实。
+3. 宿主在启动 Agent 前记录本次 Agent 执行开始时间，并在正式 run 时通过 `WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT` 传入 Unix 毫秒或 RFC3339 时间。这样正式入口能读取 Agent 已经产生、但早于 delivery command 的真实 transcript/token/tool 事件；没有这个边界时不得用历史会话回填。
+4. Agent 结束后，宿主用 WorkflowHub 私有桥接入口把这个真实结果交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。缺文件、身份不符、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。
+5. 宿主绑定属于配置事实，不属于四份当前材料，也不创建第二套 WorkflowHub 状态机。桥接入口只转发一个已经执行的结果，不启动 Agent、不解析 session、不扫描目录、不补零成本；正式 run 仍由 WorkflowHub 公共入口完成。
 
 ## 评论
 

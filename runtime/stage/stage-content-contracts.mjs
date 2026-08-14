@@ -2139,7 +2139,7 @@ export function validateStageSpecAnalyzeProfile({ stage, packet } = {}) {
       }));
       errors.push(`${type}: ${item.requirement_id}`);
     }
-    const knownCoverageStates = new Set(["partial", "missing", "changed", "expanded", "stale", "not_applicable", "unavailable", "deferred"]);
+    const knownCoverageStates = new Set(["partial", "missing", "changed", "expanded", "stale", "not_applicable", "unavailable", "incomplete", "deferred"]);
     if (item.status !== "covered") {
       if (!knownCoverageStates.has(item.status)) {
         errors.push(`unknown coverage status: ${item.requirement_id}`);
@@ -2460,6 +2460,7 @@ export function validatePlanTaskContract({
   const headingIds = parsedTasks.map(({ heading_id }) => heading_id);
   const duplicateIds = headingIds.filter((id, index) => headingIds.indexOf(id) !== index);
   if (duplicateIds.length) errors.push(`duplicate task ID: ${[...new Set(duplicateIds)].join(", ")}`);
+  const activeAcSet = new Set(activeAcceptanceCriterionIds(spec));
   const taskRows = parsedTasks.map((task, index) => {
     for (const field of isV3 ? TASK_FIELDS_V3 : TASK_FIELDS) {
       if (!(field in task.fields) || task.fields[field].trim() === "") errors.push(`${task.heading_id ?? `task ${index + 1}`} is missing ${field}`);
@@ -2469,7 +2470,8 @@ export function validatePlanTaskContract({
     if (task.fields.expected_exit && !/^-?\d+$/.test(task.fields.expected_exit)) errors.push(`${task.heading_id} expected_exit must be an integer`);
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
     const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID);
+    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)
+      .filter((id) => activeAcSet.has(id));
     return Object.freeze({
       id: task.heading_id,
       order: index,
@@ -2593,7 +2595,7 @@ export function validatePlanTaskContract({
   }
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-  const acceptedAcs = identifiers(spec, ACCEPTANCE_CRITERION_ID);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec);
   if (isV3 && acceptedFrs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted FR");
   if (isV3 && acceptedAcs.length === 0) errors.push("plan-task.v3 spec must contain at least one accepted AC");
   const referencedFrs = [...new Set(taskRows.flatMap(({ frs }) => frs))];
@@ -2699,7 +2701,7 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
   if (cycleIn(rows)) errors.push("task dependency graph contains a cycle");
 
   const acceptedFrs = identifiers(spec, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-  const acceptedAcs = identifiers(spec, ACCEPTANCE_CRITERION_ID);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec);
   const referencedFrs = [...new Set(rows.flatMap(({ frs }) => frs))];
   const referencedAcs = [...new Set(rows.flatMap(({ acs }) => acs))];
   if (acceptedFrs.length === 0) errors.push("spec has no accepted FR");
@@ -2774,6 +2776,18 @@ const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
 const ACCEPTANCE_CRITERION_ID = /\bAC(?:-\d{1,3}|-ROBUST-\d{3}|\d{1,3})\b/g;
 const V2_AC = ACCEPTANCE_CRITERION_ID;
 
+function activeAcceptanceCriterionIds(spec) {
+  const text = String(spec ?? "");
+  const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|Acceptance Criteria)\s*$/mi);
+  if (!heading) return identifiers(text, ACCEPTANCE_CRITERION_ID);
+  const body = text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0];
+  const activeId = /^AC(?:-\d{1,3}|-ROBUST-\d{3}|\d{1,3})$/;
+  const headingIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
+    .map(([, id]) => id.trim())
+    .filter((id) => activeId.test(id));
+  return [...new Set(headingIds)];
+}
+
 function parseReferenceList(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string" || value.trim() === "") return [];
@@ -2840,7 +2854,7 @@ export function validatePlanTaskContractV2({ spec, plan, tasks, specRef, specHas
     for (const error of structural.errors) errors.push(`plan-task.v3: ${error}`);
   }
   const acceptedFrs = identifiers(spec ?? "", V2_FR);
-  const acceptedAcs = identifiers(spec ?? "", V2_AC);
+  const acceptedAcs = activeAcceptanceCriterionIds(spec ?? "");
   if (acceptedFrs.length === 0) errors.push("spec must contain at least one accepted FR");
   if (acceptedAcs.length === 0) errors.push("spec must contain at least one accepted AC");
   if (/^\s*[-*]?\s*PFACT-[A-Z0-9]+\s*[—:-]/m.test(plan ?? "")) errors.push("plan must not copy product facts into an authoritative section");

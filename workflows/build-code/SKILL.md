@@ -11,6 +11,15 @@ version: 2.2.0
 Implement the current task with the smallest correct change, real tests,
 per-AC evidence, independent review, and explicit finding disposition.
 
+When the host provides an explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery
+comes before extended reporting: read the host stage input once, perform the
+smallest real verification needed for the current task, write the complete
+Stage Agent execution object to that exact path, verify that it parses, and
+stop. Do not spend the bounded host run rereading runtime adapters, replaying
+old phases, or repeating a full test suite after a current result exists. Any
+step not actually performed must be recorded as `incomplete` with its real
+reason; leaving the execution file unwritten is never an acceptable handoff.
+
 ## Authority and entry
 
 Only these current materials define the work:

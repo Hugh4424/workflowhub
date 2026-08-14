@@ -22,7 +22,7 @@ const HISTORICAL_SEMANTICS = {
 
 describe("workflow quality regression and historical replay", () => {
   it("keeps the three live thread bindings explicit and hash-unavailable", () => {
-    const decision = read("specs/workflowhub-delivery-flow-quality-v1/decision-log.md");
+    const decision = read("specs/archive/workflowhub-delivery-flow-quality-v1/decision-log.md");
     expect(Object.keys(THREADS)).toHaveLength(3);
     for (const [task, id] of Object.entries(THREADS)) {
       expect(decision, task).toContain(id);
@@ -33,7 +33,7 @@ describe("workflow quality regression and historical replay", () => {
   });
 
   it("keeps every historical task replayable across five stages and seven audit questions", () => {
-    const decision = read("specs/workflowhub-delivery-flow-quality-v1/decision-log.md");
+    const decision = read("specs/archive/workflowhub-delivery-flow-quality-v1/decision-log.md");
     for (const task of Object.keys(THREADS)) {
       expect(decision).toContain(`| ${task} |`);
       for (const stage of STAGES) expect(decision, `${task}/${stage}`).toContain(stage);
@@ -103,7 +103,7 @@ describe("workflow quality regression and historical replay", () => {
   });
 
   it("keeps missing historical facts truthful instead of inventing a replay", () => {
-    const decision = read("specs/workflowhub-delivery-flow-quality-v1/decision-log.md");
+    const decision = read("specs/archive/workflowhub-delivery-flow-quality-v1/decision-log.md");
     expect(decision).toContain("integration 证据有缺口");
     expect(decision).toContain("逐原始需求最终验收链不完整");
     expect(decision).toContain("真实 E2E/正式质量未完成");

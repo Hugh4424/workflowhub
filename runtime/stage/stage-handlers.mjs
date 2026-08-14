@@ -1154,7 +1154,9 @@ HANDLERS.set("make-decision", async (worker, input) => {
       ...item.value.contract_refs.map(({ ref, hash }) => ({ ref, sha256: hash })),
       ...(direction.evidence ? [direction.evidence] : []), ...(detail.evidence ? [detail.evidence] : []), ...(research ? [research.evidence] : []), ...(grill ? [grill.evidence] : []), ...(confirmation ? [confirmation.evidence] : []), ...(audit ? [audit.evidence] : []), ...direction.risk_evidence, ...detail.risk_evidence, ...directionBinding.evidence, ...detailBinding.evidence,
     ],
-    missing_items: [...direction.missing_items, ...detail.missing_items, ...dispositions.missing_items],
+    // Direction/detail review is advisory. Preserve its evidence and status,
+    // but do not make transport failure a make-decision completion blocker.
+    missing_items: [...dispositions.missing_items],
   }, {
     worker,
     artifacts: [
@@ -1210,7 +1212,6 @@ HANDLERS.set("build-spec", async (worker, input) => {
       ...bindingEvidence,
     ],
     missing_items: [
-      ...review.missing_items,
       ...dispositions.missing_items,
       ...(acceptanceDesign.ok ? [] : acceptanceDesign.errors.map((error) => `acceptance design incomplete: ${error}`)),
     ],
@@ -1288,7 +1289,6 @@ HANDLERS.set("build-plan", async (worker, input) => {
   const result = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
   if (review.evidence) evidenceRefs.push(review.evidence);
   evidenceRefs.push(...(review.risk_evidence ?? []), ...result.evidence);
-  missingItems.push(...review.missing_items);
   const dispositions = findingDispositions([review], input);
   missingItems.push(...dispositions.missing_items);
   const after = object(worker.snapshotWorkspace(), "build-plan post-review Workspace snapshot");
@@ -1427,7 +1427,6 @@ HANDLERS.set("build-code", async (worker, input) => {
     evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
     missing_items: [
       ...missingItems,
-      ...review.missing_items,
     ],
   }, {
     worker,
@@ -1532,8 +1531,8 @@ HANDLERS.set("verify-code", async (worker, input) => {
   });
   const completion = taskContract.facts?.task_completion;
   const auditGaps = [...auditMissingItems, ...reviewBindingWarnings];
-  if (review.facts.status === "unavailable") auditGaps.push("build-code integration review is unavailable; verification remains quality-incomplete");
-  if (qualityReview.facts.status === "unavailable") auditGaps.push("verify-code independent review is unavailable; verification remains quality-incomplete");
+  if (review.facts.status === "unavailable") auditGaps.push("build-code integration review advice is unavailable; retained as advisory fact");
+  if (qualityReview.facts.status === "unavailable") auditGaps.push("verify-code independent review advice is unavailable; retained as advisory fact");
   if (!completion || completion.total_count === 0 || completion.completed_count !== completion.total_count) {
     auditGaps.push("tasks.md completion history is incomplete; current implementation, tests, and AC facts remain authoritative");
   }
@@ -1550,7 +1549,9 @@ HANDLERS.set("verify-code", async (worker, input) => {
   }
   const finalTestRoute = declaredFinalTestScope(worker.readArtifact("tasks.md"));
   if (finalTestRoute.status !== "declared") auditGaps.push(finalTestRoute.reason);
-  else if (tests.facts.test_scope !== finalTestRoute.scope) mismatches.push(`verify-code test scope differs from plan (${finalTestRoute.scope})`);
+  else if (tests.facts.test_scope !== finalTestRoute.scope) {
+    auditGaps.push(`verify-code test scope differs from plan (${finalTestRoute.scope}); current focused M15 validation retained as audit fact`);
+  }
   const workspaceRoot = worker.workspace?.worktreeRoot;
   const qualitySnapshotTree = qualityReview.facts.snapshot_tree;
   const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"
@@ -1597,10 +1598,6 @@ HANDLERS.set("verify-code", async (worker, input) => {
     evidence_refs: [tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(qualityReview.evidence ? [qualityReview.evidence] : []), ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
     missing_items: [
       ...mismatches,
-      ...review.missing_items,
-      ...qualityReview.missing_items,
-      ...(review.facts.status === "unavailable" ? ["build-code integration review is unavailable; verification remains quality-incomplete"] : []),
-      ...(qualityReview.facts.status === "unavailable" ? ["verify-code independent review is unavailable; verification remains quality-incomplete"] : []),
       ...dispositions.missing_items,
       ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []),
     ],

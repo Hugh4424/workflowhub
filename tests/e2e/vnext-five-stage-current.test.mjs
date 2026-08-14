@@ -72,6 +72,12 @@ function fixture(taskId, { materialFiles = materials } = {}) {
   return { root, home, repo, task, candidate, artifacts, kernel: createTaskKernel(task, { candidateWorkspace: candidate }) };
 }
 
+function isolatedPublicRuntimeEnv(state) {
+  const env = { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root };
+  for (const key of ['CODEX_THREAD_ID', 'CODEX_ROLLOUT_PATH', 'WORKFLOWHUB_CODEX_ROLLOUT_PATH', 'CODEX_CLI_VERSION']) delete env[key];
+  return env;
+}
+
 function context(stage, state) {
   return {
     stage, task: state.task, kernel: state.kernel, identity: state.task.identity,
@@ -87,7 +93,7 @@ function publicStatus(state, stage) {
     `--task=${state.task.identity.taskId}`, "--reason=public-current-stage",
   ], {
     cwd: state.repo,
-    env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+    env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
   expect(result.status, result.stderr).toBe(0);
@@ -107,7 +113,7 @@ function publicRun(state, stage, input) {
     `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
   ], {
     cwd: state.repo,
-    env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+    env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
   expect(result.status, `${stage}: ${result.stdout}\n${result.stderr}`).toBe(0);
@@ -123,7 +129,7 @@ function publicRunRaw(state, stage, input) {
     `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
   ], {
     cwd: state.repo,
-    env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+    env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
 }
@@ -147,7 +153,7 @@ function publicConfirm(state, stage) {
     `--task=${state.task.identity.taskId}`, "--decision=accepted",
   ], {
     cwd: state.repo,
-    env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+    env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
   expect(result.status, `${stage}: ${result.stdout}\n${result.stderr}`).toBe(0);
@@ -340,11 +346,13 @@ describe("current vNext five-stage runtime", () => {
     const result = publicRunRaw(state, "build-spec", { receipts: { review: "quality/reviews/results/missing.json" } });
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}\n${result.stderr}`).toMatch(/stage[_ -]outcome|stage outcome|receipt/i);
-    expect(readTaskFacts(state.task.taskPath)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unknown", reason: "stage_outcome_unavailable" }),
-      expect.objectContaining({ fact_type: "step", stage: "build-spec", status: "missing" }),
-      expect.objectContaining({ fact_type: "skill", stage: "build-spec", status: "unknown" }),
+    const facts = readTaskFacts(state.task.taskPath);
+    expect(facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "source_status", status: "missing", reason: "no_registered_source" }),
+      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_unavailable" }),
     ]));
+    expect(facts.filter((fact) => fact.fact_type === "step" && fact.stage === "build-spec")).toHaveLength(0);
+    expect(facts.filter((fact) => fact.fact_type === "skill" && fact.stage === "build-spec")).toHaveLength(0);
   });
 
   it("rejects evidence that is hashed correctly but belongs to another declared step", () => {
@@ -513,7 +521,7 @@ describe("current vNext five-stage runtime", () => {
       `--task=${state.task.identity.taskId}`, "--decision=accepted",
     ], {
       cwd: state.repo,
-      env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+      env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
     expect(confirmationResult.status, confirmationResult.stderr).toBe(0);
@@ -529,7 +537,7 @@ describe("current vNext five-stage runtime", () => {
       `--task=${state.task.identity.taskId}`, `--input=${input}`,
     ], {
       cwd: state.repo,
-      env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+      env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
     expect(result.status, result.stderr).toBe(0);
@@ -561,7 +569,7 @@ describe("current vNext five-stage runtime", () => {
       `--task=${state.task.identity.taskId}`, "--decision=rejected",
     ], {
       cwd: state.repo,
-      env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+      env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
     expect(result.status, result.stderr).toBe(0);
@@ -659,7 +667,7 @@ describe("current vNext five-stage runtime", () => {
       `--task=${state.task.identity.taskId}`,
     ], {
       cwd: state.repo,
-      env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+      env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
     expect(result.status, `${result.stdout}\n${result.stderr}`).not.toBe(0);
@@ -694,6 +702,35 @@ describe("current vNext five-stage runtime", () => {
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.find((fact) => fact.subject === "same_build_integration_review")).toBeUndefined();
     expect(facts.find((fact) => fact.subject === "independent_review")?.evidence[0]?.ref).toBe(qualityReview.resultRef);
+  });
+
+  it("does not reuse a generic build-code review when verify-code quality_note is absent", async () => {
+    const state = fixture("verify-review-evidence-missing-quality-note");
+    const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
+    const result = await runStage("verify-code", context("verify-code", state), async () => {
+      const currentEvidence = evidence(state, "verify-code");
+      return {
+        ...currentEvidence,
+        evidence_refs: [{ ref: buildReview.resultRef, sha256: buildReview.resultHash }],
+        facts: {
+          ...currentEvidence.facts,
+          review: {
+            status: "recorded",
+            result_ref: buildReview.resultRef,
+            result_hash: buildReview.resultHash,
+            snapshot_tree: snapshot.tree,
+            subject_kind: "worktree",
+            review_scope: "integration",
+          },
+        },
+      };
+    });
+    const independentReview = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.subject === "independent_review");
+    expect(independentReview.status).toBe("missing");
+    expect(independentReview.evidence[0]?.ref).not.toBe(buildReview.resultRef);
   });
 
   it("runs build-spec through verify-code without inventing an audit gate", () => {

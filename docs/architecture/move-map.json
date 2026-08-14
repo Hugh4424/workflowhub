@@ -1581,6 +1581,24 @@
       "content_change": "new explicit binding adapter; no native session discovery"
     },
     {
+      "source": "runtime/stage/stage-agent-outcome-adapter.mjs",
+      "destination": "runtime/stage/stage-agent-outcome-adapter.mjs",
+      "status": "add",
+      "owner": "WorkflowHub host boundary",
+      "consumer": "authenticated Stage Agent host integration only",
+      "delete_condition": "remove when the host protocol has one approved canonical result adapter",
+      "content_change": "host-facing result serialization through TaskKernel; never executes agents or discovers sessions"
+    },
+    {
+      "source": "tools/host/workflowhub-stage-agent-bridge.mjs",
+      "destination": "tools/host/workflowhub-stage-agent-bridge.mjs",
+      "status": "add",
+      "owner": "WorkflowHub host boundary",
+      "consumer": "explicit external Stage Agent host integration only",
+      "delete_condition": "remove when the host protocol has one approved canonical result adapter",
+      "content_change": "private stdin bridge that authenticates the explicit task/workspace and forwards one already-produced Stage Agent outcome"
+    },
+    {
       "source": "runtime/schemas/monitoring-fact.v1.json",
       "destination": "runtime/schemas/monitoring-fact.v1.json",
       "status": "add",
@@ -1660,6 +1678,15 @@
       "consumer": "M15 build-code and verify-code evidence",
       "delete_condition": "remove with stage sidecar retirement",
       "content_change": "private source seam and stage sidecar integration coverage"
+    },
+    {
+      "source": "tests/integration/vnext-official-stage-run.test.mjs",
+      "destination": "tests/integration/vnext-official-stage-run.test.mjs",
+      "status": "modify",
+      "owner": "WorkflowHub host boundary contract tests",
+      "consumer": "build-code and verify-code stage-outcome authentication",
+      "delete_condition": "remove when the host adapter contract is retired",
+      "content_change": "real Stage Agent result adapter and official-route acceptance coverage"
     },
     {
       "source": "docs/standard-workflow.md",

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, readFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createTask } from "../runtime/task/task-handle.mjs";
-import { appendTaskFact, appendMonitoringFacts, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
-import { createMonitoringFact, validateMonitoringFact } from "../runtime/evidence/monitoring-facts.mjs";
+import { appendTaskFact, appendMonitoringFacts, initializeTaskStore, readMonitoringFacts, readTaskFacts } from "../runtime/task/task-store.mjs";
+import { createMonitoringFact, isHistoricalMonitoringFact, validateMonitoringFact } from "../runtime/evidence/monitoring-facts.mjs";
 import { buildArtifactProjection } from "../runtime/evidence/fact-collector.mjs";
 
 function taskRoot(taskId = "m15-facts") {
@@ -57,6 +57,7 @@ describe("M15 monitoring facts", () => {
     const result = appendMonitoringFacts(root, { task_id: "m15-facts", records: [record] });
     expect(result.refs).toHaveLength(1);
     expect(readTaskFacts(root)).toEqual([expect.objectContaining(legacyFact), record]);
+    expect(readMonitoringFacts(root)).toEqual([record]);
   });
 
   it("rejects unsupported fields, raw source paths, and present values without coverage", () => {
@@ -100,6 +101,7 @@ describe("M15 monitoring facts", () => {
     const validate = new Ajv2020({ strict: false, $data: true, formats: { "date-time": true } }).compile(schema);
     const validStage = fact();
     expect(validate(validStage)).toBe(true);
+    expect(validate({ ...validStage, value: { outcome: "completed", result_summary: "真实结果摘要" } })).toBe(true);
     expect(validate({ ...validStage, value: {} })).toBe(false);
     expect(validate({ ...validStage, coverage: { expected: 0, observed: 1 } })).toBe(false);
     expect(validate({ ...validStage, coverage: { expected: null, observed: 999 } })).toBe(true);
@@ -116,12 +118,48 @@ describe("M15 monitoring facts", () => {
     expect(validate({ ...validStage, evidence_refs: ["quality/evidence/opaque-ref.json"] })).toBe(true);
   });
 
-  it("preserves missing, partial, unknown, and conflict without zero-filling", () => {
-    for (const status of ["missing", "partial", "unknown", "conflict"]) {
+  it("preserves missing, unknown, and conflict without zero-filling", () => {
+    for (const status of ["missing", "unknown", "conflict"]) {
       const value = fact({ fact_id: `fact:m15:${status}`, status, value: null, reason: `${status}_reason`, coverage: { observed: 0, expected: 1 } });
       expect(validateMonitoringFact(value)).toEqual(value);
       expect(value.value).toBeNull();
     }
+  });
+
+  it("uses event states for skipped, applicability, unavailable, unsupported, and incomplete facts", () => {
+    for (const status of ["skipped", "not_applicable", "unavailable", "unsupported", "incomplete"]) {
+      const value = fact({ fact_id: `fact:m15:${status}`, status, value: null, reason: `${status}_reason`, coverage: { observed: 0, expected: 1 } });
+      expect(validateMonitoringFact(value)).toEqual(value);
+      expect(value.value).toBeNull();
+    }
+    for (const status of ["partial", "fatal"]) {
+      expect(() => fact({ fact_id: `fact:m15:derived:${status}`, status, value: null, reason: `${status}_reason`, coverage: { observed: 0, expected: 1 } })).toThrow(/status is invalid/i);
+    }
+  });
+
+  it("reads old partial/fatal monitoring rows without allowing new writers to create them", () => {
+    const root = taskRoot();
+    const historical = { ...fact({ fact_id: "fact:m15:historical-partial" }), status: "partial", value: null, reason: "old_contract" };
+    expect(() => validateMonitoringFact(historical)).toThrow(/status is invalid/i);
+    expect(isHistoricalMonitoringFact(historical)).toBe(true);
+    const raw = readFileSync(join(root, "facts.jsonl"), "utf8");
+    writeFileSync(join(root, "facts.jsonl"), `${raw}${JSON.stringify(historical)}\n`);
+    expect(readTaskFacts(root)).toEqual([historical]);
+    expect(readMonitoringFacts(root)).toEqual([historical]);
+  });
+
+  it("rejects a quality fact accidentally written to facts.jsonl with a namespace error", () => {
+    const root = taskRoot();
+    writeFileSync(join(root, "facts.jsonl"), `${JSON.stringify({ schema_version: "quality-fact.v1" })}\n`);
+    expect(() => readMonitoringFacts(root)).toThrow(/quality facts must be stored under quality\/facts/i);
+  });
+
+  it("rejects monitoring facts from another project at both write and read boundaries", () => {
+    const root = taskRoot();
+    const foreign = fact({ fact_id: "fact:m15:foreign-project", project_name: "other-project" });
+    expect(() => appendMonitoringFacts(root, { task_id: "m15-facts", records: [foreign] })).toThrow(/project identity mismatch/i);
+    writeFileSync(join(root, "facts.jsonl"), `${JSON.stringify(foreign)}\n`);
+    expect(() => readMonitoringFacts(root)).toThrow(/project identity mismatch/i);
   });
 
   it("requires an explanation for every non-present status", () => {
@@ -133,6 +171,26 @@ describe("M15 monitoring facts", () => {
     const first = fact({ fact_id: "fact:m15:batch" });
     expect(() => appendMonitoringFacts(root, { task_id: "m15-facts", records: [first, first] })).toThrow(/duplicate monitoring fact id in batch/i);
     expect(readTaskFacts(root)).toEqual([]);
+  });
+
+  it("treats same-content replay as idempotent and changed-content replay as conflict", () => {
+    const root = taskRoot();
+    const record = fact({ fact_id: "fact:m15:replay" });
+    const first = appendMonitoringFacts(root, { task_id: "m15-facts", records: [record] });
+    const replay = appendMonitoringFacts(root, { task_id: "m15-facts", records: [record] });
+    expect(replay).toMatchObject({ idempotent: true, refs: first.refs });
+    expect(readMonitoringFacts(root)).toHaveLength(1);
+    expect(() => appendMonitoringFacts(root, { task_id: "m15-facts", records: [fact({ fact_id: record.fact_id, reason: "changed" })] })).toThrow(/fact id conflict/i);
+  });
+
+  it("treats same-content replay as idempotent and changed-content replay as conflict", () => {
+    const root = taskRoot();
+    const record = fact({ fact_id: "fact:m15:replay" });
+    const first = appendMonitoringFacts(root, { task_id: "m15-facts", records: [record] });
+    const replay = appendMonitoringFacts(root, { task_id: "m15-facts", records: [record] });
+    expect(replay).toMatchObject({ idempotent: true, refs: first.refs });
+    expect(readMonitoringFacts(root)).toHaveLength(1);
+    expect(() => appendMonitoringFacts(root, { task_id: "m15-facts", records: [fact({ fact_id: record.fact_id, reason: "changed" })] })).toThrow(/fact id conflict/i);
   });
 
   it("rolls back the facts append when index publication fails", () => {

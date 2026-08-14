@@ -11,7 +11,10 @@ const LFS_POINTER_VERSION = "version https://git-lfs.github.com/spec/v1";
 const HASH = /^[a-f0-9]{64}$/;
 
 /** Files written while recording execution facts are not source material. */
-export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/"]);
+// Host-owned sidecar state is not WorkflowHub source or M15 evidence. Keep it
+// outside authenticated snapshots so an unrelated host integration cannot
+// contaminate the current task's diff, review packet, or page provenance.
+export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/", "quality/", ".multica/"]);
 const CURRENT_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
 
 function git(root, args, options = {}) {

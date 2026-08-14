@@ -2,13 +2,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import yaml from "js-yaml";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
+import {
+  publishStageAgentOutcome,
+  publishUnavailableStageAgentOutcome,
+} from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
@@ -89,6 +94,41 @@ function publishReviewFixture(state) {
   return { ref, sha256: sha256(raw) };
 }
 
+function stageAgentExecution(stage) {
+  const stepsManifest = JSON.parse(readFileSync(join(process.cwd(), "workflows", stage, "steps.json"), "utf8"));
+  const skillsManifest = yaml.load(readFileSync(join(process.cwd(), "workflows", stage, "skill-deps.yaml"), "utf8"));
+  const evidence = () => ({ kind: "host-command", command: "stage-agent-test", exit_code: 0, output: "actual host result" });
+  const steps = stepsManifest.steps.map((step) => ({
+    step_id: step.step_id, step_slug: step.step_slug, order: step.order, status: "completed",
+    input_refs: step.entry_conditions.map(({ uri_or_path }) => uri_or_path),
+    result_summary: `Stage Agent 实际执行 ${step.step_slug}，产生当前结果`, evidence: [evidence()],
+    cost: { duration_ms: 1, tokens: 1, status: "recorded" },
+  }));
+  const skills = (skillsManifest.skills ?? []).map(({ name }) => ({
+    skill_id: name, status: "completed", trigger: true, executed: true, version: "test-stage-agent-1.0.0",
+    result_summary: `Stage Agent 实际执行 ${name}，产生当前结果`, evidence: [evidence()],
+    cost: { duration_ms: 1, tokens: 1, status: "recorded" },
+  }));
+  return {
+    status: "completed",
+    provenance: { kind: "stage-agent", host: "test-host", agent_run_id: `real-${stage}-run` },
+    steps, skills,
+    spec_analyze: {
+      packet: {
+        original_requirements: [{ id: "R-001", summary: "当前用户需求" }],
+        coverage: [{
+          requirement_id: "R-001", expected_behavior: "当前用户需求",
+          actual_behavior: "当前用户需求已由 Stage Agent 实际执行并产生当前结果", semantic_match: true,
+          scenario_refs: ["SCN-real-stage-agent"], oracle_refs: ["ORACLE-real-stage-agent"],
+          artifact_refs: ["decision_log"], evidence_refs: ["decision-log"], status: "covered",
+        }],
+        work_summary: "Stage Agent 实际执行 stage-end spec-analyze",
+      },
+      evidence_subjects: { "decision-log": { subject_kind: "step", subject_id: steps[0].step_slug } },
+    },
+  };
+}
+
 function stageOutcome(state, stage, { workspace = null, artifacts = null, attemptId = `attempt-${stage}` } = {}) {
   return writeStageOutcomeFixture({
     task: state.task,
@@ -101,6 +141,69 @@ function stageOutcome(state, stage, { workspace = null, artifacts = null, attemp
 }
 
 describe("vNext official stage completion", () => {
+  it("accepts a host-supplied Stage Agent result through the adapter and the official route", async () => {
+    const state = fixture("stage-agent-adapter");
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const context = contextFor("make-decision", state);
+    const outcome = publishStageAgentOutcome({
+      task: state.task, kernel: state.kernel, artifacts, candidateWorkspace: state.candidate,
+      stage: "make-decision", attemptId: "attempt-real-stage-agent", workflowRunId: context.workflowRunId, execution: stageAgentExecution("make-decision"),
+    });
+    expect(outcome.value.producer).toMatchObject({ kind: "stage-agent", host: "test-host" });
+    expect(outcome.value.run_id).toBe(context.workflowRunId);
+    const proof = JSON.parse(state.task.readRecord(outcome.value.step_outcomes[0].evidence_refs[0].ref));
+    expect(proof.host_evidence).toEqual({ kind: "host-command", command: "stage-agent-test", exit_code: 0, output: "actual host result" });
+    const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
+    expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+  });
+  it("accepts the same result through the private external-host bridge", () => {
+    const state = fixture("stage-agent-host-bridge");
+    const execution = stageAgentExecution("make-decision");
+    const request = {
+      project_name: state.task.identity.projectName,
+      task_id: state.task.identity.taskId,
+      stage: "make-decision",
+      attempt_id: "attempt-external-host-bridge",
+      task_path: state.task.taskPath,
+      execution,
+    };
+    const bridge = join(process.cwd(), "tools", "host", "workflowhub-stage-agent-bridge.mjs");
+    const output = execFileSync(process.execPath, [bridge], {
+      cwd: process.cwd(),
+      input: `${JSON.stringify(request)}\n`,
+      encoding: "utf8",
+    });
+    const result = JSON.parse(output);
+    expect(result).toMatchObject({
+      schema_version: "workflowhub-stage-agent-bridge-result.v1",
+      task_id: state.task.identity.taskId,
+      stage: "make-decision",
+      attempt_id: "attempt-external-host-bridge",
+      outcome_status: "completed",
+    });
+    const raw = state.task.readRecord(result.outcome_ref);
+    expect(createHash("sha256").update(raw).digest("hex")).toBe(result.outcome_sha256);
+  });
+  it("publishes a truthful unavailable outcome when the external Stage Agent produced no packet", async () => {
+    const state = fixture("stage-agent-unavailable");
+    const outcome = publishUnavailableStageAgentOutcome({
+      task: state.task,
+      kernel: state.kernel,
+      candidateWorkspace: state.candidate,
+      stage: "build-code",
+      attemptId: "attempt-unavailable-stage-agent",
+      host: "multica-real-host",
+      agentRunId: "agent-run-unavailable",
+      reason: "stage_agent_outcome_missing",
+    });
+    expect(outcome.value.status).toBe("unavailable");
+    expect(outcome.value.step_outcomes).toHaveLength(15);
+    expect(outcome.value.step_outcomes.every((entry) => entry.status === "unavailable")).toBe(true);
+    expect(outcome.value.skill_outcomes.find((entry) => entry.skill_id === "spec-analyze")).toMatchObject({ trigger: true, executed: true, status: "unavailable" });
+    expect(outcome.value.spec_analyze.result.status).toBe("material_incomplete");
+    const result = await runOfficialStage("build-code", contextFor("build-code", state), { receipts: { stage_outcomes: outcome.ref } });
+    expect(result).toMatchObject({ stage: "build-code", stage_outcome_status: "unavailable", quality_status: "incomplete" });
+  });
   it("reads the four current materials directly and rejects revision pointers/writers", () => {
     const state = fixture("vnext-direct-materials");
     expect(() => state.task.readRecord("materials/current.json")).toThrow(/ENOENT/);
@@ -292,9 +395,10 @@ describe("vNext official stage completion", () => {
       workspace, artifacts,
     }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
 
-    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "passed" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
-    expect(result.completion).toMatchObject({ status: "in_progress", missing: ["independent_review"] });
+    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result.quality_advisories).toContain("independent_review:unavailable");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
     expect(result.quality_fact_refs).toHaveLength(3);
