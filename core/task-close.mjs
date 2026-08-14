@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
@@ -348,7 +348,7 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
     if (trees.size !== 1) return Object.freeze({ current: false, reason: "current verify-code quality facts do not share one snapshot after worktree removal" });
     return Object.freeze({ current: true, reason: "worktree-already-removed", snapshot_tree: required[0].snapshot_tree });
   }
-  const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const snapshot = captureExecutionSnapshot(worktreeRoot);
   const required = [acceptedVerify.facts.tests, acceptedVerify.facts.independent_review];
   // The verify-code quality review is the single independent review for the
   // final snapshot. Phase reviews remain immutable audit facts; requiring a
@@ -610,7 +610,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const workspace = openCurrentTaskWorkspace(task);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
-  const currentSnapshot = captureGitWorktreeSnapshot(worktree);
+  const currentSnapshot = captureExecutionSnapshot(worktree);
   const acceptedVerify = currentVerifyFacts(task, {
     snapshotTree: currentSnapshot.tree,
     materialRevision: currentMaterialRevision(task, worktree),
@@ -634,7 +634,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
     const taskTree = gitResult(root, ["rev-parse", `${taskCommit}^{tree}`]);
     if (!parent.ok || parent.stdout.toLowerCase() !== tip) throw new Error("task snapshot commit must have the current task branch tip as its parent");
     if (!taskTree.ok) throw new Error("task snapshot commit does not exist");
-    const snapshot = captureGitWorktreeSnapshot(worktree);
+    const snapshot = captureExecutionSnapshot(worktree);
     if (snapshot.head.toLowerCase() !== tip || snapshot.tree.toLowerCase() !== taskTree.stdout.toLowerCase()) {
       throw new Error("task worktree does not match the verified task snapshot commit");
     }
