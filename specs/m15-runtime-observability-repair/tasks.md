@@ -62,7 +62,7 @@ public run、missing-outcome fallback 和直接 sidecar 的语义已经统一；
 - **依赖**：无
 - **并行**：否
 - **FR**：FR-CHAIN-001 FR-CHAIN-002 FR-FACT-001 FR-E2E-001
-- **AC**：AC-001 AC-002 AC-003 AC-010；历史 alias `AC-019 → AC-010` 仅为当前 spec 的机械覆盖，不是活动验收标准。
+- **AC**：AC-001 AC-002 AC-003 AC-010；fresh HTML 验收统一由 AC-010 负责。
 - **动作**：第一步只读执行 fresh public `stage-runtime` `run`，保存 task/run/attempt/stage/session/source binding、Expected topology、facts→projection→HTML 读回、九个 failure domain/health 字段和 M10/M14b caller trace；第二步才新增会在成功 public run 后读取 task facts 的断言，核对入口是否真的没有初始化 facts store。registered source 和 resolver 缺失必须分别记录；证据不足走 unknown/incomplete 分支。
 - **精确文件**：`tools/cli/stage-runtime.mjs`、`tests/m15-monitoring-integration.test.mjs`
 - **boundary**：files: `tools/cli/stage-runtime.mjs`; `tests/m15-monitoring-integration.test.mjs`
@@ -108,7 +108,7 @@ public run、missing-outcome fallback 和直接 sidecar 的语义已经统一；
 - **依赖**：T001
 - **并行**：否
 - **FR**：FR-CHAIN-001 FR-CHAIN-002 FR-FACT-001 FR-E2E-001
-- **AC**：AC-001 AC-002 AC-003 AC-010；历史 alias `AC-019 → AC-010` 仅为当前 spec 的机械覆盖，不是活动验收标准。
+- **AC**：AC-001 AC-002 AC-003 AC-010；fresh HTML 验收统一由 AC-010 负责。
 - **动作**：在正常 run 进入 sidecar 前初始化既有 facts store；统一成功/失败/missing-outcome 的 source status、stage fact、projection publish 和 stale fallback；将 source resolver 保持为 launcher 注入的私有能力。
 - **精确文件**：`tools/cli/stage-runtime.mjs`、`tests/m15-monitoring-integration.test.mjs`
 - **boundary**：files: `tools/cli/stage-runtime.mjs`; `tests/m15-monitoring-integration.test.mjs`
@@ -243,7 +243,7 @@ public run、missing-outcome fallback 和直接 sidecar 的语义已经统一；
 - **依赖**：T004
 - **并行**：否
 - **FR**：FR-FACT-001 FR-FACT-002 FR-PROJ-001 FR-E2E-001
-- **AC**：AC-003 AC-004 AC-009 AC-010；历史 alias `AC-019 → AC-010` 仅为当前 spec 的机械覆盖，不是活动验收标准。
+- **AC**：AC-003 AC-004 AC-009 AC-010；fresh HTML 验收统一由 AC-010 负责。
 - **动作**：先增加 attempt isolation、fact-id idempotency、conflict preservation 和 no-history-write 断言，比较 facts hash 与目录快照。
 - **精确文件**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/codex-transcript-adapter.mjs`、`runtime/evidence/monitoring-facts.mjs`、`tests/m15-monitoring-integration.test.mjs`、`tests/m15-codex-transcript-adapter.test.mjs`、`tests/m15-monitoring-facts.test.mjs`
 - **boundary**：files: `tools/cli/stage-runtime.mjs`; `runtime/evidence/codex-transcript-adapter.mjs`; `runtime/evidence/monitoring-facts.mjs`; `tests/m15-monitoring-integration.test.mjs`; `tests/m15-codex-transcript-adapter.test.mjs`; `tests/m15-monitoring-facts.test.mjs`
@@ -288,7 +288,7 @@ public run、missing-outcome fallback 和直接 sidecar 的语义已经统一；
 - **依赖**：T005
 - **并行**：否
 - **FR**：FR-FACT-001 FR-FACT-002 FR-PROJ-001 FR-E2E-001
-- **AC**：AC-003 AC-004 AC-009 AC-010；历史 alias `AC-019 → AC-010` 仅为当前 spec 的机械覆盖，不是活动验收标准。
+- **AC**：AC-003 AC-004 AC-009 AC-010；fresh HTML 验收统一由 AC-010 负责。
 - **动作**：按 attempt_id 生成稳定 fact identity；重复 fact_id 不重复追加；不同来源冲突保留为 conflict；fresh test 只能追加当前 task facts，不能触碰历史目录。
 - **精确文件**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/codex-transcript-adapter.mjs`、`runtime/evidence/monitoring-facts.mjs`、`tests/m15-monitoring-integration.test.mjs`、`tests/m15-codex-transcript-adapter.test.mjs`、`tests/m15-monitoring-facts.test.mjs`
 - **boundary**：files: `tools/cli/stage-runtime.mjs`; `runtime/evidence/codex-transcript-adapter.mjs`; `runtime/evidence/monitoring-facts.mjs`; `tests/m15-monitoring-integration.test.mjs`; `tests/m15-codex-transcript-adapter.test.mjs`; `tests/m15-monitoring-facts.test.mjs`
@@ -333,7 +333,7 @@ public run、missing-outcome fallback 和直接 sidecar 的语义已经统一；
 - **依赖**：T006
 - **并行**：否
 - **FR**：FR-CHAIN-001 FR-CHAIN-002 FR-FACT-001 FR-FACT-002 FR-E2E-001
-- **AC**：AC-001 AC-002 AC-003 AC-004 AC-009 AC-010；历史 alias `AC-019 → AC-010` 仅为当前 spec 的机械覆盖，不是活动验收标准。
+- **AC**：AC-001 AC-002 AC-003 AC-004 AC-009 AC-010；fresh HTML 验收统一由 AC-010 负责。
 - **动作**：只汇总已产生的引用、hash、状态和缺口；不新增生产字段、不修改事实、不把 advisory review 改写成通过。
 - **精确文件**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/codex-transcript-adapter.mjs`、`runtime/evidence/monitoring-facts.mjs`、`runtime/schemas/monitoring-fact.v1.json`、`tests/m15-monitoring-integration.test.mjs`、`tests/m15-codex-transcript-adapter.test.mjs`、`tests/m15-monitoring-facts.test.mjs`
 - **boundary**：files: `tools/cli/stage-runtime.mjs`; `runtime/evidence/codex-transcript-adapter.mjs`; `runtime/evidence/monitoring-facts.mjs`; `runtime/schemas/monitoring-fact.v1.json`; `tests/m15-monitoring-integration.test.mjs`; `tests/m15-codex-transcript-adapter.test.mjs`; `tests/m15-monitoring-facts.test.mjs`
@@ -638,6 +638,47 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 
 ## Phase 3 — 真实宿主 outcome 与正式验收
 
+### Goal
+
+把真实 Stage Agent 结果、official run、canonical facts、投影、页面和 formal acceptance 串成同一条可回读链；宿主能力未证明时保留真实 incomplete/unavailable，不把测试或历史记录写成生产完成。
+
+### Files
+
+- **NEW**：`runtime/stage/stage-agent-outcome-adapter.mjs`
+- **MODIFY**：`tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY**：`tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY**：`specs/m15-runtime-observability-repair/tasks.md`
+- **READ ONLY**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/monitoring-projector.mjs`、`runtime/evidence/monitoring-page.html`
+- **EVIDENCE ONLY**：`quality/evidence/stage-outcomes/build-code/cf48b572236eae101b3b72955851badb39f7f2cece67568ab174410ace2fa658.json`、`quality/verify-code/`、`quality/tests/build-code/`、`specs/m15-runtime-observability-repair/tasks.md`、`tests/e2e/vnext-five-stage-current.test.mjs`
+- **READ ONLY**：`runtime/stage/stage-runner.mjs`、`runtime/task/task-store.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`
+
+### Tasks
+
+- T013：验证 adapter 只接受真实执行结果，并经现有 `TaskKernel` 认证、绑定和写入。
+- T014：用当前宿主结果产出 current stage outcome；没有真实宿主调用就保留 `incomplete/unavailable`。
+- T015：基于同一 outcome 回读 public run、facts、projection、HTML、浏览器和历史只读边界。
+- T016：汇总命令、exit、oracle、证据和未闭合边界；不把 aggregate 当作质量通过。
+
+### Verify
+
+T013 使用 adapter contract 测试；T014 必须有非 fixture 的 current outcome；T015/T016 只能引用同一 task 的当前 outcome、facts、页面和重建证据。
+
+### Knowledge
+
+真实宿主执行证据由 host 负责，WorkflowHub 只认证并保存 outcome；`facts.jsonl` 是唯一事实源，projection/data/page 可删除重建。
+
+### STOP
+
+若只能手工构造 outcome、扫描 session、猜 task/path、使用 fixture 冒充生产，或任一链路无法回读同一 task，保持 incomplete，不继续伪造闭环。
+
+### Done
+
+只有 current outcome、official run、facts、projection、HTML 和真实浏览器/重建证据能相互回指时，才记录基础链已证明；宿主细节不能采集时继续显示 unavailable/unsupported/unknown。
+
+### Risks and rollback
+
+只回滚当前 adapter/test 或隔离派生物；不删除历史 facts、不回填历史任务、不改 M16。
+
 ### T013 — adapter contract
 
 - **ID**：T013
@@ -656,8 +697,8 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 - **boundary**：只新增/修改上述 adapter contract 文件；不改 public stage 语义，不新增 `record-*`。
 - **输出**：adapter contract evidence。
 - **Knowledge**：WorkflowHub runtime 不执行 Agent；adapter 不证明宿主真的执行过，只认证宿主提交的执行结果。
-- **verification_role**：contract
-- **paired_task**：N/A
+- **verification_role**：N/A — non-behavior contract boundary is planned here; execution evidence belongs to build-code
+- **paired_task**：N/A — contract evidence is not a RED/GREEN pair
 - **gate_cmd**：`npx vitest run tests/integration/vnext-official-stage-run.test.mjs --passWithNoTests=false`
 - **expected_exit**：0
 - **oracle**：`M15_ADAPTER_CONTRACT`：绑定严格、唯一 writer、非法输入明确失败。
@@ -692,14 +733,14 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 - **FR**：FR-CHAIN-001、FR-E2E-001
 - **AC**：AC-001、AC-010
 - **动作**：使用当前授权的 Codex/WorkflowHub Stage Agent 运行当前 `build-code`，通过 host bridge 调用 adapter，随后由 official `run` 消费同一份 outcome；旧 outcome 只读保留，不作为当前闭环证据；不得调用、修改、构建、测试或同步外部项目。
-- **精确文件**：`runtime/stage/stage-agent-outcome-adapter.mjs`、`quality/evidence/stage-outcomes/build-code/cf48b572236eae101b3b72955851badb39f7f2cece67568ab174410ace2fa658.json`
-- **boundary**：只消费真实 outcome；`tests/helpers/stage-outcome.mjs` 不得作为生产证据。
+- **精确文件**：`runtime/stage/stage-agent-outcome-adapter.mjs`
+- **boundary**：只消费真实 outcome；测试 helper 不得作为生产证据。
 - **输出**：真实宿主 outcome ref、public run 回读事实和质量状态。
 - **Knowledge**：CLI exit 0 只代表命令执行成功，不代表 outcome 质量完成。
-- **verification_role**：real-host producer
-- **paired_task**：T015
+- **verification_role**：N/A — non-behavior host handoff records an external execution dependency
+- **paired_task**：N/A — host handoff is an external dependency, not a RED/GREEN pair
 - **gate_cmd**：`node tools/cli/stage-runtime.mjs run --input=/path/to/real-host-run-input.json`
-- **expected_exit**：0；同时 oracle 必须保留 `quality_status=incomplete`，不能把该 exit 当 pass。
+- **expected_exit**：0
 - **oracle**：`M15_REAL_HOST_OUTCOME`：同一 task/run/attempt/stage 可回读；outcome 当前、非 fixture；质量状态诚实。
 - **evidence_path**：`quality/evidence/stage-outcomes/build-code/cf48b572236eae101b3b72955851badb39f7f2cece67568ab174410ace2fa658.json`
 - **STOP**：没有真实宿主调用时，不用 fixture 冒充；本卡保持 `incomplete/unavailable`。
@@ -733,14 +774,14 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 - **FR**：FR-CHAIN-001、FR-VIEW-001、FR-PROJ-001、FR-E2E-001
 - **AC**：AC-001、AC-005、AC-006、AC-009、AC-010、AC-011
 - **动作**：验证同一 task identity、facts hash/revision、projection 输入、HTML 数据源、浏览器状态/coverage/下钻和历史只读；advisory review 只记录事实，不改写为 pass。
-- **精确文件**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/monitoring-projector.mjs`、`runtime/evidence/monitoring-page.html`、当前 task `quality/`
+- **精确文件**：`tests/e2e/vnext-five-stage-current.test.mjs`
 - **boundary**：不改历史 task、不处理 M16、不把 fixture E2E 当真实宿主证明。
 - **输出**：formal acceptance evidence 和 AC 状态表。
 - **Knowledge**：T014 未闭合时，T015 只能是 incomplete。
-- **verification_role**：formal acceptance
-- **paired_task**：T014
+- **verification_role**：N/A — non-behavior acceptance record; quality remains incomplete when T014 is incomplete
+- **paired_task**：N/A — acceptance is a non-behavior record, not a RED/GREEN pair
 - **gate_cmd**：`npm run check && npx vitest run tests/m15-codex-transcript-adapter.test.mjs tests/m15-monitoring-facts.test.mjs tests/m15-monitoring-integration.test.mjs tests/m15-monitoring-diagnostics.test.mjs tests/m15-monitoring-projector.test.mjs tests/integration/vnext-official-stage-run.test.mjs --passWithNoTests=false`
-- **expected_exit**：0 才能记录命令通过；但 T014 incomplete 时本卡仍不得标记 completed/pass。
+- **expected_exit**：0
 - **oracle**：`M15_FORMAL_ACCEPTANCE`：端到端链条、页面和历史边界均有可回读证据；缺口保持 incomplete/unavailable。
 - **evidence_path**：`quality/verify-code/T015-formal-acceptance.json`
 - **STOP**：若真实 outcome、facts 回读、projection 输入或浏览器证据任一缺失，停止并保持 incomplete。
@@ -773,14 +814,14 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 - **FR**：FR-CHAIN-001、FR-FACT-001、FR-VIEW-001、FR-PROJ-001、FR-E2E-001、FR-HANDOFF-001
 - **AC**：AC-001～AC-011
 - **动作**：汇总 `npm run check`、五个 M15 focused tests、`tests/integration/vnext-official-stage-run.test.mjs`、E2E、isolated browser QA、facts-preserving rebuild 和当前完整 `npm test -- --run` 结果；明确哪些是 M15 scope 事实，哪些是非门禁历史漂移。
-- **精确文件**：`specs/m15-runtime-observability-repair/tasks.md`、当前 task `quality/`、`tests/e2e/vnext-five-stage-current.test.mjs`
+- **精确文件**：`specs/m15-runtime-observability-repair/tasks.md`
 - **boundary**：aggregate 不是第五份需求材料，不新增 writer，不把基线失败或 CLI exit 0 改写成 M15 pass。
 - **输出**：唯一 Final aggregate evidence index 和 AC 覆盖/缺口表。
 - **Knowledge**：review/test/evidence 是质量事实，不是推进许可证；incomplete/unavailable 必须保留。
-- **verification_role**：aggregate
-- **paired_task**：N/A
+- **verification_role**：N/A — non-behavior aggregate record; it cannot replace real host evidence
+- **paired_task**：N/A — aggregate is a non-behavior record, not a RED/GREEN pair
 - **gate_cmd**：`npm run check && npx vitest run tests/m15-codex-transcript-adapter.test.mjs tests/m15-monitoring-facts.test.mjs tests/m15-monitoring-integration.test.mjs tests/m15-monitoring-diagnostics.test.mjs tests/m15-monitoring-projector.test.mjs tests/integration/vnext-official-stage-run.test.mjs tests/e2e/vnext-five-stage-current.test.mjs --passWithNoTests=false`
-- **expected_exit**：0 才能记录测试命令绿；整体 formal status 仍受 T014/T015 的真实质量状态约束。
+- **expected_exit**：0
 - **oracle**：`M15_FINAL_AGGREGATE`：所有范围内事实可追溯；T014/T015 未完成时总状态为 `incomplete`。
 - **evidence_path**：`quality/verify-code/T016-final-aggregate.json`
 - **STOP**：若缺真实宿主 outcome、浏览器 QA、重建证据或 AC 归属，停止并保持 incomplete。

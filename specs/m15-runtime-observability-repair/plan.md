@@ -122,6 +122,8 @@
 - `tests/m15-monitoring-diagnostics.test.mjs`
 - `tests/m15-monitoring-projector.test.mjs`
 - `tests/integration/vnext-official-stage-run.test.mjs`
+- `tests/e2e/vnext-five-stage-current.test.mjs`
+- `specs/m15-runtime-observability-repair/tasks.md`
 
 ### DO NOT TOUCH
 
@@ -314,7 +316,7 @@ project/global/data.js/HTML 都是 derived；sample sufficiency 的分母和 req
 
 projection schema 变严会让旧派生物不可作为新交付证据；只在隔离 fresh storage 重建派生物，不触碰历史 facts。页面问题回滚只恢复 P2 MODIFY 文件，canonical facts 不随页面回滚。
 
-## Phase 3 — 真实宿主 adapter 与正式验收
+## Phase 3 — 真实宿主 outcome 与正式验收
 
 ### Goal
 
@@ -324,6 +326,10 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 
 - **NEW**：`runtime/stage/stage-agent-outcome-adapter.mjs`
 - **MODIFY**：`tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY**：`tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY**：`specs/m15-runtime-observability-repair/tasks.md`
+- **READ ONLY**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/monitoring-projector.mjs`、`runtime/evidence/monitoring-page.html`
+- **EVIDENCE ONLY**：`quality/evidence/stage-outcomes/build-code/cf48b572236eae101b3b72955851badb39f7f2cece67568ab174410ace2fa658.json`、`quality/verify-code/`、`quality/tests/build-code/`、`specs/m15-runtime-observability-repair/tasks.md`、`tests/e2e/vnext-five-stage-current.test.mjs`
 - **READ ONLY**：`runtime/stage/stage-runner.mjs`、`runtime/task/task-store.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`
 
 ### Tasks
