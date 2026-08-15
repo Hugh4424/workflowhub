@@ -863,6 +863,12 @@
         identityStrip.appendChild(text('span', '本阶段尝试：' + (stage.attempt_id || '未采集')));
         identityStrip.appendChild(text('span', '每个阶段只取该阶段最近尝试，避免把旧尝试混进来'));
         stageBody.appendChild(identityStrip);
+        const stageEvidence = text('div', '', 'snapshot-strip');
+        stageEvidence.appendChild(text('span', '阶段原因：' + (stage.reason ? reason(stage.reason) : '未采集')));
+        if (stage.evidence_summary) stageEvidence.appendChild(text('span', stage.evidence_summary));
+        if (stage.source_refs?.length) addRefs(stageEvidence, stage.source_refs, evidenceSummary(stage));
+        else stageEvidence.appendChild(unavailableCell('阶段无可回指来源'));
+        stageBody.appendChild(stageEvidence);
         if (Array.isArray(stage.errors) && stage.errors.length) {
           const errBox = text('div', '', 'snapshot-strip');
           stage.errors.slice(0, 4).forEach((error) => errBox.appendChild(text('span', error)));

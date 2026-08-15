@@ -864,7 +864,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             if (tip !== parent) throw new Error("task branch changed before publishing verified snapshot");
             git(root, ["update-ref", `refs/heads/${delivery.task_branch}`, delivery.task_commit, parent]);
           }
-          const snapshot = captureGitWorktreeSnapshot(worktree);
+          const snapshot = captureExecutionSnapshot(worktree);
           if (snapshot.tree.toLowerCase() !== git(root, ["rev-parse", `${delivery.task_commit}^{tree}`]).toLowerCase()) throw new Error("task worktree bytes changed before snapshot publish");
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
           if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");
