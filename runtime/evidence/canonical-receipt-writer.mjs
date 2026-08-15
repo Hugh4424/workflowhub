@@ -378,8 +378,17 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   }
   const raw = canonicalJson(value);
   if (revisionOf !== undefined) throw new Error("REPLACEMENT_RETIRED: official records are create-only; publish a new task material instead");
-  publishIdempotently({ task: safeTask, write, ref: registration.ref, raw, label: "official component receipt" });
-  return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
+  // Verification is the one official receipt that may be produced again after
+  // an earlier incomplete attempt on the same task. Keep the historical fixed
+  // record untouched and give the new bytes an explicit content-addressed ref.
+  // The caller must pass this returned ref to the public verify run; there is
+  // no latest pointer, selector, or replacement path.
+  const existing = readCanonicalRecord(safeTask, registration.ref);
+  const ref = component === "verification" && existing !== undefined && existing !== raw
+    ? `quality/evidence/verification/${sha256(raw)}.json`
+    : registration.ref;
+  publishIdempotently({ task: safeTask, write, ref, raw, label: "official component receipt" });
+  return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
 }
 
 export { validateAcceptanceEvidence };

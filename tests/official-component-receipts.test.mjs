@@ -1,8 +1,9 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
@@ -14,6 +15,7 @@ import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
 import { validateBuildCodePhaseEvidence } from "../runtime/stage/stage-content-contracts.mjs";
 
 const temporary = [];
+const execFileAsync = promisify(execFile);
 function fixture({ recordModel } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-official-receipt-"))); temporary.push(root);
   const repo = join(root, "repo"), worktree = join(root, "repo-receipt-task"); mkdirSync(repo);
@@ -200,28 +202,142 @@ describe("official component receipt authority", () => {
     const { task } = fixture();
     createTaskKernel(task).publishCanonicalRecord("quality/evidence/verification-proof.json", "{\"verified\":true}\n");
     const proof = { ref: "quality/evidence/verification-proof.json", sha256: createHash("sha256").update("{\"verified\":true}\n").digest("hex") };
+    const payload = {
+      items: [
+        { id: "current_materials", status: "pass", evidence_refs: [proof], reason: "current material revision verified" },
+        { id: "diff_scope", status: "pass", evidence_refs: [proof], reason: "diff and delivery scope verified" },
+        { id: "risk_tests", status: "pass", evidence_refs: [proof], reason: "risk tests verified" },
+        { id: "acceptance_criteria", status: "pass", evidence_refs: [proof], reason: "each AC verified" },
+        { id: "tasks_completion", status: "pass", evidence_refs: [proof], reason: "tasks completion verified" },
+        { id: "browser_qa", status: "not_applicable", evidence_refs: [], reason: "no UI AC applies" },
+        { id: "independent_review_resolution", status: "unknown", evidence_refs: [], reason: "review unavailable and disclosed" },
+        { id: "core_gaps", status: "pass", evidence_refs: [proof], reason: "no core delivery gap" },
+        { id: "human_handoff", status: "pass", evidence_refs: [proof], reason: "handoff recorded" },
+      ],
+    };
     const receipt = writeOfficialComponentReceipt({
       task,
       stage: "verify-code",
       component: "verification",
-      payload: {
-        items: [
-          { id: "current_materials", status: "pass", evidence_refs: [proof], reason: "current material revision verified" },
-          { id: "diff_scope", status: "pass", evidence_refs: [proof], reason: "diff and delivery scope verified" },
-          { id: "risk_tests", status: "pass", evidence_refs: [proof], reason: "risk tests verified" },
-          { id: "acceptance_criteria", status: "pass", evidence_refs: [proof], reason: "each AC verified" },
-          { id: "tasks_completion", status: "pass", evidence_refs: [proof], reason: "tasks completion verified" },
-          { id: "browser_qa", status: "not_applicable", evidence_refs: [], reason: "no UI AC applies" },
-          { id: "independent_review_resolution", status: "unknown", evidence_refs: [], reason: "review unavailable and disclosed" },
-          { id: "core_gaps", status: "pass", evidence_refs: [proof], reason: "no core delivery gap" },
-          { id: "human_handoff", status: "pass", evidence_refs: [proof], reason: "handoff recorded" },
-        ],
-      },
+      payload,
     });
+    const same = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "verification", payload });
     expect(receipt).toMatchObject({
       ref: "quality/evidence/verification.json",
       value: { items: expect.arrayContaining([expect.objectContaining({ id: "human_handoff" })]) },
     });
+    expect(same.ref).toBe("quality/evidence/verification.json");
+  });
+
+  it("publishes a new content-addressed verification receipt without replacing history", () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task);
+    const oldRaw = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
+      producer: { stage: "verify-code", component: "verification", version: "old" },
+      items: [],
+    }, null, 2)}\n`;
+    kernel.publishCanonicalRecord("quality/evidence/verification.json", oldRaw);
+    const proofRaw = "current verification proof\n";
+    const proofRef = "quality/evidence/current-verification-proof.txt";
+    kernel.publishCanonicalRecord(proofRef, proofRaw);
+    const proof = { ref: proofRef, sha256: createHash("sha256").update(proofRaw).digest("hex") };
+    const payload = {
+      items: [
+        "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+        "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+      ].map((id) => ({ id, status: "pass", evidence_refs: [proof], reason: "current verification fact" })),
+    };
+
+    const first = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "verification", version: "current", payload });
+    const second = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "verification", version: "current", payload });
+
+    expect(first.ref).toMatch(/^quality\/evidence\/verification\/[a-f0-9]{64}\.json$/);
+    expect(second.ref).toBe(first.ref);
+    expect(first.sha256).toBe(first.ref.match(/([a-f0-9]{64})\.json$/)[1]);
+    expect(task.readRecord("quality/evidence/verification.json")).toBe(oldRaw);
+    expect(createHash("sha256").update(task.readRecord(first.ref)).digest("hex")).toBe(first.sha256);
+  });
+
+  it("fails closed when the content-addressed verification ref is preoccupied", () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task);
+    const oldRaw = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
+      producer: { stage: "verify-code", component: "verification", version: "old" },
+      items: [],
+    }, null, 2)}\n`;
+    kernel.publishCanonicalRecord("quality/evidence/verification.json", oldRaw);
+    const proofRaw = "preoccupied verification proof\n";
+    const proofRef = "quality/evidence/preoccupied-verification-proof.txt";
+    kernel.publishCanonicalRecord(proofRef, proofRaw);
+    const proof = { ref: proofRef, sha256: createHash("sha256").update(proofRaw).digest("hex") };
+    const payload = {
+      items: [
+        "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+        "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+      ].map((id) => ({ id, status: "pass", evidence_refs: [proof], reason: "preoccupied target fact" })),
+    };
+    const canonical = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
+      producer: { stage: "verify-code", component: "verification", version: "current" },
+      items: payload.items,
+    }, null, 2)}\n`;
+    const targetRef = `quality/evidence/verification/${createHash("sha256").update(canonical).digest("hex")}.json`;
+    const occupiedRaw = "occupied by another immutable record\n";
+    kernel.publishCanonicalRecord(targetRef, occupiedRaw);
+
+    expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "verification", version: "current", payload }))
+      .toThrow(/already exists with different content/);
+    expect(task.readRecord(targetRef)).toBe(occupiedRaw);
+  });
+
+  it("keeps concurrent same-content verification publication create-only", async () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task);
+    const oldRaw = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
+      producer: { stage: "verify-code", component: "verification", version: "old" },
+      items: [],
+    }, null, 2)}\n`;
+    kernel.publishCanonicalRecord("quality/evidence/verification.json", oldRaw);
+    const proofRaw = "concurrent verification proof\n";
+    const proofRef = "quality/evidence/concurrent-verification-proof.txt";
+    kernel.publishCanonicalRecord(proofRef, proofRaw);
+    const proofHash = createHash("sha256").update(proofRaw).digest("hex");
+    const taskModule = resolve(process.cwd(), "runtime/task/task-handle.mjs");
+    const writerModule = resolve(process.cwd(), "runtime/evidence/canonical-receipt-writer.mjs");
+    const child = `
+      import { openTask } from ${JSON.stringify(`file://${taskModule}`)};
+      import { writeOfficialComponentReceipt } from ${JSON.stringify(`file://${writerModule}`)};
+      const [taskPath, proofRef, proofHash] = process.argv.slice(1);
+      const task = openTask(taskPath, { projectName: "Demo", taskId: "receipt-task" });
+      const payload = { items: [
+        "current_materials", "diff_scope", "risk_tests", "acceptance_criteria", "tasks_completion",
+        "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+      ].map((id) => ({ id, status: "pass", evidence_refs: [{ ref: proofRef, sha256: proofHash }], reason: "concurrent fact" })) };
+      const result = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "verification", version: "race", payload });
+      process.stdout.write(result.ref + "\\n");
+    `;
+    const args = ["--input-type=module", "-e", child, task.taskPath, proofRef, proofHash];
+    const [first, second] = await Promise.all([
+      execFileAsync(process.execPath, args, { cwd: process.cwd() }),
+      execFileAsync(process.execPath, args, { cwd: process.cwd() }),
+    ]);
+    const firstRef = first.stdout.trim();
+    const secondRef = second.stdout.trim();
+    expect(firstRef).toMatch(/^quality\/evidence\/verification\/[a-f0-9]{64}\.json$/);
+    expect(secondRef).toBe(firstRef);
+    expect(createHash("sha256").update(task.readRecord(firstRef)).digest("hex")).toBe(firstRef.match(/([a-f0-9]{64})\.json$/)[1]);
+    expect(task.readRecord("quality/evidence/verification.json")).toBe(oldRaw);
   });
 
   it("preserves semantic requirement-replay evidence for the current verification receipt", () => {
