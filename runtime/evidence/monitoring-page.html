@@ -46,9 +46,9 @@
     .brand-mark { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #fff; background: var(--wh-accent); font-size: 0; }
     .brand-sub, .top-meta { color: var(--wh-text-muted); font-size: 12px; }
     .top-meta { text-align: right; }
-    .page { width: 100%; margin: 0; padding: 0 0 48px; }
-    .app-grid { min-height: calc(100vh - 46px); display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
-    .sidebar { position: static; min-height: calc(100vh - 46px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
+    .page { width: min(1600px, calc(100% - 48px)); margin: auto; padding: 20px 0 48px; }
+    .app-grid { display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
+    .sidebar { position: sticky; top: 14px; min-height: calc(100vh - 90px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
     .sidebar-head { padding: 14px 14px 12px; border-bottom: 1px solid var(--wh-border-soft); }
     .eyebrow { color: var(--wh-accent); font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
     .sidebar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0; }
@@ -77,7 +77,7 @@
     .task-item-meta { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-top: 5px; color: var(--wh-text-muted); font-size: 11px; }
     .task-item-meta strong { display: inline; color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; }
     .sidebar-foot { margin: 0; padding: 10px 14px; border-radius: 0; border-top: 1px solid var(--wh-border-soft); color: var(--wh-text-faint); background: transparent; font-size: 10.5px; line-height: 1.5; }
-    .main { min-width: 0; display: grid; gap: 12px; padding: 20px 24px 48px; }
+    .main { min-width: 0; display: grid; gap: 12px; padding: 0 24px; }
     .fatal { padding: 20px; border: 1px solid var(--wh-danger); border-radius: var(--radius); color: var(--wh-danger); background: var(--wh-danger-soft); }
     .banner { padding: 11px 15px; border-radius: var(--radius); font-size: 11.5px; line-height: 1.45; }
     .banner strong { display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; }
@@ -152,7 +152,7 @@
     .stage-list { display: grid; gap: 8px; }
     .stage-block { border: 1px solid var(--wh-border-soft); border-radius: 6px; background: var(--wh-panel-2); overflow: hidden; }
     .stage-block.open { border-color: var(--wh-border); background: var(--wh-panel); }
-    .stage-toggle { width: 100%; display: grid; grid-template-columns: 52px minmax(180px, 1.35fr) 112px minmax(160px, 1.4fr) 110px 100px minmax(100px, 1fr); align-items: center; gap: 8px; height: 78px; padding: 0 16px; border: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
+    .stage-toggle { width: 100%; display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; align-items: center; gap: 14px; height: 62px; padding: 0 16px; border: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
     .stage-toggle:hover { background: var(--wh-panel-hover); }
     .stage-block.open .stage-toggle { border-bottom: 1px solid var(--wh-border-soft); background: var(--wh-accent-soft); }
     .stage-index { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; color: var(--wh-text-dim); font-size: 14px; font-weight: 600; }
@@ -165,11 +165,10 @@
     .stage-cell .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
     .stage-cell .gap-warn { color: var(--wh-warn); font-weight: 750; }
     .stage-cell .gap-ok { color: var(--wh-success); }
-    .stage-summary-meta { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 2px 8px; }
-    .stage-summary-meta > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; white-space: normal; }
-    .stage-summary-meta > div:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 5px; }
+    .stage-summary-meta { display: flex; align-items: flex-start; gap: 12px; }
+    .stage-summary-meta > div { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; white-space: nowrap; }
     .stage-summary-meta label { color: var(--wh-text-faint); font-size: 9.5px; }
-    .stage-summary-meta .wh-mono { white-space: normal; overflow-wrap: anywhere; }
+    .stage-summary-meta .wh-mono { white-space: nowrap; }
     .metric-bar { display: inline-flex; align-items: center; gap: 8px; }
     .metric-track { width: 48px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--wh-track); flex-shrink: 0; }
     .metric-fill { display: block; height: 100%; border-radius: 3px; background: var(--wh-accent); min-width: 3px; }
@@ -188,20 +187,21 @@
     .subheading { display: flex; align-items: baseline; justify-content: space-between; margin: 0; padding: 9px 16px 6px; }
     .subheading h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--wh-text-dim); }
     .subheading span { color: var(--wh-text-faint); font-size: 10.5px; }
-    .fact-grid { display: grid; grid-template-columns: 44px minmax(180px, 1.35fr) 110px minmax(140px, 1.4fr) 100px 100px minmax(110px, 1fr); gap: 8px; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--wh-border-soft); }
+    .fact-grid { display: grid; grid-template-columns: 52px minmax(150px, 1.35fr) 122px minmax(180px, 1.6fr) 150px 128px 132px; gap: 14px; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--wh-border-soft); }
     .fact-grid.header { min-height: 30px; background: var(--wh-inset); }
     .fact-grid.header span { color: var(--wh-text-faint); font-size: 10.5px; letter-spacing: .03em; }
     .fact-grid:nth-child(even) { background: rgba(255,255,255,.015); }
     .fact-grid.step-row { min-height: 33px; }
     .fact-grid.skill-row { min-height: 38px; }
-    .fact-grid .fact-name { color: var(--wh-text-dim); font-size: 12px; overflow-wrap: anywhere; line-height: 1.3; }
-    .fact-grid .fact-outcome { color: var(--wh-text-muted); font-size: 11.5px; overflow-wrap: anywhere; line-height: 1.3; }
+    .fact-grid .fact-name { color: var(--wh-text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fact-grid .fact-outcome { color: var(--wh-text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fact-grid .fact-outcome.warn { color: var(--wh-warn); }
     .fact-grid .fact-outcome.danger { color: var(--wh-danger); }
     .fact-grid .fact-detail { display: block; margin-top: 3px; color: var(--wh-text-dim); font-size: 10.5px; line-height: 1.3; overflow-wrap: anywhere; }
-    .fact-grid .fact-trigger { color: var(--wh-text-faint); font-size: 10px; overflow-wrap: anywhere; line-height: 1.25; }
+    .fact-grid .fact-trigger { color: var(--wh-text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fact-grid .evidence-cell { min-width: 0; display: grid; gap: 3px; }
-    .fact-grid .evidence-summary { color: var(--wh-text-faint); font-size: 10px; overflow-wrap: anywhere; line-height: 1.25; }
+    .fact-grid .evidence-state { color: var(--wh-text-dim); font-size: 10px; font-weight: 650; white-space: nowrap; }
+    .fact-grid .evidence-summary { color: var(--wh-text-faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fact-grid .stage-index { color: var(--wh-text-faint); font-size: 11px; font-weight: 600; }
     .fact-grid .stage-index.step { color: var(--wh-text-muted); }
     .fact-grid .stage-index.skill { color: var(--wh-accent); }
@@ -218,7 +218,7 @@
     #evidence-panel p { margin: 0 0 8px; color: var(--wh-text-muted); font-size: 12px; }
     #evidence-panel code { display: block; overflow-wrap: anywhere; padding: 9px; border-radius: 5px; color: #d5e2ff; background: #101827; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; }
     .table-scroll { overflow-x: auto; }
-    @media (max-width: 1100px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 20px 16px 48px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } }
+    @media (max-width: 1300px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } .stage-summary-meta { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 6px; } .stage-summary-meta > div { min-width: 0; gap: 1px; } .stage-summary-meta .wh-mono { overflow: hidden; text-overflow: ellipsis; } }
     @media (max-width: 760px) { .topbar-inner { width: calc(100% - 24px); } .page { width: 100%; } .main { padding: 16px 12px 36px; } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -314,7 +314,12 @@
     const recordHasStage = (record, stage) => (record.diagnostics.stage || []).some((entry) => entry.id === stage && entry.status !== 'pending' && hasObservedEntry(entry))
       || (record.diagnostics.steps || []).some((entry) => entry.stage === stage && hasObservedEntry(entry))
       || (record.diagnostics.skills || []).some((entry) => entry.stage === stage && hasObservedEntry(entry));
-    const openObservedStages = () => new Set(stageOrder);
+    const openObservedStages = (record) => {
+      const entries = stagesFor(record);
+      const observed = entries.filter((entry) => entry.status !== 'pending' && hasObservedEntry(entry));
+      const stage = observed.at(-1) || entries.find((entry) => entry.status !== 'pending' && entry.status !== 'unknown') || entries[0];
+      return new Set(stage ? [stage.id] : []);
+    };
     if (preferredRecord) openStages = openObservedStages(preferredRecord);
     const recordHasSkill = (record, skill) => (record.diagnostics.skills || []).some((entry) => entry.id === skill) || (record.diagnostics.compatibility?.skill_keys || []).some((key) => key.includes('+' + skill + '+'));
     const recordHasVersion = (record, version) => (record.diagnostics.compatibility?.skill_keys || []).some((key) => key.endsWith('+' + version));
@@ -336,8 +341,8 @@
       for (const [id, key] of [['global-filter', 'global'], ['project-filter', 'project'], ['task-filter', 'task'], ['stage-filter', 'stage'], ['skill-filter', 'skill'], ['version-filter', 'version'], ['time-filter', 'time_window']]) $('#' + id).addEventListener('change', (event) => { filters[key] = event.target.value; render(); });
       document.querySelectorAll('.view-tab').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; document.querySelectorAll('.view-tab').forEach((tab) => tab.classList.toggle('active', tab === button)); render(); }));
     }
-    function addRefs(parent, refs, detail = '') { const safeRefs = Array.isArray(refs) ? refs.filter(safeRef) : []; if (!safeRefs.length) return; const wrap = document.createElement('div'); wrap.className = 'refs'; safeRefs.slice(0, 5).forEach((ref, index) => { const button = text('button', '来源 ' + (index + 1), 'ref-chip'); button.type = 'button'; button.dataset.ref = ref; if (detail) button.dataset.detail = detail; button.title = '查看受控来源和这条记录的摘要'; wrap.appendChild(button); }); parent.appendChild(wrap); }
-    function reason(value) { return reasonLabels[value] || (value ? '存在未展开的记录原因' : ''); }
+    function addRefs(parent, refs, detail = '') { const safeRefs = Array.isArray(refs) ? refs.filter(safeRef) : []; if (!safeRefs.length) return; const wrap = document.createElement('div'); wrap.className = 'refs'; safeRefs.slice(0, 5).forEach((ref, index) => { const label = '证据 ' + (index + 1); const button = text('button', label, 'ref-chip'); button.type = 'button'; button.dataset.ref = ref; if (detail) button.dataset.detail = detail; button.title = '查看受控来源：' + ref; button.setAttribute('aria-label', '查看' + label); wrap.appendChild(button); }); parent.appendChild(wrap); }
+    function reason(value) { return reasonLabels[value] || (value ? '原因：' + value : ''); }
     function metricValue(value, suffix = '') { return value === null || value === undefined ? '未采集' : String(value) + suffix; }
     function stageToken(record, id) { const value = record.diagnostics.cost?.breakdown?.stage?.[id]; return value === undefined ? null : value; }
     function stepToken(record, stage, slug) { const value = record.diagnostics.cost?.breakdown?.step?.[stage + '+' + slug]; return value === undefined ? null : value; }
@@ -345,9 +350,9 @@
     function stageDuration(record, id) { const value = record.diagnostics.cost?.duration_breakdown?.stage?.[id]; return Number.isFinite(value) ? value : null; }
     function stepDuration(record, stage, slug) { const value = record.diagnostics.cost?.duration_breakdown?.step?.[stage + '+' + slug]; return Number.isFinite(value) ? value : null; }
     function skillDuration(record, id) { const direct = record.diagnostics.cost?.duration_breakdown?.skill?.[id]; if (Number.isFinite(direct)) return direct; const found = Object.entries(record.diagnostics.cost?.duration_breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
-    function evidenceSummary(entry) { return [entry.evidence_summary, entry.source_kind ? '来源类型=' + entry.source_kind : null, entry.source_id ? '来源ID=' + entry.source_id : null, entry.observed_at ? '采集时间=' + readableTime(entry.observed_at) : null, '覆盖=' + (entry.coverage?.observed ?? '未采集') + ' / ' + (entry.coverage?.expected ?? '未采集')].filter(Boolean).join('；'); }
+    function evidenceSummary(entry) { const reasonText = entry.reason && !String(entry.evidence_summary || '').includes('原因=') ? '原因=' + reason(entry.reason) : null; return [entry.evidence_summary, reasonText, entry.source_kind ? '来源类型=' + entry.source_kind : null, entry.source_id ? '来源ID=' + entry.source_id : null, entry.observed_at ? '采集时间=' + readableTime(entry.observed_at) : null, '覆盖=' + (entry.coverage?.observed ?? '未采集') + ' / ' + (entry.coverage?.expected ?? '未采集')].filter(Boolean).join('；'); }
     function currentCoverage(record) { const current = record.diagnostics?.current || {}; return { stages: current.stage_coverage || { observed: 0, expected: 5 }, steps: current.step_coverage || { observed: 0, expected: 0 }, skills: current.skill_coverage || { observed: 0, expected: 0 } }; }
-    function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = openObservedStages(record); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const coverage = currentCoverage(record); const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', coverage.stages.observed + ' / ' + coverage.stages.expected)); meta.appendChild(text('span', '步骤 ')); meta.lastChild.appendChild(text('strong', coverage.steps.observed + ' / ' + coverage.steps.expected)); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
+    function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = openObservedStages(record); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const coverage = currentCoverage(record); const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', coverage.stages.observed + ' / ' + coverage.stages.expected)); meta.appendChild(text('span', '步骤 ')); meta.lastChild.appendChild(text('strong', coverage.steps.observed + ' / ' + coverage.steps.expected)); meta.appendChild(text('span', '技能 ')); meta.lastChild.appendChild(text('strong', coverage.skills.observed + ' / ' + coverage.skills.expected)); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
     function renderBanner(record) {
       const problems = [];
       if (record.status === 'partial') problems.push('当前任务是部分可见（partial）：部分来源缺失或损坏，下面只展示已核实的合法事实，缺口会逐项标明。');
@@ -464,10 +469,11 @@
       const skills = record.diagnostics.skills || [];
       const cost = record.diagnostics.cost || {};
       const automation = record.diagnostics.automation || {};
+      const coverage = currentCoverage(record);
       const autoText = automation.rate?.status === 'present' && automation.rate.value !== null ? Math.round(automation.rate.value * 100) + '%' : '无法判断';
       const cards = [
         ['当前状态', statusLabels[record.status] || '无法判断', '快照状态'],
-        ['阶段事实', stageRows.filter(hasObservedEntry).length + ' / 5', stageRows.some((entry) => entry.status === 'evidence_gap') ? '存在证据断链' : '固定五阶段'],
+        ['阶段事实', coverage.stages.observed + ' / ' + coverage.stages.expected, stageRows.some((entry) => entry.status === 'evidence_gap') ? '存在证据断链' : '按当前覆盖统计'],
         ['步骤结果', steps.length ? countDone(steps) + ' / ' + steps.length : '无法判断', steps.length ? (countGap(steps) ? countGap(steps) + ' 项遗漏或异常' : '没有已知缺口') : '没有步骤拓扑事实'],
         ['技能结果', skills.length ? countDone(skills) + ' / ' + skills.length : '无法判断', skills.length ? (countGap(skills) ? countGap(skills) + ' 项遗漏或异常' : '没有已知缺口') : '没有技能拓扑事实'],
         ['Token', metricValue(cost.token_count), cost.token_count === null ? '未采集，不按 0 处理' : '按消息去重统计'],
@@ -673,7 +679,11 @@
       const num = String(stageIndex) + '.' + (index + 1);
       const serial = text('span', kind === 'step' ? num : 'S' + num, 'stage-index ' + kind);
       tr.appendChild(serial);
-      tr.appendChild(text('span', kind === 'step' ? (entry.step_slug || '步骤 ' + entry.id) : skillLabel(entry.id), 'fact-name'));
+      const name = document.createElement('div');
+      name.className = 'fact-name';
+      name.appendChild(text('span', kind === 'step' ? (entry.step_slug || '步骤 ' + entry.id) : skillLabel(entry.id)));
+      if (kind === 'skill') name.appendChild(text('span', ' · ' + entry.id, 'fact-code'));
+      tr.appendChild(name);
       const state = document.createElement('div');
       state.appendChild(statusWithCode(entry.status));
       if (entry.reason) state.appendChild(text('span', reason(entry.reason), 'reason'));
@@ -713,8 +723,9 @@
       tr.appendChild(durationCell);
       const refs = document.createElement('div');
       refs.className = 'evidence-cell';
+      refs.appendChild(text('strong', entry.source_refs?.length ? '证据链：已绑定 ' + entry.source_refs.length + ' 条受控来源' : '证据链：无受控来源，无法核实', 'evidence-state'));
       if (entry.source_refs?.length) addRefs(refs, entry.source_refs, evidenceSummary(entry)); else refs.appendChild(unavailableCell(entry.evidence_summary || '无可回指来源'));
-      refs.appendChild(text('span', '证据摘要：' + (evidenceSummary(entry) || '无可回指来源'), 'evidence-summary'));
+      refs.appendChild(text('span', entry.source_refs?.length ? '点击证据查看来源详情' : '无可回指来源', 'evidence-summary'));
       tr.appendChild(refs);
       return tr;
     }

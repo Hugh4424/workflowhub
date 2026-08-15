@@ -351,8 +351,10 @@ describe("current vNext five-stage runtime", () => {
       expect.objectContaining({ fact_type: "source_status", status: "missing", reason: "no_registered_source" }),
       expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_unavailable" }),
     ]));
-    expect(facts.filter((fact) => fact.fact_type === "step" && fact.stage === "build-spec")).toHaveLength(0);
-    expect(facts.filter((fact) => fact.fact_type === "skill" && fact.stage === "build-spec")).toHaveLength(0);
+    const declaredSteps = JSON.parse(readFileSync(join(process.cwd(), "workflows/build-spec/steps.json"), "utf8")).steps;
+    const declaredSkills = yaml.load(readFileSync(join(process.cwd(), "workflows/build-spec/skill-deps.yaml"), "utf8")).skills;
+    expect(facts.filter((fact) => fact.fact_type === "step" && fact.stage === "build-spec")).toHaveLength(declaredSteps.length);
+    expect(facts.filter((fact) => fact.fact_type === "skill" && fact.stage === "build-spec")).toHaveLength(declaredSkills.length);
   });
 
   it("rejects evidence that is hashed correctly but belongs to another declared step", () => {

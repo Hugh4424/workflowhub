@@ -145,13 +145,18 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAt
       continue;
     }
     const eventType = `${outer.type ?? "rollout"}/${payloadType}`;
+    // Some host session metadata records reuse the thread id as payload.id.
+    // Generic transcript events need the rollout line boundary as part of
+    // their identity, otherwise a normal append-only session becomes a false
+    // typed-event conflict.
+    const genericEventId = `${sourceEventId}-${index}`;
     records.push(JSON.stringify({
-      id: `event-${sourceEventId}`,
+      id: `event-${genericEventId}`,
       type: "transcript_event",
       fact_type: "transcript_event",
       ...common,
       value: {
-        event_id: `event-${sourceEventId}`,
+        event_id: `event-${genericEventId}`,
         event_type: eventType,
         ...(occurredAt === null ? {} : { timestamp: new Date(occurredAt).toISOString() }),
       },
@@ -253,6 +258,68 @@ function normalizeOutcomeStatus(outcome, kind) {
   };
 }
 
+function normalizeOutcomeCost(outcome) {
+  const cost = outcome?.cost;
+  if (!cost || typeof cost !== 'object' || Array.isArray(cost)) return null;
+  const status = cost.status === 'recorded' || cost.status === 'unavailable' ? cost.status : null;
+  const durationMs = cost.duration_ms;
+  const tokens = cost.tokens;
+  if (!status) return null;
+  if (status === 'recorded'
+      && Number.isSafeInteger(durationMs) && durationMs >= 0
+      && Number.isSafeInteger(tokens) && tokens >= 0) {
+    return { status, duration_ms: durationMs, tokens };
+  }
+  if (status === 'unavailable'
+      && (durationMs === null || durationMs === undefined)
+      && (tokens === null || tokens === undefined)
+      && typeof cost.reason === 'string' && cost.reason.trim()) {
+    return { status, duration_ms: null, tokens: null, reason: cost.reason.trim() };
+  }
+  return null;
+}
+
+function outcomeCostFacts({ task, factIdentity, stage, kind, id, stepSlug = null, skillId = null, outcome }) {
+  const cost = normalizeOutcomeCost(outcome);
+  if (!cost) return [];
+  const subject = `${kind}:${id}`;
+  const evidenceRefs = [
+    ...normalizeEvidenceRefs(outcome?.evidence_refs),
+    ...(typeof outcome?.stage_outcome_ref === 'string' && outcome.stage_outcome_ref.trim()
+      ? [outcome.stage_outcome_ref]
+      : []),
+  ];
+  const common = {
+    ...task,
+    stage,
+    step_id: kind === 'step' ? id : null,
+    step_slug: kind === 'step' ? stepSlug : null,
+    skill_id: kind === 'skill' ? skillId : null,
+    coverage: { observed: cost.status === 'recorded' ? 1 : 0, expected: 1 },
+    evidence_refs: evidenceRefs,
+  };
+  const status = cost.status === 'recorded' ? 'present' : 'unavailable';
+  const reason = status === 'present' ? null : cost.reason;
+  return [
+    createMonitoringFact({
+      ...common,
+      fact_id: `token:${factIdentity}:${subject}`,
+      fact_type: 'token',
+      status,
+      value: status === 'present' ? { message_id: `stage-outcome:${factIdentity}:${subject}`, tokens: cost.tokens, grain: 'stage_outcome' } : null,
+      reason,
+    }),
+    createMonitoringFact({
+      ...common,
+      fact_id: `duration:${factIdentity}:${subject}`,
+      fact_type: 'duration',
+      status,
+      value: status === 'present' ? { duration_ms: cost.duration_ms, event_id: `stage-outcome:${factIdentity}:${subject}`, grain: 'stage_outcome' } : null,
+      reason,
+    }),
+  ];
+}
+
 function normalizeEvidenceRefs(value) {
   return Array.isArray(value)
     ? value.map((entry) => typeof entry === "string" ? entry : entry?.ref).filter((ref) => typeof ref === "string" && ref.trim())
@@ -286,7 +353,7 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
     ? stageOutcome.stage_outcome_status
     : stageOutcome?.status;
   const stageState = normalizeOutcomeStatus(
-    stageOutcomeStatus === undefined ? null : { status: stageOutcomeStatus },
+    stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
     "stage",
   );
   const records = [createMonitoringFact({
@@ -300,43 +367,52 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
     coverage: outcomeCoverage(stageState.status),
     evidence_refs: typeof stageOutcome?.stage_outcome_ref === "string" ? [stageOutcome.stage_outcome_ref] : [],
   })];
+  records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'stage', id: stage ?? 'unknown', outcome: stageOutcome }));
   if (!stage) return records;
-  const stageTopology = (topology?.stages ?? []).find((entry) => entry.id === stage) ?? { steps: [], skills: [] };
-  const declaredStepIds = new Set((stageTopology.steps ?? []).map((step) => String(step.id)));
-  const stepOutcomes = Array.isArray(stageOutcome?.step_outcomes) ? stageOutcome.step_outcomes : [];
-  for (const outcome of stepOutcomes) {
-    if (!outcome || outcome.step_id === undefined || outcome.step_id === null) continue;
-    const id = String(outcome.step_id);
-    if (!declaredStepIds.has(id)) continue;
-    const state = normalizeOutcomeStatus(outcome, "step");
+  const stageTopology = (topology?.stages ?? []).find((entry) => entry.id === stage);
+  if (!stageTopology) throw new Error(`monitoring topology missing stage: ${stage}`);
+  const stepOutcomes = new Map((Array.isArray(stageOutcome?.step_outcomes) ? stageOutcome.step_outcomes : [])
+    .filter((outcome) => outcome && outcome.step_id !== undefined && outcome.step_id !== null)
+    .map((outcome) => [String(outcome.step_id), outcome]));
+  for (const declared of stageTopology.steps ?? []) {
+    const id = String(declared.id);
+    const outcome = stepOutcomes.get(id);
+    const state = outcome
+      ? normalizeOutcomeStatus(outcome, "step")
+      : { status: 'unavailable', value: null, reason: 'step_outcome_unavailable', error: null };
+    const value = state.status === 'present' ? state.value : null;
     records.push(createMonitoringFact({
       ...task,
       fact_id: `step:${factIdentity}:${stage}:${id}`,
       fact_type: "step",
       step_id: id,
-      step_slug: typeof outcome.step_slug === "string" ? outcome.step_slug : null,
+      step_slug: typeof outcome?.step_slug === "string" ? outcome.step_slug : (typeof declared.slug === 'string' ? declared.slug : null),
       status: state.status,
-      value: state.value,
+      value,
       reason: state.reason,
       error: state.error,
       coverage: outcomeCoverage(state.status),
-      evidence_refs: normalizeEvidenceRefs(outcome.evidence_refs),
+      evidence_refs: normalizeEvidenceRefs(outcome?.evidence_refs),
     }));
+    records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'step', id, stepSlug: typeof outcome?.step_slug === 'string' ? outcome.step_slug : declared.slug, outcome }));
   }
-  const declaredSkillIds = new Set((stageTopology.skills ?? []).map((skill) => String(skill.id)));
-  const skillOutcomes = Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [];
-  for (const outcome of skillOutcomes) {
-    if (!outcome || typeof outcome.skill_id !== "string" || !declaredSkillIds.has(outcome.skill_id)) continue;
-    const id = outcome.skill_id;
-    let state = normalizeOutcomeStatus(outcome, "skill");
+  const skillOutcomes = new Map((Array.isArray(stageOutcome?.skill_outcomes) ? stageOutcome.skill_outcomes : [])
+    .filter((outcome) => outcome && typeof outcome.skill_id === 'string')
+    .map((outcome) => [outcome.skill_id, outcome]));
+  for (const declared of stageTopology.skills ?? []) {
+    const id = String(declared.id);
+    const outcome = skillOutcomes.get(id);
+    let state = outcome
+      ? normalizeOutcomeStatus(outcome, "skill")
+      : { status: 'unavailable', value: null, reason: 'skill_outcome_unavailable', error: null };
     let value = state.value;
     if (state.status === "present") {
       value = {};
-      if (typeof outcome.trigger === "boolean") value.trigger = outcome.trigger;
-      if (typeof outcome.executed === "boolean") value.executed = outcome.executed;
-      if (typeof outcome.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
-      if (typeof outcome.version === "string" && outcome.version.trim()) value.version = outcome.version;
-      if (typeof outcome.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
+      if (typeof outcome?.trigger === "boolean") value.trigger = outcome.trigger;
+      if (typeof outcome?.executed === "boolean") value.executed = outcome.executed;
+      if (typeof outcome?.reason === "string" && outcome.reason.trim()) value.reason = outcome.reason;
+      if (typeof outcome?.version === "string" && outcome.version.trim()) value.version = outcome.version;
+      if (typeof outcome?.result_summary === "string" && outcome.result_summary.trim()) value.result_summary = outcome.result_summary.trim();
       if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
         state = { status: "unavailable", value: null, reason: "skill_outcome_unavailable", error: null };
         value = null;
@@ -347,14 +423,15 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
       fact_id: `skill:${factIdentity}:${stage}:${id}`,
       fact_type: "skill",
       skill_id: id,
-      skill_version: typeof outcome.version === "string" ? outcome.version : null,
+      skill_version: typeof outcome?.version === "string" ? outcome.version : null,
       status: state.status,
       value,
       reason: state.reason,
       error: state.error,
       coverage: outcomeCoverage(state.status),
-      evidence_refs: normalizeEvidenceRefs(outcome.evidence_refs),
+      evidence_refs: normalizeEvidenceRefs(outcome?.evidence_refs),
     }));
+    records.push(...outcomeCostFacts({ task, factIdentity, stage, kind: 'skill', id, skillId: id, outcome }));
   }
   return records;
 }

@@ -73,6 +73,8 @@ describe('M15 project/global projector', () => {
     expect(html).toContain('收起全部阶段');
     expect(html).toContain('步骤和技能名称来自固定流程清单');
     expect(html).toContain('证据摘要');
+    expect(html).toContain('证据链：已绑定');
+    expect(html).toContain("const label = '证据 ' + (index + 1)");
     expect(html).toContain('当前结构化覆盖');
     expect(html).toContain('未拆分：没有稳定归属来源');
   });

@@ -272,6 +272,27 @@ describe('M15 diagnostics', () => {
     expect(result.steps[0].source_refs).toContain('quality/evidence/token-bound');
   });
 
+  it('keeps transcript totals separate from stage-outcome step and skill attribution', () => {
+    const result = deriveMonitoringDiagnostics({ topology: {
+      stages: [{ id: 'build-code', steps: [{ id: 'bc-1', slug: 'implement-change', order: 1 }], skills: [{ id: 'skill-a' }] }],
+    }, facts: [
+      fact({ fact_id: 'transcript-token', fact_type: 'token', stage: 'build-code', value: { message_id: 'message-1', total_tokens: 5, grain: 'message' } }),
+      fact({ fact_id: 'outcome-step-token', fact_type: 'token', stage: 'build-code', step_id: 'bc-1', step_slug: 'implement-change', value: { message_id: 'stage-outcome:step:bc-1', tokens: 7, grain: 'stage_outcome' } }),
+      fact({ fact_id: 'outcome-skill-token', fact_type: 'token', stage: 'build-code', skill_id: 'skill-a', value: { message_id: 'stage-outcome:skill:skill-a', tokens: 9, grain: 'stage_outcome' } }),
+      fact({ fact_id: 'transcript-duration', fact_type: 'duration', stage: 'build-code', value: { event_id: 'event-1', duration_ms: 100, grain: 'message' } }),
+      fact({ fact_id: 'outcome-step-duration', fact_type: 'duration', stage: 'build-code', step_id: 'bc-1', step_slug: 'implement-change', value: { event_id: 'stage-outcome:duration:step:bc-1', duration_ms: 200, grain: 'stage_outcome' } }),
+      fact({ fact_id: 'outcome-skill-duration', fact_type: 'duration', stage: 'build-code', skill_id: 'skill-a', value: { event_id: 'stage-outcome:duration:skill:skill-a', duration_ms: 300, grain: 'stage_outcome' } }),
+    ] });
+    expect(result.cost.token_count).toBe(5);
+    expect(result.cost.breakdown.stage['build-code']).toBe(5);
+    expect(result.cost.breakdown.step['build-code+implement-change']).toBe(7);
+    expect(result.cost.breakdown.skill['skill-a']).toBe(9);
+    expect(result.cost.duration_ms).toBe(100);
+    expect(result.cost.duration_breakdown.stage['build-code']).toBe(100);
+    expect(result.cost.duration_breakdown.step['build-code+implement-change']).toBe(200);
+    expect(result.cost.duration_breakdown.skill['skill-a']).toBe(300);
+  });
+
   it('counts the producer token shape and exposes mechanically proven duplicate waste', () => {
     const result = deriveMonitoringDiagnostics({ topology, facts: [
       fact({ fact_id: 't1', fact_type: 'token', value: { message_id: 'm1', input_tokens: 2, output_tokens: 3, total_tokens: 5, grain: 'message' }, stage: 'build-code' }),

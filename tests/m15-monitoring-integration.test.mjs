@@ -84,6 +84,30 @@ describe('M15 stage sidecar integration', () => {
     }
   });
 
+  it('does not turn repeated host session metadata ids into a transcript conflict', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-session-meta-home-')));
+    const rolloutDir = join(home, '.codex', 'sessions', '2026', '08', '13');
+    const threadId = 'thread-m15-session-meta';
+    const rolloutPath = join(rolloutDir, `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    try {
+      mkdirSync(rolloutDir, { recursive: true });
+      writeFileSync(rolloutPath, [
+        { timestamp: '2026-08-13T00:00:01.000Z', type: 'session_meta', payload: { id: threadId, type: 'session_meta', source: 'host' } },
+        { timestamp: '2026-08-13T00:00:02.000Z', type: 'session_meta', payload: { id: threadId, type: 'session_meta', source: 'host', sequence: 2 } },
+      ].map((entry) => JSON.stringify(entry)).join('\n') + '\n');
+      const source = resolveDefaultMonitoringSource({
+        task_id: 'm15-session-meta', run_id: 'run-session-meta', attempt_id: 'attempt-session-meta', context: { stage: 'build-code' },
+        env: { CODEX_THREAD_ID: threadId, CODEX_ROLLOUT_PATH: rolloutPath }, home, startedAtMs: 0,
+      });
+      const parsed = parseRegisteredCodexTranscript(source, { project_name: 'workflowhub', task_id: 'm15-session-meta', run_id: 'run-session-meta', attempt_id: 'attempt-session-meta' });
+      expect(parsed.status).toBe('present');
+      expect(parsed.records.filter((record) => record.fact_type === 'transcript_event')).toHaveLength(2);
+      expect(parsed.records).not.toEqual(expect.arrayContaining([expect.objectContaining({ error: 'TYPED_EVENT_ID_CONFLICT' })]));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('converts Codex token_count events into per-turn token facts without guessing step attribution', () => {
     const home = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-codex-token-home-')));
     const rolloutDir = join(home, '.codex', 'sessions', '2026', '08', '13');
@@ -200,6 +224,69 @@ describe('M15 stage sidecar integration', () => {
       try { execFileSync('git', ['worktree', 'remove', '--force', state.candidate.worktreeRoot], { cwd: state.repo, stdio: 'ignore' }); } catch {}
       rmSync(state.storageRoot, { recursive: true, force: true });
       rmSync(state.repo, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps declared step and skill rows, including authenticated outcome cost details', async () => {
+    const state = fixture();
+    const topology = { stages: [{
+      id: 'build-spec',
+      steps: [{ id: '1', slug: 'read-decision-log', order: 1 }],
+      skills: [{ id: 'spec-analyze', trigger_condition: 'always', execution: 'direct' }],
+    }] };
+    try {
+      await runMonitoringSidecar({
+        context: { storageRoot: state.storageRoot, task: state.task, identity: state.task.identity, workflowRunId: 'run-outcome-details', stage: 'build-spec', attempt_id: 'attempt-outcome-details' },
+        topology,
+        stageOutcome: {
+          status: 'completed',
+          step_outcomes: [{
+            step_id: '1', step_slug: 'read-decision-log', status: 'completed',
+            result_summary: '真实步骤结果', evidence_refs: ['quality/evidence/step-proof'],
+            cost: { status: 'recorded', duration_ms: 42, tokens: 123 },
+          }],
+          skill_outcomes: [{
+            skill_id: 'spec-analyze', status: 'completed', trigger: true, executed: true,
+            version: 'skill-v1', result_summary: '真实技能结果', evidence_refs: ['quality/evidence/skill-proof'],
+            cost: { status: 'recorded', duration_ms: 7, tokens: 11 },
+          }],
+        },
+        services: { resolveMonitoringSource: async () => null, monitoringTopology: topology },
+        now: () => new Date('2026-08-15T00:00:00.000Z'),
+      });
+      const facts = readTaskFacts(state.task.taskPath);
+      expect(facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ fact_type: 'token', step_slug: 'read-decision-log', value: { message_id: expect.any(String), tokens: 123, grain: 'stage_outcome' } }),
+        expect.objectContaining({ fact_type: 'duration', step_slug: 'read-decision-log', value: { duration_ms: 42, event_id: expect.any(String), grain: 'stage_outcome' } }),
+        expect.objectContaining({ fact_type: 'token', skill_id: 'spec-analyze', value: { message_id: expect.any(String), tokens: 11, grain: 'stage_outcome' } }),
+        expect.objectContaining({ fact_type: 'duration', skill_id: 'spec-analyze', value: { duration_ms: 7, event_id: expect.any(String), grain: 'stage_outcome' } }),
+      ]));
+    } finally {
+      rmSync(state.storageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('writes explicit unavailable rows when a stage outcome omits declared steps or skills', async () => {
+    const state = fixture();
+    const topology = { stages: [{
+      id: 'build-spec',
+      steps: [{ id: '1', slug: 'read-decision-log', order: 1 }],
+      skills: [{ id: 'spec-analyze', trigger_condition: 'always', execution: 'direct' }],
+    }] };
+    try {
+      await runMonitoringSidecar({
+        context: { storageRoot: state.storageRoot, task: state.task, identity: state.task.identity, workflowRunId: 'run-missing-details', stage: 'build-spec', attempt_id: 'attempt-missing-details' },
+        stageOutcome: { status: 'unavailable', step_outcomes: [], skill_outcomes: [] },
+        services: { resolveMonitoringSource: async () => null, monitoringTopology: topology },
+        now: () => new Date('2026-08-15T00:00:00.000Z'),
+      });
+      const facts = readTaskFacts(state.task.taskPath);
+      expect(facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ fact_type: 'step', step_id: '1', status: 'unavailable', reason: 'step_outcome_unavailable' }),
+        expect.objectContaining({ fact_type: 'skill', skill_id: 'spec-analyze', status: 'unavailable', reason: 'skill_outcome_unavailable' }),
+      ]));
+    } finally {
+      rmSync(state.storageRoot, { recursive: true, force: true });
     }
   });
 
@@ -340,13 +427,13 @@ describe('M15 stage sidecar integration', () => {
     const result = await runMonitoringSidecar({ context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-1', stage: 'build-code' }, services: { resolveMonitoringSource: async () => source }, now: () => new Date('2026-08-12T00:00:00.000Z') });
     expect(result.status).toBe('present');
     expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'token' && fact.value.total_tokens === 5)).toBe(true);
-    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'step')).toBe(false);
-    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'skill')).toBe(false);
+    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'step' && fact.status === 'unavailable')).toBe(true);
+    expect(readTaskFacts(task.taskPath).some((fact) => fact.fact_type === 'skill' && fact.status === 'unavailable')).toBe(true);
     expect(readFileSync(result.global_snapshot, 'utf8')).toContain('globalThis.__WH_MONITOR_DATA__');
     expect(result.diagnostics?.skills ?? []).toBeDefined();
   });
 
-  it('does not turn topology entries without an outcome into happened step or skill events', async () => {
+  it('keeps topology entries without an outcome visible as unavailable step or skill facts', async () => {
     const { storageRoot, task } = fixture();
     await runMonitoringSidecar({
       context: { storageRoot, task, identity: task.identity, workflowRunId: 'run-no-events', stage: 'build-code' },
@@ -355,8 +442,10 @@ describe('M15 stage sidecar integration', () => {
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
     const facts = readTaskFacts(task.taskPath);
-    expect(facts.filter((fact) => fact.fact_type === 'step')).toHaveLength(0);
-    expect(facts.filter((fact) => fact.fact_type === 'skill')).toHaveLength(0);
+    const topology = monitoringTopology(realpathSync(new URL('..', import.meta.url).pathname));
+    expect(facts.filter((fact) => fact.fact_type === 'step')).toHaveLength(topology.stages.find((stage) => stage.id === 'build-code').steps.length);
+    expect(facts.filter((fact) => fact.fact_type === 'skill')).toHaveLength(topology.stages.find((stage) => stage.id === 'build-code').skills.length);
+    expect(facts.filter((fact) => ['step', 'skill'].includes(fact.fact_type)).every((fact) => fact.status === 'unavailable')).toBe(true);
   });
 
   it('loads declared skill trigger topology instead of silently publishing an empty skill dimension', () => {

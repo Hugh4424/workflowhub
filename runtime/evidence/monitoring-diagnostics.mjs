@@ -330,7 +330,7 @@ function failureDiagnostics(facts) {
 }
 
 function costDiagnostics(facts, topology = { stages: [] }) {
-  const tokens = new Map(), tokenRows = new Map(), tokenGroups = new Map(), toolRows = new Map(), toolGroups = new Map(), retryGroups = new Map(), retryRows = new Map(), retries = new Set(), durationGroups = new Map(), durationRows = new Map(), durationEntries = new Map(), durationConflicts = new Set();
+  const tokens = new Map(), outcomeTokenRows = new Map(), tokenRows = new Map(), tokenGroups = new Map(), toolRows = new Map(), toolGroups = new Map(), retryGroups = new Map(), retryRows = new Map(), retries = new Set(), durationGroups = new Map(), durationRows = new Map(), durationEntries = new Map(), durationConflicts = new Set();
   const breakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
   const durationBreakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
   const breakdownEvidence = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
@@ -390,7 +390,7 @@ function costDiagnostics(facts, topology = { stages: [] }) {
         const group = tokenGroups.get(identity) ?? { sources: new Set(), rows: [], conflict: false };
         if (group.sources.size && !group.sources.has(sourceId)) group.conflict = true;
         group.sources.add(sourceId); group.rows.push(rowKey); tokenGroups.set(identity, group);
-        tokenRows.set(rowKey, { identity, amount, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
+        tokenRows.set(rowKey, { identity, amount, grain, run: fact.run_id, attempt: fact.attempt_id, stage: fact.stage, step: fact.step_id, step_slug: fact.step_slug, skill: fact.skill_id, session: fact.session_id, subagent: fact.subagent_id, evidence_refs: evidenceRefs(fact) });
       }
     }
     if (fact?.fact_type === 'tool_use' && fact.status === 'present' && typeof value.tool_use_id === 'string') {
@@ -475,9 +475,22 @@ function costDiagnostics(facts, topology = { stages: [] }) {
   for (const [identity, group] of tokenGroups) {
     if (group.conflict || group.sources.size > 1) { conflicts += 1; continue; }
     const row = tokenRows.get(group.rows[0]);
-    tokens.set(group.rows[0], row.amount);
+    const dimensions = [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]];
+    if (row.grain === 'stage_outcome') outcomeTokenRows.set(group.rows[0], row);
+    else {
+      tokens.set(group.rows[0], row.amount);
+      for (const [key, field] of dimensions) {
+        if (typeof field === 'string' && field) {
+          breakdown[key][field] = (breakdown[key][field] ?? 0) + row.amount;
+          addBreakdown(key, field, row.amount, row.evidence_refs);
+        }
+      }
+    }
+  }
+  const regularTokenBreakdownKeys = new Set(Object.entries(breakdown).flatMap(([dimension, values]) => Object.keys(values).map((key) => `${dimension}|${key}`)));
+  for (const row of outcomeTokenRows.values()) {
     for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
-      if (typeof field === 'string' && field) {
+      if (typeof field === 'string' && field && !regularTokenBreakdownKeys.has(`${key}|${field}`)) {
         breakdown[key][field] = (breakdown[key][field] ?? 0) + row.amount;
         addBreakdown(key, field, row.amount, row.evidence_refs);
       }
@@ -510,14 +523,25 @@ function costDiagnostics(facts, topology = { stages: [] }) {
     }
   }
   const durationAttributions = [...durationEntries.values()];
-  const durations = durationAttributions.map((row) => row.duration_ms);
-  for (const row of durationAttributions) for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
+  const regularDurationAttributions = durationAttributions.filter((row) => row.grain !== 'stage_outcome');
+  const outcomeDurationAttributions = durationAttributions.filter((row) => row.grain === 'stage_outcome');
+  const durationBreakdownKeys = new Set();
+  for (const row of regularDurationAttributions) for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
     if (typeof field === 'string' && field) {
+      durationBreakdown[key][field] = (durationBreakdown[key][field] ?? 0) + row.duration_ms;
+      durationBreakdownKeys.add(`${key}|${field}`);
+      addBreakdown(key, field, row.duration_ms, row.evidence_refs);
+    }
+  }
+  for (const row of outcomeDurationAttributions) for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
+    if (typeof field === 'string' && field && !durationBreakdownKeys.has(`${key}|${field}`)) {
       durationBreakdown[key][field] = (durationBreakdown[key][field] ?? 0) + row.duration_ms;
       addBreakdown(key, field, row.duration_ms, row.evidence_refs);
     }
   }
-  return { token_count: tokens.size ? [...tokens.values()].reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durations.length ? durations.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown, duration_breakdown: durationBreakdown, breakdown_evidence: breakdownEvidence };
+  const durations = (regularDurationAttributions.length ? regularDurationAttributions : outcomeDurationAttributions).map((row) => row.duration_ms);
+  const tokenValues = tokens.size ? [...tokens.values()] : [...outcomeTokenRows.values()].map((row) => row.amount);
+  return { token_count: tokenValues.length ? tokenValues.reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durations.length ? durations.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown, duration_breakdown: durationBreakdown, breakdown_evidence: breakdownEvidence };
 }
 
 function automationDiagnostics(facts) {

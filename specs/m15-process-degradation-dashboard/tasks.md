@@ -558,12 +558,21 @@ sidecar warning 不改 stage completion；无真实 read capability 时 AC-E2E-0
 
 ##### 执行状态填写区（唯一完成权威）
 
+- **当前 Phase Card（M15 运行事实与页面修复）**：
+  - **目标**：让正式 `stage-runtime` 产出的每个声明步骤/技能都有对应事实；保留结果摘要、输入/证据、成本；静态页按原始紧凑 UI 展示真实名称、状态和受控来源。
+  - **允许文件/符号**：`tools/cli/stage-runtime.mjs`（`stageMonitoringFacts`、成本/来源映射）；`runtime/evidence/monitoring-facts.mjs` 与 `runtime/schemas/monitoring-fact.v1.json`（step/skill 事实值合同）；`runtime/evidence/monitoring-page.html`（布局与事实行）；`tests/m15-monitoring-*.test.mjs`（对应 RED/GREEN 和投影）；必要时 `runtime/evidence/monitoring-projector.mjs`（拓扑缺失 fail-loud）。
+  - **覆盖 AC**：AC-001、AC-002、AC-003、AC-004、AC-005、AC-006、AC-007、AC-008、AC-009、AC-010、AC-011、AC-012、AC-013、AC-014、AC-015、AC-016、AC-017、AC-018、AC-019、AC-E2E-001（能真实证明的才记录为 pass）。
+  - **非目标**：不处理历史数据；不扫描本地 session 目录猜来源；不修改 Multica、stage runner 公共接口、M16；不把缺失事实补成成功。
+  - **测试路线**：原预判 `fullstack-slice-testing + isolated-browser-qa`；实际边界仍是运行时事实→投影→静态页面，重判 `fullstack`，使用 focused Vitest、真实 file 页面和一次真实入口验收。
+  - **停止条件**：没有真实 host binding 时保留 `unknown/incomplete`；拓扑、来源或证据无法绑定时 fail-loud，不用 fixture 宣称五阶段完成。
+  - **阶段结束输出**：代码 diff、focused RED/GREEN、浏览器证据、真实入口事实、独立审查建议及未覆盖边界。
+
 - [ ] **任务完成**
 - **status**：`pending`
-- **actual_changes**：已运行当前 M15 定向测试、最新快照全量测试、`npm run check` 和隔离浏览器验收；最终 aggregate 仍未完成，因为真实 Codex host/E2E 缺证，integration wh-review provider 未返回终态。
-- **executed_commands**：M15 focused suites：4 files / 27 tests passed；`npm test`：151 files / 1325 passed / 1 skipped，exclusive 31 passed（exit 0）；`npm run check`：exit 0；隔离浏览器以 `agent-browser` 验证四视图、七筛选、手动刷新和 partial 状态。
-- **evidence_refs**：`quality/tests/m15/final-current-post-browser.json`（receipt_hash `df12a55cfec50a1bbe2c67bf671735e280ef989d9e00296181a5c7029df87456`，snapshot_tree `764222e2848d00c7e0a38a10f927da3c841dd98d`）；integration subject 当前 `audit_gaps=[]`，review provider 未产生 terminal result。旧 `final-latest/final-verify/final-close/check-*` 只作历史事实，不代表当前快照。
-- **covered_ac**：当前只能声明各 phase focused seam 的部分 AC；AC-E2E-001、完整 repo check、真实 host、完整逐 AC trace 均 `unknown/incomplete`。
+- **actual_changes**：本轮修复正式 `stage-runtime` 的拓扑驱动 step/skill 事实生成、Stage Agent result summary/证据保留、stage outcome 成本/时长独立事实、重复 session metadata 的 transcript 身份冲突，以及静态页原始紧凑布局和证据详情交互；不回填历史数据。
+- **executed_commands**：M15 focused suites：4 files / 111 tests passed（含 session metadata RED→GREEN）；`node tools/cli/verify-structure.mjs` exit 0；真实 `agent-browser` 页面验收通过，静态 HTTP 服务保持运行；另以只读真实 Codex rollout 检查 launcher source binding，parser 返回 `present`。
+- **evidence_refs**：`quality/evidence/verification-current-20260815-v12.json`（sha256 `38e03e69fd058b369170dbd02f9c97e9cff744c11abd22a5b41c6b76a44e2c5b`）；`quality/evidence/m15-browser-qa-current-20260815-v13.json`（sha256 `bfbceea585dbb63d0de0c13c98335453e70e424c7a768ee51c6995fbe56d5ea9`）；`quality/tests/verify-code/m15-runtime-observability-repair-focused-20260815-v2.json`（sha256 `adfa93c84efa93f8f1e8567d8a1e0277f3f4793929ca94499da9f20aa34f8c8f`）。旧 evidence 只作历史事实，不代表当前快照。
+- **covered_ac**：页面和生产 sidecar 的当前代码边界已由 focused/浏览器证据覆盖；fresh Codex 五阶段官方 outcome 链、完整逐 AC 真实 trace、异源 review terminal result、人工确认仍 `unknown/incomplete`。
 - **review_fact**：最终 aggregate 与 build-code integration wh-review 尚未执行；phase reviews 均有 tree/material mismatch，不能当作 terminal pass。
 - **completed_at**：N/A — not completed
 - **执行事实**：不能把 focused GREEN、浏览器单环境或旧 review 代替当前全量/真实 E2E；T009 保持 pending。
