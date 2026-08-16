@@ -1296,3 +1296,11 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - **评测计划**：使用当前候选三仓、当前配置生成 `1260` 条 paired plan，`provider_calls=0`；只完成计划和资产校验，没有把 plan-only 当成质量结果，也没有启动昂贵的全量 live A/B。
 - **范围判断**：这是原需求中的 ModelTest 评测资产补齐，不是新增产品需求；没有启动 mini-task，也没有生成待清理的 mini-task worktree/lock。
 - **当前仍未完成**：候选 WorkflowHub 尚未安全合并 dirty `main`；九面 live paired A/B 仍无结果；当前 verify-code 的真实 Stage Agent execution、逐 AC、finding disposition、exceptions 和人工确认仍未闭合；没有执行最终 close。
+
+### 执行状态填写区（当前 T041 候选合并与针对性回归，2026-08-16）
+
+- **合并事实**：候选分支已把 `main` 当前提交 `ece89717` 合并，唯一冲突 `core/task-close.mjs` 已按新快照规则解析为 `captureExecutionSnapshot(worktree)`；合并提交为 `415344ed`。候选工作树当前 clean。
+- **回归事实**：受合并影响的 6 个测试文件共 `107/107` 通过，包含官方 component receipt、official stage run、delivery close、execution snapshot isolation、canonical review result 和 invocation identity；`git diff --check` 通过。
+- **目标 main 边界**：`/Users/Hugh/Hugh/Project/workflowhub` 仍有用户未提交的 27 个 tracked 文件和 2 个 untracked 路径；本轮没有覆盖、提交、stash、合并回写或删除这些改动。
+- **三仓候选边界**：3rd-review 候选 `a8d7a82`、ModelTest 候选 `ad920f9` 均已提交且候选工作树 clean；目标 main 的未提交改动仍只读保留，未擅自合并覆盖。
+- **当前仍未完成**：九面 live paired A/B 仍只有 plan-only、没有质量结果；当前 verify-code 的真实 Stage Agent execution、逐 AC、finding disposition、exceptions 和人工确认仍未闭合；不执行最终 close。
