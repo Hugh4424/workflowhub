@@ -246,11 +246,34 @@ function stageDiagnostics(topology, facts, stageAttempts = new Map()) {
     let status = source
       ? source.status === 'present'
         ? outcome === 'failed' ? 'failed' : outcome === 'fatal' ? 'fatal' : 'present'
-        : factStatus(source)
+      : factStatus(source)
       : 'pending';
     if (!source && index < lastObserved) status = 'evidence_gap';
     const identity = stageAttempts.get(id);
-    return { id, run_id: identity?.run_id ?? source?.run_id ?? null, attempt_id: identity?.attempt_id ?? source?.attempt_id ?? null, status, coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 }, errors: source?.error ? [source.error] : [], reason: source?.reason ?? null, source_refs: evidenceRefs(source), ...evidenceDetails(source) };
+    const witness = status === 'evidence_gap'
+      ? STAGES.slice(index + 1).map((stageId) => observed.get(stageId)).find(Boolean)
+      : null;
+    const witnessRefs = evidenceRefs(witness);
+    return {
+      id,
+      run_id: identity?.run_id ?? source?.run_id ?? null,
+      attempt_id: identity?.attempt_id ?? source?.attempt_id ?? null,
+      status,
+      coverage: source?.coverage ?? { expected: 1, observed: source ? 1 : 0 },
+      errors: source?.error ? [source.error] : [],
+      reason: source?.reason ?? (status === 'evidence_gap' ? 'stage_evidence_gap' : null),
+      source_refs: source ? evidenceRefs(source) : witnessRefs,
+      ...(status === 'evidence_gap'
+        ? {
+            source_kind: witness?.source?.kind ?? null,
+            source_id: witness?.source?.source_id ?? null,
+            observed_at: witness?.observed_at ?? null,
+            evidence_summary: witness
+              ? `后续阶段 ${witness.stage} 已有事实；当前阶段没有阶段事实`
+              : '当前阶段没有阶段事实',
+          }
+        : evidenceDetails(source)),
+    };
   });
 }
 

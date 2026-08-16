@@ -76,7 +76,10 @@ describe('M15 project/global projector', () => {
     expect(html).toContain('证据链：已绑定');
     expect(html).toContain("const label = '证据 ' + (index + 1)");
     expect(html).toContain('当前结构化覆盖');
-    expect(html).toContain('未拆分：没有稳定归属来源');
+    expect(html).toContain('stage-summary-note');
+    expect(html).toContain('见证来源：后续阶段事实（不是当前阶段证据）');
+    expect(html).toContain('未拆分');
+    expect(html).toContain('没有稳定归属来源');
   });
 
   it('publishes fixed view fields, field coverage, and sample sufficiency from facts', () => {

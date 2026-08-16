@@ -157,6 +157,7 @@
     .stage-block.open .stage-toggle { border-bottom: 1px solid var(--wh-border-soft); background: var(--wh-accent-soft); }
     .stage-index { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; color: var(--wh-text-dim); font-size: 14px; font-weight: 600; }
     .stage-name strong { display: block; font-size: 14.5px; font-weight: 600; color: var(--wh-text); }
+    .stage-name .stage-summary-note { display: block; margin-top: 3px; overflow: hidden; color: var(--wh-text-faint); font-size: 10px; font-weight: 500; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
     .stage-name small { display: none; color: var(--wh-text-faint); font-size: 10px; }
     .stage-cell { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
     .stage-cell label { color: var(--wh-text-faint); font-size: 9.5px; }
@@ -165,10 +166,10 @@
     .stage-cell .wh-mono { font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
     .stage-cell .gap-warn { color: var(--wh-warn); font-weight: 750; }
     .stage-cell .gap-ok { color: var(--wh-success); }
-    .stage-summary-meta { display: flex; align-items: flex-start; gap: 12px; }
-    .stage-summary-meta > div { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; white-space: nowrap; }
+    .stage-summary-meta { min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+    .stage-summary-meta > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; white-space: nowrap; overflow: hidden; }
     .stage-summary-meta label { color: var(--wh-text-faint); font-size: 9.5px; }
-    .stage-summary-meta .wh-mono { white-space: nowrap; }
+    .stage-summary-meta .wh-mono { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .metric-bar { display: inline-flex; align-items: center; gap: 8px; }
     .metric-track { width: 48px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--wh-track); flex-shrink: 0; }
     .metric-fill { display: block; height: 100%; border-radius: 3px; background: var(--wh-accent); min-width: 3px; }
@@ -218,7 +219,7 @@
     #evidence-panel p { margin: 0 0 8px; color: var(--wh-text-muted); font-size: 12px; }
     #evidence-panel code { display: block; overflow-wrap: anywhere; padding: 9px; border-radius: 5px; color: #d5e2ff; background: #101827; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; }
     .table-scroll { overflow-x: auto; }
-    @media (max-width: 1300px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } .stage-summary-meta { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 6px; } .stage-summary-meta > div { min-width: 0; gap: 1px; } .stage-summary-meta .wh-mono { overflow: hidden; text-overflow: ellipsis; } }
+    @media (max-width: 1300px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } .stage-toggle { min-width: 0; height: 78px; } .stage-summary-meta { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px 8px; } .stage-summary-meta > div { min-width: 0; gap: 1px; } .stage-summary-meta > div:last-child { display: none; } .stage-summary-meta .stage-cell strong, .stage-summary-meta .stage-cell span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stage-cell .metric-bar, .metric-unavailable { min-width: 0; } .metric-unavailable { overflow: hidden; } .metric-unavailable .metric-note { display: none; } }
     @media (max-width: 760px) { .topbar-inner { width: calc(100% - 24px); } .page { width: 100%; } .main { padding: 16px 12px 36px; } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -243,7 +244,7 @@
     const stageLabels = { 'make-decision': '做决定', 'build-spec': '规格设计', 'build-plan': '执行计划', 'build-code': '开发实现', 'verify-code': '验收检查' };
     const skillLabels = { 'talk-with-zhipeng': 'Talk 对话', 'grill-with-docs': '文档质询', 'decision-log': '决策记录', 'wh-review': '独立审查', 'spec-research': '规格调研', 'spec-clarify': '规格澄清', 'spec-specify': '规格编写', 'simplicity-guard': '简洁性检查', 'plan-ceo-review': '目标审查', 'plan-design-review': '设计审查', 'spec-plan': '计划编写', 'plan-eng-review': '工程审查', 'testing-system-blueprint': '测试蓝图', 'test-routing-advisor': '测试路由', 'spec-tasks': '任务拆分', 'spec-analyze': '规格分析', 'backend-testing': '后端测试', 'frontend-testing': '前端测试', 'fullstack-slice-testing': '全栈切片测试' };
     const statusLabels = { loading: '读取中', ready: '就绪', empty_valid: '合法为空', current: '当前', partial: '部分可见', stale: '已过期', fatal: '不可用', empty: '合法为空', sufficient: '样本充足', insufficient: '样本不足', present: '已记录', executed: '已执行', completed: '已完成', missing: '未记录', unknown: '无法判断', pending: '待开始', evidence_gap: '证据断链', out_of_order: '顺序异常', conflict: '来源冲突', failed: '失败', not_applicable: '不适用', skipped: '已跳过', insufficient_samples: '样本不足', mismatch: '口径不兼容', unavailable: '不可用', unsupported: '格式不支持', incomplete: '记录不完整' };
-    const reasonLabels = { step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据', automation_opportunity_denominator_unavailable: '没有可核实的自动化机会分母', expected_topology_unavailable: '没有拿到本次任务的固定流程清单', compatible_time_buckets_insufficient: '兼容的时间样本少于两段', run_id_missing: '事实没有绑定运行编号', attempt_id_missing: '事实没有绑定尝试编号', 'source.status_missing': '没有登记来源状态' };
+    const reasonLabels = { stage_outcome_incomplete: '阶段记录不完整，当前阶段有步骤或技能缺口', stage_evidence_gap: '当前阶段没有阶段事实，后续阶段只提供了受控见证', step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据', automation_opportunity_denominator_unavailable: '没有可核实的自动化机会分母', expected_topology_unavailable: '没有拿到本次任务的固定流程清单', compatible_time_buckets_insufficient: '兼容的时间样本少于两段', run_id_missing: '事实没有绑定运行编号', attempt_id_missing: '事实没有绑定尝试编号', 'source.status_missing': '没有登记来源状态' };
     const domainLabels = { transcript: '会话来源', review: '审查', verify: '验收', artifact_missing: '产物缺失', task_dir: '任务目录', worktree: '工作区', handoff: '交接', skill_missing: '技能缺失', token_waste: 'Token 重复计数', unknown: '未归类问题' };
     const gapStatuses = new Set(['missing', 'unknown', 'evidence_gap', 'out_of_order', 'partial', 'conflict', 'fatal', 'failed', 'unavailable', 'unsupported', 'incomplete']);
     const doneStatuses = new Set(['present', 'executed', 'completed', 'skipped', 'not_applicable']);
@@ -350,7 +351,7 @@
     function stageDuration(record, id) { const value = record.diagnostics.cost?.duration_breakdown?.stage?.[id]; return Number.isFinite(value) ? value : null; }
     function stepDuration(record, stage, slug) { const value = record.diagnostics.cost?.duration_breakdown?.step?.[stage + '+' + slug]; return Number.isFinite(value) ? value : null; }
     function skillDuration(record, id) { const direct = record.diagnostics.cost?.duration_breakdown?.skill?.[id]; if (Number.isFinite(direct)) return direct; const found = Object.entries(record.diagnostics.cost?.duration_breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
-    function evidenceSummary(entry) { const reasonText = entry.reason && !String(entry.evidence_summary || '').includes('原因=') ? '原因=' + reason(entry.reason) : null; return [entry.evidence_summary, reasonText, entry.source_kind ? '来源类型=' + entry.source_kind : null, entry.source_id ? '来源ID=' + entry.source_id : null, entry.observed_at ? '采集时间=' + readableTime(entry.observed_at) : null, '覆盖=' + (entry.coverage?.observed ?? '未采集') + ' / ' + (entry.coverage?.expected ?? '未采集')].filter(Boolean).join('；'); }
+    function evidenceSummary(entry) { const reasonText = entry.reason && !String(entry.evidence_summary || '').includes('原因=') ? '原因=' + reason(entry.reason) : null; const roleText = entry.reason === 'stage_evidence_gap' ? '来源角色=后续阶段见证（不是当前阶段证据）' : null; return [entry.evidence_summary, roleText, reasonText, entry.source_kind ? '来源类型=' + entry.source_kind : null, entry.source_id ? '来源ID=' + entry.source_id : null, entry.observed_at ? '采集时间=' + readableTime(entry.observed_at) : null, '覆盖=' + (entry.coverage?.observed ?? '未采集') + ' / ' + (entry.coverage?.expected ?? '未采集')].filter(Boolean).join('；'); }
     function currentCoverage(record) { const current = record.diagnostics?.current || {}; return { stages: current.stage_coverage || { observed: 0, expected: 5 }, steps: current.step_coverage || { observed: 0, expected: 0 }, skills: current.skill_coverage || { observed: 0, expected: 0 } }; }
     function renderSidebar() { const list = $('#task-list'); list.textContent = ''; const visible = filteredRecords(); $('#task-count').textContent = '当前快照中 ' + visible.length + ' 个任务'; if (!visible.length) { list.appendChild(text('div', '没有匹配任务', 'empty')); return; } visible.forEach((record) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'task-item' + (keyOf(record) === selectedKey ? ' selected' : ''); button.addEventListener('click', () => { selectedKey = keyOf(record); openStages = openObservedStages(record); render(); }); const top = document.createElement('div'); top.className = 'task-item-top'; top.appendChild(text('strong', record.task_id)); top.appendChild(status(record.status)); button.appendChild(top); button.appendChild(text('span', record.project_name + ' · ' + relativeTime(record.generated_at), 'task-project')); const coverage = currentCoverage(record); const meta = document.createElement('div'); meta.className = 'task-item-meta'; meta.appendChild(text('span', '阶段 ')); meta.lastChild.appendChild(text('strong', coverage.stages.observed + ' / ' + coverage.stages.expected)); meta.appendChild(text('span', '步骤 ')); meta.lastChild.appendChild(text('strong', coverage.steps.observed + ' / ' + coverage.steps.expected)); meta.appendChild(text('span', '技能 ')); meta.lastChild.appendChild(text('strong', coverage.skills.observed + ' / ' + coverage.skills.expected)); meta.appendChild(text('span', '问题 ')); meta.lastChild.appendChild(text('strong', problemsFor(record).length)); button.appendChild(meta); list.appendChild(button); }); $('#sidebar-foot').textContent = '快照：' + readableTime(data.generated_at) + ' · 页面只读，数据更新后请用浏览器手动刷新。'; }
     function renderBanner(record) {
@@ -658,7 +659,8 @@
     function unavailableMetric() {
       const wrap = document.createElement('span');
       wrap.className = 'metric-unavailable';
-      wrap.appendChild(text('span', '未拆分：没有稳定归属来源', 'metric-value unavailable'));
+      wrap.appendChild(text('span', '未拆分', 'metric-value unavailable'));
+      wrap.appendChild(text('span', '没有稳定归属来源', 'metric-note'));
       return wrap;
     }
     function skillTriggerLabel(entry) {
@@ -796,6 +798,12 @@
         const name = document.createElement('div');
         name.className = 'stage-name';
         name.appendChild(text('strong', stageLabels[stage.id] || stage.id));
+        const stageNote = stage.reason
+          ? '原因：' + reason(stage.reason)
+          : stage.evidence_summary || (stage.source_refs?.length ? '已有受控证据' : '阶段事实未采集');
+        const stageNoteNode = text('span', stageNote, 'stage-summary-note');
+        stageNoteNode.title = stage.evidence_summary || stageNote;
+        name.appendChild(stageNoteNode);
         summary.appendChild(name);
         const stateCell = document.createElement('div');
         stateCell.className = 'stage-cell';
@@ -866,7 +874,10 @@
         const stageEvidence = text('div', '', 'snapshot-strip');
         stageEvidence.appendChild(text('span', '阶段原因：' + (stage.reason ? reason(stage.reason) : '未采集')));
         if (stage.evidence_summary) stageEvidence.appendChild(text('span', stage.evidence_summary));
-        if (stage.source_refs?.length) addRefs(stageEvidence, stage.source_refs, evidenceSummary(stage));
+        if (stage.source_refs?.length) {
+          stageEvidence.appendChild(text('span', stage.reason === 'stage_evidence_gap' ? '见证来源：后续阶段事实（不是当前阶段证据）' : '阶段证据链'));
+          addRefs(stageEvidence, stage.source_refs, evidenceSummary(stage));
+        }
         else stageEvidence.appendChild(unavailableCell('阶段无可回指来源'));
         stageBody.appendChild(stageEvidence);
         if (Array.isArray(stage.errors) && stage.errors.length) {

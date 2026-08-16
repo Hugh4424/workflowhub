@@ -18,8 +18,11 @@ function sha256(bytes) {
 }
 
 const HASH = /^[0-9a-f]{64}$/i;
-const ACCEPTANCE_ID = /\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/;
-const ACCEPTANCE_IDS = /\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g;
+// Match one canonical AC token. Do not treat range prose such as AC-01..32
+// as an acceptance-criterion id: the range endpoints are not independently
+// supplied criteria and must not satisfy the current-AC-set check.
+const ACCEPTANCE_ID = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/;
+const ACCEPTANCE_IDS = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/g;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const FULL_TEST_COMMAND = "npm test";
 

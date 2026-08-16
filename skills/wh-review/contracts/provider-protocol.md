@@ -46,14 +46,14 @@ request 同时声明本次审查合同和语义材料身份：
 `material_id` 仍由 broker 根据已校验附件计算并返回；它不是语义身份，不能用来
 判断“只写回状态”或“实际改变了被审行为”。
 
-这是一整个 reviewer group 的一次调用。WorkflowHub 传入本 stage 配置的完整
-候选 profile 列表，不逐个启动 CLI；3rd-review 按 adapter 自动排除与 host 同源
-的 profile，并行运行其余成员，管理它们的会话、健康、重试和私有附件 workspace。
-WorkflowHub 不实现 advisory lock、process flight、polling、poll interval、session lifecycle
-或额外 timeout；这些 provider lifecycle 事实由 3rd-review broker 负责。`run` 阻塞到
-broker 返回 terminal group；exit code `3` 的 stdout 仍是合法的 unavailable terminal
-group，必须按公开协议读取，不能丢弃或改写为空 findings。每个候选都必须有一条
-公共结果；被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没有 finding 或悄悄丢弃。
+WorkflowHub 把本 stage 配置的完整 candidate profile 列表交给 3rd-review；同一个
+显式 source identity 才算同源并返回 `SAME_SOURCE`。不能因为 adapter 名称相同就跳过
+另一个已配置 profile。不同附件能力的 profile 可以被 WorkflowHub 拆成多个兼容小组并行
+调用；每个配置 profile 都必须有一条公共结果。WorkflowHub 不实现 advisory lock、process
+flight、polling、poll interval、session lifecycle 或额外 timeout；这些 provider lifecycle
+事实由 3rd-review broker 负责。`run` 阻塞到 broker 返回 terminal group；exit code `3`
+的 stdout 仍是合法的 unavailable terminal group，必须按公开协议读取，不能丢弃或改写为空
+findings。被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没有 finding 或悄悄丢弃。
 
 这是一次 reviewer group 的一次 public request。WorkflowHub 不在外层追加 retry、
 格式纠正、换 provider、同源兜底或 continuation。broker 可以在这一次 request 内部

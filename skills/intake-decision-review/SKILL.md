@@ -39,15 +39,18 @@ Independently inspect all four angles:
 - `feasibility`: whether objective facts already disprove an external
   interface, dependency, timing, or operational assumption.
 
-Each finding must use exactly one angle and include evidence, risk, and a
-recommended next action. Findings are `0-N`; do not invent one merely to fill an
-angle and do not cap real findings. Distinguish supplied facts from reviewer
-inference.
+Each finding must use exactly one angle. Put the angle in the finding prose;
+do not add an `angle` field. Findings are `0-N`; do not invent one merely to
+fill an angle and do not cap real findings. Distinguish supplied facts from
+reviewer inference. Every finding must use only the provider protocol fields:
+`severity`, `path`, optional `line`, `issue`, `root_cause`, `recommendation`,
+`evidence_kind`, and `evidence`.
 
 This is direction review, not solution review. Do not compare implementation
 approaches, refine the candidate design, or use knowledge of downstream stage
-artifacts. Return findings to the provider's normal `verdict`, `summary`, and
-`findings` response; `wh-review` validates and publishes that response.
+artifacts. Return exactly one JSON object: `{ "findings": [...] }`. Do not
+return `verdict`, `summary`, checklist fields, angle/axis fields, or a second
+object.
 
 ## Failure contract
 

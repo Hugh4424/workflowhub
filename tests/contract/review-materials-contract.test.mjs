@@ -125,6 +125,15 @@ describe("current review material and capture contracts", () => {
     expect(validateVerifyAcceptanceSummary(currentIds.join("\n"), { expectedCriterionIds: currentIds })).toBe(true);
   });
 
+  it("does not treat AC range prose as a canonical criterion id", () => {
+    expect(() => validateVerifyAcceptanceSummary(JSON.stringify({ criteria: [
+      { id: "AC-01..32", status: "incomplete" },
+    ] }))).toThrow(/must identify ACs/);
+    expect(() => validateVerifyAcceptanceSummary("AC-01..32", {
+      expectedCriterionIds: ["AC-01", "AC-02"],
+    })).toThrow(/must name current ACs/);
+  });
+
   it("accepts the same typed AC identifiers used by integration review", () => {
     expect(validateVerifyAcceptanceSummary(JSON.stringify({ criteria: [
       { acceptance_criterion_id: "AC-E2E-001", status: "incomplete", actual_outcome: "证据不足" },

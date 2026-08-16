@@ -104,7 +104,13 @@ describe('M15 diagnostics', () => {
       fact({ fact_id: 'step-2', fact_type: 'step', stage: 'build-code', step_id: 'bc-2' }),
       fact({ fact_id: 'step-1', fact_type: 'step', stage: 'build-code', step_id: 'bc-1' }),
     ] });
-    expect(result.stage).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'build-spec', status: 'evidence_gap' })]));
+    expect(result.stage).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: 'build-spec',
+      status: 'evidence_gap',
+      reason: 'stage_evidence_gap',
+      source_refs: ['facts/fixture'],
+      evidence_summary: '后续阶段 build-code 已有事实；当前阶段没有阶段事实',
+    })]));
     expect(result.steps).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'bc-1', status: 'out_of_order' })]));
   });
 
