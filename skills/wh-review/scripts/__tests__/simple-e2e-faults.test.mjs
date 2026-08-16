@@ -29,7 +29,10 @@ describe("simple runner fake E2E and recovery", () => {
     for (const [stage, reviewTrack] of stages) {
       const { attachmentRoot, task } = fixture("wh-review-e2e-");
       const out = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage, reviewTrack,
-        hostProvider: "codex", providers: ["kimi"], providerClient: client(), captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) });
+        hostProvider: "codex", providers: ["kimi"], providerClient: client(), captureSource: () => source,
+        ...(reviewTrack === "direction" ? { directionSelection: { current_selection: "fixture choice" } } : {}),
+        ...(reviewTrack === "direction" ? { materials: { raw_requirement: "fixture requirement", objective_facts: ["fixture fact"] } } : {}),
+        buildMaterials: () => bundle(attachmentRoot) });
       expect(out.status).toBe("available");
       const result = JSON.parse(task.readRecord(out.resultRef)); expect(result).toMatchObject({ stage, review_track: reviewTrack, snapshot_tree: oid, material_id: materialId });
     }
@@ -55,5 +58,18 @@ describe("simple runner fake E2E and recovery", () => {
     const input = { task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], captureSource: () => source, buildMaterials: () => bundle(attachmentRoot) };
     expect((await runReviewFixture({ ...input, providerClient: protocol })).resultRef).toBe(null);
     expect((await runReviewFixture({ ...input, providerClient: client("not json") })).resultRef).toBe(null);
+  });
+
+  it("records one group failure, not one provider attempt per configured profile", async () => {
+    const { attachmentRoot, task } = fixture("wh-review-group-fault-");
+    const protocol = { runGroup: async () => { const error = new Error("broker public error"); error.code = "REQUEST_INVALID"; throw error; } };
+    const out = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi", "opencode"],
+      captureSource: () => source, buildMaterials: () => bundle(attachmentRoot), providerClient: protocol,
+    });
+    expect(out.status).toBe("unavailable");
+    const attempt = JSON.parse(task.readRecord(out.attemptRef));
+    expect(attempt.provider_attempts).toEqual([]);
+    expect(attempt.error).toMatchObject({ code: "REQUEST_INVALID" });
   });
 });

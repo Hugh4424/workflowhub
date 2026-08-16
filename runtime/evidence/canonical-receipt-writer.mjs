@@ -13,6 +13,7 @@ import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mj
 import { validateBuildCodePhaseEvidence } from "../stage/stage-content-contracts.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const FULL_TEST_COMMAND = "npm test";
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
@@ -98,7 +99,7 @@ function publishIdempotently({ task, write, ref, raw, label }) {
 }
 
 function reusableTestCapture({ task, workspace, stage, component, command, receiptRef, outputRef }) {
-  const snapshot = captureWorkspaceSnapshot(workspace);
+  const snapshot = captureWorkspaceSnapshot(workspace, task.identity.taskId);
   const candidateRefs = [
     receiptRef,
     ...(stage === "verify-code" && command.trim() === FULL_TEST_COMMAND && typeof task.listCanonicalTestReceiptRefs === "function"
@@ -118,18 +119,25 @@ function reusableTestCapture({ task, workspace, stage, component, command, recei
     }
     const producerStage = receipt.producer?.stage;
     const stageAllowed = producerStage === stage || (stage === "verify-code" && producerStage === "build-code");
+    const producerComponent = receipt.producer?.component;
+    const componentAllowed = producerStage === stage
+      ? producerComponent === component
+      : stage === "verify-code"
+        && component === "verify-code-test-capture"
+        && producerStage === "build-code"
+        && producerComponent === "build-code-test-capture";
     if (receipt.schema_version !== "workflowhub-receipt.v1"
         || receipt.task_id !== task.identity.taskId
         || receipt.stage !== producerStage
         || !stageAllowed
-        || typeof receipt.producer?.component !== "string"
+        || !componentAllowed
         || receipt.command !== command
         || receipt.output_ref !== (candidateRef === receiptRef ? outputRef : receipt.output_ref)) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt conflicts with requested capture");
       continue;
     }
     if (receipt.exit_code !== 0 || typeof receipt.output_ref !== "string"
-        || !/^quality\/tests\/output\//.test(receipt.output_ref)
+        || !TEST_OUTPUT_REF.test(receipt.output_ref)
         || typeof receipt.output_hash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.output_hash)
         || typeof receipt.command_hash !== "string" || receipt.command_hash !== sha256(command)) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt is invalid");
@@ -140,10 +148,16 @@ function reusableTestCapture({ task, workspace, stage, component, command, recei
       if (candidateRef === receiptRef) throw new Error("existing test output is missing or tampered");
       continue;
     }
-    const snapshotMatches = receipt.snapshot_tree === snapshot.tree
-      || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, receipt.snapshot_tree, snapshot.tree);
-    if (receipt.snapshot_head !== snapshot.head || !snapshotMatches
-        || (snapshot.source_digest !== undefined && receipt.source_digest !== snapshot.source_digest)) {
+    const materialOnlySnapshot = receipt.snapshot_tree !== snapshot.tree
+      && isMaterialOnlySnapshotDelta(workspace.worktreeRoot, receipt.snapshot_tree, snapshot.tree, task.identity.taskId);
+    const snapshotMatches = receipt.snapshot_tree === snapshot.tree || materialOnlySnapshot;
+    const sourceDigestMatches = /^[a-f0-9]{64}$/.test(snapshot.source_digest ?? "")
+      && receipt.source_digest === snapshot.source_digest;
+    // A committed executor status writeback changes HEAD and the full
+    // workspace tree, but it does not change the implementation or test
+    // inputs.  Reuse the immutable test result only after the narrow
+    // material-only delta check above; all other HEAD changes stay stale.
+    if ((!snapshotMatches) || (!sourceDigestMatches) || (receipt.snapshot_head !== snapshot.head && !materialOnlySnapshot)) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt does not match current workspace; use a new receipt ref");
       continue;
     }
@@ -170,8 +184,9 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
 }
 
 function currentImplementationReceipt({ task, workspace, version }) {
+  const safeTask = assertTaskHandle(task);
   const safeWorkspace = assertWorkspace(workspace);
-  const snapshot = captureWorkspaceSnapshot(safeWorkspace);
+  const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
   const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
   const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
   const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n")
@@ -198,9 +213,9 @@ export function writeCurrentImplementationReceipt({ task, workspace, version = "
 }
 
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
-export function captureWorkspaceSnapshot(workspace) {
+export function captureWorkspaceSnapshot(workspace, taskId = null) {
   const root = assertWorkspace(workspace).worktreeRoot;
-  return captureExecutionSnapshot(root);
+  return captureExecutionSnapshot(root, taskId);
 }
 
 /** Legacy component registry; vNext current materials are ArtifactDir-owned. */
@@ -393,17 +408,17 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
     captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, phaseEvidence = null } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       const receiptPattern = /^quality\/tests\/[a-zA-Z0-9._/-]+\.json$/;
-      const outputPattern = /^quality\/tests\/output\/[a-zA-Z0-9._/-]+$/;
+      const outputPattern = TEST_OUTPUT_REF;
       if (!receiptPattern.test(receiptRef ?? "") || !outputPattern.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
       const capture = () => safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
         const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, stage, component, command, receiptRef, outputRef });
         if (reusable !== undefined) return reusable;
-        const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
+        const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId), headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
         const startedAt = now();
         const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
         const completedAt = now();
         const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
-        const after = captureWorkspaceSnapshot(safeWorkspace);
+        const after = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
         if (after.head !== headBefore || after.tree !== treeBefore || after.source_digest !== sourceDigestBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
         const exitCode = proc.status ?? (proc.error ? 1 : 128);
         const outputHash = sha256(output), commandHash = sha256(command);
@@ -488,7 +503,15 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
         ? metadata.provider ?? match[2].replace(/-[0-9]+$/, "")
         : match[2].replace(/-[0-9]+$/, "");
       if (typeof providerName !== "string" || providerName.trim() === "") throw new TypeError("provider name required");
-      const record = { schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: match[1], provider: providerName, content: output, content_hash: sha256(output) };
+      const evidenceAnchors = metadata?.evidence_anchor_valid;
+      if (evidenceAnchors !== undefined && (!Array.isArray(evidenceAnchors) || evidenceAnchors.some((value) => typeof value !== "boolean"))) {
+        throw new TypeError("provider output evidence_anchor_valid must be a boolean array");
+      }
+      const record = {
+        schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: match[1], provider: providerName,
+        content: output, content_hash: sha256(output),
+        ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: [...evidenceAnchors] }),
+      };
       write(ref, `${JSON.stringify(record, null, 2)}\n`); return ref;
     },
     writeAttempt(ref, value) {

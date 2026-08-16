@@ -28,6 +28,18 @@ requirement replay、旧 review ledger、provider session 或本机绝对路径�
 - AC、测试和风险结论是否互相矛盾；
 - 是否有会影响交付的严重遗漏。
 
+对每条 AC 只有在同时看到真实场景、判定规则、实际结果、一个实现锚点和一个独立的测试/断言锚点时，才可以把它当作 `pass`；缺任何一项都只能是 `unknown/incomplete`。不同 AC 共用同一个实现锚点、测试锚点或嵌套证据时，也不能把它们算成独立证明。
+
+审查返回的每个 canonical/reportable finding 都必须进入处理清单，普通 finding 也不能被
+过滤掉。`fixed`、`rejected_invalid`、`accepted_risk`、`needs_human` 只表示主 agent 的
+处理结果；`accepted_risk` 必须有绑定当前 finding/review/snapshot 的真实用户确认，不能
+靠 provider 的 verdict 或空 findings 代替。
+
+审查顺序固定为：交付声明 → 每条 AC → 实现和真实消费者 → 测试断言 → 实际结果 → 弱
+oracle/假绿。重点攻击“看起来通过但用户仍会失败”的地方：测试没有走到关键分支、mock
+绕过真实 seam、错误被吞掉、成功结果没有被真实入口消费、延期项被误写成完成。不要把
+verify-code 变成材料考古或第二套 receipt 审计。
+
 ## 结果
 
 只输出 provider protocol 要求的最小 JSON：只包含 `findings`。

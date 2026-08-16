@@ -47,7 +47,7 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 这条链只负责把真实事实写入当前 task；它不是开始工作、继续工作或宣称完成的门禁：
 
 1. 用 `tools/cli/stage-runtime.mjs doctor`、`status` 查看当前能力和四材料状态；缺失的辅助能力只记录事实，不暂停同一 task。
-2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；每次审查只发起一次新的 broker 请求，结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
+2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 严格发起两次有序 public 请求但只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
 3. `build-code` 和 `verify-code` 通过各自 workflow 的 capture 脚本生成测试/验证事实，再由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录；宿主不手写替代 receipt。
 4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
 

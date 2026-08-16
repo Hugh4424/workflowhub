@@ -825,8 +825,8 @@
         attemptCell.className = 'stage-cell';
         attemptCell.appendChild(text('label', '本阶段尝试'));
         const attemptValue = text('span', stage.attempt_id ? compactId(stage.attempt_id) : '未采集', stage.attempt_id ? 'wh-mono' : 'unavailable');
-        if (stage.attempt_id) attemptValue.title = stage.attempt_id;
-        attemptCell.appendChild(attemptValue);
+         if (stage.attempt_id) attemptValue.title = stage.attempt_id;
+         attemptCell.appendChild(attemptValue);
          meta.appendChild(attemptCell);
         summary.appendChild(meta);
         const tokenCell = document.createElement('div');

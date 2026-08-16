@@ -2,22 +2,27 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { createCanonicalReceiptWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
-import { captureGitWorktreeSnapshot } from "../../../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
+import { validateCanonicalFullTestReceipt, validateMiniTaskAcTrace } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
+import { validateReportableFindingDispositions } from "../../../runtime/review/stage-review-disposition.mjs";
+import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import {
   closePlanHash,
   confirmClosePlan,
   createDeliveryCloseExecutorRegistry,
   executeClosePlan,
+  authenticateReviewEvidence,
   prepareDeliveryClosePlan,
 } from "../../../core/task-close.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/i;
-const SAFE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)(?!$).+/;
+const SAFE_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const MINI_REVIEW_RESULT = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
+const MINI_REVIEW_ATTEMPT = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
 const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 const RESUME_PLAN_PREFIX = "operations/close/plans/";
 const CLOSE_CONFIRMATION_PREFIX = "operations/close/confirmations/";
@@ -30,6 +35,14 @@ const DELIVERY_AUTH_STEP_IDS = Object.freeze({
 });
 const MINI_REVIEW_STATUSES = new Set(["passed", "failed", "recorded", "unavailable", "missing"]);
 const MINI_REVIEW_CLOSE_STATUSES = new Set(["passed", "recorded"]);
+const MINI_REVIEW_KIND = Object.freeze({ design: "mini_task.design", implementation: "mini_task.implementation" });
+const MINI_REVIEW_PHASE = Object.freeze({ design: "mini-task-design", implementation: "mini-task-implementation" });
+const NOT_APPLICABLE_REASON_CODES = new Set(["out_of_scope", "no_ui", "no_code_change", "no_runtime_path", "deferred_scope"]);
+
+async function runWhReview(input) {
+  const module = await import("../../../skills/wh-review/scripts/wh-review-cli.mjs");
+  return module.runReviewRecovery(input);
+}
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -47,6 +60,17 @@ function oid(value, label) {
 }
 
 function hash(raw) { return createHash("sha256").update(raw).digest("hex"); }
+
+function originalRequirementSection(decisionLog) {
+  if (typeof decisionLog !== "string") return null;
+  const lines = decisionLog.replaceAll("\r\n", "\n").split("\n");
+  const start = lines.findIndex((line) => /^##[ \t]+原始需求(?:[ \t（(]|$)/.test(line));
+  if (start < 0) return null;
+  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+\S/.test(line));
+  const end = nextHeading < 0 ? lines.length : nextHeading;
+  const section = lines.slice(start, end).join("\n").trim();
+  return section.length > 0 ? `${section}\n` : null;
+}
 
 function canonical(value) {
   if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") return JSON.stringify(value);
@@ -134,23 +158,39 @@ function readQualityFact(task, ref) {
   try {
     const raw = task.readRecord(ref);
     const value = JSON.parse(raw);
-    if (value?.schema_version !== "quality-fact.v1"
-        || value.task_id !== task.identity.taskId
+    if (!value || typeof value !== "object" || Array.isArray(value) || value.schema_version !== "quality-fact.v1") {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} is not a quality-fact.v1 record`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
+    if (value.task_id !== task.identity.taskId
         || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
         || !OID.test(value.snapshot_tree ?? "")
         || !["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(value.stage)
-        || value.kind !== "review"
-        || !MINI_REVIEW_STATUSES.has(value.status)
+        || typeof value.kind !== "string"
         || typeof value.subject !== "string"
         || !Array.isArray(value.evidence)
         || value.evidence.length === 0
         || !Number.isFinite(Date.parse(value.recorded_at))
         || ref !== `quality/facts/${qualityFactDigest(value)}.json`
-        || value.fact_id !== `quality-${qualityFactDigest(value)}`) return null;
+        || value.fact_id !== `quality-${qualityFactDigest(value)}`) {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has invalid quality fact fields`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
+    if (value.kind !== "review") return null;
+    if (!MINI_REVIEW_STATUSES.has(value.status)) {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has an invalid review status`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
     return value;
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    return null;
+    if (error?.code === "QUALITY_FACT_INVALID") throw error;
+    const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} is unreadable: ${error?.message ?? error}`);
+    invalid.code = "QUALITY_FACT_INVALID";
+    throw invalid;
   }
 }
 
@@ -179,6 +219,195 @@ function currentMaterialRevision(task, worktreeRoot) {
   return `revision-${hash(JSON.stringify(values))}`;
 }
 
+function currentMiniTaskMaterials(task, worktreeRoot) {
+  const artifacts = ArtifactDir.open(worktreeRoot, task);
+  const read = (name) => artifacts.read(name);
+  const decisionLog = read("decision-log.md");
+  const rawRequirement = originalRequirementSection(decisionLog);
+  if (rawRequirement === null) {
+    throw new Error("MATERIAL_INCOMPLETE: mini-task decision-log has no original requirement section");
+  }
+  return {
+    raw_requirement: rawRequirement,
+    decision_log: decisionLog,
+    spec: read("spec.md"),
+    plan: read("plan.md"),
+    tasks: read("tasks.md"),
+  };
+}
+
+function reviewRequest(task, _workspace, reviewKind, materials, hostProvider) {
+  text(hostProvider, "hostProvider");
+  return {
+    task_path: task.taskPath,
+    project_name: task.identity.projectName,
+    task_id: task.identity.taskId,
+    stage: "build-code",
+    phase_id: MINI_REVIEW_PHASE[reviewKind.split(".")[1]],
+    review_kind: reviewKind,
+    host_provider: hostProvider,
+    materials,
+  };
+}
+
+function canonicalReviewBinding(task, review, expectedKind, expectedSnapshot, label) {
+  const value = object(review, label);
+  if (Object.prototype.hasOwnProperty.call(value, "status")) {
+    throw new TypeError(`${label}.status is not accepted; status is derived from canonical wh-review evidence`);
+  }
+  const resultRef = value.result_ref ?? value.resultRef ?? value.ref;
+  const attemptRef = value.attempt_ref ?? value.attemptRef;
+  const ref = resultRef ?? attemptRef;
+  const digest = value.sha256 ?? value.hash;
+  const unavailableRef = typeof ref === "string" && /^quality\/evidence\/mini-task-review-unavailable\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref);
+  if (typeof ref !== "string" || (!MINI_REVIEW_RESULT.test(ref) && !MINI_REVIEW_ATTEMPT.test(ref) && !unavailableRef) || !HASH.test(digest ?? "")) {
+    throw new TypeError(`${label} must bind a canonical wh-review result or attempt`);
+  }
+  const raw = task.readRecord(ref);
+  if (hash(raw) !== digest) throw new Error(`${label} evidence hash mismatch`);
+  const canonical = JSON.parse(raw);
+  if (canonical.version === "wh-review-result.v1") validateSchema("result", canonical);
+  if (canonical.version === "wh-review-attempt.v1") validateSchema("attempt", canonical);
+  if (canonical.task_id !== task.identity.taskId || canonical.review_kind !== expectedKind || canonical.snapshot_tree !== expectedSnapshot) {
+    throw new Error(`${label} is not bound to the current mini-task snapshot`);
+  }
+  const available = canonical.version === "wh-review-result.v1" && ref === resultRef;
+  const unavailable = (canonical.version === "wh-review-attempt.v1" && canonical.terminal_status === "unavailable" && ref === attemptRef)
+    || (canonical.schema_version === "workflowhub-mini-task-review-unavailable.v1" && canonical.status === "unavailable");
+  if (!available && !unavailable) throw new Error(`${label} is not a canonical terminal wh-review record`);
+  if (available) authenticateReviewEvidence(task, canonical);
+  return Object.freeze({ ref, sha256: digest, status: available ? "recorded" : "unavailable", value: canonical });
+}
+
+function bindingInput(binding) {
+  return { ref: binding.ref, sha256: binding.sha256 };
+}
+
+function resultBindingOrUnavailable({ task, kernel, runResult, reviewKind, snapshotTree }) {
+  const value = object(runResult, `${reviewKind} review result`);
+  const resultRef = value.result_ref ?? value.resultRef;
+  const attemptRef = value.attempt_ref ?? value.attemptRef;
+  const ref = value.status === "available" ? resultRef : attemptRef;
+  const suppliedDigest = ref === resultRef ? value.result_sha256 ?? value.resultHash : value.attempt_sha256 ?? value.attemptHash;
+  const digest = typeof suppliedDigest === "string" && HASH.test(suppliedDigest ?? "") ? suppliedDigest : (typeof ref === "string" ? hash(task.readRecord(ref)) : null);
+  if (typeof ref === "string" && HASH.test(digest ?? "")) {
+    const binding = canonicalReviewBinding(task, value.status === "available" ? { result_ref: ref, sha256: digest } : { attempt_ref: ref, sha256: digest }, reviewKind, snapshotTree, `${reviewKind} review`);
+    return bindingInput(binding);
+  }
+  if (value.status !== "unavailable") throw new Error(`${reviewKind} review did not return canonical evidence`);
+  const fallback = unavailableReviewRecord({
+    task,
+    kernel,
+    reviewKind,
+    snapshotTree,
+    errorCode: value.error_code ?? "REVIEW_UNAVAILABLE",
+    reason: value.error?.message ?? value.recovery ?? "wh-review returned unavailable without a canonical record",
+  });
+  return bindingInput(fallback);
+}
+
+function reviewRunnerFor(options) {
+  const runner = options.reviewRunner ?? options.runReview ?? runWhReview;
+  if (typeof runner !== "function") throw new TypeError("reviewRunner must be a function");
+  return runner;
+}
+
+function readUserResultFields(value) {
+  const result = object(value, "userResult");
+  if (result.status !== "verified") throw new Error("userResult.status must be verified");
+  for (const field of ["method", "scenario", "expected", "observed", "oracle"]) text(result[field], `userResult.${field}`);
+  return result;
+}
+
+function receiptBinding(value, label = "mini-task focused test") {
+  const ref = value?.receipt_ref ?? value?.ref;
+  const digest = value?.receipt_hash ?? value?.sha256;
+  if (typeof ref !== "string" || !ref.startsWith("quality/tests/") || !HASH.test(digest ?? "")) {
+    throw new Error(`${label} binding is invalid`);
+  }
+  return { ref, sha256: digest };
+}
+
+function validateUserResultEvidence({ task, result, receipt, snapshotTree }) {
+  const expected = receiptBinding(receipt);
+  if (result.evidence_type !== "test_receipt"
+      || result.evidence_ref !== expected.ref
+      || result.evidence_hash !== expected.sha256) {
+    throw new Error("mini-task user result must bind its evidence_ref/evidence_hash to the focused test receipt");
+  }
+  const raw = task.readRecord(expected.ref);
+  if (hash(raw) !== expected.sha256) throw new Error("mini-task user result evidence hash mismatch");
+  const bound = JSON.parse(raw);
+  validateCanonicalFullTestReceipt(bound, {
+    taskId: task.identity.taskId,
+    snapshotTree: snapshotTree ?? bound.snapshot_tree,
+    requirePassed: false,
+    allowMiniTaskFocused: true,
+  });
+  const output = task.readRecord(bound.output_ref);
+  if (hash(output) !== bound.output_hash) throw new Error("mini-task user result evidence output hash mismatch");
+  return bound;
+}
+
+function publishMiniTaskUserResult({ task, kernel, receipt, userResult }) {
+  const result = readUserResultFields(userResult);
+  if (result.snapshot_tree !== undefined && result.snapshot_tree !== receipt.snapshot_tree) {
+    throw new Error("mini-task user result snapshot differs from focused test snapshot");
+  }
+  const value = {
+    ...result,
+    schema_version: "workflowhub-mini-task-user-result.v1",
+    task_id: task.identity.taskId,
+    snapshot_tree: receipt.snapshot_tree,
+    evidence_type: "test_receipt",
+    evidence_ref: receipt.receipt_ref,
+    evidence_hash: receipt.receipt_hash,
+  };
+  validateUserResultEvidence({ task, result: value, receipt, snapshotTree: receipt.snapshot_tree });
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const ref = `quality/evidence/mini-task-user-result/${hash(raw)}.json`;
+  return kernel.publishCanonicalRecord(ref, raw);
+}
+
+function assertMiniTaskUserResult(task, binding, snapshotTree, receipt = null) {
+  const result = readBoundJson(task, binding, "mini-task user result");
+  if (result.schema_version !== "workflowhub-mini-task-user-result.v1"
+      || result.task_id !== task.identity.taskId
+      || result.snapshot_tree !== snapshotTree) {
+    throw new Error("mini-task user result is not a canonical current-snapshot record");
+  }
+  const expectedReceipt = receipt ?? { receipt_ref: result.evidence_ref, receipt_hash: result.evidence_hash };
+  validateUserResultEvidence({ task, result, receipt: expectedReceipt, snapshotTree });
+  return readUserResultFields(result);
+}
+
+function assertAcTraceForMiniTask(acTrace, { task, receipt, receiptBinding = null }) {
+  if (acTrace === null || acTrace === undefined) throw new Error("mini-task AC trace is required");
+  return validateMiniTaskAcTrace(acTrace, {
+    taskId: task.identity.taskId,
+    snapshotTree: receipt.snapshot_tree,
+    receiptRef: receipt.receipt_ref ?? receiptBinding?.ref,
+    receiptHash: receipt.receipt_hash ?? receiptBinding?.sha256,
+    read: (ref) => task.readRecord(ref),
+  });
+}
+
+function unavailableReviewRecord({ task, kernel, reviewKind, snapshotTree, reason, errorCode = "REVIEW_UNAVAILABLE" }) {
+  const value = {
+    schema_version: "workflowhub-mini-task-review-unavailable.v1",
+    task_id: task.identity.taskId,
+    review_kind: reviewKind,
+    snapshot_tree: snapshotTree,
+    status: "unavailable",
+    error_code: errorCode,
+    reason,
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const ref = `quality/evidence/mini-task-review-unavailable/${hash(raw)}.json`;
+  const record = kernel.publishCanonicalRecord(ref, raw);
+  return { ref: record.ref, sha256: record.sha256, status: "unavailable" };
+}
+
 function readBoundJson(task, binding, label) {
   if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) throw new Error(`${label} evidence binding is invalid`);
   const raw = task.readRecord(binding.ref);
@@ -186,13 +415,47 @@ function readBoundJson(task, binding, label) {
   return JSON.parse(raw);
 }
 
+function authenticateMiniReviewResult(task, value, label) {
+  if (value?.version !== "wh-review-result.v1") throw new Error(`${label} is not a canonical semantic review result`);
+  validateSchema("result", value);
+  authenticateReviewEvidence(task, value);
+  return value;
+}
+
+function miniFindingDispositions({ reviewResult, supplied, label }) {
+  const result = validateReportableFindingDispositions({ result: reviewResult, dispositions: supplied });
+  if (result.facts.status === "incomplete") {
+    throw new Error(`${label} finding dispositions are incomplete: ${result.missing_items.join("; ")}`);
+  }
+  return result.facts;
+}
+
+function writeMiniFindingDispositionEvidence({ task, kernel, reviewResult, dispositions, reviewBinding, label }) {
+  const facts = miniFindingDispositions({ reviewResult, supplied: dispositions, label });
+  if (facts.status === "not_applicable") return Object.freeze({ facts, evidence: null });
+  const value = {
+    schema_version: "workflowhub-mini-task-finding-dispositions.v1",
+    task_id: task.identity.taskId,
+    review_ref: reviewBinding.ref,
+    review_hash: reviewBinding.sha256,
+    snapshot_tree: reviewResult.snapshot_tree,
+    ...facts,
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const record = kernel.publishCanonicalRecord(`quality/evidence/mini-task-finding-dispositions/${hash(raw)}.json`, raw);
+  return Object.freeze({ facts, evidence: { ref: record.ref, sha256: record.sha256, evidence_type: "review_result" } });
+}
+
 function assertMiniTaskQualityForDelivery(task) {
   const workspace = openCurrentTaskWorkspace(task);
-  const snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot);
+  const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
   const facts = latestMiniQualityFacts(task);
   const design = facts.get("mini_task_design_review")?.value;
   if (!design || !MINI_REVIEW_CLOSE_STATUSES.has(design.status)) throw new Error("mini-task design review is incomplete for the current materials");
-  if (design.material_revision !== currentMaterialRevision(task, workspace.worktreeRoot)) {
+  const designSnapshotReusable = design.snapshot_tree === snapshot.tree
+    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId)
+    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId);
+  if (design.material_revision !== currentMaterialRevision(task, workspace.worktreeRoot) && !designSnapshotReusable) {
     throw new Error("mini-task design review is stale for the current materials");
   }
   const designResult = readBoundJson(task, design.evidence[0], "mini-task design review");
@@ -201,32 +464,73 @@ function assertMiniTaskQualityForDelivery(task) {
       || designResult.snapshot_tree !== design.snapshot_tree) {
     throw new Error("mini-task design review is not bound to its frozen design snapshot");
   }
+  authenticateMiniReviewResult(task, designResult, "mini-task design review");
+  const designDispositionEvidence = (design.evidence ?? []).slice(1).map((entry) => {
+    try { return readBoundJson(task, entry, "mini-task design finding dispositions"); } catch { return null; }
+  }).find((value) => value?.schema_version === "workflowhub-mini-task-finding-dispositions.v1");
+  const designDispositionFacts = miniFindingDispositions({
+    reviewResult: designResult,
+    supplied: designDispositionEvidence?.items ?? [],
+    label: "mini-task design review",
+  });
+  if (designDispositionFacts.status !== (designDispositionEvidence?.status ?? designDispositionFacts.status)) {
+    throw new Error("mini-task design finding disposition status is inconsistent");
+  }
 
   const implementation = facts.get("mini_task_implementation_review")?.value;
   if (!implementation || !MINI_REVIEW_CLOSE_STATUSES.has(implementation.status)) throw new Error("mini-task implementation review is incomplete for the current snapshot");
   const packet = readBoundJson(task, implementation.evidence[0], "mini-task implementation evidence");
+  const implementationSnapshotReusable = packet.snapshot_tree === snapshot.tree
+    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, packet.snapshot_tree, snapshot.tree, task.identity.taskId)
+    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, packet.snapshot_tree, snapshot.tree, task.identity.taskId);
   if (packet.schema_version !== "workflowhub-mini-task-implementation-evidence.v1"
       || packet.task_id !== task.identity.taskId
-      || packet.snapshot_tree !== snapshot.tree
+      || !implementationSnapshotReusable
       || !Array.isArray(packet.coverage_limits)
       || !Array.isArray(packet.skip_reasons)
       || !Array.isArray(packet.remaining_risks)) throw new Error("mini-task implementation evidence is incomplete or stale");
   if (!MINI_REVIEW_CLOSE_STATUSES.has(packet.implementation_review?.status ?? implementation.status)) throw new Error("mini-task implementation review is incomplete");
   const implementationResult = readBoundJson(task, packet.implementation_review, "mini-task implementation review");
+  const implementationReviewReusable = implementationResult.snapshot_tree === snapshot.tree
+    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, implementationResult.snapshot_tree, snapshot.tree, task.identity.taskId)
+    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, implementationResult.snapshot_tree, snapshot.tree, task.identity.taskId);
   if (implementationResult.task_id !== task.identity.taskId
       || implementationResult.review_kind !== "mini_task.implementation"
-      || implementationResult.snapshot_tree !== snapshot.tree) throw new Error("mini-task implementation review is not bound to the current snapshot");
+      || !implementationReviewReusable) throw new Error("mini-task implementation review is not bound to the current snapshot");
+  authenticateMiniReviewResult(task, implementationResult, "mini-task implementation review");
+  const dispositionFacts = miniFindingDispositions({
+    reviewResult: implementationResult,
+    supplied: packet.finding_dispositions?.items ?? [],
+    label: "mini-task implementation review",
+  });
+  if (dispositionFacts.status !== packet.finding_dispositions?.status) throw new Error("mini-task finding disposition status is inconsistent");
   const testReceipt = readBoundJson(task, packet.test_receipt, "mini-task focused test");
-  if (testReceipt.schema_version !== "workflowhub-receipt.v1"
-      || testReceipt.task_id !== task.identity.taskId
-      || testReceipt.exit_code !== 0
-      || testReceipt.snapshot_tree !== snapshot.tree) throw new Error("mini-task focused test evidence is incomplete or stale");
+  validateCanonicalFullTestReceipt(testReceipt, {
+    taskId: task.identity.taskId,
+    snapshotTree: testReceipt.snapshot_tree,
+    requirePassed: false,
+    allowMiniTaskFocused: true,
+  });
+  if (!(testReceipt.snapshot_tree === snapshot.tree
+      || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, testReceipt.snapshot_tree, snapshot.tree, task.identity.taskId)
+      || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, testReceipt.snapshot_tree, snapshot.tree, task.identity.taskId))) throw new Error("mini-task focused test evidence is incomplete or stale");
+  const testOutput = task.readRecord(testReceipt.output_ref);
+  if (hash(testOutput) !== testReceipt.output_hash) throw new Error("mini-task focused test output hash mismatch");
+  if (testReceipt.exit_code !== 0) {
+    throw new Error(`mini-task focused test failed (exit_code=${testReceipt.exit_code}); delivery remains incomplete`);
+  }
   const userResult = readBoundJson(task, packet.user_result, "mini-task user result");
   if (userResult.schema_version !== "workflowhub-mini-task-user-result.v1"
       || userResult.task_id !== task.identity.taskId
-      || userResult.status !== "verified"
-      || userResult.snapshot_tree !== snapshot.tree) throw new Error("mini-task real user result is incomplete or stale");
-  if (!packet.ac_trace || typeof packet.ac_trace !== "object" || Array.isArray(packet.ac_trace)) throw new Error("mini-task AC trace is incomplete");
+        || userResult.status !== "verified"
+      || !(userResult.snapshot_tree === snapshot.tree
+        || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, userResult.snapshot_tree, snapshot.tree, task.identity.taskId)
+        || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, userResult.snapshot_tree, snapshot.tree, task.identity.taskId))) throw new Error("mini-task real user result is incomplete or stale");
+  assertMiniTaskUserResult(task, packet.user_result, testReceipt.snapshot_tree, {
+    receipt_ref: packet.test_receipt.ref,
+    receipt_hash: packet.test_receipt.sha256,
+  });
+  assertAcTraceForMiniTask(packet.ac_trace, { task, receipt: testReceipt, receiptBinding: packet.test_receipt });
   return Object.freeze({ snapshot_tree: snapshot.tree, design_fact: design, implementation_fact: implementation, packet });
 }
 
@@ -252,11 +556,11 @@ function statusPaths(root) {
   return [...new Set(paths)].sort();
 }
 
-function progressState(root, step) {
+function progressState(root, step, taskId) {
   const branch = currentBranch(root);
   const head = currentHead(root);
   const status = currentStatus(root);
-  const snapshot = captureGitWorktreeSnapshot(root);
+  const snapshot = captureExecutionSnapshot(root, taskId);
   const expectedHead = oid(step.expected_head, "expected_head");
   const expectedTree = oid(step.progress_snapshot_tree, "progress_snapshot_tree");
   const parents = git(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/).slice(1).map((value) => value.toLowerCase());
@@ -327,7 +631,7 @@ function createResumePlan({ task, workspace, targetOid: requestedTargetOid, orig
   const root = workspace.worktreeRoot;
   const branch = currentBranch(root);
   const expectedHead = currentHead(root);
-  const snapshot = captureGitWorktreeSnapshot(root);
+  const snapshot = captureExecutionSnapshot(root, task.identity.taskId);
   const paths = statusPaths(root);
   const steps = [];
   if (paths.length > 0) {
@@ -366,7 +670,7 @@ async function executeResume({ task, kernel, plan, closeConfirmationRef }) {
     let progressCommitOid = null;
     for (const step of plan.steps) {
       if (step.operation === "commit") {
-        const before = progressState(root, step);
+        const before = progressState(root, step, task.identity.taskId);
         if (before.satisfied) {
           progressCommitOid = before.commit_oid;
           continue;
@@ -380,7 +684,7 @@ async function executeResume({ task, kernel, plan, closeConfirmationRef }) {
           if (currentStatus(root) === "") throw new Error("A progress commit has no changes");
           git(root, ["commit", "-m", "mini-task: preserve A progress"]);
         }
-        const after = progressState(root, step);
+        const after = progressState(root, step, task.identity.taskId);
         if (!after.satisfied) throw new Error("A progress commit did not reach the declared physical state");
         progressCommitOid = after.commit_oid;
         continue;
@@ -483,6 +787,19 @@ export function evaluateMiniTaskScope(input = {}) {
 export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, delivery } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task TaskHandle/TaskKernel mismatch");
+  const focusedTestFact = task.listCanonicalQualityFactRefs()
+    .map((ref) => ({ ref, value: readQualityFact(task, ref) }))
+    .filter(({ value }) => value?.subject === "full_tests_fresh")
+    .sort((left, right) => Date.parse(right.value.recorded_at) - Date.parse(left.value.recorded_at) || right.ref.localeCompare(left.ref))[0];
+  if (focusedTestFact?.value?.status === "failed") {
+    const evidence = focusedTestFact.value.evidence?.find((entry) => entry.evidence_type === "test_receipt");
+    if (evidence) {
+      const receipt = readBoundJson(task, evidence, "mini-task focused test");
+      if (receipt.exit_code !== 0) {
+        throw new Error(`mini-task focused test failed (exit_code=${receipt.exit_code}); delivery remains incomplete`);
+      }
+    }
+  }
   return prepareDeliveryClosePlan({ task, kernel, delivery });
 }
 
@@ -492,25 +809,39 @@ export function confirmMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, 
   return confirmClosePlan({ task, kernel, plan, outcome });
 }
 
-export function recordMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, review } = {}) {
+export function recordMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, review, findingDispositions } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task design review TaskHandle/TaskKernel mismatch");
-  const value = object(review, "design review");
-  const ref = text(value.ref, "design review ref");
-  if (!MINI_REVIEW_RESULT.test(ref) || !HASH.test(value.sha256 ?? "")) throw new TypeError("design review must bind a canonical review result");
-  const raw = task.readRecord(ref);
-  if (hash(raw) !== value.sha256) throw new Error("design review hash mismatch");
-  const result = JSON.parse(raw);
-  const snapshot = captureGitWorktreeSnapshot(openCurrentTaskWorkspace(task).worktreeRoot);
-  if (result.task_id !== task.identity.taskId || result.review_kind !== "mini_task.design" || result.snapshot_tree !== snapshot.tree) {
-    throw new Error("design review is not bound to the current mini-task materials");
-  }
-  const status = value.status ?? "passed";
-  if (!MINI_REVIEW_STATUSES.has(status)) throw new TypeError("design review status is invalid");
-  return kernel.publishVNextQualityFact("build-code", {
-    kind: "review", status, subject: "mini_task_design_review",
-    evidence: [{ ref, sha256: value.sha256, evidence_type: "review_result" }],
+  const snapshot = captureExecutionSnapshot(openCurrentTaskWorkspace(task).worktreeRoot, task.identity.taskId);
+  const binding = canonicalReviewBinding(task, review, MINI_REVIEW_KIND.design, snapshot.tree, "design review");
+  const dispositionEvidence = writeMiniFindingDispositionEvidence({
+    task, kernel, reviewResult: binding.value, dispositions: findingDispositions,
+    reviewBinding: binding, label: "mini-task design review",
   });
+  return kernel.publishVNextQualityFact("build-code", {
+    kind: "review", status: binding.status, subject: "mini_task_design_review",
+    evidence: [
+      { ref: binding.ref, sha256: binding.sha256, evidence_type: "review_result" },
+      ...(dispositionEvidence.evidence ? [dispositionEvidence.evidence] : []),
+    ],
+  });
+}
+
+export async function runMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, reviewRunner, runReview, hostProvider, findingDispositions } = {}) {
+  const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("mini-task design review TaskHandle/TaskKernel mismatch");
+  text(hostProvider, "hostProvider");
+  const workspace = openCurrentTaskWorkspace(task);
+  const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
+  const runner = reviewRunnerFor({ reviewRunner, runReview });
+  let outcome;
+  try {
+    outcome = await runner(reviewRequest(task, workspace, MINI_REVIEW_KIND.design, currentMiniTaskMaterials(task, workspace.worktreeRoot), hostProvider));
+  } catch (error) {
+    outcome = { status: "unavailable", error_code: error?.code ?? "REVIEW_UNAVAILABLE", error: { message: String(error?.message ?? error) } };
+  }
+  const binding = resultBindingOrUnavailable({ task, kernel, runResult: outcome, reviewKind: MINI_REVIEW_KIND.design, snapshotTree: snapshot.tree });
+  return Object.freeze({ review: recordMiniTaskDesignReview({ task, kernel, review: binding, findingDispositions }), outcome, snapshot_tree: snapshot.tree });
 }
 
 export function authorizeMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, plan, confirmationRef, operations = ["commit", "archive", "merge", "push", "cleanup"] } = {}) {
@@ -566,6 +897,8 @@ export function createMiniTaskRunner({ task: taskHandle, kernel: taskKernel } = 
   if (kernel.task !== task) throw new Error("mini-task TaskHandle/TaskKernel mismatch");
   return Object.freeze({
     evaluateScope: evaluateMiniTaskScope,
+    runDesignReview: (input) => runMiniTaskDesignReview({ ...input, task, kernel }),
+    runImplementationReview: (input) => runMiniTaskImplementationReview({ ...input, task, kernel }),
     prepareDelivery: (input) => prepareMiniTaskDelivery({ ...input, task, kernel }),
     confirmDelivery: (input) => confirmMiniTaskDelivery({ ...input, task, kernel }),
     authorizeDelivery: (input) => authorizeMiniTaskDelivery({ ...input, task, kernel }),
@@ -577,49 +910,29 @@ export function createMiniTaskRunner({ task: taskHandle, kernel: taskKernel } = 
   });
 }
 
-export function recordMiniTaskQuality({ task: taskHandle, kernel: taskKernel, workspace, testCommand, receiptRef = "quality/tests/mini-task-implementation.json", outputRef = "quality/tests/output/mini-task-implementation.output", implementationReview, userResult, acTrace = null, coverageLimits = [], skipReasons = [], remainingRisks = [] } = {}) {
-  const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
-  if (kernel.task !== task) throw new Error("mini-task quality TaskHandle/TaskKernel mismatch");
-  text(testCommand, "testCommand");
-  const review = object(implementationReview, "implementationReview");
-  const reviewRef = text(review.ref, "implementationReview.ref");
-  if (!MINI_REVIEW_RESULT.test(reviewRef) || !HASH.test(review.sha256 ?? "")) throw new TypeError("implementationReview must bind a canonical review result");
-  const result = object(userResult, "userResult");
-  if (result.status !== "verified") throw new Error("mini-task real user result must be verified before delivery");
-  if (!acTrace || typeof acTrace !== "object" || Array.isArray(acTrace)) throw new Error("mini-task AC trace is required");
-  if (!Array.isArray(coverageLimits) || !Array.isArray(skipReasons) || !Array.isArray(remainingRisks)) throw new TypeError("mini-task quality limits must be arrays");
-  const safeWorkspace = workspace ?? openCurrentTaskWorkspace(task);
-  const writer = createCanonicalReceiptWriter({ task, workspace: safeWorkspace, stage: "verify-code", component: "mini-task-focused-tests" });
-  const receipt = writer.captureTests({ command: testCommand, receiptRef, outputRef });
-  const testFact = kernel.publishVNextQualityFact("verify-code", {
-    kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh",
-    evidence: [{ ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" }],
+function recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implementationReview, userRecord, acTrace, coverageLimits, skipReasons, remainingRisks, findingDispositions, humanConfirmation = null }) {
+  const snapshot = captureExecutionSnapshot(openCurrentTaskWorkspace(task).worktreeRoot, task.identity.taskId);
+  if (snapshot.tree !== receipt.snapshot_tree) throw new Error("mini-task evidence snapshot changed before review record");
+  const userResult = assertMiniTaskUserResult(task, userRecord, receipt.snapshot_tree, receipt);
+  const trace = assertAcTraceForMiniTask(acTrace, { task, receipt });
+  const reviewBinding = canonicalReviewBinding(task, implementationReview, MINI_REVIEW_KIND.implementation, receipt.snapshot_tree, "implementation review");
+  const dispositionEvidence = writeMiniFindingDispositionEvidence({
+    task, kernel, reviewResult: reviewBinding.value, dispositions: findingDispositions,
+    reviewBinding, label: "mini-task implementation review",
   });
-  const reviewRaw = task.readRecord(reviewRef);
-  if (hash(reviewRaw) !== review.sha256) throw new Error("implementation review hash mismatch");
-  const reviewValue = JSON.parse(reviewRaw);
-  if (reviewValue.task_id !== task.identity.taskId
-      || reviewValue.review_kind !== "mini_task.implementation"
-      || reviewValue.snapshot_tree !== receipt.snapshot_tree) throw new Error("implementation review is not bound to the current mini-task snapshot");
-  const reviewStatus = review.status ?? "passed";
-  if (!MINI_REVIEW_STATUSES.has(reviewStatus)) throw new TypeError("implementation review status is invalid");
   const reviewFact = kernel.publishVNextQualityFact("verify-code", {
-    kind: "review", status: reviewStatus, subject: "independent_review",
-    evidence: [{ ref: reviewRef, sha256: review.sha256, evidence_type: "review_result" }],
+    kind: "review", status: reviewBinding.status, subject: "independent_review",
+    evidence: [{ ref: reviewBinding.ref, sha256: reviewBinding.sha256, evidence_type: "review_result" }],
   });
-  const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
-  if (snapshot.tree !== receipt.snapshot_tree) throw new Error("mini-task user result snapshot differs from focused test snapshot");
-  const userRaw = `${JSON.stringify({ ...result, schema_version: "workflowhub-mini-task-user-result.v1", task_id: task.identity.taskId, snapshot_tree: snapshot.tree }, null, 2)}\n`;
-  const userRef = `quality/evidence/mini-task-user-result/${hash(userRaw)}.json`;
-  const userRecord = kernel.publishCanonicalRecord(userRef, userRaw);
   const packet = {
     schema_version: "workflowhub-mini-task-implementation-evidence.v1",
     task_id: task.identity.taskId,
-    snapshot_tree: snapshot.tree,
+    snapshot_tree: receipt.snapshot_tree,
     test_receipt: { ref: receipt.receipt_ref, sha256: receipt.receipt_hash },
-    implementation_review: { ref: reviewRef, sha256: review.sha256, status: reviewStatus },
+    implementation_review: { ref: reviewBinding.ref, sha256: reviewBinding.sha256, status: reviewBinding.status },
+    finding_dispositions: dispositionEvidence.facts,
     user_result: { ref: userRecord.ref, sha256: userRecord.sha256 },
-    ac_trace: acTrace,
+    ac_trace: trace,
     coverage_limits: [...coverageLimits],
     skip_reasons: [...skipReasons],
     remaining_risks: [...remainingRisks],
@@ -627,9 +940,125 @@ export function recordMiniTaskQuality({ task: taskHandle, kernel: taskKernel, wo
   const packetRaw = `${JSON.stringify(packet, null, 2)}\n`;
   const packetRef = `quality/evidence/mini-task-implementation/${hash(packetRaw)}.json`;
   const packetRecord = kernel.publishCanonicalRecord(packetRef, packetRaw);
+  const acceptanceStatus = (facts) => facts.status === "not_applicable"
+    || (facts.status === "recorded" && facts.items.every((item) => item.status !== "needs_human"))
+    ? "passed"
+    : "missing";
+  const publishMiniAcceptanceFact = (subject, status) => kernel.publishVNextQualityFact("verify-code", {
+    kind: "acceptance_criterion", status, subject,
+    evidence: [{ ref: packetRecord.ref, sha256: packetRecord.sha256, evidence_type: "acceptance_evidence" }],
+  });
+  let humanConfirmationStatus = "missing";
+  publishMiniAcceptanceFact("finding_dispositions", acceptanceStatus(dispositionEvidence.facts));
+  const acceptanceCriteriaStatus = receipt.exit_code === 0
+    && userResult.status === "verified"
+    && trace.entries.every((entry) => entry.status === "passed")
+    ? "passed"
+    : "missing";
+  const structuredExceptionLists = [coverageLimits, skipReasons, remainingRisks].every((values) => Array.isArray(values)
+    && values.every((value) => typeof value === "string" && value.trim() !== "" && value.trim().toLowerCase() !== "unknown"));
+  const exceptionsStatus = structuredExceptionLists && acceptanceStatus(dispositionEvidence.facts) === "passed" ? "passed" : "missing";
+  publishMiniAcceptanceFact("acceptance_criteria", acceptanceCriteriaStatus);
+  publishMiniAcceptanceFact("exceptions", exceptionsStatus);
+  if (humanConfirmation !== null) {
+    const confirmation = object(humanConfirmation, "mini-task human confirmation");
+    if (!["accepted", "rejected"].includes(confirmation.decision)) throw new TypeError("mini-task human confirmation decision is invalid");
+    text(confirmation.subject_ref, "mini-task human confirmation subject_ref");
+    kernel.publishHumanConfirmation("verify-code", {
+      decision: confirmation.decision,
+      subject_ref: confirmation.subject_ref,
+    });
+    humanConfirmationStatus = confirmation.decision === "accepted" ? "passed" : "failed";
+  } else {
+    const missingRaw = `${JSON.stringify({
+      schema_version: "workflowhub-mini-task-human-confirmation-missing.v1",
+      task_id: task.identity.taskId,
+      snapshot_tree: receipt.snapshot_tree,
+      status: "missing",
+      reason: "explicit human confirmation is required before mini-task delivery close",
+    }, null, 2)}\n`;
+    const missingRecord = kernel.publishCanonicalRecord(`quality/evidence/mini-task-human-confirmation-missing/${hash(missingRaw)}.json`, missingRaw);
+    kernel.publishVNextQualityFact("verify-code", {
+      kind: "confirmation", status: "missing", subject: "human_confirmation",
+      evidence: [{ ref: missingRecord.ref, sha256: missingRecord.sha256, evidence_type: "human_confirmation" }],
+    });
+  }
   const implementationFact = kernel.publishVNextQualityFact("build-code", {
-    kind: "review", status: reviewStatus, subject: "mini_task_implementation_review",
+    kind: "review", status: reviewBinding.status, subject: "mini_task_implementation_review",
     evidence: [{ ref: packetRecord.ref, sha256: packetRecord.sha256, evidence_type: "review_result" }],
   });
-  return Object.freeze({ status: receipt.exit_code === 0 && MINI_REVIEW_CLOSE_STATUSES.has(reviewStatus) ? "ready" : "incomplete", test_fact: testFact, review_fact: reviewFact, implementation_fact: implementationFact, evidence_ref: packetRecord.ref, evidence_hash: packetRecord.sha256, snapshot_tree: snapshot.tree, snapshot_commit: receipt.snapshot_commit, user_result_ref: userRecord.ref });
+  const qualityReady = reviewBinding.status === "recorded"
+    && receipt.exit_code === 0
+    && acceptanceStatus(dispositionEvidence.facts) === "passed"
+    && acceptanceCriteriaStatus === "passed"
+    && exceptionsStatus === "passed"
+    && humanConfirmationStatus === "passed";
+  return Object.freeze({
+    status: qualityReady ? "ready" : "incomplete",
+    test_fact: testFact,
+    review_fact: reviewFact,
+    implementation_fact: implementationFact,
+    evidence_ref: packetRecord.ref,
+    evidence_hash: packetRecord.sha256,
+    snapshot_tree: receipt.snapshot_tree,
+    snapshot_commit: receipt.snapshot_commit,
+    user_result_ref: userRecord.ref,
+  });
+}
+
+export function recordMiniTaskQuality({ task: taskHandle, kernel: taskKernel, workspace, testCommand, receiptRef = "quality/tests/mini-task-implementation.json", outputRef = "quality/tests/output/mini-task-implementation.output", implementationReview, userResult, acTrace = null, coverageLimits = [], skipReasons = [], remainingRisks = [], findingDispositions, humanConfirmation = null, capturedReceipt = null, capturedUserResult = null } = {}) {
+  const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("mini-task quality TaskHandle/TaskKernel mismatch");
+  text(testCommand, "testCommand");
+  if (!Array.isArray(coverageLimits) || !Array.isArray(skipReasons) || !Array.isArray(remainingRisks)) throw new TypeError("mini-task quality limits must be arrays");
+  const safeWorkspace = workspace ?? openCurrentTaskWorkspace(task);
+  const receipt = capturedReceipt ?? createCanonicalReceiptWriter({ task, workspace: safeWorkspace, stage: "verify-code", component: "mini-task-focused-tests" }).captureTests({ command: testCommand, receiptRef, outputRef });
+  const trace = assertAcTraceForMiniTask(acTrace, { task, receipt });
+  const userRecord = capturedUserResult ?? publishMiniTaskUserResult({ task, kernel, receipt, userResult });
+  assertMiniTaskUserResult(task, userRecord, receipt.snapshot_tree);
+  const testFact = kernel.publishVNextQualityFact("verify-code", {
+    kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh",
+    evidence: [{ ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" }],
+  });
+  return recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implementationReview, userRecord, acTrace: trace, coverageLimits, skipReasons, remainingRisks, findingDispositions, humanConfirmation });
+}
+
+export async function runMiniTaskImplementationReview({ task: taskHandle, kernel: taskKernel, workspace, testCommand, receiptRef = "quality/tests/mini-task-implementation.json", outputRef = "quality/tests/output/mini-task-implementation.output", userResult, acTrace = null, coverageLimits = [], skipReasons = [], remainingRisks = [], findingDispositions, humanConfirmation = null, reviewRunner, runReview, hostProvider } = {}) {
+  const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("mini-task implementation review TaskHandle/TaskKernel mismatch");
+  text(hostProvider, "hostProvider");
+  const safeWorkspace = workspace ?? openCurrentTaskWorkspace(task);
+  text(testCommand, "testCommand");
+  if (!Array.isArray(coverageLimits) || !Array.isArray(skipReasons) || !Array.isArray(remainingRisks)) throw new TypeError("mini-task quality limits must be arrays");
+  const receipt = createCanonicalReceiptWriter({ task, workspace: safeWorkspace, stage: "verify-code", component: "mini-task-focused-tests" }).captureTests({ command: testCommand, receiptRef, outputRef });
+  const trace = assertAcTraceForMiniTask(acTrace, { task, receipt });
+  const userRecord = publishMiniTaskUserResult({ task, kernel, receipt, userResult });
+  const testFact = kernel.publishVNextQualityFact("verify-code", {
+    kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh",
+    evidence: [{ ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" }],
+  });
+  let outcome;
+  if (receipt.exit_code !== 0) {
+    outcome = { status: "unavailable", error_code: "FOCUSED_TEST_FAILED", recovery: "review_not_dispatched" };
+  } else {
+    const runner = reviewRunnerFor({ reviewRunner, runReview });
+    try {
+      const materials = {
+        ...currentMiniTaskMaterials(task, safeWorkspace.worktreeRoot),
+        test_evidence: { receipt_ref: receipt.receipt_ref, receipt_hash: receipt.receipt_hash, command: testCommand, suite_scope: "mini-task focused tests", coverage_classes: ["focused"] },
+        ac_trace: trace,
+        user_result: { ref: userRecord.ref, sha256: userRecord.sha256 },
+        coverage_limits: [...coverageLimits],
+        skip_reasons: [...skipReasons],
+        remaining_risks: [...remainingRisks],
+      };
+      outcome = await runner(reviewRequest(task, safeWorkspace, MINI_REVIEW_KIND.implementation, materials, hostProvider));
+    } catch (error) {
+      outcome = { status: "unavailable", error_code: error?.code ?? "REVIEW_UNAVAILABLE", error: { message: String(error?.message ?? error) } };
+    }
+  }
+  const snapshot = captureExecutionSnapshot(safeWorkspace.worktreeRoot, task.identity.taskId);
+  const implementationReview = resultBindingOrUnavailable({ task, kernel, runResult: outcome, reviewKind: MINI_REVIEW_KIND.implementation, snapshotTree: snapshot.tree });
+  const quality = recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implementationReview, userRecord, acTrace: trace, coverageLimits, skipReasons, remainingRisks, findingDispositions, humanConfirmation });
+  return Object.freeze({ ...quality, outcome });
 }

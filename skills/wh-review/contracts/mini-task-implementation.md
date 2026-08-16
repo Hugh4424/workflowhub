@@ -6,7 +6,16 @@
 
 - 当前 diff/snapshot 是否实现冻结的四份材料和逐 AC trace。
 - 受影响测试命令、实际结果、跳过理由、coverage limits、真实用户结果和剩余风险是否真实且相互一致。
+- AC 标为 `not_applicable` 时必须给受限 `reason_code`（`out_of_scope`、`no_ui`、`no_code_change`、`no_runtime_path` 或 `deferred_scope`）和具体 `not_applicable_reason`；它不会自动算作通过。
 - 失败、unavailable、same-source 或证据缺口是否被如实保留，是否有越界改动或静默遗漏。
+
+如果返回 finding，mini-task 必须逐条记录 `fixed`、`rejected_invalid`、`accepted_risk` 或
+`needs_human`；普通 finding 不能省略，`accepted_risk` 必须绑定当前 finding/review/snapshot
+并有真实用户风险确认。审查事实不等于实现通过，最终交付仍由测试、AC、例外和人工确认共同决定。
+
+沿用 build-code 的“需求符合度 → 真实正确性 → 必要性”三轴，再补真实用户结果和小功能
+边界。优先找会让用户结果错误、让原有流程退化、让失败无法恢复或让改动悄悄扩大范围的
+问题；不把快照、材料清单和流程记录本身当成审查目标。
 
 ## 复审边界
 

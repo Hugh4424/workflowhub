@@ -7,6 +7,10 @@ import {
   classifyComparison,
   collectBehaviorEvidence,
 } from "../../tools/architecture/public-behavior-baseline.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const baseline = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseline/v1/baseline.json", "utf8"));
 const candidate = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseline/v1/candidate.json", "utf8"));
@@ -19,7 +23,17 @@ describe("public behavior baseline", () => {
     // The live collector is an explicit architecture probe. Keep the normal suite
     // bounded and run the 14 isolated CLI cases only when requested.
     evidence = liveProbe
-      ? collectBehaviorEvidence(process.cwd())
+      ? collectBehaviorEvidence(process.cwd(), {
+        // The public run contract authenticates a Stage Agent outcome; the live
+        // probe must provide that real current-snapshot receipt instead of
+        // silently testing an obsolete caller-only input shape.
+        stageOutcomeWriter: ({ stage, task }) => {
+          const candidateWorkspace = prepareTaskWorkspace(task);
+          const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
+          const kernel = createTaskKernel(task, { candidateWorkspace });
+          return writeStageOutcomeFixture({ task, kernel, artifacts, candidateWorkspace, stage });
+        },
+      })
       : candidate;
   });
 

@@ -231,7 +231,7 @@ export function preflightFactCollection(ctx) {
     catch (error) { throw wrongWorktree(`MATERIAL_INCOMPLETE: ${name} (${error.code ?? "invalid"})`); }
   }
   let snapshot;
-  try { workspace.assertValid(); snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot); }
+  try { workspace.assertValid(); snapshot = captureGitWorktreeSnapshot(workspace.worktreeRoot, task.identity.taskId); }
   catch (error) {
     if (error?.code === "FORMAL_LFS_CONTENT_UNAVAILABLE") throw error;
     throw wrongWorktree("WRONG_WORKTREE: Workspace snapshot unavailable");

@@ -1,5 +1,6 @@
 const severities = new Set(["blocking", "major", "minor"]);
 const evidenceKinds = new Set(["direct", "inferred", "machine"]);
+export const MAX_REVIEWER_OUTPUT_BYTES = 128 * 1024;
 
 function invalid(message) {
   const error = new Error(`OUTPUT_INVALID: ${message}`);
@@ -104,6 +105,7 @@ function terminalJsonAfterProse(raw) {
 
 export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
+  if (Buffer.byteLength(raw, "utf8") > MAX_REVIEWER_OUTPUT_BYTES) invalid(`provider output exceeds ${MAX_REVIEWER_OUTPUT_BYTES} bytes`);
   const options = { requireEvidence };
   try { return validate(JSON.parse(raw.trim()), options); } catch (error) { if (error?.code === "OUTPUT_INVALID") throw error; }
   const fences = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];

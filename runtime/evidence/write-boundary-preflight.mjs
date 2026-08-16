@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { assertTaskHandle } from "../../runtime/task/task-handle.mjs";
-import { inspectOfficialInvocation, persistOfficialInvocation } from "./invocation-identity.mjs";
+import { inspectOfficialInvocation, isOfficialInvocation, persistOfficialInvocation } from "./invocation-identity.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "../../runtime/task/workspace.mjs";
 import { assertCurrentSourceDigest, captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 
@@ -72,8 +72,8 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
     if (worktreeRoot !== null) {
       try {
       const snapshot = sourceDigest === undefined
-        ? captureGitWorktreeSnapshot(worktreeRoot)
-        : assertCurrentSourceDigest(worktreeRoot, sourceDigest);
+        ? captureGitWorktreeSnapshot(worktreeRoot, handle.identity.taskId)
+        : assertCurrentSourceDigest(worktreeRoot, sourceDigest, handle.identity.taskId);
       observedSourceDigest = snapshot.source_digest;
       } catch (error) {
         if (error?.code === "FORMAL_LFS_CONTENT_UNAVAILABLE" || error?.code === "FORMAL_SNAPSHOT_MISMATCH") throw error;
@@ -82,17 +82,38 @@ export function inspectWriteBoundary({ task, stage, operation, invocation, works
     }
   }
 
-  const identity = invocation?.identity;
-  if (!invocation || typeof invocation.ref !== "string" || !HASH.test(invocation.hash ?? "")
-      || !identity || identity.task_id !== handle.identity.taskId || identity.project_name !== handle.identity.projectName
-      || identity.stage !== stage) {
+  let identity = null;
+  if (!invocation || typeof invocation.ref !== "string" || !HASH.test(invocation.hash ?? "")) {
     violations.push("INVOCATION_IDENTITY_INVALID");
   } else {
-    const raw = typeof invocation.raw === "string"
-      ? invocation.raw
-      : handle.readRecord(invocation.ref);
-    if (sha256(raw) !== invocation.hash) violations.push("INVOCATION_RECORD_HASH_MISMATCH");
-    if (identity.source_kind !== "git_invocation" || typeof identity.source_clean !== "boolean"
+    let raw = null;
+    try {
+      // Once an invocation has been persisted, the TaskHandle record is the
+      // authority. Never trust identity or raw bytes supplied alongside it.
+      raw = handle.readRecord(invocation.ref);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      // authenticateWriteBoundary validates an inspected invocation before it
+      // persists it. Only that internal, non-forgeable object may carry the
+      // pre-persist raw bytes; a caller-created clone must fail closed.
+      if (!isOfficialInvocation(invocation) || typeof invocation.raw !== "string") {
+        violations.push("INVOCATION_RECORD_UNAVAILABLE");
+      } else raw = invocation.raw;
+    }
+    if (raw !== null) {
+      if (sha256(raw) !== invocation.hash) violations.push("INVOCATION_RECORD_HASH_MISMATCH");
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+        identity = parsed;
+      } catch {
+        violations.push("INVOCATION_RECORD_INVALID");
+      }
+    }
+    if (!identity || identity.task_id !== handle.identity.taskId || identity.project_name !== handle.identity.projectName
+        || identity.stage !== stage) {
+      violations.push("INVOCATION_IDENTITY_INVALID");
+    } else if (identity.source_kind !== "git_invocation" || typeof identity.source_clean !== "boolean"
         || !OID.test(identity.source?.git_oid ?? "") || !OID.test(identity.source?.git_tree ?? "")
         || !HASH.test(identity.contracts?.agents?.sha256 ?? "")
         || !HASH.test(identity.contracts?.stage_skill?.sha256 ?? "")

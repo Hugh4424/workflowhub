@@ -16,7 +16,8 @@
     }
   },
   "stage_skill_plan": "stage-skill-plan.json",
-  "provider_result_contract": "contracts/workflowhub-result.v2.json",
+  "provider_result_contract": "contracts/workflowhub-result.v3.json",
+  "legacy_provider_result_contract": "contracts/workflowhub-result.v2.json",
   "contracts": {
     "make-decision": {
       "path": "contracts/make-decision.md",

@@ -1,5 +1,25 @@
 const GIT_OID = /^[a-f0-9]{40}$/i;
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+const EVIDENCE_REF = /^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+
+function validateSummaryAnchor(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an anchor object`);
+  const allowed = new Set(["id", "path", "start_line", "end_line", "role", "reason"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error(`${label} has unknown field`);
+  const expectedRole = label.endsWith(".implementation_anchor") ? "implementation"
+    : label.endsWith(".verification_anchor") ? "verification" : null;
+  if (typeof value.id !== "string" || value.id.trim() === ""
+      || typeof value.path !== "string" || !ANCHOR_PATH.test(value.path) || value.path.includes("..")
+      || !Number.isSafeInteger(value.start_line) || value.start_line < 1
+      || !Number.isSafeInteger(value.end_line) || value.end_line < value.start_line
+      || typeof value.role !== "string" || value.role.trim() === ""
+      || (expectedRole !== null && value.role !== expectedRole)
+      || (value.reason !== undefined && (typeof value.reason !== "string" || value.reason.trim() === ""))) {
+    throw new Error(`${label} requires id, relative path, line range, and role`);
+  }
+  return Object.freeze({ ...value });
+}
 
 /** Validate evidence shape only; it has no TaskKernel or TaskHandle dependency. */
 export function validateAcceptanceEvidence(value, label = "acceptance evidence") {
@@ -10,7 +30,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
   if (!new Set(["pass", "fail"]).has(value.result)) throw new Error(`${label} result must be pass or fail`);
   if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
   const refs = value.refs.map((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !/^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(entry.ref) || entry.ref.includes("..") || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
     return { ref: entry.ref, sha256: entry.sha256 };
   });
   if (value.snapshot_tree !== undefined && (typeof value.snapshot_tree !== "string" || !GIT_OID.test(value.snapshot_tree))) throw new Error(`${label} snapshot_tree must be a Git tree id`);
@@ -18,7 +38,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
   let summary;
   if (value.summary !== undefined) {
     if (!value.summary || typeof value.summary !== "object" || Array.isArray(value.summary)) throw new Error(`${label}.summary must be an object`);
-    const fields = ["scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions"];
+    const fields = ["scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions", "implementation_anchor", "verification_anchor"];
     for (const key of Object.keys(value.summary)) if (!fields.includes(key)) throw new Error(`${label}.summary has unknown field ${key}`);
     if (Object.keys(value.summary).length === 0) throw new Error(`${label}.summary must contain at least one non-empty field`);
     summary = {};
@@ -33,6 +53,9 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
         if (!Array.isArray(value.summary[key]) || value.summary[key].length === 0 || value.summary[key].some((item) => typeof item !== "string" || item.trim() === "")) throw new Error(`${label}.summary.${key} must be a non-empty text array`);
         summary[key] = Object.freeze([...value.summary[key]]);
       }
+    }
+    for (const key of ["implementation_anchor", "verification_anchor"]) {
+      if (value.summary[key] !== undefined) summary[key] = validateSummaryAnchor(value.summary[key], `${label}.summary.${key}`);
     }
   }
   return Object.freeze({ schema_version: value.schema_version, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result, refs: Object.freeze(refs), ...(value.snapshot_tree === undefined ? {} : { snapshot_tree: value.snapshot_tree }), ...(value.source_digest === undefined ? {} : { source_digest: value.source_digest }), ...(summary === undefined ? {} : { summary: Object.freeze(summary) }) });

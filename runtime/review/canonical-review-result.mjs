@@ -18,7 +18,21 @@ export function parseCanonicalReviewerOutput(raw, options = {}) {
   return parseReviewerOutput(raw, options);
 }
 
-function adapterOf(provider) { return provider.split("/", 1)[0]; }
+function adapterOf(provider) {
+  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?$/.test(provider)) return null;
+  return provider.split("/", 1)[0];
+}
+function sourceIdentityOf(item, { requireIdentity = false, requireSourceId = false } = {}) {
+  const provider = item?.provider;
+  const adapter = item?.identity?.adapter ?? adapterOf(provider);
+  const explicitSourceId = Object.hasOwn(item ?? {}, "source_id") ? item.source_id : item?.identity?.source_id;
+  if (typeof provider !== "string" || provider.trim() === "" || typeof adapter !== "string" || adapter === "") return null;
+  if (requireIdentity && !Object.hasOwn(item ?? {}, "identity")) return null;
+  if (Object.hasOwn(item ?? {}, "identity") && (!item.identity || typeof item.identity !== "object" || item.identity.provider !== provider || item.identity.adapter !== adapterOf(provider) || typeof item.identity.source_id !== "string" || item.identity.source_id.trim() === "")) return null;
+  if (Object.hasOwn(item ?? {}, "source_id") && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
+  if (requireSourceId && (typeof explicitSourceId !== "string" || explicitSourceId.trim() === "")) return null;
+  return { provider, adapter, source_id: explicitSourceId ?? provider };
+}
 function normalizedIssue(value) {
   return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
 }
@@ -57,7 +71,12 @@ function clusterRecord(cluster) {
   return {
     id: `F-${createHash("sha256").update(findingKey(finding)).digest("hex").slice(0, 12)}`,
     severity, path: finding.path, ...(finding.line ? { line: finding.line } : {}),
-    issue: finding.issue, root_cause: finding.root_cause ?? finding.issue, recommendation: finding.recommendation,
+    // A serious finding must carry its own root cause.  Do not turn a missing
+    // root cause into an apparently complete actionable finding by copying the
+    // issue text; the provider contract treats that as invalid evidence.
+    issue: finding.issue,
+    root_cause: finding.root_cause ?? (severity === "minor" ? finding.issue : invalid("serious finding root_cause is required")),
+    recommendation: finding.recommendation,
     providers: [...new Set(members.map(({ provider }) => provider))],
     adapter_count: new Set(members.map(({ adapter }) => adapter)).size,
     finding_count: members.length, disposition, evidence_status: evidenceStatus,
@@ -68,25 +87,65 @@ function clusterRecord(cluster) {
   };
 }
 
-export function aggregateCanonicalProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [] } = {}) {
+export function aggregateCanonicalProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [], requireIdentity = false, requireSourceId = false } = {}) {
   if (!Number.isSafeInteger(minimumReviewers) || minimumReviewers < 1) throw new TypeError("minimumReviewers must be positive");
   const priority = new Map(profilePriority.map((provider, index) => [provider, index]));
-  const byAdapter = new Map();
-  providerResults.filter((item) => {
+  // A configured profile is an independent review member. Do not collapse
+  // two profiles merely because they use the same CLI adapter; source/profile
+  // identity is already carried by `provider` and is part of the contract.
+  const byProvider = new Map();
+  const canonicalReview = (review) => review && typeof review === "object" && !Array.isArray(review)
+    && Object.keys(review).length === 1 && Object.hasOwn(review, "findings") && Array.isArray(review.findings)
+    && review.findings.every((finding) => finding && typeof finding === "object" && !Array.isArray(finding)
+      && ["blocking", "major", "minor"].includes(finding.severity)
+      && typeof finding.path === "string" && finding.path.trim() !== ""
+      && typeof finding.issue === "string" && finding.issue.trim() !== ""
+      && typeof finding.recommendation === "string" && finding.recommendation.trim() !== ""
+      && (finding.severity === "minor" || (
+        typeof finding.root_cause === "string" && finding.root_cause.trim() !== ""
+        && ["direct", "inferred", "machine"].includes(finding.evidence_kind)
+        && typeof finding.evidence === "string" && finding.evidence.trim() !== ""
+      )));
+  // A transport failure is represented by review=null and remains eligible for
+  // normal quorum accounting. A non-null malformed object is different: it is
+  // a completed-looking member whose semantic output cannot be authenticated.
+  // Do not silently drop it and let the remaining profiles appear sufficient.
+  const malformedMembers = providerResults.filter((item) => item?.review !== null
+    && item?.review !== undefined && !canonicalReview(item.review));
+  if (malformedMembers.length > 0) {
+    return {
+      status: "unavailable", valid: [], findings: [],
+      invalid_members: malformedMembers.map((item) => item?.provider ?? null),
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [], actionable: [] },
+    };
+  }
+  const validReviewItems = providerResults.filter((item) => {
     const review = item?.review;
-    return review && typeof review === "object" && !Array.isArray(review)
-      && Object.keys(review).length === 1 && Object.hasOwn(review, "findings") && Array.isArray(review.findings);
-  }).forEach((item, index) => {
-    const adapter = adapterOf(item.provider); const current = byAdapter.get(adapter);
+    return canonicalReview(review);
+  });
+  // A malformed identity is not a lower-quality reviewer that can be ignored:
+  // it makes the quorum unverifiable. Keep the result unavailable instead of
+  // silently counting the remaining profiles.
+  if (validReviewItems.some((item) => sourceIdentityOf(item, { requireIdentity, requireSourceId }) === null)) {
+    return { status: "unavailable", valid: [], findings: [], adjudication: { version: "wh-review-adjudication.v1", clusters: [], actionable: [] } };
+  }
+  validReviewItems.forEach((item, index) => {
+    const current = byProvider.get(item.provider);
     const rank = priority.get(item.provider) ?? Number.MAX_SAFE_INTEGER;
     const currentRank = current ? (priority.get(current.item.provider) ?? Number.MAX_SAFE_INTEGER) : null;
-    if (!current || rank < currentRank || (rank === currentRank && index < current.index)) byAdapter.set(adapter, { item, index });
+    if (!current || rank < currentRank || (rank === currentRank && index < current.index)) byProvider.set(item.provider, { item, index });
   });
-  const valid = [...byAdapter.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider));
-  const candidates = valid.flatMap((item) => item.review.findings.map((finding, index) => ({
-    provider: item.provider, adapter: adapterOf(item.provider), finding, index,
-    anchorValid: item.evidenceAnchors?.[index] ?? true,
-  }))).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
+  const valid = [...byProvider.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider));
+  const candidates = valid.flatMap((item) => {
+    // The source identity was already authenticated above. Reuse that exact
+    // identity for finding adjudication instead of deriving a second adapter
+    // value from the provider label.
+    const identity = sourceIdentityOf(item, { requireIdentity, requireSourceId });
+    return item.review.findings.map((finding, index) => ({
+      provider: item.provider, adapter: identity.adapter, finding, index,
+      anchorValid: item.evidenceAnchors?.[index] ?? true,
+    }));
+  }).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
   const grouped = [];
   for (const candidate of candidates) {
     const cluster = grouped.find((entry) => sameCluster(entry, candidate));
@@ -96,7 +155,9 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
   const findings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
   const adjudication = { version: "wh-review-adjudication.v1", clusters, actionable };
-  if (valid.length < minimumReviewers) return { status: "unavailable", valid, findings, adjudication };
+  const distinctAdapters = new Set(valid.map((item) => sourceIdentityOf(item, { requireIdentity, requireSourceId })?.adapter).filter(Boolean)).size;
+  const distinctSources = new Set(valid.map((item) => sourceIdentityOf(item, { requireIdentity, requireSourceId })?.source_id).filter(Boolean)).size;
+  if (distinctAdapters < minimumReviewers || distinctSources < minimumReviewers) return { status: "unavailable", valid, findings, adjudication };
   return { status: "available", valid, findings, adjudication };
 }
 
@@ -120,15 +181,22 @@ function policyFacts(attempt, fallbackMinimumReviewers) {
   if (!Array.isArray(requested) || attempted.size !== requested.length || requested.some((provider) => !attempted.has(provider))) {
     invalid("provider attempts do not exactly match requested profiles");
   }
+  if (requested.some((provider) => sourceIdentityOf(attempt.provider_attempts.find((item) => item.provider === provider), { requireIdentity: true, requireSourceId: true }) === null)) invalid("review provider source identity is missing");
   if (!Number.isSafeInteger(policy.minimum_heterologous) || policy.minimum_heterologous < 1) invalid("review quorum is invalid");
   if (!Array.isArray(policy.eligible_profiles)) invalid("eligible review profiles are invalid");
-  return { minimum: policy.minimum_heterologous, priority: requested, eligible: new Set(policy.eligible_profiles) };
+  if (!Array.isArray(policy.effective_profiles) || policy.effective_profiles.some((profile) => {
+    const identity = sourceIdentityOf(profile);
+    return identity === null || profile.adapter !== identity.adapter;
+  })) invalid("review effective profile source identity is missing");
+  return { minimum: policy.minimum_heterologous, priority: requested, eligible: new Set(policy.eligible_profiles), requireIdentity: true, requireSourceId: true };
 }
 
 export function authenticateCanonicalReviewResult({
-  attempt, result, providerOutputs, fallbackMinimumReviewers = 1, assess = (items) => items,
+  attempt, result, providerOutputs, fallbackMinimumReviewers = 1, assess = (items) => items, requireEvidenceAnchors = undefined,
 }) {
-  const { minimum, priority, eligible } = policyFacts(attempt, fallbackMinimumReviewers);
+  const policy = policyFacts(attempt, fallbackMinimumReviewers);
+  const { minimum, priority, eligible } = policy;
+  const mustHaveEvidenceAnchors = requireEvidenceAnchors ?? attempt.review_policy?.source === "wh_review.v2";
   const outputByRef = new Map(providerOutputs.map((item) => [item.ref, item]));
   const terminalProviderAttempts = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
@@ -140,19 +208,50 @@ export function authenticateCanonicalReviewResult({
     const output = outputByRef.get(providerAttempt.output_ref);
     if (!output || output.provider !== providerAttempt.provider) invalid("completed provider output is missing or misbound");
     latestCompleted.set(providerAttempt.provider, {
-      provider: providerAttempt.provider, review: output.review, execution: providerAttempt.execution ?? null,
+      provider: providerAttempt.provider,
+      ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
+      review: output.review, execution: providerAttempt.execution ?? null,
+      ...(output.evidenceAnchors === undefined ? {} : { evidenceAnchors: output.evidenceAnchors }),
     });
   }
   const specs = new Map((attempt.review_policy?.requested_profile_specs ?? []).map((spec) => [spec.provider, spec]));
   for (const item of latestCompleted.values()) {
     const spec = specs.get(item.provider);
-    if (spec && (!item.execution || item.execution.model !== spec.model
-        || item.execution.effort !== spec.effort || item.execution.thinking !== spec.thinking)) {
+    // The public v2/v3 result exposes model reliably, but broker projections
+    // intentionally expose effort/thinking as null. Null means "not directly
+    // model-reported", not "the provider ignored the configured pin". The
+    // managed host checks the configured tuple before dispatch and v3 carries
+    // config_id as the broker-side profile attestation; do not duplicate the
+    // broker's config-hash algorithm in WorkflowHub.
+    const executionMatches = spec && item.execution
+      && (spec.model === null || item.execution.model === spec.model)
+      && (spec.effort === null || item.execution.effort === null || item.execution.effort === spec.effort)
+      && (spec.thinking === null || item.execution.thinking === null || item.execution.thinking === spec.thinking);
+    if (spec && !executionMatches) {
       invalid(`provider execution does not match pinned profile ${item.provider}`);
+    }
+    if (item.execution?.adapter !== undefined && item.execution.adapter !== adapterOf(item.provider)) {
+      invalid(`provider execution adapter does not match provider ${item.provider}`);
     }
   }
   const eligibleCompleted = [...latestCompleted.values()].filter((item) => eligible === null || eligible.has(item.provider));
-  const aggregation = aggregateCanonicalProviderResults(assess(eligibleCompleted), minimum, { profilePriority: priority });
+  if (mustHaveEvidenceAnchors && eligibleCompleted.some((item) => !Array.isArray(item.evidenceAnchors)
+      || item.evidenceAnchors.length !== item.review.findings.length
+      || item.evidenceAnchors.some((value) => typeof value !== "boolean"))) {
+    invalid("completed provider output evidence anchors are missing or invalid");
+  }
+  const assessed = assess(eligibleCompleted);
+  const anchored = mustHaveEvidenceAnchors
+    ? assessed.map((item) => ({
+      ...item,
+      evidenceAnchors: eligibleCompleted.find((candidate) => candidate.provider === item.provider)?.evidenceAnchors,
+    }))
+    : assessed;
+  const aggregation = aggregateCanonicalProviderResults(anchored, minimum, {
+    profilePriority: priority,
+    requireIdentity: policy.requireIdentity ?? false,
+    requireSourceId: policy.requireSourceId ?? false,
+  });
   if (aggregation.status !== "available") invalid("completed provider outputs do not satisfy review quorum");
   const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const expectedFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));

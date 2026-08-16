@@ -10,6 +10,7 @@ import { prepareDeliveryClosePlan } from "../../core/task-close.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -18,7 +19,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHumanConfirmation = false } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -43,7 +44,12 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
   const candidate = prepareTaskWorkspace(task);
   const worktreeRoot = candidate.worktreeRoot;
   const artifacts = ArtifactDir.open(worktreeRoot, task);
-  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) artifacts.writeAtomic(name, `# ${name}\n`);
+  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    const content = name === "tasks.md"
+      ? "# tasks.md\n\n### 执行状态填写区\n- pending\n\n### Verify\n- current\n"
+      : `# ${name}\n`;
+    artifacts.writeAtomic(name, content);
+  }
   if (testVariant === "clean-head") {
     git(worktreeRoot, ["add", "specs"]);
     git(worktreeRoot, ["commit", "-qm", "publish current materials"]);
@@ -52,15 +58,47 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
     ? createTaskKernel(task, { workspace: openCurrentTaskWorkspace(task), artifacts })
     : createTaskKernel(task, { candidateWorkspace: candidate });
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
+  const evidenceRawFor = (subject, tree) => {
+    if (subject === "human_confirmation") {
+      return `${JSON.stringify({ schema_version: "human-confirmation.v2", task_id: taskId, stage: "verify-code", decision: "accepted", subject_ref: "verify-code", snapshot_tree: tree })}\n`;
+    }
+    const nestedRef = `quality/evidence/verify-code/stage-quality-${subject}.json`;
+    const nestedValue = {
+      schema_version: "stage-quality-evidence.v1", task_id: nestedAcceptanceVariant === "wrong-task" ? "other-task" : taskId, stage: "verify-code", subject,
+      status: "passed", snapshot_tree: tree,
+      subject_fact: {
+        status: "passed",
+        detail: "fixture",
+        evidence_refs: nestedAcceptanceVariant === "missing-subject-evidence" ? [] : [{ ref: testRef, sha256: sha256(testRaw) }],
+        ...(subject === "finding_dispositions" ? { disposition_items: [], source_review_refs: [], risk_acceptance_refs: [] } : {}),
+      },
+    };
+    const nestedRaw = `${JSON.stringify(nestedValue)}\n`;
+    kernel.publishCanonicalRecord(nestedRef, nestedRaw);
+    return `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: subject, result: acceptanceResult, refs: [{ ref: nestedRef, sha256: sha256(nestedRaw) }], snapshot_tree: tree, summary: { actual_outcome: acceptanceResult === "pass" ? "passed" : "failed", evidence_type: "stage quality fact" } })}\n`;
+  };
+  const reviewRawFor = (subject, tree) => `${JSON.stringify({
+    version: "wh-review-result.v1", task_id: taskId, stage: "verify-code", review_track: null,
+    review_kind: null, subject_kind: "worktree", phase_id: null, review_scope: null,
+    source: { target_commit: snapshot.head, base_commit: snapshot.head, base_tree: tree, captured_head: snapshot.head },
+    snapshot_tree: tree, material_id: "b".repeat(64),
+    attempt_ref: `quality/reviews/attempts/${subject}.json`,
+    provider_results: [{ provider: "fixture", output: { findings: [] } }], findings: [],
+    adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+  })}\n`;
   const testRef = "quality/tests/verify-code.json";
+  const testStage = testVariant === "focused-build-receipt" ? "build-code" : "verify-code";
+  const testComponent = testVariant === "focused-build-receipt" ? "focused-test-capture" : `${testStage}-test-capture`;
   const testValue = {
-    schema_version: "workflowhub-receipt.v1", task_id: taskId, stage: "verify-code",
-    producer: { stage: "verify-code", component: "verify-code-test-capture", version: "1.0.0" },
-    command: "true", command_hash: sha256("true"), exit_code: 0,
+    schema_version: "workflowhub-receipt.v1", task_id: taskId, stage: testStage,
+    producer: { stage: testStage, component: testComponent, version: "1.0.0" },
+    command: "npm test", command_hash: sha256("npm test"), exit_code: 0,
     snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
+    source_digest: snapshot.source_digest,
     started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",
     output_ref: "quality/tests/output/verify-code.output", output_hash: sha256("pass\n"),
   };
+  if (testVariant === "failed-receipt") testValue.exit_code = 1;
   if (testVariant === "clean-head") testValue.snapshot_commit = snapshot.head;
   if (testVariant === "tree-mismatch") testValue.snapshot_tree = "0".repeat(40);
   if (testVariant === "commit-mismatch") testValue.snapshot_commit = snapshot.head;
@@ -76,26 +114,47 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
   const testEvidence = { ref: testRef, sha256: sha256(testRaw), evidence_type: "test_receipt" };
   kernel.publishVNextQualityFact("verify-code", { kind: "test", status: "passed", subject: "full_tests_fresh", evidence: [testEvidence] });
   for (const subject of ["same_build_integration_review", "independent_review"]) {
-    const ref = `quality/reviews/results/${subject}.json`;
-    const raw = "{}\n";
-    kernel.publishCanonicalRecord(ref, raw);
+    if (omitSubjects.includes(subject)) continue;
+    const review = writeFormalReviewFixture({ task, stage: "verify-code", snapshotTree: snapshot.tree, provider: "fixture" });
+    const ref = review.resultRef;
+    const raw = task.readRecord(ref);
     kernel.publishVNextQualityFact("verify-code", {
       kind: "review", status: reviewStatus, subject,
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
   }
+  for (const [subject, kind, evidenceType] of [
+    ["finding_dispositions", "acceptance_criterion", "acceptance_evidence"],
+    ["acceptance_criteria", "acceptance_criterion", "acceptance_evidence"],
+    ["exceptions", "acceptance_criterion", "acceptance_evidence"],
+    ["human_confirmation", "confirmation", "human_confirmation"],
+  ]) {
+    if (omitSubjects.includes(subject)) continue;
+    if (subject === "human_confirmation") {
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code" });
+      continue;
+    }
+    const ref = `quality/evidence/verify-code/${subject}.json`;
+    const raw = evidenceRawFor(subject, snapshot.tree);
+    kernel.publishCanonicalRecord(ref, raw);
+    kernel.publishVNextQualityFact("verify-code", {
+      kind, status: "passed", subject,
+      evidence: [{ ref, sha256: sha256(raw), evidence_type: evidenceType }],
+    });
+  }
   if (duplicateHumanConfirmation) {
-    for (const suffix of ["old", "new"]) {
-      const ref = `quality/confirmations/${suffix}.json`;
-      const raw = `${suffix}\n`;
-      kernel.publishCanonicalRecord(ref, raw);
-      kernel.publishVNextQualityFact("verify-code", {
-        kind: "confirmation", status: suffix === "old" ? "missing" : "passed", subject: "human_confirmation",
-        evidence: [{ ref, sha256: sha256(raw), evidence_type: "human_confirmation" }],
-      });
+    if (!omitSubjects.includes("human_confirmation")) {
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-old" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new" });
     }
   }
-  return { task, kernel, repo, taskId, candidate, snapshot: { ...snapshot, commit: testValue.snapshot_commit } };
+  const receiptSnapshot = { ...snapshot, commit: testValue.snapshot_commit };
+  if (materialOnlyWriteback) {
+    artifacts.writeAtomic("tasks.md", "# tasks.md\n\n### 执行状态填写区\n- result written back\n\n### Verify\n- current\n");
+    const current = captureGitWorktreeSnapshot(worktreeRoot);
+    return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: current };
+  }
+  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: receiptSnapshot };
 }
 
 describe("vNext formal delivery close", () => {
@@ -134,6 +193,20 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery.task_commit).toBe(state.snapshot.head);
   });
 
+  it("accepts a material-only writeback after the test receipt without rerunning or invalidating the test", () => {
+    const state = fixture({ materialOnlyWriteback: true });
+    expect(state.snapshot.tree).not.toBe(state.receiptSnapshot.tree);
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
+  });
+
   it("selects the newest duplicate current quality fact", () => {
     const state = fixture({ duplicateHumanConfirmation: true });
     expect(() => prepareDeliveryClosePlan({
@@ -147,7 +220,24 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
-  it("does not treat a non-pass review verdict as a close gate", () => {
+  it("normalizes an empty quality evidence reference before close", () => {
+    const state = fixture();
+    state.kernel.publishVNextQualityFact("verify-code", {
+      kind: "review", status: "recorded", subject: "independent_review",
+      evidence: [{ ref: "quality/", sha256: "a".repeat(64), evidence_type: "review_result" }],
+    });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/QUALITY_FACT_INVALID/);
+  });
+
+  it("does not treat a failed review fact as a formal close fact", () => {
     const state = fixture({ reviewStatus: "failed" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -157,7 +247,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    })).toThrow(/independent_review/);
   });
 
   it("accepts the canonical recorded status used by review quality facts", () => {
@@ -173,8 +263,8 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
-  it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent"])("rejects an unauthenticated test snapshot: %s", (testVariant) => {
-    const state = fixture({ testVariant });
+  it("rejects a passed acceptance fact whose bound evidence says fail", () => {
+    const state = fixture({ acceptanceResult: "fail" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
@@ -183,6 +273,81 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/verify-code test receipt snapshot_commit is unavailable/);
+    })).toThrow(/non-pass result/);
+  });
+
+  it("rejects an acceptance fact whose nested stage-quality subject is detached", () => {
+    const state = fixture({ nestedAcceptanceVariant: "wrong-task" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/nested stage-quality subject/);
+  });
+
+  it("rejects a passed acceptance fact whose stage-quality wrapper has no underlying evidence", () => {
+    const state = fixture({ nestedAcceptanceVariant: "missing-subject-evidence" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/underlying evidence|stage-quality subject fact|stage-quality/);
+  });
+
+  it.each(["independent_review", "finding_dispositions", "acceptance_criteria", "exceptions", "human_confirmation"])(
+    "rejects close when the formal verify fact is missing: %s",
+    (subject) => {
+      const state = fixture({ omitSubjects: [subject] });
+      expect(() => prepareDeliveryClosePlan({
+        task: state.task,
+        kernel: state.kernel,
+        delivery: {
+          remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+          task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+          spec_archive_path: `specs/archive/${state.taskId}`,
+        },
+      })).toThrow(new RegExp(subject));
+    },
+  );
+
+  it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent", "failed-receipt"])("rejects an unauthenticated test snapshot: %s", (testVariant) => {
+    const state = fixture({ testVariant });
+    const expectedError = {
+      missing: /stage-quality evidence is unavailable: missing quality\/tests\/verify-code\.json/,
+      "tree-mismatch": /stage-quality receipt provenance is invalid: quality\/tests\/verify-code\.json/,
+      "commit-mismatch": /verify-code test receipt snapshot_commit is unavailable/,
+      "extra-parent": /verify-code test receipt snapshot_commit is unavailable/,
+      "failed-receipt": /canonical test receipt did not pass/,
+    }[testVariant];
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(expectedError);
+  });
+
+  it("does not accept a focused build-code receipt as verify-code full tests", () => {
+    const state = fixture({ testVariant: "focused-build-receipt" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/unsupported stage-quality receipt producer|verify-code test receipt snapshot_commit is unavailable/);
   });
 });

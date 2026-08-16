@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../core/artifact-dir.mjs", () => ({
   assertArtifactDir: (value) => value,
+  artifactReference: (taskId, name) => `specs/${taskId}/${name}`,
   ArtifactDir: {},
 }));
 
@@ -15,7 +16,7 @@ const { buildIntegrationReviewSubject } = await import("../../runtime/review/int
 const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
-function fixture({ tasks = "# tasks\n\nNo completion rows yet.\n" } = {}) {
+function fixture({ tasks = "# tasks\n\nNo completion rows yet.\n", executionRecordOnlyDelta = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-integration-subject-"));
   mkdirSync(join(root, "specs", "task"), { recursive: true });
   execFileSync("git", ["init", "-q"], { cwd: root });
@@ -30,8 +31,27 @@ function fixture({ tasks = "# tasks\n\nNo completion rows yet.\n" } = {}) {
   for (const [name, content] of Object.entries(materials)) writeFileSync(join(root, "specs", "task", name), content);
   execFileSync("git", ["add", "specs"], { cwd: root });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: root });
-  const tree = git(root, ["rev-parse", "HEAD^{tree}"]);
+  const receiptTree = git(root, ["rev-parse", "HEAD^{tree}"]);
+  if (executionRecordOnlyDelta) {
+    const currentTasks = `${tasks}\n### 执行状态填写区\n- 记录：本次只写回执行事实。\n`;
+    writeFileSync(join(root, "specs", "task", "tasks.md"), currentTasks);
+    materials["tasks.md"] = currentTasks;
+    execFileSync("git", ["add", "specs/task/tasks.md"], { cwd: root });
+  }
+  const tree = execFileSync("git", ["write-tree"], { cwd: root, encoding: "utf8" }).trim();
   const records = new Map();
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const implementationDiff = `${JSON.stringify({
+    schema_version: "workflowhub-diff-evidence.v1",
+    baseline_commit: head,
+    snapshot_head: head,
+    snapshot_tree: receiptTree,
+    patch: "",
+    untracked: [],
+  }, null, 2)}\n`;
+  const implementationDiffHash = sha256(implementationDiff);
+  const implementationDiffRef = `quality/evidence/implementation/${implementationDiffHash}.diff`;
+  records.set(implementationDiffRef, implementationDiff);
   const revision = JSON.stringify({
     task_id: "task",
     hashes: Object.fromEntries(Object.entries(materials).map(([name, content]) => [name, sha256(content)])),
@@ -43,14 +63,23 @@ function fixture({ tasks = "# tasks\n\nNo completion rows yet.\n" } = {}) {
   }));
   records.set("materials/revisions/rev.json", revision);
   records.set("receipts/implementation.json", JSON.stringify({
-    stage: "build-code", producer: { component: "implementation" }, snapshot_tree: tree,
+    schema_version: "workflowhub-receipt.v1", task_id: "task", stage: "build-code",
+    producer: { stage: "build-code", component: "implementation", version: "fixture" }, changed: [],
+    snapshot_head: head, snapshot_tree: receiptTree, snapshot_commit: head,
+    diff_ref: implementationDiffRef, diff_hash: implementationDiffHash,
   }));
-  records.set("receipts/green.json", JSON.stringify({
-    stage: "build-code", producer: { component: "build-code-test-capture" }, exit_code: 0, snapshot_tree: tree,
-  }));
-  records.set("quality/tests/T002.json", JSON.stringify({
-    stage: "build-code", producer: { component: "fixture-task" }, exit_code: 0, snapshot_tree: tree,
-  }));
+  const greenOutputRef = "quality/tests/output/green.output";
+  const greenOutput = "fixture GREEN output\n";
+  const greenReceipt = {
+    schema_version: "workflowhub-receipt.v1", task_id: "task", stage: "build-code",
+    producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+    command: "npm test", command_hash: sha256("npm test"), exit_code: 0, snapshot_tree: receiptTree,
+    output_ref: greenOutputRef, output_hash: sha256(greenOutput),
+  };
+  records.set("receipts/green.json", JSON.stringify(greenReceipt));
+  records.set("quality/tests/T002.json", JSON.stringify(greenReceipt));
+  records.set(greenOutputRef, greenOutput);
+  records.set("quality/evidence/task-fact.json", JSON.stringify({ snapshot_tree: receiptTree, kind: "task-fact" }));
   const task = {
     identity: { taskId: "task" },
     readRecord(ref) {
@@ -81,21 +110,24 @@ describe("integration review subject current-material boundary", () => {
     expect(subject.audit_gaps.map(({ kind }) => kind)).toEqual(["task_completion_history"]);
     expect(subject.ac_trace.entries).toHaveLength(1);
     expect(subject.ac_trace.entries[0].acceptance_criterion_id).toBe("AC-01");
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("unknown");
     expect(subject.ac_trace.entries[0].change[0].task_id).toBeNull();
     expect(subject).not.toHaveProperty("phase_coverage");
     expect(subject).not.toHaveProperty("seam_index");
     expect(subject.ac_trace.implementation_anchors).toEqual([]);
   });
 
-  it("keeps current implementation evidence fail-closed", () => {
+  it("keeps missing implementation evidence as an unavailable host fact", () => {
     const f = fixture();
-    expect(() => buildIntegrationReviewSubject({
+    const subject = buildIntegrationReviewSubject({
       task: f.task,
       sourceRoot: f.root,
       artifacts: f.artifacts,
       finalTree: f.tree,
       current_receipts: { green_ref: "receipts/green.json" },
-    })).toThrow(/current implementation receipt for final snapshot is missing/);
+    });
+    expect(subject.formal_record_status).toMatchObject({ status: "unavailable", reason: expect.stringMatching(/current implementation receipt/) });
+    expect(subject.ac_trace.entries[0]).toMatchObject({ evidence_status: "unavailable" });
   });
 
   it("reads the current task execution fields for AC traceability", () => {
@@ -111,8 +143,41 @@ describe("integration review subject current-material boundary", () => {
     });
 
     expect(subject.formal_record_status.status).toBe("available");
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("covered");
     expect(subject.ac_trace.entries[0].change[0].task_id).toBe("T002");
-    expect(subject.ac_trace.entries[0].change[0].evidence_refs[0].ref).toBe("quality/tests/T002.json");
+    expect(subject.ac_trace.entries[0].test[0].receipt_ref).toBe("quality/tests/T002.json");
+    expect(subject.ac_trace.entries[0].evidence[0].ref).toBe("receipts/implementation.json");
+  });
+
+  it("reuses implementation, GREEN, and AC facts after execution-only task writeback", () => {
+    const f = fixture({
+      executionRecordOnlyDelta: true,
+      tasks: "# tasks\n\n### T002 — GREEN\n- **status**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/tests/T002.json`\n- **执行事实**：GREEN receipt recorded.\n",
+    });
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+
+    expect(subject.formal_record_status.status).toBe("available");
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("covered");
+    expect(subject.ac_trace.entries[0].test).toEqual([{ receipt_ref: "quality/tests/T002.json", receipt_hash: expect.any(String) }]);
+  });
+
+  it("does not bind the one global GREEN receipt to every acceptance criterion", () => {
+    const f = fixture({
+      tasks: "# tasks\n\n### T002 — GREEN\n- **status**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/evidence/task-fact.json`\n- **执行事实**：GREEN receipt recorded.\n",
+    });
+    const subject = buildIntegrationReviewSubject({
+      task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("unknown");
+    expect(subject.ac_trace.entries[0].test).toEqual([]);
+    expect(subject.ac_trace.entries[0].coverage_reason).toMatch(/explicit|test/i);
   });
 
   it("includes named and typed acceptance IDs, including AC-E2E-001", () => {

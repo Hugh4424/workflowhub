@@ -13,6 +13,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
+import { validateCanonicalFullTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -338,6 +339,10 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   return Object.freeze({
     ref,
     sha256: actualHash,
+    // Reuse the authenticated entry snapshot for the immediately following
+    // official stage run.  The publication path still captures a fresh
+    // snapshot at the end, so external material changes remain detectable.
+    snapshot,
     value: Object.freeze({ ...record, step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes, spec_analyze: specAnalyze.analyzer }),
     step_outcomes: stepOutcomes,
     skill_outcomes: skillOutcomes,
@@ -533,7 +538,7 @@ function reviewEvidenceStatus(task, candidate) {
   return { status: "missing" };
 }
 
-function testEvidenceStatus(task, candidate) {
+function testEvidenceStatus(task, candidate, { stage, subject } = {}) {
   if (!candidate) return { status: "missing" };
   let raw;
   try {
@@ -542,6 +547,9 @@ function testEvidenceStatus(task, candidate) {
       return { status: "unavailable" };
     }
     const record = JSON.parse(raw);
+    if (stage === "verify-code" && subject === "full_tests_fresh") {
+      validateCanonicalFullTestReceipt(record, { taskId: task.identity.taskId, snapshotTree: record.snapshot_tree });
+    }
     if (!Number.isInteger(record?.exit_code)) return { status: "unavailable" };
     return { status: record.exit_code === 0 ? "passed" : "failed" };
   } catch {
@@ -612,12 +620,18 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
           const items = Array.isArray(dispositions?.items) ? dispositions.items : [];
           const complete = dispositions?.status === "not_applicable"
             || (dispositions?.status === "recorded" && items.every((item) => item.status !== "needs_human"));
-          return { status: complete ? "passed" : "missing", detail: "serious findings are fixed or explicitly risk-accepted" };
+          return {
+            status: complete ? "passed" : "missing",
+            detail: "serious findings are fixed or explicitly risk-accepted",
+            disposition_items: items,
+            source_review_refs: dispositions?.source_review_refs ?? [],
+            risk_acceptance_refs: dispositions?.risk_acceptance_refs ?? [],
+          };
         })()
         : result.facts?.completion_subjects?.[subject]
       : null;
     const review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate) : null;
-    const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate) : null;
+    const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
     const confirmation = kind === "confirmation" ? confirmationEvidenceStatus(ctx.task, candidate) : null;
     const status = kind === "acceptance_criterion"
       ? new Set(["passed", "failed", "missing"]).has(acceptanceSubject?.status)
@@ -658,6 +672,11 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
           status,
           detail: acceptanceSubject?.detail ?? "handler did not provide a subject-specific completion fact",
           evidence_refs: subjectEvidence,
+          ...(subject === "finding_dispositions" ? {
+            disposition_items: acceptanceSubject?.disposition_items ?? [],
+            source_review_refs: acceptanceSubject?.source_review_refs ?? [],
+            risk_acceptance_refs: acceptanceSubject?.risk_acceptance_refs ?? [],
+          } : {}),
         },
       };
       const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
@@ -766,7 +785,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
  * and executed directly by the current host Stage Agent; this runtime only
  * records the resulting task and quality facts.
  */
-export async function runStage(stage, context, handler, publication = {}) {
+export async function runStage(stage, context, handler, publication = {}, internal = {}) {
   if (!Object.prototype.hasOwnProperty.call(UPSTREAM_STAGE, stage)) {
     throw new TypeError(`unsupported stage: ${stage}`);
   }
@@ -774,8 +793,8 @@ export async function runStage(stage, context, handler, publication = {}) {
   if (typeof handler !== "function") throw new TypeError("stage handler is required");
 
   const upstream = upstreamForStage(ctx, stage);
-  const vNextPreflightSnapshot = ctx.kernel.currentVNextSnapshot();
-  const vNextPreflightMaterials = currentMaterialBinding(ctx);
+  const vNextPreflightSnapshot = internal?.preflightSnapshot ?? ctx.kernel.currentVNextSnapshot();
+  const vNextPreflightMaterials = internal?.preflightMaterials ?? currentMaterialBinding(ctx);
   const result = plainResult(await handler(workerContext(ctx, publication), upstream, {
     snapshot: vNextPreflightSnapshot,
     materials: vNextPreflightMaterials,
@@ -824,7 +843,7 @@ function officialWorkerContext(ctx, publication = {}) {
       }),
     } : {}),
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
-    ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
+    ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace, ctx.identity.taskId) } : {}),
     ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({
       worktreeRoot: ctx.candidateWorkspace.worktreeRoot,
       baselineCommit: ctx.candidateWorkspace.baselineCommit,

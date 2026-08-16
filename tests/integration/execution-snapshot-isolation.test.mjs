@@ -9,6 +9,7 @@ import {
   assertCurrentSourceDigest,
   captureExecutionSnapshot,
   captureGitWorktreeSnapshot,
+  isMaterialOnlySnapshotDelta,
 } from "../../runtime/task/git-worktree-snapshot.mjs";
 
 function git(root, args) {
@@ -62,6 +63,35 @@ describe("execution snapshot evidence isolation", () => {
 
       writeFileSync(resolve(root, "source.txt"), "changed\n");
       expect(captureExecutionSnapshot(root).tree).not.toBe(before.tree);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("only treats the named task materials as reusable-material changes", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "workflowhub-task-material-scope-"));
+    try {
+      git(root, ["init", "-q"]);
+      git(root, ["config", "user.name", "WorkflowHub Test"]);
+      git(root, ["config", "user.email", "workflowhub-test@local"]);
+      writeFileSync(resolve(root, "source.txt"), "initial\n");
+      mkdirSync(resolve(root, "specs", "current-task"), { recursive: true });
+      mkdirSync(resolve(root, "specs", "other-task"), { recursive: true });
+      writeFileSync(resolve(root, "specs", "current-task", "tasks.md"), "### 执行状态填写区\n- v1\n");
+      writeFileSync(resolve(root, "specs", "other-task", "tasks.md"), "v1\n");
+      git(root, ["add", "."]); git(root, ["commit", "-qm", "fixture"]);
+      const before = captureGitWorktreeSnapshot(root, "current-task");
+      writeFileSync(resolve(root, "specs", "other-task", "tasks.md"), "v2\n");
+      const otherChanged = captureGitWorktreeSnapshot(root, "current-task");
+      expect(otherChanged.source_digest).not.toBe(before.source_digest);
+      expect(isMaterialOnlySnapshotDelta(root, before.tree, otherChanged.tree, "current-task")).toBe(false);
+      writeFileSync(resolve(root, "specs", "current-task", "tasks.md"), "### 执行状态填写区\n- v2\n");
+      const currentChanged = captureGitWorktreeSnapshot(root, "current-task");
+      expect(currentChanged.source_digest).toBe(otherChanged.source_digest);
+      expect(isMaterialOnlySnapshotDelta(root, otherChanged.tree, currentChanged.tree, "current-task")).toBe(true);
+      writeFileSync(resolve(root, "specs", "current-task", "tasks.md"), "# semantic task change\n");
+      const semanticChanged = captureGitWorktreeSnapshot(root, "current-task");
+      expect(isMaterialOnlySnapshotDelta(root, currentChanged.tree, semanticChanged.tree, "current-task")).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

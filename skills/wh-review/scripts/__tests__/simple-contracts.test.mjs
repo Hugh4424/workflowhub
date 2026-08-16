@@ -39,6 +39,15 @@ describe("simple wh-review contracts", () => {
     })).toMatchObject({ valid: false, errors: ["rereview_flow_id is retired"] });
   });
 
+  it("accepts the four canonical finding disposition statuses", async () => {
+    const { validateReviewDisposition } = await import("../review-result.mjs");
+    const common = { finding_id: "F-1", evidence: "bound fact" };
+    expect(validateReviewDisposition({ ...common, status: "fixed", verification: "test", root_cause: "cause" }).valid).toBe(true);
+    expect(validateReviewDisposition({ ...common, status: "rejected_invalid" }).valid).toBe(true);
+    expect(validateReviewDisposition({ ...common, status: "accepted_risk" }).valid).toBe(true);
+    expect(validateReviewDisposition({ finding_id: "F-1", status: "needs_human" }).valid).toBe(true);
+  });
+
   it("publishes the simple production entrypoints and bundles their runtime closure", () => {
     const manifest = readJson(join(root, "wh-review", "manifest.json"));
     expect(manifest.commands).toEqual({
@@ -57,7 +66,7 @@ describe("simple wh-review contracts", () => {
         }
       },
       stage_skill_plan: "stage-skill-plan.json",
-      provider_result_contract: "contracts/workflowhub-result.v2.json"
+      provider_result_contract: "contracts/workflowhub-result.v3.json"
     });
     const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
     expect(providerProtocol).toContain('"findings": []');
@@ -327,6 +336,14 @@ describe("simple wh-review contracts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-spec"]).not.toHaveProperty("optional_skills");
     expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
+  });
+
+  it("makes direction request count explicit without turning it into a retry loop", () => {
+    const contract = readFileSync(join(root, "wh-review", "contracts", "make-decision.md"), "utf8");
+    expect(contract).toMatch(/`single_round` 表示一个逻辑 review fact 完成后/);
+    expect(contract).toMatch(/direction 固定由两个[\s\S]*短请求组成/);
+    expect(contract).toMatch(/detail 只发[\s\S]*一个短请求/);
+    expect(contract).toMatch(/不再为了追求空 findings[\s\S]*自动发起后续复审/);
   });
 
   it("reports scope expansion as findings without rejecting necessary protections", () => {

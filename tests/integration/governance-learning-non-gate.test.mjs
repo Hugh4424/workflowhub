@@ -21,6 +21,12 @@ describe("governance learning is retained but non-gating", () => {
     // The frozen inventory predates an existing archive move. That historical
     // drift remains visible, but this diagnostic must not turn it into a
     // product-stage gate or authorize history rewriting.
+    expect(result.errors).toEqual(expect.arrayContaining([
+      "new historical file appeared: specs/archive/workflowhub-delivery-flow-quality-v1/decision-log.md",
+      "new historical file appeared: specs/archive/workflowhub-delivery-flow-quality-v1/plan.md",
+      "new historical file appeared: specs/archive/workflowhub-delivery-flow-quality-v1/spec.md",
+      "new historical file appeared: specs/archive/workflowhub-delivery-flow-quality-v1/tasks.md",
+    ]));
     expect(result.errors.every((error) => error.startsWith("new historical file appeared:"))).toBe(true);
   });
 });

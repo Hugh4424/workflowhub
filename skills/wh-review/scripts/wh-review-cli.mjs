@@ -11,6 +11,13 @@ import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const HOST_PATH = /(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g;
+
+function safeRecoveryError(error) {
+  const code = typeof error?.code === "string" && error.code !== "" ? error.code : "WORKFLOWHUB_LOCAL_ERROR";
+  const message = String(error?.message ?? error).replace(HOST_PATH, "<host-path-redacted>");
+  return { code, message };
+}
 
 export function resolveTrustedReviewSubject(input) {
   if (!isAbsolute(input.task_path ?? "")) throw new TypeError("task_path must be an absolute TaskHandle path");
@@ -54,117 +61,29 @@ function providerClient(stage = null, reviewTrack = null, reviewKind = null) {
   return { thirdReview, client: new ReviewProviderClient({ command: thirdReview.command, config: thirdReview.config }) };
 }
 
-const RETRYABLE_UNAVAILABLE_CODES = new Set([
-  "AUTH", "PROVIDER_UNAVAILABLE", "PROCESS_DEAD", "PROCESS_EXIT_NONZERO",
-  "RATE_LIMITED", "TIMEOUT", "TRANSPORT_FAILURE", "PROVIDER_NO_TERMINAL_RESULT", "REVIEW_ROUTE_UNAVAILABLE",
-  "OUTPUT_INVALID", "PROVIDER_OUTPUT_INVALID", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE",
-  "PROFILE_MISMATCH", "SAME_SOURCE", "UNKNOWN",
-]);
-const MATERIAL_UNAVAILABLE_CODES = new Set(["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"]);
 const RETIRED_RECOVERY_FIELDS = ["previous_result_ref", "previousResultRef", "review_round", "reviewRound", "review_delta", "reviewDelta", "request_id", "requestId", "prior_attempt_refs", "priorAttemptRefs", "dispatch_sequence", "dispatchSequence"];
-const MAX_RECOVERY_REQUESTS = 3;
-const MAX_PUBLIC_REQUESTS = 1 + MAX_RECOVERY_REQUESTS;
-
-function recoveryErrorCode(result) { return result?.error_code ?? result?.error?.code ?? "PROVIDER_UNAVAILABLE"; }
-function frozenIdentity(input, result = null) {
-  const value = result === null ? input : result;
-  return {
-    snapshot_tree: value?.snapshot_tree ?? value?.snapshotTree ?? null,
-    material_id: value?.material_id ?? value?.materialId ?? null,
-  };
-}
-function identityMissing(identity) {
-  return identity.snapshot_tree === null || identity.material_id === null;
-}
-
-function fallbackReasonFor(errorCodes) {
-  const codes = [...new Set(errorCodes.filter((code) => typeof code === "string" && code !== ""))];
-  if (codes.length === 1 && codes[0] === "REVIEW_ROUTE_UNAVAILABLE") {
-    return "review_route_unavailable_after_public_requests";
-  }
-  if (codes.length > 0 && codes.every((code) => RETRYABLE_UNAVAILABLE_CODES.has(code))) {
-    return "heterologous_provider_unavailable_after_public_requests";
-  }
-  return "heterologous_review_unavailable_after_public_requests";
-}
-
-function uniqueAttemptRefs(attemptRefs) {
-  return [...new Set(attemptRefs.filter((ref) => typeof ref === "string" && ref !== ""))];
-}
-
-function sameSourceResult({ attemptRefs, identity, fallbackResult = null, reason = null, errorCodes = [], recoveryErrors = [] }) {
-  return {
-    ...(fallbackResult && typeof fallbackResult === "object" ? fallbackResult : {}),
-    status: "incomplete", recovery: "same_source_fallback", source: "same_source", attempt_refs: uniqueAttemptRefs(attemptRefs),
-    snapshot_tree: identity.snapshot_tree, material_id: identity.material_id, fallback_required: fallbackResult === null,
-    fallback_reason: reason ?? fallbackReasonFor(errorCodes),
-    ...(recoveryErrors.length > 0 ? { recovery_errors: recoveryErrors.map((item) => ({ ...item })) } : {}),
-  };
-}
-
-/** Ephemeral outer composition; each public attempt remains immutable. */
+/** One WorkflowHub call. Provider recovery and lifecycle belong to 3rd-review. */
 export async function runReviewRecovery(input, { runRound = runReviewRound, sameSourceFallback = null } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review recovery input is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
-  if (sameSourceFallback !== null && typeof sameSourceFallback !== "function") throw new TypeError("sameSourceFallback must be a function");
-  const attemptRefs = [];
-  const errorCodes = [];
-  const recoveryErrors = [];
-  let identity = frozenIdentity(input, null);
-  for (let index = 0; index < MAX_PUBLIC_REQUESTS; index += 1) {
-    const request = structuredClone(input);
-    for (const field of RETIRED_RECOVERY_FIELDS) delete request[field];
-    let result;
-    try {
-      result = await runRound(request);
-    } catch (error) {
-      const code = typeof error?.code === "string" && error.code !== "" ? error.code : "PROVIDER_NO_TERMINAL_RESULT";
-      recoveryErrors.push({ code, message: String(error?.message ?? error) });
-      result = {
-        status: "unavailable",
-        recovery: "run_round_exception",
-        error_code: code,
-        error: { code, message: String(error?.message ?? error) },
-        snapshot_tree: identity.snapshot_tree ?? frozenIdentity(input).snapshot_tree,
-        material_id: identity.material_id ?? frozenIdentity(input).material_id,
-      };
-    }
-    const code = result?.status === "unavailable" ? recoveryErrorCode(result) : null;
-    if (code) errorCodes.push(code);
-    const currentIdentity = frozenIdentity(input, result);
-    if (identity.snapshot_tree === null) identity = { ...identity, snapshot_tree: currentIdentity.snapshot_tree };
-    if (identity.material_id === null) identity = { ...identity, material_id: currentIdentity.material_id };
-    if ((identity.snapshot_tree !== null && currentIdentity.snapshot_tree !== null && identity.snapshot_tree !== currentIdentity.snapshot_tree)
-      || (identity.material_id !== null && currentIdentity.material_id !== null && identity.material_id !== currentIdentity.material_id)) {
-      return { status: "incomplete", recovery: "snapshot_or_material_drift", attempt_refs: uniqueAttemptRefs([...attemptRefs, ...(result?.attempt_ref ? [result.attempt_ref] : [])]), snapshot_tree: currentIdentity.snapshot_tree, material_id: currentIdentity.material_id };
-    }
-    if (result?.attempt_ref) attemptRefs.push(result.attempt_ref);
-    if ((identity.snapshot_tree !== null && currentIdentity.snapshot_tree === null)
-      || (identity.material_id !== null && currentIdentity.material_id === null)) {
-      return { status: "incomplete", recovery: "snapshot_or_material_identity_unavailable", attempt_refs: uniqueAttemptRefs(attemptRefs), snapshot_tree: identity.snapshot_tree, material_id: identity.material_id };
-    }
-    if (identityMissing(identity)) {
-      return { status: "incomplete", recovery: "snapshot_or_material_identity_unavailable", attempt_refs: uniqueAttemptRefs(attemptRefs), snapshot_tree: identity.snapshot_tree, material_id: identity.material_id };
-    }
-    if (result?.status !== "unavailable") return result;
-    if (MATERIAL_UNAVAILABLE_CODES.has(code) || !RETRYABLE_UNAVAILABLE_CODES.has(code)) return result;
-  }
-  const fallbackInput = structuredClone(input);
-  for (const field of RETIRED_RECOVERY_FIELDS) delete fallbackInput[field];
-  fallbackInput.same_source = true;
-  fallbackInput.independent_context = true;
-  fallbackInput.recovery = { kind: "same_source_fallback", attempt_refs: uniqueAttemptRefs(attemptRefs), snapshot_tree: identity.snapshot_tree, material_id: identity.material_id };
-  if (sameSourceFallback === null) return sameSourceResult({ attemptRefs, identity, errorCodes, recoveryErrors });
+  if (sameSourceFallback !== null) throw new TypeError("sameSourceFallback is retired; 3rd-review owns heterologous recovery");
+  const request = structuredClone(input);
+  for (const field of RETIRED_RECOVERY_FIELDS) delete request[field];
   try {
-    const fallback = await sameSourceFallback(fallbackInput);
-    if (!fallback || fallback.source !== "same_source" || fallback.independent_context !== true) return sameSourceResult({ attemptRefs, identity, reason: "same_source_fallback_contract_invalid", errorCodes, recoveryErrors });
-    return sameSourceResult({ attemptRefs, identity, fallbackResult: fallback, errorCodes, recoveryErrors });
+    return await runRound(request);
   } catch (error) {
-    return sameSourceResult({ attemptRefs, identity, reason: `same_source_fallback_unavailable:${error?.code ?? "ERROR"}`, errorCodes, recoveryErrors });
+    const diagnostic = safeRecoveryError(error);
+    return {
+      status: "unavailable", recovery: "run_round_exception", error_code: diagnostic.code,
+      error: diagnostic,
+      ...(request.snapshot_tree === undefined ? {} : { snapshot_tree: request.snapshot_tree }),
+      ...(request.material_id === undefined ? {} : { material_id: request.material_id }),
+    };
   }
 }
 
 export async function runReviewRound(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
     if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
   }
@@ -194,6 +113,9 @@ export async function runReviewRound(input) {
   }
   if (input.previous_runtime_ids !== undefined || input.previousRuntimeIds !== undefined) {
     throw new TypeError("runtime continuation is retired; each review starts a new broker public request");
+  }
+  for (const [field, value] of [["task_path", input.task_path], ["project_name", input.project_name ?? input.projectName], ["task_id", input.task_id ?? input.taskId], ["stage", input.stage], ["host_provider", input.host_provider ?? input.hostProvider]]) {
+    if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${field} is required`);
   }
   const reviewKind = input.review_kind ?? input.reviewKind ?? null;
   if (reviewKind !== null && !["mini_task.design", "mini_task.implementation"].includes(reviewKind)) throw new TypeError("review_kind is unsupported");
@@ -229,6 +151,7 @@ export async function runReviewRound(input) {
       ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),
     };
   }
+  if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials)) throw new TypeError("materials is required");
   const profileSet = "initial";
   const selection = selectTrustedReviewProviderSelection(thirdReview.config, hostProvider, route, profileSet);
   const reviewPolicy = {
@@ -246,6 +169,7 @@ export async function runReviewRound(input) {
     stage, phaseId, reviewTrack, reviewKind, uiScope: input.ui_scope === true,
     materials: input.materials ?? {},
     current_receipts: input.current_receipts ?? input.currentReceipts ?? {},
+    directionSelection: input.direction_selection ?? input.directionSelection ?? null,
     hostProvider,
     // The broker owns adapter-level exclusion. Keep the complete configured
     // group here so it can attest SAME_SOURCE rather than trusting a local

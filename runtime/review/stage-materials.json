@@ -1,12 +1,59 @@
 {
   "version": "wh-review-stage-materials.v2",
+  "surfaces": {
+    "make-decision/direction": {
+      "contract": "contracts/make-decision.md",
+      "problem_order": ["problem", "constraints", "failure_consequence", "smaller_reversible_option"],
+      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction"]
+    },
+    "make-decision/detail": {
+      "contract": "contracts/make-decision.md",
+      "problem_order": ["scope", "user_flow", "states", "acceptance", "risk", "simplicity"],
+      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "objective_facts"]
+    },
+    "build-spec": {
+      "contract": "contracts/build-spec.md",
+      "problem_order": ["requirement_coverage", "journey_states", "failure_recovery", "oracle", "scope"],
+      "semantic_fields": ["raw_requirement", "approved_decision", "draft_spec", "acceptance_criteria", "user_flow", "data_states", "failure_boundaries"]
+    },
+    "build-plan": {
+      "contract": "contracts/build-plan.md",
+      "problem_order": ["causal_graph", "dependencies", "consumers", "verification", "recovery", "necessity"],
+      "semantic_fields": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "dependencies", "verification"]
+    },
+    "build-code/phase": {
+      "contract": "contracts/build-code.md",
+      "problem_order": ["spec_conformance", "correctness", "necessity"],
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "phase_map", "impact_map", "reuse_map", "acceptance_map", "change_map", "test_evidence"]
+    },
+    "build-code/integration": {
+      "contract": "contracts/build-code.md",
+      "problem_order": ["user_flow", "cross_phase_seams", "interfaces", "failure_recovery", "necessity"],
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "test_evidence", "open_risks"]
+    },
+    "verify-code": {
+      "contract": "contracts/verify-code.md",
+      "problem_order": ["claim_coverage", "implementation", "consumer", "assertion", "result", "weak_oracle"],
+      "semantic_fields": ["acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "acceptance_evidence"]
+    },
+    "mini-task/design": {
+      "contract": "contracts/mini-task-design.md",
+      "problem_order": ["still_small", "scope", "states", "risks", "tests", "rollback"],
+      "semantic_fields": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "objective_facts", "risks", "rollback"]
+    },
+    "mini-task/implementation": {
+      "contract": "contracts/mini-task-implementation.md",
+      "problem_order": ["spec_conformance", "correctness", "necessity", "user_result", "scope_boundary"],
+      "semantic_fields": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "change_map"]
+    }
+  },
   "stages": {
     "make-decision": {
       "tracks": {
         "direction": {
           "source_bundle": "none",
           "required": ["raw_requirement", "objective_facts", "review_instructions"],
-          "optional": [],
+          "optional": ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"],
           "generated": ["review_instructions"],
           "forbidden": ["proposed_solution", "decision_log", "spec", "plan", "changes_diff", "changed_files"],
           "minimum_reviewers": 1,

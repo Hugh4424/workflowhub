@@ -166,8 +166,9 @@ function publicTestReceipt(state, stage, snapshot, suffix = "") {
   state.kernel.publishCanonicalRecord(outputRef, output);
   return record(state, `receipts/tests/public-${stage}${suffix}.json`, {
     schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage,
-    producer: { stage, component: "tests", version: "1.0.0" },
-    command: "public-stage-test", command_hash: sha256("public-stage-test"), exit_code: 0,
+    producer: { stage, component: stage === "build-code" ? "build-code-test-capture" : "verify-code-test-capture", version: "1.0.0" },
+    command: stage === "verify-code" ? "npm test" : "public-stage-test",
+    command_hash: sha256(stage === "verify-code" ? "npm test" : "public-stage-test"), exit_code: 0,
     source_digest: snapshot.source_digest, snapshot_head: snapshot.head,
     snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
     started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",
@@ -286,8 +287,9 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
     state.kernel.publishCanonicalRecord(outputRef, output);
     refs.push(record(state, `receipts/tests/${stage}-${testExit}${suffix}.json`, {
       schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage,
-      producer: { stage, component: "current-five-stage-test", version: "1.0.0" },
-      command: testExit === 0 ? "true" : "false", command_hash: sha256(testExit === 0 ? "true" : "false"), exit_code: testExit,
+      producer: { stage, component: stage === "verify-code" ? "verify-code-test-capture" : "current-five-stage-test", version: "1.0.0" },
+      command: stage === "verify-code" ? "npm test" : (testExit === 0 ? "true" : "false"),
+      command_hash: sha256(stage === "verify-code" ? "npm test" : (testExit === 0 ? "true" : "false")), exit_code: testExit,
       material_revision: materialRevision, source_digest: snapshot.source_digest,
       snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
       started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z",

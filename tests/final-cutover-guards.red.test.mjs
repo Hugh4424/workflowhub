@@ -819,7 +819,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     const worker = workerFor(stage, values);
     await expect(officialStageHandler(stage)(worker, { receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef } })).resolves.toMatchObject({
-      completion: { system: { result: "completed_with_open_items" } },
+      completion: { system: { result: "incomplete" } },
       missing_items: expect.arrayContaining([expect.stringMatching(/snapshot/i)]),
     });
   });
@@ -1181,6 +1181,35 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
     expect(result.missing_items).toContain("canonical verification receipt is missing");
     expect(result.missing_items.join("\n")).not.toMatch(/results\/build-code\/accepted\.json|accepted build-code/i);
+  });
+
+  it("does not mark acceptance covered when the verification item passes but the current AC set is empty", async () => {
+    const stage = "verify-code";
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      "quality/reviews/results/review.json": reviewReceipt(stage),
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+      "quality/evidence/verification.json": canonical(stage, {
+        producer: { stage, component: "verification", version: "1" },
+        items: [
+          "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
+          "tasks_completion", "browser_qa", "independent_review_resolution", "core_gaps", "human_handoff",
+        ].map((id) => ({ id, status: id === "acceptance_criteria" ? "pass" : "not_applicable", reason: "fixture summary only", evidence_refs: [] })),
+      }),
+    };
+    const worker = workerFor(stage, values);
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: {
+        tests: "quality/tests/tests.json",
+        review: "quality/reviews/results/review.json",
+        quality_review: worker.qualityReviewRef,
+        evidence: "quality/evidence/evidence.json",
+        verification: "quality/evidence/verification.json",
+        audit: worker.auditRef,
+      },
+    });
+    expect(result.verification_failure).toBe(true);
+    expect(result.completion.system.business_facts.acceptance_criteria).toBe("unknown");
   });
 
   it("reports verify-code failure when current tests and reviews no longer match the Workspace", async () => {

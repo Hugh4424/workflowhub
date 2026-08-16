@@ -12,11 +12,11 @@ description: Freeze current materials, ask the configured 3rd-review broker for 
 1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks. The stage matrix is the allowlist; do not add a whole repository or a historical review bundle.
 2. Add any applicable `simplicity-guard` and `plan-ceo-review` files as read-only advisory lenses in this same packet. Do not invoke either lens as a separate skill or create a second output path.
 3. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
-4. Resolve provider/model from trusted 3rd-review configuration. Call the broker through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary. After the initial request, the outer recovery composition may issue at most three additional fresh public requests on the same snapshot/material, and only for terminal provider unavailability; material failures and semantic findings are not retried.
+4. Resolve provider/model from trusted 3rd-review configuration. Call the broker through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary. Ordinary surfaces use one broker request; `make-decision.direction` uses exactly two ordered requests (blind reconstruction, then reveal challenge) but writes one logical fact. The broker owns any internal provider recovery and returns the terminal facts. WorkflowHub does not add outer retries, format correction, provider fallback, or same-source fallback.
 5. Preserve the broker's real public result and provenance, including findings and transport status, as an immutable review fact.
 6. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
 
-WorkflowHub does not start models directly and does not implement provider polling, native coordination locks, session lifecycle, or a second timeout. After the initial request plus three terminal-unavailable recovery requests, the host may run one independent same-source subagent using the current provider; that fact is recorded as `SAME_SOURCE`/`incomplete`, never as heterologous quality or pass.
+WorkflowHub does not start models directly and does not implement provider polling, native coordination locks, session lifecycle, or a second timeout. A broker failure remains an `unavailable` fact; it is never rewritten as empty findings, quality pass, or heterologous review.
 
 ## Commands
 

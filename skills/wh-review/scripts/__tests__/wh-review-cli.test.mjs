@@ -14,6 +14,11 @@ function git(cwd, args) { return String(execFileSync("git", args, { cwd, encodin
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
+  it("rejects a non-object request with a clear boundary error", async () => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound(null)).rejects.toThrow("review request must be an object");
+  });
+
   it("exports only current review operations and no resolution writer", async () => {
     const mod = await import(cli.href);
     expect(typeof mod.verifyFinalReview).toBe("function");
@@ -99,10 +104,9 @@ describe("wh-review production CLI", () => {
     }
   });
 
-  it("retries only terminal provider unavailability and then exposes a same-source fallback fact", async () => {
+  it("makes one broker request and preserves terminal provider unavailability", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const calls = [];
-    const fallback = [];
     const result = await runReviewRecovery({
       task_path: "/tmp/task",
       stage: "build-code",
@@ -114,21 +118,14 @@ describe("wh-review production CLI", () => {
         calls.push(input);
         return { status: "unavailable", attempt_ref: `quality/reviews/attempts/a-${calls.length}.json`, error_code: "AUTH", snapshot_tree: "tree-1", material_id: "material-1" };
       },
-      sameSourceFallback: async (input) => {
-        fallback.push(input);
-        return { status: "incomplete", source: "same_source", independent_context: true, evidence_ref: "quality/evidence/same-source.json" };
-      },
     });
-    expect(calls).toHaveLength(4);
-    expect(calls.map((input) => input.snapshot_tree)).toEqual(["tree-1", "tree-1", "tree-1", "tree-1"]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].snapshot_tree).toBe("tree-1");
     expect(calls.some((input) => input.previous_result_ref || input.prior_attempt_refs || input.dispatch_sequence)).toBe(false);
-    expect(fallback).toHaveLength(1);
-    expect(result).toMatchObject({ status: "incomplete", recovery: "same_source_fallback", source: "same_source" });
-    expect(result.attempt_refs).toHaveLength(4);
-    expect(result.recovery_errors).toBeUndefined();
+    expect(result).toMatchObject({ status: "unavailable", error_code: "AUTH" });
   });
 
-  it("retries a public round exception when the frozen identity remains available", async () => {
+  it("turns a public round exception into one unavailable fact", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const calls = [];
     const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
@@ -137,26 +134,30 @@ describe("wh-review production CLI", () => {
         throw Object.assign(new Error("broker process died"), { code: "PROCESS_DEAD" });
       },
     });
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(1);
     expect(result).toMatchObject({
-      status: "incomplete",
-      recovery: "same_source_fallback",
-      source: "same_source",
-      attempt_refs: [],
+      status: "unavailable",
+      recovery: "run_round_exception",
+      error_code: "PROCESS_DEAD",
       snapshot_tree: "tree-1",
       material_id: "material-1",
     });
-    expect(result.recovery_errors).toHaveLength(4);
   });
 
-  it("preserves recovery failure provenance when a same-source callback returns a fact", async () => {
+  it("keeps a code-less local exception out of provider failure taxonomy", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+      runRound: async () => { throw new TypeError("local input is invalid"); },
+    });
+    expect(result).toMatchObject({ status: "unavailable", error_code: "WORKFLOWHUB_LOCAL_ERROR" });
+  });
+
+  it("rejects the retired same-source fallback callback", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    await expect(runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => ({ status: "unavailable", attempt_ref: "attempt", error_code: "OUTPUT_INVALID", snapshot_tree: "tree-1", material_id: "material-1" }),
       sameSourceFallback: async () => ({ source: "same_source", independent_context: true, status: "incomplete" }),
-    });
-    expect(result).toMatchObject({ status: "incomplete", source: "same_source", fallback_reason: "heterologous_provider_unavailable_after_public_requests" });
-    expect(result.recovery_errors).toBeUndefined();
+    })).rejects.toThrow(/sameSourceFallback is retired/);
   });
 
   it("does not retry material failures or semantic findings", async () => {
@@ -168,45 +169,41 @@ describe("wh-review production CLI", () => {
       const calls = [];
       const result = await runReviewRecovery({ task_path: "/tmp/task", stage: "build-code", snapshot_tree: "tree-1", material_id: "material-1" }, {
         runRound: async () => { calls.push(true); return envelope; },
-        sameSourceFallback: async () => { throw new Error("same-source fallback must not run"); },
       });
       expect(calls).toHaveLength(1);
       expect(result).toMatchObject(envelope);
     }
   });
 
-  it("retries a missing route and stops when identity disappears", async () => {
+  it("preserves missing-route and provider identity failures after one call", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const routeCalls = [];
     const routeResult = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => { routeCalls.push(true); return { status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE", snapshot_tree: "tree-1", material_id: "material-1" }; },
     });
-    expect(routeCalls).toHaveLength(4);
-    expect(routeResult).toMatchObject({ status: "incomplete", recovery: "same_source_fallback", source: "same_source", fallback_reason: "review_route_unavailable_after_public_requests" });
+    expect(routeCalls).toHaveLength(1);
+    expect(routeResult).toMatchObject({ status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE" });
 
     const identityCalls = [];
     const identityResult = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => { identityCalls.push(true); return { status: "unavailable", error_code: "AUTH", attempt_ref: `attempt-${identityCalls.length}`, snapshot_tree: "tree-1" }; },
     });
     expect(identityCalls).toHaveLength(1);
-    expect(identityResult).toMatchObject({ status: "incomplete", recovery: "snapshot_or_material_identity_unavailable" });
+    expect(identityResult).toMatchObject({ status: "unavailable", error_code: "AUTH" });
   });
 
-  it("retries output/protocol/profile failures, but keeps cancellation terminal", async () => {
+  it("preserves output/protocol/profile failures without a second WorkflowHub retry", async () => {
     const { runReviewRecovery } = await import(cli.href);
     for (const error_code of ["PROTOCOL_INCOMPATIBLE", "PUBLIC_RESULT_INVALID", "PROFILE_MISMATCH", "OUTPUT_INVALID", "PROVIDER_OUTPUT_INVALID"]) {
       const calls = [];
-      const fallback = [];
       const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
         runRound: async () => {
           calls.push(true);
           return { status: "unavailable", attempt_ref: `attempt-${error_code}`, error_code, snapshot_tree: "tree-1", material_id: "material-1" };
         },
-        sameSourceFallback: async () => { fallback.push(true); return { source: "same_source", independent_context: true }; },
       });
-      expect(calls).toHaveLength(4);
-      expect(fallback).toHaveLength(1);
-      expect(result).toMatchObject({ status: "incomplete", recovery: "same_source_fallback", source: "same_source" });
+      expect(calls).toHaveLength(1);
+      expect(result).toMatchObject({ status: "unavailable", error_code });
     }
 
     const calls = [];
@@ -215,19 +212,17 @@ describe("wh-review production CLI", () => {
         calls.push(true);
         return { status: "unavailable", attempt_ref: "cancelled", error_code: "CANCELLED", snapshot_tree: "tree-1", material_id: "material-1" };
       },
-      sameSourceFallback: async () => { throw new Error("same-source fallback must not run"); },
     });
     expect(calls).toHaveLength(1);
     expect(result).toMatchObject({ status: "unavailable", error_code: "CANCELLED" });
   });
 
-  it("locks SAME_SOURCE truth even when the fallback callback returns conflicting fields", async () => {
+  it("rejects a caller-provided same-source fallback", async () => {
     const { runReviewRecovery } = await import(cli.href);
-    const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+    await expect(runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async ({ snapshot_tree, material_id }) => ({ status: "unavailable", error_code: "AUTH", attempt_ref: "attempt", snapshot_tree, material_id }),
       sameSourceFallback: async () => ({ status: "available", source: "heterologous", independent_context: true, snapshot_tree: "tree-2", material_id: "material-2", attempt_refs: ["forged"] }),
-    });
-    expect(result).toMatchObject({ status: "incomplete", source: "same_source", snapshot_tree: "tree-1", material_id: "material-1", attempt_refs: ["attempt"] });
+    })).rejects.toThrow(/sameSourceFallback is retired/);
   });
 
   it("opens only an existing make-decision Workspace and never prepares one", async () => {
@@ -270,7 +265,7 @@ describe("wh-review production CLI", () => {
     writeFileSync(brokerConfig, JSON.stringify({
       version: 4,
       tiers: [["kimi"]],
-      providers: { kimi: { enabled: true } },
+      providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
       attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
     }));
     writeFileSync(join(configDir, "config.json"), JSON.stringify({
@@ -290,9 +285,9 @@ describe("wh-review production CLI", () => {
       encoding: "utf8",
       env: { ...process.env, HOME: home },
     }));
-    expect(result).toMatchObject({ status: "incomplete", recovery: "same_source_fallback", source: "same_source" });
-    expect(result.attempt_refs).toHaveLength(4);
-    const attempt = JSON.parse(task.readRecord(result.attempt_refs.at(-1)));
+    expect(result).toMatchObject({ status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE" });
+    expect(result.attempt_ref).toBeTruthy();
+    const attempt = JSON.parse(task.readRecord(result.attempt_ref));
     expect(attempt).toMatchObject({
       terminal_status: "unavailable",
       provider_attempts: [],
@@ -300,7 +295,7 @@ describe("wh-review production CLI", () => {
     });
   });
 
-  it("uses the production run entry for one initial and three recovery requests before same-source fallback", async () => {
+  it("uses the production run entry for one broker request and preserves the failure", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-recovery-entry-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
     execFileSync("git", ["init", "-q"], { cwd: repo });
@@ -318,7 +313,7 @@ describe("wh-review production CLI", () => {
     writeFileSync(brokerConfig, JSON.stringify({
       version: 4,
       tiers: [["kimi"]],
-      providers: { kimi: { enabled: true } },
+      providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
       attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
     }));
     const counter = join(root, "broker-count"); writeFileSync(counter, "0");
@@ -332,15 +327,26 @@ const count = Number(readFileSync(countPath, "utf8")) + 1;
 writeFileSync(countPath, String(count));
 const request = JSON.parse(readFileSync(requestPath, "utf8"));
 const attachments = JSON.parse(readFileSync(attachmentsPath, "utf8"));
+const runtimeId = "fixture-runtime-" + count;
+const error = { code: "AUTH", message: "fixture auth unavailable" };
 process.stdout.write(JSON.stringify({
-  version: 4, outcome: "unavailable", runtime_id: "fixture-runtime-" + count, round: 0,
-  host_provider: request.host_provider, selected_tier: 0,
+  version: "workflowhub-result.v3", outcome: "partial", runtime_id: runtimeId, round: 1,
+  host_provider: request.host_provider, material_id: attachments.bundle_id, selected_tier: 0,
   providers: [{
-    adapter: "kimi", continuable: false, effort: null, error: { code: "AUTH", message: "fixture auth unavailable" },
-    material_id: attachments.bundle_id, model: null, output: null, provider: "kimi", raw_output_ref: null,
-    result_protocol: "workflowhub-result.v2", retry: { count: 0, progress_events: 0 }, runtime_id: "fixture-runtime-" + count,
-    session_file_path: null, status: "failed", session_id: null, thinking: null,
-    timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, unavailable_diagnostics: null, usage: null,
+    attempts: [{ attempt_id: "fixture-attempt-" + count, completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "failed" }],
+    continuable: false, deadline_ms: 360000, error,
+    identity: { adapter: "kimi", config_id: "fixture-config", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
+    material: {
+      contract_hash: request.contract_hash ?? "fixture-contract-hash",
+      contract_id: request.contract_id ?? "fixture-contract",
+      material_id: attachments.bundle_id,
+      semantic_hash: request.semantic_hash ?? "fixture-semantic-hash",
+    },
+    output: null,
+    provenance: { raw_output_sha256: null, raw_stderr_sha256: null, runtime_id: runtimeId },
+    recovery: { fresh_execution_retry_count: 0, provider_internal_retry_count: 0, same_session_repair_count: 0 },
+    result_protocol: "workflowhub-result.v3", session_id: null, status: "failed",
+    timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
   }],
 }));
 `);
@@ -355,6 +361,7 @@ process.stdout.write(JSON.stringify({
     const inputPath = join(root, "input.json");
     writeFileSync(inputPath, JSON.stringify({
       task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision", review_track: "direction", host_provider: "codex",
+      direction_selection: { current_selection: "fixture choice" },
       materials: {
         raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
         review_instructions: reviewInstructionsFor("make-decision", "direction"),
@@ -364,9 +371,9 @@ process.stdout.write(JSON.stringify({
     const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
       encoding: "utf8", env: { ...process.env, HOME: home, FAKE_REVIEW_COUNTER: counter },
     }));
-    expect(Number(readFileSync(counter, "utf8"))).toBe(4);
-    expect(result).toMatchObject({ status: "incomplete", recovery: "same_source_fallback", source: "same_source" });
-    expect(result.attempt_refs).toHaveLength(4);
-    for (const attemptRef of result.attempt_refs) expect(JSON.parse(task.readRecord(attemptRef))).toMatchObject({ terminal_status: "unavailable", error: { code: "AUTH" } });
+    expect(Number(readFileSync(counter, "utf8"))).toBe(1);
+    expect(result).toMatchObject({ status: "unavailable", error_code: "AUTH" });
+    expect(result.attempt_ref).toBeTruthy();
+    expect(JSON.parse(task.readRecord(result.attempt_ref))).toMatchObject({ terminal_status: "unavailable", error: { code: "AUTH" } });
   });
 });

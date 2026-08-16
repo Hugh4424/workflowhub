@@ -47,6 +47,18 @@
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "semantic_projection": {
+      "type": "object",
+      "required": ["projection_version", "surface", "contract_id", "contract_hash", "semantic_hash"],
+      "properties": {
+        "projection_version": { "const": "wh-review-semantic-projection.v1" },
+        "surface": { "type": "string", "minLength": 1 },
+        "contract_id": { "type": "string", "minLength": 1 },
+        "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "semantic_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "review_policy": {
       "type": "object",
       "required": ["source", "mode", "minimum_heterologous", "requested_profiles", "eligible_profiles", "same_source_exclusions", "effective_profiles"],
@@ -100,7 +112,8 @@
         "selected_profiles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "selected_count": { "type": "integer", "minimum": 0 },
         "valid_provider_count": { "type": "integer", "minimum": 0 },
-        "minimum_required": { "type": "integer", "minimum": 1 }
+        "minimum_required": { "type": "integer", "minimum": 1 },
+        "group_outcome": { "enum": ["completed", "partial", "unavailable", "cancelled"] }
       },
       "additionalProperties": false
     },
@@ -111,6 +124,18 @@
         "required": ["provider", "status", "session_id", "runtime_id", "output_ref", "error"],
         "properties": {
           "provider": { "type": "string", "minLength": 1 },
+          "identity": {
+            "type": "object",
+            "required": ["provider", "adapter", "source_id", "config_id", "model"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 1 },
+              "adapter": { "type": "string", "minLength": 1 },
+              "source_id": { "type": "string", "minLength": 1 },
+              "config_id": { "type": "string", "minLength": 1 },
+              "model": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          },
           "status": { "enum": ["completed", "failed", "cancelled"] },
           "session_id": { "type": ["string", "null"] },
           "runtime_id": { "type": ["string", "null"] },
@@ -137,6 +162,17 @@
                     "additionalProperties": false
                   },
                   "usage": { "type": ["object", "null"] },
+                  "deadline_ms": { "type": ["integer", "null"], "minimum": 1 },
+                  "recovery": {
+                    "type": ["object", "null"],
+                    "required": ["fresh_execution_retry_count", "provider_internal_retry_count", "same_session_repair_count"],
+                    "properties": {
+                      "fresh_execution_retry_count": { "type": "integer", "minimum": 0 },
+                      "provider_internal_retry_count": { "type": "integer", "minimum": 0 },
+                      "same_session_repair_count": { "type": "integer", "minimum": 0 }
+                    },
+                    "additionalProperties": false
+                  },
                   "retry": {
                     "type": "object",
                     "required": ["count", "progress_events"],

@@ -450,6 +450,23 @@ describe("vNext official stage completion", () => {
     }
   });
 
+  it("does not mark verify finding dispositions passed when verification evidence is absent", async () => {
+    const state = fixture("vnext-verify-missing-dispositions");
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const result = await runOfficialStage("verify-code", {
+      stage: "verify-code", task: state.task, kernel: state.kernel, identity: state.task.identity,
+      workflowRunId: state.kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
+      candidateWorkspace: state.candidate, artifacts,
+    }, { receipts: { stage_outcomes: stageOutcome(state, "verify-code").ref } });
+
+    expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+    expect(result.completion.predicates.finding_dispositions).toMatchObject({ status: "missing", fact_ref: null });
+    const dispositionFact = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.subject === "finding_dispositions");
+    expect(dispositionFact).toMatchObject({ subject: "finding_dispositions", status: "missing" });
+  });
+
   it("publishes acceptance predicates from canonical completion facts even when another quality item is open", async () => {
     const state = fixture("vnext-predicate-isolation");
     const workspace = openCurrentTaskWorkspace(state.task);

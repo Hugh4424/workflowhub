@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
+import { authenticateOfficialInvocation, inspectOfficialInvocation, persistOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { assertWriteBoundary } from "../../runtime/evidence/write-boundary-preflight.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 
@@ -71,6 +71,27 @@ describe("per-invocation runner identity", () => {
     const other = fixture({ taskId: "other-call" });
     expect(authenticateOfficialInvocation(other.task, { runnerRoot: f.runner, stage: "build-code", runId: "cross-task" }).identity)
       .toMatchObject({ task_id: "other-call", source: { git_branch: "task/workflowhub/per-call" } });
+  });
+
+  it("does not accept a caller-supplied raw invocation and identity before persistence", () => {
+    const f = fixture();
+    const official = inspectOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "raw-boundary" });
+    const forged = {
+      ref: official.ref,
+      hash: official.hash,
+      raw: official.raw,
+      identity: { ...official.identity, stage: "make-decision" },
+    };
+    expect(() => assertWriteBoundary({
+      task: f.task, stage: "build-code", operation: "receipt", invocation: forged,
+    })).toThrow(/INVOCATION_RECORD_UNAVAILABLE|INVOCATION_IDENTITY_INVALID/i);
+  });
+
+  it("does not persist a caller-shaped invocation without the official inspection marker", () => {
+    const f = fixture();
+    const official = inspectOfficialInvocation(f.task, { runnerRoot: f.runner, stage: "build-code", runId: "persist-boundary" });
+    const forged = { ref: official.ref, hash: official.hash, raw: official.raw, identity: official.identity };
+    expect(() => persistOfficialInvocation(f.task, forged)).toThrow(/inspected official invocation is invalid/i);
   });
 
   it("reads legacy pinned tasks without migrating their runner history", () => {

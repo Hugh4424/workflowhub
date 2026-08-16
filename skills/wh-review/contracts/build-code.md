@@ -7,7 +7,8 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 `phase_id` 存在时，runner 自动派生 `review_scope=phase`。这是一份严格代码审查：
 必须审查完整当前 Phase diff，不能只检查上轮 finding；provider findings 原样保留为质量事实。
 review findings 不是继续工作或无限复审的 gate；Phase 完成仍需要测试、AC、finding
-disposition 和 serious 风险处置事实。
+disposition 和 serious 风险处置事实。所有 canonical/reportable finding（包括 minor）都要
+逐条记录 disposition；只有 serious actionable finding 额外需要真实用户风险确认。
 
 Phase 的审查对象由宿主根据 `phase_id` 和 Git 工作树推导，调用方不能传入
 `tasks.md` 的 `execution_file_paths`、`phasePaths` 或其他路径选择器。已提交的 Phase
@@ -61,9 +62,10 @@ candidate 行区间不得与任何 unified diff hunk 相交；否则 runner 直�
 Phase 相关 FR/AC/合同摘录、compact maps、测试摘要和 anchors；全文 spec/maps 仅保留
 canonical ref/hash/bytes。总交付超过 330 KiB 时必须在 dispatch 前失败。
 大 Phase 的 full change-map 也只存 canonical audit；provider 版本只保留
-change ID、path、status 和 hunk IDs。`selected_context` 不交付独立
-`context/<anchor>.txt`；context 仅存 canonical audit，`diff-index.anchors` 用
-`anchor_id → shard_id,line` 短引用定位。
+change ID、path、status 和 hunk IDs。`selected_context` 对已经由 included
+diff shard 覆盖的 anchor 不再重复交付 `context/<anchor>.txt`；只有未被 shard
+覆盖的、明确选中的外部依赖 anchor 才交付有界 context，`diff-index.anchors`
+用 `anchor_id → shard_id,line` 短引用定位。
 
 `phase_map` 必须覆盖 `change-map.json` 的全部 `change_id`；`impact_map` 也必须
 覆盖全部 change_id。`reuse_map` 和 `acceptance_map` 的每个 entry 必须关联至少一个
@@ -88,25 +90,45 @@ DRY/KISS/YAGNI/SoC、复杂度或可读性 finding 必须指出当前 diff 中�
 风格或假设性未来需求裁决，也不得删除规格要求的测试、输入校验、错误处理、
 安全或可访问性保护。
 
+每个 Phase 的问题顺序固定为三轴：
+
+1. `spec_conformance`：这段代码是否真的实现批准的用户行为、状态、失败边界和 AC；
+2. `correctness`：接口、数据流、并发、重试、幂等、错误和测试 oracle 是否会在真实消费者
+   场景下出错；
+3. `necessity`：是否引入了没有交付收益的抽象、兼容层、重复状态或复杂兜底。
+
+Integration 再按完整用户流程检查跨 Phase seam、真实入口、真实结果和失败恢复。参考
+成熟 code-review 的做法，finding 必须说明“会怎样坏、为什么当前代码会坏、怎样用最小
+改动修好”；不要只报风格、材料治理、快照绑定或流程合规。phase review 看完整当前
+diff，不能只盯上一轮 finding；但也不因为一次记录性写回就重审没有变化的行为。
+
 ## 最终 Integration 审查材料
 
-Integration 只读取当前四份材料（批准的 `spec.md`/AC 来自当前材料）、最终代码
-快照、当前快照的测试事实、当前 AC trace、冻结 reviewer lens 和审查说明。runner
-在调用 provider 前校验 implementation/test receipt 的当前 snapshot 绑定；这些是
-质量事实，不是继续工作的许可证。
+Integration 的宿主仍读取当前四份材料（批准的 `spec.md`/AC 来自当前材料）、最终
+代码快照、当前快照的测试事实和 AC trace。已有 implementation/test receipt 时，宿主严格
+校验 task、stage、producer、命令、输出 hash 和当前 snapshot 绑定；缺失、过期或无效时
+记录 `unavailable` audit gap，但仍允许 provider 审查最终实现。这样“有没有测试事实”和
+“有没有发现交付缺陷”不会互相挡住。
 
-AC trace 只表达当前 AC 到当前任务变化、测试和证据的对应关系，并验证引用的 hash
-与最终快照一致。历史 Phase 审查、旧 snapshot、seam、phase map、continuity 或
-lineage 记录不属于当前 Integration 输入，也不生成新的控制链；它们若存在，只能
-作为只读历史事实保留。
+这些校验结果是质量事实，不是继续工作的许可证；AC trace、task 行、receipt/hash、snapshot
+和 lineage 只用于宿主认证、收尾和事实留存，不进入 provider 的审查对象。
+
+provider 只读取压缩后的行为需求、与当前交付面有关的 AC 段落、最终实现上下文和相关
+测试结果。它重点检查完整用户流程、跨 Phase seam、真实接口、状态变化、失败恢复、
+必要性和会影响交付的真实缺陷。除非某项材料治理问题直接造成或掩盖用户可见的行为
+失败，否则不要把 AC 台账、任务行、receipt/hash、快照、lineage、证据完整性或流程
+合规写成 finding。历史 Phase 审查、旧 snapshot、phase map、continuity 或 lineage
+记录不属于当前 Integration 输入，也不生成新的控制链；它们若存在，只能作为只读历史
+事实保留。
 
 Integration packet 明确禁止 `changes.diff`、累计历史 diff、raw log、完整项目和
 重复 `integration_map`。缺少或不可用的质量事实如实记录为 `unavailable`，但不得
 把质量结果改写成完成，也不得把它变成阻止同一任务修复的 gate。
 
-Integration 的正式结果必须与 implementation receipt、fresh test receipt 和最终
-snapshot 同树；findings 和传输状态原样保留为质量事实，不能被改写成阶段通过。它仍是严格
-build-code 边界，不适用 build-spec/build-plan/verify-code 的普通修复免二审规则。
+Integration 的正式结果在存在对应回执时必须与 implementation receipt、fresh test receipt
+和最终 snapshot 同树；没有回执时，semantic review 仍可返回真实 findings，但正式收口必须
+保持 `incomplete`，不能把缺失事实改写成阶段通过。findings 和传输状态原样保留为质量事实。
+它仍是严格 build-code 边界，不适用 build-spec/build-plan/verify-code 的普通修复免二审规则。
 
 provider 无法形成 semantic findings 时，认证的 `unavailable` attempt 也是原样保留的
 质量事实，不得改写成“没有问题”，也不得称为“审查通过”。Phase 与 Integration 的结构

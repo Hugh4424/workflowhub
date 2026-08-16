@@ -30,6 +30,8 @@ export async function runAuditFixture({ outputRoot } = {}) {
   for (const [stage, reviewTrack] of stages) {
     const providerClient = { runGroup: async ({ providers }) => ({ runtimeId: `runtime-${stage}-${reviewTrack ?? "default"}`, providers: providers.map(providerResult) }) };
     const result = await runReviewFixture({ task, attachmentRoot, taskId: "audit-e2e", stage, reviewTrack, hostProvider: "codex", providers: ["kimi"], providerClient,
+      ...(stage === "make-decision" && reviewTrack === "direction" ? { directionSelection: { current_selection: "fixture choice", selection_rationale: "fixture only" } } : {}),
+      ...(stage === "make-decision" && reviewTrack === "direction" ? { materials: { raw_requirement: "fixture requirement", objective_facts: ["fixture fact"] } } : {}),
       captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, attachmentRoot, sourcePrefix: ".wh-review-packets/fake", materialId, manifest: [] }) });
     records.push({ stage, review_track: reviewTrack, status: result.status, snapshot_tree: result.snapshotTree, material_id: result.materialId, attempt_ref: result.attemptRef, result_ref: result.resultRef });
   }

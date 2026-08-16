@@ -6,6 +6,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import decisionEntrySchema from "../schemas/decision-entry.v1.json" with { type: "json" };
 import ambiguityLedgerV2Schema from "../schemas/ambiguity-ledger.v2.json" with { type: "json" };
 import planTaskV2Schema from "../schemas/plan-task-contract.v2.json" with { type: "json" };
+import makeDecisionSteps from "../../workflows/make-decision/steps.json" with { type: "json" };
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const HASH = /^[a-f0-9]{64}$/;
@@ -13,6 +14,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: false, formats: { "date-time"
 const validateEntrySchema = ajv.compile(decisionEntrySchema);
 const validateAmbiguityLedgerV2Schema = ajv.compile(ambiguityLedgerV2Schema);
 const validatePlanTaskV2Schema = ajv.compile(planTaskV2Schema);
+const MAX_MAKE_DECISION_STEP_ID = Math.max(...makeDecisionSteps.steps.map(({ step_id }) => step_id));
 
 const REQUIRED_MAIN_SECTIONS = Object.freeze([
   "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
@@ -367,7 +369,7 @@ export function validateDecisionLogStepUpdateContract(value) {
   for (const update of updates) {
     const stepId = update?.step_id;
     if (update?.stage !== "make-decision") errors.push("decision-log step update stage must be make-decision");
-    if (!Number.isInteger(stepId) || stepId < 1 || stepId > 12) errors.push("decision-log step update step_id must be 1..12");
+    if (!Number.isInteger(stepId) || stepId < 1 || stepId > MAX_MAKE_DECISION_STEP_ID) errors.push(`decision-log step update step_id must be 1..${MAX_MAKE_DECISION_STEP_ID}`);
     if (seenSteps.has(stepId)) errors.push(`decision-log step ${stepId} was updated more than once in one batch`);
     seenSteps.add(stepId);
     if (!nonEmptyString(update?.decision_log_ref) || !validHash(update?.decision_log_hash)) {

@@ -9,16 +9,18 @@ import { buildIntegrationReviewSubject as buildIntegrationSubjectDefault } from 
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
+import { buildSemanticProjection } from "./review-semantic-projection.mjs";
 import { validateSchema } from "./schema-validator.mjs";
+import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
-const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
+const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "BROKER_SPAWN_FAILED", "BROKER_EXIT_NONZERO", "BROKER_INVOCATION_FAILED", "GROUP_OUTCOME_UNAVAILABLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
 // Providers run from a writable wrapper directory; sealed review material is
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 // Keep the provider on the bounded, provider-visible view. The canonical
 // archives and out-of-scope summaries remain audit material, but asking the
 // model to enumerate the complete bundle makes large Phase reviews spend
 // their budget on transport/tool traversal before semantic review.
-const providerPrompt = "Read bundle/review-instructions.md first, then bundle/manifest.json and bundle/packet-plan.json. Read only manifest entries marked required plus the explicitly selected files under context/ needed by the maps; summary diff shards are navigation metadata and are not required to read. Use direct file reads only: do not call Grep, Glob, Bash, shell, directory listing, or recursive search, and do not enumerate or read canonical archives, full-diff archives, or out-of-scope summary shards unless the instructions explicitly require them. Return the requested JSON object only.";
+const providerPrompt = "Read bundle/review-instructions.md first, then bundle/manifest.json and bundle/packet-plan.json. Read only manifest entries marked required, plus the declared contract and reviewer-lens entries and only the explicitly selected files under context/ needed by the maps; summary diff shards are navigation metadata and are not required to read. Use direct file reads only: do not call Grep, Glob, Bash, shell, directory listing, or recursive search, and do not enumerate or read canonical archives, full-diff archives, or out-of-scope summary shards unless the instructions explicitly require them. Return exactly one JSON object of the form {\"findings\":[{\"severity\":\"blocking|major|minor\",\"path\":\"provider-relative-material-path\",\"line\":1,\"issue\":\"...\",\"recommendation\":\"...\",\"root_cause\":\"...\",\"evidence_kind\":\"direct|machine|inferred\",\"evidence\":\"...\"}]}; every finding must include severity, path, issue, and recommendation, and every major/blocking finding must also include root_cause, evidence_kind, and evidence. Omit line only when no reliable line exists. Never omit path, and do not output any other top-level field.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 const reviewRootFor = () => "quality/reviews";
@@ -40,8 +42,78 @@ function sourceRecord(source, integrationSubject = null) {
   };
 }
 
+function sourceStabilityDiagnostic(source, taskId) {
+  if (typeof source?.sourceRoot !== "string" || source.sourceRoot === "") return null;
+  try {
+    const current = captureExecutionSnapshot(source.sourceRoot, taskId);
+    if (current.head === source.capturedHead && current.tree === source.snapshotTree) return null;
+    return {
+      code: "SOURCE_CHANGED_AFTER_CAPTURE",
+      message: "review source changed after the packet was built; provider dispatch was skipped",
+    };
+  } catch {
+    return {
+      code: "SOURCE_UNAVAILABLE",
+      message: "review source could not be revalidated before provider dispatch",
+    };
+  }
+}
+
 function reviewScopeFor(stage, phaseId) {
   return stage === "build-code" ? (phaseId ? "phase" : "integration") : null;
+}
+
+/**
+ * Direction review is intentionally two small, ordered semantic requests:
+ * the first reconstructs the problem without seeing the current choice; the
+ * second reveals the choice and consumes the first answer. The caller keeps
+ * the returned pair in memory and writes one logical review fact, so this is
+ * not a persisted review state machine or a second completion record.
+ */
+function directionInputError(message) {
+  const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
+  error.code = "MATERIAL_INCOMPLETE";
+  return error;
+}
+
+function normalizeDirectionSelection(value) {
+  if (typeof value === "string" && value.trim() !== "") return Object.freeze({ current_selection: value });
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.current_selection !== "string" || value.current_selection.trim() === "") {
+    throw directionInputError("direction_selection.current_selection is required for the reveal challenge");
+  }
+  const selection = { current_selection: value.current_selection };
+  for (const field of ["alternatives", "selection_rationale", "key_assumptions"]) {
+    if (value[field] !== undefined) selection[field] = structuredClone(value[field]);
+  }
+  return Object.freeze(selection);
+}
+
+function directionSelectionMaterials(selection, reconstruction) {
+  return {
+    ...selection,
+    independent_reconstruction: structuredClone(reconstruction),
+  };
+}
+
+export function planDirectionReviewRequests({ raw_requirement, objective_facts, current_selection, reconstruction_result = null } = {}) {
+  if (typeof raw_requirement !== "string" || raw_requirement.trim() === "") throw new TypeError("raw_requirement is required");
+  const selection = normalizeDirectionSelection(current_selection);
+  const facts = objective_facts === undefined ? null : structuredClone(objective_facts);
+  const first = Object.freeze({
+    request_id: "direction-reconstruct",
+    reveal_selection: false,
+    depends_on: [],
+    input: Object.freeze({ raw_requirement, objective_facts: facts }),
+    prompt: "先独立重建问题、约束、失败后果和可逆边界；不要猜测或评价当前选择。",
+  });
+  const second = Object.freeze({
+    request_id: "direction-challenge",
+    reveal_selection: true,
+    depends_on: [first.request_id],
+    input: Object.freeze({ ...selection, raw_requirement, objective_facts: facts, independent_reconstruction: reconstruction_result ?? "inject-result-from-direction-reconstruct" }),
+    prompt: "现在揭示当前选择，针对它做反方论证，并寻找更小、更可逆的替代；只报告会伤害交付的真实问题。",
+  });
+  return Object.freeze({ requests: Object.freeze([first, second]), logical_fact_count: 1 });
 }
 
 function subjectRecord(source, stage, phaseId, integrationSubject = null) {
@@ -117,16 +189,6 @@ function stringList(value, label) {
 
 function adapterOf(provider) { return provider.split("/", 1)[0]; }
 
-function uniqueAdapterProfiles(providers, label) {
-  const adapters = new Set();
-  for (const provider of providers) {
-    const adapter = adapterOf(provider);
-    if (adapters.has(adapter)) throw new TypeError(`${label} must contain at most one profile per adapter`);
-    adapters.add(adapter);
-  }
-  return providers;
-}
-
 function normalizeRequestedProfileSpecs(value, requestedProfiles) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new TypeError("reviewPolicy.requested_profile_specs is invalid");
@@ -161,7 +223,10 @@ function reviewPolicyRecord(value) {
   }) : (() => { throw new TypeError("reviewPolicy.effective_profiles is invalid"); })();
   const requestedProfiles = stringList(value.requested_profiles, "reviewPolicy.requested_profiles");
   const requestedProfileSpecs = normalizeRequestedProfileSpecs(value.requested_profile_specs, requestedProfiles);
-  const eligibleProfiles = uniqueAdapterProfiles(stringList(value.eligible_profiles, "reviewPolicy.eligible_profiles"), "reviewPolicy.eligible_profiles");
+  // A configured profile is an independently requested reviewer. Adapter
+  // identity is only diagnostic/source metadata; it must not collapse two
+  // configured models into one public member.
+  const eligibleProfiles = stringList(value.eligible_profiles, "reviewPolicy.eligible_profiles");
   if (effectiveProfiles.length !== eligibleProfiles.length || effectiveProfiles.some((profile, index) =>
     profile.provider !== eligibleProfiles[index] || profile.adapter !== adapterOf(profile.provider))) {
     throw new TypeError("reviewPolicy.effective_profiles must represent eligible_profiles in priority order");
@@ -182,6 +247,41 @@ function minimumReviewersForPolicy(policy, stage, reviewTrack, reviewScope = nul
     : minimumReviewersFor(stage, reviewTrack, reviewScope);
 }
 
+function reuseSatisfiesCurrentPolicy({ result, attempt, reviewPolicy }) {
+  if (reviewPolicy?.source !== "wh_review.v2") return true;
+  const eligible = new Set(reviewPolicy.eligible_profiles ?? []);
+  const attempts = new Map((attempt.provider_attempts ?? []).map((item) => [item.provider, item]));
+  const adapters = new Set();
+  const sources = new Set();
+  for (const member of result.provider_results ?? []) {
+    if (!eligible.has(member.provider)) continue;
+    const providerAttempt = attempts.get(member.provider);
+    if (!providerAttempt || providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    const adapter = providerAttempt.identity?.adapter;
+    const sourceId = providerAttempt.identity?.source_id;
+    if (typeof adapter !== "string" || adapter.trim() === ""
+        || typeof sourceId !== "string" || sourceId.trim() === "") return false;
+    adapters.add(adapter);
+    sources.add(sourceId);
+  }
+  return adapters.size >= reviewPolicy.minimum_heterologous && sources.size >= reviewPolicy.minimum_heterologous;
+}
+
+function providerOutputCarriesAnchors(task, attempt) {
+  for (const providerAttempt of attempt.provider_attempts ?? []) {
+    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    try {
+      const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
+      if (!Array.isArray(output.evidence_anchor_valid) || output.evidence_anchor_valid.some((value) => typeof value !== "boolean")) return false;
+      const review = parseReviewerOutput(output.content, { requireEvidence: true });
+      if (output.evidence_anchor_valid.length !== review.findings.length) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
@@ -192,7 +292,167 @@ function hashCanonical(value) {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles = [] }) {
+function semanticProjectionIdentity(projection) {
+  return {
+    projection_version: projection.projection_version,
+    surface: projection.surface,
+    contract_id: projection.contract_id,
+    contract_hash: projection.contract_hash,
+    semantic_hash: projection.semantic_hash,
+  };
+}
+
+function textHash(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function sameNullable(left, right) { return (left ?? null) === (right ?? null); }
+
+function materialOnlyTreeTransition(sourceRoot, beforeTree, afterTree, taskId) {
+  return beforeTree === afterTree
+    || (typeof sourceRoot === "string"
+      && isMaterialOnlySnapshotDelta(sourceRoot, beforeTree, afterTree, taskId));
+}
+
+/**
+ * Find an immutable result whose semantic input is unchanged. A result is
+ * reusable only when the two captured trees differ by current task-material
+ * files, so a code/interface/config change can never hide behind a stable
+ * semantic projection. The caller may then publish a current-tree alias; no
+ * provider is invoked and the original result remains the provenance source.
+ */
+export function findReusableReviewResult({ task, source, subject, integrationSubject = null, stage, reviewTrack = null, reviewKind = null, semanticProjection, reviewPolicy = null } = {}) {
+  if (!task || typeof task.listCanonicalReviewResultRefs !== "function" || !source || !subject || !semanticProjection) return null;
+  const currentPolicyHash = reviewPolicy?.source === "wh_review.v2" ? hashCanonical(reviewPolicy) : null;
+  const refs = task.listCanonicalReviewResultRefs();
+  for (const resultRef of [...refs].sort().reverse()) {
+    let raw; let result; let attempt;
+    try {
+      raw = task.readRecord(resultRef);
+      result = JSON.parse(raw);
+      validateSchema("result", result);
+      attempt = JSON.parse(task.readRecord(result.attempt_ref));
+      validateSchema("attempt", attempt);
+      if (attempt.task_id !== task.identity.taskId
+          || attempt.stage !== stage
+          || attempt.snapshot_tree !== result.snapshot_tree
+          || attempt.terminal_status !== "semantic"
+          || attempt.error !== null
+          || !Array.isArray(attempt.provider_attempts)
+          || attempt.provider_attempts.length === 0) continue;
+    } catch { continue; }
+    const identity = result.semantic_projection;
+    if (result.task_id !== task.identity.taskId
+        || result.stage !== stage
+        || !sameNullable(result.review_track, reviewTrack)
+        || !sameNullable(result.review_kind, reviewKind)
+        || result.subject_kind !== subject.subject_kind
+        || !sameNullable(result.phase_id, subject.phase_id)
+        || !sameNullable(result.review_scope, subject.review_scope)
+        || result.semantic_projection?.semantic_hash !== semanticProjection.semantic_hash
+        || result.semantic_projection?.contract_id !== semanticProjection.contract_id
+        || result.semantic_projection?.contract_hash !== semanticProjection.contract_hash
+        || !Array.isArray(result.provider_results) || result.provider_results.length === 0) continue;
+    if (!reuseSatisfiesCurrentPolicy({ result, attempt, reviewPolicy })) continue;
+    if (currentPolicyHash !== null && attempt.policy_snapshot_hash !== currentPolicyHash) continue;
+    if (reviewPolicy?.source === "wh_review.v2" && !providerOutputCarriesAnchors(task, attempt)) continue;
+    const exact = result.snapshot_tree === source.snapshotTree;
+    const materialOnly = !exact && materialOnlyTreeTransition(source.sourceRoot, result.snapshot_tree, source.snapshotTree, task.identity.taskId);
+    if (!exact && !materialOnly) continue;
+    const baseTree = subject.base_tree ?? source.baseTree;
+    const baseTreeMaterialOnly = materialOnlyTreeTransition(source.sourceRoot, result.base_tree, baseTree, task.identity.taskId);
+    if (!baseTreeMaterialOnly) continue;
+    const sameSourceIdentity = result.source?.base_commit === (integrationSubject?.base_commit ?? source.baseCommit)
+      && result.source?.captured_head === source.capturedHead;
+    // A committed execution-status writeback changes HEAD and the current
+    // base tree, but it does not change the reviewed implementation. Once the
+    // candidate and base trees both prove that the only delta is that block,
+    // the old provider result remains the correct semantic result.
+    if (!sameSourceIdentity && !(materialOnly && baseTreeMaterialOnly)) continue;
+    return Object.freeze({ resultRef, raw, result, exact, materialOnly });
+  }
+  return null;
+}
+
+function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKind, source, subject, integrationSubject, bundle, semanticProjection, reusable, reviewPolicy = null }) {
+  const reuseId = `reuse-${randomUUID()}`;
+  const refs = reviewRefs({ attemptId: reuseId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
+  const sourceAttempt = JSON.parse(task.readRecord(reusable.result.attempt_ref));
+  validateSchema("attempt", sourceAttempt);
+  const result = {
+    ...reusable.result,
+    task_id: taskId,
+    stage,
+    review_track: reviewTrack,
+    review_kind: reviewKind,
+    ...subject,
+    source: sourceRecord(source, integrationSubject),
+    snapshot_tree: source.snapshotTree,
+    material_id: bundle.materialId,
+    semantic_projection: semanticProjectionIdentity(semanticProjection),
+    reuse: {
+      source_result_ref: reusable.resultRef,
+      source_result_hash: textHash(reusable.raw),
+      reason: "semantic_hash_unchanged_material_only",
+    },
+  };
+  const selectedProfiles = reviewPolicy?.eligible_profiles
+    ?? sourceAttempt?.coverage?.selected_profiles
+    ?? result.provider_results.map(({ provider }) => provider);
+  const minimumRequired = reviewPolicy
+    ? minimumReviewersForPolicy(reviewPolicy, stage, reviewTrack, subject.review_scope)
+    : sourceAttempt?.coverage?.minimum_required ?? 1;
+  const attempt = {
+    version: "wh-review-attempt.v1", attempt_id: reuseId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
+    ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    semantic_projection: semanticProjectionIdentity(semanticProjection), report_ref: refs.reportRef,
+    provider_attempts: (sourceAttempt?.provider_attempts ?? []).map((providerAttempt, index) => {
+      if (!providerAttempt?.output_ref) return { ...providerAttempt };
+      const rawOutput = task.readRecord(providerAttempt.output_ref);
+      const outputRecord = JSON.parse(rawOutput);
+      if (outputRecord?.schema_version !== "wh-review-provider-output.v1"
+          || outputRecord.attempt_id !== sourceAttempt.attempt_id
+          || outputRecord.provider !== providerAttempt.provider
+          || typeof outputRecord.content !== "string") {
+        throw new Error("REUSE_PROVENANCE_INVALID: source provider output is not bound to its source attempt");
+      }
+      if (reviewPolicy?.source === "wh_review.v2"
+          && (!Array.isArray(outputRecord.evidence_anchor_valid)
+            || outputRecord.evidence_anchor_valid.some((value) => typeof value !== "boolean"))) {
+        throw new Error("REUSE_PROVENANCE_INVALID: source provider output is missing evidence anchor facts");
+      }
+      const outputRef = writeProviderOutput(task, refs.providerDirectoryRef, providerAttempt.provider, outputRecord.content, index + 1, {
+        taskId, stage, evidence_anchor_valid: outputRecord.evidence_anchor_valid,
+      });
+      return { ...providerAttempt, output_ref: outputRef };
+    }), terminal_status: "semantic", error: null,
+    ...(reviewPolicy ? { review_policy: reviewPolicy, policy_snapshot_hash: hashCanonical(reviewPolicy) } : sourceAttempt?.review_policy ? {
+      review_policy: sourceAttempt.review_policy,
+      policy_snapshot_hash: sourceAttempt.policy_snapshot_hash,
+    } : {}),
+    coverage: {
+      mode: sourceAttempt?.coverage?.mode ?? (selectedProfiles.length === 1 ? "single_external" : "parallel_external"),
+      selected_profiles: [...selectedProfiles], selected_count: selectedProfiles.length,
+      valid_provider_count: result.provider_results.length, minimum_required: minimumRequired,
+      ...(sourceAttempt?.coverage?.group_outcome ? { group_outcome: sourceAttempt.coverage.group_outcome } : {}),
+    },
+  };
+  validateSchema("attempt", attempt);
+  writeAttempt(task, refs.attemptRef, attempt);
+  result.attempt_ref = refs.attemptRef;
+  result.report_ref = refs.reportRef;
+  validateSchema("result", result);
+  writeSemanticResult(task, refs.resultRef, result);
+  writeReviewReport(task, refs.reportRef, { attempt, result });
+  return {
+    status: "available", reused: true, attemptRef: refs.attemptRef, resultRef: refs.resultRef,
+    reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId,
+    runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
+    reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
+  };
+}
+
+function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles = [], groupOutcome = null }) {
   const selectedProfiles = policy ? [...policy.eligible_profiles] : [...requestedProfiles];
   return {
     mode: stage === "build-code" && policy?.mode === "full_only" && selectedProfiles.length === 1 ? "single_external" : "parallel_external",
@@ -200,6 +460,7 @@ function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, re
     selected_count: selectedProfiles.length,
     valid_provider_count: aggregation.valid.length,
     minimum_required: minimumReviewers,
+    ...(groupOutcome ? { group_outcome: groupOutcome } : {}),
   };
 }
 
@@ -211,8 +472,16 @@ function evidenceAnchorsFor(reviewed, bundle) {
     const evidenceAnchors = item.review.findings.map((finding) => {
       if (!["direct", "machine"].includes(finding.evidence_kind)) return true;
       if (!manifestPaths.has(finding.path)) return false;
-      if (finding.evidence_kind === "machine" && !finding.path.startsWith("canonical/")) return false;
-      if (finding.line === undefined) return true;
+      // The provider contract allows a packet-relative path anchor without a
+      // guessed line when the excerpt is the smallest reliable unit. Keep
+      // rejecting a bare "path exists" claim, but do not throw away a real
+      // finding merely because the provider could not name a stable line.
+      if (finding.line === undefined || finding.line === null) {
+        const evidence = String(finding.evidence ?? "").trim().toLocaleLowerCase("en").replace(/\s+/g, " ");
+        const path = finding.path.toLocaleLowerCase("en");
+        return evidence !== path && evidence !== `${path} exists`;
+      }
+      if (!Number.isSafeInteger(finding.line) || finding.line < 1) return false;
       try { return readFileSync(join(bundle.bundleRoot, ...finding.path.split("/")), "utf8").split(/\r?\n/).length >= finding.line; }
       catch { return false; }
     });
@@ -246,7 +515,12 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
   const materialId = undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
-  const aggregation = aggregateProviderResults([], minimumReviewers, { profilePriority: policy?.requested_profiles ?? [] });
+  const managedIdentity = policy?.source === "wh_review.v2";
+  const aggregation = aggregateProviderResults([], minimumReviewers, {
+    profilePriority: policy?.requested_profiles ?? [],
+    requireIdentity: managedIdentity,
+    requireSourceId: managedIdentity,
+  });
   const attemptId = randomUUID();
   const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
   const attempt = {
@@ -270,8 +544,14 @@ function failedProvider(provider, error) {
   return { provider, status: "failed", session_id: null, output: null, error: { code: error?.code ?? "PROVIDER_UNAVAILABLE", message: error?.message ?? String(error) }, execution: null };
 }
 
+function groupFailureItem(error, provider = null) {
+  const failed = failedProvider(provider, error);
+  return { provider, review: null, final: failed, calls: [{ runtimeId: null, provider: failed }], group_failure: true };
+}
+
 function primaryError(reviewed) {
-  const errors = reviewed.map((item) => item.final?.error).filter((error) => typeof error?.code === "string");
+  const errors = reviewed.flatMap((item) => [item.group_error, item.final?.error])
+    .filter((error) => typeof error?.code === "string");
   if (errors.length === 0) return { code: "PROVIDER_UNAVAILABLE", message: "no provider returned a valid semantic result" };
   return [...errors].sort((left, right) => {
     const leftRank = errorPriority.indexOf(left.code); const rightRank = errorPriority.indexOf(right.code);
@@ -280,15 +560,28 @@ function primaryError(reviewed) {
   })[0];
 }
 
-function pinnedProfileMatches(profile, execution) {
-  return execution !== null && execution !== undefined && execution.model === profile.model && execution.effort === profile.effort && execution.thinking === profile.thinking;
+function pinnedProfileMatches(profile, execution, identity = null, resultProtocol = null) {
+  if (execution === null || execution === undefined || execution.model !== profile.model) return false;
+  // workflowhub-result.v3 carries the complete configured profile in its
+  // broker-side config identity, but does not expose effort or thinking as
+  // separate model-reported fields. If a configured pin depends on either
+  // value, require that attestation; do not silently accept a v3 result with
+  // no profile identity. The host/broker config check remains the authority
+  // for the tuple itself, so WorkflowHub does not duplicate the broker hash.
+  if (resultProtocol === "workflowhub-result.v3"
+      && (profile.effort !== null || profile.thinking !== null)
+      && (typeof identity?.config_id !== "string" || identity.config_id.trim() === "")) return false;
+  const effortMatches = execution.effort === null || execution.effort === undefined || execution.effort === profile.effort;
+  const thinkingMatches = execution.thinking === null || execution.thinking === undefined || execution.thinking === profile.thinking;
+  return effortMatches && thinkingMatches;
 }
 
 function rejectProfileMismatches(reviewed, policy) {
   const expected = new Map((policy?.requested_profile_specs ?? []).map((profile) => [profile.provider, profile]));
   return reviewed.map((item) => {
     const profile = expected.get(item.provider);
-    if (!profile || item.final.status !== "completed" || pinnedProfileMatches(profile, item.final.execution)) return item;
+    if (!profile || item.final.status !== "completed"
+        || pinnedProfileMatches(profile, item.final.execution, item.identity ?? item.final.identity, item.final.result_protocol)) return item;
     return {
       ...item,
       review: null,
@@ -306,46 +599,68 @@ function reviewGroupOutcome(provider, result, runtimeId) {
     return { provider, review: null, final: result, calls: [{ runtimeId, provider: result }] };
   }
   try {
-    return { provider, review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls: [{ runtimeId, provider: result }] };
+    return { provider, ...(result.identity ? { identity: result.identity } : {}), review: parseReviewerOutput(result.output, { requireEvidence: true }), final: result, calls: [{ runtimeId, provider: result }] };
   } catch {
     return {
-      provider, review: null,
+      provider, ...(result.identity ? { identity: result.identity } : {}), review: null,
       final: { ...result, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } },
       calls: [{ runtimeId, provider: { ...result, error: { code: "OUTPUT_INVALID", message: "provider output is not valid reviewer JSON" } } }],
     };
   }
 }
 
-async function reviewGroup({ providerClient, providers, hostProvider, materials }) {
+async function reviewGroup({ providerClient, providers, hostProvider, materials, prompt = providerPrompt }) {
   if (typeof providerClient?.runGroup !== "function") throw new TypeError("providerClient.runGroup is required; review dispatch is one broker group call");
   let group;
   try {
-    group = await providerClient.runGroup({ hostProvider, providers, materials, prompt: providerPrompt });
+    // Attachment delivery is a broker transport decision. The complete
+    // configured profile group must reach one public run so the broker can
+    // apply quorum, source filtering, and profile identity atomically.
+    group = await providerClient.runGroup({ hostProvider, providers, materials, prompt });
   } catch (error) {
-    return providers.map((provider) => {
-      const failed = failedProvider(provider, error);
-      return { provider, review: null, final: failed, calls: [{ runtimeId: null, provider: failed }] };
-    });
+    // One broker invocation failed before it produced provider-level facts.
+    // Keep the configured provider list for coverage, but do not turn one
+    // group failure into N independent provider attempts.
+    return [groupFailureItem(error)];
   }
   if (!group || typeof group.runtimeId !== "string" || !Array.isArray(group.providers)) {
     const error = protocolFailure("3rd-review group client returned an incomplete result");
-    return providers.map((provider) => {
-      const failed = failedProvider(provider, error);
-      return { provider, review: null, final: failed, calls: [{ runtimeId: null, provider: failed }] };
-    });
+    return [groupFailureItem(error)];
   }
-  const byProvider = new Map(group.providers.map((result) => [result?.provider, result]));
-  return providers.map((provider) => {
-    const result = byProvider.get(provider);
+  const groupOutcome = typeof group.outcome === "string" ? group.outcome : null;
+  const groupError = groupOutcome === "unavailable" || groupOutcome === "cancelled"
+    ? { code: "GROUP_OUTCOME_UNAVAILABLE", message: `3rd-review group ended with ${groupOutcome}; member output is not a semantic review result` }
+    : null;
+  const groupByProvider = new Map(group.providers.map((result) => [result?.provider, result]));
+  const reviewedGroups = providers.map((provider) => {
+    const result = groupByProvider.get(provider);
     if (!result) {
-      const failed = failedProvider(provider, protocolFailure(`3rd-review group omitted provider ${provider}`));
-      return { provider, review: null, final: failed, calls: [{ runtimeId: group.runtimeId, provider: failed }] };
+      return groupFailureItem(protocolFailure(`3rd-review group omitted provider ${provider}`), provider);
     }
-    return reviewGroupOutcome(provider, result, group.runtimeId);
+    const reviewed = reviewGroupOutcome(provider, result, group.runtimeId);
+    return {
+      ...reviewed,
+      ...(groupOutcome ? { group_outcome: groupOutcome } : {}),
+      ...(group.round === undefined ? {} : { group_round: group.round }),
+      ...(group.selectedTier === undefined ? {} : { group_selected_tier: group.selectedTier }),
+      ...(groupError ? { group_error: groupError, review: null } : {}),
+    };
+  });
+  const reviewedByProvider = new Map(reviewedGroups.map((item) => [item.provider, item]));
+  return providers.map((provider) => reviewedByProvider.get(provider));
+}
+
+function mergeDirectionReviews(reconstructed, challenged) {
+  if (challenged.some((item) => item.group_failure)) return challenged;
+  const byProvider = new Map(challenged.map((item) => [item.provider, item]));
+  return reconstructed.map((first) => {
+    const second = byProvider.get(first.provider);
+    if (!second) return first;
+    return { ...second, calls: [...first.calls, ...second.calls] };
   });
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -369,10 +684,20 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree review forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);
   }
-  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || (stage === "build-code" && phaseId === null), ...(phaseId === null ? {} : { phaseId }) });
-  let integrationSubject; let subject; let bundle;
+  // The final build-code integration review is a worktree-semantic review.
+  // Do not even capture a cumulative diff for it: the integration contract
+  // forbids diff delivery and the subject builder supplies bounded current
+  // implementation excerpts. Phase reviews still capture their phase diff.
+  const needsMiniImplementationDiff = reviewKind === "mini_task.implementation";
+  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || needsMiniImplementationDiff, taskId, ...(phaseId === null ? {} : { phaseId }) });
+  const isDirectionReview = stage === "make-decision" && reviewTrack === "direction" && reviewKind === null;
+  let integrationSubject; let subject; let bundle; let fixedMaterials;
   try {
-    const isIntegration = stage === "build-code" && phaseId === null;
+    // mini-task reviews use their own material contracts even though the
+    // public runner enters through the build-code stage. They must not be
+    // treated as the ordinary final integration review, which would inject
+    // integration-only subject/material requirements.
+    const isIntegration = stage === "build-code" && phaseId === null && reviewKind === null;
     if (isIntegration && (fixtureSourceToken !== FIXTURE_SOURCE_TOKEN || typeof buildIntegrationSubject === "function")) {
       integrationSubject = (buildIntegrationSubject ?? buildIntegrationSubjectDefault)({
         task: taskHandle,
@@ -383,16 +708,36 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       });
     } else integrationSubject = null;
     subject = subjectRecord(source, stage, phaseId, integrationSubject);
-    const fixedMaterials = {
+    const baseMaterials = {
       ...materials,
       ...(integrationSubject ? integrationMaterialFacts(integrationSubject) : {}),
-      review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope),
     };
-    bundle = buildMaterials({
-      reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack,
-      reviewScope: subject.review_scope, uiScope, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2",
-    });
+    if (isDirectionReview) {
+      const selection = normalizeDirectionSelection(directionSelection);
+      fixedMaterials = {
+        ...baseMaterials,
+        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind, "reconstruct"),
+      };
+      bundle = buildMaterials({
+        reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, reviewKind,
+        reviewScope: subject.review_scope, uiScope, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2", directionMode: "reconstruct",
+      });
+      // Keep the normalized selection private to this runner until the blind
+      // request has produced its reconstruction. It is deliberately absent
+      // from the first provider-visible bundle.
+      fixedMaterials = Object.freeze({ ...fixedMaterials, __direction_selection: selection, __direction_base_materials: baseMaterials });
+    } else {
+      fixedMaterials = {
+        ...baseMaterials,
+        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind),
+      };
+      bundle = buildMaterials({
+        reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, reviewKind,
+        reviewScope: subject.review_scope, uiScope, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2",
+      });
+    }
   } catch (error) {
+    source.dispose?.();
     if (!isMaterialPreflightFailure(error)) throw error;
     const diagnostic = materialPreflightDiagnostic(error);
     const preflightSubject = subject ?? subjectRecord(source, stage, phaseId);
@@ -400,38 +745,154 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: preflightSubject, source, policy, diagnostic,
       materialFingerprint: hashCanonical(materials ?? null),
     });
-  } finally {
-    source.dispose?.();
   }
-  const reviewed = rejectProfileMismatches(await reviewGroup({ providerClient, providers, hostProvider, materials: bundle }), policy);
+  const stabilityDiagnostic = sourceStabilityDiagnostic(source, taskId);
+  if (stabilityDiagnostic) {
+    const unavailableResult = await recordUndispatchedUnavailable({
+      kind: "source-stability", task: taskHandle, taskId, stage, reviewTrack, reviewKind,
+      subject: subject ?? subjectRecord(source, stage, phaseId), source, policy,
+      diagnostic: stabilityDiagnostic, materialFingerprint: hashCanonical(materials ?? null),
+    });
+    source.dispose?.();
+    return unavailableResult;
+  }
+  if (!isDirectionReview) source.dispose?.();
+  let contractId;
+  let contractHash;
+  let semanticProjection;
+  let reviewBundle;
+  let reviewed;
+  if (isDirectionReview) {
+    const selection = fixedMaterials.__direction_selection;
+    const baseMaterials = fixedMaterials.__direction_base_materials;
+    const initialMaterials = Object.fromEntries(Object.entries(fixedMaterials).filter(([key]) => !key.startsWith("__direction_")));
+    contractId = bundle.contractId ?? "wh-review.contract.make-decision.v1";
+    contractHash = bundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: initialMaterials.review_instructions });
+    const initialProjection = buildSemanticProjection({
+      stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
+      contract_id: contractId, contract_hash: contractHash, input: initialMaterials, materials: initialMaterials,
+      subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+    });
+    const initialBundle = { ...bundle, contractId, contractHash, semanticHash: initialProjection.semantic_hash };
+    const sequence = planDirectionReviewRequests({
+      raw_requirement: initialMaterials.raw_requirement,
+      objective_facts: initialMaterials.objective_facts,
+      current_selection: selection,
+    });
+    const reconstructed = rejectProfileMismatches(await reviewGroup({
+      providerClient, providers, hostProvider, materials: initialBundle,
+      prompt: `${providerPrompt} ${sequence.requests[0].prompt} Return findings as a compact reconstruction of delivery-threatening problem gaps; do not mention or infer any current choice.`,
+    }), policy);
+    if (reconstructed.some((item) => !item.review)) {
+      fixedMaterials = initialMaterials;
+      bundle = initialBundle;
+      semanticProjection = initialProjection;
+      reviewBundle = initialBundle;
+      reviewed = reconstructed;
+    } else {
+      const independentReconstruction = reconstructed.map((item) => ({ provider: item.provider, findings: item.review.findings }));
+      const challengeMaterials = {
+        ...baseMaterials,
+        ...directionSelectionMaterials(selection, independentReconstruction),
+        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind, "challenge"),
+      };
+      const challengeBundle = buildMaterials({
+        reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, reviewKind,
+        reviewScope: subject.review_scope, uiScope, materials: challengeMaterials, strictV2Maps: policy?.source === "wh_review.v2", directionMode: "challenge",
+      });
+      contractId = challengeBundle.contractId ?? contractId;
+      contractHash = challengeBundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: challengeMaterials.review_instructions });
+      semanticProjection = buildSemanticProjection({
+        stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
+        contract_id: contractId, contract_hash: contractHash, input: challengeMaterials, materials: challengeMaterials,
+        subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+      });
+      reviewBundle = { ...challengeBundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
+      const challenged = rejectProfileMismatches(await reviewGroup({
+        providerClient, providers, hostProvider, materials: reviewBundle,
+        prompt: `${providerPrompt} ${sequence.requests[1].prompt} The blind reconstruction is in requirements/independent_reconstruction.json; consume it, then report only concrete findings about the revealed current choice.`,
+      }), policy);
+      reviewed = mergeDirectionReviews(reconstructed, challenged);
+      fixedMaterials = challengeMaterials;
+      bundle = challengeBundle;
+    }
+    source.dispose?.();
+  } else {
+    contractId = bundle.contractId ?? `wh-review.contract.${reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage}.v1`;
+    contractHash = bundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: fixedMaterials.review_instructions });
+    semanticProjection = buildSemanticProjection({
+      stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
+      contract_id: contractId, contract_hash: contractHash, input: fixedMaterials, materials: fixedMaterials,
+      subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+    });
+    reviewBundle = { ...bundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
+    const reusable = findReusableReviewResult({
+      task: taskHandle, source, subject, integrationSubject, stage, reviewTrack, reviewKind, semanticProjection,
+      reviewPolicy: policy,
+    });
+    if (reusable) {
+      if (reusable.exact) {
+        source.dispose?.();
+        return {
+          status: "available", reused: true, attemptRef: reusable.result.attempt_ref, resultRef: reusable.resultRef,
+          reportRef: reusable.result.report_ref ?? null, snapshotTree: source.snapshotTree, materialId: bundle.materialId,
+          runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
+          reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
+        };
+      }
+      const reusedResult = publishReusedReviewResult({
+        task: taskHandle, taskId, stage, reviewTrack, reviewKind, source, subject, integrationSubject,
+        bundle, semanticProjection, reusable, reviewPolicy: policy,
+      });
+      source.dispose?.();
+      return reusedResult;
+    }
+    reviewed = rejectProfileMismatches(await reviewGroup({ providerClient, providers, hostProvider, materials: reviewBundle }), policy);
+  }
   const attemptId = randomUUID();
   const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(taskHandle) });
-  const runtimeIds = Object.fromEntries(reviewed.map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
+  const runtimeIds = Object.fromEntries(reviewed
+    .filter((item) => typeof item.provider === "string")
+    .map((item) => [item.provider, [...item.calls].reverse().find((call) => typeof call.runtimeId === "string")?.runtimeId ?? null]));
+  const groupFailure = reviewed.find((item) => item.group_failure)?.final?.error ?? null;
+  const groupOutcome = reviewed.find((item) => typeof item.group_outcome === "string")?.group_outcome ?? null;
+  const assessed = evidenceAnchorsFor(reviewed, bundle);
   const providerAttempts = [];
-  for (const item of reviewed) {
+  for (const item of assessed) {
+    if (groupFailure) break;
     for (let index = 0; index < item.calls.length; index += 1) {
       const call = item.calls[index];
-      const finalError = item.final?.error ?? null;
-      const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, { taskId, stage });
+      const finalError = call.provider?.error ?? (index === item.calls.length - 1 ? item.final?.error ?? null : null);
+      const outputRef = writeProviderOutput(taskHandle, refs.providerDirectoryRef, item.provider, call.provider.output, index + 1, {
+        taskId, stage, evidence_anchor_valid: item.evidenceAnchors,
+      });
       providerAttempts.push({
         provider: item.provider, status: finalError ? "failed" : call.provider.status,
+        ...(call.provider.identity ? { identity: call.provider.identity } : {}),
         session_id: call.provider.session_id ?? null, runtime_id: call.runtimeId ?? null,
         execution: call.provider.execution ?? null, unavailable_diagnostics: call.provider.unavailable_diagnostics ?? null,
         output_ref: outputRef, raw_output_ref: call.provider.raw_output_ref ?? null, error: finalError,
       });
     }
   }
-  const assessed = evidenceAnchorsFor(reviewed, bundle);
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
-  const aggregation = aggregateProviderResults(assessed, minimumReviewers, { profilePriority: policy?.requested_profiles ?? providers });
+  const aggregation = aggregateProviderResults(assessed, minimumReviewers, {
+    profilePriority: policy?.requested_profiles ?? providers,
+    // The managed policy is a hard identity boundary. Missing broker source
+    // identity makes the semantic quorum unverifiable; it must not fall back
+    // to the configured provider name.
+    requireIdentity: policy?.source === "wh_review.v2",
+    requireSourceId: policy?.source === "wh_review.v2",
+  });
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    semantic_projection: semanticProjectionIdentity(semanticProjection),
     report_ref: refs.reportRef, provider_attempts: providerAttempts,
     terminal_status: aggregation.status === "available" ? "semantic" : "unavailable",
-    error: aggregation.status === "available" ? null : (() => { const error = primaryError(reviewed); return { code: error.code, message: `${error.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }; })(),
+    error: aggregation.status === "available" ? null : (() => { const error = groupFailure ?? primaryError(reviewed); return { code: error.code, message: `${error.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }; })(),
     ...(policy ? { review_policy: policy, policy_snapshot_hash: hashCanonical(policy) } : {}),
-    coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles: providers }),
+    coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles: providers, groupOutcome }),
   };
   validateSchema("attempt", attempt);
   writeAttempt(taskHandle, refs.attemptRef, attempt);
@@ -444,6 +905,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const result = {
     version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind, ...subject,
     source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    semantic_projection: semanticProjectionIdentity(semanticProjection),
     attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
     findings,
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
@@ -466,11 +928,11 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
   if (stage === "make-decision") {
     if (candidateWorkspace !== undefined) {
       const candidate = assertCandidateWorkspace(candidateWorkspace);
-      source = captureSource({ sourceRoot: candidate.worktreeRoot, targetRepoRoot: candidate.targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false });
+      source = captureSource({ sourceRoot: candidate.worktreeRoot, targetRepoRoot: candidate.targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false, taskId });
     } else {
-      source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false });
+      source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false, taskId });
     }
-  } else source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false });
+  } else source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false, taskId });
   try {
     return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
   } finally { source.dispose?.(); }
@@ -479,14 +941,16 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */
 export function runReviewFixture(options) { return runReview({ ...options, fixtureSourceToken: FIXTURE_SOURCE_TOKEN }); }
 
-export function verifyFinalSubject({ result, current, integrationSubject = null } = {}) {
+export function verifyFinalSubject({ result, current, integrationSubject = null, taskId = null } = {}) {
   if (!result || typeof result !== "object" || !current || typeof current !== "object") throw new TypeError("result and current source are required");
   const isIntegration = result.stage === "build-code" && result.review_scope === "integration" && integrationSubject !== null;
+  const recordOnlyWriteback = isIntegration && isExecutionRecordOnlyMaterialDelta(current.sourceRoot, result.snapshot_tree, current.snapshotTree, taskId);
   const expected = isIntegration ? integrationSubject : { base_commit: current.baseCommit, base_tree: current.baseTree, snapshot_tree: current.snapshotTree };
-  if (!expected || typeof expected !== "object" || expected.base_commit !== result.source.base_commit || expected.base_tree !== result.base_tree || (isIntegration && expected.snapshot_tree !== current.snapshotTree)) {
+  if (!expected || typeof expected !== "object" || expected.base_commit !== result.source.base_commit || expected.base_tree !== result.base_tree || (isIntegration && expected.snapshot_tree !== current.snapshotTree && !recordOnlyWriteback)) {
     const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
   }
-  const subjectMismatch = result.subject_kind === "worktree" && (current.snapshotTree !== result.candidate_tree || current.snapshotTree !== result.snapshot_tree);
+  const subjectMismatch = result.subject_kind === "worktree" && !recordOnlyWriteback
+    && (current.snapshotTree !== result.candidate_tree || current.snapshotTree !== result.snapshot_tree);
   const phaseMismatch = result.subject_kind === "phase" && (
     !current.phaseCommit
     || !result.source.phase_commit
@@ -495,7 +959,13 @@ export function verifyFinalSubject({ result, current, integrationSubject = null 
     || current.snapshotTree !== result.snapshot_tree
     || (current.phaseCommit.committed && !current.phaseCommit.tree_matches_candidate)
   );
-  if (subjectMismatch || phaseMismatch || current.targetCommit !== result.source.target_commit || current.capturedHead !== result.source.captured_head || result.source.base_commit !== expected.base_commit || result.source.base_tree !== expected.base_tree) {
+  // target_commit is provenance about the repository used to resolve the
+  // baseline, not part of the reviewed candidate subject. The candidate
+  // snapshot, captured head, base commit/tree, and (for integration) final
+  // subject are the freshness boundary. Requiring target HEAD equality here
+  // makes an unrelated main-repository advance force a duplicate review for
+  // the same candidate snapshot.
+  if (subjectMismatch || phaseMismatch || current.capturedHead !== result.source.captured_head || result.source.base_commit !== expected.base_commit || result.source.base_tree !== expected.base_tree) {
     const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
   }
   return { status: "finalized", snapshotTree: current.snapshotTree };
@@ -525,11 +995,11 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, workspace, 
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("full worktree verification forbids naked source/target paths; use Workspace");
     workspace = assertWorkspace(workspace);
   }
-  const current = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false, ...(result.phase_id === null ? {} : { phaseId: result.phase_id }) });
+  const current = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: false, taskId, ...(result.phase_id === null ? {} : { phaseId: result.phase_id }) });
   try {
     const integrationSubject = result.stage === "build-code" && result.review_scope === "integration" && workspace?.worktreeRoot
       ? buildIntegrationSubjectDefault({ task: taskHandle, sourceRoot: workspace.worktreeRoot, artifacts: ArtifactDir.open(workspace.worktreeRoot, taskHandle), finalTree: result.snapshot_tree })
       : null;
-    return verifyFinalSubject({ result, current, integrationSubject });
+    return verifyFinalSubject({ result, current, integrationSubject, taskId });
   } finally { current.dispose?.(); }
 }

@@ -16,11 +16,16 @@ function providerFilePart(provider) {
   return `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
 }
 
-export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [] } = {}) {
-  return aggregateCanonicalProviderResults(providerResults, minimumReviewers, { profilePriority });
+export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [], requireIdentity = false, requireSourceId = false } = {}) {
+  return aggregateCanonicalProviderResults(providerResults, minimumReviewers, { profilePriority, requireIdentity, requireSourceId });
 }
 
-const DISPOSITION_DECISIONS = new Set(["accept", "partial", "reject", "needs_human"]);
+const DISPOSITION_DECISIONS = new Set([
+  "fixed", "rejected_invalid", "accepted_risk", "needs_human",
+  // Read compatibility for the pre-vNext helper contract. New callers should
+  // use the four canonical statuses above.
+  "accept", "partial", "reject",
+]);
 
 // A disposition is the smallest durable fact needed after a finding is
 // consumed. Replay bindings and re-review orchestration are retired and are
@@ -31,14 +36,16 @@ export function validateReviewDisposition(value) {
     return { valid: false, errors: ["disposition must be an object"] };
   }
   if (typeof value.finding_id !== "string" || value.finding_id.trim() === "") errors.push("finding_id required");
-  if (!DISPOSITION_DECISIONS.has(value.decision)) errors.push("invalid decision");
-  if (["accept", "partial"].includes(value.decision)) {
+  const decision = value.decision ?? value.status;
+  if (value.decision !== undefined && value.status !== undefined && value.decision !== value.status) errors.push("decision/status mismatch");
+  if (!DISPOSITION_DECISIONS.has(decision)) errors.push("invalid decision");
+  if (["accept", "partial", "fixed"].includes(decision)) {
     for (const field of ["verification", "root_cause", "evidence"]) {
       if (typeof value[field] !== "string" || value[field].trim() === "") errors.push(`${field} required for accepted finding`);
     }
   }
   if (value.rereview_flow_id !== undefined) errors.push("rereview_flow_id is retired");
-  if (value.decision === "reject" && (typeof value.evidence !== "string" || value.evidence.trim() === "")) {
+  if (["reject", "rejected_invalid", "accepted_risk"].includes(decision) && (typeof value.evidence !== "string" || value.evidence.trim() === "")) {
     errors.push("evidence required for rejected finding");
   }
   return { valid: errors.length === 0, errors };
@@ -63,7 +70,10 @@ export function writeProviderOutput(task, directoryRef, provider, output, sequen
   const suffix = sequence === 1 ? "" : `-${sequence}`;
   const ref = posix.join(directoryRef, `${providerFilePart(provider)}${suffix}.output.json`);
   const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output, { provider });
+  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output, {
+    provider,
+    ...(provenance.evidence_anchor_valid === undefined ? {} : { evidence_anchor_valid: provenance.evidence_anchor_valid }),
+  });
 }
 
 export function writeAttempt(task, ref, attempt) {
@@ -107,20 +117,49 @@ function latestAttempts(attempt) {
   return [...latest.values()].sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
+function configuredPin(attempt, provider) {
+  return (attempt.review_policy?.requested_profile_specs ?? []).find((profile) => profile.provider === provider) ?? null;
+}
+
+function executionLabel(attempt, providerAttempt) {
+  const execution = providerAttempt.execution;
+  if (!execution) return "EXECUTION_UNAVAILABLE";
+  const pin = configuredPin(attempt, providerAttempt.provider);
+  // workflowhub-result.v3 does not expose effort/thinking as model-reported
+  // fields. The host validates the configured tuple before dispatch and the
+  // broker returns config_id as its public profile identity. Report that
+  // distinction explicitly: this is an attested configured value, not a
+  // claim that the model echoed its runtime setting.
+  const brokerConfigAttested = typeof providerAttempt.identity?.config_id === "string"
+    && providerAttempt.identity.config_id.trim() !== "";
+  const effort = execution.effort ?? (pin?.effort !== null && pin?.effort !== undefined
+    ? `${brokerConfigAttested ? "BROKER_CONFIG_ATTESTED" : "UNAVAILABLE"} (configured=${pin.effort})`
+    : "UNAVAILABLE");
+  const thinking = execution.thinking ?? (pin?.thinking !== null && pin?.thinking !== undefined
+    ? `${brokerConfigAttested ? "BROKER_CONFIG_ATTESTED" : "UNAVAILABLE"} (configured=${pin.thinking})`
+    : "UNAVAILABLE");
+  return `${execution.adapter}/${execution.model ?? "MODEL_UNAVAILABLE"}; effort=${effort}; thinking=${thinking}`;
+}
+
 const FAILURE_CATEGORIES = Object.freeze({
   completed: "completed",
   OUTPUT_INVALID: "output_invalid",
   PROVIDER_OUTPUT_INVALID: "provider_output_invalid",
   PROVIDER_NO_TERMINAL_RESULT: "provider_no_terminal_result",
   PROVIDER_UNAVAILABLE: "provider_unavailable",
+  PROCESS_TIMEOUT: "timeout",
   RATE_LIMITED: "rate_limited",
   CANCELLED: "cancelled",
   TIMEOUT: "timeout",
   SAME_SOURCE: "same_source",
   PUBLIC_RESULT_INVALID: "public_result_invalid",
   PROTOCOL_INCOMPATIBLE: "protocol_incompatible",
+  BROKER_SPAWN_FAILED: "broker_spawn_failed",
+  BROKER_EXIT_NONZERO: "broker_exit_nonzero",
+  BROKER_INVOCATION_FAILED: "broker_invocation_failed",
   MATERIAL_INCOMPLETE: "material_incomplete",
   PROFILE_MISMATCH: "profile_mismatch",
+  GROUP_OUTCOME_UNAVAILABLE: "group_outcome_unavailable",
   UNKNOWN: "unknown",
 });
 
@@ -132,14 +171,19 @@ const ATTEMPT_CLASS_CODES = new Set([
   "PROVIDER_OUTPUT_INVALID",
   "PROVIDER_NO_TERMINAL_RESULT",
   "PROVIDER_UNAVAILABLE",
+  "PROCESS_TIMEOUT",
   "RATE_LIMITED",
   "CANCELLED",
   "TIMEOUT",
   "SAME_SOURCE",
   "PUBLIC_RESULT_INVALID",
   "PROTOCOL_INCOMPATIBLE",
+  "BROKER_SPAWN_FAILED",
+  "BROKER_EXIT_NONZERO",
+  "BROKER_INVOCATION_FAILED",
   "MATERIAL_INCOMPLETE",
   "PROFILE_MISMATCH",
+  "GROUP_OUTCOME_UNAVAILABLE",
 ]);
 
 export function classifyAttempt(providerAttempt) {
@@ -165,6 +209,9 @@ export function classificationSummary(attempt, result = null) {
   const attemptBuckets = Object.fromEntries(["completed", ...ATTEMPT_CLASS_CODES, "UNKNOWN"].map((key) => [key, 0]));
   const failureTaxonomy = {};
   let failedDurationMs = 0;
+  let providerInternalRetryCount = 0;
+  let freshExecutionRetryCount = 0;
+  let sameSessionRepairCount = 0;
   for (const providerAttempt of providerAttempts) {
     const taxonomy = classifyAttemptTaxonomy(providerAttempt);
     const bucket = classifyAttempt(providerAttempt);
@@ -172,15 +219,32 @@ export function classificationSummary(attempt, result = null) {
     failureTaxonomy[bucket] = { code: taxonomy.code, category: taxonomy.category, count: (failureTaxonomy[bucket]?.count ?? 0) + 1 };
     const duration = providerAttempt.execution?.timing?.duration_ms;
     if (bucket !== "completed" && Number.isFinite(duration)) failedDurationMs += duration;
+    const recovery = providerAttempt.execution?.recovery;
+    const retry = providerAttempt.execution?.retry;
+    // v3 exposes the broker's recovery counters. Legacy public results only
+    // expose retry.count; keep it as a fallback instead of silently losing
+    // provider-internal retries from cost reports.
+    providerInternalRetryCount += Number.isSafeInteger(recovery?.provider_internal_retry_count)
+      ? recovery.provider_internal_retry_count
+      : Number.isSafeInteger(retry?.count) ? retry.count : 0;
+    freshExecutionRetryCount += Number.isSafeInteger(recovery?.fresh_execution_retry_count) ? recovery.fresh_execution_retry_count : 0;
+    sameSessionRepairCount += Number.isSafeInteger(recovery?.same_session_repair_count) ? recovery.same_session_repair_count : 0;
   }
   const providerCounts = new Map();
   for (const providerAttempt of providerAttempts) providerCounts.set(providerAttempt.provider, (providerCounts.get(providerAttempt.provider) ?? 0) + 1);
+  const outerRetryCount = [...providerCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
   const findingBuckets = Object.fromEntries(["valid", "invalid_anchor", "minor", "not_adopted"].map((key) => [key, 0]));
   for (const cluster of result?.adjudication?.clusters ?? []) findingBuckets[classifyFinding(cluster)] += 1;
   return {
     attempt: attemptBuckets,
     provider_attempt_count: providerAttempts.length,
-    retry_count: [...providerCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0),
+    retry_count: outerRetryCount + providerInternalRetryCount + freshExecutionRetryCount + sameSessionRepairCount,
+    retry_breakdown: {
+      outer_execution_retry_count: outerRetryCount,
+      provider_internal_retry_count: providerInternalRetryCount,
+      fresh_execution_retry_count: freshExecutionRetryCount,
+      same_session_repair_count: sameSessionRepairCount,
+    },
     failure_taxonomy: failureTaxonomy,
     finding: findingBuckets,
     failed_duration_ms: failedDurationMs,
@@ -235,14 +299,18 @@ export function renderReviewReport({ attempt, result = null }) {
     lines.push(`- eligible profiles: ${attempt.review_policy.eligible_profiles.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
     lines.push(`- same-source exclusions: ${attempt.review_policy.same_source_exclusions.map((profile) => `\`${profile}\``).join(", ") || "none"}`);
   }
-  if (attempt.coverage) lines.push(`- coverage: \`${attempt.coverage.mode}\`; ${attempt.coverage.valid_provider_count}/${attempt.coverage.minimum_required} valid reviewers`);
+  if (attempt.coverage) {
+    lines.push(`- coverage: \`${attempt.coverage.mode}\`; ${attempt.coverage.valid_provider_count}/${attempt.coverage.minimum_required} valid reviewers`);
+    if (attempt.coverage.group_outcome) lines.push(`- broker group outcome: \`${attempt.coverage.group_outcome}\``);
+  }
+  if (attempt.error) lines.push(`- attempt error: \`${markdown(attempt.error.code)}\` — ${markdown(attempt.error.message)}`);
   const classification = classificationSummary(attempt, result);
   lines.push(`- attempt classification: ${Object.entries(classification.attempt).map(([key, value]) => `${key}=${value}`).join(", ")}`);
   lines.push(`- finding classification: ${Object.entries(classification.finding).map(([key, value]) => `${key}=${value}`).join(", ")}; quality denominator=${classification.quality_denominator}; failed duration=${classification.failed_duration_ms} ms`);
   lines.push("", "## Provider runs", "", "| Provider | Model / thinking | Duration | Token usage | Runtime / session state | Status |", "| --- | --- | ---: | --- | --- | --- |");
   for (const providerAttempt of latestAttempts(attempt)) {
     const execution = providerAttempt.execution;
-    const model = execution ? `${execution.adapter}/${execution.model ?? "MODEL_UNAVAILABLE"}; effort=${execution.effort ?? "UNAVAILABLE"}; thinking=${execution.thinking ?? "UNAVAILABLE"}` : "EXECUTION_UNAVAILABLE";
+    const model = executionLabel(attempt, providerAttempt);
     const duration = execution?.timing?.duration_ms ?? "UNAVAILABLE";
     const usage = tokenUsage(execution?.usage);
     const runtime = execution?.runtime_id ?? providerAttempt.runtime_id ?? "UNAVAILABLE";

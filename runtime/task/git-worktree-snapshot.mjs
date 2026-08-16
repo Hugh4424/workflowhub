@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, resolve, sep } from "node:path";
 import { deflateSync } from "node:zlib";
 
+import { artifactReference } from "../../core/artifact-dir.mjs";
+
 const AUTO_MANAGED_RUNTIME_BLOCK = /<!-- BEGIN ([A-Z][A-Z0-9_-]*-RUNTIME) \(auto-managed; do not edit\) -->\r?\n[\s\S]*?<!-- END \1 -->\r?\n?/g;
 const SNAPSHOT_OBJECT_ROOT = resolve(tmpdir(), "workflowhub-git-snapshots");
 const LFS_POINTER_VERSION = "version https://git-lfs.github.com/spec/v1";
@@ -16,6 +18,11 @@ const HASH = /^[a-f0-9]{64}$/;
 // contaminate the current task's diff, review packet, or page provenance.
 export const EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES = Object.freeze(["evidence/", "quality/", ".multica/"]);
 const CURRENT_MATERIAL_PATH = /^specs\/[^/]+\/(?:decision-log|spec|plan|tasks)\.md$/;
+
+function isCurrentMaterialPath(path, taskId = null) {
+  if (!CURRENT_MATERIAL_PATH.test(path)) return false;
+  return taskId === null || path.split("/")[1] === taskId;
+}
 
 function git(root, args, options = {}) {
   return execFileSync("git", args, {
@@ -135,11 +142,11 @@ function formalLfsUnavailable(path, pointer) {
   return error;
 }
 
-function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree, filters: providedFilters } = {}) {
+function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes, { head, gitTree, contentTree, filters: providedFilters, taskId = null } = {}) {
   // Current WorkflowHub materials are handoff records, not implementation or
   // test-contract inputs. Their edits must not invalidate a reusable full-test
   // receipt; the workspace tree still records them for material freshness.
-  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !CURRENT_MATERIAL_PATH.test(path));
+  const filePaths = paths.filter((path) => !excluded(path, excludedPrefixes) && !isCurrentMaterialPath(path, taskId));
   const filters = providedFilters ?? lfsFilterMap(root, filePaths);
   const entries = [];
   for (const path of filePaths.sort()) {
@@ -186,7 +193,16 @@ function sourceManifest(root, paths, headEntriesByPath, format, excludedPrefixes
     content_tree: contentTree,
     entries,
   };
-  return Object.freeze({ ...unsigned, source_digest: sha256(JSON.stringify(unsigned)) });
+  // The source digest identifies test/review inputs, not the commit that
+  // happened to carry a handoff-record writeback. Keep commit/tree ids in the
+  // manifest for provenance without invalidating reusable evidence after a
+  // material-only execution-status commit.
+  const digestInput = {
+    schema_version: unsigned.schema_version,
+    content_tree: unsigned.content_tree,
+    entries: unsigned.entries,
+  };
+  return Object.freeze({ ...unsigned, source_digest: sha256(JSON.stringify(digestInput)) });
 }
 
 function fileEntry(root, path, format, objectDir, filters) {
@@ -295,7 +311,7 @@ function snapshotCommit(head, tree, format, objectDir) {
   return writeLooseObject(objectDir, format, "commit", body);
 }
 
-function captureSnapshot(root, excludedPrefixes = []) {
+function captureSnapshot(root, excludedPrefixes = [], taskId = null) {
   const head = gitText(root, ["rev-parse", "HEAD"]);
   const gitTree = gitText(root, ["rev-parse", "HEAD^{tree}"]);
   const format = objectFormat(root);
@@ -324,26 +340,26 @@ function captureSnapshot(root, excludedPrefixes = []) {
     filters,
     EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES,
     false,
-    (path) => !CURRENT_MATERIAL_PATH.test(path),
+    (path) => !isCurrentMaterialPath(path, taskId),
   );
-  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree, filters });
+  const manifest = sourceManifest(root, [...paths], sourceHeadEntriesByPath, format, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, { head, gitTree, contentTree, filters, taskId });
   const tree = workspaceTree(root, head, format, objectDir, filters, excludedPrefixes);
   return Object.freeze({ head, tree, commit: snapshotCommit(head, tree, format, objectDir), source_digest: manifest.source_digest, source_manifest: manifest });
 }
 
 /** Capture tracked, dirty, and untracked bytes without writing repository .git. */
-export function captureGitWorktreeSnapshot(root) { return captureSnapshot(root); }
+export function captureGitWorktreeSnapshot(root, taskId = null) { return captureSnapshot(root, [], taskId); }
 
 /** Capture a snapshot while preserving HEAD bytes for execution-record files. */
-export function captureExecutionSnapshot(root) { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES); }
+export function captureExecutionSnapshot(root, taskId = null) { return captureSnapshot(root, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, taskId); }
 
 /**
- * A material-only edit changes the handoff documents while leaving the
- * implementation/test candidate untouched. It is safe to reuse a full-test
- * receipt for this delta; callers still bind the current four materials
- * separately and keep the changed tree visible in the audit facts.
+ * A reusable material delta is deliberately narrow: only the executor's
+ * status writeback block in tasks.md is non-semantic. Changes to decision,
+ * spec, plan, or any other task-card text can change what was reviewed and
+ * must invalidate the old test/review fact.
  */
-export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree) {
+export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, taskId = null) {
   if (expectedTree === actualTree) return true;
   ensureGitSnapshotObjectStore(root);
   let changed;
@@ -352,13 +368,65 @@ export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree) {
   } catch {
     return false;
   }
-  return changed.length > 0 && changed.every((path) => CURRENT_MATERIAL_PATH.test(path));
+  return typeof taskId === "string" && taskId.trim() !== ""
+    && changed.length === 1
+    && isCurrentMaterialPath(changed[0], taskId)
+    && changed[0] === artifactReference(taskId, "tasks.md")
+    && isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId);
+}
+
+function taskExecutionRecordOnly(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  const kept = [];
+  let skipLevel = null;
+  for (const line of lines) {
+    const heading = /^(#{3,6})\s+(.+?)\s*$/.exec(line);
+    if (skipLevel !== null) {
+      if (heading && heading[1].length <= skipLevel) skipLevel = null;
+      else continue;
+    }
+    if (skipLevel === null && heading && /执行状态填写区|execution status/i.test(heading[2])) {
+      skipLevel = heading[1].length;
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join("\n").replace(/\s+$/u, "").replace(/\r\n/g, "\n");
+}
+
+/**
+ * A task card may be updated after a review only to record facts produced by
+ * the executor.  That bookkeeping must not invalidate a review of the same
+ * implementation, but any change outside the execution-status blocks must.
+ */
+export function isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId) {
+  if (expectedTree === actualTree) return true;
+  if (typeof root !== "string" || typeof taskId !== "string" || taskId.trim() === "") return false;
+  ensureGitSnapshotObjectStore(root);
+  let changed;
+  try {
+    changed = gitText(root, ["diff", "--name-only", expectedTree, actualTree, "--"]).split("\n").filter(Boolean);
+  } catch {
+    return false;
+  }
+  const executionRecordRef = artifactReference(taskId, "tasks.md");
+  if (changed.length !== 1 || changed[0] !== executionRecordRef) return false;
+  let before;
+  let after;
+  try {
+    before = treeFile(root, expectedTree, executionRecordRef);
+    after = treeFile(root, actualTree, executionRecordRef);
+  } catch {
+    return false;
+  }
+  return Boolean(before && after && before.mode === after.mode
+    && taskExecutionRecordOnly(before.text) === taskExecutionRecordOnly(after.text));
 }
 
 /** Re-read the current source manifest and require the caller's digest to be current. */
-export function assertCurrentSourceDigest(root, expectedDigest) {
+export function assertCurrentSourceDigest(root, expectedDigest, taskId = null) {
   if (!HASH.test(expectedDigest ?? "")) throw new TypeError("expected source digest must be a sha256");
-  const snapshot = captureGitWorktreeSnapshot(root);
+  const snapshot = captureGitWorktreeSnapshot(root, taskId);
   if (snapshot.source_digest !== expectedDigest) {
     const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected ${expectedDigest}, observed ${snapshot.source_digest}`);
     error.code = "FORMAL_SNAPSHOT_MISMATCH";

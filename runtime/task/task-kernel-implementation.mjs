@@ -185,7 +185,7 @@ export function buildTaskKernel(taskHandle, {
       material_digest: materialDigest,
       source: "current-four-materials",
     };
-    return { revision, snapshot: captureExecutionSnapshot(active.worktreeRoot) };
+    return { revision, snapshot: captureExecutionSnapshot(active.worktreeRoot, task.identity.taskId) };
   };
   const readInput = (slot) => {
     const input = task.manifest.inputs?.[slot];

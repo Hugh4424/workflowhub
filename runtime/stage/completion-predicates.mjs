@@ -37,7 +37,7 @@ export const STAGE_PREDICATES = Object.freeze({
     acceptance_criteria: "acceptance_criterion", finding_dispositions: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
-    full_tests_fresh: "test",
+    full_tests_fresh: "test", independent_review: "review",
     finding_dispositions: "acceptance_criterion", acceptance_criteria: "acceptance_criterion",
     exceptions: "acceptance_criterion", human_confirmation: "confirmation",
   }),
@@ -53,10 +53,10 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   "build-spec": Object.freeze({ independent_review: "review" }),
   "build-plan": Object.freeze({ independent_review: "review" }),
   "build-code": Object.freeze({}),
-  "verify-code": Object.freeze({ independent_review: "review" }),
+  "verify-code": Object.freeze({}),
 });
 
-function satisfiesQualityPredicate(fact, kind) {
+export function qualityPredicateSatisfied(fact, kind) {
   if (kind === "review") {
     // A real unavailable attempt is a current quality fact, but it is not a
     // completed independent review. It remains visible to stage handlers and
@@ -75,7 +75,7 @@ export function deriveStageCompletion(stage, observations = []) {
     const fact = observation?.fact?.value ?? observation?.fact;
     if (!fact || fact.stage !== stage
         || observation.authenticated !== true || observation.freshness?.status !== "current") continue;
-    if (requirements[fact.subject] === fact.kind && satisfiesQualityPredicate(fact, fact.kind)) {
+    if (requirements[fact.subject] === fact.kind && qualityPredicateSatisfied(fact, fact.kind)) {
       satisfied.set(fact.subject, observation);
     }
   }

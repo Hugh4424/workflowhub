@@ -17,8 +17,30 @@
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "semantic_projection": {
+      "type": "object",
+      "required": ["projection_version", "surface", "contract_id", "contract_hash", "semantic_hash"],
+      "properties": {
+        "projection_version": { "const": "wh-review-semantic-projection.v1" },
+        "surface": { "type": "string", "minLength": 1 },
+        "contract_id": { "type": "string", "minLength": 1 },
+        "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "semantic_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "attempt_ref": { "type": "string", "minLength": 1 },
         "report_ref": { "type": "string", "pattern": "^quality/reviews/reports/[A-Za-z0-9._-]+\\.md$" },
+    "reuse": {
+      "type": "object",
+      "required": ["source_result_ref", "source_result_hash", "reason"],
+      "properties": {
+        "source_result_ref": { "type": "string", "pattern": "^quality/reviews/results/[A-Za-z0-9._-]+\\.json$" },
+        "source_result_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "reason": { "const": "semantic_hash_unchanged_material_only" }
+      },
+      "additionalProperties": false
+    },
     "provider_results": {
       "type": "array", "minItems": 1,
       "items": {

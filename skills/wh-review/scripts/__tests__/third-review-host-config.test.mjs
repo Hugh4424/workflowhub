@@ -16,8 +16,8 @@ function configuredRoot() {
     tiers: [["opencode", "kimi"], ["claude-code", "codex"]],
     runtime: { root: runtimeRoot },
     providers: {
-      opencode: { enabled: true }, kimi: { enabled: true },
-      "claude-code": { enabled: true }, codex: { enabled: true },
+      opencode: { enabled: true, source_id: "source-opencode" }, kimi: { enabled: true, source_id: "source-kimi" },
+      "claude-code": { enabled: true, source_id: "source-claude-code" }, codex: { enabled: true, source_id: "source-codex" },
     },
     attachment_roots: [{ root: packetRoot, sources: [PACKET_SOURCE_PREFIX] }],
   }));
@@ -99,6 +99,20 @@ describe("trusted third-review host configuration", () => {
     expect(selectTrustedReviewProviderSelection(brokerConfig, "codex").eligibleProfiles).toEqual(["claude-code"]);
   });
 
+  it("does not dispatch a disabled provider from a legacy tier when an enabled candidate remains", () => {
+    const { brokerConfig } = configuredRoot();
+    const config = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    config.providers.opencode.enabled = false;
+    writeFileSync(brokerConfig, JSON.stringify(config));
+
+    expect(selectTrustedReviewProviders(brokerConfig, "codex")).toEqual(["kimi"]);
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex")).toMatchObject({
+      providers: ["kimi"],
+      requestedProfiles: ["kimi"],
+      eligibleProfiles: ["kimi"],
+    });
+  });
+
   it("fails loud when a fallback tier references an unknown provider", () => {
     const { brokerConfig } = configuredRoot();
     const config = JSON.parse(readFileSync(brokerConfig, "utf8"));
@@ -111,7 +125,7 @@ describe("trusted third-review host configuration", () => {
   it("uses a declared wh_review route and excludes the host adapter by profile family", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
-    broker.providers["codex/terra"] = { enabled: true };
+    broker.providers["codex/terra"] = { enabled: true, source_id: "source-codex-terra" };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, profiles: {
@@ -129,9 +143,12 @@ describe("trusted third-review host configuration", () => {
     expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", route)).toMatchObject({
       requestedProfiles: ["codex/terra", "kimi"],
       providers: ["codex/terra", "kimi"],
-      eligibleProfiles: ["kimi"],
-      sameSourceExcluded: ["codex/terra"],
-      effectiveProfiles: [{ provider: "kimi", adapter: "kimi", model: null, effort: null, thinking: null }],
+      eligibleProfiles: ["codex/terra", "kimi"],
+      sameSourceExcluded: [],
+      effectiveProfiles: [
+        { provider: "codex/terra", adapter: "codex", model: null, effort: null, thinking: null },
+        { provider: "kimi", adapter: "kimi", model: null, effort: null, thinking: null },
+      ],
     });
   });
 
@@ -166,6 +183,37 @@ describe("trusted third-review host configuration", () => {
     expect(brokerConfig).toBeTruthy();
   });
 
+  it("accepts the live single_round mini-task routes without changing configured providers", () => {
+    const { hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: {}, mini_task: {
+      design: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round", minimum_heterologous: 1 },
+      implementation: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round", minimum_heterologous: 1 },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
+      .toMatchObject({ initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
+      .toMatchObject({ initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" });
+  });
+
+  it("accepts the configured mini-task routes nested under stages without treating mini-task as a sixth stage", () => {
+    const { hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: { mini_task: {
+      design: { initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 1 },
+      implementation: { initial: ["kimi", "claude-code"], mode: "full_only", minimum_heterologous: 1 },
+    } } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_on_structural_rework" });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_only" });
+    expect(Object.hasOwn(trusted.whReview.stages, "mini_task")).toBe(false);
+  });
+
   it("preserves make-decision single_round routes without widening provider dispatch", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
@@ -183,37 +231,68 @@ describe("trusted third-review host configuration", () => {
       .toMatchObject({ initial: ["opencode"], mode: "single_round" });
   });
 
-  it("counts distinct adapters, while retaining all configured profiles for broker attestation", () => {
+  it("retains every configured profile while counting distinct adapters for heterologous quorum", () => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
-    broker.providers["kimi/k3"] = { enabled: true, model: "k3", thinking: true };
-    broker.providers["kimi/coding"] = { enabled: true, model: "kimi-for-coding", thinking: true };
-    broker.providers["claude-code/opus"] = { enabled: true, model: "claude-opus-4-8", effort: "high" };
+    broker.providers["kimi/k3"] = { enabled: true, source_id: "source-kimi-k3", model: "k3", thinking: true };
+    broker.providers["kimi/coding"] = { enabled: true, source_id: "source-kimi-coding", model: "kimi-for-coding", thinking: true };
+    broker.providers["claude-code/opus"] = { enabled: true, source_id: "source-claude-opus", model: "claude-opus-4-8", effort: "high" };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const route = {
       initial: ["kimi/k3", "kimi/coding", "claude-code/opus"], mode: "adaptive", minimum_heterologous: 2,
     };
     expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", route)).toMatchObject({
-      // The full group is sent to 3rd-review, which is authoritative for
-      // SAME_SOURCE facts. WorkflowHub's quorum is adapter, not profile, based.
+      // Every configured profile is sent to 3rd-review. The quorum counts
+      // distinct adapters, so the two kimi profiles count as one.
       requestedProfiles: ["kimi/k3", "kimi/coding", "claude-code/opus"],
       providers: ["kimi/k3", "kimi/coding", "claude-code/opus"],
-      eligibleProfiles: ["kimi/k3", "claude-code/opus"],
+      eligibleProfiles: ["kimi/k3", "kimi/coding", "claude-code/opus"],
       effectiveProfiles: [
         { provider: "kimi/k3", adapter: "kimi", model: "k3", effort: null, thinking: true },
+        { provider: "kimi/coding", adapter: "kimi", model: "kimi-for-coding", effort: null, thinking: true },
         { provider: "claude-code/opus", adapter: "claude-code", model: "claude-opus-4-8", effort: "high", thinking: null },
       ],
     });
     expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", { ...route, minimum_heterologous: 3 }))
       .toThrow(/insufficient enabled heterologous providers/i);
+    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", {
+      initial: ["kimi/k3", "kimi/coding"], mode: "adaptive", minimum_heterologous: 2,
+    })).toThrow(/insufficient enabled heterologous providers/i);
+  });
+
+  it("fails closed when an enabled quorum candidate has no source identity", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    delete broker.providers.kimi.source_id;
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", {
+      initial: ["kimi"], mode: "full_only", minimum_heterologous: 1,
+    })).toThrow(/source_id/i);
+  });
+
+  it("uses explicit source identity for host exclusion and fails closed if the host identity is absent", () => {
+    const { brokerConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["codex/host"] = { enabled: true, source_id: "shared-codex-source" };
+    broker.providers["codex/reviewer"] = { enabled: true, source_id: "shared-codex-source" };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const route = { initial: ["codex/reviewer", "kimi"], mode: "full_only", minimum_heterologous: 1 };
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toMatchObject({
+      providers: ["codex/reviewer", "kimi"],
+      eligibleProfiles: ["kimi"],
+      sameSourceExcluded: ["codex/reviewer"],
+    });
+    delete broker.providers["codex/host"].source_id;
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toThrow(/host provider.*source_id/i);
   });
 
   it("pins declared profile tuples, requires priority order, and preserves those pins for dispatch", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
-    broker.providers["claude-code/opus"] = { enabled: true, model: "claude-opus-4-8", effort: "high" };
-    broker.providers["kimi/coding"] = { enabled: true, model: "kimi-for-coding", thinking: true };
-    broker.providers["kimi/k3"] = { enabled: true, model: "k3", thinking: true };
+    broker.providers["claude-code/opus"] = { enabled: true, source_id: "source-claude-opus", model: "claude-opus-4-8", effort: "high" };
+    broker.providers["kimi/coding"] = { enabled: true, source_id: "source-kimi-coding", model: "kimi-for-coding", thinking: true };
+    broker.providers["kimi/k3"] = { enabled: true, source_id: "source-kimi-k3", model: "k3", thinking: true };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, profiles: {
@@ -238,7 +317,7 @@ describe("trusted third-review host configuration", () => {
         { provider: "kimi/k3", model: "k3", effort: null, thinking: true, priority: 30 },
       ],
       providers: ["claude-code/opus", "kimi/coding", "kimi/k3"],
-      eligibleProfiles: ["claude-code/opus", "kimi/coding"],
+      eligibleProfiles: ["claude-code/opus", "kimi/coding", "kimi/k3"],
     });
     host.wh_review.profiles["kimi/k3"].model = "wrong";
     writeFileSync(hostConfig, JSON.stringify(host));
@@ -290,7 +369,7 @@ describe("trusted third-review host configuration", () => {
   it("keeps non-current route errors as warnings while doctor remains strict", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
-    broker.providers["claude-code/opus"] = { enabled: true, model: "claude-opus-4-8", effort: "high" };
+    broker.providers["claude-code/opus"] = { enabled: true, source_id: "source-claude-opus", model: "claude-opus-4-8", effort: "high" };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, profiles: {

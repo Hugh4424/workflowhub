@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -14,6 +14,7 @@ import {
   redactProviderHostPaths,
   validateAuthorityMap,
   validateBuildCodeAcceptanceMap,
+  validateVerifyAcceptanceSummary,
   validateDiffIndexBundle,
   phaseDiffDeliveryForPath,
   buildReviewMaterials,
@@ -23,6 +24,14 @@ import { captureReviewSource } from "../../skills/wh-review/scripts/review-sourc
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const sourceForPlanFixture = {
+  targetCommit: "1".repeat(40),
+  baseCommit: "2".repeat(40),
+  baseTree: "3".repeat(40),
+  capturedHead: "4".repeat(40),
+  snapshotTree: "5".repeat(40),
+  changedFiles: [],
+};
 
 function taskFixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-materials-")));
@@ -45,6 +54,7 @@ function taskFixture() {
     },
   });
   const candidate = prepareTaskWorkspace(task);
+  writeFileSync(join(candidate.worktreeRoot, "package.json"), `${JSON.stringify({ scripts: { test: "true" } })}\n`);
   return { root, task, workspace: openCurrentTaskWorkspace(task) };
 }
 
@@ -73,8 +83,8 @@ describe("current review material and capture contracts", () => {
     const valid = {
       acceptance_ids: ["AC-1", "AC-2"],
       entries: [
-        { id: "AC-1", change_ids: ["C-1"], implementation: "implementation for AC-1", verification: "test for AC-1" },
-        { id: "AC-2", change_ids: ["C-2"], implementation: "implementation for AC-2", verification: "test for AC-2" },
+        { id: "AC-1", change_ids: ["C-1"], implementation: "implementation for AC-1", verification: "test for AC-1", implementation_anchor_ids: ["impl-1"], verification_anchor_ids: ["test-1"] },
+        { id: "AC-2", change_ids: ["C-2"], implementation: "implementation for AC-2", verification: "test for AC-2", implementation_anchor_ids: ["impl-2"], verification_anchor_ids: ["test-2"] },
       ],
     };
     expect(() => validateBuildCodeAcceptanceMap(valid)).not.toThrow();
@@ -94,7 +104,31 @@ describe("current review material and capture contracts", () => {
         { id: "AC-009", subject: "second", rationale: "second", disposition: "complete", anchors: [{ ...anchor, id: "shared-again" }] },
       ],
     };
-    expect(() => validateAuthorityMap("evidence_map", map)).toThrow(/share one proving anchor/i);
+    expect(() => validateAuthorityMap("evidence_map", map)).toThrow(/(?:share|overlap) one proving anchor/i);
+  });
+
+  it("rejects an empty verify acceptance summary before provider dispatch", () => {
+    expect(() => validateVerifyAcceptanceSummary(JSON.stringify({ criteria: [] })))
+      .toThrow(/empty criteria list/);
+    expect(() => validateVerifyAcceptanceSummary("当前验收材料已准备"))
+      .toThrow(/must name current ACs/);
+    expect(validateVerifyAcceptanceSummary(JSON.stringify({ criteria: [
+      { acceptance_criterion_id: "AC-01", status: "incomplete", actual_outcome: "证据不足" },
+    ] }))).toBe(true);
+  });
+
+  it("rejects a verify summary copied from an older AC set", () => {
+    const oldIds = Array.from({ length: 26 }, (_, index) => `AC-${String(index + 1).padStart(2, "0")}`);
+    const currentIds = Array.from({ length: 32 }, (_, index) => `AC-${String(index + 1).padStart(2, "0")}`);
+    expect(() => validateVerifyAcceptanceSummary(oldIds.join("\n"), { expectedCriterionIds: currentIds }))
+      .toThrow(/does not match current spec AC set/);
+    expect(validateVerifyAcceptanceSummary(currentIds.join("\n"), { expectedCriterionIds: currentIds })).toBe(true);
+  });
+
+  it("accepts the same typed AC identifiers used by integration review", () => {
+    expect(validateVerifyAcceptanceSummary(JSON.stringify({ criteria: [
+      { acceptance_criterion_id: "AC-E2E-001", status: "incomplete", actual_outcome: "证据不足" },
+    ] }))).toBe(true);
   });
 
   it("authenticates an included diff shard and rejects tampering", () => {
@@ -141,6 +175,30 @@ describe("current review material and capture contracts", () => {
     expect(verify).toMatchObject({ exit_code: 0, stage: "verify-code", source_digest: expect.any(String) });
   });
 
+  it("keeps the build-plan projection for spec-analyze without sending a second copy to the provider", () => {
+    const { root, task } = taskFixture();
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: { ...sourceForPlanFixture },
+      task,
+      taskId: "review-materials-contract",
+      stage: "build-plan",
+      materials: {
+        raw_requirement: "原始需求",
+        approved_spec: "已批准 spec",
+        acceptance_criteria: "AC-1",
+        draft_plan: "先实现再验证",
+        draft_tasks: "T-1",
+        review_instructions: reviewInstructionsFor("build-plan"),
+      },
+    });
+    expect(existsSync(join(bundle.bundleRoot, "requirements/planning_artifacts.json"))).toBe(true);
+    expect(bundle.files).not.toContain("requirements/planning_artifacts.json");
+    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).excluded)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ category: "generated:planning_artifacts" })]));
+  });
+
   it("defines distinct mini-task design and implementation packet contracts", async () => {
     const { reviewRuleFor, minimumReviewersFor } = await import("../../runtime/review/review-policy.mjs");
     expect(reviewRuleFor("mini_task.design").required).toEqual(expect.arrayContaining(["decision_log", "spec", "plan", "tasks"]));
@@ -172,6 +230,12 @@ describe("current review material and capture contracts", () => {
         "requirements/spec.md",
         "packet-plan.json",
       ]));
+      expect(readFileSync(join(design.bundleRoot, "requirements/raw_requirement.md"), "utf8"))
+        .toContain("交付一个边界清楚的小功能。");
+      expect(readFileSync(join(design.bundleRoot, "requirements/decision_log.md"), "utf8"))
+        .not.toContain("交付一个边界清楚的小功能。");
+      expect(readFileSync(join(design.bundleRoot, "requirements/decision_log.md"), "utf8"))
+        .toContain("## 决定");
       expect(reviewInstructionsFor("build-code", null, false, null, "mini_task.design"))
         .toMatch(/frozen four materials and the design risks/i);
       expect(reviewInstructionsFor("build-code", null, false, null, "mini_task.design"))
@@ -222,8 +286,37 @@ describe("current review material and capture contracts", () => {
         "context/mini-result.txt",
       ]));
       expect(implementation.packetPlan.review_kind).toBe("mini_task.implementation");
+      const traceProjection = JSON.parse(readFileSync(join(implementation.bundleRoot, "requirements/ac_trace.json"), "utf8"));
+      expect(traceProjection.entries[0].test).toEqual([{ receipt_ref: receiptRef, receipt_hash: receiptHash }]);
+      expect(traceProjection.entries[0].evidence).toEqual([{ ref: evidenceRef, sha256: evidenceHash }]);
       expect(readFileSync(join(implementation.bundleRoot, "contracts/mini-task-implementation.md"), "utf8"))
         .toMatch(/变更文件.*anchor.*例外/s);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("fails a mini-task packet when the decision log cannot yield the bounded original requirement", () => {
+    const { root, task, workspace } = taskFixture();
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, includeDiff: false });
+    try {
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: "review-materials-contract",
+        stage: "build-code",
+        reviewKind: "mini_task.design",
+        materials: {
+          raw_requirement: "交付一个小功能。",
+          decision_log: "# Decision Log\n\n## 决定\n\n采用 mini-task。\n",
+          spec: "# Spec\n",
+          plan: "# Plan\n",
+          tasks: "# Tasks\n",
+          review_instructions: reviewInstructionsFor("build-code", null, false, null, "mini_task.design"),
+        },
+      })).toThrow(/MATERIAL_INCOMPLETE.*original requirement/i);
     } finally {
       source.dispose();
     }
@@ -303,6 +396,266 @@ describe("current review material and capture contracts", () => {
           review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
         },
       })).toThrow(/current[- ]snapshot/);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("accepts an integration packet when only the execution-status block changed", async () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const tasksPath = join(workspace.worktreeRoot, "specs", taskId, "tasks.md");
+    mkdirSync(join(workspace.worktreeRoot, "specs", taskId), { recursive: true });
+    const taskCard = "# Tasks\n\n### T001 — implementation\n- **状态**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/tests/integration-current.json`\n- **执行事实**：实现已完成。\n";
+    writeFileSync(tasksPath, taskCard);
+    const receiptRef = "quality/tests/integration-current.json";
+    await runBuildCapture("npm test", receiptRef, {
+      task,
+      workspace,
+      outputRef: "quality/tests/output/integration-current.output",
+    });
+    const receipt = task.readRecord(receiptRef);
+    writeFileSync(tasksPath, `${taskCard}\n### 执行状态填写区\n- 记录：只写回执行事实。\n`);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    try {
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "# Spec\n\nAC-01：实现结果正确。\n",
+          acceptance_criteria: "# Acceptance\n\nAC-01：实现结果正确。\n",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              change: [{ task_id: "T001", summary: "实现已完成" }],
+              test: [{ receipt_ref: receiptRef, receipt_hash: sha256(receipt) }],
+              evidence: [{ ref: receiptRef, sha256: sha256(receipt) }],
+              anchors: [{ id: "implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+            }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      })).not.toThrow();
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("still builds a semantic integration packet when the test receipt is unavailable", () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "# Spec\n\nAC-01：用户得到正确结果。\n",
+          acceptance_criteria: "# Acceptance\n\nAC-01：用户得到正确结果。\n",
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "当前测试回执不可用",
+              change: [{ task_id: null, summary: "当前实现" }],
+              test: [],
+              evidence: [],
+              evidence_status: "unavailable",
+              evidence_reason: "当前实现回执不可用",
+              anchors: [{ id: "integration-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+            }],
+            implementation_anchors: [{ id: "integration-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      expect(bundle.files).not.toContain("requirements/test_evidence.json");
+      expect(bundle.files).toContain("evidence/test-summary.json");
+      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({ status: "unavailable" });
+      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).included.required).toContain("evidence/test-summary.json");
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("keeps the integration AC trace host-only", async () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "integration.mjs"), "export const result = 'ok';\n");
+    const receiptRef = "quality/tests/integration-host-only.json";
+    await runBuildCapture("npm test", receiptRef, {
+      task,
+      workspace,
+      outputRef: "quality/tests/output/integration-host-only.output",
+    });
+    const receipt = task.readRecord(receiptRef);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: task.identity.taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "## 目标\n\n用户可以得到正确结果。\n",
+          acceptance_criteria: "## 验收\n\nAC-01：用户得到正确结果。\n",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "host-side evidence is incomplete",
+              change: [{ task_id: "T001", summary: "实现用户结果" }],
+              test: [],
+              evidence: [{ ref: receiptRef, sha256: sha256(receipt) }],
+              anchors: [{ id: "integration-result", path: "integration.mjs", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+            }],
+            implementation_anchors: [{ id: "integration-code", path: "integration.mjs", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      expect(bundle.files).not.toContain("requirements/ac_trace.json");
+      expect(bundle.files).not.toContain("requirements/test_evidence.json");
+      expect(bundle.files).not.toContain("canonical-evidence.json");
+      expect(bundle.files).toContain("requirements/implementation_context.json");
+      expect(bundle.files.some((file) => file.startsWith("context/"))).toBe(true);
+      const packetPlan = JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8"));
+      expect(packetPlan.included.required).toContain("evidence/test-summary.json");
+      expect(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8")).not.toMatch(/receipt_ref|snapshot_tree|sha256/i);
+      expect(packetPlan.excluded).toEqual(expect.arrayContaining([
+        expect.objectContaining({ category: "material:ac_trace", reason: expect.stringMatching(/host-only/i) }),
+      ]));
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("bounds integration provider context to delivery-critical excerpts", () => {
+    const { root, task, workspace } = taskFixture();
+    const paths = Array.from({ length: 10 }, (_value, index) => `runtime/provider-context-${index}.mjs`);
+    mkdirSync(join(workspace.worktreeRoot, "runtime"), { recursive: true });
+    for (const path of paths) {
+      const target = join(workspace.worktreeRoot, path);
+      writeFileSync(target, "export const value = " + JSON.stringify(path) + ";\n");
+    }
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    try {
+      const implementationAnchors = paths.map((path, index) => ({
+        id: `provider-context-${index}`,
+        path,
+        start_line: 1,
+        end_line: 1,
+        role: "implementation",
+        reason: "delivery behavior context",
+      }));
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: task.identity.taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "## 目标\n\n用户得到正确结果。\n",
+          acceptance_criteria: "## 验收\n\nAC-01：用户得到正确结果。\n",
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "当前没有逐 AC 可用事实",
+              change: [{ task_id: null, summary: "当前实现" }],
+              test: [],
+              evidence: [],
+              evidence_status: "unavailable",
+              evidence_reason: "当前实现回执不可用",
+              anchors: [{ id: "provider-context-0", path: paths[0], start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+            }],
+            implementation_anchors: implementationAnchors,
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      const contextFiles = bundle.files.filter((path) => path.startsWith("context/"));
+      expect(contextFiles).toHaveLength(9);
+      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).excluded)
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ category: "provider_context_overflow" }),
+        ]));
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("does not duplicate acceptance sections inside the integration approved spec", async () => {
+    const { root, task, workspace } = taskFixture();
+    const receiptRef = "quality/tests/integration-spec-compaction.json";
+    await runBuildCapture("npm test", receiptRef, { task, workspace, outputRef: "quality/tests/output/integration-spec-compaction.output" });
+    const receipt = task.readRecord(receiptRef);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId: task.identity.taskId, includeDiff: false });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: task.identity.taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "## 目标\n\n实现稳定结果。\n\n## 验收\n\nAC-01：结果正确。\n",
+          acceptance_criteria: "## 验收\n\nAC-01：结果正确。\n",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "provider-facing integration review does not consume host AC ledger",
+              change: [{ task_id: null, summary: "当前实现" }],
+              test: [],
+              evidence: [{ ref: receiptRef, sha256: sha256(receipt) }],
+              anchors: [{ id: "implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+            }],
+            implementation_anchors: [{ id: "implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      const approved = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/approved_spec.json"), "utf8"));
+      const acceptance = JSON.parse(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.json"), "utf8"));
+      expect(approved.excerpts.join("\n")).toContain("目标");
+      expect(approved.excerpts.join("\n")).not.toContain("验收");
+      expect(approved.excerpts.join("\n")).not.toContain("AC-01");
+      expect(acceptance.excerpts.join("\n")).toContain("AC-01");
     } finally {
       source.dispose();
     }

@@ -36,9 +36,11 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 新 attempt 的事实只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须
 在本阶段的人类确认摘要中显式展示。
 
-人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
-`accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
-provider findings 转成“审查通过”。
+每个 canonical/reportable finding（包括普通和严重）都必须有一个 disposition：`fixed`、
+`rejected_invalid`、`accepted_risk` 或 `needs_human`；没有可绑定 ledger 时显示
+`unverified`。`accepted_risk` 必须绑定当前 finding、review、snapshot 和真实用户风险确认。
+严重 finding 额外决定是否暂停正式完成，普通 finding 不能因此被丢掉。这描述处理事实，
+不把 provider findings 转成“审查通过”。
 
 审查结果用于暴露问题和记录处置；阶段是否推进由正式 stage contract 与证据决定。
 
@@ -58,6 +60,12 @@ build-plan 只消费可信异源 advice，不要求 provider `pass` 或 findings
   为事实，不成为继续工作的前置条件。
 - scope creep、重复已有能力、没有故障证据的长期能力，或修订后仍无理由保留的旧内容，
   报告具体删除或缩减 finding。
+
+审查顺序固定为：任务是否形成“需求 → 实现 → 真实消费者 → 验证”的因果链 → 依赖和
+顺序 → 接口/数据/状态的交接 → 失败、回滚和重试 → 是否真的需要新增能力。重点找计划
+无法落地、验证测不到行为、漏掉直接消费者、顺序导致半成品可被使用，以及为了审查或
+证据治理新增控制面的情况。不要因为任务卡字段、snapshot lineage 或流程痕迹不够漂亮
+而消耗审查预算。
 
 ## 输出
 

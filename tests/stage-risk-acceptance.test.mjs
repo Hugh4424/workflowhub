@@ -123,6 +123,36 @@ describe("current quality boundary", () => {
     }).status).toBe("continue");
   });
 
+  it("does not turn non-reportable clusters into findings when findings is explicitly empty", () => {
+    const result = {
+      task_id: "demo",
+      stage: "build-code",
+      snapshot_tree: SNAPSHOT_TREE,
+      findings: [],
+      adjudication: {
+        clusters: [{
+          id: "F-needs-corroboration",
+          severity: "major",
+          path: "core/demo.mjs",
+          issue: "unconfirmed provider inference",
+          root_cause: "insufficient corroboration",
+          recommendation: "keep as provenance",
+          disposition: "needs_corroboration",
+          evidence_status: "inferred",
+        }],
+      },
+    };
+    expect(canonicalReviewFindings(result)).toEqual([]);
+    expect(deriveSeriousReviewPause({
+      taskId: "demo",
+      stage: "build-code",
+      reviewRef: "quality/reviews/results/demo.json",
+      reviewHash: REVIEW_HASH,
+      result,
+      workflowRunId: "run-0001",
+    })).toMatchObject({ status: "continue", findings: [] });
+  });
+
   it("keeps the 21-clause constitution and its checklist synchronized", () => {
     expect(constitution).toMatch(/\*\*Version\*\*:\s*1\.5\.0\b/);
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(21);

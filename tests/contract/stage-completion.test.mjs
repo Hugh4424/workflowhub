@@ -28,8 +28,8 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["build-code"].risk_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"].full_tests_fresh).toBe("test");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
-    expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
-    expect(STAGE_ADVISORY_PREDICATES["verify-code"].independent_review).toBe("review");
+    expect(STAGE_PREDICATES["verify-code"].independent_review).toBe("review");
+    expect(STAGE_ADVISORY_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
   });
 
   for (const stage of Object.keys(STAGE_PREDICATES)) {

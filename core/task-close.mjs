@@ -5,12 +5,19 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, captureGitWorktreeSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
+import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
+import { validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
+import { validateSchema } from "../runtime/review/schema-validator.mjs";
+import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
+import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
+import { canonicalReviewFindings, deriveSeriousReviewPause, validateReportableFindingDispositions, validateRiskAcceptance } from "../runtime/review/stage-review-disposition.mjs";
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
 import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
+import { STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
@@ -40,6 +47,250 @@ function canonical(value, label = "close plan") {
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 
+export function authenticateReviewEvidence(task, result) {
+  const attemptRef = result.attempt_ref;
+  const attempt = JSON.parse(task.readRecord(attemptRef));
+  validateSchema("attempt", attempt);
+  if (attempt.task_id !== task.identity.taskId
+      || attempt.stage !== result.stage
+      || attempt.review_track !== result.review_track
+      || attempt.snapshot_tree !== result.snapshot_tree
+      || attempt.material_id !== result.material_id
+      || attempt.terminal_status !== "semantic"
+      || attempt.error !== null) {
+    throw new Error(`review attempt/result binding is invalid: ${attemptRef}`);
+  }
+  const attemptId = attemptRef.match(/^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/)?.[1];
+  if (!attemptId || attempt.attempt_id !== attemptId) throw new Error(`review attempt identity is invalid: ${attemptRef}`);
+  const latest = new Map();
+  for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
+  const providerOutputs = [];
+  for (const providerAttempt of latest.values()) {
+    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
+    if (output.schema_version !== "wh-review-provider-output.v1"
+        || output.task_id !== task.identity.taskId
+        || output.stage !== attempt.stage
+        || output.attempt_id !== attemptId
+        || output.provider !== providerAttempt.provider
+        || typeof output.content !== "string"
+        || output.content_hash !== sha256(output.content)) {
+      throw new Error(`review provider output provenance is invalid: ${providerAttempt.provider}`);
+    }
+    providerOutputs.push({
+      ref: providerAttempt.output_ref,
+      provider: providerAttempt.provider,
+      ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
+      ...(output.evidence_anchor_valid === undefined ? {} : { evidenceAnchors: output.evidence_anchor_valid }),
+      review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
+    });
+  }
+  authenticateCanonicalReviewResult({
+    attempt,
+    result,
+    providerOutputs,
+  });
+}
+
+function authenticateFindingDispositionEvidence(task, fact, nestedValues) {
+  const stageQuality = nestedValues.find((value) => value?.schema_version === "stage-quality-evidence.v1"
+    && value.subject === "finding_dispositions");
+  if (!stageQuality || stageQuality.task_id !== task.identity.taskId
+      || stageQuality.stage !== fact.stage || stageQuality.snapshot_tree !== fact.snapshot_tree) {
+    throw new Error(`finding disposition evidence lacks an authenticated stage-quality subject: ${fact.subject}`);
+  }
+  const subjectFact = stageQuality.subject_fact;
+  if (!subjectFact || !Array.isArray(subjectFact.disposition_items)
+      || !Array.isArray(subjectFact.source_review_refs)
+      || !Array.isArray(subjectFact.risk_acceptance_refs)) {
+    throw new Error("finding disposition evidence is missing its source review and disposition bindings");
+  }
+  const reviews = subjectFact.source_review_refs.map((binding) => {
+    if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")
+        || !binding.ref.startsWith("quality/reviews/results/")) {
+      throw new Error("finding disposition source review binding is invalid");
+    }
+    const raw = task.readRecord(binding.ref);
+    if (sha256(raw) !== binding.sha256) throw new Error(`finding disposition source review hash mismatch: ${binding.ref}`);
+    const value = JSON.parse(raw);
+    validateSchema("result", value);
+    if (value.task_id !== task.identity.taskId || value.stage !== fact.stage || value.snapshot_tree !== fact.snapshot_tree) {
+      throw new Error(`finding disposition source review is not current: ${binding.ref}`);
+    }
+    authenticateReviewEvidence(task, value);
+    return Object.freeze({ ref: binding.ref, sha256: binding.sha256, value });
+  });
+  const riskIds = [];
+  for (const binding of subjectFact.risk_acceptance_refs) {
+    if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")
+        || typeof binding.finding_id !== "string") throw new Error("finding disposition risk acceptance binding is invalid");
+    const raw = task.readRecord(binding.ref);
+    if (sha256(raw) !== binding.sha256) throw new Error(`finding disposition risk acceptance hash mismatch: ${binding.ref}`);
+    const acceptance = JSON.parse(raw);
+    const review = reviews.find((candidate) => candidate.ref === acceptance.review_ref);
+    if (!review) throw new Error(`finding disposition risk acceptance is not bound to a source review: ${binding.ref}`);
+    const pause = deriveSeriousReviewPause({
+      taskId: task.identity.taskId,
+      stage: review.value.stage,
+      reviewRef: review.ref,
+      reviewHash: review.sha256,
+      result: review.value,
+      workflowRunId: acceptance.workflow_run_id,
+    });
+    validateRiskAcceptance({ acceptance, pause });
+    if (acceptance.finding_id !== binding.finding_id) throw new Error(`finding disposition risk acceptance finding mismatch: ${binding.ref}`);
+    riskIds.push(binding.finding_id);
+  }
+  const validation = validateReportableFindingDispositions({
+    result: { findings: reviews.flatMap(({ value }) => canonicalReviewFindings(value)) },
+    dispositions: subjectFact.disposition_items,
+    authorizedRiskFindingIds: riskIds,
+  });
+  if (validation.missing_items.length > 0) {
+    throw new Error(`finding disposition evidence is incomplete: ${validation.missing_items.join("; ")}`);
+  }
+}
+
+function readQualityEvidenceBinding(task, binding, label) {
+  if (!binding || typeof binding.ref !== "string" || !/^quality\/(?!.*\.\.)[^\s]+$/.test(binding.ref) || !HASH.test(binding.sha256 ?? "")) {
+    throw new Error(`${label} binding is invalid`);
+  }
+  let raw;
+  try {
+    raw = task.readRecord(binding.ref);
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`${label} is unavailable: missing ${binding.ref}`);
+    throw error;
+  }
+  if (sha256(raw) !== binding.sha256) throw new Error(`${label} hash mismatch: ${binding.ref}`);
+  let value;
+  try { value = JSON.parse(raw); } catch { throw new Error(`${label} is not canonical JSON: ${binding.ref}`); }
+  return { raw, value };
+}
+
+function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), depth = 0) {
+  if (depth > 6) throw new Error("stage-quality evidence chain is too deep");
+  const key = `${binding.ref}:${binding.sha256}`;
+  if (seen.has(key)) throw new Error(`stage-quality evidence chain is cyclic: ${binding.ref}`);
+  const nextSeen = new Set(seen).add(key);
+  const { value } = readQualityEvidenceBinding(task, binding, "stage-quality evidence");
+  const treeMatches = value?.snapshot_tree === context.snapshotTree
+    || isMaterialOnlySnapshotDelta(task.manifest.target_repo_root, value?.snapshot_tree, context.snapshotTree, task.identity.taskId);
+  const taskMatches = value?.task_id === task.identity.taskId;
+  if (value?.schema_version === "workflowhub-receipt.v1") {
+    if (!taskMatches || !treeMatches || typeof value.stage !== "string" || !value.producer
+        || value.producer.stage !== value.stage || typeof value.producer.component !== "string"
+        || typeof value.producer.version !== "string" || value.producer.version.trim() === "") {
+      throw new Error(`stage-quality receipt provenance is invalid: ${binding.ref}`);
+    }
+    if (value.producer.component === "implementation") {
+      validateCanonicalImplementationReceipt(value, {
+        taskId: task.identity.taskId,
+        snapshotTree: value.snapshot_tree,
+        read: (ref) => task.readRecord(ref),
+      });
+    } else if (["build-code-test-capture", "verify-code-test-capture"].includes(value.producer.component)) {
+      validateCanonicalFullTestReceipt(value, {
+        taskId: task.identity.taskId,
+        snapshotTree: value.snapshot_tree,
+        requirePassed: context.status === "passed",
+      });
+      const output = task.readRecord(value.output_ref);
+      if (sha256(output) !== value.output_hash) throw new Error(`stage-quality test output hash mismatch: ${value.output_ref}`);
+    } else if (value.producer.component === "evidence") {
+      if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`stage-quality evidence receipt refs are invalid: ${binding.ref}`);
+      for (const nested of value.refs) authenticateStageQualityLeaf(task, nested, context, nextSeen, depth + 1);
+    } else if (value.producer.component === "verification") {
+      if (!Array.isArray(value.items) || value.items.length === 0) throw new Error(`stage-quality verification receipt items are invalid: ${binding.ref}`);
+      for (const item of value.items) {
+        if (!item || typeof item !== "object" || !Array.isArray(item.evidence_refs)) throw new Error(`verification evidence item is invalid: ${binding.ref}`);
+        if (item.status === "not_applicable") continue;
+        for (const nested of item.evidence_refs) {
+          authenticateStageQualityLeaf(task, nested, { ...context, status: item.status === "pass" ? "passed" : "missing" }, nextSeen, depth + 1);
+        }
+      }
+    } else {
+      throw new Error(`unsupported stage-quality receipt producer: ${value.producer.component}`);
+    }
+    return;
+  }
+  if (value?.schema_version === "acceptance-evidence.v1") {
+    const acceptance = validateAcceptanceEvidence(value, `nested ${binding.ref}`);
+    if (!treeMatches || (context.status === "passed" && acceptance.result !== "pass")) throw new Error(`nested acceptance evidence is not current and passing: ${binding.ref}`);
+    for (const nested of acceptance.refs) authenticateStageQualityLeaf(task, nested, { ...context, status: acceptance.result === "pass" ? "passed" : "missing" }, nextSeen, depth + 1);
+    return;
+  }
+  if (value?.schema_version === "workflowhub-verification-test-proof.v1") {
+    if (!taskMatches || value.stage !== "verify-code" || !treeMatches || value.outcome !== "passed"
+        || typeof value.test_receipt_ref !== "string" || !HASH.test(value.test_receipt_hash ?? "")) {
+      throw new Error(`verification test proof provenance is invalid: ${binding.ref}`);
+    }
+    authenticateStageQualityLeaf(task, { ref: value.test_receipt_ref, sha256: value.test_receipt_hash }, { ...context, status: "passed" }, nextSeen, depth + 1);
+    return;
+  }
+  if (value?.schema_version === "workflowhub-verification-material-proof.v1") {
+    if (!taskMatches || value.stage !== "verify-code" || !treeMatches
+        || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+        || !value.materials || Object.keys(value.materials).sort().join(",") !== "decision-log.md,plan.md,spec.md,tasks.md"
+        || Object.values(value.materials).some((digest) => !HASH.test(digest ?? ""))) {
+      throw new Error(`verification material proof provenance is invalid: ${binding.ref}`);
+    }
+    return;
+  }
+  if (value?.schema_version === "wh-review-result.v1") {
+    if (!taskMatches || !treeMatches || (value.stage !== context.stage && !(context.stage === "verify-code" && value.stage === "build-code"))) {
+      throw new Error(`nested review provenance is invalid: ${binding.ref}`);
+    }
+    authenticateReviewEvidence(task, value);
+    return;
+  }
+  if (value?.schema_version === "wh-review-attempt.v1") {
+    validateSchema("attempt", value);
+    if (!taskMatches || !treeMatches || value.terminal_status !== "unavailable" || context.status === "passed") {
+      throw new Error(`nested unavailable review provenance is invalid: ${binding.ref}`);
+    }
+    return;
+  }
+  if (value?.schema_version === "human-confirmation.v2") {
+    if (!treeMatches) throw new Error(`nested human confirmation is stale: ${binding.ref}`);
+    validateHumanConfirmation(value, {
+      taskId: task.identity.taskId,
+      stage: context.stage,
+      requireAccepted: context.status === "passed",
+      requireSubjectRef: true,
+    });
+    return;
+  }
+  throw new Error(`unsupported stage-quality evidence leaf: ${binding.ref}`);
+}
+
+function authenticateStageQualityEvidence(task, fact, stageQuality, nestedValues) {
+  const allowed = new Set(["schema_version", "task_id", "stage", "subject", "status", "snapshot_tree", "subject_fact"]);
+  if (!stageQuality || Object.keys(stageQuality).some((key) => !allowed.has(key))
+      || stageQuality.schema_version !== "stage-quality-evidence.v1"
+      || stageQuality.task_id !== task.identity.taskId
+      || stageQuality.stage !== fact.stage
+      || stageQuality.subject !== fact.subject
+      || stageQuality.status !== fact.status
+      || stageQuality.snapshot_tree !== fact.snapshot_tree) {
+    throw new Error(`acceptance evidence nested stage-quality subject is not bound to the current fact: ${fact.subject}`);
+  }
+  const subjectFact = stageQuality.subject_fact;
+  if (!subjectFact || typeof subjectFact !== "object" || Array.isArray(subjectFact)
+      || subjectFact.status !== fact.status
+      || typeof subjectFact.detail !== "string" || subjectFact.detail.trim() === ""
+      || !Array.isArray(subjectFact.evidence_refs)) {
+    throw new Error(`stage-quality subject fact is incomplete: ${fact.subject}`);
+  }
+  const subjectAllowed = new Set(["status", "detail", "evidence_refs", "disposition_items", "source_review_refs", "risk_acceptance_refs"]);
+  if (Object.keys(subjectFact).some((key) => !subjectAllowed.has(key))) throw new Error(`stage-quality subject fact has unknown fields: ${fact.subject}`);
+  if (fact.subject !== "finding_dispositions" && fact.status === "passed" && subjectFact.evidence_refs.length === 0) {
+    throw new Error(`passed stage-quality subject has no underlying evidence: ${fact.subject}`);
+  }
+  for (const binding of subjectFact.evidence_refs) authenticateStageQualityLeaf(task, binding, { stage: fact.stage, snapshotTree: fact.snapshot_tree, status: fact.status });
+  if (fact.subject === "finding_dispositions" && fact.status === "passed") authenticateFindingDispositionEvidence(task, fact, nestedValues);
+}
+
 function currentQualityValue(task, ref) {
   try {
     const raw = task.readRecord(ref);
@@ -53,14 +304,176 @@ function currentQualityValue(task, ref) {
         || !["passed", "failed", "recorded", "unavailable", "missing"].includes(value.status)
         || typeof value.subject !== "string" || value.subject.trim() === ""
         || !Array.isArray(value.evidence) || value.evidence.length === 0
-        || !Number.isFinite(Date.parse(value.recorded_at))) return null;
+        || value.evidence.some((entry) => !entry || typeof entry.ref !== "string" || entry.ref.trim() === ""
+          || !/^quality\/[^/].+$/.test(entry.ref) || entry.ref.includes("..")
+          || !HASH.test(entry.sha256 ?? "")
+          || entry.evidence_type !== ({
+            test: "test_receipt",
+            review: "review_result",
+            acceptance_criterion: "acceptance_evidence",
+            confirmation: "human_confirmation",
+          })[value.kind])
+        || !Number.isFinite(Date.parse(value.recorded_at))) {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has invalid quality fact fields`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
     const digest = qualityFactDigest(value);
-    if (ref !== `quality/facts/${digest}.json` || value.fact_id !== `quality-${digest}`) return null;
+    if (ref !== `quality/facts/${digest}.json` || value.fact_id !== `quality-${digest}`) {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has an invalid digest binding`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
     return value;
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    throw error;
+    if (error?.code === "QUALITY_FACT_INVALID") throw error;
+    const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} is unreadable: ${error?.message ?? error}`);
+    invalid.code = "QUALITY_FACT_INVALID";
+    throw invalid;
   }
+}
+
+function authenticatedQualityEvidence(task, fact) {
+  const evidence = fact?.evidence ?? [];
+  for (const entry of evidence) {
+    const raw = task.readRecord(entry.ref);
+    if (sha256(raw) !== entry.sha256) throw new Error(`quality fact evidence hash mismatch: ${entry.ref}`);
+    let value;
+    try { value = JSON.parse(raw); } catch { throw new Error(`quality fact evidence is invalid JSON: ${entry.ref}`); }
+    if (fact.kind === "review") {
+      const schema = value?.version === "wh-review-result.v1" ? "result" : value?.version === "wh-review-attempt.v1" ? "attempt" : null;
+      if (schema === null) throw new Error(`review evidence is not a canonical wh-review result or attempt: ${entry.ref}`);
+      validateSchema(schema, value);
+      const miniImplementationReview = fact.stage === "verify-code"
+        && value.stage === "build-code"
+        && value.review_kind === "mini_task.implementation";
+      if (value.task_id !== task.identity.taskId
+          || (value.stage !== fact.stage && !miniImplementationReview)
+          || value.snapshot_tree !== fact.snapshot_tree) {
+        throw new Error(`review evidence is not bound to the current task/stage/snapshot: ${entry.ref}`);
+      }
+      if (fact.status === "recorded" && schema !== "result") throw new Error(`recorded review fact must reference a semantic result: ${entry.ref}`);
+      if (schema === "result") authenticateReviewEvidence(task, value);
+    } else if (fact.kind === "test") {
+      const receiptStage = value?.stage;
+      const crossStageReuse = fact.stage === "verify-code" && receiptStage === "build-code";
+      if (receiptStage !== fact.stage && !crossStageReuse) throw new Error(`test evidence stage does not match quality fact: ${entry.ref}`);
+      validateCanonicalTestReceipt(value, { taskId: task.identity.taskId, stage: receiptStage, snapshotTree: fact.snapshot_tree, subject: fact.subject, requirePassed: fact.status === "passed" });
+      const output = task.readRecord(value.output_ref);
+      if (sha256(output) !== value.output_hash) throw new Error(`test evidence output hash mismatch: ${value.output_ref}`);
+    } else if (fact.kind === "acceptance_criterion") {
+      if (value?.schema_version === "workflowhub-mini-task-implementation-evidence.v1") {
+        if (value.task_id !== task.identity.taskId || value.snapshot_tree !== fact.snapshot_tree
+            || !value.test_receipt || !value.implementation_review || !value.user_result || !value.ac_trace) {
+          throw new Error(`mini-task acceptance evidence is not bound to the current task/snapshot: ${entry.ref}`);
+        }
+        const readBound = (binding, label) => {
+          if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) throw new Error(`${label} binding is invalid: ${entry.ref}`);
+          const nestedRaw = task.readRecord(binding.ref);
+          if (sha256(nestedRaw) !== binding.sha256) throw new Error(`${label} hash mismatch: ${binding.ref}`);
+          return JSON.parse(nestedRaw);
+        };
+        const testReceipt = readBound(value.test_receipt, "mini-task test receipt");
+        // A failed mini-task focused test is a real quality fact, not a
+        // malformed receipt. Preserve that fact so the mini-task boundary can
+        // report the concrete failure and keep delivery incomplete.
+        validateCanonicalTestReceipt(testReceipt, {
+          taskId: task.identity.taskId,
+          stage: testReceipt.stage,
+          snapshotTree: fact.snapshot_tree,
+          subject: "mini-task-focused-tests",
+          // The packet is also referenced by the acceptance-criteria and
+          // exception facts. Those facts describe whether the mini-task is
+          // deliverable; they do not change a failed focused-test receipt
+          // into malformed evidence. The separate full_tests_fresh fact and
+          // the mini-task close assertion keep the delivery incomplete.
+          requirePassed: false,
+        });
+        const testOutput = task.readRecord(testReceipt.output_ref);
+        if (sha256(testOutput) !== testReceipt.output_hash) throw new Error(`mini-task test output hash mismatch: ${testReceipt.output_ref}`);
+        const review = readBound(value.implementation_review, "mini-task implementation review");
+        const reviewSchema = review?.version === "wh-review-result.v1" ? "result" : review?.version === "wh-review-attempt.v1" ? "attempt" : null;
+        if (reviewSchema === null) throw new Error(`mini-task implementation review is not canonical: ${entry.ref}`);
+        validateSchema(reviewSchema, review);
+        if (review.task_id !== task.identity.taskId || review.review_kind !== "mini_task.implementation" || review.snapshot_tree !== fact.snapshot_tree) {
+          throw new Error(`mini-task implementation review is not current: ${entry.ref}`);
+        }
+        if (reviewSchema === "result") authenticateReviewEvidence(task, review);
+        else if (fact.status === "passed") throw new Error(`passed mini-task independent_review requires a semantic implementation review result: ${entry.ref}`);
+        const userResult = readBound(value.user_result, "mini-task user result");
+        if (userResult.schema_version !== "workflowhub-mini-task-user-result.v1"
+            || userResult.task_id !== task.identity.taskId || userResult.snapshot_tree !== fact.snapshot_tree
+            || userResult.status !== "verified") throw new Error(`mini-task user result is not current and verified: ${entry.ref}`);
+        if (userResult.evidence_type !== "test_receipt"
+            || userResult.evidence_ref !== value.test_receipt.ref
+            || userResult.evidence_hash !== value.test_receipt.sha256) {
+          throw new Error(`mini-task user result evidence is not bound to its focused test receipt: ${entry.ref}`);
+        }
+        const userReceiptRaw = task.readRecord(userResult.evidence_ref);
+        if (sha256(userReceiptRaw) !== userResult.evidence_hash) {
+          throw new Error(`mini-task user result evidence hash mismatch: ${entry.ref}`);
+        }
+        const userReceipt = JSON.parse(userReceiptRaw);
+        validateCanonicalFullTestReceipt(userReceipt, {
+          taskId: task.identity.taskId,
+          snapshotTree: fact.snapshot_tree,
+          requirePassed: false,
+          allowMiniTaskFocused: true,
+        });
+        const userReceiptOutput = task.readRecord(userReceipt.output_ref);
+        if (sha256(userReceiptOutput) !== userReceipt.output_hash) {
+          throw new Error(`mini-task user result evidence output hash mismatch: ${entry.ref}`);
+        }
+        validateMiniTaskAcTrace(value.ac_trace, {
+          taskId: task.identity.taskId,
+          snapshotTree: fact.snapshot_tree,
+          receiptRef: value.test_receipt.ref,
+          receiptHash: value.test_receipt.sha256,
+          read: (ref) => task.readRecord(ref),
+        });
+      } else {
+        const acceptance = validateAcceptanceEvidence(value, `acceptance evidence ${entry.ref}`);
+        if (fact.status === "passed" && acceptance.result !== "pass") {
+          throw new Error(`passed acceptance fact is bound to a non-pass result: ${entry.ref}`);
+        }
+        const acceptanceTreeMatches = acceptance.snapshot_tree === fact.snapshot_tree
+          || isMaterialOnlySnapshotDelta(task.manifest.target_repo_root, acceptance.snapshot_tree, fact.snapshot_tree, task.identity.taskId);
+        if (!acceptanceTreeMatches || acceptance.acceptance_criterion_id !== fact.subject) {
+          throw new Error(`acceptance evidence is not bound to the current subject/snapshot: ${entry.ref}`);
+        }
+        const nestedValues = [];
+        for (const nested of acceptance.refs) {
+          const nestedRaw = task.readRecord(nested.ref);
+          if (sha256(nestedRaw) !== nested.sha256) throw new Error(`acceptance evidence nested hash mismatch: ${nested.ref}`);
+          try { nestedValues.push(JSON.parse(nestedRaw)); }
+          catch { throw new Error(`acceptance evidence nested record is invalid JSON: ${nested.ref}`); }
+        }
+        const stageQuality = nestedValues.find((nested) => nested?.schema_version === "stage-quality-evidence.v1");
+        authenticateStageQualityEvidence(task, fact, stageQuality, nestedValues);
+      }
+    } else if (fact.kind === "confirmation") {
+      if (fact.stage !== "verify-code") throw new Error(`human confirmation quality fact must target verify-code: ${entry.ref}`);
+      validateHumanConfirmation(value, {
+        taskId: task.identity.taskId,
+        stage: fact.stage,
+        requireAccepted: true,
+        requireSubjectRef: true,
+      });
+      // The shared validator still accepts the legacy v1 interaction record
+      // for older public callers. Formal delivery close only consumes the
+      // current v2 verify-code confirmation, so keep that policy in this one
+      // branch instead of validating the same evidence twice below.
+      if (value.schema_version !== "human-confirmation.v2"
+          || value.stage !== "verify-code"
+          || value.snapshot_tree !== fact.snapshot_tree) {
+        throw new Error(`human confirmation is not an accepted current verify-code confirmation: ${entry.ref}`);
+      }
+    } else {
+      throw new Error(`unsupported quality fact kind: ${fact.kind}`);
+    }
+  }
+  return fact;
 }
 
 function unavailableVerifySnapshotCommit(reason) {
@@ -69,7 +482,7 @@ function unavailableVerifySnapshotCommit(reason) {
   return error;
 }
 
-function authenticatedTestSnapshotCommit(task, fact) {
+function authenticatedTestSnapshotCommit(task, fact, { currentSnapshotTree = fact?.snapshot_tree, sourceDigest = null, allowMiniTaskFocused = false } = {}) {
   const evidence = Array.isArray(fact?.evidence)
     ? fact.evidence.find((entry) => entry?.evidence_type === "test_receipt")
     : null;
@@ -86,10 +499,28 @@ function authenticatedTestSnapshotCommit(task, fact) {
   let receipt;
   try { receipt = JSON.parse(raw); }
   catch { throw unavailableVerifySnapshotCommit(`invalid JSON in ${evidence.ref}`); }
+  try {
+    validateCanonicalFullTestReceipt(receipt, {
+      taskId: task.identity.taskId,
+      snapshotTree: receipt?.snapshot_tree,
+      requirePassed: fact.status === "passed",
+      allowMiniTaskFocused,
+    });
+    const output = task.readRecord(receipt.output_ref);
+    if (sha256(output) !== receipt.output_hash) throw new Error(`output hash mismatch for ${receipt.output_ref}`);
+  } catch (error) {
+    throw unavailableVerifySnapshotCommit(`test receipt is not an authenticated passing record: ${error.message}`);
+  }
+  const receiptTreeMatchesCurrent = receipt?.snapshot_tree === currentSnapshotTree
+    || (typeof currentSnapshotTree === "string"
+      && isMaterialOnlySnapshotDelta(task.manifest.target_repo_root, receipt?.snapshot_tree, currentSnapshotTree, task.identity.taskId));
+  const receiptStage = receipt?.stage;
+  const crossStageReuse = receiptStage === "build-code";
   if (receipt?.schema_version !== "workflowhub-receipt.v1"
       || receipt.task_id !== task.identity.taskId
-      || receipt.stage !== "verify-code"
-      || receipt.snapshot_tree !== fact.snapshot_tree
+      || (receiptStage !== "verify-code" && !crossStageReuse)
+      || receipt.snapshot_tree !== fact.snapshot_tree && !receiptTreeMatchesCurrent
+      || (sourceDigest !== null && receipt.source_digest !== sourceDigest)
       || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_head ?? "")
       || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_tree ?? "")
       || !/^[a-f0-9]{40,64}$/i.test(receipt.snapshot_commit ?? "")) {
@@ -112,12 +543,51 @@ function authenticatedTestSnapshotCommit(task, fact) {
   return commit;
 }
 
+function factMatchesExpected(value, expected, root, taskId) {
+  const snapshotDelta = (from, to) => isMaterialOnlySnapshotDelta(root, from, to, taskId)
+    || isExecutionRecordOnlyMaterialDelta(root, from, to, taskId);
+  const treeMatches = expected.snapshotTree === undefined
+    || value.snapshot_tree === expected.snapshotTree
+    || (root && snapshotDelta(value.snapshot_tree, expected.snapshotTree));
+  const reusableMaterialOnlyDelta = expected.snapshotTree !== undefined
+    && value.snapshot_tree !== expected.snapshotTree
+    && root
+    && snapshotDelta(value.snapshot_tree, expected.snapshotTree);
+  const materialMatches = expected.materialRevision === undefined
+    || value.material_revision === expected.materialRevision
+    || reusableMaterialOnlyDelta;
+  return treeMatches && materialMatches;
+}
+
 function currentVerifyFacts(task, expected = {}) {
-  const values = task.listCanonicalQualityFactRefs()
+  const allValues = task.listCanonicalQualityFactRefs()
     .map((ref) => ({ ref, value: currentQualityValue(task, ref) }))
+    .filter(({ value }) => value?.stage !== undefined);
+  const currentValues = allValues
+    .filter(({ value }) => factMatchesExpected(value, expected, expected.worktreeRoot, task.identity.taskId));
+  const currentMiniImplementation = currentValues.find(({ value }) => value?.stage === "build-code"
+    && value?.subject === "mini_task_implementation_review"
+    && value?.status === "recorded");
+  const currentMiniAcceptance = currentValues.find(({ value }) => value?.stage === "verify-code"
+    && value?.kind === "acceptance_criterion"
+    && value?.subject === "acceptance_criteria"
+    && ["passed", "failed", "missing", "unavailable"].includes(value?.status));
+  // A focused mini-task receipt may stand in for verify-code's full suite only
+  // after the same current task/snapshot has an authenticated mini-task
+  // acceptance packet. The mere presence of an old, failed, unavailable, or
+  // unverified implementation fact must never relax the normal npm test rule.
+  let miniTaskMode = false;
+  if (currentMiniImplementation && currentMiniAcceptance && expected.snapshotTree !== undefined) {
+    try {
+      authenticatedQualityEvidence(task, currentMiniAcceptance.value);
+      miniTaskMode = true;
+    } catch {
+      miniTaskMode = false;
+    }
+  }
+  const values = currentValues
     .filter(({ value }) => value?.stage === "verify-code"
-      && (expected.snapshotTree === undefined || value.snapshot_tree === expected.snapshotTree)
-      && (expected.materialRevision === undefined || value.material_revision === expected.materialRevision));
+    );
   const bySubject = new Map();
   for (const item of values) {
     const previous = bySubject.get(item.value.subject);
@@ -134,14 +604,39 @@ function currentVerifyFacts(task, expected = {}) {
       bySubject.set(item.value.subject, item);
     }
   }
-  const test = bySubject.get("full_tests_fresh")?.value ?? null;
-  const independentReview = bySubject.get("independent_review")?.value ?? null;
-  const snapshotCommit = test ? authenticatedTestSnapshotCommit(task, test) : null;
+  const requiredSubjects = Object.keys({ ...STAGE_PREDICATES["verify-code"], independent_review: "review" });
+  const facts = Object.fromEntries(requiredSubjects.map((subject) => {
+    const item = bySubject.get(subject);
+    return [subject, item && subject !== "full_tests_fresh" ? authenticatedQualityEvidence(task, item.value) : item?.value ?? null];
+  }));
+  const test = facts.full_tests_fresh;
+  const receiptSnapshotCommit = test
+    ? authenticatedTestSnapshotCommit(task, test, {
+      currentSnapshotTree: expected.snapshotTree ?? test.snapshot_tree,
+      sourceDigest: expected.sourceDigest ?? null,
+      allowMiniTaskFocused: miniTaskMode,
+    })
+    : null;
+  // A reused test receipt proves the implementation/source snapshot. Delivery
+  // still binds the current full workspace snapshot, which may contain a
+  // material-only writeback after the test ran.
+  const snapshotCommit = test ? (expected.snapshotCommit ?? receiptSnapshotCommit) : null;
   return Object.freeze({
     vnext: true,
     facts: {
-      tests: test ? { snapshot_tree: test.snapshot_tree, snapshot_commit: snapshotCommit, status: test.status } : null,
-      independent_review: independentReview ? { snapshot_tree: independentReview.snapshot_tree, status: independentReview.status } : null,
+      tests: test ? {
+        kind: test.kind,
+        snapshot_tree: test.snapshot_tree,
+        material_revision: test.material_revision,
+        snapshot_commit: snapshotCommit,
+        receipt_snapshot_commit: receiptSnapshotCommit,
+        status: test.status,
+      } : null,
+      ...Object.fromEntries(requiredSubjects
+        .filter((subject) => subject !== "full_tests_fresh")
+        .map((subject) => [subject, facts[subject]
+          ? { kind: facts[subject].kind, snapshot_tree: facts[subject].snapshot_tree, status: facts[subject].status }
+          : null])),
     },
   });
 }
@@ -150,6 +645,13 @@ function currentMaterialRevision(task, worktreeRoot) {
   const artifacts = ArtifactDir.open(worktreeRoot, task);
   const values = CURRENT_MATERIAL_FILES.map((file) => [file, artifacts.read(file)]);
   return `revision-${sha256(JSON.stringify(values))}`;
+}
+
+function currentDeliverySnapshotCommit(worktreeRoot, snapshot) {
+  const headTree = gitResult(worktreeRoot, ["rev-parse", `${snapshot.head}^{tree}`]);
+  return headTree.ok && headTree.stdout.toLowerCase() === snapshot.tree.toLowerCase()
+    ? snapshot.head
+    : snapshot.commit;
 }
 
 function currentWorkspaceBinding(task, kernel, delivery = null) {
@@ -335,35 +837,51 @@ function createOrVerify(task, path, record, label) {
   return record;
 }
 
-function verifyFactsFreshForClose(acceptedVerify, worktreeRoot) {
+function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, currentSnapshotTree = null, repositoryRoot = null) {
   if (acceptedVerify?.vnext !== true) {
     return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
   }
-  if (!existsSync(worktreeRoot)) {
-    const required = [acceptedVerify?.facts?.tests, acceptedVerify?.facts?.independent_review];
-    const complete = acceptedVerify?.vnext === true
-      && required.every((fact) => typeof fact?.snapshot_tree === "string" && fact.snapshot_tree !== "");
-    if (!complete) return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete after worktree removal" });
-    const trees = new Set(required.map((fact) => fact.snapshot_tree));
-    if (trees.size !== 1) return Object.freeze({ current: false, reason: "current verify-code quality facts do not share one snapshot after worktree removal" });
-    return Object.freeze({ current: true, reason: "worktree-already-removed", snapshot_tree: required[0].snapshot_tree });
+  const requiredKinds = { ...STAGE_PREDICATES["verify-code"], independent_review: "review" };
+  const requiredSubjects = Object.keys(requiredKinds);
+  const required = requiredSubjects.map((subject) => acceptedVerify?.facts?.[subject === "full_tests_fresh" ? "tests" : subject]);
+  const missing = requiredSubjects.filter((subject, index) => {
+    const fact = required[index];
+    const kind = requiredKinds[subject];
+    return !fact || fact.kind !== kind || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === ""
+      || !qualityPredicateSatisfied(fact, kind);
+  });
+  if (missing.length) {
+    const state = existsSync(worktreeRoot) ? "current verify-code quality facts are incomplete" : "current verify-code quality facts are incomplete after worktree removal";
+    const failedTest = missing.includes("full_tests_fresh") && acceptedVerify?.facts?.tests?.status === "failed";
+    return Object.freeze({
+      current: false,
+      reason: failedTest
+        ? `${state}: focused test failed; delivery remains incomplete (${missing.join(", ")})`
+        : `${state}: ${missing.join(", ")}`,
+    });
   }
-  const snapshot = captureExecutionSnapshot(worktreeRoot);
-  const required = [acceptedVerify.facts.tests, acceptedVerify.facts.independent_review];
+  const snapshot = existsSync(worktreeRoot)
+    ? captureExecutionSnapshot(worktreeRoot, taskId)
+    : Object.freeze({ tree: currentSnapshotTree ?? required[0]?.snapshot_tree ?? null });
   // The verify-code quality review is the single independent review for the
   // final snapshot. Phase reviews remain immutable audit facts; requiring a
   // second build-code integration review here duplicated work without adding
   // a new acceptance question. The explicit close confirmation decides what
   // to do with the current verification conclusion.
-  const missing = required.some((fact) => !fact || typeof fact.snapshot_tree !== "string" || fact.snapshot_tree === "");
-  const trees = required.map((fact) => fact?.snapshot_tree).filter((tree) => typeof tree === "string" && tree !== "");
-  if (missing || trees.length !== required.length) {
-    return Object.freeze({ current: false, reason: "current verify-code quality facts are incomplete", snapshot_tree: snapshot.tree });
+  // A task-card execution-status write is bookkeeping, not a new
+  // implementation subject. It may change the full tree, but only that
+  // bounded block is allowed to keep the old quality facts current.
+  // After delivery cleanup the accepted worktree is gone. Material-only
+  // freshness still needs Git objects to compare the old fact tree with the
+  // current tree, so use the target repository instead of a deleted cwd.
+  const deltaRoot = worktreeRoot && existsSync(worktreeRoot) ? worktreeRoot : repositoryRoot;
+  const stale = required.filter((fact) => fact?.snapshot_tree !== snapshot.tree
+    && !isMaterialOnlySnapshotDelta(deltaRoot, fact?.snapshot_tree, snapshot.tree, taskId)
+    && !isExecutionRecordOnlyMaterialDelta(deltaRoot, fact?.snapshot_tree, snapshot.tree, taskId));
+  if (stale.length) {
+    return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(stale.map((fact) => fact.snapshot_tree))] });
   }
-  if (trees.some((tree) => tree !== snapshot.tree)) {
-    return Object.freeze({ current: false, reason: "current verify-code quality facts are stale relative to the Workspace", snapshot_tree: snapshot.tree, expected_trees: [...new Set(trees)] });
-  }
-  return Object.freeze({ current: true, snapshot_tree: snapshot.tree });
+  return Object.freeze({ current: true, reason: snapshot.tree === currentSnapshotTree ? "current" : "record-only-task-writeback", snapshot_tree: snapshot.tree });
 }
 
 /** Persist one immutable, plan-bound close decision. */
@@ -610,19 +1128,23 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const workspace = openCurrentTaskWorkspace(task);
   const worktree = resolve(workspace.worktreeRoot);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
-  const currentSnapshot = captureExecutionSnapshot(worktree);
+  const currentSnapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
+  const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
   const acceptedVerify = currentVerifyFacts(task, {
     snapshotTree: currentSnapshot.tree,
     materialRevision: currentMaterialRevision(task, worktree),
+    snapshotCommit: deliverySnapshotCommit,
+    sourceDigest: currentSnapshot.source_digest,
+    worktreeRoot: worktree,
   });
-  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree);
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree, task.identity.taskId, currentSnapshot.tree);
   if (!verifyFreshness.current) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
   if (taskCommit !== oid(acceptedVerify.facts.tests.snapshot_commit, "accepted verify-code snapshot_commit")) {
-    throw new Error("delivery task_commit does not match the accepted verify-code snapshot");
+    throw new Error(`delivery task_commit does not match the accepted verify-code snapshot (${taskCommit} !== ${acceptedVerify.facts.tests.snapshot_commit})`);
   }
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
   if (!branchTip.ok) throw new Error("task branch does not exist");
@@ -634,7 +1156,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
     const taskTree = gitResult(root, ["rev-parse", `${taskCommit}^{tree}`]);
     if (!parent.ok || parent.stdout.toLowerCase() !== tip) throw new Error("task snapshot commit must have the current task branch tip as its parent");
     if (!taskTree.ok) throw new Error("task snapshot commit does not exist");
-    const snapshot = captureExecutionSnapshot(worktree);
+    const snapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
     if (snapshot.head.toLowerCase() !== tip || snapshot.tree.toLowerCase() !== taskTree.stdout.toLowerCase()) {
       throw new Error("task worktree does not match the verified task snapshot commit");
     }
@@ -684,8 +1206,12 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const root = delivery.target_repo_root;
   const taskSnapshotTree = gitResult(root, ["rev-parse", `${delivery.task_commit}^{tree}`]);
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
-  const acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? { snapshotTree: taskSnapshotTree.stdout } : {});
-  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root);
+  const acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? {
+    snapshotTree: taskSnapshotTree.stdout,
+    snapshotCommit: delivery.task_commit,
+    worktreeRoot: delivery.target_repo_root,
+  } : {});
+  const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root, task.identity.taskId, taskSnapshotTree.ok ? taskSnapshotTree.stdout : null, root);
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
@@ -864,7 +1390,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             if (tip !== parent) throw new Error("task branch changed before publishing verified snapshot");
             git(root, ["update-ref", `refs/heads/${delivery.task_branch}`, delivery.task_commit, parent]);
           }
-          const snapshot = captureGitWorktreeSnapshot(worktree);
+          const snapshot = captureGitWorktreeSnapshot(worktree, task.identity.taskId);
           if (snapshot.tree.toLowerCase() !== git(root, ["rev-parse", `${delivery.task_commit}^{tree}`]).toLowerCase()) throw new Error("task worktree bytes changed before snapshot publish");
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
           if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");

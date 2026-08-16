@@ -36,9 +36,11 @@ provider 调用。
 若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
 新 attempt 的事实只供改进，不循环也不阻断 stage 推进。
 
-人类审查卡按 finding 显示一个 disposition：`fixed`、`rejected_invalid`、
-`accepted_risk`；没有可绑定 ledger 时显示 `unverified`。这描述处理事实，不把
-provider findings 转成“审查通过”。
+每个 canonical/reportable finding（包括普通和严重）都必须有一个 disposition：`fixed`、
+`rejected_invalid`、`accepted_risk` 或 `needs_human`；没有可绑定 ledger 时显示
+`unverified`。`accepted_risk` 必须绑定当前 finding、review、snapshot 和真实用户风险确认。
+严重 finding 额外决定是否暂停正式完成，普通 finding 不能因此被丢掉。这描述处理事实，
+不把 provider findings 转成“审查通过”。
 
 ## 处置边界
 
@@ -60,6 +62,11 @@ build-spec 只消费可信异源 advice，不要求 provider `pass` 或 findings
   lens 缺失只记录为材料事实，不阻止同 task 继续工作。
 - 发现上述内容实质扩大实现或维护面时，报告具体删除或缩减 finding，不得以补充更多
   要求、通用框架或未来兼容层代替删除。
+
+审查顺序固定为：需求覆盖 → 完整用户旅程和状态 → 失败/恢复/幂等边界 → 可打破的验收
+断言 → 范围和长期维护成本。重点是找“做完以后仍然不能交付”的缺口，例如成功路径能
+走通但重试会重复写入、失败后无法恢复、AC 只能看文件存在而不能证明行为。不要把 packet
+格式、快照或 receipt 本身当成质量目标；它们只有在遮住上述语义时才报告。
 
 ## 输出
 

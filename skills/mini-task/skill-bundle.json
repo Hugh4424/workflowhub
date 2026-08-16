@@ -2,8 +2,14 @@
   "schema_version": 1,
   "skill": "mini-task",
   "files": [
-    { "path": "SKILL.md", "sha256": "95ef499d710fee8c9aeed422a26502cd9dbede6b5af7932d041a634210941b4b" },
-    { "path": "scripts/mini-task-runner.mjs", "sha256": "1cc7980699730faf9bbc8ea25f1f1cd9855679fbaebc31ae06d4871f2be1e761" }
+    {
+      "path": "SKILL.md",
+      "sha256": "95ef499d710fee8c9aeed422a26502cd9dbede6b5af7932d041a634210941b4b"
+    },
+    {
+      "path": "scripts/mini-task-runner.mjs",
+      "sha256": "9a9738ee43ae148e0512d21324a59e06718559a4d19cc07fba31fdda33be4e4c"
+    }
   ],
   "sources": []
 }

@@ -4,8 +4,11 @@ import { dirname, extname, join, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
+import { isExecutionRecordOnlyMaterialDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
+import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
 import { buildAcEvidenceSummary } from "./ac-evidence-summary.mjs";
 import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skillPlan = JSON.parse(readFileSync(resolve(here, "..", "stage-skill-plan.json"), "utf8"));
@@ -15,9 +18,21 @@ function sha256(bytes) {
 }
 
 const HASH = /^[0-9a-f]{64}$/i;
+const ACCEPTANCE_ID = /\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/;
+const ACCEPTANCE_IDS = /\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g;
+const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+const FULL_TEST_COMMAND = "npm test";
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
-export const PHASE_DIFF_INLINE_LIMIT_BYTES = 320 * 1024;
+export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 330 * 1024;
+// Kept as a named compatibility export for phase-packet callers. The bound
+// is a build-code packet bound, not a license to let integration packets grow
+// without limit.
+export const PHASE_DIFF_MAX_DELIVERY_BYTES = REVIEW_PACKET_MAX_DELIVERY_BYTES;
+// Leave room for the fixed contract, prompt, manifest, and selected-context
+// overhead before choosing the inline path. The final cap remains enforced
+// after the complete packet is measured.
+export const PHASE_DIFF_INLINE_LIMIT_BYTES = 288 * 1024;
 const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
 const FULL_PHASE_DIFF_PREFIXES = [
   "runtime/",
@@ -146,10 +161,10 @@ function materialPresent(value) {
   return value !== null && typeof value === "object" && Object.keys(value).length > 0;
 }
 
-const LOCAL_HOST_PATH = /(^|[\s("'`=,:;])\/(?:Users|home|private|tmp)\/[^\s"'`<>()[\]{}]+/g;
+const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+/g;
 
 function redactHostPathText(value) {
-  return value.replace(LOCAL_HOST_PATH, (_match, prefix) => `${prefix}<host-path-redacted>`);
+  return value.replace(LOCAL_HOST_PATH, "<host-path-redacted>");
 }
 
 /**
@@ -171,6 +186,61 @@ function validateVerifyEvidenceRoots(stage, materials) {
   for (const [refKey, hashKey] of [["test_receipt_ref", "test_receipt_hash"], ["evidence_ref", "evidence_hash"]]) {
     if (typeof evidence[refKey] !== "string" || evidence[refKey].trim() === "") throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_evidence requires ${refKey}`);
     if (typeof evidence[hashKey] !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(evidence[hashKey])) throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_evidence requires ${hashKey}`);
+  }
+}
+
+/**
+ * A verify review cannot find delivery defects when its acceptance subject is
+ * an empty placeholder. This is a material preflight, not an AC pass gate:
+ * incomplete or failed criteria remain valid review input, but zero criteria
+ * or a generic non-AC note must fail before spending provider budget.
+ */
+export function validateVerifyAcceptanceSummary(value, { expectedCriterionIds = null } = {}) {
+  const raw = Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : JSON.stringify(value);
+  if (typeof raw !== "string" || raw.trim() === "") throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria is empty");
+  const text = raw.trim();
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { /* Markdown summaries are also supported. */ }
+  if (/"criteria"\s*:\s*\[\s*\]/i.test(text) || /"acceptance_criteria"\s*:\s*\[\s*\]/i.test(text)) {
+    throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria contains an empty criteria list");
+  }
+  const candidateArrays = [];
+  if (Array.isArray(parsed)) candidateArrays.push(parsed);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    for (const key of ["criteria", "acceptance_criteria", "items"]) {
+      if (Object.hasOwn(parsed, key)) candidateArrays.push(parsed[key]);
+    }
+  }
+  for (const entries of candidateArrays) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria must contain current AC entries");
+    }
+    if (entries.some((entry) => {
+      if (typeof entry === "string") return !ACCEPTANCE_ID.test(entry);
+      return !entry || typeof entry !== "object" || !ACCEPTANCE_ID.test(String(entry.acceptance_criterion_id ?? entry.id ?? ""));
+    })) {
+      throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria entries must identify ACs");
+    }
+  }
+  if (!ACCEPTANCE_ID.test(text)) throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria must name current ACs");
+  if (Array.isArray(expectedCriterionIds) && expectedCriterionIds.length > 0) {
+    const actual = [...new Set([...text.matchAll(ACCEPTANCE_IDS)].map(([id]) => id.toUpperCase()))].sort();
+    const expected = [...new Set(expectedCriterionIds.map((id) => String(id).toUpperCase()))].sort();
+    if (actual.length !== expected.length || actual.some((id, index) => id !== expected[index])) {
+      throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_criteria does not match current spec AC set (expected ${expected.join(", ")}, received ${actual.join(", ")})`);
+    }
+  }
+  return true;
+}
+
+function currentSpecCriterionIds(task) {
+  if (!task || typeof task.readArtifact !== "function") return null;
+  try {
+    const spec = task.readArtifact("spec.md");
+    const ids = [...String(spec).matchAll(ACCEPTANCE_IDS)].map(([id]) => id.toUpperCase());
+    return [...new Set(ids)];
+  } catch {
+    return null;
   }
 }
 
@@ -199,11 +269,35 @@ function validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps }
 
 function validateIntegrationFreshTests({ task, source, materials }) {
   const evidence = materials.test_evidence;
-  const raw = assertTaskHandle(task).readRecord(evidence.receipt_ref);
+  if (evidence?.status === "unavailable") {
+    if (typeof evidence.reason !== "string" || evidence.reason.trim() === "") {
+      throw new Error("MATERIAL_INCOMPLETE: unavailable integration test evidence requires a reason");
+    }
+    return;
+  }
+  const handle = assertTaskHandle(task);
+  const raw = handle.readRecord(evidence.receipt_ref);
   if (sha256(raw) !== evidence.receipt_hash.replace(/^sha256:/, "")) throw new Error("MATERIAL_INCOMPLETE: integration test receipt hash mismatch");
   let receipt;
   try { receipt = JSON.parse(raw); } catch { throw new Error("MATERIAL_INCOMPLETE: integration test receipt must be JSON"); }
-  if (receipt.snapshot_tree !== source.snapshotTree || receipt.exit_code !== 0) {
+  validateCanonicalTestReceipt(receipt, {
+    taskId: handle.identity.taskId,
+    stage: "build-code",
+    // An execution-status-only tasks.md writeback is not a source change.
+    // Validate the receipt's own immutable snapshot first, then apply the
+    // narrow semantic-delta check below.
+    snapshotTree: receipt.snapshot_tree,
+    subject: "build-code-test-capture",
+    allowedProducerComponents: ["build-code-test-capture"],
+    expectedCommand: FULL_TEST_COMMAND,
+    requirePassed: true,
+  });
+  const output = handle.readRecord(receipt.output_ref);
+  if (sha256(output) !== receipt.output_hash) throw new Error("MATERIAL_INCOMPLETE: integration test output hash mismatch");
+  const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
+    || (typeof source.sourceRoot === "string"
+      && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
+  if (!snapshotCurrent || receipt.exit_code !== 0) {
     throw new Error("MATERIAL_INCOMPLETE: integration requires a fresh passing test receipt for the frozen final snapshot");
   }
 }
@@ -247,15 +341,17 @@ export function validateAuthorityMap(key, value) {
 }
 
 function validateDistinctAcceptanceEvidenceAnchors(value) {
-  const owners = new Map();
+  const owners = [];
   for (const entry of value.entries.filter(({ id, disposition }) => disposition === "complete" && /^AC-/.test(id))) {
     for (const anchor of entry.anchors ?? []) {
-      const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
-      const previous = owners.get(signature);
-      if (previous !== undefined && previous !== entry.id) {
-        throw new Error(`MATERIAL_INCOMPLETE: evidence_map ${previous} and ${entry.id} share one proving anchor; each AC needs a distinct implementation/test block`);
+      const previous = owners.find(({ anchor: previousAnchor, entryId }) => entryId !== entry.id
+        && previousAnchor.path === anchor.path
+        && previousAnchor.start_line <= anchor.end_line
+        && anchor.start_line <= previousAnchor.end_line);
+      if (previous !== undefined) {
+        throw new Error(`MATERIAL_INCOMPLETE: evidence_map ${previous.entryId} and ${entry.id} overlap one proving anchor; each AC needs a distinct implementation/test block`);
       }
-      owners.set(signature, entry.id);
+      owners.push({ anchor, entryId: entry.id });
     }
   }
 }
@@ -266,7 +362,7 @@ function validateAnchors(key, entryId, anchors) {
   for (const anchor of anchors) {
     if (!anchor || typeof anchor !== "object" || Array.isArray(anchor) ||
         typeof anchor.id !== "string" || anchor.id.trim() === "" || ids.has(anchor.id) ||
-        !safeRelative(anchor.path) || !Number.isSafeInteger(anchor.start_line) || anchor.start_line < 1 ||
+        !ANCHOR_PATH.test(anchor.path ?? "") || !Number.isSafeInteger(anchor.start_line) || anchor.start_line < 1 ||
         !Number.isSafeInteger(anchor.end_line) || anchor.end_line < anchor.start_line ||
         typeof anchor.role !== "string" || anchor.role.trim() === "" ||
         typeof anchor.reason !== "string" || anchor.reason.trim() === "") {
@@ -286,6 +382,13 @@ export function validateBuildCodeAcceptanceMap(value) {
     entryIds.add(entry.id);
     if (typeof entry.implementation !== "string" || entry.implementation.trim() === "" || typeof entry.verification !== "string" || entry.verification.trim() === "") {
       throw new Error("MATERIAL_INCOMPLETE: acceptance_map entries require implementation and verification");
+    }
+    for (const key of ["implementation_anchor_ids", "verification_anchor_ids"]) {
+      if (!Array.isArray(entry[key]) || entry[key].length === 0
+          || new Set(entry[key]).size !== entry[key].length
+          || entry[key].some((id) => typeof id !== "string" || id.trim() === "")) {
+        throw new Error(`MATERIAL_INCOMPLETE: acceptance_map ${entry.id} requires non-empty ${key}`);
+      }
     }
   }
   if (entryIds.size !== value.acceptance_ids.length) throw new Error("MATERIAL_INCOMPLETE: acceptance_map must map every declared AC");
@@ -330,11 +433,18 @@ function validateIntegrationMaterials({ task, source, materials }) {
   }
   const traced = new Set();
   for (const entry of integrationEntries(trace, "ac_trace")) {
+    const evidenceUnavailable = entry?.evidence_status === "unavailable";
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.acceptance_criterion_id !== "string" ||
         !trace.acceptance_ids.includes(entry.acceptance_criterion_id) || traced.has(entry.acceptance_criterion_id) ||
         !Array.isArray(entry.change) || !Array.isArray(entry.test) || !Array.isArray(entry.evidence) ||
-        entry.change.length === 0 || entry.test.length === 0 || entry.evidence.length === 0) {
+        entry.change.length === 0 || (!evidenceUnavailable && entry.evidence.length === 0)
+        || (entry.test.length === 0 && entry.coverage_status !== "unknown")
+        || (entry.coverage_status === "unknown" && (typeof entry.coverage_reason !== "string" || entry.coverage_reason.trim() === ""))
+        || (evidenceUnavailable && (typeof entry.evidence_reason !== "string" || entry.evidence_reason.trim() === ""))) {
       throw new Error("MATERIAL_INCOMPLETE: current AC evidence requires change, test, and evidence mappings");
+    }
+    if (entry.coverage_status !== undefined && !["covered", "unknown"].includes(entry.coverage_status)) {
+      throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} coverage_status is invalid`);
     }
     traced.add(entry.acceptance_criterion_id);
     validateAnchors("ac_trace", entry.acceptance_criterion_id, entry.anchors);
@@ -348,14 +458,20 @@ function validateIntegrationMaterials({ task, source, materials }) {
       const raw = assertTaskHandle(task).readRecord(test.receipt_ref);
       if (sha256(raw) !== test.receipt_hash) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test hash mismatch`);
       const receipt = JSON.parse(raw);
-      if (receipt.snapshot_tree !== source.snapshotTree || receipt.exit_code !== 0) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test is not a passing current-snapshot fact`);
+      const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
+        || (typeof source.sourceRoot === "string"
+          && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
+      if (!snapshotCurrent || receipt.exit_code !== 0) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} test is not a passing current-snapshot fact`);
     }
     for (const evidence of entry.evidence) {
       if (typeof evidence?.ref !== "string" || !HASH.test(evidence.sha256 ?? "")) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence binding is invalid`);
       const raw = assertTaskHandle(task).readRecord(evidence.ref);
       if (sha256(raw) !== evidence.sha256) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence hash mismatch`);
       const receipt = JSON.parse(raw);
-      if (receipt.snapshot_tree !== source.snapshotTree) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence is not current-snapshot fact`);
+      const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
+        || (typeof source.sourceRoot === "string"
+          && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
+      if (!snapshotCurrent) throw new Error(`MATERIAL_INCOMPLETE: AC ${entry.acceptance_criterion_id} evidence is not current-snapshot fact`);
     }
     if (entry.evidence_status === "historical_non_replayable") {
       const disposition = entry.disposition;
@@ -476,6 +592,21 @@ function deduplicateDecisionMaterials(materials) {
   return { ...materials, raw_requirement: derivedRawRequirement };
 }
 
+function compactMiniTaskDecisionLog(decisionLog) {
+  if (typeof decisionLog !== "string") {
+    throw new Error("MATERIAL_INCOMPLETE: mini-task decision_log must be text with an original requirement section");
+  }
+  const lines = decisionLog.replaceAll("\r\n", "\n").split("\n");
+  const start = lines.findIndex((line) => /^##[ \t]+原始需求(?:[ \t（(]|$)/.test(line));
+  if (start < 0) {
+    throw new Error("MATERIAL_INCOMPLETE: mini-task decision_log has no original requirement section");
+  }
+  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+\S/.test(line));
+  const end = nextHeading < 0 ? lines.length : nextHeading;
+  const compacted = [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim();
+  return compacted.length > 0 ? `${compacted}\n` : "# Decision Log\n";
+}
+
 /**
  * Build-plan's spec-analyze input is a packet projection, not another current
  * material. The raw requirement index is carried from decision-log so the
@@ -516,46 +647,66 @@ function stagePlanFor(stage, track, reviewKind = null) {
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
-function stageReviewFocus(stage, track, reviewScope, reviewKind = null) {
-  if (reviewKind === "mini_task.design") return "Focus on whether the mini-task four materials freeze one small, safe, complete design, its risks, dependencies, boundaries, tests, rollback, and delivery; do not invent product scope.";
-  if (reviewKind === "mini_task.implementation") return "Focus on whether the mini-task implementation matches the frozen four materials, current diff/snapshot, tests, AC trace, real user result, coverage limits, and remaining risks.";
+function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
+  if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") return `mini-task/${reviewKind.split(".")[1]}`;
+  if (stage === "make-decision") return `${stage}/${track ?? ""}`;
+  if (stage === "build-code") return `${stage}/${reviewScope ?? "phase"}`;
+  return stage;
+}
+
+function problemOrderFor(stage, track, reviewScope, reviewKind) {
+  const surface = reviewSurfaceFor(stage, track, reviewScope, reviewKind);
+  return stageMaterials.surfaces?.[surface]?.problem_order ?? [];
+}
+
+function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directionMode = "full") {
+  const order = problemOrderFor(stage, track, reviewScope, reviewKind);
+  const ordered = order.length ? ` Review in this order: ${order.join(" -> ")}.` : "";
+  if (reviewKind === "mini_task.design") return `Focus on whether the mini-task four materials freeze one small, safe, complete design, its risks, dependencies, boundaries, tests, rollback, and delivery; do not invent product scope.${ordered}`;
+  if (reviewKind === "mini_task.implementation") return `Focus on whether the mini-task implementation matches the frozen four materials, current diff/snapshot, tests, AC trace, real user result, coverage limits, and remaining risks.${ordered}`;
+  if (stage === "make-decision" && track === "direction" && directionMode === "reconstruct") {
+    return `First request: independently reconstruct the problem, user flow, hard constraints, non-goals, failure consequences, and the smallest reversible boundary from only the raw requirement and objective facts. Do not look for or infer a current choice.${ordered}`;
+  }
+  if (stage === "make-decision" && track === "direction" && directionMode === "challenge") {
+    return `Second request: use the blind reconstruction, then inspect the revealed current choice, alternatives, rationale, and assumptions. Attack the choice, failure modes, and smaller reversible alternatives; report only delivery-threatening findings.${ordered}`;
+  }
   if (stage === "make-decision" && track === "direction") {
-    return "Focus on whether the raw requirement, user flow, boundaries, risks, and direction are complete. Do not propose or judge an implementation solution.";
+    return `Focus on whether the raw requirement, user flow, boundaries, risks, and direction are complete. Do not propose or judge an implementation solution.${ordered}`;
   }
   if (stage === "make-decision" && track === "detail") {
-    return "Focus on whether the approved direction is turned into a complete flow, page scope, data states, success/failure boundaries, non-goals, and deferred handoff. Do not invent a new direction.";
+    return `Focus on whether the approved direction is turned into a complete flow, page scope, data states, success/failure boundaries, non-goals, and deferred handoff. Do not invent a new direction.${ordered}`;
   }
   if (stage === "build-spec") {
-    return "Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, and objective acceptance. Do not re-decide product direction or plan implementation work.";
+    return `Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, and objective acceptance. Do not re-decide product direction or plan implementation work.${ordered}`;
   }
   if (stage === "build-plan") {
-    return "Focus on whether the plan and tasks execute the approved spec in dependency order, with real test or evidence oracles and no missing requirement. Do not add requirements or treat review as permission to proceed.";
+    return `Focus on whether the plan and tasks execute the approved spec in dependency order, with real test or evidence oracles and no missing requirement. Do not add requirements or treat review as permission to proceed.${ordered}`;
   }
   if (stage === "build-code" && reviewScope === "phase") {
-    return "Focus on the complete current Phase diff, its direct consumers, tests, acceptance trace, and actionable major or blocking risks. Ignore unrelated history and do not require a provider pass.";
+    return `Focus on the complete current Phase diff, its direct consumers, tests, acceptance trace, and actionable major or blocking risks. Ignore unrelated history and do not require a provider pass.${ordered}`;
   }
   if (stage === "build-code" && reviewScope === "integration") {
-    return "Focus on the final current worktree implementation, current tests, acceptance trace, and actionable major or blocking risks. Do not replay Phase history, cumulative diffs, or require a provider pass.";
+    return `Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.${ordered}`;
   }
   if (stage === "verify-code") {
-    return "Focus on the current acceptance summary, final test facts, implementation assessment, and open delivery risks. Report advice only; do not emit a provider verdict.";
+    return `Focus on the current acceptance summary, final test facts, implementation assessment, and open delivery risks. Report advice only; do not emit a provider verdict.${ordered}`;
   }
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
 
-export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null) {
+export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full") {
   const rule = ruleFor(reviewKind ?? stage, track, reviewKind ? null : reviewScope);
   const plan = stagePlanFor(stage, track, reviewKind);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
   if (["build-code", "verify-code"].includes(stage) && selectedSkills.length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
   const scope = reviewKind ?? (stage === "make-decision" ? `${stage}/${track}` : stage === "build-code" ? `${stage}/${reviewScope ?? "phase"}` : stage);
-  const blind = stage === "make-decision" && track === "direction"
+  const blind = stage === "make-decision" && track === "direction" && directionMode !== "challenge"
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const reviewInstruction = "This is a full review of the supplied current stage subject.";
-  const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind);
+  const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode);
   const verifyBound = reviewKind
     ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
@@ -573,9 +724,14 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : reviewKind === "mini_task.implementation"
     ? "Read the current implementation diff/snapshot and the explicitly supplied tests, AC trace, and real user result."
     : stage === "build-code" && reviewScope === "integration"
-    ? "For integration, do not look for or infer a diff; read only the final current worktree subject, current tests, AC trace, and selected context."
+    ? "For integration, do not look for or infer a diff; read only the final current worktree subject, compact behavior requirements, relevant test outcome, and selected implementation context. AC bindings and evidence-ledger details are host-only and are not review targets."
+    : stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
+    ? "Read only the raw requirement and objective facts; the current choice is intentionally absent."
+    : stage === "make-decision" && track === "direction" && directionMode === "challenge"
+    ? "Read the raw requirement, objective facts, revealed current choice, alternatives, rationale, assumptions, and the blind reconstruction; do not treat the reconstruction as a verdict."
     : "Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority.";
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -734,6 +890,110 @@ function compactApprovedSpec(spec, acceptanceCriteria, acceptanceMap, archive) {
   };
 }
 
+function markdownText(value, label) {
+  if (Buffer.isBuffer(value)) return value.toString("utf8");
+  if (typeof value !== "string") throw new Error(`MATERIAL_INCOMPLETE: ${label} must be markdown text`);
+  return value;
+}
+
+function markdownSections(value, label = "review material") {
+  const text = markdownText(value, label);
+  const headings = [...text.matchAll(/^##+\s+.*$/gm)];
+  if (headings.length === 0) return [{ heading: null, text }];
+  return headings.map((match, index) => ({
+    heading: match[0].trim(),
+    text: text.slice(match.index, headings[index + 1]?.index ?? text.length).trim(),
+  }));
+}
+
+function compactIntegrationAcceptanceCriteria(value, archive) {
+  const sections = markdownSections(value, "build-code integration acceptance_criteria");
+  const acceptanceSections = sections.filter(({ heading }) => heading && /验收|acceptance criteria/i.test(heading));
+  const selectedText = (acceptanceSections.length ? acceptanceSections : sections).map(({ text }) => text).join("\n\n");
+  const selectedIds = [...requirementIds(selectedText)].filter((id) => /^AC-\d+$/.test(id)).sort();
+  const blocks = selectedText.split(/\n{2,}/).filter((block) => selectedIds.some((id) => block.includes(id)));
+  return {
+    schema_version: "wh-review-acceptance-excerpts.v1",
+    full: archive,
+    selected_ids: selectedIds,
+    excerpts: blocks.length > 0 ? blocks : [selectedText],
+  };
+}
+
+function compactIntegrationSpec(value, archive) {
+  const sections = markdownSections(value, "build-code integration approved_spec");
+  const nonAcceptanceSections = sections.filter(({ heading }) => !heading || !/验收|acceptance criteria/i.test(heading));
+  const selected = nonAcceptanceSections.filter(({ heading }) => {
+    if (!heading) return false;
+    if (/来源与决策映射|产品事实与假设|build-spec 执行结论/i.test(heading)) return false;
+    return /速读|背景|目标|范围|场景|功能需求|关键实体|数据|生命周期|兼容|不做|非目标|风险|未决|交接|业务影响|回归/i.test(heading);
+  });
+  return {
+    schema_version: "wh-review-integration-spec.v1",
+    full: archive,
+    selected_sections: selected.map(({ heading }) => heading),
+    excerpts: (selected.length > 0 ? selected : nonAcceptanceSections).map(({ text }) => text),
+  };
+}
+
+// Keep the integration packet focused on delivery behavior rather than the
+// host's evidence/transport plumbing. The host still retains every anchor in
+// the authenticated AC trace; this limit only bounds provider-visible source
+// context. One excerpt per priority path preserves the main cross-phase seams
+// without turning a wide worktree change into repository replay.
+const INTEGRATION_PROVIDER_ANCHOR_MAX = 9;
+const INTEGRATION_PROVIDER_ANCHOR_MAX_PER_PATH = 1;
+const INTEGRATION_PROVIDER_ANCHOR_PRIORITY = Object.freeze([
+  "core/task-close.mjs",
+  "runtime/task/git-worktree-snapshot.mjs",
+  "skills/mini-task/scripts/mini-task-runner.mjs",
+  "runtime/review/integration-review-subject.mjs",
+  "skills/wh-review/scripts/review-runner.mjs",
+  "runtime/review/canonical-review-result.mjs",
+  "skills/wh-review/scripts/review-materials.mjs",
+  "runtime/evidence/canonical-evidence-validators.mjs",
+  "runtime/stage/stage-handlers.mjs",
+]);
+
+function integrationProviderAnchorPathAllowed(path) {
+  if (typeof path !== "string" || path.length === 0) return false;
+  if (path.startsWith("tests/") || path.includes("/__tests__/")) return false;
+  if (path.startsWith("skills/") && (
+    path.includes("/contracts/")
+    || path.endsWith("/SKILL.md")
+    || path.endsWith("/skill-bundle.json")
+    || path.endsWith("/manifest.json")
+  )) return false;
+  return true;
+}
+
+function compactIntegrationImplementationAnchors(value) {
+  if (!Array.isArray(value)) return value;
+  const rank = new Map(INTEGRATION_PROVIDER_ANCHOR_PRIORITY.map((path, index) => [path, index]));
+  const byPath = new Map();
+  for (const anchor of value) {
+    if (!anchor || !integrationProviderAnchorPathAllowed(anchor.path)) continue;
+    const list = byPath.get(anchor.path) ?? [];
+    list.push(anchor);
+    byPath.set(anchor.path, list);
+  }
+  const paths = [...byPath.keys()].sort((left, right) =>
+    (rank.get(left) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right) ?? Number.MAX_SAFE_INTEGER)
+    || left.localeCompare(right),
+  );
+  const selected = [];
+  for (const path of paths) {
+    const anchors = byPath.get(path).slice().sort((left, right) => {
+      const leftSpan = Number(left.end_line) - Number(left.start_line);
+      const rightSpan = Number(right.end_line) - Number(right.start_line);
+      return rightSpan - leftSpan || Number(left.start_line) - Number(right.start_line) || String(left.id).localeCompare(String(right.id));
+    });
+    selected.push(...anchors.slice(0, INTEGRATION_PROVIDER_ANCHOR_MAX_PER_PATH));
+    if (selected.length >= INTEGRATION_PROVIDER_ANCHOR_MAX) break;
+  }
+  return selected.slice(0, INTEGRATION_PROVIDER_ANCHOR_MAX).map(({ id, path, start_line, end_line, role }) => ({ id, path, start_line, end_line, role }));
+}
+
 function canonicalAnchorSource({ reviewDataRoot, source, anchor }) {
   const temporaryRoot = mkdtempSync(join(resolve(reviewDataRoot), "anchor-source-"));
   try {
@@ -754,8 +1014,8 @@ function canonicalAnchorSource({ reviewDataRoot, source, anchor }) {
   }
 }
 
-function diffSections(source) {
-  const bytes = readFileSync(source.diffPath);
+function diffSections(source, cachedBytes = null) {
+  const bytes = cachedBytes ?? readFileSync(source.diffPath);
   const starts = [];
   let offset = 0;
   while (offset < bytes.length) {
@@ -820,9 +1080,10 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
   const selectedChangeIds = selectedPhaseChangeIds(materials);
+  const sections = diffSections(source);
   const shards = [];
   let ordinal = 0;
-  for (const section of diffSections(source)) {
+  for (const section of sections) {
     const change = changesByPath.get(section.path);
     if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
     // An explicit phase/acceptance map is the authority for a bounded Phase
@@ -867,7 +1128,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
       });
     }
   }
-  const indexedChanges = [...new Set(diffSections(source).map(({ path }) => changesByPath.get(path)?.change_id).filter(Boolean))];
+  const indexedChanges = [...new Set(sections.map(({ path }) => changesByPath.get(path)?.change_id).filter(Boolean))];
   const covered = new Set(indexedChanges);
   const missing = changeMap.changes.map(({ change_id }) => change_id).filter((id) => !covered.has(id));
   if (missing.length > 0) throw new Error(`MATERIAL_INCOMPLETE: diff index misses change_ids ${missing.join(",")}`);
@@ -935,14 +1196,18 @@ export function validateDiffIndexBundle(bundleRoot) {
   }
 }
 
-function packetAuthority(path, rule) {
+function packetAuthority(path, rule, { reviewScope = null } = {}) {
   if (path === "source.json") return { authority: "required", inclusion_reason: "immutable_snapshot_identity" };
   if (path === "changes.diff") return { authority: "required", inclusion_reason: "complete_phase_diff" };
   if (path === "diff-index.json") return { authority: "required", inclusion_reason: "complete_phase_diff_index" };
   if (path.startsWith("diff-shards/")) return { authority: "required", inclusion_reason: "selected_phase_diff_shard" };
   if (path === "change-map.json") return { authority: "required", inclusion_reason: "deterministic_phase_change_map" };
   if (path.startsWith("context/")) return { authority: "context", inclusion_reason: "map_selected_direct_context" };
-  if (path === "evidence/test-summary.json") return { authority: "evidence", inclusion_reason: "structured_test_receipt_summary" };
+  if (path === "evidence/test-summary.json") {
+    return reviewScope === "integration"
+      ? { authority: "required", inclusion_reason: "current_behavior_test_outcome" }
+      : { authority: "evidence", inclusion_reason: "structured_test_receipt_summary" };
+  }
   if (path === "canonical-evidence.json") return { authority: "evidence", inclusion_reason: "canonical_evidence_index" };
   if (path.startsWith("canonical/")) return { authority: "evidence", inclusion_reason: "frozen_canonical_evidence" };
   if (path.startsWith("contracts/")) return { authority: "contract", inclusion_reason: "stage_or_provider_contract" };
@@ -968,7 +1233,14 @@ function excludedPacketMaterial(rule, stage) {
     excluded.push({ category: "out_of_scope_diff_summaries", reason: "summary shards remain canonical audit material and are not provider-visible" });
   }
   excluded.push({ category: "canonical_raw_output", reason: "raw_logs_are_retained_for_audit_not_provider_delivery" });
+  if (stage === "build-plan") {
+    excluded.push({ category: "generated:planning_artifacts", reason: "stage-local spec-analyze projection duplicates declared provider materials" });
+  }
   if (stage === "verify-code") excluded.push({ category: "canonical_acceptance_evidence_tree", reason: "reduced_to_structured_per_ac_summary" });
+  if (stage === "build-code" && rule.source_bundle === "none") {
+    excluded.push({ category: "material:ac_trace", reason: "host-only AC binding; provider reviews delivery behavior instead" });
+    excluded.push({ category: "provider_context_overflow", reason: "provider receives a bounded set of delivery-critical implementation excerpts; host retains the complete authenticated anchor set" });
+  }
   return excluded;
 }
 
@@ -978,14 +1250,22 @@ function isSummaryDiffShard(bundleRoot, path) {
   catch { return false; }
 }
 
-function packetEntries(bundleRoot, rule) {
-  return filesUnder(bundleRoot).filter((path) => !isSummaryDiffShard(bundleRoot, path)).map((path) => {
+function packetEntries(bundleRoot, rule, { reviewScope = null } = {}) {
+  return filesUnder(bundleRoot)
+    // planning_artifacts is a stage-local spec-analyze projection. The same
+    // raw requirement/spec/plan/task bytes are already declared as the
+    // provider inputs, so sending this generated projection as a second copy
+    // spends transport budget without adding a review angle. Keep the file in
+    // the bundle for the inline spec-analyze consumer, but exclude it from the
+    // provider packet.
+    .filter((path) => !isSummaryDiffShard(bundleRoot, path) && path !== "requirements/planning_artifacts.json")
+    .map((path) => {
     const filePath = join(bundleRoot, ...path.split("/"));
     const bytes = statSync(filePath).size;
     const entry = {
       path,
       bytes,
-      ...packetAuthority(path, rule),
+      ...packetAuthority(path, rule, { reviewScope }),
     };
     if (path.startsWith("context/")) {
       const header = firstTextLine(filePath);
@@ -1028,7 +1308,7 @@ function packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind = null, i
 }
 
 function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, reviewKind = null, rule }) {
-  const payload = packetEntries(bundleRoot, rule);
+  const payload = packetEntries(bundleRoot, rule, { reviewScope });
   const excluded = excludedPacketMaterial(rule, stage);
   const included = [...payload, { path: "packet-plan.json", authority: "metadata" }, { path: "manifest.json", authority: "metadata" }];
   const deliveryMode = reviewScope === "integration" || filesUnder(bundleRoot).includes("diff-index.json")
@@ -1039,14 +1319,14 @@ function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, reviewKi
   return JSON.parse(planBytes.toString("utf8"));
 }
 
-function selectedAnchors(materials) {
+function selectedAnchors(materials, { integration = false } = {}) {
   const anchors = [];
   for (const key of ["context_map", "impact_map", "reuse_map", "acceptance_map", "evidence_map"]) {
     const map = materials[key];
     if (!map || !Array.isArray(map.entries)) continue;
     for (const entry of map.entries) for (const anchor of entry.anchors ?? []) anchors.push({ ...anchor, map: key, entry_id: entry.id, change_ids: entry.change_ids ?? [] });
   }
-  for (const [key, idKey] of [["ac_trace", "acceptance_criterion_id"]]) {
+  for (const [key, idKey] of integration ? [] : [["ac_trace", "acceptance_criterion_id"]]) {
     const record = materials[key];
     if (!record || !Array.isArray(record.entries)) continue;
     for (const entry of record.entries) {
@@ -1057,6 +1337,11 @@ function selectedAnchors(materials) {
   if (Array.isArray(implementationAnchors)) {
     for (const anchor of implementationAnchors) {
       anchors.push({ ...anchor, map: "ac_trace", entry_id: "implementation", change_ids: [] });
+    }
+  }
+  if (integration) {
+    for (const anchor of materials.implementation_context?.anchors ?? []) {
+      anchors.push({ ...anchor, map: "implementation_context", entry_id: "implementation", change_ids: [] });
     }
   }
   const ids = new Set();
@@ -1096,10 +1381,12 @@ function snapshotContext({ source, anchor, temporaryRoot }) {
   return { ...snapshot, content: lines.join("\n") };
 }
 
-function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, canonicalOnly = false }) {
+function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, canonicalOnly = false, integration = false, diffIndex = null }) {
   const temporaryRoot = mkdtempSync(join(resolve(reviewDataRoot), "context-capture-"));
   try {
-    for (const anchor of selectedAnchors(materials)) {
+    const shardBackedAnchors = new Set((diffIndex?.anchors ?? []).filter(({ shard_id }) => typeof shard_id === "string").map(({ anchor_id }) => anchor_id));
+    for (const anchor of selectedAnchors(materials, { integration })) {
+      if (shardBackedAnchors.has(anchor.id)) continue;
       const changed = source.changedFiles.some((item) => item.path === anchor.path);
       const snapshot = snapshotContext({ source, anchor, temporaryRoot });
       const header = { schema_version: "wh-review-context.v1", id: anchor.id, path: anchor.path, provider_path: `context/${anchor.id}.txt`, start_line: anchor.start_line, end_line: anchor.end_line, role: anchor.role, reason: anchor.reason, outside_diff_reason: anchor.outside_diff_reason ?? null, map: anchor.map, entry_id: anchor.entry_id, change_ids: anchor.change_ids, changed_file: changed, snapshot_sha256: snapshot.sha256 };
@@ -1112,8 +1399,18 @@ function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, c
   }
 }
 
-function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = null, reviewKind = null }) {
+function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = null, reviewKind = null, integration = false }) {
   const evidence = materials.test_evidence;
+  if (integration && evidence?.status === "unavailable") {
+    if (typeof evidence.reason !== "string" || evidence.reason.trim() === "") throw new Error("MATERIAL_INCOMPLETE: unavailable integration test evidence requires a reason");
+    write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify({
+      schema_version: "wh-review-test-summary.v1",
+      status: "unavailable",
+      reason: evidence.reason,
+      raw_output_included: false,
+    }, null, 2)}\n`, "utf8"));
+    return;
+  }
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) || typeof evidence.receipt_ref !== "string" || typeof evidence.receipt_hash !== "string") return;
   const raw = assertTaskHandle(task).readRecord(evidence.receipt_ref);
   if (sha256(raw) !== evidence.receipt_hash.replace(/^sha256:/, "")) throw new Error("MATERIAL_INCOMPLETE: test receipt hash mismatch");
@@ -1121,17 +1418,19 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
   try { receipt = JSON.parse(raw); } catch { throw new Error("MATERIAL_INCOMPLETE: test receipt must be JSON"); }
   const summary = {
     schema_version: "wh-review-test-summary.v1",
-    receipt_ref: evidence.receipt_ref,
-    receipt_hash: evidence.receipt_hash.replace(/^sha256:/, ""),
     command: receipt.command ?? null,
     exit_code: receipt.exit_code ?? null,
-    snapshot_tree: receipt.snapshot_tree ?? null,
-    started_at: receipt.started_at ?? null,
-    completed_at: receipt.completed_at ?? null,
-    output_hash: receipt.output_hash ?? null,
     suite_scope: evidence.suite_scope ?? "unspecified",
     coverage_classes: evidence.coverage_classes ?? [],
     raw_output_included: false,
+    ...(integration ? {} : {
+      receipt_ref: evidence.receipt_ref,
+      receipt_hash: evidence.receipt_hash.replace(/^sha256:/, ""),
+      snapshot_tree: receipt.snapshot_tree ?? null,
+      started_at: receipt.started_at ?? null,
+      completed_at: receipt.completed_at ?? null,
+      output_hash: receipt.output_hash ?? null,
+    }),
   };
   if (reviewKind === "mini_task.implementation" && receipt.snapshot_tree !== sourceSnapshotTree) {
     throw new Error("MATERIAL_INCOMPLETE: mini-task implementation test receipt is not bound to the current snapshot");
@@ -1139,14 +1438,31 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
   write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify(summary, null, 2)}\n`, "utf8"));
 }
 
-export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, reviewKind = null, uiScope = false, materials = {}, strictV2Maps = false } = {}) {
+export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, reviewKind = null, uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full" } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
   const effectiveScope = reviewKind === null && stage === "build-code" ? (reviewScope ?? "phase") : null;
   const rule = ruleFor(reviewKind ?? stage, reviewTrack, effectiveScope);
+  if (stage === "build-code" && effectiveScope === "integration" && !Object.hasOwn(materials, "test_evidence")) {
+    // Semantic integration review can still inspect the final implementation
+    // when the host has no current test receipt. Keep the missing fact explicit
+    // so close remains incomplete and the provider never sees a fake GREEN.
+    materials = {
+      ...materials,
+      test_evidence: {
+        status: "unavailable",
+        reason: "current integration test receipt was not provided; semantic review proceeds and formal close remains incomplete",
+      },
+    };
+  }
   for (const key of rule.required) if (!(key in materials) || !materialPresent(materials[key])) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${key}`);
   validateMaterialAllowlist(rule, materials);
   if (stage === "make-decision" && reviewTrack === "direction") {
     const allowed = new Set([...rule.required, ...rule.optional]);
+    if (directionMode !== "challenge") {
+      for (const key of ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"]) {
+        allowed.delete(key);
+      }
+    }
     for (const key of Object.keys(materials)) if (!allowed.has(key)) throw new Error(`MATERIAL_FORBIDDEN: direction forbids unknown material ${key}`);
   }
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
@@ -1154,10 +1470,16 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const diffIndex = usesDiffBundle ? diffIndexFor(source) : null;
   const changeMap = usesDiffBundle ? changeMapFor({ source, phaseId, diffIndex }) : null;
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
-  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind);
+  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
+  if (stage === "verify-code") {
+    validateVerifyAcceptanceSummary(materials.acceptance_criteria, {
+      expectedCriterionIds: currentSpecCriterionIds(task),
+    });
+  }
   validateVerifyEvidenceRoots(stage, materials);
-  if (stage === "build-code" && (reviewKind === null || reviewKind === "mini_task.implementation")) {
+  if (stage === "build-code" && effectiveScope !== "integration"
+      && (reviewKind === null || reviewKind === "mini_task.implementation")) {
     validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps });
   }
   rejectDirectRawEvidence(materials);
@@ -1175,6 +1497,15 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   let providerMaterials = deduplicateDecisionMaterials(
     Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence")),
   );
+  if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") {
+    // raw_requirement is the bounded source view. Keep the full decision log
+    // authoritative in the task store, but remove that same section from the
+    // provider-facing projection so the requirement is delivered once.
+    providerMaterials = {
+      ...providerMaterials,
+      decision_log: compactMiniTaskDecisionLog(providerMaterials.decision_log),
+    };
+  }
   const selectedContextDelivery = rule.source_bundle === "diff" && source.diffBytes > PHASE_DIFF_INLINE_LIMIT_BYTES;
   if (selectedContextDelivery) {
     const compacted = { ...providerMaterials };
@@ -1203,6 +1534,43 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     }
     providerMaterials = compacted;
   }
+  if (stage === "build-code" && effectiveScope === "integration" && providerMaterials.approved_spec) {
+    // The full approved spec remains immutable in the task store and is
+    // archived here for provenance. Integration review only needs the AC
+    // paragraphs that explain the current delivery surface; sending the full
+    // decision/spec history makes the provider spend tokens on governance
+    // material instead of finding cross-phase defects.
+    const bytes = materialBytes(providerMaterials.approved_spec);
+    const compacted = { ...providerMaterials };
+    compacted.approved_spec = compactIntegrationSpec(
+      providerMaterials.approved_spec,
+      canonicalMaterialArchive({ reviewDataRoot, label: "integration-approved-spec", bytes }),
+    );
+    if (providerMaterials.acceptance_criteria) {
+      const acceptanceBytes = materialBytes(providerMaterials.acceptance_criteria);
+      compacted.acceptance_criteria = compactIntegrationAcceptanceCriteria(
+        providerMaterials.acceptance_criteria,
+        canonicalMaterialArchive({ reviewDataRoot, label: "integration-acceptance-criteria", bytes: acceptanceBytes }),
+      );
+    }
+    // AC trace is required for host-side authentication and close facts, but
+    // it is not a provider review target. Sending coverage_status, receipt
+    // bindings, and task-row anchors turns an adversarial integration review
+    // into evidence governance. Keep that ledger host-only, while preserving
+    // a separate bounded set of final implementation excerpts for the actual
+    // cross-phase behavior review.
+    const implementationAnchors = compactIntegrationImplementationAnchors(materials.ac_trace?.implementation_anchors);
+    const { ac_trace: _hostOnlyAcTrace, test_evidence: _hostOnlyTestEvidence, ...providerView } = compacted;
+    providerMaterials = implementationAnchors?.length
+      ? {
+        ...providerView,
+        implementation_context: {
+          schema_version: "wh-review-integration-implementation-context.v1",
+          anchors: implementationAnchors,
+        },
+      }
+      : providerView;
+  }
   if (stage === "build-plan") {
     const rawRequirement = materials.raw_requirement ?? null;
     providerMaterials.planning_artifacts = buildPlanningArtifacts({
@@ -1221,6 +1589,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
   const bundleRoot = mkdtempSync(join(packetRoot, `bundle-${stage}-${reviewTrack ?? "default"}-`));
+  let bundleDiffIndex = null;
   if (rule.source_bundle === "diff") {
     write(bundleRoot, "source.json", Buffer.from(`${JSON.stringify({
       target_commit: source.targetCommit,
@@ -1252,7 +1621,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
-      writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials });
+      bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials });
     }
   }
   // Context is never inferred from repository size or file membership. Every
@@ -1261,17 +1630,24 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     bundleRoot,
     reviewDataRoot,
     source,
-    materials,
+    // Integration material is deliberately compacted before provider
+    // delivery. Use that projected view for context capture as well; using
+    // the original AC trace here would silently re-expand all implementation
+    // anchors after the trace itself had been bounded.
+    materials: providerMaterials,
+    integration: stage === "build-code" && effectiveScope === "integration",
     // Large diff packets still need the explicitly selected bounded excerpts
     // in the provider bundle. The complete source remains canonical; only
     // map-selected excerpts are embedded here.
     canonicalOnly: false,
+    diffIndex: bundleDiffIndex,
   });
 
   const stagePlan = stagePlanFor(stage, reviewTrack, reviewKind);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${reviewKind ?? `${stage}/${reviewTrack ?? "default"}`}`);
   const contractName = reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage === "make-decision" ? "make-decision" : stage;
-  write(bundleRoot, `contracts/${contractName}.md`, readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`));
+  const contractBytes = readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`);
+  write(bundleRoot, `contracts/${contractName}.md`, contractBytes);
   write(bundleRoot, "contracts/provider-protocol.md", readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol"));
   const selectedSkills = [...(stagePlan?.required_skills ?? []), ...(uiScope === true ? (stagePlan?.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])];
   if (["build-code", "verify-code"].includes(stage) && (stagePlan.required_skills ?? []).length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
@@ -1283,8 +1659,8 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     const path = key === "review_instructions" ? "review-instructions.md" : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
     write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
-  freezeCanonicalEvidence({ bundleRoot, task, stage, materials });
-  writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree: source.snapshotTree, reviewKind });
+  freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration: stage === "build-code" && effectiveScope === "integration" });
+  writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree: source.snapshotTree, reviewKind, integration: stage === "build-code" && effectiveScope === "integration" });
   validateDiffIndexBundle(bundleRoot);
   const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, reviewKind, rule });
   const payloadFiles = filesUnder(bundleRoot);
@@ -1300,14 +1676,31 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
-  if (stage === "build-code" && effectiveScope === "phase" && deliveryBytes > 330 * 1024) {
+  if (stage === "build-code" && deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
     throw new Error("MATERIAL_INCOMPLETE: review packet exceeds 330 KiB; provide bounded affected excerpts");
   }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
-  return Object.freeze({ bundleRoot, attachmentRoot: resolve(attachmentRoot), sourcePrefix, materialId, files: Object.freeze([...entries.map(({ path }) => path), "manifest.json"]), manifest: Object.freeze(entries), deliveryManifest: Object.freeze(deliveryManifest), packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }) });
+  return Object.freeze({
+    bundleRoot,
+    attachmentRoot: resolve(attachmentRoot),
+    sourcePrefix,
+    materialId,
+    contractId: `wh-review.contract.${contractName}.v1`,
+    contractHash: sha256(contractBytes),
+    files: Object.freeze([...entries.map(({ path }) => path), "manifest.json"]),
+    manifest: Object.freeze(entries),
+    deliveryManifest: Object.freeze(deliveryManifest),
+    packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }),
+  });
 }
 
-function freezeCanonicalEvidence({ bundleRoot, task, stage, materials }) {
+function freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration = false }) {
+  // Verify-code reviews consume the bounded acceptance summary and open-risk
+  // facts. The full canonical evidence index is intentionally excluded from
+  // that packet; writing an empty placeholder would make the provider treat
+  // an audit-only file as review material and spend tokens on evidence
+  // governance instead of delivery risk.
+  if (stage !== "build-code" || integration) return;
   const entries = [];
   if (stage === "build-code" && materials.ac_trace) {
     const bindings = new Map();

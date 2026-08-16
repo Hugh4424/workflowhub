@@ -27,11 +27,12 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), 1);
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
   const subject = { subject_kind: subjectKind, phase_id: phaseId, review_scope: reviewScope, base_tree: snapshotTree, candidate_tree: snapshotTree };
+  const identity = { provider, adapter: provider.split("/", 1)[0], source_id: `${provider}-source`, config_id: `${provider}-config`, model: null };
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: task.identity.taskId, stage,
     review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
-    provider_attempts: [{ provider, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
+    provider_attempts: [{ provider, identity, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
   });
   const aggregation = aggregateProviderResults([{ provider, review: providerOutput }], 1);

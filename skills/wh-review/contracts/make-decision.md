@@ -39,6 +39,12 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 
 审查重点：真实问题、方向对位、更小更稳的路径、关键前提、范围和时机。
 
+审查顺序固定为两次短请求、一个逻辑 review fact：第一次只让 reviewer 从原始需求和事实
+重建“要解决什么、不能做什么、失败会怎样”；第二次才揭示当前选择，要求它攻击选择和
+更小的替代路径。第一次不得看到当前选择，第二次必须消费第一次的重建结果；两次都只
+报告会伤害交付的具体问题。不要把时间花在材料命名、快照、流程、receipt 或“是否完整
+走过步骤”上。
+
 ## detail
 
 必需材料：
@@ -55,6 +61,10 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 - 每项关键决定是否记录精确来源、事实与约束、选择理由、影响范围、后果风险、被拒方案、未决项及 supersedes 关系。
 - grill 结果是否记录 CONTEXT changed/no-change、ADR created/not-needed 的三项判断、冲突处理、文件引用和四项退出检查。
 - 方案是否忠实于批准方向，关键前提和边界是否完整，验收是否可判断，是否未经确认扩大范围。
+
+先查交付风险，再查记录形式：需求有没有丢、用户流程能不能走通、状态和失败边界是否
+可实现、验收是否能被测试打破、方案是否比必要范围更大。只有这些会改变交付结果的问题
+才应成为 finding；文件齐不齐、引用漂不漂亮、审查动作是否“标准化”不单独报 finding。
 
 detail 的同一 wh-review packet 必须包含 `simplicity-guard` 只读 advisory lens，逐项执行
 P0-P3：优先删除、直接复用或最小改造；标出 scope creep、重复已有能力，以及没有故障
@@ -77,9 +87,11 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
 
 findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
-通过/不通过。make-decision 使用 `single_round`：初次 findings 结果后不再调用 provider
-追求空 findings；finding 处理和最终快照变化属于业务材料变更。材料变化后的新 attempt
-仍完整交付当前材料；旧 findings 不被改写，也不生成独立 resolution action。
+通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings
+自动发起后续复审；它不表示 direction 只能发一个 broker request。direction 固定由两个
+有顺序的短请求组成：先盲重建，再揭示选择并挑战；两次合并成一个逻辑 fact。detail 只发
+一个短请求。finding 处理和最终快照变化属于业务材料变更。材料变化后的新 attempt 仍
+完整交付当前材料；旧 findings 不被改写，也不生成独立 resolution action。
 
 ## 处置边界
 

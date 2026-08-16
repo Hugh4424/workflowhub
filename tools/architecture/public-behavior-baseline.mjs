@@ -132,7 +132,7 @@ function requireSuccessfulSetup(result, label) {
   return result;
 }
 
-function collectCase(root, behavior, variant = "default") {
+function collectCase(root, behavior, variant = "default", { stageOutcomeWriter = null } = {}) {
   const state = prepareIsolatedCase(root, behavior, variant);
   try {
     const common = [`--project=${state.project}`, `--task=${state.task}`];
@@ -171,11 +171,15 @@ function collectCase(root, behavior, variant = "default") {
         `run ${variant} test setup`,
       );
       setup.push(tests);
+      const stageOutcome = typeof stageOutcomeWriter === "function"
+        ? stageOutcomeWriter({ root, state, stage, task, workspace, implementation, tests })
+        : null;
       inputPath = join(state.caseRoot, `run-${variant}.json`);
       writeFileSync(inputPath, `${JSON.stringify({
         receipts: {
           implementation: implementation.ref,
           tests: tests.json.receipt_ref,
+          ...(stageOutcome?.ref ? { stage_outcomes: stageOutcome.ref } : {}),
         },
       }, null, 2)}\n`, "utf8");
     } else if (behavior === "review") {
@@ -254,12 +258,17 @@ function collectCase(root, behavior, variant = "default") {
   }
 }
 
-export function collectBehaviorEvidence(root = ROOT) {
+export function collectBehaviorEvidence(root = ROOT, options = {}) {
   const entries = {};
   entries.help = runCli(root, ["help"]);
   for (const behavior of BEHAVIORS) {
     assertBehavior(behavior);
-    entries[behavior] = { cases: [collectCase(root, behavior, "default"), collectCase(root, behavior, "alternate")] };
+    entries[behavior] = {
+      cases: [
+        collectCase(root, behavior, "default", options),
+        collectCase(root, behavior, "alternate", options),
+      ],
+    };
   }
   return entries;
 }

@@ -7,6 +7,8 @@ import { readTaskIndex, replaceTaskIndex, withStoreLock } from "../task/task-sto
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
 const HASH = /^[a-f0-9]{64}$/;
+const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+const EVIDENCE_REF = /^(?:evidence|quality\/(?:evidence|tests))\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const KINDS = new Set(["reviews", "tests"]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -68,20 +70,49 @@ function assertQualityValue(root, kind, value) {
 
 const VERIFY_LEAF_KEYS = new Set([
   "acceptance_criterion_id", "result", "status", "source_digest", "acceptance_leaf", "nested_evidence",
-  "scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions",
+  "scenario", "oracle", "actual_outcome", "evidence_type", "coverage_limits", "exceptions", "implementation_anchor", "verification_anchor",
 ]);
+
+function validAnchor(value, expectedRole = null) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && typeof value.id === "string" && value.id.trim() !== ""
+    && typeof value.path === "string" && ANCHOR_PATH.test(value.path) && !value.path.includes("..")
+    && Number.isSafeInteger(value.start_line) && value.start_line >= 1
+    && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
+    && typeof value.role === "string" && value.role.trim() !== ""
+    && (expectedRole === null || value.role === expectedRole)
+    && (value.reason === undefined || (typeof value.reason === "string" && value.reason.trim() !== ""));
+}
+
+function anchorsOverlap(left, right) {
+  return validAnchor(left) && validAnchor(right)
+    && left.path === right.path
+    && left.start_line <= right.end_line
+    && right.start_line <= left.end_line;
+}
+
+function copyAnchor(value) {
+  return value === undefined ? undefined : {
+    id: value.id, path: value.path, start_line: value.start_line, end_line: value.end_line, role: value.role,
+    ...(value.reason === undefined ? {} : { reason: value.reason }),
+  };
+}
 
 function verifyLeafStatus(criterion) {
   const values = [criterion.scenario, criterion.oracle, criterion.actual_outcome, criterion.evidence_type,
     ...(criterion.coverage_limits ?? []), ...(criterion.exceptions ?? [])];
   if (criterion.result === "fail") return "failed";
-  return values.some((value) => value === "unknown") ? "incomplete" : "passed";
+  return values.some((value) => value === "unknown")
+    || !validAnchor(criterion.implementation_anchor, "implementation")
+    || !validAnchor(criterion.verification_anchor, "verification")
+    ? "incomplete" : "passed";
 }
 
 export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
   if (!Array.isArray(criteria) || criteria.length === 0) throw new TypeError("verify criteria must contain at least one leaf");
   if (!HASH.test(sourceDigest ?? "")) throw new TypeError("verify source digest is required");
   const seen = new Set();
+  const suppliedStatuses = [];
   return criteria.map((criterion, index) => {
     if (!criterion || typeof criterion !== "object" || Array.isArray(criterion)
         || [...Object.keys(criterion)].some((key) => !VERIFY_LEAF_KEYS.has(key))
@@ -101,12 +132,12 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
         || !criterion.acceptance_leaf || typeof criterion.acceptance_leaf.ref !== "string" || !/^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(criterion.acceptance_leaf.ref)
         || !HASH.test(criterion.acceptance_leaf.sha256 ?? "")
         || !Array.isArray(criterion.nested_evidence) || criterion.nested_evidence.length === 0
-        || criterion.nested_evidence.some((entry) => !entry || typeof entry.ref !== "string" || !/^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(entry.ref) || !HASH.test(entry.sha256 ?? ""))) {
+        || criterion.nested_evidence.some((entry) => !entry || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !HASH.test(entry.sha256 ?? ""))) {
       throw new TypeError(`verify criterion ${index} is incomplete or duplicated`);
     }
     seen.add(criterion.acceptance_criterion_id);
+    suppliedStatuses[index] = criterion.status;
     const status = verifyLeafStatus(criterion);
-    if (criterion.status !== undefined && criterion.status !== status) throw new TypeError(`verify criterion ${index} status does not match its evidence fields`);
     return Object.freeze({
       acceptance_criterion_id: criterion.acceptance_criterion_id,
       result: criterion.result,
@@ -117,7 +148,19 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
       scenario: criterion.scenario, oracle: criterion.oracle, actual_outcome: criterion.actual_outcome,
       evidence_type: criterion.evidence_type,
       coverage_limits: [...criterion.coverage_limits], exceptions: [...criterion.exceptions],
+      ...(validAnchor(criterion.implementation_anchor, "implementation") ? { implementation_anchor: copyAnchor(criterion.implementation_anchor) } : {}),
+      ...(validAnchor(criterion.verification_anchor, "verification") ? { verification_anchor: copyAnchor(criterion.verification_anchor) } : {}),
     });
+  }).map((criterion, _index, all) => {
+    if (criterion.status !== "passed") return criterion;
+    const shared = all.some((other) => other !== criterion
+      && [criterion.implementation_anchor, criterion.verification_anchor].some((left) =>
+        [other.implementation_anchor, other.verification_anchor].some((right) => anchorsOverlap(left, right))));
+    const normalized = shared
+      ? Object.freeze({ ...criterion, status: "incomplete", exceptions: [...criterion.exceptions, "proof anchor is shared across acceptance criteria"] })
+      : criterion;
+    if (suppliedStatuses[_index] !== undefined && suppliedStatuses[_index] !== normalized.status) throw new TypeError(`verify criterion ${_index} status does not match its evidence fields`);
+    return normalized;
   });
 }
 

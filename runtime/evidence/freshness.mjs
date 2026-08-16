@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
+import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 
@@ -72,10 +72,14 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
       ? "build-code"
       : fact.stage;
     if (evidence.evidence_type === "test_receipt") {
-      validateCanonicalTestReceipt(value, {
-        taskId: fact.task_id, stage: fact.stage, snapshotTree: fact.snapshot_tree,
-        subject: fact.subject, requirePassed: false,
-      });
+      if (fact.stage === "verify-code" && fact.subject === "full_tests_fresh") {
+        validateCanonicalFullTestReceipt(value, { taskId: fact.task_id, snapshotTree: fact.snapshot_tree, requirePassed: false });
+      } else {
+        validateCanonicalTestReceipt(value, {
+          taskId: fact.task_id, stage: fact.stage, snapshotTree: fact.snapshot_tree,
+          subject: fact.subject, requirePassed: false,
+        });
+      }
       if (!expectedPassed(fact.status, value.exit_code === 0, value.exit_code !== 0)) throw new Error("test outcome mismatch");
       const outputKey = `${key}:output:${value.output_ref}`;
       const outputRaw = readBound({ ref: value.output_ref, sha256: value.output_hash }, read, dependencies, outputKey);
@@ -111,7 +115,14 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
       }
     } else if (evidence.evidence_type === "human_confirmation") {
       validateHumanConfirmation(value, {
-        taskId: fact.task_id, stage: fact.stage, subject: value.attempt_ref, requireAccepted: false,
+        taskId: fact.task_id,
+        stage: fact.stage,
+        subject: value.attempt_ref,
+        requireAccepted: false,
+        // Stage confirmation facts may confirm the current stage outcome
+        // without pointing at a provider attempt. Close/irreversible
+        // authorization has its own stricter subject_ref validation.
+        requireSubjectRef: false,
       });
       if (fact.subject !== "human_confirmation") throw new Error("confirmation subject mismatch");
       if (value.schema_version === "human-confirmation.v2"

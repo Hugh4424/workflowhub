@@ -139,7 +139,9 @@ function requireStageReviewMode(stage, configuredRoute, label) {
 
 function requireMiniTaskReviewMode(reviewKind, configuredRoute, label) {
   const required = reviewKind === "mini_task.design" ? "full_on_structural_rework" : "full_only";
-  if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
+  if (!["single_round", required].includes(configuredRoute.mode)) {
+    throw new Error(`${label}.mode must be single_round or ${required}`);
+  }
 }
 
 function routeEntries(stages) {
@@ -189,8 +191,13 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
   for (const key of Object.keys(value)) if (!["version", "profiles", "stages", "mini_task"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
   const profiles = profileDeclarations(value.profiles, "workflowhub host wh_review.profiles");
+  const embeddedMiniTask = value.stages.mini_task ?? value.stages["mini-task"];
+  if (embeddedMiniTask !== undefined && value.mini_task !== undefined) throw new Error("workflowhub host wh_review mini-task routes must have one config location");
+  const configuredStages = { ...value.stages };
+  delete configuredStages.mini_task;
+  delete configuredStages["mini-task"];
   const stages = {};
-  for (const [stage, configured] of Object.entries(value.stages)) {
+  for (const [stage, configured] of Object.entries(configuredStages)) {
     if (!REVIEW_STAGES.has(stage)) throw new Error("workflowhub host wh_review.stages." + stage + " is unsupported");
     if (stage === "make-decision") {
       if (!configured || typeof configured !== "object" || Array.isArray(configured)) {
@@ -222,9 +229,10 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
     }
   }
   const miniTask = {};
-  if (value.mini_task !== undefined) {
-    if (!value.mini_task || typeof value.mini_task !== "object" || Array.isArray(value.mini_task)) throw new Error("workflowhub host wh_review.mini_task must be an object");
-    for (const [configuredKind, item] of Object.entries(value.mini_task)) {
+  const rawMiniTask = value.mini_task ?? embeddedMiniTask;
+  if (rawMiniTask !== undefined) {
+    if (!rawMiniTask || typeof rawMiniTask !== "object" || Array.isArray(rawMiniTask)) throw new Error("workflowhub host wh_review.mini_task must be an object");
+    for (const [configuredKind, item] of Object.entries(rawMiniTask)) {
       const reviewKind = configuredKind.startsWith("mini_task.") ? configuredKind : `mini_task.${configuredKind}`;
       const label = `workflowhub host wh_review.${reviewKind}`;
       if (!MINI_TASK_REVIEW_KINDS.has(reviewKind)) throw new Error(`${label} is unsupported`);
@@ -356,6 +364,22 @@ function effectiveProfile(config, provider) {
   };
 }
 
+function configuredSourceId(config, provider, label = "3rd-review provider") {
+  const sourceId = config.providers[provider]?.source_id;
+  if (typeof sourceId !== "string" || sourceId.trim() === "") {
+    throw new Error(`${label} ${provider} source_id is missing`);
+  }
+  return sourceId;
+}
+
+function sameSourceProfile(config, provider, hostProvider) {
+  if (provider === hostProvider) return true;
+  const providerSource = configuredSourceId(config, provider);
+  if (!config.providers[hostProvider]) return false;
+  const hostSource = configuredSourceId(config, hostProvider, "host provider");
+  return providerSource === hostSource;
+}
+
 function highestPriorityProfilesByAdapter(providers) {
   // The already ranked route order chooses the first profile for an adapter.
   // A second
@@ -381,7 +405,7 @@ function rankRouteProfiles(route, profileSet) {
 export function selectTrustedReviewProviderSelection(configuredPath, hostProvider, configuredRoute = null, profileSet = "initial") {
   if (typeof hostProvider !== "string" || hostProvider.length === 0) throw new TypeError("host_provider is required");
   if (!new Set(["initial", "closure"]).has(profileSet)) throw new TypeError("profileSet is invalid");
-  const hostAdapter = adapterOf(hostProvider, "host_provider");
+  adapterOf(hostProvider, "host_provider");
   const config = brokerConfig(configuredPath);
   const selectedRoute = configuredRoute
     ? (profileSet === "closure" ? configuredRoute.closure : configuredRoute.initial)
@@ -402,18 +426,29 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
         throw new Error("wh_review route references disabled 3rd-review provider " + provider);
       }
     }
-    const sameSourceExcluded = tier.filter((provider) => config.providers[provider]?.enabled === true && adapterOf(provider, "3rd-review provider") === hostAdapter);
-    const enabledHeterologous = tier.filter((provider) => adapterOf(provider, "3rd-review provider") !== hostAdapter && config.providers[provider]?.enabled === true);
-    const selected = highestPriorityProfilesByAdapter(enabledHeterologous);
+    for (const provider of tier) {
+      if (config.providers[provider]?.enabled === true) configuredSourceId(config, provider);
+    }
+    const sameSourceExcluded = tier.filter((provider) => config.providers[provider]?.enabled === true && sameSourceProfile(config, provider, hostProvider));
+    const enabledHeterologous = tier.filter((provider) => config.providers[provider]?.enabled === true && !sameSourceProfile(config, provider, hostProvider));
+    // An explicit WorkflowHub route is an operator decision: dispatch every
+    // configured profile. Adapter-level deduplication is only retained for
+    // the legacy fallback tier, never for a declared review surface.
+    const selected = configuredRoute ? enabledHeterologous : highestPriorityProfilesByAdapter(enabledHeterologous);
     const minimum = profileSet === "closure" ? 1 : (configuredRoute?.minimum_heterologous ?? 1);
-    if (configuredRoute && selected.length < minimum) throw new Error("wh_review route has insufficient enabled heterologous providers");
+    const distinctAdapters = new Set(selected.map((provider) => adapterOf(provider, "3rd-review provider"))).size;
+    if (configuredRoute && distinctAdapters < minimum) throw new Error("wh_review route has insufficient enabled heterologous providers");
+    // Explicit routes are already validated as fully enabled. Legacy tiers
+    // must not leak disabled fallbacks into the broker allowlist or dispatch
+    // group merely because another member of the tier is eligible.
+    const dispatchProfiles = configuredRoute ? [...tier] : tier.filter((provider) => config.providers[provider]?.enabled === true);
     if (selected.length > 0) return {
       // This is the complete candidate group that must reach 3rd-review.
       // eligibleProfiles is local quorum accounting only; it never chooses
       // which same-source candidate the broker gets to attest.
-      providers: [...tier],
+      providers: dispatchProfiles,
       eligibleProfiles: selected,
-      requestedProfiles: [...tier],
+      requestedProfiles: dispatchProfiles,
       requestedProfileSpecs: tier.flatMap((provider) => configuredRoute?.profile_specs?.[provider] ? [configuredRoute.profile_specs[provider]] : []),
       sameSourceExcluded,
       effectiveProfiles: selected.map((provider) => effectiveProfile(config, provider)),

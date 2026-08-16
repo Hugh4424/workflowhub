@@ -206,7 +206,7 @@ function assertReviewDataRoot({ sourceRoot, targetRepoRoot, reviewDataRoot }) {
   return realpathSync(requestedData);
 }
 
-export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, baselineCommit, reviewDataRoot, betweenCaptures, includeDiff = true, phaseId = undefined } = {}) {
+export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, baselineCommit, reviewDataRoot, betweenCaptures, includeDiff = true, phaseId = undefined, taskId = null } = {}) {
   if (typeof includeDiff !== "boolean") throw new TypeError("includeDiff must be boolean");
   if (phaseId !== undefined && (typeof phaseId !== "string" || phaseId === "")) throw new TypeError("phaseId must be a non-empty string");
   if (workspace !== undefined) {
@@ -241,10 +241,10 @@ export function captureReviewSource({ workspace, sourceRoot, targetRepoRoot, bas
     // canonical execution snapshot so hydrated Git LFS bytes are represented
     // exactly like canonical test receipts instead of being cleaned back to
     // pointer blobs by a temporary Git index.
-    const firstSnapshot = captureExecutionSnapshot(source);
+    const firstSnapshot = captureExecutionSnapshot(source, taskId);
     const first = firstSnapshot.tree;
     betweenCaptures?.();
-    const secondSnapshot = captureExecutionSnapshot(source);
+    const secondSnapshot = captureExecutionSnapshot(source, taskId);
     if (secondSnapshot.head !== capturedHead || secondSnapshot.tree !== first) fail("SOURCE_CHANGED_DURING_CAPTURE", "HEAD or working tree changed during capture");
     const phaseCommit = phaseId === undefined ? undefined : (() => {
       const headTree = text(source, ["rev-parse", `${capturedHead}^{tree}`]);

@@ -8,11 +8,11 @@ import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { aggregateCanonicalProviderResults } from "../review/canonical-review-result.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { equivalentWorkspaceTrees, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateAcceptanceDesignMinimum, validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../stage/stage-content-contracts.mjs";
-import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
+import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
@@ -70,13 +70,20 @@ const RECEIPT_KEYS = Object.freeze({
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
-function semanticAnchor(value) {
+function semanticAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
     && typeof value.id === "string" && value.id.trim() !== ""
     && typeof value.path === "string" && value.path.trim() !== "" && !value.path.includes("..") && !value.path.startsWith("/")
     && Number.isSafeInteger(value.start_line) && value.start_line >= 1
     && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
-    && typeof value.role === "string" && value.role.trim() !== "";
+    && typeof value.role === "string" && value.role.trim() !== ""
+    && (expectedRole === null || value.role === expectedRole);
+}
+function anchorsOverlap(left, right) {
+  return semanticAnchor(left) && semanticAnchor(right)
+    && left.path === right.path
+    && left.start_line <= right.end_line
+    && right.start_line <= left.end_line;
 }
 function completionReview(records) {
   const reviews = records.filter(Boolean);
@@ -366,7 +373,7 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
     });
     const semanticFields = ["scenario", "oracle", "actual_outcome", "coverage_limits"];
     const semanticMissing = semanticFields.filter((field) => typeof value[field] !== "string" || value[field].trim() === "");
-    const anchorsValid = semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor);
+    const anchorsValid = semanticAnchor(value.implementation_anchor, "implementation") && semanticAnchor(value.verification_anchor, "verification");
     if (value.status === "covered" && (semanticMissing.length > 0 || !anchorsValid)) {
       // Do not let a caller's covered label become a green quality fact. Keep
       // the run inspectable, but downgrade the row until it has a concrete
@@ -393,21 +400,20 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
     };
   });
   if (declared.size) throw new Error("acceptance_coverage is missing an accepted criterion");
-  const proofOwners = new Map();
+  const proofOwners = [];
   const normalizedItems = items.map((item) => {
     if (item.status !== "covered") return item;
     for (const anchor of [item.implementation_anchor, item.verification_anchor]) {
-      const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
-      const previous = proofOwners.get(signature);
-      if (previous !== undefined && previous !== item.acceptance_criterion_id) {
+      const previous = proofOwners.find(({ anchor: previousAnchor, criterionId }) => criterionId !== item.acceptance_criterion_id && anchorsOverlap(previousAnchor, anchor));
+      if (previous !== undefined) {
         return {
           acceptance_criterion_id: item.acceptance_criterion_id,
           status: "unknown",
           evidence_refs: [],
-          semantic_gap: `covered claim shares proving anchor with ${previous}`,
+          semantic_gap: `covered claim overlaps proving anchor with ${previous.criterionId}`,
         };
       }
-      proofOwners.set(signature, item.acceptance_criterion_id);
+      proofOwners.push({ anchor, criterionId: item.acceptance_criterion_id });
     }
     return item;
   });
@@ -422,7 +428,7 @@ function differsOnlyByTasksCompletion(worker, expectedTree, actualTree) {
   if (expectedTree === actualTree) return true;
   const root = worker.workspace?.worktreeRoot;
   if (!root) return false;
-  return isMaterialOnlySnapshotDelta(root, expectedTree, actualTree);
+  return isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, worker.identity.taskId);
 }
 
 function unavailableFormalRecordStatus(reason = "canonical Phase history is unavailable; current quality facts remain authoritative") {
@@ -619,34 +625,6 @@ function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   }
   return policy.minimum_heterologous;
 }
-function normalizedReviewIssue(value) {
-  return String(value ?? "").toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
-}
-function reviewIssueMatches(left, right) {
-  if (left.path !== right.path) return false;
-  if (left.line !== undefined && right.line !== undefined && left.line !== right.line) return false;
-  const leftTerms = normalizedReviewIssue(left.issue); const rightTerms = normalizedReviewIssue(right.issue);
-  if (leftTerms.join(" ") === rightTerms.join(" ")) return true;
-  const rightSet = new Set(rightTerms); const leftSet = new Set(leftTerms);
-  if (!leftSet.size || !rightSet.size) return false;
-  let shared = 0;
-  for (const term of leftSet) if (rightSet.has(term)) shared += 1;
-  return shared / Math.min(leftSet.size, rightSet.size) >= 0.7;
-}
-function evidenceAnchorsFromAdjudication(result, provider, review) {
-  const clusters = result?.adjudication?.clusters;
-  if (!Array.isArray(clusters)) return review.findings.map(() => true);
-  const used = new Set();
-  return review.findings.map((finding) => {
-    const clusterIndex = clusters.findIndex((cluster, index) => {
-      if (used.has(index) || !reviewIssueMatches(cluster, finding)) return false;
-      return cluster.provider_findings?.some((item) => item.provider === provider);
-    });
-    if (clusterIndex < 0) return true;
-    used.add(clusterIndex);
-    return clusters[clusterIndex].provider_findings.find((item) => item.provider === provider)?.evidence_anchor_valid ?? true;
-  });
-}
 function verifyReviewChain(worker, result, expectedTrack, producerStage = worker.stage) {
   const attemptRecord = object(worker.readReceipt(result.attempt_ref), "review attempt record");
   const attempt = object(attemptRecord.value, "review attempt");
@@ -674,16 +652,14 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
     providerOutputs.push({
       ref: providerAttempt.output_ref,
       provider: providerAttempt.provider,
+      ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
+      ...(output.evidence_anchor_valid === undefined ? {} : { evidenceAnchors: output.evidence_anchor_valid }),
       review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
     });
   }
   try {
     authenticateCanonicalReviewResult({
       attempt, result, providerOutputs, fallbackMinimumReviewers: minimumReviewers,
-      assess: (items) => items.map((item) => ({
-        ...item,
-        evidenceAnchors: evidenceAnchorsFromAdjudication(result, item.provider, item.review),
-      })),
     });
   } catch (error) {
     throw new Error(`review result canonical authentication failed: ${error.message}`);
@@ -722,10 +698,20 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   }
   const recomputed = [...latestByProvider.entries()].map(([provider, latest]) => {
     if (latest.providerAttempt.status !== "completed" || latest.output === null) return { provider, review: null };
-    try { return { provider, review: parseReviewerOutput(latest.output.content) }; }
+    try {
+      return {
+        provider,
+        ...(latest.providerAttempt.identity ? { identity: latest.providerAttempt.identity } : {}),
+        review: parseReviewerOutput(latest.output.content),
+      };
+    }
     catch { return { provider, review: null }; }
   });
-  const aggregation = aggregateCanonicalProviderResults(recomputed, reviewMinimumForAttempt(attempt, producerStage, expectedTrack));
+  const managedIdentity = attempt.review_policy?.source === "wh_review.v2";
+  const aggregation = aggregateCanonicalProviderResults(recomputed, reviewMinimumForAttempt(attempt, producerStage, expectedTrack), {
+    requireIdentity: managedIdentity,
+    requireSourceId: managedIdentity,
+  });
   if (aggregation.status !== "unavailable") throw new Error("review attempt claims unavailable but provider outputs produce a semantic result");
 }
 function reviewScope(value) {
@@ -779,61 +765,55 @@ function riskAcceptanceForReview(worker, invocation, review, expectedTrack, rece
   const acceptedIds = new Set(accepted.map((entry) => entry.finding_id));
   const missing = pause.findings.map(({ finding_id: id }) => id).filter((id) => !acceptedIds.has(id));
   if (missing.length) throw new Error(`${receiptName} must cover every serious review finding: ${missing.join(", ")}`);
-  return { verified: true, evidence: accepted.map(({ ref, sha256 }) => ({ ref, sha256 })) };
+  return { verified: true, evidence: accepted.map(({ ref, sha256, finding_id }) => ({ ref, sha256, finding_id })) };
 }
 
 function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage, invocation = {}) {
   if (review?.facts?.status === "unavailable" || !review?.value) return [];
-  const seriousFindings = canonicalReviewFindings(review.value).filter(isActionableSeriousFinding);
-  if (seriousFindings.length === 0) return [];
+  const reportableFindings = canonicalReviewFindings(review.value)
+    .filter((finding) => typeof finding?.id === "string");
+  if (reportableFindings.length === 0) return [];
   const suppliedIds = new Set((invocation.finding_dispositions ?? []).map((entry) => entry?.finding_id));
-  const missingIds = seriousFindings.map(({ id }) => id).filter((id) => !suppliedIds.has(id));
+  const missingIds = reportableFindings.map(({ id }) => id).filter((id) => !suppliedIds.has(id));
   if (missingIds.length === 0) return [];
-  return [`authenticated actionable serious review findings require disposition before formal completion: ${missingIds.join(", ")}`];
+  const seriousMissingIds = reportableFindings
+    .filter(isActionableSeriousFinding)
+    .map(({ id }) => id)
+    .filter((id) => !suppliedIds.has(id));
+  return [
+    `authenticated reportable review findings require disposition before formal completion: ${missingIds.join(", ")}`,
+    ...(seriousMissingIds.length
+      ? [`authenticated actionable serious review findings require disposition before formal completion: ${seriousMissingIds.join(", ")}`]
+      : []),
+  ];
 }
 
-const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
-const FINDING_DISPOSITION_FIELDS = new Set([
-  "finding_id", "original_fact", "source", "consequence", "status", "next_action",
-  "evidence_ref", "owner", "consumer", "retain_or_delete",
-]);
-
 function findingDispositions(reviews, invocation) {
-  const findings = reviews.flatMap((review) => review?.facts?.status === "unavailable" || !review?.value
-    ? []
-    : canonicalReviewFindings(review.value))
-    .filter(isActionableSeriousFinding)
-    .filter((finding) => typeof finding?.id === "string");
-  const ids = [...new Set(findings.map(({ id }) => id))];
-  if (ids.length === 0) {
-    return { facts: { status: "not_applicable", items: [] }, missing_items: [] };
-  }
+  const authorizedRiskIds = new Set(reviews.flatMap((review) => review?.risk_evidence ?? [])
+    .map((entry) => entry?.finding_id)
+    .filter((id) => typeof id === "string"));
+  const findings = reviews.flatMap((review) => review?.facts?.status === "unavailable" || !review?.value ? [] : [review.value]);
+  if (findings.length === 0) return { facts: { status: "not_applicable", items: [] }, missing_items: [] };
   const supplied = invocation.finding_dispositions;
-  if (supplied === undefined) {
-    return {
-      facts: { status: "incomplete", items: [] },
-      missing_items: [`finding disposition is missing for: ${ids.join(", ")}`],
-    };
-  }
-  if (!Array.isArray(supplied)) throw new TypeError("finding_dispositions must be an array");
-  const seen = new Set();
-  const items = supplied.map((entry, index) => {
-    const value = object(entry, `finding_dispositions[${index}]`);
-    for (const key of Object.keys(value)) {
-      if (!FINDING_DISPOSITION_FIELDS.has(key)) throw new Error(`finding_dispositions[${index}] has unknown field ${key}`);
-    }
-    for (const key of FINDING_DISPOSITION_FIELDS) text(value[key], `finding_dispositions[${index}].${key}`);
-    if (!FINDING_DISPOSITION_STATUSES.has(value.status)) throw new Error(`finding_dispositions[${index}].status is invalid`);
-    if (seen.has(value.finding_id)) throw new Error(`duplicate finding disposition: ${value.finding_id}`);
-    seen.add(value.finding_id);
-    return Object.freeze({ ...value });
+  const result = findings.length === 1 ? findings[0] : { findings: findings.flatMap((value) => canonicalReviewFindings(value)) };
+  const dispositionResult = validateReportableFindingDispositions({
+    result,
+    dispositions: supplied,
+    authorizedRiskFindingIds: [...authorizedRiskIds],
   });
-  const missing = ids.filter((id) => !seen.has(id));
-  const extra = [...seen].filter((id) => !ids.includes(id));
-  if (extra.length) throw new Error(`finding_dispositions contains unknown finding: ${extra.join(", ")}`);
+  const sourceReviewRefs = reviews
+    .filter((review) => review?.value && review.ref && review.evidence?.sha256)
+    .map((review) => ({ ref: review.ref, sha256: review.evidence.sha256 }));
+  const riskAcceptanceRefs = reviews.flatMap((review) => review?.risk_evidence ?? [])
+    .filter((entry) => entry?.ref && entry?.sha256 && entry?.finding_id)
+    .map((entry) => ({ ref: entry.ref, sha256: entry.sha256, finding_id: entry.finding_id }));
   return {
-    facts: { status: missing.length ? "incomplete" : "recorded", items },
-    missing_items: missing.length ? [`finding disposition is missing for: ${missing.join(", ")}`] : [],
+    facts: {
+      ...dispositionResult.facts,
+      source_review_refs: sourceReviewRefs,
+      risk_acceptance_refs: riskAcceptanceRefs,
+    },
+    missing_items: dispositionResult.missing_items,
   };
 }
 
@@ -864,7 +844,7 @@ function requirementReplayFacts(worker, verification, currentTree) {
     if (!new Set(["pass", "fail", "unknown", "deferred", "unavailable"]).has(value.status)) throw new Error(`requirement_replay[${index}].status is invalid`);
     const replaySnapshotMatches = value.snapshot_tree === currentTree
       || (worker.workspace?.worktreeRoot
-        && isMaterialOnlySnapshotDelta(worker.workspace.worktreeRoot, value.snapshot_tree, currentTree));
+        && isMaterialOnlySnapshotDelta(worker.workspace.worktreeRoot, value.snapshot_tree, currentTree, worker.identity.taskId));
     if (!replaySnapshotMatches) throw new Error(`requirement_replay ${value.source_id} does not bind the current snapshot`);
     if (!Array.isArray(value.linked_ids) || value.linked_ids.length === 0 || value.linked_ids.some((id) => typeof id !== "string" || id.trim() === "")) throw new Error(`requirement_replay ${value.source_id}.linked_ids is invalid`);
     if (!Array.isArray(value.evidence_refs)) throw new Error(`requirement_replay ${value.source_id}.evidence_refs is invalid`);
@@ -882,16 +862,15 @@ function requirementReplayFacts(worker, verification, currentTree) {
       ? semanticFields.filter((field) => typeof value[field] !== "string" || value[field].trim() === "")
       : [];
     let anchorCollision = null;
-    if (value.status === "pass" && semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor)) {
+    if (value.status === "pass" && semanticAnchor(value.implementation_anchor, "implementation") && semanticAnchor(value.verification_anchor, "verification")) {
       for (const anchor of [value.implementation_anchor, value.verification_anchor]) {
-        const signature = JSON.stringify([anchor.path, anchor.start_line, anchor.end_line, anchor.role]);
-        const previous = replayProofOwners.get(signature);
-        if (previous !== undefined && previous !== value.source_id) anchorCollision = previous;
-        replayProofOwners.set(signature, value.source_id);
+        const previous = [...replayProofOwners.entries()].find(([previousAnchor, previousSource]) => previousSource !== value.source_id && anchorsOverlap(previousAnchor, anchor));
+        if (previous !== undefined) anchorCollision = previous[1];
+        replayProofOwners.set(anchor, value.source_id);
       }
     }
     const anchorsValid = value.status !== "pass"
-      || (semanticAnchor(value.implementation_anchor) && semanticAnchor(value.verification_anchor) && anchorCollision === null);
+      || (semanticAnchor(value.implementation_anchor, "implementation") && semanticAnchor(value.verification_anchor, "verification") && anchorCollision === null);
     const status = semanticMissing.length || !anchorsValid ? "unknown" : value.status;
     const semanticReason = semanticMissing.length || !anchorsValid
       ? `${reason}; semantic proof is incomplete: ${[...semanticMissing, ...(anchorsValid ? [] : [anchorCollision ? `shared proving anchor with ${anchorCollision}` : "implementation_anchor/verification_anchor"])].join(", ")}`
@@ -1046,7 +1025,8 @@ function bindFinalReview(worker, invocation, review, currentTree, {
   // Non-build-code reviews are advice about the material they actually saw.
   // Their reviewed snapshot remains provenance, not an expiry condition. The
   // implementation review is the only review that must bind the current tree.
-  if (stage === "build-code" && review.value.snapshot_tree !== currentTree) {
+  if (stage === "build-code" && review.value.snapshot_tree !== currentTree
+      && !isExecutionRecordOnlyMaterialDelta(worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot, review.value.snapshot_tree, currentTree, worker.identity.taskId)) {
     throw new Error(`${stage} review does not bind the final current snapshot`);
   }
   return { evidence: [] };
@@ -1436,7 +1416,10 @@ HANDLERS.set("build-code", async (worker, input) => {
       content: "present",
       code: "complete",
       tests: tests.facts.exit_code === 0 ? "passed" : "failed",
-      acceptance_criteria: coverage.items.every((item) => item.status === "covered") ? "covered" : "unknown",
+      // An empty or unavailable coverage object must never become green via
+      // Array.prototype.every([]).  Coverage is a quality fact, not a default
+      // success value.
+      acceptance_criteria: acceptanceComplete ? "covered" : "unknown",
     },
     audit,
     verification: review.facts.status === "unavailable"
@@ -1457,7 +1440,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
           acceptance_criteria: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
           exceptions: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
         },
-        finding_dispositions: { status: "not_applicable", items: [] },
+        finding_dispositions: { status: "missing", items: [] },
         audit_gaps: ["current verification test/evidence facts are unavailable; current four materials remain the work authority"],
       },
       evidence_refs: [],
@@ -1558,7 +1541,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
     || equivalentWorkspaceTrees(workspaceRoot, qualitySnapshotTree, current.tree);
   const testSnapshotMatches = workspaceRoot
     && (equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
-      || isMaterialOnlySnapshotDelta(workspaceRoot, tests.facts.snapshot_tree, current.tree))
+      || isMaterialOnlySnapshotDelta(workspaceRoot, tests.facts.snapshot_tree, current.tree, worker.identity.taskId))
     && (tests.facts.source_digest === undefined
       || current.source_digest === undefined
       || tests.facts.source_digest === current.source_digest);
@@ -1609,9 +1592,11 @@ HANDLERS.set("verify-code", async (worker, input) => {
       content: "present",
       code: "complete",
       tests: tests.facts.exit_code === 0 ? "passed" : "failed",
-      acceptance_criteria: failedEvidence.length
-        ? "missing"
-        : (verificationItems.find((item) => item.id === "acceptance_criteria")?.status === "pass" ? "covered" : "unknown"),
+      // The verification item is only meaningful when the current evidence
+      // set matches the current spec and contains no failed criterion.  Do
+      // not let a caller-supplied "pass" summary cover an empty/mismatched
+      // acceptance set.
+      acceptance_criteria: acceptanceVerified ? "covered" : (failedEvidence.length ? "missing" : "unknown"),
     },
     audit,
     verification: `${mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试已完成"}；已绑定审查质量事实：${boundReviewQualityFacts([["build-code final", review], ["verify-code independent", qualityReview]])}`,

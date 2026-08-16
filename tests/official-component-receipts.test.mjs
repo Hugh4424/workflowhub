@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
+import { validateCanonicalTestReceipt } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
@@ -104,14 +106,25 @@ describe("official component receipt authority", () => {
     expect(() => task.readRecord("quality/tests/verify-code-full.json")).toThrow(/ENOENT|record/i);
   });
 
+  it("does not reuse a focused build-code receipt as verify-code full tests", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
+    const focused = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "focused-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-focused.json", outputRef: "quality/tests/output/build-code-focused" });
+    const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-full-component.json", outputRef: "quality/tests/output/verify-code-full-component" });
+    expect(verify.receipt_ref).toBe("quality/tests/verify-code-full-component.json");
+    expect(verify.receipt_ref).not.toBe(focused.receipt_ref);
+  });
+
   it("reuses a full receipt after current-material-only edits without rerunning npm test", () => {
     const { task, worktree, workspace } = fixture();
     writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
     mkdirSync(join(worktree, "specs", "receipt-task"), { recursive: true });
-    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "# tasks v1\n");
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "### 执行状态填写区\n- pending\n");
     const build = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "build-code-test-capture" })
       .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-material.json", outputRef: "quality/tests/output/build-code-material" });
-    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "# tasks v2\n");
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "### 执行状态填写区\n- completed\n");
     const current = captureExecutionSnapshot(worktree);
     const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
       .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-material.json", outputRef: "quality/tests/output/verify-code-material" });
@@ -120,6 +133,44 @@ describe("official component receipt authority", () => {
     expect(verify.snapshot_tree).toBe(build.snapshot_tree);
     expect(verify.source_digest).toBe(build.source_digest);
     expect(() => task.readRecord("quality/tests/verify-code-material.json")).toThrow(/ENOENT|record/i);
+  });
+
+  it("reuses a full receipt after committing only the execution-status block", () => {
+    const { task, worktree, workspace } = fixture();
+    const marker = join(worktree, "..", "receipt-command-ran");
+    writeFileSync(join(worktree, "package.json"), JSON.stringify({
+      scripts: { test: `if [ -e ${JSON.stringify(marker)} ]; then exit 99; else touch ${JSON.stringify(marker)}; fi` },
+    }));
+    mkdirSync(join(worktree, "specs", "receipt-task"), { recursive: true });
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "### 执行状态填写区\n- pending\n");
+    const build = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "build-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-committed-material.json", outputRef: "quality/tests/output/build-code-committed-material" });
+    writeFileSync(join(worktree, "specs", "receipt-task", "tasks.md"), "### 执行状态填写区\n- completed\n");
+    execFileSync("git", ["add", "--", "specs/receipt-task/tasks.md"], { cwd: worktree });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "record execution status"], { cwd: worktree });
+    const current = captureExecutionSnapshot(worktree);
+    const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-committed-material.json", outputRef: "quality/tests/output/verify-code-committed-material" });
+    expect(current.head).not.toBe(build.snapshot_head);
+    expect(current.tree).not.toBe(build.snapshot_tree);
+    expect(verify.receipt_ref).toBe(build.receipt_ref);
+    expect(verify.exit_code).toBe(0);
+    expect(verify.snapshot_tree).toBe(build.snapshot_tree);
+    expect(verify.snapshot_head).toBe(build.snapshot_head);
+  });
+
+  it("reruns instead of reusing a full receipt after implementation code changes", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
+    const build = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "build-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/build-code-code-change.json", outputRef: "quality/tests/output/build-code-code-change" });
+    writeFileSync(join(worktree, "tracked.txt"), "implementation changed\n");
+    const verify = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "verify-code-test-capture" })
+      .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-code-change.json", outputRef: "quality/tests/output/verify-code-code-change" });
+    expect(verify.receipt_ref).toBe("quality/tests/verify-code-code-change.json");
+    expect(verify.receipt_ref).not.toBe(build.receipt_ref);
+    expect(verify.snapshot_tree).not.toBe(build.snapshot_tree);
+    expect(verify.source_digest).not.toBe(build.source_digest);
   });
 
   it("publishes evidence and verification facts through the single official writer", () => {
@@ -183,6 +234,46 @@ describe("official component receipt authority", () => {
     const raw = `${JSON.stringify(entity)}\n`, ref = "quality/evidence/ac.json";
     kernel.publishCanonicalRecord(ref, raw);
     expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref, sha256: createHash("sha256").update(raw).digest("hex") }] } })).toThrow(pattern);
+  });
+
+  it("keeps per-AC proof anchors structured and rejects host paths", () => {
+    const value = validateAcceptanceEvidence({
+      schema_version: "acceptance-evidence.v1",
+      acceptance_criterion_id: "AC-1",
+      result: "pass",
+      refs: [{ ref: "quality/evidence/proof.txt", sha256: "a".repeat(64) }],
+      summary: {
+        scenario: "保存后读取",
+        oracle: "读取值与保存值一致",
+        actual_outcome: "读取值一致",
+        implementation_anchor: { id: "impl-1", path: "src/save.mjs", start_line: 1, end_line: 2, role: "implementation" },
+        verification_anchor: { id: "test-1", path: "tests/save.test.mjs", start_line: 1, end_line: 2, role: "verification" },
+      },
+    });
+    expect(value.summary.implementation_anchor.path).toBe("src/save.mjs");
+    expect(() => validateAcceptanceEvidence({
+      schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass",
+      refs: [{ ref: "quality/evidence/proof.txt", sha256: "a".repeat(64) }],
+      summary: { implementation_anchor: { id: "host", path: "/Users/Hugh/repo.mjs", start_line: 1, end_line: 1, role: "implementation" } },
+    })).toThrow(/relative path/);
+  });
+
+  it.each([".hidden/file.mjs", "src//save.mjs", "src/"])("rejects malformed relative proof anchor paths: %s", (path) => {
+    expect(() => validateAcceptanceEvidence({
+      schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass",
+      refs: [{ ref: "quality/evidence/proof.txt", sha256: "a".repeat(64) }],
+      summary: { implementation_anchor: { id: "bad", path, start_line: 1, end_line: 1, role: "implementation" } },
+    })).toThrow(/relative path/);
+  });
+
+  it("rejects test outputs outside the canonical test-output namespace", () => {
+    const command = "true";
+    expect(() => validateCanonicalTestReceipt({
+      schema_version: "workflowhub-receipt.v1", task_id: "receipt-task", stage: "build-code",
+      producer: { stage: "build-code", component: "build-code-test-capture" },
+      snapshot_tree: "a".repeat(40), command, command_hash: createHash("sha256").update(command).digest("hex"),
+      exit_code: 0, output_ref: "quality/evidence/not-a-test-output.txt", output_hash: "b".repeat(64),
+    }, { taskId: "receipt-task", stage: "build-code", snapshotTree: "a".repeat(40) })).toThrow(/output_ref|namespace|provenance/i);
   });
 
   it("rejects duplicate acceptance criterion identities", () => {

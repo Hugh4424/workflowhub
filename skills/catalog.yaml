@@ -224,7 +224,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 836e40a2553fe2753b0d3e4f1e0c52a37bafb5f0da09dba09057714469fec08b
+    local_bundle_hash: faac5007323adb146aafda8843597f7e6c271aa130bb70f51518a0a4efe00907
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d7e96dc3ed8ed7a1c909e7d1a4f523c3564ecff2f518857505c2af77d1d59a76
+    local_bundle_hash: 62ab8cfcde70e18adc9018e281db6954f883b8e276ebb82f04ae529b3e1b2289
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -265,7 +265,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b3a5a8da880e09d37f0b6a25c542c1d81be36bbb6f422f0afbb5ca703cc12671
+    local_bundle_hash: 80b17d523402f8bd402bb5f1e4c611b6d9df964685037cafa86dadff9d109025
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
