@@ -32,7 +32,7 @@
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "be527c9c866bf7d472fada6e1cd7b48e44a2b515581a138ff67ad0ea0b1fabed"
+      "sha256": "ff68582268bca10492085ec772bd4eefecdf8b0664b1a049d3832b969ee6f334"
     },
     {
       "path": "contracts/verify-code.md",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "613797d5a9be406b5e83ce9d94f6df4b3b21a76ec349d1b6d1631848b9ce7bf2"
+      "sha256": "1a67da4127c241f4a45f101696b78cde382fd845a4297ed312e5e702f88fb139"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",

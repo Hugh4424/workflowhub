@@ -57,7 +57,7 @@ skills:
   - name: intake-decision-review
     path: skills/intake-decision-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 03b84d9e167739857f2b0adaaede12bc87508a08d435b20eb34ed4728fbd0472
+    local_bundle_hash: 4f211fb462932454bac880431dd7dd2a381fcbf8f93b0e85ebb55b03c6ee5ef5
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对 intake direction 冻结材料执行四角度纯盲审
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: cd723850c65963f094241905b9f38527f4a37fabadff9c9a0ced4cb9d82629ce
+    local_bundle_hash: 3024b33a4bfc0fd2ca46abeaae13e112122ad4f39fa758937db0bcca2c2f1c3e
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -279,7 +279,7 @@ skills:
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b17c4fd34e191391c32f2eb16f10a3b6d42bdbf9cf2594187700697f5f87b4ea
+    local_bundle_hash: b571c3deb4109ef5b6a6e8b837b62200a5acb4592c0b946c0625e25175bb90bc
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 产品方向审查 lens
@@ -318,7 +318,7 @@ skills:
   - name: review
     path: skills/review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f5021ac90100b8a9fe279746392f230124ae947c845379398dd1537af2c04a5a
+    local_bundle_hash: e87012fd585550d14f5078e8d97b3ccbab7889136e8ee95f450721a20d03155d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 正确性、范围、证据和未决风险通用 lens
