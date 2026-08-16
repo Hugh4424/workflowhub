@@ -1123,6 +1123,9 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const unavailableRef = "quality/reviews/attempts/verify-code-unavailable/attempt.json";
     const values = {
       "quality/tests/tests.json": testsReceipt(stage),
+      // The historical review is intentionally supplied through the audit
+      // slot. Verify-code must expose it as recorded context but never use it
+      // as a substitute for the current quality review.
       "quality/reviews/results/review.json": reviewReceipt("build-code", "revise_required"),
       [unavailableRef]: {
         version: "wh-review-attempt.v1", attempt_id: "verify-code-unavailable", task_id: "task", stage: "verify-code", review_track: null,

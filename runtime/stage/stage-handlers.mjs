@@ -804,9 +804,7 @@ function findingDispositions(reviews, invocation) {
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
     const reasons = dispositionReviews.length === 0
-      ? (reviewRecords.length === 0
-        ? ["no current review result was recorded"]
-        : ["current review result is unavailable for finding disposition"])
+      ? ["current review result is unavailable for finding disposition"]
       : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
         return `${status} review result is not available for finding disposition`;
