@@ -788,7 +788,7 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
   ];
 }
 
-function findingDispositions(reviews, invocation) {
+function findingDispositions(reviews, invocation, expectedStage = null) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
   // Only terminal review facts may contribute to current finding disposition
   // or risk authorization. Unavailable records remain visible to their
@@ -800,14 +800,15 @@ function findingDispositions(reviews, invocation) {
   const invalidReviews = dispositionReviews.filter((review) => {
     const legacyPass = review?.facts?.status === undefined && review?.facts?.verdict === "pass";
     const terminal = review?.facts?.status === "recorded" || legacyPass;
-    return !terminal || !review?.value;
+    return !terminal || !review?.value || (expectedStage !== null && review.value.stage !== expectedStage);
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
     const reasons = dispositionReviews.length === 0
       ? ["current review result is unavailable for finding disposition"]
       : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
-        return `${status} review result is not available for finding disposition`;
+        const stage = review?.value?.stage;
+        return `${status} review result${stage && expectedStage !== null && stage !== expectedStage ? ` from ${stage}` : ""} is not available for finding disposition`;
       });
     return {
       facts: { status: "missing", items: [] },
@@ -1497,7 +1498,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   // Only the current verify-code review can supply verify-code finding
   // dispositions.  The build-code review remains visible as historical audit
   // context, but it must not substitute for an unavailable current review.
-  const dispositions = findingDispositions([qualityReview], input);
+  const dispositions = findingDispositions([qualityReview], input, "verify-code");
   // The build-code integration review is historical audit context for verify-code.
   // It must not be re-authenticated as the current verify review flow: doing so
   // turns a missing/stale flow record into an unnecessary ordinary-work blocker.

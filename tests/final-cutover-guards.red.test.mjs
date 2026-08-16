@@ -1146,6 +1146,43 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.facts.quality_note.status).toBe("unavailable");
   });
 
+  it("uses only current verify-code findings when historical review also has findings", async () => {
+    const stage = "verify-code";
+    const historicalTree = "a".repeat(40);
+    const historicalRef = "quality/reviews/results/build-code-history-with-finding.json";
+    const currentRef = "quality/reviews/results/verify-code-current-with-finding.json";
+    const historical = reviewReceipt("build-code", "revise_required", historicalTree);
+    const current = {
+      ...reviewReceipt("build-code", "revise_required", tree),
+      stage,
+      review_scope: null,
+      phase_id: null,
+      attempt_ref: "quality/reviews/attempts/verify-code-current-with-finding/attempt.json",
+    };
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      [historicalRef]: historical,
+      [currentRef]: current,
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const finding = current.findings[0];
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: { tests: "quality/tests/tests.json", review: historicalRef, quality_review: currentRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef },
+      finding_dispositions: [{
+        finding_id: finding.id, original_fact: finding.issue, source: finding.path,
+        consequence: "保留为当前质量风险", status: "needs_human", next_action: "在正式交付前由用户决定",
+        evidence_ref: "evidence/current-finding.json", owner: "task owner", consumer: "verify-code", retain_or_delete: "retain",
+      }],
+    });
+    expect(result.facts.finding_dispositions).toMatchObject({
+      status: "recorded",
+      items: [{ finding_id: finding.id, status: "needs_human" }],
+      source_review_refs: [{ ref: currentRef }],
+    });
+    expect(result.facts.finding_dispositions.source_review_refs).toHaveLength(1);
+  });
+
   it("keeps finding dispositions missing when both historical and current reviews are unavailable", async () => {
     const stage = "verify-code";
     const historicalRef = "quality/reviews/attempts/build-code-unavailable-both/attempt.json";

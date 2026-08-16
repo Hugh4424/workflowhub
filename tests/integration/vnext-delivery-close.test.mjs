@@ -166,7 +166,7 @@ describe("vNext formal delivery close", () => {
     expect(prepareDeliveryClosePlan).toBeTypeOf("function");
   });
 
-  it("accepts the authenticated test receipt snapshot commit", () => {
+  it("accepts an empty current review without creating a retry requirement", () => {
     const state = fixture();
     const targetBaseline = execFileSync("git", ["rev-parse", "refs/heads/main"], { cwd: state.repo, encoding: "utf8" }).trim();
     const result = prepareDeliveryClosePlan({
@@ -181,6 +181,19 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery).toMatchObject({
       task_commit: state.snapshot.commit, target_baseline: targetBaseline, remote_target_baseline: targetBaseline,
     });
+  });
+
+  it("does not let an unavailable current review reach the close consumer", () => {
+    const state = fixture({ reviewStatus: "unavailable" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/current verify-code quality facts are incomplete:.*independent_review/);
   });
 
   it("accepts a clean task-head snapshot commit", () => {
