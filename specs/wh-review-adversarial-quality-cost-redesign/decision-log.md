@@ -1935,3 +1935,35 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 不新增 mini-task：本轮仍是同一 wh-review 主任务的审查质量、成本和收口事实修复。
 - 不再因同一 snapshot 的 80 分、finding 数量或 execution-only 写回重复审查。
 - T010 可信 paired A/B、当前逐 AC 事实、完整 finding disposition、exceptions、正式 human confirmation、public runtime live probe 和用户 close 授权仍未完成；不执行 close、commit、merge、push 或 cleanup，等待用户指令。
+
+## T032-T041 后续执行事实（2026-08-16，append-only）
+
+这一段补记 T031 之后的真实调研、实现、对照和边界，避免 `tasks.md` 有执行记录而 `decision-log.md` 没有完整背景。
+
+### 已完成的实现与核查
+
+- 修复了语义复用边界、材料版本绑定、缺失事实的 false-green、人工确认 subject 绑定、未知 producer、删除文件、mini-task AC trace 和 v3 provider 身份等问题；相关定向回归已经在前文各任务记录中保留。
+- 3rd-review 候选分支 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 已提交 `a8d7a82`；受影响测试 `120/120` 通过，语法检查和 `git diff --check` 通过。
+- ModelTest 候选分支 `codex/workflowhub-wh-review-adversarial-quality-cost-redesign` 已提交 `ad920f9`；新增 benchmark 测试 `31/31` 通过，资产校验通过，包含 9 个 surface、45 个 mutation 和独立 gold-clean acceptance 引用。
+- 使用当前三仓候选、当前配置和显式路径生成了 `1260` 条 paired 评测计划，`provider_calls=0`。这只证明计划、资产和绑定可生成，不是质量结果，也没有运行昂贵的 live A/B。
+
+### WorkflowHub 候选与 main 对齐
+
+- 候选 WorkflowHub 分支先提交主任务改动 `3f93f8c1`，随后把 `main` 当前提交 `ece89717` 合并进候选；唯一冲突是 `core/task-close.mjs` 的快照捕获调用，按 `main` 新规则保留 `captureExecutionSnapshot(worktree)`。
+- 合并提交为 `415344ed`。合并后的 6 个受影响测试文件共 `107/107` 通过，覆盖 official component receipt、official stage run、delivery close、execution snapshot isolation、canonical review result 和 invocation identity；`git diff --check` 通过。
+- 候选随后只追加执行记录提交 `b0fb7dce`，当前候选 HEAD 为 `b0fb7dced61962d88e34fac5b9e65ffd37f36eeb`，候选工作树 clean。该次只改当前任务记录，不改生产行为。
+- 目标 `/Users/Hugh/Hugh/Project/workflowhub` 的 `main` 仍有用户未提交的 27 个 tracked 文件和 2 个 untracked 路径；本轮没有覆盖、提交、stash、合并回写或删除这些改动。候选只对齐了已提交的 `main`，没有把 dirty main 误当成可安全合并内容。
+
+### 当前正式质量事实与外部宿主边界
+
+- 重新通过公共 `stage-runtime status --action=begin --stage=verify-code` 检查后，四份当前材料齐全、`work_status=ready`，但 `quality_status=in_progress`；以下六项仍是 `missing`：`full_tests_fresh`、`independent_review`、`finding_dispositions`、`acceptance_criteria`、`exceptions`、`human_confirmation`。
+- 当前仓库只有接收并认证外部 Stage Agent execution object 的 bridge，没有现成的本地 Codex/Claude Stage Agent 启动器。`write-template` 只能生成 `incomplete` 模板，`write-unavailable` 只能记录真实 unavailable；都不能冒充 verify-code 完成。
+- 因此没有伪造当前 Stage Agent execution、逐 AC、finding 处置、例外或人工确认，也没有把旧快照下的测试/审查当作当前候选的最终证明。公开 `quality/verify.json` 仍绑定旧候选快照，当前状态保持 `incomplete`。
+- 这不是 WorkflowHub 依赖 Multica 的证据。Multica 只是一个可选外部宿主；当前 `wh-review` 的实际 provider 依赖是受信的 3rd-review broker。没有使用 Multica 作为本任务的质量或 close 门槛。
+
+### 当前未完成项与停止边界
+
+- 九面 live paired A/B 仍没有当前候选结果；历史对比仍为 `diagnostic_inconclusive`，只能说明方向/detail 有召回上升信号，不能证明所有 stage 质量提升。
+- 当前 verify-code 的真实 Stage Agent execution、逐 AC 当前事实、完整 finding disposition、exceptions、human confirmation 和正式 close 授权仍未闭合。
+- 没有新增产品需求，所以没有启动 mini-task，也没有待清理的 mini-task worktree/lock。
+- 决定：在没有真实 Stage Agent 和这些正式事实前，不重复同一 snapshot 的 provider 审查、不跑昂贵全量 ModelTest、不执行最终 close、push、archive 或 cleanup；到此停在 final close 之前，等待后续正式宿主事实或用户明确收口授权。
