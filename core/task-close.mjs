@@ -341,6 +341,23 @@ function authenticatedQualityEvidence(task, fact) {
     if (sha256(raw) !== entry.sha256) throw new Error(`quality fact evidence hash mismatch: ${entry.ref}`);
     let value;
     try { value = JSON.parse(raw); } catch { throw new Error(`quality fact evidence is invalid JSON: ${entry.ref}`); }
+    // Stage publication deliberately keeps an unavailable/missing quality
+    // fact as a canonical disclosure record. It is not a review result and
+    // must never satisfy a close predicate, but close must be able to read it
+    // and report the real missing fact instead of misclassifying it as corrupt
+    // review evidence.
+    if (value?.schema_version === "stage-quality-missing.v1") {
+      if (!new Set(["missing", "unavailable"]).has(fact.status)
+          || value.task_id !== task.identity.taskId
+          || value.stage !== fact.stage
+          || value.subject !== fact.subject
+          || value.status !== fact.status
+          || value.snapshot_tree !== fact.snapshot_tree
+          || typeof value.reason !== "string" || value.reason.trim() === "") {
+        throw new Error(`stage-quality missing evidence is not bound to the current fact: ${entry.ref}`);
+      }
+      continue;
+    }
     if (fact.kind === "review") {
       const schema = value?.version === "wh-review-result.v1" ? "result" : value?.version === "wh-review-attempt.v1" ? "attempt" : null;
       if (schema === null) throw new Error(`review evidence is not a canonical wh-review result or attempt: ${entry.ref}`);
@@ -565,26 +582,6 @@ function currentVerifyFacts(task, expected = {}) {
     .filter(({ value }) => value?.stage !== undefined);
   const currentValues = allValues
     .filter(({ value }) => factMatchesExpected(value, expected, expected.worktreeRoot, task.identity.taskId));
-  const currentMiniImplementation = currentValues.find(({ value }) => value?.stage === "build-code"
-    && value?.subject === "mini_task_implementation_review"
-    && value?.status === "recorded");
-  const currentMiniAcceptance = currentValues.find(({ value }) => value?.stage === "verify-code"
-    && value?.kind === "acceptance_criterion"
-    && value?.subject === "acceptance_criteria"
-    && ["passed", "failed", "missing", "unavailable"].includes(value?.status));
-  // A focused mini-task receipt may stand in for verify-code's full suite only
-  // after the same current task/snapshot has an authenticated mini-task
-  // acceptance packet. The mere presence of an old, failed, unavailable, or
-  // unverified implementation fact must never relax the normal npm test rule.
-  let miniTaskMode = false;
-  if (currentMiniImplementation && currentMiniAcceptance && expected.snapshotTree !== undefined) {
-    try {
-      authenticatedQualityEvidence(task, currentMiniAcceptance.value);
-      miniTaskMode = true;
-    } catch {
-      miniTaskMode = false;
-    }
-  }
   const values = currentValues
     .filter(({ value }) => value?.stage === "verify-code"
     );
@@ -610,11 +607,15 @@ function currentVerifyFacts(task, expected = {}) {
     return [subject, item && subject !== "full_tests_fresh" ? authenticatedQualityEvidence(task, item.value) : item?.value ?? null];
   }));
   const test = facts.full_tests_fresh;
+  const allowMiniTaskFocused = expected.allowMiniTaskFocused === true;
+  // A mini-task focused receipt is valid only inside the dedicated mini-task
+  // delivery path. It must never weaken the ordinary verify-code full-suite
+  // requirement for the parent task.
   const receiptSnapshotCommit = test
     ? authenticatedTestSnapshotCommit(task, test, {
       currentSnapshotTree: expected.snapshotTree ?? test.snapshot_tree,
       sourceDigest: expected.sourceDigest ?? null,
-      allowMiniTaskFocused: miniTaskMode,
+      allowMiniTaskFocused,
     })
     : null;
   // A reused test receipt proves the implementation/source snapshot. Delivery
@@ -1116,7 +1117,7 @@ const DELIVERY_AUTHORIZATIONS = Object.freeze({
 });
 
 /** Freeze the concrete close actions before asking for their independent authorization. */
-export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, delivery: requested } = {}) {
+export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, delivery: requested, allowMiniTaskFocused = false } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
@@ -1136,6 +1137,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
     snapshotCommit: deliverySnapshotCommit,
     sourceDigest: currentSnapshot.source_digest,
     worktreeRoot: worktree,
+    allowMiniTaskFocused,
   });
   const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, worktree, task.identity.taskId, currentSnapshot.tree);
   if (!verifyFreshness.current) throw new Error(`delivery close requires fresh verify-code facts: current Workspace does not match accepted verify-code snapshot (${verifyFreshness.reason})`);
@@ -1180,6 +1182,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
       target_baseline: targetBaseline,
       remote_target_baseline: remoteTargetBaseline,
       merge_strategy: "--no-ff --no-edit",
+      close_mode: allowMiniTaskFocused ? "mini-task" : "ordinary",
     },
     steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
   };
@@ -1210,6 +1213,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     snapshotTree: taskSnapshotTree.stdout,
     snapshotCommit: delivery.task_commit,
     worktreeRoot: delivery.target_repo_root,
+    allowMiniTaskFocused: delivery.close_mode === "mini-task",
   } : {});
   const verifyFreshness = verifyFactsFreshForClose(acceptedVerify, delivery.worktree_root, task.identity.taskId, taskSnapshotTree.ok ? taskSnapshotTree.stdout : null, root);
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);

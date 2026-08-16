@@ -56,10 +56,12 @@ const FULL_PHASE_DIFF_PREFIXES = [
 ];
 const FULL_PHASE_DIFF_FILES = new Set(["skills/catalog.yaml"]);
 
-// Provider-visible Phase diffs must include implementation code regardless of
-// which project owns the path. Keep documentation, configuration, fixtures,
-// and generated reports as bounded summaries unless they are selected through
-// the normal context/authority maps.
+// Provider-visible Phase diffs must include implementation and test source
+// code regardless of which project owns the path. Keep documentation,
+// configuration, fixtures, and generated reports as bounded summaries unless
+// they are selected through the normal context/authority maps. If the complete
+// semantic packet still exceeds the hard cap, the caller fails closed instead
+// of replacing these sources with summaries.
 const FULL_PHASE_DIFF_CODE_EXTENSIONS = new Set([
   ".c", ".cc", ".cpp", ".cxx", ".css", ".fish", ".go", ".h", ".hpp",
   ".java", ".js", ".jsx", ".kt", ".m", ".mjs", ".mm", ".php", ".py",
@@ -76,11 +78,6 @@ const FULL_PHASE_DIFF_CODE_EXTENSIONS = new Set([
  * packet below the hard transport limit without hiding changed-file coverage.
  */
 export function phaseDiffDeliveryForPath(path) {
-  // Tests and generated fixtures are valid evidence, but they are not the
-  // implementation authority. Keep them as bounded summaries so the packet
-  // can carry every changed production hunk without exceeding the transport
-  // limit.
-  if (path.startsWith("tests/") || path.includes("/__tests__/")) return "summary";
   return FULL_PHASE_DIFF_FILES.has(path)
     || FULL_PHASE_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
     || FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())
@@ -565,9 +562,16 @@ export function reviewMaterialBytes(key, value) {
 function originalRequirementSection(decisionLog) {
   if (typeof decisionLog !== "string") return null;
   const lines = decisionLog.replaceAll("\r\n", "\n").split("\n");
-  const start = lines.findIndex((line) => /^##[ \t]+原始需求(?:[ \t（(]|$)/.test(line));
+  const isOriginalRequirementHeading = (line) => /^##[ \t]+原始需求.*$/.test(line);
+  const start = lines.findIndex(isOriginalRequirementHeading);
   if (start < 0) return null;
-  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+\S/.test(line));
+  // A make-decision log may split the original request across consecutive
+  // level-2 sections (for example, a source table followed by the original
+  // request body). Keep that complete contiguous requirement block, but stop
+  // before decisions, research, or execution records.
+  const nextHeading = lines.findIndex((line, index) => index > start
+    && /^##[ \t]+\S/.test(line)
+    && !isOriginalRequirementHeading(line));
   const end = nextHeading < 0 ? lines.length : nextHeading;
   const section = lines.slice(start, end).join("\n").trim();
   return section.length > 0 ? `${section}\n` : null;
@@ -590,6 +594,66 @@ function deduplicateDecisionMaterials(materials) {
     throw new Error("MATERIAL_INCOMPLETE: raw_requirement duplicates approved_decision and no original requirement section can be derived");
   }
   return { ...materials, raw_requirement: derivedRawRequirement };
+}
+
+function providerMaterialPath(key, value) {
+  return key === "review_instructions"
+    ? "review-instructions.md"
+    : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
+}
+
+/**
+ * Keep one provider-visible copy of every byte-identical material. The
+ * canonical task material is never changed; this only removes repeated
+ * derived files from the sealed packet. Required materials win over
+ * optional/generated materials so deduplication cannot hide the authority
+ * file named by the stage contract.
+ */
+function deduplicateProviderMaterials(materials, rule) {
+  const originalEntries = Object.entries(materials).map((entry, index) => ({ entry, index }));
+  const rank = (key, index) => {
+    const required = rule.required.indexOf(key);
+    if (required >= 0) return [0, required, index];
+    const optional = rule.optional.indexOf(key);
+    if (optional >= 0) return [1, optional, index];
+    return [2, 0, index];
+  };
+  originalEntries.sort((left, right) => {
+    const leftRank = rank(left.entry[0], left.index);
+    const rightRank = rank(right.entry[0], right.index);
+    return leftRank[0] - rightRank[0] || leftRank[1] - rightRank[1] || leftRank[2] - rightRank[2];
+  });
+  const kept = {};
+  const seen = new Map();
+  const deduplicated = [];
+  for (const { entry: [key, value] } of originalEntries) {
+    // The protocol instructions are a separate control file.  Even when its
+    // bytes happen to match a material, keep the fixed entrypoint so a
+    // provider can always read the review contract first.
+    if (key === "review_instructions") {
+      kept[key] = value;
+      continue;
+    }
+    const bytes = reviewMaterialBytes(key, value);
+    const digest = sha256(bytes);
+    const previous = seen.get(digest);
+    if (previous !== undefined) {
+      deduplicated.push({
+        alias_material: key,
+        alias_path: providerMaterialPath(key, value),
+        canonical_material: previous.key,
+        canonical_path: previous.path,
+        content_sha256: digest,
+        bytes: bytes.length,
+        reason: "same_content_hash",
+      });
+      continue;
+    }
+    const path = providerMaterialPath(key, value);
+    kept[key] = value;
+    seen.set(digest, { key, path });
+  }
+  return { materials: kept, deduplicated };
 }
 
 function compactMiniTaskDecisionLog(decisionLog) {
@@ -1087,7 +1151,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     const change = changesByPath.get(section.path);
     if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
     // An explicit phase/acceptance map is the authority for a bounded Phase
-    // review.  The default path classifier keeps implementation code
+    // review.  The default path classifier keeps implementation and test code
     // complete when no map was supplied, but it must not silently pull every
     // earlier dirty-phase code hunk into the current review packet.  Unselected
     // changes remain in the canonical archive and indexed summary, so this is
@@ -1293,7 +1357,7 @@ function compactPacketEntries(entries) {
   return Object.fromEntries(Object.entries(included).filter(([, entriesForAuthority]) => entriesForAuthority.length > 0));
 }
 
-function packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind = null, included, excluded, deliveryMode }) {
+function packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind = null, included, excluded, deliveryMode, deduplicatedMaterials = [] }) {
   const value = {
     schema_version: "wh-review-packet-plan.v1",
     stage,
@@ -1303,18 +1367,19 @@ function packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind = null, i
     delivery_mode: deliveryMode,
     included: compactPacketEntries(included),
     excluded,
+    ...(deduplicatedMaterials.length > 0 ? { deduplicated_materials: deduplicatedMaterials } : {}),
   };
   return Buffer.from(`${deliveryMode === "selected_context" ? JSON.stringify(value) : JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, reviewKind = null, rule }) {
+function writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope, reviewKind = null, rule, deduplicatedMaterials = [] }) {
   const payload = packetEntries(bundleRoot, rule, { reviewScope });
   const excluded = excludedPacketMaterial(rule, stage);
   const included = [...payload, { path: "packet-plan.json", authority: "metadata" }, { path: "manifest.json", authority: "metadata" }];
   const deliveryMode = reviewScope === "integration" || filesUnder(bundleRoot).includes("diff-index.json")
     ? "selected_context"
     : "inline_complete";
-  const planBytes = packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind, included, excluded, deliveryMode });
+  const planBytes = packetPlanBytes({ stage, reviewTrack, reviewScope, reviewKind, included, excluded, deliveryMode, deduplicatedMaterials });
   write(bundleRoot, "packet-plan.json", planBytes);
   return JSON.parse(planBytes.toString("utf8"));
 }
@@ -1585,6 +1650,8 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   if (acEvidenceSummary !== null) providerMaterials.ac_evidence_summary = acEvidenceSummary;
   providerMaterials = redactProviderHostPaths(providerMaterials);
+  const providerMaterialDeduplication = deduplicateProviderMaterials(providerMaterials, rule);
+  providerMaterials = providerMaterialDeduplication.materials;
 
   const packetRoot = resolve(attachmentRoot, ".wh-review-packets");
   mkdirSync(packetRoot, { recursive: true });
@@ -1656,13 +1723,13 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
 
   for (const [key, value] of Object.entries(providerMaterials)) {
-    const path = key === "review_instructions" ? "review-instructions.md" : `requirements/${key}.${typeof value === "string" ? "md" : "json"}`;
+    const path = key === "review_instructions" ? "review-instructions.md" : providerMaterialPath(key, value);
     write(bundleRoot, path, reviewMaterialBytes(key, value));
   }
   freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration: stage === "build-code" && effectiveScope === "integration" });
   writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree: source.snapshotTree, reviewKind, integration: stage === "build-code" && effectiveScope === "integration" });
   validateDiffIndexBundle(bundleRoot);
-  const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, reviewKind, rule });
+  const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, reviewKind, rule, deduplicatedMaterials: providerMaterialDeduplication.deduplicated });
   const payloadFiles = filesUnder(bundleRoot);
   const fullEntries = payloadFiles.map((path) => {
     const filePath = join(bundleRoot, ...path.split("/"));
@@ -1676,8 +1743,10 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
-  if (stage === "build-code" && deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
-    throw new Error("MATERIAL_INCOMPLETE: review packet exceeds 330 KiB; provide bounded affected excerpts");
+  if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
+    const error = new Error("MATERIAL_TOO_LARGE: review packet exceeds 330 KiB after content deduplication and semantic slicing; canonical material is retained");
+    error.code = "MATERIAL_TOO_LARGE";
+    throw error;
   }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
   return Object.freeze({

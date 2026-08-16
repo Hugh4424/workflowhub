@@ -1304,3 +1304,80 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - **目标 main 边界**：`/Users/Hugh/Hugh/Project/workflowhub` 仍有用户未提交的 27 个 tracked 文件和 2 个 untracked 路径；本轮没有覆盖、提交、stash、合并回写或删除这些改动。
 - **三仓候选边界**：3rd-review 候选 `a8d7a82`、ModelTest 候选 `ad920f9` 均已提交且候选工作树 clean；目标 main 的未提交改动仍只读保留，未擅自合并覆盖。
 - **当前仍未完成**：九面 live paired A/B 仍只有 plan-only、没有质量结果；当前 verify-code 的真实 Stage Agent execution、逐 AC、finding disposition、exceptions 和人工确认仍未闭合；不执行最终 close。
+
+### 执行状态填写区（当前 T042 材料上限、去重与 false-green 修复，2026-08-16）
+
+- **实现修复**：provider 材料改为全局内容 hash 去重；required 材料优先，alias 只写入 `packet-plan.json` 诊断；`review-instructions.md` 固定保留，不参与语义材料去重。
+- **超限边界**：所有 review surface 统一检查 330 KiB；超限返回 `MATERIAL_TOO_LARGE`，runner 记录 `unavailable`，provider 调用数为 0，不静默截断。默认 Phase diff 保留实现和测试源码，非语义材料才可摘要。
+- **状态修复**：当前 review 不可用时，finding disposition 写 `missing`，不再写 `not_applicable`；新增 build-spec 和 verify-code 回归，防止 false-green。
+- **定向验证**：review-runner 58 个、review-materials contract 22 个、official stage run 15 个，共 `95/95` 通过；skill closure、语法检查、`git diff --check` 通过。
+- **长耗时事实**：官方 verify 测试捕获尝试约 5 分钟无输出后中止，没有新测试收据。根因诊断为锁内 `spawnSync` 无命令级超时、管道吞输出，`npm test` 还串行执行两组测试；本轮记录事实，未盲目重跑。
+- **当前状态**：public status 仍显示六类正式质量事实 missing：`full_tests_fresh`、`independent_review`、`finding_dispositions`、`acceptance_criteria`、`exceptions`、`human_confirmation`。九面 live paired A/B 仍未完成。
+- **边界**：本轮没有新增需求，不启动 mini-task；修复尚未提交；不执行 close、push、archive、cleanup，继续停在最终 close 前。
+
+### T043 Phase Card：测试捕获的有界终止（2026-08-16）
+
+- **目标**：修复测试命令在执行锁内无限等待、无进度且无法区分 timeout 的问题；超时必须留下失败事实，不能写成通过。
+- **允许文件**：`runtime/task/workspace-runner.mjs`、`runtime/evidence/canonical-receipt-writer.mjs`、`tests/official-component-receipts.test.mjs`、本任务 `tasks.md`/`decision-log.md` 执行事实区。
+- **覆盖范围**：FR-EXEC-004..006、FR-GOV-001、AC-08、AC-12、AC-13；重点是 test capture 的 timeout、退出状态、输出和锁释放。
+- **非目标**：不改 3rd-review provider 生命周期、不新增 retry、不改 reviewer 数量、不改 public runtime 状态机、不跑全量 `npm test`。
+- **测试路线**：原预判为 `feature`；按实际改动重判为 `fullstack`，因为它修改共享进程执行边界和测试锁的并发终止行为。先用短命令制造 RED，再用官方 receipt writer 绿回归，覆盖成功、非零退出和 timeout 三类终态。
+- **预期证据**：定向 `tests/official-component-receipts.test.mjs`；exit 0；timeout receipt 明确为失败/超时，且不影响后续锁获取。
+- **停止条件**：若需要新增配置中心、改 public schema、改 provider owner 或无法安全终止子进程，则停止并回到 make-decision/plan，不扩大本 Phase。
+
+#### T043 执行事实
+
+- **RED**：新增 timeout 回归在旧实现上失败；实际 `exit_code=0`，没有 timeout 事实。
+- **GREEN**：改为 `spawnSync` 有界终止后，官方 receipt 回归 `42/42` 通过；public behavior baseline `10` 通过、`1` 跳过。timeout 后的下一条 `true` 命令成功，证明记录锁已释放。
+- **实现结果**：默认测试预算 `600000ms`，最大允许 `900000ms`；timeout 记录 `exit_code=124`、`execution.status=timed_out`、`TEST_CAPTURE_TIMEOUT`，不重试、不写 pass。
+- **范围限制**：没有跑全量 `npm test`；没有调用 provider；当前六项正式质量事实、ModelTest 当前 paired A/B 和正式 close 仍未完成。
+
+#### T043 当前快照异源复核与修复事实
+
+- [x] 当前 build-code integration review 使用配置的 3 个 profile：`opencode/coding`、`opencode/v4flash`、`codex/luna`；attempt `quality/reviews/attempts/a1a0f56d-7b20-4369-b3dc-0ca203e08908/attempt.json`，snapshot `4af965016f56681d1286d29f98472501d115c8b0`。
+- [x] provider 终态如实保留：`codex/luna` 有 semantic 结果；`opencode/coding` `PROCESS_EXIT_NONZERO`；`opencode/v4flash` `PUBLIC_RESULT_INVALID`；broker group `partial`，没有 WorkflowHub 重试。
+- [x] 真实 finding 指出空 review/非终态/缺少结果值时可能误写 `not_applicable`；虽然最终聚合因锚点无效没有采纳为 clean finding，但根因成立，已修复 `findingDispositions`：缺失审查统一写 `missing`，只有有效当前空 findings 才写 `not_applicable`。
+- [x] 修复后定向回归：official stage run `15/15`；stage completion 与 contract 合计 `60/60`；T043 receipt `42/42`，public baseline `10` 通过、`1` 跳过；语法检查和 `git diff --check` 通过。
+- [x] 修复后的当前 snapshot 已执行一次 focused build-code review；结果为 `GROUP_OUTCOME_UNAVAILABLE`，之后不因同一 finding、分数或记录性写回继续重试。正式 verify-code 的 full test、逐 AC、finding disposition、exceptions、human confirmation 和 close 仍未完成。
+
+#### T043 收口前复核补充（2026-08-16）
+
+- 当前 WorkflowHub 候选定向回归用正确的 Vitest 入口执行，5 个受影响文件共 `143/143` 通过；第一次直接用 `node --test` 触发的是 Vitest 启动方式错误，不计为产品测试失败。
+- 3rd-review 候选 `a8d7a82` 定向协议/恢复测试 `118/118` 通过；ModelTest 候选 `ad920f9` 九面资产与评分测试 `31/31` 通过；两者工作树均 clean。
+- ModelTest 仍只有评测资产和 plan，当前候选没有合法的九面 paired A/B 质量结果；不把资产测试或 plan-only 当成质量提升。
+- task store 中发现的 `test-capture.execution.lock` 属于已死亡进程 `46549` 的陈旧锁，已通过正式 record-lock 机制回收并释放；当前 locks 目录为空。
+- 没有新增需求，不启动 mini-task；没有执行 commit、merge、push、archive、cleanup 或最终 close。
+
+#### T043 最终执行事实
+
+- [x] 测试 timeout 使用独立进程组；后台子进程不会在 timeout 返回后继续写入 worktree。
+- [x] 输出超过 50 MiB 时记录 `output_limit_exceeded` / `TEST_OUTPUT_OVERFLOW`，不再归类成模糊的普通退出失败。
+- [x] 连续原始需求 H2 分段完整保留；回归覆盖索引表和原始需求正文分离的当前格式。
+- [x] 定向回归：official receipts `44/44`、wh-review runner `59/59`、review-materials contract `22/22`、official stage run `15/15`、stage completion/contract `60/60`、WorkspaceRunner `3/3`；语法检查和 `git diff --check` 通过。
+- [x] 最终当前 build-code review 已按配置提交三个 profile，但结果为 `GROUP_OUTCOME_UNAVAILABLE`：`opencode/coding` `PROCESS_EXIT_NONZERO`，`opencode/v4flash` `PROVIDER_OUTPUT_INVALID`，`codex/luna` `PROCESS_TIMEOUT`；`0/1` 个有效 reviewer，无 semantic findings。
+- [ ] 当前 verify-code 的 full test、独立审查、逐 AC、finding 处置、例外和人工确认仍缺失；不把本次 unavailable 写成通过，不再重复本次同 surface 审查。
+
+#### T044 provider 故障根因修复事实
+
+- [x] 3rd-review OpenCode 每个 runtime/profile 使用独立 0700 `XDG_DATA_HOME`；同一 continuation 复用，不同 profile 隔离，避免全局 OpenCode SQLite 锁互相影响。
+- [x] `403 usage/quota/billing/credit` 归类为 `RATE_LIMITED`；invalid API key 仍归类为 `AUTHENTICATION_FAILED`，不把所有 403 混为一类。
+- [x] 3rd-review 候选相关定向回归 `121/121` 通过；没有重新调用真实 provider，不把本地修复测试写成新的语义质量结果。
+- [ ] 当前正式 Stage Agent、full test、独立审查、逐 AC、finding 处置、例外、人工确认和九面 paired A/B 仍缺失；不执行最终 close。
+
+#### T045 收口前边界修复与评测绑定补充（2026-08-16）
+
+- [x] 普通父任务 `verify-code` 不再接受 mini-task focused receipt 代替完整 `npm test`；mini-task focused 测试只在专用 mini-task delivery 路径使用。
+- [x] 3rd-review OpenCode native auth 改为 runtime-local copy；terminal permission/timeout/output failure 保留明确分类；定向测试 `123/123` 通过。
+- [x] ModelTest 每个版本记录三仓 source identity，每个 case 记录 subject/material hash；completed attempt 绑定失败时保持 unavailable；synthetic result 不进入质量分母；定向 benchmark 测试 `30/30` 通过。
+- [x] `run-count=1` 重新生成 `252` 条计划，`provider_calls=0`；baseline/candidate TaskHandle 当前明确为 `unbound`，没有伪造 paired A/B 质量结果。
+- [ ] 三个候选工作树尚未提交；当前六项正式 verify-code 事实、九面 live paired A/B、最终 close 授权仍缺失；不执行 close、merge、push、archive 或 cleanup。
+
+#### T046 最终当前快照复核与收口前状态（2026-08-16）
+
+- [x] 普通父任务 `verify-code` 拒绝 mini-task focused receipt；专用 mini-task delivery 保留 focused receipt；缺失/不可用审查的 finding disposition 保持 `missing`，不再 false-green。
+- [x] mini-task bundle hash 与 catalog hash 已同步；`npm run check:skill-closure`、`git diff --check` 通过。
+- [x] 最后一次公共全量捕获：`quality/tests/verify-code-current-20260816-v22.json`，HEAD `209b14e5aca36a5a06b2d5a4a637cd7ff20d31bf`，tree `16dddc1a1a0f51e4e9b8c74eadb6a3a2b525c3f7`，safe `162` 文件 `1680 passed / 1 skipped`，exclusive `31 passed`，exit `0`。
+- [x] 受影响回归已通过：mini-task `9/9`、父任务 focused receipt `1/1`、final-cutover unavailable review `2/2`、stage artifact closure `4/4`；3rd-review 候选 `123/123`，ModelTest 候选 `30/30`。
+- [x] 当前 verify-code review 只尝试一轮：第一次材料预检拒绝审计 output_ref，第二次请求 host 标识无效，第三次真实 provider 返回 `PUBLIC_RESULT_INVALID`（公共结果含私有路径）；没有可用 semantic result，不把它写成空 findings，也不继续重试。
+- [ ] 当前仍没有绑定最新 tree 的有效独立 review；正式 Stage Agent outcome、逐 AC、finding disposition、exceptions、human confirmation 和公开 `full_tests_fresh` 事实仍缺失。
+- [ ] ModelTest 仍只有 `252` 条 plan、`provider_calls=0`，baseline/candidate TaskHandle unbound；三仓候选仍未提交；没有启动 mini-task，没有执行 close、commit、merge、push、archive 或 cleanup。

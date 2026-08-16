@@ -11,7 +11,11 @@ function failure(code, message) { const error = new Error(`${code}: ${message}`)
 // Reject absolute filesystem paths, not ordinary review terms such as
 // `map/AC`. A provider must use packet-relative anchors; the old allowlist of
 // known host roots missed paths such as `/workspace` and `/srv`.
-const absolutePathPattern = /(?:^|[^A-Za-z0-9._~/%-])\/(?![\/\s])(?:[A-Za-z0-9._~%-]+(?:\/[A-Za-z0-9._~%-]+)*)(?=$|[\s"'`,.;:!?)]|\/)/;
+// Keep the boundary aligned with the broker: a slash after a Unicode letter
+// or number can be ordinary review notation such as `中文/AC/oracle`, not a
+// host absolute path. A slash at the start or after punctuation/whitespace is
+// still treated as a path boundary, including unlisted Unix roots.
+const absolutePathPattern = /(?:^|[^\p{L}\p{N}A-Za-z0-9._~\/%-])\/(?![\/\s])(?:[\p{L}\p{N}A-Za-z0-9._~%-]+(?:\/[\p{L}\p{N}A-Za-z0-9._~%-]+)*)(?=$|[\s"'`,.;:!?)]|\/)|[A-Za-z]:[\\/]/u;
 const fileUriPathPattern = /\bfile:\/\/\/(?:[A-Za-z0-9._~%-]|%[A-Fa-f0-9]{2})/i;
 
 function containsPrivatePath(value) {

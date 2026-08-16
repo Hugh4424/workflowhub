@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -493,6 +493,60 @@ describe("official component receipt authority", () => {
     });
     expect(observed.timedOut).toBe(false);
     expect(observed.stderr).toMatch(/timed out waiting for record lock|lease/i);
+  });
+
+  it("records a bounded test-command timeout and releases the capture lock", () => {
+    const { task, workspace } = fixture();
+    const timedOut = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "timeout-capture" })
+      .captureTests({
+        command: "node -e \"setTimeout(() => {}, 1000)\"",
+        receiptRef: "quality/tests/timeout-capture.json",
+        outputRef: "quality/tests/output/timeout-capture",
+        timeoutMs: 25,
+      });
+    expect(timedOut).toMatchObject({
+      exit_code: 124,
+      execution: { status: "timed_out", timeout_ms: 25 },
+      failure_attribution: { status: "failed", category: "test_timeout", code: "TEST_CAPTURE_TIMEOUT" },
+    });
+    const afterTimeout = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "after-timeout" })
+      .captureTests({ command: "true", receiptRef: "quality/tests/after-timeout.json", outputRef: "quality/tests/output/after-timeout" });
+    expect(afterTimeout.exit_code).toBe(0);
+  });
+
+  it("terminates test descendants when a bounded capture times out", async () => {
+    const { task, workspace, worktree } = fixture();
+    const marker = join(worktree, "late-descendant-marker");
+    const childScript = `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(marker)}, "orphan"), 200)`;
+    const timedOut = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "descendant-timeout" })
+      .captureTests({
+        command: `node -e ${JSON.stringify(childScript)} & sleep 1`,
+        receiptRef: "quality/tests/descendant-timeout.json",
+        outputRef: "quality/tests/output/descendant-timeout",
+        timeoutMs: 25,
+      });
+    expect(timedOut).toMatchObject({
+      exit_code: 124,
+      execution: { status: "timed_out" },
+      failure_attribution: { code: "TEST_CAPTURE_TIMEOUT" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("records bounded test output overflow as a distinct failure", () => {
+    const { task, workspace } = fixture();
+    const overflow = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "output-overflow" })
+      .captureTests({
+        command: `node -e ${JSON.stringify("process.stdout.write('x'.repeat(50 * 1024 * 1024 + 1))")}`,
+        receiptRef: "quality/tests/output-overflow.json",
+        outputRef: "quality/tests/output/output-overflow",
+      });
+    expect(overflow).toMatchObject({
+      exit_code: 1,
+      execution: { status: "output_limit_exceeded", output_limit_bytes: 50 * 1024 * 1024 },
+      failure_attribution: { status: "failed", category: "test_output_overflow", code: "TEST_OUTPUT_OVERFLOW" },
+    });
   });
 
   it("binds G6 phase evidence to distinct baselines and the current snapshot", () => {

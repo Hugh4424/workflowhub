@@ -195,3 +195,14 @@ test("client rejects provider results that expose unlisted absolute Unix paths",
       .rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
   }
 });
+
+test("client allows slash notation that follows a Unicode word", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].output = JSON.stringify({ findings: [{
+    severity: "major", path: "requirements/open_risks.json",
+    issue: "代码/AC/oracle/接口变化需要重新绑定事实", recommendation: "补齐当前事实",
+  }] });
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .resolves.toMatchObject({ providers: [{ status: "completed" }] });
+});

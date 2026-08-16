@@ -88,7 +88,11 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
   })}\n`;
   const testRef = "quality/tests/verify-code.json";
   const testStage = testVariant === "focused-build-receipt" ? "build-code" : "verify-code";
-  const testComponent = testVariant === "focused-build-receipt" ? "focused-test-capture" : `${testStage}-test-capture`;
+  const testComponent = testVariant === "focused-build-receipt"
+    ? "focused-test-capture"
+    : testVariant === "focused-mini-receipt"
+      ? "mini-task-focused-tests"
+      : `${testStage}-test-capture`;
   const testValue = {
     schema_version: "workflowhub-receipt.v1", task_id: taskId, stage: testStage,
     producer: { stage: testStage, component: testComponent, version: "1.0.0" },
@@ -250,6 +254,34 @@ describe("vNext formal delivery close", () => {
     })).toThrow(/independent_review/);
   });
 
+  it("reads an unavailable review disclosure and reports the missing close fact", () => {
+    const state = fixture({ omitSubjects: ["independent_review"] });
+    const ref = "quality/evidence/stage-quality-missing/verify-code/independent_review-test.json";
+    const raw = `${JSON.stringify({
+      schema_version: "stage-quality-missing.v1",
+      task_id: state.taskId,
+      stage: "verify-code",
+      subject: "independent_review",
+      status: "missing",
+      snapshot_tree: state.snapshot.tree,
+      reason: "the independent review execution was unavailable",
+    }, null, 2)}\n`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    state.kernel.publishVNextQualityFact("verify-code", {
+      kind: "review", status: "missing", subject: "independent_review",
+      evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
+    });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/current verify-code quality facts are incomplete:.*independent_review/);
+  });
+
   it("accepts the canonical recorded status used by review quality facts", () => {
     const state = fixture({ reviewStatus: "recorded" });
     expect(() => prepareDeliveryClosePlan({
@@ -340,6 +372,19 @@ describe("vNext formal delivery close", () => {
 
   it("does not accept a focused build-code receipt as verify-code full tests", () => {
     const state = fixture({ testVariant: "focused-build-receipt" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/unsupported stage-quality receipt producer|verify-code test receipt snapshot_commit is unavailable/);
+  });
+
+  it("does not let a mini-task focused receipt replace the parent verify-code full suite", () => {
+    const state = fixture({ testVariant: "focused-mini-receipt" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,

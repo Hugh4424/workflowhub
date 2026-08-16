@@ -980,6 +980,39 @@ describe("material and workspace boundaries", () => {
     expect(rawRequirement).not.toBe(frozenDecision);
   });
 
+  it("keeps consecutive original-requirement sections in the bounded source view", () => {
+    const { attachmentRoot, task } = fixture("review-build-spec-multi-requirement-sections-");
+    const approvedDecision = [
+      "# Decision Log",
+      "",
+      "## 原始需求",
+      "",
+      "需求索引表。",
+      "",
+      "## 原始需求正文（make-decision 输入）",
+      "",
+      "必须保留完整用户结果。",
+      "",
+      "## 决定",
+      "",
+      "只修复审查边界。",
+    ].join("\n");
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: attachmentRoot, attachmentRoot, source, task, taskId: "task", stage: "build-spec",
+      materials: {
+        raw_requirement: approvedDecision,
+        approved_decision: approvedDecision,
+        draft_spec: "# Spec\n",
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    });
+
+    const rawRequirement = readFileSync(join(bundle.bundleRoot, "requirements/raw_requirement.md"), "utf8");
+    expect(rawRequirement).toContain("需求索引表。");
+    expect(rawRequirement).toContain("必须保留完整用户结果。");
+    expect(rawRequirement).not.toContain("## 决定");
+  });
+
   it("deduplicates equivalent decision material with CRLF and trailing whitespace differences", () => {
     const { attachmentRoot, task } = fixture("review-build-spec-normalized-materials-");
     const approvedDecision = "# Decision Log\n\n## 原始需求\n\n必须保留实际语义。\n\n## 决定\n\n采用最小修复。\n";
@@ -993,6 +1026,55 @@ describe("material and workspace boundaries", () => {
       },
     });
     expect(readFileSync(join(bundle.bundleRoot, "requirements/raw_requirement.md"), "utf8")).toBe("## 原始需求\n\n必须保留实际语义。\n");
+  });
+
+  it("deduplicates identical required materials across different names and records a deterministic alias", () => {
+    const { attachmentRoot, task } = fixture("review-materials-global-dedup-");
+    const shared = "同一份交付语义\n";
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: attachmentRoot,
+      attachmentRoot,
+      source,
+      task,
+      taskId: "task",
+      stage: "build-spec",
+      materials: {
+        raw_requirement: shared,
+        approved_decision: "选择一个可逆实现边界。\n",
+        draft_spec: shared,
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    });
+    expect(bundle.files).toContain("requirements/raw_requirement.md");
+    expect(bundle.files).not.toContain("requirements/draft_spec.md");
+    const packetPlan = JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8"));
+    expect(packetPlan.deduplicated_materials).toEqual([expect.objectContaining({
+      alias_material: "draft_spec",
+      alias_path: "requirements/draft_spec.md",
+      canonical_material: "raw_requirement",
+      canonical_path: "requirements/raw_requirement.md",
+      reason: "same_content_hash",
+    })]);
+    expect(new Set(bundle.manifest.map(({ sha256 }) => sha256)).size).toBe(bundle.manifest.length);
+  });
+
+  it("never deduplicates the protocol instructions with a semantic material", () => {
+    const { attachmentRoot, task } = fixture("review-materials-protocol-dedup-");
+    const shared = reviewInstructionsFor("build-spec");
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: attachmentRoot, attachmentRoot, source, task, taskId: "task", stage: "build-spec",
+      materials: {
+        raw_requirement: shared,
+        approved_decision: "选择一个可逆实现边界。\n",
+        draft_spec: "# Spec\n",
+        review_instructions: shared,
+      },
+    });
+    expect(bundle.files).toEqual(expect.arrayContaining(["review-instructions.md", "requirements/raw_requirement.md"]));
+    const packetPlan = JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8"));
+    expect(packetPlan.deduplicated_materials ?? []).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ alias_material: "review_instructions" }),
+    ]));
   });
 
   it("fails before packet delivery when duplicate decision material has no original requirement section", () => {
@@ -1039,6 +1121,20 @@ describe("material and workspace boundaries", () => {
     const attempt = JSON.parse(task.readRecord(result.attemptRef));
     expect(attempt.error).toEqual({ code: "MATERIAL_INCOMPLETE", message: "review material preflight failed; private diagnostic withheld" });
     expect(task.readRecord(result.reportRef)).not.toContain(privatePath);
+  });
+
+  it("records an oversized packet as material preflight failure without dispatching", async () => {
+    const { attachmentRoot, task } = fixture("review-material-too-large-");
+    const calls = [];
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-spec", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: groupClient([publicProvider("kimi")], calls), captureSource: () => source,
+      buildMaterials: () => { const error = new Error("MATERIAL_TOO_LARGE: review packet exceeds 330 KiB"); error.code = "MATERIAL_TOO_LARGE"; throw error; },
+    });
+    expect(result).toMatchObject({ status: "unavailable", resultRef: null });
+    expect(calls).toHaveLength(0);
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
+    expect(attempt.error).toEqual({ code: "MATERIAL_TOO_LARGE", message: "MATERIAL_TOO_LARGE: review packet exceeds 330 KiB" });
   });
 
   it("records a source change after packet construction without dispatching a mixed packet", async () => {

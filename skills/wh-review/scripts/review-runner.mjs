@@ -13,14 +13,14 @@ import { buildSemanticProjection } from "./review-semantic-projection.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
-const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "BROKER_SPAWN_FAILED", "BROKER_EXIT_NONZERO", "BROKER_INVOCATION_FAILED", "GROUP_OUTCOME_UNAVAILABLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
+const errorPriority = ["MATERIAL_TOO_LARGE", "MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "BROKER_SPAWN_FAILED", "BROKER_EXIT_NONZERO", "BROKER_INVOCATION_FAILED", "GROUP_OUTCOME_UNAVAILABLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];
 // Providers run from a writable wrapper directory; sealed review material is
 // deliberately exposed beneath `bundle/`, never at that directory's root.
 // Keep the provider on the bounded, provider-visible view. The canonical
 // archives and out-of-scope summaries remain audit material, but asking the
 // model to enumerate the complete bundle makes large Phase reviews spend
 // their budget on transport/tool traversal before semantic review.
-const providerPrompt = "Read bundle/review-instructions.md first, then bundle/manifest.json and bundle/packet-plan.json. Read only manifest entries marked required, plus the declared contract and reviewer-lens entries and only the explicitly selected files under context/ needed by the maps; summary diff shards are navigation metadata and are not required to read. Use direct file reads only: do not call Grep, Glob, Bash, shell, directory listing, or recursive search, and do not enumerate or read canonical archives, full-diff archives, or out-of-scope summary shards unless the instructions explicitly require them. Return exactly one JSON object of the form {\"findings\":[{\"severity\":\"blocking|major|minor\",\"path\":\"provider-relative-material-path\",\"line\":1,\"issue\":\"...\",\"recommendation\":\"...\",\"root_cause\":\"...\",\"evidence_kind\":\"direct|machine|inferred\",\"evidence\":\"...\"}]}; every finding must include severity, path, issue, and recommendation, and every major/blocking finding must also include root_cause, evidence_kind, and evidence. Omit line only when no reliable line exists. Never omit path, and do not output any other top-level field.";
+const providerPrompt = "Read bundle/review-instructions.md first, then bundle/manifest.json and bundle/packet-plan.json. If packet-plan.json lists deduplicated_materials, treat each alias as the same bytes as its canonical_path and read the canonical file once; do not report the alias as missing. Read only manifest entries marked required, plus the declared contract and reviewer-lens entries and only the explicitly selected files under context/ needed by the maps; summary diff shards are navigation metadata and are not required to read. Use direct file reads only: do not call Grep, Glob, Bash, shell, directory listing, or recursive search, and do not enumerate or read canonical archives, full-diff archives, or out-of-scope summary shards unless the instructions explicitly require them. Return exactly one JSON object of the form {\"findings\":[{\"severity\":\"blocking|major|minor\",\"path\":\"provider-relative-material-path\",\"line\":1,\"issue\":\"...\",\"recommendation\":\"...\",\"root_cause\":\"...\",\"evidence_kind\":\"direct|machine|inferred\",\"evidence\":\"...\"}]}; every finding must include severity, path, issue, and recommendation, and every major/blocking finding must also include root_cause, evidence_kind, and evidence. Omit line only when no reliable line exists. Never omit path, and do not output any other top-level field.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 const absoluteDiagnosticPath = /(?:^|[^A-Za-z0-9._~/%-])(?:\/(?![\s/])|[A-Za-z]:[\\/]|file:\/\/\/)/;
 const reviewRootFor = () => "quality/reviews";
@@ -490,8 +490,8 @@ function evidenceAnchorsFor(reviewed, bundle) {
 }
 
 function materialPreflightCode(error) {
-  if (["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(error?.code)) return error.code;
-  return /^(MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN):\s/.exec(error?.message ?? "")?.[1] ?? null;
+  if (["MATERIAL_TOO_LARGE", "MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(error?.code)) return error.code;
+  return /^(MATERIAL_TOO_LARGE|MATERIAL_INCOMPLETE|MATERIAL_FORBIDDEN):\s/.exec(error?.message ?? "")?.[1] ?? null;
 }
 
 function isMaterialPreflightFailure(error) { return materialPreflightCode(error) !== null; }

@@ -800,7 +800,7 @@ export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, 
       }
     }
   }
-  return prepareDeliveryClosePlan({ task, kernel, delivery });
+  return prepareDeliveryClosePlan({ task, kernel, delivery, allowMiniTaskFocused: true });
 }
 
 export function confirmMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, plan, outcome = "confirmed" } = {}) {

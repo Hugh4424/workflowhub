@@ -158,8 +158,8 @@ describe("current review material and capture contracts", () => {
     expect(phaseDiffDeliveryForPath("skills/grill-with-docs/skill-bundle.json")).toBe("included");
     expect(phaseDiffDeliveryForPath("skills/spec-clarify/skill-bundle.json")).toBe("included");
     expect(phaseDiffDeliveryForPath("skills/catalog.yaml")).toBe("included");
-    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("summary");
-    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("included");
+    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
   });
 
@@ -197,6 +197,25 @@ describe("current review material and capture contracts", () => {
     expect(bundle.files).not.toContain("requirements/planning_artifacts.json");
     expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).excluded)
       .toEqual(expect.arrayContaining([expect.objectContaining({ category: "generated:planning_artifacts" })]));
+  });
+
+  it("rejects an oversized non-build-code packet before dispatch instead of silently truncating it", () => {
+    const { root, task } = taskFixture();
+    const oversized = "关键行为\n" + "x".repeat(400 * 1024);
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: sourceForPlanFixture,
+      task,
+      taskId: task.identity.taskId,
+      stage: "build-spec",
+      materials: {
+        raw_requirement: oversized,
+        approved_decision: "采用当前方向。\n",
+        draft_spec: "# Spec\nAC-01\n",
+        review_instructions: reviewInstructionsFor("build-spec"),
+      },
+    })).toThrow(/MATERIAL_TOO_LARGE.*330 KiB/);
   });
 
   it("defines distinct mini-task design and implementation packet contracts", async () => {

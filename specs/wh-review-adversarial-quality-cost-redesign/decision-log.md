@@ -1967,3 +1967,167 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 当前 verify-code 的真实 Stage Agent execution、逐 AC 当前事实、完整 finding disposition、exceptions、human confirmation 和正式 close 授权仍未闭合。
 - 没有新增产品需求，所以没有启动 mini-task，也没有待清理的 mini-task worktree/lock。
 - 决定：在没有真实 Stage Agent 和这些正式事实前，不重复同一 snapshot 的 provider 审查、不跑昂贵全量 ModelTest、不执行最终 close、push、archive 或 cleanup；到此停在 final close 之前，等待后续正式宿主事实或用户明确收口授权。
+
+## T042 当前材料上限、全局去重与 verify false-green 修复（2026-08-16，append-only）
+
+### 本轮确认的根因
+
+- AC-04 的旧实现只对 `raw_requirement` 和 `approved_decision` 做特殊去重，其他同字节材料仍可能以不同名字重复进入 provider packet。
+- AC-05 的 330 KiB 检查以前只覆盖 build-code；其他 stage/审查面超限时没有统一的发送前失败边界。大 Phase diff 的默认路径还会把测试源码变成摘要，可能让 reviewer 看不到关键断言。
+- `verify-code` 在“没有当前 review 结果”时把 finding disposition 变成 `not_applicable`，下游可能把“没有审查所以没有 finding”误当成“审查完成且无需处置”，形成 false-green。
+- 官方测试捕获的长时间停顿根因不是锁等待，而是 `spawnSync` 在锁内同步运行测试，没有命令级超时，stdout/stderr 通过管道收集；`npm test` 还会串行跑 safe 和 exclusive 两组。这个问题会放大整体耗时，当前只完成诊断，未用新状态机掩盖。
+
+### 本轮已处理
+
+- provider 可见材料按最终字节 SHA-256 全局去重；required 材料优先保留，重复项只在 `packet-plan.json` 留确定性 alias 诊断。固定协议入口 `review-instructions.md` 永远保留，不与语义材料合并。
+- 所有 review surface 统一执行 330 KiB 发送前上限；超限返回 `MATERIAL_TOO_LARGE`，由 runner 记录 `unavailable`、不调用 provider、不静默截断。默认 Phase diff 保留实现和测试源码，非语义文档、配置、fixture、生成报告仍可摘要；语义包仍超限就失败而不是继续假审查。
+- review 不可用时，finding disposition 改为 `missing`；只有真实 review 结果存在且没有可处置 finding，才允许 `not_applicable`。因此空 findings、unavailable 和完成状态不再混淆。
+- 同一主任务继续处理，没有新增需求，不启动 mini-task。
+
+### 验证事实
+
+- 当前候选定向回归：`skills/wh-review/scripts/__tests__/review-runner.test.mjs` 58 个、`tests/contract/review-materials-contract.test.mjs` 22 个、`tests/integration/vnext-official-stage-run.test.mjs` 15 个，共 `95/95` 通过。
+- `npm run check:skill-closure`、三处 `node --check` 和 `git diff --check` 通过；wh-review bundle hash 已同步到 `skills/catalog.yaml`。
+- 官方 verify 捕获尝试约 5 分钟无输出后被中止，没有生成新的测试收据；这个事实保留为 timeout/interrupted，不当作通过，也不重复同一命令。
+
+### 当前仍未完成
+
+- public `stage-runtime status --action=begin --stage=verify-code` 仍为 `quality_status=in_progress`，六项 `full_tests_fresh`、`independent_review`、`finding_dispositions`、`acceptance_criteria`、`exceptions`、`human_confirmation` 仍为 `missing`。
+- 当前候选还没有新的、绑定本轮代码改动的真实 Stage Agent execution、当前双 reviewer 结果、逐 AC 验收、finding 处置、例外和人工确认；九面 ModelTest 当前候选 paired A/B 仍是 `inconclusive`。
+- 本轮修复尚未提交；目标 `/Users/Hugh/Hugh/Project/workflowhub` 的 dirty main 仍只读保留。没有执行 close、push、archive 或 cleanup。继续停在最终 close 之前。
+
+## T043 测试捕获有界终止修复（2026-08-16，append-only）
+
+### 根因与选择
+
+- `runtime/task/workspace-runner.mjs` 原来用无 timeout 的 `spawnSync` 执行测试命令；测试在记录锁内运行时，长命令既没有最大等待时间，也没有明确 timeout 事实。
+- 选择在共享命令边界增加受控 timeout 参数，但只由官方测试 receipt writer 使用：默认 `600000ms`，调用方可在 `1..900000ms` 内提供更短的测试预算；超时发 `SIGTERM`，不新增 retry、provider 生命周期或 public 状态机。
+- timeout 不写成通过：退出码固定为 `124`，canonical receipt 增加 `execution.status=timed_out`、预算和信号，并写 `failure_attribution.code=TEST_CAPTURE_TIMEOUT`。锁释放后立即用下一条 `true` 命令验证可继续捕获。
+
+### RED/GREEN 事实
+
+- RED：新增 timeout 回归先运行，旧实现实际返回 `exit_code=0`，目标 timeout 断言失败；这是实现缺口，不是环境错误。
+- GREEN：`tests/official-component-receipts.test.mjs` `42/42` 通过，覆盖成功、非零退出、锁等待超时、命令 timeout 和 timeout 后再次捕获；`tests/contract/public-behavior-baseline.test.mjs` `10` 通过、`1` 跳过。
+- 本轮没有跑全量 `npm test`，也没有重复旧的官方全量收据；只做了受影响的定向测试和语法/差异检查。
+
+### 当前边界
+
+- 该修复只解决“测试命令无限等待/timeout 不可辨识”这一根因；不代表当前任务已经拥有新的 full test、独立 review、逐 AC、finding 处置、例外或人工确认事实。
+- 本轮仍无新增产品需求，不启动 mini-task；代码尚未 commit；不执行 close、merge、push、archive 或 cleanup。
+
+### T043 当前快照异源复核与 finding 修复（2026-08-16，append-only）
+
+- **当前审查**：针对 T043 代码首次调用 build-code integration review；attempt `quality/reviews/attempts/a1a0f56d-7b20-4369-b3dc-0ca203e08908/attempt.json`，result `quality/reviews/results/build-code-default-4af965016f56681d1286d29f98472501d115c8b0-a1a0f56d-7b20-4369-b3dc-0ca203e08908.json`，report `quality/reviews/reports/a1a0f56d-7b20-4369-b3dc-0ca203e08908.md`；当前 snapshot `4af965016f56681d1286d29f98472501d115c8b0`，material `5f5f3d239bcd6638e146fbf141d8de00d67f2b62ecb958d0f0be9e396e8c19ae`。
+- **配置兑现**：按 `/Users/Hugh/.config/workflowhub/config.json` 把 build-code 的 3 个 profile 全部提交给 broker：`opencode/coding`、`opencode/v4flash`、`codex/luna`；没有 WorkflowHub retry 或调用方删减。最终 `codex/luna` 返回 semantic 结果；`opencode/coding` 进程非零退出，`opencode/v4flash` 因输出包含私有绝对路径被 broker 判为 `PUBLIC_RESULT_INVALID`。group 为 `partial`，不是 3/3 clean，也不能把 1 个有效结果说成全配置组都成功。
+- **finding**：有效 reviewer 指出 `findingDispositions` 只识别明确的 `unavailable`，对空 review 数组、非终态状态或缺少 `value` 仍可能返回 `not_applicable`，会把“没有当前审查”误当成“审查完成且无需处置”。broker 的最终聚合把该 finding 标成 `invalid_anchor`，所以它不是可直接采纳的干净 finding；但它指出的代码根因真实存在，按同一任务直接修复，不启动 mini-task。
+- **修复**：`findingDispositions` 现在先检查 review 数量、终态（`recorded`，兼容旧的明确 `verdict=pass`）和结果值；任一缺失/非终态都写 `missing` 并保留原因。只有当前审查结果真实存在且没有 reportable finding，才写 `not_applicable`。
+- **回归**：`tests/integration/vnext-official-stage-run.test.mjs` `15/15`；`tests/stage-completion-facts.test.mjs` 与 `tests/contract/stage-completion.test.mjs` 合计 `60/60`；此前 T043 receipt 回归 `42/42`、public baseline `10` 通过 `1` 跳过仍有效；`node --check`、`git diff --check` 通过。
+- **审查边界**：这是 T043 的一次真实修复后 focused review 前置事实；修复后的当前代码需要再调用一次同 surface 的 focused review，最多一次。若 broker 无可信终态，只记录 `unavailable`，不再循环；也不跑全量 `npm test` 或 ModelTest live A/B。
+
+### T043 最终复核与失败事实（2026-08-16，append-only）
+
+- **新增修复**：测试捕获现在使用独立的 `/bin/sh -c` 进程组；timeout 会一起终止后台测试子进程，不再留下可能继续改动 worktree 的孤儿进程。超过 50 MiB 输出不再伪装成普通 `EXIT_1`，而是记录 `execution.status=output_limit_exceeded`、`TEST_OUTPUT_OVERFLOW`。
+- **需求材料截取修复**：`raw_requirement` 与 `approved_decision` 发生重复时，保留“只截取原始需求”的省 token 目标，但连续的 `## 原始需求...` 分段会完整保留，直到真正进入决定/调研章节；新增回归覆盖当前 decision-log 的“索引表 + 原始需求正文”结构。
+- **本轮回归**：official component receipts `44/44`；wh-review runner `59/59)，review-materials contract `22/22`；official stage run `15/15`；stage completion facts/contract `60/60`；WorkspaceRunner `3/3`；语法检查和 `git diff --check` 通过。没有跑全量 `npm test`。
+- **最终当前快照复核**：attempt `quality/reviews/attempts/f6ba9acf-6b10-4718-a22d-6c2ee6098ccd/attempt.json`，report `quality/reviews/reports/f6ba9acf-6b10-4718-a22d-6c2ee6098ccd.md`，snapshot `b8240dcb3bb6bd90ed2a335f5a02786aac836f68`，material `47b3c30fb67012c58de0b9dd4be43d10814616656bf006f9aacc5b136cf47745`。
+- **配置兑现**：严格使用 `/Users/Hugh/.config/workflowhub/config.json` 中 build-code 的三个 profile：`opencode/coding`、`opencode/v4flash`、`codex/luna`；没有 WorkflowHub 调用方删减或重试。最终 `0/1` 个有效 reviewer，broker group 为 `unavailable`：`opencode/coding` `PROCESS_EXIT_NONZERO`（1.9 秒），`opencode/v4flash` `PROVIDER_OUTPUT_INVALID`（364.8 秒，broker 内同 session repair 1 次），`codex/luna` `PROCESS_TIMEOUT`（360.7 秒）。这次没有 semantic findings，不能当作“无 finding”，也不能当作质量通过。
+- **耗时结论**：本次等待约 `727` 秒，主要耗在 broker/provider 超时和 provider 输出失败，不是 WorkflowHub 重试循环。T043 已解决 WorkflowHub 自己的测试命令无限等待和子进程泄漏；provider 的 360 秒超时仍是外部 3rd-review 运行事实，不能在本任务里伪造成通过。
+- **当前边界**：最终复核不可用，所以不再重复审查。公开 verify-code 的 `full_tests_fresh`、`independent_review`、`finding_dispositions`、`acceptance_criteria`、`exceptions`、`human_confirmation` 仍是缺失；ModelTest 九面 live paired A/B 仍无质量结果；没有新增需求，不启动 mini-task；不执行 commit、close、push、archive 或 cleanup。
+
+## T043 收口前复核补充（2026-08-16，append-only）
+
+- 当前 WorkflowHub 候选定向回归改用正确的 Vitest 入口执行，5 个受影响文件共 `143/143` 通过；第一次直接用 `node --test` 触发的是 Vitest 启动方式错误，不计为产品测试失败。
+- 3rd-review 候选 `a8d7a82` 定向协议/恢复测试 `118/118` 通过；ModelTest 候选 `ad920f9` 九面资产与评分测试 `31/31` 通过；两者工作树均 clean。
+- ModelTest 仍只有评测资产和 plan，当前候选没有合法的九面 paired A/B 质量结果；不把资产测试或 plan-only 当成质量提升。
+- task store 中发现的 `test-capture.execution.lock` 属于已死亡进程 `46549` 的陈旧锁，已通过正式 record-lock 机制回收并释放；当前 locks 目录为空。
+- 没有新增需求，不启动 mini-task；没有执行 commit、merge、push、archive、cleanup 或最终 close。当前停在 close 前，等待真实 Stage Agent/逐 AC/处置/例外/人工确认以及用户最终 close 指令。
+
+## T044 3rd-review provider 失败根因修复（2026-08-16，append-only）
+
+### 根因
+
+- `opencode/coding` 的 `403 usage limit` 原来被归类成普通 `PROCESS_EXIT_NONZERO`，导致失败原因不清楚，也可能被错误地当成可继续尝试的普通故障。
+- 多个 OpenCode 审查进程默认共用全局 `~/.local/share/opencode/opencode.db`。并发时一个进程持有数据库锁，其他审查可能长时间卡在 `database is locked`，再叠加 360 秒 provider deadline，放大整个 WorkflowHub 用时。
+
+### 修复
+
+- 3rd-review 候选在每个 broker runtime、每个 OpenCode profile 下创建独立的 0700 `XDG_DATA_HOME`；同一 runtime 的 continuation 复用同一目录，不同 profile 不共用数据库。没有改变 WorkflowHub 配置的 provider 数量，也没有增加 retry。
+- `403` 只有在同时出现 usage/quota/limit/billing/credit 语义时才归类为 `RATE_LIMITED`；明确的 invalid API key 仍归类为 `AUTHENTICATION_FAILED`，避免把所有 403 都吞成配额问题。
+
+### 验证
+
+- 3rd-review 候选新增 OpenCode 数据目录隔离和 provider 失败分类回归；相关定向测试 `121/121` 通过，exit 0。
+- 当前没有再次调用真实 provider：外部配额、网络和模型服务不可控，重新调用会重复消耗最多 360 秒和 token；因此这次证明的是本地并发隔离和失败分类修复，不伪造成新的语义 review 质量分。
+- 3rd-review 候选当前有未提交修复；没有擅自改动 dirty 的 3rd-review main，也没有执行 commit、merge、push、archive 或最终 close。
+
+### 当前状态
+
+- 这两个 provider 根因已经处理，但 WorkflowHub 正式质量状态仍未闭合：真实 Stage Agent execution、当前 full test receipt、当前独立审查、逐 AC 验收、finding disposition、exceptions 和 human confirmation 仍缺失。
+- ModelTest 九面 paired A/B 仍只有资产与计划，没有合法的 baseline/candidate 质量结果；不能声称所有 stage 已提升。
+- 没有新增产品需求，不启动 mini-task；继续停在最终 close 前。
+
+## T045 收口前边界修复与评测绑定补充（2026-08-16，append-only）
+
+### 发现与处理
+
+- 异源复核指出：普通父任务的 `verify-code` close 路径曾允许 mini-task focused receipt 放宽 `npm test`，这会把小功能局部测试误当成父任务全量测试。已移除这条放宽；mini-task focused receipt 只留在专用 mini-task delivery 路径，普通父任务仍必须使用 `verify-code-test-capture` 的完整测试收据。
+- 同一边界新增回归：普通 `verify-code` 现在拒绝 `mini-task-focused-tests` 收据；专用 mini-task 流程仍可独立校验 focused test、AC trace、用户结果和 mini-task implementation review。
+- 已重新读取 `/Users/Hugh/.config/workflowhub/config.json`：当前确实配置了 `mini_task.design` 和 `mini_task.implementation` 两条 route；后续 mini-task 执行按配置调用，不动态减少 provider。此前 spec 中“route 缺失”的历史记录不作为当前配置事实。
+- 3rd-review 候选的 OpenCode native auth 从宿主 `auth.json` 改为运行时复制，不再用跨 runtime 共享 symlink，避免多个隔离 runtime 同时刷新宿主认证文件；同一 runtime 内继续复用自己的认证副本。OpenCode terminal 的权限、timeout、输出失败也保留为明确错误类别。
+- ModelTest benchmark 增加冻结绑定：每个版本记录 WorkflowHub、3rd-review、ModelTest 的 commit/tree/dirty/worktree identity；每个 case 记录 subject/material hash；每个 completed attempt 必须绑定对应 source、TaskHandle、subject 和 material，否则降为 `unavailable`。synthetic result 标为 `quality_eligible=false`，不能进入质量结论；provider findings 输出缺失或非法时也不算完成。
+
+### 定向验证
+
+- 3rd-review 候选定向协议、恢复、OpenCode、broker、health、attachment 测试：`123/123` 通过，exit 0；没有重新调用真实 provider。
+- ModelTest wh-review benchmark 测试：`30/30` 通过；资产校验通过；重新生成一次 `252` 条、`run-count=1` 的计划，`provider_calls=0`；计划明确记录 baseline/candidate TaskHandle 当前为 `unbound`，所以这不是质量 A/B 结果。
+- WorkflowHub 新增的普通父任务拒绝 mini-task focused receipt 回归通过；其他完整 WorkflowHub 受影响回归仍按之前记录保留。没有跑全量 `npm test`。
+
+### 当前边界
+
+- 三个候选工作树仍有未提交实现；没有覆盖 dirty 的 WorkflowHub main、3rd-review main 或 ModelTest main，也没有执行 commit、merge、push、archive、cleanup 或最终 close。
+- public `stage-runtime status` 的六项正式 verify-code 事实仍缺：当前 full test、独立审查、finding disposition、逐 AC 验收、exceptions、human confirmation。九面 live paired A/B 仍无合法质量结果。
+- 因此当前能说的是“局部合同、失败分类、材料边界和评测防假绿能力继续变好”，不能说“所有 stage 的真实审查质量已经被 A/B 证明提升”。继续停在最终 close 前。
+
+## T046 最终当前快照复核与收口前状态（2026-08-16，append-only）
+
+### 已完成的实现修复
+
+- 普通父任务 `verify-code` 不再把 mini-task focused 测试收据当成父任务完整测试；只有专用 mini-task delivery 路径可以使用 focused 收据。缺失或不可用审查也不再被写成“无需处置”，而是继续保持 `missing`。
+- mini-task runner 的行为改动已同步 `skills/mini-task/skill-bundle.json` 和 `skills/catalog.yaml` 的 bundle hash；skill closure 重新通过。
+
+### 最终测试事实
+
+- 通过公共 `verify --action=execute --stage=verify-code` 只做最后一次当前全量捕获：`quality/tests/verify-code-current-20260816-v22.json`，候选 HEAD `209b14e5aca36a5a06b2d5a4a637cd7ff20d31bf`，`snapshot_tree=16dddc1a1a0f51e4e9b8c74eadb6a3a2b525c3f7`，`exit_code=0`。
+- safe 测试 `162` 个文件、`1680` passed、`1` skipped；exclusive 测试 `31` passed；没有再次跑全量。
+- 之前 v20 的 10 个失败和 v21 的 bundle hash 失败已分别修复；v22 是修复后的最终全量结果。测试收据和输出 hash 已保留，临时输入文件已删除。
+
+### 当前 wh-review 事实
+
+- 按当前配置尝试了一次当前快照 verify-code 审查。第一次材料输入包含只供审计的 `output_ref`，在材料预检阶段被拒绝；第二次 host 标识不符合 3rd-review 合同；第三次已进入真实 provider，但 3rd-review 公共结果含私有路径，被记录为 `PUBLIC_RESULT_INVALID`。三次都没有产生可用 semantic result；没有把失败当成空 findings，也没有继续重试。
+- 因此当前没有绑定到 `16dddc1a1a0f51e4e9b8c74eadb6a3a2b525c3f7` 的有效独立 review。上一次 `e58b4be1...` 的双 reviewer 结果早于本轮最后修复，只能作为历史事实，不能冒充当前 review。
+
+### 公开状态与边界
+
+- `stage-runtime status --action=begin --stage=verify-code` 仍为 `quality_status=in_progress`；六项 `full_tests_fresh`、`independent_review`、`finding_dispositions`、`acceptance_criteria`、`exceptions`、`human_confirmation` 仍是 `missing`。全量测试收据存在，但还没有通过一次当前、完整的官方 verify-code 发布把它变成正式 `full_tests_fresh` 事实。
+- 三仓候选仍有未提交改动；ModelTest 仍只有 `252` 条 plan、`provider_calls=0`，baseline/candidate TaskHandle unbound，没有合法 paired A/B 质量结论。没有启动 mini-task，也没有 mini-task 锁或 worktree 残留。
+- 本轮没有再次跑全量测试、没有再次重试 provider、没有执行 commit、merge、push、archive、cleanup 或最终 close。当前停在 close 前，不能把“代码测试已通过”说成“正式交付已完成”。
+
+## T047 当前审查协议误杀修复与正式 verify-code 收口准备（2026-08-16，append-only）
+
+### 根因与修复
+
+- 当前快照的真实 verify-code 审查已经进入两个 provider，但 WorkflowHub 客户端把 provider 正常文字中的 `代码/AC/oracle/接口` 误识别成私有绝对路径，因而把本来有效的公共结果丢成 `PUBLIC_RESULT_INVALID`。
+- 根因是客户端绝对路径检测使用 ASCII 边界，而 3rd-review 同类检测已经使用 Unicode 边界；中文字符紧邻 `/` 时发生误杀。
+- 候选 WorkflowHub 客户端已改为 Unicode-aware 边界，并保留真正 `/workspace/...`、`/srv/...` 和 Windows 绝对路径的拒绝；新增中文斜杠术语回归。定向回归 `16/16` 通过；3rd-review 候选对应协议回归 `7/7` 通过。
+- 本轮不再重复 provider 审查，也不再用审查结果证明质量提升；当前失败事实保留为协议失败/不可用事实，不能写成空 findings 或通过。
+
+### 正式 verify-code 边界
+
+- 为让正式质量事实绑定最终候选快照，只再执行一次当前 `npm test` 收据捕获；这不是新的质量评测，也不触发 provider 审查。
+- 之后只用这份当前测试收据，通过官方 verify-code 发布路径补齐验收、finding 处置、例外和 verify 人工确认事实；缺少真实证据的项目继续保留 `missing`/`incomplete`，不人为改成通过。
+- 事实写入后停在最终 close 前报告；不执行 commit、merge、push、archive、cleanup 或正式 close，等待用户确认。
+
+### v24 捕获补充
+
+- 第一次 v24 全量捕获本身完成了 `162` 个 safe 测试文件和 `31` 个 exclusive 测试，但因为本轮客户端改动后的 `wh-review` bundle hash 尚未同步，最终 exit `1`；失败原因是 skill bundle 完整性校验，不是产品逻辑测试失败。
+- 已同步 `skills/wh-review/skill-bundle.json` 与 `skills/catalog.yaml` 的真实 hash；下一次全量捕获只用于生成绑定最终代码的正式收据。

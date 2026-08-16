@@ -5,7 +5,7 @@ import { assertTaskHandle } from "../task/task-handle.mjs";
 import { createTaskKernel } from "../task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "../task/task-kernel-implementation.mjs";
 import { assertWorkspace } from "../task/workspace.mjs";
-import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
+import { MAX_OUTPUT_BYTES, runWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { captureExecutionSnapshot, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
@@ -17,6 +17,8 @@ const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\
 const FULL_TEST_COMMAND = "npm test";
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
+export const TEST_CAPTURE_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_TEST_CAPTURE_TIMEOUT_MS = 15 * 60 * 1000;
 const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
 const VERIFY_REVIEW_STEPS = Object.freeze(["architect_review", "main_repair_1", "independent_review", "main_repair_2"]);
 const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
@@ -414,23 +416,37 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
   if (typeof component !== "string" || component.trim() === "") throw new TypeError("canonical receipt producer component required");
   const write = createTaskKernel(safeTask).publishCanonicalRecord;
   const writer = {
-    captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, phaseEvidence = null } = {}) {
+    captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, timeoutMs = TEST_CAPTURE_TIMEOUT_MS, phaseEvidence = null } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       const receiptPattern = /^quality\/tests\/[a-zA-Z0-9._/-]+\.json$/;
       const outputPattern = TEST_OUTPUT_REF;
       if (!receiptPattern.test(receiptRef ?? "") || !outputPattern.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TEST_CAPTURE_TIMEOUT_MS) {
+        throw new TypeError(`test capture timeoutMs must be between 1 and ${MAX_TEST_CAPTURE_TIMEOUT_MS}ms`);
+      }
       const capture = () => safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
         const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, stage, component, command, receiptRef, outputRef });
         if (reusable !== undefined) return reusable;
         const before = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId), headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
         const startedAt = now();
-        const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
+        const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command], { timeoutMs, killProcessGroup: true });
         const completedAt = now();
         const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
         const after = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId);
         if (after.head !== headBefore || after.tree !== treeBefore || after.source_digest !== sourceDigestBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
-        const exitCode = proc.status ?? (proc.error ? 1 : 128);
+        const timedOut = proc.error?.code === "ETIMEDOUT";
+        const outputLimitExceeded = proc.error?.code === "ENOBUFS";
+        const exitCode = timedOut ? 124 : (proc.status ?? (proc.error ? 1 : 128));
         const outputHash = sha256(output), commandHash = sha256(command);
+        const timeoutFailure = timedOut ? {
+          status: "failed", category: "test_timeout", code: "TEST_CAPTURE_TIMEOUT", exit_code: exitCode,
+          reason: `test command exceeded ${timeoutMs}ms and was terminated`,
+        } : null;
+        const outputLimitFailure = outputLimitExceeded ? {
+          status: "failed", category: "test_output_overflow", code: "TEST_OUTPUT_OVERFLOW", exit_code: exitCode,
+          reason: `test command output exceeded ${MAX_OUTPUT_BYTES} bytes`,
+        } : null;
+        const captureFailure = timeoutFailure ?? outputLimitFailure;
         let phaseEvidenceValue;
         if (phaseEvidence !== null) {
           if (!phaseEvidence || typeof phaseEvidence !== "object" || Array.isArray(phaseEvidence)) throw new TypeError("phaseEvidence must be an object or null");
@@ -445,7 +461,9 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
             failure_attribution: {
               ...phaseEvidence.failure_attribution,
               status: exitCode === 0 ? (phaseEvidence.failure_attribution?.status ?? "passed") : "failed",
-              code: exitCode === 0 ? (phaseEvidence.failure_attribution?.code ?? "NONE") : (phaseEvidence.failure_attribution?.code ?? `EXIT_${exitCode}`),
+              category: exitCode === 0 ? phaseEvidence.failure_attribution?.category : (captureFailure?.category ?? phaseEvidence.failure_attribution?.category ?? "test_command"),
+              code: exitCode === 0 ? (phaseEvidence.failure_attribution?.code ?? "NONE") : (captureFailure?.code ?? phaseEvidence.failure_attribution?.code ?? `EXIT_${exitCode}`),
+              reason: exitCode === 0 ? phaseEvidence.failure_attribution?.reason : (captureFailure?.reason ?? phaseEvidence.failure_attribution?.reason ?? "test command failed"),
               exit_code: exitCode,
             },
           }, { snapshotTree: treeBefore });
@@ -457,9 +475,11 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
           snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, source_digest: sourceDigestBefore,
           started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash,
           lease: { status: "released", ref: TEST_CAPTURE_LOCK_REF, wait_ms: lockWaitMs },
+          ...(timedOut ? { execution: { status: "timed_out", timeout_ms: timeoutMs, signal: proc.signal ?? "SIGTERM" } } : {}),
+          ...(outputLimitExceeded ? { execution: { status: "output_limit_exceeded", output_limit_bytes: MAX_OUTPUT_BYTES, signal: proc.signal ?? null } } : {}),
           ...(phaseEvidenceValue === undefined ? {} : { phase_evidence: phaseEvidenceValue }),
           ...(exitCode === 0 || phaseEvidenceValue !== undefined ? {} : {
-            failure_attribution: { status: "failed", category: "test_command", code: `EXIT_${exitCode}`, exit_code: exitCode, reason: "test command exited non-zero" },
+            failure_attribution: captureFailure ?? { status: "failed", category: "test_command", code: `EXIT_${exitCode}`, exit_code: exitCode, reason: "test command exited non-zero" },
           }),
         };
         validateCanonicalTestReceipt(receipt, {

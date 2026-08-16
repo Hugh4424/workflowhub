@@ -15,7 +15,7 @@ import {
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
 import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
@@ -359,7 +359,7 @@ describe("vNext official stage completion", () => {
     expect(ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
   });
 
-  it("review:unavailable-not-passed routes the repository-owned official build-spec run to vNext facts", async () => {
+  it("review:unavailable keeps the repository-owned official build-spec run incomplete", async () => {
     const state = fixture("vnext-official-run");
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
@@ -395,9 +395,10 @@ describe("vNext official stage completion", () => {
       workspace, artifacts,
     }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
 
-    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "passed" });
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
-    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result.completion).toMatchObject({ status: "in_progress" });
+    expect(result.completion.missing).toContain("finding_dispositions");
     expect(result.quality_advisories).toContain("independent_review:unavailable");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
@@ -458,6 +459,55 @@ describe("vNext official stage completion", () => {
       workflowRunId: state.kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
       candidateWorkspace: state.candidate, artifacts,
     }, { receipts: { stage_outcomes: stageOutcome(state, "verify-code").ref } });
+
+    expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
+    expect(result.completion.predicates.finding_dispositions).toMatchObject({ status: "missing", fact_ref: null });
+    const dispositionFact = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.subject === "finding_dispositions");
+    expect(dispositionFact).toMatchObject({ subject: "finding_dispositions", status: "missing" });
+  });
+
+  it("keeps verify finding dispositions incomplete when tests exist but review is unavailable", async () => {
+    const state = fixture("vnext-verify-review-unavailable-dispositions");
+    const workspace = openCurrentTaskWorkspace(state.task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
+    const kernel = createTaskKernel(state.task, { workspace, artifacts });
+    const snapshot = state.candidate.captureSnapshot();
+    const output = "verify tests passed\n";
+    const outputRef = "quality/tests/output/verify-review-unavailable.output";
+    kernel.publishCanonicalRecord(outputRef, output);
+    const testValue = {
+      schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage: "verify-code",
+      producer: { stage: "verify-code", component: "tests", version: "1.0.0" }, command: "true",
+      command_hash: sha256("true"), exit_code: 0, source_digest: snapshot.source_digest,
+      snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit,
+      started_at: "2026-08-16T00:00:00.000Z", completed_at: "2026-08-16T00:00:01.000Z",
+      output_ref: outputRef, output_hash: sha256(output),
+    };
+    const testRaw = `${JSON.stringify(testValue, null, 2)}\n`;
+    const testRef = "quality/tests/verify-review-unavailable.json";
+    kernel.publishCanonicalRecord(testRef, testRaw);
+    const nestedRef = "quality/evidence/verify-review-unavailable-proof.json";
+    const nestedRaw = "current verification proof\n";
+    kernel.publishCanonicalRecord(nestedRef, nestedRaw);
+    const leaf = {
+      schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-01", result: "pass",
+      refs: [{ ref: nestedRef, sha256: sha256(nestedRaw) }], snapshot_tree: snapshot.tree,
+      summary: { scenario: "verification evidence exists", oracle: "current receipt", actual_outcome: "pass", evidence_type: "test" },
+    };
+    const leafRaw = `${JSON.stringify(leaf, null, 2)}\n`;
+    const leafRef = "quality/evidence/verify-review-unavailable-acceptance.json";
+    kernel.publishCanonicalRecord(leafRef, leafRaw);
+    const evidence = writeOfficialComponentReceipt({
+      task: state.task, workspace, stage: "verify-code", component: "evidence",
+      payload: { refs: [{ ref: leafRef, sha256: sha256(leafRaw) }] },
+    });
+    const result = await runOfficialStage("verify-code", {
+      stage: "verify-code", task: state.task, kernel, identity: state.task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
+      workspace, artifacts,
+    }, { receipts: { tests: testRef, evidence: evidence.ref, stage_outcomes: stageOutcome({ ...state, kernel }, "verify-code", { workspace, artifacts }).ref } });
 
     expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
     expect(result.completion.predicates.finding_dispositions).toMatchObject({ status: "missing", fact_ref: null });

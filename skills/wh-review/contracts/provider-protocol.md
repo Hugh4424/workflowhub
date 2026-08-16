@@ -11,6 +11,9 @@
 - 材料缺失、不可读、传输失败或 hash 不符都不是 findings 结果。
 - Phase 大 diff 可使用 `diff-index.v1`。provider 只能读取 manifest 内的 index、已选
   shard、摘要和 anchors；材料必须自足完成审查，不存在二次补取或包外工具入口。
+- `packet-plan.json` 可能列出 `deduplicated_materials`。其中 `alias_path` 只是同一
+  `content_sha256` 的重复材料名；provider 只读取 `canonical_path` 一次，不把 alias
+  当成缺失材料，也不为 alias 产生额外 finding。
 
 ## 3rd-review 公共结果：workflowhub-result.v3
 

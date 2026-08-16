@@ -32,7 +32,7 @@
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "dc7a7d7358f58157bec802c48327a20dcc2292659fdc794fa887fcc629516163"
+      "sha256": "be527c9c866bf7d472fada6e1cd7b48e44a2b515581a138ff67ad0ea0b1fabed"
     },
     {
       "path": "contracts/verify-code.md",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "5cedacf6405a9a7f393b98be69de0b7b954e0a0c266d3a113a455022ed56b631"
+      "sha256": "613797d5a9be406b5e83ce9d94f6df4b3b21a76ec349d1b6d1631848b9ce7bf2"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "1bdf2d579a4c7685c1c44bbfecccaabc69a324424bd1d41472c5b7e6b531f541"
+      "sha256": "c95e39c1ceaf84f4864a5336c84d4b234b05039769aedd35057c4094c9571bc7"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "b4f94dac552bb03e3d4ad9e14ee0d277b9ea68d77a1769e931a2068bf70ed73d"
+      "sha256": "0685e880bcb455241443a9e4531e5ce4a28189f6144ff73285d12547886c6507"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
