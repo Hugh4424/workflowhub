@@ -790,13 +790,11 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
 
 function findingDispositions(reviews, invocation) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
-  // Verify-code may carry an unavailable historical build-code review as
-  // audit context together with a recorded current independent review.  The
-  // historical unavailable record must stay visible, but it must not erase
-  // the current review's finding-disposition fact.  If every review is
-  // unavailable, the existing fail-closed result below still applies.
+  // Only terminal review facts may contribute to current finding disposition
+  // or risk authorization. Unavailable records remain visible to their
+  // caller, but they must never authorize a current disposition.
   const dispositionReviews = reviewRecords.filter((review) => review?.facts?.status !== "unavailable");
-  const authorizedRiskIds = new Set(reviewRecords.flatMap((review) => review?.risk_evidence ?? [])
+  const authorizedRiskIds = new Set(dispositionReviews.flatMap((review) => review?.risk_evidence ?? [])
     .map((entry) => entry?.finding_id)
     .filter((id) => typeof id === "string"));
   const invalidReviews = dispositionReviews.filter((review) => {
@@ -806,7 +804,9 @@ function findingDispositions(reviews, invocation) {
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
     const reasons = dispositionReviews.length === 0
-      ? (reviewRecords.length === 0 ? ["no current review result was recorded"] : [])
+      ? (reviewRecords.length === 0
+        ? ["no current review result was recorded"]
+        : ["current review result is unavailable for finding disposition"])
       : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
         return `${status} review result is not available for finding disposition`;
@@ -817,12 +817,6 @@ function findingDispositions(reviews, invocation) {
     };
   }
   const findings = dispositionReviews.map((review) => review.value);
-  if (findings.length === 0) {
-    return {
-      facts: { status: "not_applicable", items: [] },
-      missing_items: [],
-    };
-  }
   const supplied = invocation.finding_dispositions;
   const result = findings.length === 1 ? findings[0] : { findings: findings.flatMap((value) => canonicalReviewFindings(value)) };
   const dispositionResult = validateReportableFindingDispositions({
@@ -1388,7 +1382,11 @@ HANDLERS.set("build-code", async (worker, input) => {
   const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
   if (reviewWarning) missingItems.push(reviewWarning);
   const dispositions = findingDispositions([review], input);
-  missingItems.push(...dispositions.missing_items);
+  // An unavailable build-code review is an explicit non-gating quality fact;
+  // keep its status visible without turning the advice-only review into an
+  // ordinary completion gap. Verify-code reports its unavailable current
+  // review as a concrete finding-disposition gap instead.
+  if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
   let coverage;
   try { coverage = acceptanceCoverageFacts(worker, input, tests.facts.snapshot_tree); }
   catch (error) {
@@ -1498,7 +1496,10 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const tests = testFacts(worker, input, "tests", ["build-code", "verify-code"]);
   const review = safeReviewFacts(worker, input, "review", undefined, "build-code");
   const qualityReview = safeReviewFacts(worker, input, "quality_review", undefined, "verify-code");
-  const dispositions = findingDispositions([review, qualityReview], input);
+  // Only the current verify-code review can supply verify-code finding
+  // dispositions.  The build-code review remains visible as historical audit
+  // context, but it must not substitute for an unavailable current review.
+  const dispositions = findingDispositions([qualityReview], input);
   // The build-code integration review is historical audit context for verify-code.
   // It must not be re-authenticated as the current verify review flow: doing so
   // turns a missing/stale flow record into an unnecessary ordinary-work blocker.

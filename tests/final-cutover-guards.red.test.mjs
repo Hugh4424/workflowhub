@@ -616,16 +616,19 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("keeps a revise_required build-code review as audit-only during verify-code", async () => {
+    const historicalTree = "a".repeat(40);
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage),
-      "quality/reviews/results/review.json": reviewReceipt(stage, "revise_required"),
+      "quality/reviews/results/review.json": reviewReceipt("build-code", "revise_required", historicalTree),
       "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     const worker = workerFor(stage, values);
     const result = await officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } });
     expect(result.verification_failure).toBe(true);
     expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
-    expect(result.missing_items).toEqual(expect.arrayContaining([
+    expect(result.facts.review.status).toBe("recorded");
+    expect(result.facts.finding_dispositions).toMatchObject({ status: "not_applicable", items: [] });
+    expect(result.missing_items).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/finding disposition is missing/i),
     ]));
     expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
@@ -1113,6 +1116,58 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/finding disposition is missing/i)]));
     expect(result.facts.review.status).toBe("unavailable");
     expect(result.facts.quality_note.status).toBe("recorded");
+  });
+
+  it("does not use a recorded historical review when the current verify review is unavailable", async () => {
+    const stage = "verify-code";
+    const unavailableRef = "quality/reviews/attempts/verify-code-unavailable/attempt.json";
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      "quality/reviews/results/review.json": reviewReceipt("build-code", "revise_required"),
+      [unavailableRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "verify-code-unavailable", task_id: "task", stage: "verify-code", review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: null, base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "MATERIAL_INCOMPLETE", message: "current verify review is unavailable" },
+      },
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: unavailableRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef },
+    });
+    expect(result.facts.finding_dispositions.status).toBe("missing");
+    expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/current review result is unavailable/i)]));
+    expect(result.facts.review.status).toBe("recorded");
+    expect(result.facts.quality_note.status).toBe("unavailable");
+  });
+
+  it("keeps finding dispositions missing when both historical and current reviews are unavailable", async () => {
+    const stage = "verify-code";
+    const historicalRef = "quality/reviews/attempts/build-code-unavailable-both/attempt.json";
+    const currentRef = "quality/reviews/attempts/verify-code-unavailable-both/attempt.json";
+    const unavailableAttempt = (attemptId, attemptStage) => ({
+      version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: attemptStage, review_track: null,
+      source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+      subject_kind: "worktree", phase_id: null, review_scope: attemptStage === "build-code" ? "integration" : null,
+      base_tree: tree, candidate_tree: tree, material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+      error: { code: "MATERIAL_INCOMPLETE", message: `${attemptStage} review is unavailable` },
+    });
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      [historicalRef]: unavailableAttempt("build-code-unavailable-both", "build-code"),
+      [currentRef]: unavailableAttempt("verify-code-unavailable-both", "verify-code"),
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: { tests: "quality/tests/tests.json", review: historicalRef, quality_review: currentRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef },
+    });
+    expect(result.facts.finding_dispositions).toMatchObject({ status: "missing", items: [] });
+    expect(result.facts.review.status).toBe("unavailable");
+    expect(result.facts.quality_note.status).toBe("unavailable");
+    expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/current review result is unavailable/i)]));
   });
 
   it("replays every source ID present in decision-log before reporting verification", async () => {
