@@ -15,6 +15,8 @@ import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validatePhaseCompletion } from "../runtime/task/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
 import { validateBuildCodePhaseEvidence } from "../runtime/stage/stage-content-contracts.mjs";
+import { runCapture as runBuildCodeCapture } from "../workflows/build-code/capture.mjs";
+import { runCapture as runVerifyCodeCapture } from "../workflows/verify-code/capture.mjs";
 
 const temporary = [];
 const execFileAsync = promisify(execFile);
@@ -106,6 +108,15 @@ describe("official component receipt authority", () => {
       .captureTests({ command: "npm test", receiptRef: "quality/tests/verify-code-full.json", outputRef: "quality/tests/output/verify-code-full" });
     expect(verify.receipt_ref).toBe(build.receipt_ref);
     expect(() => task.readRecord("quality/tests/verify-code-full.json")).toThrow(/ENOENT|record/i);
+  });
+
+  it("derives retry-safe default output refs from unique receipt refs", async () => {
+    const { task, workspace } = fixture({ recordModel: "vnext-single-write" });
+    const build = await runBuildCodeCapture("printf build", "quality/tests/retry-build.json", { task, workspace });
+    const verify = await runVerifyCodeCapture("printf verify", "quality/tests/retry-verify.json", { task, workspace });
+    expect(build.output_ref).toBe("quality/tests/output/retry-build.output");
+    expect(verify.output_ref).toBe("quality/tests/output/retry-verify.output");
+    expect(build.output_ref).not.toBe(verify.output_ref);
   });
 
   it("does not reuse a focused build-code receipt as verify-code full tests", () => {
