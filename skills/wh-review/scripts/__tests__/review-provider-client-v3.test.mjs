@@ -206,3 +206,35 @@ test("client allows slash notation that follows a Unicode word", async () => {
   await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
     .resolves.toMatchObject({ providers: [{ status: "completed" }] });
 });
+
+test("client accepts truthful null deadline and timing for an unavailable provider", async () => {
+  const value = group(["opencode/v4flash"]);
+  const provider = value.providers[0];
+  provider.status = "failed";
+  provider.error = { code: "PROCESS_DEAD", message: "provider did not return a terminal result" };
+  provider.output = null;
+  provider.deadline_ms = null;
+  provider.attempts = [];
+  provider.timing = { started_at_ms: null, completed_at_ms: null, duration_ms: null };
+  value.outcome = "unavailable";
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 3, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  expect(result.providers[0].execution.deadline_ms).toBeNull();
+  expect(result.providers[0].timing).toEqual({ started_at_ms: null, completed_at_ms: null, duration_ms: null });
+});
+
+test("client rejects inconsistent duration and unsafe public strings", async () => {
+  const cases = [
+    (value) => { value.providers[0].timing.duration_ms = 11; },
+    (value) => { value.providers[0].material.contract_id = ""; },
+    (value) => { value.providers[0].error = { code: "", message: "failed" }; value.providers[0].status = "failed"; },
+    (value) => { value.providers[0].output = JSON.stringify({ path: "file://host/private/review.json" }); },
+  ];
+  for (const mutate of cases) {
+    const value = group(["opencode/v4flash"]);
+    mutate(value);
+    const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+    await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+      .rejects.toMatchObject({ code: expect.stringMatching(/PROTOCOL_INCOMPATIBLE|PUBLIC_RESULT_INVALID/) });
+  }
+});

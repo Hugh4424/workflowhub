@@ -48,7 +48,7 @@
     },
     {
       "path": "contracts/workflowhub-result.v3.json",
-      "sha256": "b0f64252eac7ae828cdfe5d8594aa90dec0610a7c0dbff55f02b2b68ba9cd9d8"
+      "sha256": "0af2065e6e8cbacaa11abcfb27b1c05b1cb7ad03af649d66491049576cb9856a"
     },
     {
       "path": "manifest.json",
@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "c95e39c1ceaf84f4864a5336c84d4b234b05039769aedd35057c4094c9571bc7"
+      "sha256": "f95fd7dbb7e3e4ae3397c374e26a8626e560821fb7daca5bd55466d8388616a6"
     },
     {
       "path": "scripts/review-result.mjs",

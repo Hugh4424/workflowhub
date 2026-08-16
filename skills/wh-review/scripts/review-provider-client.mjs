@@ -16,7 +16,7 @@ function failure(code, message) { const error = new Error(`${code}: ${message}`)
 // host absolute path. A slash at the start or after punctuation/whitespace is
 // still treated as a path boundary, including unlisted Unix roots.
 const absolutePathPattern = /(?:^|[^\p{L}\p{N}A-Za-z0-9._~\/%-])\/(?![\/\s])(?:[\p{L}\p{N}A-Za-z0-9._~%-]+(?:\/[\p{L}\p{N}A-Za-z0-9._~%-]+)*)(?=$|[\s"'`,.;:!?)]|\/)|[A-Za-z]:[\\/]/u;
-const fileUriPathPattern = /\bfile:\/\/\/(?:[A-Za-z0-9._~%-]|%[A-Fa-f0-9]{2})/i;
+const fileUriPathPattern = /\bfile:\/\//i;
 
 function containsPrivatePath(value) {
   if (typeof value === "string") return absolutePathPattern.test(value) || fileUriPathPattern.test(value);
@@ -66,17 +66,29 @@ function validateV3Error(value, label) {
   if (value === null) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.code !== "string" || typeof value.message !== "string") throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
   if (Object.keys(value).sort().join("\0") !== ["code", "message"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", `${label} has unsupported fields`);
+  if (value.code.length === 0 || value.message.length === 0 || containsPrivatePath(value.code) || containsPrivatePath(value.message)) throw failure("PROTOCOL_INCOMPATIBLE", `${label} contains an unsafe or empty field`);
   return { code: value.code, message: value.message };
 }
 
 function validateV3Timing(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)
-      || !Number.isSafeInteger(value.started_at_ms) || value.started_at_ms < 0
-      || !Number.isSafeInteger(value.completed_at_ms) || value.completed_at_ms < 0
-      || !Number.isSafeInteger(value.duration_ms) || value.duration_ms < 0
-      || value.completed_at_ms < value.started_at_ms) {
+      || !["started_at_ms", "completed_at_ms", "duration_ms"].every((key) => value[key] === null || (Number.isSafeInteger(value[key]) && value[key] >= 0))
+      || (value.started_at_ms !== null && value.completed_at_ms !== null && value.completed_at_ms < value.started_at_ms)
+      || (value.started_at_ms !== null && value.completed_at_ms !== null && value.duration_ms !== null
+        && value.duration_ms !== value.completed_at_ms - value.started_at_ms)) {
     throw failure("PROTOCOL_INCOMPATIBLE", `${label} timing is invalid`);
   }
+  return value;
+}
+
+function validateV3String(value, label, { nullable = false } = {}) {
+  if (nullable && value === null) return null;
+  if (typeof value !== "string" || value.trim().length === 0 || containsPrivatePath(value)) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  return value;
+}
+
+function validateV3Sha256(value, label) {
+  if (value !== null && (typeof value !== "string" || !/^[a-f0-9]{64}$/i.test(value))) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
   return value;
 }
 
@@ -110,13 +122,21 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   if (value.status !== "completed" && value.error === null) throw failure("PROTOCOL_INCOMPATIBLE", "failed v3 provider result must contain an error");
   const error = validateV3Error(value.error, "v3 error");
   const identity = value.identity;
-  if (!identity || typeof identity.provider !== "string" || identity.provider.trim() === ""
-      || typeof identity.adapter !== "string" || identity.adapter.trim() === ""
-      || typeof identity.source_id !== "string" || identity.source_id.trim() === ""
-      || typeof identity.config_id !== "string" || identity.config_id.trim() === ""
-      || (identity.model !== null && typeof identity.model !== "string")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 identity is invalid");
+  if (!identity) throw failure("PROTOCOL_INCOMPATIBLE", "v3 identity is invalid");
+  validateV3String(identity.provider, "v3 identity.provider");
+  validateV3String(identity.adapter, "v3 identity.adapter");
+  validateV3String(identity.source_id, "v3 identity.source_id");
+  validateV3String(identity.config_id, "v3 identity.config_id");
+  if (identity.model !== null) validateV3String(identity.model, "v3 identity.model");
   const material = value.material;
-  if (!material || typeof material.contract_id !== "string" || typeof material.contract_hash !== "string" || typeof material.semantic_hash !== "string") throw failure("PROTOCOL_INCOMPATIBLE", "v3 material identity is invalid");
+  if (!material) throw failure("PROTOCOL_INCOMPATIBLE", "v3 material identity is invalid");
+  validateV3String(material.material_id, "v3 material.material_id");
+  validateV3String(material.contract_id, "v3 material.contract_id");
+  validateV3String(material.contract_hash, "v3 material.contract_hash");
+  validateV3String(material.semantic_hash, "v3 material.semantic_hash");
+  validateV3Sha256(value.provenance?.raw_output_sha256, "v3 provenance.raw_output_sha256");
+  validateV3Sha256(value.provenance?.raw_stderr_sha256, "v3 provenance.raw_stderr_sha256");
+  validateV3String(value.provenance?.runtime_id, "v3 provenance.runtime_id");
   const recovery = value.recovery;
   if (!recovery || ["provider_internal_retry_count", "fresh_execution_retry_count", "same_session_repair_count"].some((key) => !Number.isSafeInteger(recovery[key]) || recovery[key] < 0)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 recovery counters are invalid");
   if (!Array.isArray(value.attempts)) throw failure("PROTOCOL_INCOMPATIBLE", "v3 attempts must be an array");
@@ -128,8 +148,9 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   }
   if (!value.timing || Object.keys(value.timing).sort().join("\0") !== ["completed_at_ms", "duration_ms", "started_at_ms"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 timing is invalid");
   validateV3Timing(value.timing, "v3");
-  if (!Number.isSafeInteger(value.deadline_ms) || value.deadline_ms < 1 || typeof value.continuable !== "boolean" || (value.output !== null && typeof value.output !== "string")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
-  if (value.session_id !== null && typeof value.session_id !== "string") throw failure("PROTOCOL_INCOMPATIBLE", "v3 session_id is invalid");
+  if (!(value.deadline_ms === null || (Number.isSafeInteger(value.deadline_ms) && value.deadline_ms >= 1)) || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
+  if (value.output !== null) validateV3String(value.output, "v3 output");
+  if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id");
   const usage = validateV3Usage(value.usage);
   if (containsPrivatePath(value)) throw failure("PUBLIC_RESULT_INVALID", "v3 provider result contains a private path");
   return Object.freeze({

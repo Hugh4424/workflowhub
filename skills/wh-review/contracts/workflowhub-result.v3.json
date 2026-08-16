@@ -20,7 +20,7 @@
       "required": ["code", "message"],
       "properties": {
         "code": { "type": "string", "minLength": 1 },
-        "message": { "type": "string" }
+        "message": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
@@ -30,7 +30,7 @@
       "properties": {
         "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } },
         "continuable": { "type": "boolean" },
-        "deadline_ms": { "type": "integer", "minimum": 1 },
+        "deadline_ms": { "type": ["integer", "null"], "minimum": 1 },
         "error": { "$ref": "#/$defs/error" },
         "identity": {
           "type": "object",
@@ -60,8 +60,8 @@
           "type": "object",
           "required": ["raw_output_sha256", "raw_stderr_sha256", "runtime_id"],
           "properties": {
-            "raw_output_sha256": { "type": ["string", "null"] },
-            "raw_stderr_sha256": { "type": ["string", "null"] },
+            "raw_output_sha256": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
+            "raw_stderr_sha256": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
             "runtime_id": { "type": "string", "minLength": 1 }
           },
           "additionalProperties": false
@@ -77,15 +77,15 @@
           "additionalProperties": false
         },
         "result_protocol": { "const": "workflowhub-result.v3" },
-        "session_id": { "type": ["string", "null"] },
+        "session_id": { "type": ["string", "null"], "minLength": 1 },
         "status": { "enum": ["completed", "failed", "cancelled"] },
         "timing": {
           "type": "object",
           "required": ["completed_at_ms", "duration_ms", "started_at_ms"],
           "properties": {
-            "completed_at_ms": { "type": "integer", "minimum": 0 },
-            "duration_ms": { "type": "integer", "minimum": 0 },
-            "started_at_ms": { "type": "integer", "minimum": 0 }
+            "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+            "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+            "started_at_ms": { "type": ["integer", "null"], "minimum": 0 }
           },
           "additionalProperties": false
         },
@@ -98,13 +98,13 @@
       "required": ["attempt_id", "completed_at_ms", "duration_ms", "error", "kind", "provider_retry_count", "session_id", "started_at_ms", "status"],
       "properties": {
         "attempt_id": { "type": "string", "minLength": 1 },
-        "completed_at_ms": { "type": "integer", "minimum": 0 },
-        "duration_ms": { "type": "integer", "minimum": 0 },
+        "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
         "error": { "$ref": "#/$defs/error" },
         "kind": { "type": "string", "minLength": 1 },
         "provider_retry_count": { "type": "integer", "minimum": 0 },
-        "session_id": { "type": ["string", "null"] },
-        "started_at_ms": { "type": "integer", "minimum": 0 },
+        "session_id": { "type": ["string", "null"], "minLength": 1 },
+        "started_at_ms": { "type": ["integer", "null"], "minimum": 0 },
         "status": { "enum": ["completed", "failed", "cancelled"] }
       },
       "additionalProperties": false
