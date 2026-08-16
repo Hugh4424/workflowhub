@@ -86,7 +86,7 @@ describe("verify selects facts by freshness", () => {
     }, { read: io.read }).status).toBe("stale");
   });
 
-  it("keeps non-build-code advice current after the task snapshot changes", () => {
+  it("keeps explicitly advisory early-stage review current after the task snapshot changes", () => {
     const fact = {
       schema_version: "quality-fact.v1",
       fact_id: "advice-fact",
@@ -111,6 +111,30 @@ describe("verify selects facts by freshness", () => {
       status: "current",
       dependencies: { material: "current", tree: "current", fact: "current" },
     });
+  });
+
+  it("does not keep required verify-code review current after the task snapshot changes", () => {
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "verify-review-fact",
+      task_id: "task",
+      stage: "verify-code",
+      material_revision: "revision-old",
+      snapshot_tree: "old-tree",
+      kind: "review",
+      subject: "independent_review",
+      status: "recorded",
+      ref: "verify-review-fact.json",
+      sha256: "",
+      evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-new",
+      snapshot_tree: "new-tree",
+    }, { read: io.read }).status).toBe("stale");
   });
 
   it("keeps build-code review freshness strict", () => {

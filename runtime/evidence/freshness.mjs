@@ -3,15 +3,18 @@ import { createHash } from "node:crypto";
 import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
+import { STAGE_ADVISORY_PREDICATES } from "../stage/completion-predicates.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 
-// A recorded review outside build-code is advice, not implementation
-// approval. Keep its reviewed snapshot and material revision as provenance,
-// but do not expire the advice when the current task records change.
+// Only reviews explicitly declared advisory by the stage contract can survive
+// a later snapshot. verify-code independent_review is a required current
+// quality predicate, so it must go stale when the reviewed snapshot changes.
 function isAdviceReviewFact(fact) {
-  return fact?.kind === "review" && fact?.status === "recorded" && fact?.stage !== "build-code";
+  return fact?.kind === "review"
+    && fact?.status === "recorded"
+    && Object.hasOwn(STAGE_ADVISORY_PREDICATES[fact.stage] ?? {}, fact.subject);
 }
 
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
