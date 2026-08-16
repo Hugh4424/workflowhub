@@ -626,6 +626,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     const result = await officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } });
     expect(result.verification_failure).toBe(true);
     expect(result.reason).not.toMatch(/SERIOUS_REVIEW_PAUSE/);
+    expect(result.reason).not.toMatch(/review|revise_required|historical/i);
     expect(result.facts.review.status).toBe("recorded");
     expect(result.facts.finding_dispositions).toMatchObject({ status: "not_applicable", items: [] });
     expect(result.missing_items).not.toEqual(expect.arrayContaining([
@@ -1181,6 +1182,36 @@ ${task("T002", "contract GREEN", 0, "T001")}
       source_review_refs: [{ ref: currentRef }],
     });
     expect(result.facts.finding_dispositions.source_review_refs).toHaveLength(1);
+  });
+
+  it("does not use a stale recorded verify review for current finding dispositions", async () => {
+    const stage = "verify-code";
+    const staleTree = "a".repeat(40);
+    const qualityRef = "quality/reviews/results/verify-code-stale-with-finding.json";
+    const stale = {
+      ...reviewReceipt("build-code", "revise_required", staleTree),
+      stage,
+      review_scope: null,
+      phase_id: null,
+      attempt_ref: "quality/reviews/attempts/verify-code-stale-with-finding/attempt.json",
+    };
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      "quality/reviews/results/review.json": reviewReceipt("build-code", "pass", staleTree),
+      [qualityRef]: stale,
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: qualityRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef },
+      finding_dispositions: [{
+        finding_id: stale.findings[0].id, original_fact: stale.findings[0].issue, source: stale.findings[0].path,
+        consequence: "不应从旧快照授权当前处置", status: "needs_human", next_action: "重新取得当前快照审查",
+        evidence_ref: "evidence/stale-finding.json", owner: "task owner", consumer: "verify-code", retain_or_delete: "retain",
+      }],
+    });
+    expect(result.facts.finding_dispositions.status).toBe("missing");
+    expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/current snapshot/i)]));
   });
 
   it("keeps finding dispositions missing when both historical and current reviews are unavailable", async () => {

@@ -788,7 +788,7 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
   ];
 }
 
-function findingDispositions(reviews, invocation, expectedStage = null) {
+function findingDispositions(reviews, invocation, expectedStage = null, currentSnapshot = null, workspaceRoot = null, taskId = null) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
   // Only terminal review facts may contribute to current finding disposition
   // or risk authorization. Unavailable records remain visible to their
@@ -800,7 +800,12 @@ function findingDispositions(reviews, invocation, expectedStage = null) {
   const invalidReviews = dispositionReviews.filter((review) => {
     const legacyPass = review?.facts?.status === undefined && review?.facts?.verdict === "pass";
     const terminal = review?.facts?.status === "recorded" || legacyPass;
-    return !terminal || !review?.value || (expectedStage !== null && review.value.stage !== expectedStage);
+    const snapshotCurrent = currentSnapshot === null
+      || review?.value?.snapshot_tree === currentSnapshot
+      || (workspaceRoot !== null && taskId !== null
+        && typeof review.value?.snapshot_tree === "string"
+        && isMaterialOnlySnapshotDelta(workspaceRoot, review.value?.snapshot_tree, currentSnapshot, taskId));
+    return !terminal || !review?.value || (expectedStage !== null && review.value.stage !== expectedStage) || !snapshotCurrent;
   });
   if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
     const reasons = dispositionReviews.length === 0
@@ -808,7 +813,8 @@ function findingDispositions(reviews, invocation, expectedStage = null) {
       : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
         const stage = review?.value?.stage;
-        return `${status} review result${stage && expectedStage !== null && stage !== expectedStage ? ` from ${stage}` : ""} is not available for finding disposition`;
+        const stale = currentSnapshot !== null && review?.value?.snapshot_tree !== currentSnapshot;
+        return `${status} review result${stage && expectedStage !== null && stage !== expectedStage ? ` from ${stage}` : ""}${stale ? " for the current snapshot" : ""} is not available for finding disposition`;
       });
     return {
       facts: { status: "missing", items: [] },
@@ -1495,17 +1501,18 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const tests = testFacts(worker, input, "tests", ["build-code", "verify-code"]);
   const review = safeReviewFacts(worker, input, "review", undefined, "build-code");
   const qualityReview = safeReviewFacts(worker, input, "quality_review", undefined, "verify-code");
+  const current = worker.snapshotWorkspace();
+  const workspaceRoot = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot ?? null;
   // Only the current verify-code review can supply verify-code finding
   // dispositions.  The build-code review remains visible as historical audit
   // context, but it must not substitute for an unavailable current review.
-  const dispositions = findingDispositions([qualityReview], input, "verify-code");
+  const dispositions = findingDispositions([qualityReview], input, "verify-code", current.tree, workspaceRoot, worker.identity.taskId);
   // The build-code integration review is historical audit context for verify-code.
   // It must not be re-authenticated as the current verify review flow: doing so
   // turns a missing/stale flow record into an unnecessary ordinary-work blocker.
   const evidence = receipt(worker, input, "evidence");
   const verification = input.receipts.verification === undefined ? null : receipt(worker, input, "verification");
   if (verification !== null && !Array.isArray(verification.value.items)) throw new TypeError("verification.items must be array");
-  const current = worker.snapshotWorkspace();
   const replay = requirementReplayFacts(worker, verification, current.tree);
   const reviewBindingWarnings = [];
   let qualityReviewBinding = { evidence: [] };
@@ -1564,13 +1571,13 @@ HANDLERS.set("verify-code", async (worker, input) => {
   else if (tests.facts.test_scope !== finalTestRoute.scope) {
     auditGaps.push(`verify-code test scope differs from plan (${finalTestRoute.scope}); current focused M15 validation retained as audit fact`);
   }
-  const workspaceRoot = worker.workspace?.worktreeRoot;
+  const currentWorkspaceRoot = worker.workspace?.worktreeRoot ?? workspaceRoot;
   const qualitySnapshotTree = qualityReview.facts.snapshot_tree;
   const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"
-    || equivalentWorkspaceTrees(workspaceRoot, qualitySnapshotTree, current.tree);
-  const testSnapshotMatches = workspaceRoot
-    && (equivalentWorkspaceTrees(workspaceRoot, tests.facts.snapshot_tree, current.tree)
-      || isMaterialOnlySnapshotDelta(workspaceRoot, tests.facts.snapshot_tree, current.tree, worker.identity.taskId))
+    || equivalentWorkspaceTrees(currentWorkspaceRoot, qualitySnapshotTree, current.tree);
+  const testSnapshotMatches = currentWorkspaceRoot
+    && (equivalentWorkspaceTrees(currentWorkspaceRoot, tests.facts.snapshot_tree, current.tree)
+      || isMaterialOnlySnapshotDelta(currentWorkspaceRoot, tests.facts.snapshot_tree, current.tree, worker.identity.taskId))
     && (tests.facts.source_digest === undefined
       || current.source_digest === undefined
       || tests.facts.source_digest === current.source_digest);
