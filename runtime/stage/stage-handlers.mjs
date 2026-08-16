@@ -790,18 +790,24 @@ function reviewDispositionWarnings(worker, review, riskAcceptance, producerStage
 
 function findingDispositions(reviews, invocation) {
   const reviewRecords = Array.isArray(reviews) ? reviews : [];
+  // Verify-code may carry an unavailable historical build-code review as
+  // audit context together with a recorded current independent review.  The
+  // historical unavailable record must stay visible, but it must not erase
+  // the current review's finding-disposition fact.  If every review is
+  // unavailable, the existing fail-closed result below still applies.
+  const dispositionReviews = reviewRecords.filter((review) => review?.facts?.status !== "unavailable");
   const authorizedRiskIds = new Set(reviewRecords.flatMap((review) => review?.risk_evidence ?? [])
     .map((entry) => entry?.finding_id)
     .filter((id) => typeof id === "string"));
-  const invalidReviews = reviewRecords.filter((review) => {
+  const invalidReviews = dispositionReviews.filter((review) => {
     const legacyPass = review?.facts?.status === undefined && review?.facts?.verdict === "pass";
     const terminal = review?.facts?.status === "recorded" || legacyPass;
     return !terminal || !review?.value;
   });
-  if (reviewRecords.length === 0 || invalidReviews.length > 0) {
-    const reasons = reviewRecords.length === 0
-      ? ["no current review result was recorded"]
-      : invalidReviews.filter((review) => review?.facts?.status !== "unavailable").map((review) => {
+  if (dispositionReviews.length === 0 || invalidReviews.length > 0) {
+    const reasons = dispositionReviews.length === 0
+      ? (reviewRecords.length === 0 ? ["no current review result was recorded"] : [])
+      : invalidReviews.map((review) => {
         const status = review?.facts?.status ?? "missing";
         return `${status} review result is not available for finding disposition`;
       });
@@ -810,7 +816,7 @@ function findingDispositions(reviews, invocation) {
       missing_items: [...new Set(reasons)],
     };
   }
-  const findings = reviewRecords.map((review) => review.value);
+  const findings = dispositionReviews.map((review) => review.value);
   if (findings.length === 0) {
     return {
       facts: { status: "not_applicable", items: [] },
@@ -824,10 +830,10 @@ function findingDispositions(reviews, invocation) {
     dispositions: supplied,
     authorizedRiskFindingIds: [...authorizedRiskIds],
   });
-  const sourceReviewRefs = reviewRecords
+  const sourceReviewRefs = dispositionReviews
     .filter((review) => review?.value && review.ref && review.evidence?.sha256)
     .map((review) => ({ ref: review.ref, sha256: review.evidence.sha256 }));
-  const riskAcceptanceRefs = reviewRecords.flatMap((review) => review?.risk_evidence ?? [])
+  const riskAcceptanceRefs = dispositionReviews.flatMap((review) => review?.risk_evidence ?? [])
     .filter((entry) => entry?.ref && entry?.sha256 && entry?.finding_id)
     .map((entry) => ({ ref: entry.ref, sha256: entry.sha256, finding_id: entry.finding_id }));
   return {

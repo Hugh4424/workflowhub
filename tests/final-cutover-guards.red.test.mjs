@@ -1089,6 +1089,32 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ verification_failure: true, facts: { tests: { command: "true", snapshot_tree: tree } } });
   });
 
+  it("does not let an unavailable historical review erase current verify finding dispositions", async () => {
+    const stage = "verify-code";
+    const unavailableRef = "quality/reviews/attempts/build-code-unavailable/attempt.json";
+    const qualityRef = "quality/reviews/results/quality.json";
+    const values = {
+      "quality/tests/tests.json": testsReceipt(stage),
+      [unavailableRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "build-code-unavailable", task_id: "task", stage: "build-code", review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "MATERIAL_INCOMPLETE", message: "historical integration review is unavailable" },
+      },
+      [qualityRef]: qualityReviewReceipt(),
+      "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const worker = workerFor(stage, values);
+    const result = await officialStageHandler(stage)(worker, {
+      receipts: { tests: "quality/tests/tests.json", review: unavailableRef, quality_review: qualityRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef },
+    });
+    expect(result.facts.finding_dispositions).toMatchObject({ status: "not_applicable", items: [] });
+    expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/finding disposition is missing/i)]));
+    expect(result.facts.review.status).toBe("unavailable");
+    expect(result.facts.quality_note.status).toBe("recorded");
+  });
+
   it("replays every source ID present in decision-log before reporting verification", async () => {
     const stage = "verify-code";
     const values = {
