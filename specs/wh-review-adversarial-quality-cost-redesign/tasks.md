@@ -1426,3 +1426,12 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - [x] 已将同一批实现合并到 `main`：`a1ed7cf5`；没有 push，没有覆盖 main 上与本任务无关的 `docs/research/m16-experience-loop-repair-research.md` 和 `tmp/`。
 - [x] 没有新增 mini-task；当前任务没有 mini-task worktree 或锁残留。候选分支保留为已合并后的可回读分支，未删除其他任务的分支或工作树。
 - [ ] 这次是实现交付和 close 前准备，不等于正式 close；六项正式 verify-code 事实、全局 Git 对象库例外和人工 close 授权仍按原样保留。
+
+#### T051 mini-task 与 3rd-review 分支清理核查（2026-08-17）
+
+- [x] WorkflowHub 候选分支 `task/workflowhub/wh-review-adversarial-quality-cost-redesign` 工作树干净，已并入 `main`，没有未合并提交。
+- [x] 当前任务没有独立 mini-task 分支、mini-task worktree 或任务锁；没有为了分支清理删除其他任务对象。
+- [x] 3rd-review 候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 和 `codex/3rd-review-main-integration` 的工作树都干净，但分别有 3 个和 1 个未并入 3rd-review `main` 的提交。
+- [x] 3rd-review `main` 存在用户未提交修改和 worker spool；没有擅自 merge、reset、删除分支或删除工作树，避免覆盖其他任务。
+- [x] ModelTest 候选工作树干净，候选分支没有独有提交；ModelTest `main` 仍有用户未提交内容，保持不动。
+- [ ] 3rd-review 两个候选分支不能称为“已完全清理”；需要在 3rd-review `main` 的脏改动由 owner 明确处理后，才能安全合并和删除候选工作树。
