@@ -2131,3 +2131,24 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 
 - 第一次 v24 全量捕获本身完成了 `162` 个 safe 测试文件和 `31` 个 exclusive 测试，但因为本轮客户端改动后的 `wh-review` bundle hash 尚未同步，最终 exit `1`；失败原因是 skill bundle 完整性校验，不是产品逻辑测试失败。
 - 已同步 `skills/wh-review/skill-bundle.json` 与 `skills/catalog.yaml` 的真实 hash；下一次全量捕获只用于生成绑定最终代码的正式收据。
+
+### 审查轮次策略根因修复（2026-08-17，追加）
+
+- 用户重新确认轮次边界：只有 `build-code` 的 phase 审查需要围绕严重 finding 收敛；其他正式阶段一轮异源审查拿到 findings 后就停，不追求 provider pass 或空 findings。mini-task 的 design/implementation 也各审一轮。
+- 根因确认：合同和 runner 的单次语义已经存在，但 host 校验把非 `build-code` 反向强制为 `full_on_structural_rework`；真实配置又把 `build-spec`、`build-plan`、`verify-code` 和 `mini_task.design` 设成该模式，`mini_task.implementation` 设成 `full_only`。这形成了“有 finding 就继续”的错误外部信号。
+- 决定：非 `build-code` 正式阶段和两个 mini-task route 只允许 `single_round`；`build-code` 继续保留 `full_only` 及既有严重 finding/聚焦复审边界；reviewer 数量仍由 `/Users/Hugh/.config/workflowhub/config.json` 的列表决定，不增不减、不动态替换。
+- 当前事实：候选 `third-review-host-config` 与 `review-runner` 定向回归 `84/84`，skill closure `ok`；本轮没有调用 provider、没有跑全量测试，也没有把中止的全量命令写成通过。
+
+### 当前 Git 对象图审计（2026-08-17，追加）
+
+- 原始问题：正式收口前仍有“WorkflowHub Git missing object”例外，不能只看当前命令成功就假设仓库历史完整。
+- 关键事实：当前 `HEAD`、`HEAD^{tree}`、`git ls-tree -r HEAD` 均成功；但全局 `git fsck --full` 仍在历史/辅助 refs 与 dangling objects 上报告 missing/broken links。
+- 决定：不删除 refs、不 repack、不 prune，不用破坏性操作掩盖问题；只把当前可达 `HEAD` 的可读性和全局对象库异常分开记录。
+- 理由：当前交付代码可读不等于整个仓库对象库健康；删除辅助 refs 可能影响其他任务，超出本任务范围。
+- 延期交接：保留 Git 例外，后续由仓库维护者在确认影响范围、备份和恢复方案后单独处理；它不能被写成正式 close 已完成。
+
+### 过期执行锁清理（2026-08-17，追加）
+
+- 关键事实：当前任务的 `test-capture.execution.lock` 记录 PID 已不存在，属于之前中止全量捕获留下的过期锁。
+- 决定：删除这一枚明确过期的执行锁；不删除 mini-task 记录、review、receipt 或其他任务对象。
+- 结果：当前任务没有残留的执行锁；本轮没有重新启动全量测试。
