@@ -82,7 +82,7 @@ answer from code, old records, or a plan.
 Do not run Talk or Grill in this stage, and do not call
 `talk-with-zhipeng` or `grill-with-docs`; those activities belong exclusively to
 `make-decision`. The `spec-clarify` dependency is the one allowed Clarify flow:
-it asks one material specification question, waits for the real user reply,
+it asks one material specification batch of independent questions, waits for the real user reply,
 resumes with that reply, and writes the answer back to `spec.md`. A missing
 reply, wrong card, stale hash, or interrupted resume stays `incomplete`; it is
 never inferred or replaced by a second Clarify implementation. A
@@ -109,8 +109,8 @@ review or test result never changes product scope automatically.
    deferred item, and upstream gap.
 3. Run conditional `spec-research` when the current facts are insufficient;
    otherwise record why it was skipped, and preserve unavailable facts.
-4. Run the unique `spec-clarify` flow for one material spec ambiguity at a time;
-   resume only from the matching real user reply.
+4. Run the unique `spec-clarify` flow in one batch of independent material spec ambiguities;
+   keep dependent ambiguities out of that batch and resume only from the matching real user reply.
 5. Draft or revise `spec.md` with stable IDs, flows, states, FR/AC, oracles,
    failure conditions, risks, and explicit exclusions.
 6. Cross-check no decision was dropped, no new product scope was invented, and

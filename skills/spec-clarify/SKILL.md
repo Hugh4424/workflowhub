@@ -30,6 +30,9 @@ Each question still contains only one decision axis. Never combine output shape,
 input transformation, field membership, or another independent concern into one
 “complete contract” question.
 
+一张卡可以包含多个互相独立的问题；每题只处理一个决策轴。不要把这些独立问题退化成
+逐个单题提问，也不要把有依赖的问题提前塞进同一批。
+
 Use the independent-variation test before publishing a card: if two behaviors
 could be chosen separately, they are two decision axes even when they concern
 the same field or feature. Options that pair two independently variable

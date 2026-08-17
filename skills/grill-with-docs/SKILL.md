@@ -12,6 +12,9 @@ Ask one batch only when the remaining frontier questions are independent. Each
 question in that batch must be answerable without the answer to another question;
 dependent questions stay out of the batch and are re-ranked after the reply.
 
+同一张卡可以包含多个互相独立的问题；不要把独立问题退化成逐个单题发送。每题仍只问一个
+决策轴，有依赖的问题必须等真实回答后再拆到下一批。
+
 每题使用和 Talk、Clarify 相同的大白话问题卡：`question_id`、一个 `axis`、
 `independent: true`、2～3 个带 `meaning`、`consequence`、`risk` 的选项、
 `recommended_option` 和 `recommendation_reason`。用户可以只回答其中一部分，未回答项

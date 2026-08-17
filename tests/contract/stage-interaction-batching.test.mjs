@@ -116,6 +116,9 @@ describe("batched interaction contract", () => {
     const talk = read("skills/talk-with-zhipeng/SKILL.md");
     const grill = read("skills/grill-with-docs/SKILL.md");
     const clarify = read("skills/spec-clarify/SKILL.md");
+    const makeDecision = read("workflows/make-decision/SKILL.md");
+    const buildSpec = read("workflows/build-spec/SKILL.md");
+    const reuseRegistry = read("skills/reuse-registry.md");
     for (const skill of [talk, grill, clarify]) {
       expect(skill).toMatch(/一组|一批|batch/i);
       expect(skill).toMatch(/2[～-]3|2-3|2 to 3/i);
@@ -123,7 +126,18 @@ describe("batched interaction contract", () => {
       expect(skill).toMatch(/风险|risk/i);
       expect(skill).toMatch(/编号|number|numbered|question_id/i);
     }
-    expect(talk).not.toMatch(/一次只问一个问题/);
-    expect(clarify).not.toMatch(/Handle one decision axis at a time/);
+    expect(talk).toMatch(/同一批次可以包含多个互相独立的关键问题/);
+    expect(grill).toMatch(/Ask one batch only when the remaining frontier questions are independent/i);
+    expect(clarify).toMatch(/Put independent axes into one batch/);
+    expect(makeDecision).toMatch(/Talk groups independent decision axes in one batch/i);
+    expect(buildSpec).toMatch(/one material specification batch of independent questions/i);
+    expect(reuseRegistry).toMatch(/talk-with-zhipeng[\s\S]{0,180}独立问题成批/);
+    expect(reuseRegistry).not.toMatch(/talk-with-zhipeng[\s\S]{0,180}一次一问/);
+
+    // These are the old host-level instructions that caused the skills to
+    // degrade back to one-question-at-a-time interaction.
+    expect(talk).not.toMatch(/一次最多问一个关键问题|仍有这类问题时必须逐个询问/);
+    expect(makeDecision).not.toMatch(/exactly\s+one decision axis at a time/i);
+    expect(buildSpec).not.toMatch(/asks one material specification question|one material spec ambiguity at a time/i);
   });
 });
