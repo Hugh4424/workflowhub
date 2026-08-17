@@ -69,7 +69,9 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
       subject_fact: {
         status: "passed",
         detail: "fixture",
-        evidence_refs: nestedAcceptanceVariant === "missing-subject-evidence" ? [] : [{ ref: testRef, sha256: sha256(testRaw) }],
+        evidence_refs: nestedAcceptanceVariant === "missing-subject-evidence"
+          ? []
+          : [{ ref: testRef, sha256: sha256(testRaw) }],
         ...(subject === "finding_dispositions" ? { disposition_items: [], source_review_refs: [], risk_acceptance_refs: [] } : {}),
       },
     };

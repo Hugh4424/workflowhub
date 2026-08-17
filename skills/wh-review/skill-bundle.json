@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "0685e880bcb455241443a9e4531e5ce4a28189f6144ff73285d12547886c6507"
+      "sha256": "0863b76d7038c99580ea38459421d05f837d418a308341ba0221af0c783c31ce"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -100,7 +100,7 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "8840fc7fb5cfd52e4365c11eb14250d16202c064529509ba999c376e42357cf0"
+      "sha256": "d78f88b4bc40ca9992c7bd5b0c2bb804f53c8d442aa6b8de39bd7c4c7f223b81"
     },
     {
       "path": "scripts/wh-review-cli.mjs",

@@ -1189,6 +1189,38 @@ describe("material and workspace boundaries", () => {
     expect(() => verifyFinalSubject({ result, current: { ...source, snapshotTree: "6".repeat(40) }, integrationSubject: { base_commit: source.baseCommit, base_tree: source.baseTree, snapshot_tree: source.snapshotTree } })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
   });
 
+  it("reuses an ordinary verify-code result after executor-only tasks.md writeback", () => {
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-verify-record-only-")));
+    temporary.push(repo);
+    const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+    git(["init", "-q"]);
+    git(["config", "user.name", "WorkflowHub Tests"]);
+    git(["config", "user.email", "tests@workflowhub.local"]);
+    mkdirSync(join(repo, "specs", "task"), { recursive: true });
+    writeFileSync(join(repo, "implementation.mjs"), "export const value = 1;\n");
+    writeFileSync(join(repo, "specs", "task", "tasks.md"), "# task\n\n### 执行状态填写区\n- pending\n\n### Verify\n- current\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "base"]);
+    const beforeHead = git(["rev-parse", "HEAD"]);
+    const beforeTree = git(["rev-parse", "HEAD^{tree}"]);
+    const beforeSnapshot = captureExecutionSnapshot(repo, "task");
+    writeFileSync(join(repo, "specs", "task", "tasks.md"), "# task\n\n### 执行状态填写区\n- completed\n- result written back\n\n### Verify\n- current\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "record execution fact"]);
+    const afterHead = git(["rev-parse", "HEAD"]);
+    const afterSnapshot = captureExecutionSnapshot(repo, "task");
+    const result = {
+      stage: "verify-code", subject_kind: "worktree",
+      source: { target_commit: beforeHead, base_commit: beforeHead, base_tree: beforeTree, captured_head: beforeHead },
+      base_tree: beforeTree, candidate_tree: beforeSnapshot.tree, snapshot_tree: beforeSnapshot.tree,
+    };
+    expect(verifyFinalSubject({
+      result,
+      current: { sourceRoot: repo, baseCommit: beforeHead, baseTree: beforeTree, capturedHead: afterHead, snapshotTree: afterSnapshot.tree },
+      taskId: "task",
+    })).toMatchObject({ status: "finalized", snapshotTree: afterSnapshot.tree });
+  });
+
   it("does not invalidate an unchanged candidate snapshot when only target HEAD advances", () => {
     const result = { stage: "build-code", review_scope: "integration", subject_kind: "worktree", source: { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead }, base_tree: source.baseTree, candidate_tree: source.snapshotTree, snapshot_tree: source.snapshotTree };
     expect(verifyFinalSubject({

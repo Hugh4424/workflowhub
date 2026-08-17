@@ -165,19 +165,19 @@ describe("trusted third-review host configuration", () => {
       .toThrow(/wh_review\.review_kinds is not supported/);
   });
 
-  it("accepts the two explicit non-stage mini-task review routes", () => {
+  it("requires one round for both explicit mini-task review routes", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {}, mini_task: {
-      design: { initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 1 },
-      implementation: { initial: ["kimi", "claude-code"], mode: "full_only", minimum_heterologous: 1 },
+      design: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
+      implementation: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_on_structural_rework" });
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
     expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_only" });
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
     expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.unknown"))
       .toThrow(/unsupported|unknown|mini_task/i);
     expect(brokerConfig).toBeTruthy();
@@ -202,15 +202,15 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: { mini_task: {
-      design: { initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 1 },
-      implementation: { initial: ["kimi", "claude-code"], mode: "full_only", minimum_heterologous: 1 },
+      design: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
+      implementation: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
     } } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_on_structural_rework" });
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
     expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_only" });
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
     expect(Object.hasOwn(trusted.whReview.stages, "mini_task")).toBe(false);
   });
 
@@ -336,18 +336,19 @@ describe("trusted third-review host configuration", () => {
     expect(() => selectTrustedReviewProviders(brokerConfig, "codex", { initial: ["kimi"], mode: "adaptive" })).toThrow(/disabled/i);
   });
 
-  it("accepts full_on_structural_rework without a closure route and rejects a hidden closure fallback", () => {
-    const { brokerConfig, hostConfig } = configuredRoot();
+  it("requires one round for non-build-code stages and rejects structural rework mode", () => {
+    const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-spec": { initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 2 },
+      "build-spec": { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 2 },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(resolveTrustedReviewRoute(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }).whReview, "build-spec"))
-      .toEqual({ initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 2 });
-    host.wh_review.stages["build-spec"].closure = ["kimi"];
+      .toEqual({ initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 2 });
+    host.wh_review.stages["build-spec"].mode = "full_on_structural_rework";
     writeFileSync(hostConfig, JSON.stringify(host));
-    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/closure.*adaptive/i);
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }))
+      .toThrow(/build-spec\.mode must be single_round/i);
   });
 
   it("rejects V2 modes that could reopen a cheap non-code closure review", () => {
@@ -358,7 +359,7 @@ describe("trusted third-review host configuration", () => {
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }))
-      .toThrow(/build-plan\.mode must be full_on_structural_rework/i);
+      .toThrow(/build-plan\.mode must be single_round/i);
   });
 
   it("uses the legacy tier when wh_review or the current stage is absent", () => {
@@ -377,7 +378,7 @@ describe("trusted third-review host configuration", () => {
       "claude-code/opus": { model: "claude-opus-4-8", effort: "high", thinking: null, priority: 10 },
     }, stages: {
       "build-code": { initial: ["kimi"], mode: "full_only" },
-      "build-plan": { initial: ["claude-code/opus", "kimi"], mode: "full_on_structural_rework" },
+      "build-plan": { initial: ["claude-code/opus", "kimi"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });

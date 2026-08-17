@@ -1381,3 +1381,41 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - [x] 当前 verify-code review 只尝试一轮：第一次材料预检拒绝审计 output_ref，第二次请求 host 标识无效，第三次真实 provider 返回 `PUBLIC_RESULT_INVALID`（公共结果含私有路径）；没有可用 semantic result，不把它写成空 findings，也不继续重试。
 - [ ] 当前仍没有绑定最新 tree 的有效独立 review；正式 Stage Agent outcome、逐 AC、finding disposition、exceptions、human confirmation 和公开 `full_tests_fresh` 事实仍缺失。
 - [ ] ModelTest 仍只有 `252` 条 plan、`provider_calls=0`，baseline/candidate TaskHandle unbound；三仓候选仍未提交；没有启动 mini-task，没有执行 close、commit、merge、push、archive 或 cleanup。
+
+### 执行状态填写区（追加事实，2026-08-17）
+
+- **本轮范围**：在候选分支修复正式 close 证据的语义认证，以及 `tasks.md` 执行状态写回不应让 verify-code 事实失效的问题；没有改变需求、规格、计划、reviewer 数量、mini-task 路由或 public runtime 状态机。
+- **代码改动**：`core/task-close.mjs` 现在严格认证 semantic AC/contract-test 证据，并对历史 `version` 形式的 review result 先做完整 schema 校验；`runtime/evidence/canonical-evidence-validators.mjs` 校验测试 receipt、输出哈希、source digest、snapshot 和 AC 对应关系；`runtime/evidence/freshness.mjs` 与 `tools/cli/stage-runtime.mjs` 只对执行状态区写回复用原质量事实，真实材料或代码变化仍会过期。
+- **定向验证**：候选分支语法检查通过；close 语义证据/错误哈希/嵌套 AC 对应测试 `4/4` 通过；freshness 测试 `7/7` 通过；`git diff --check` 通过。
+- **全量验证限制**：当前候选快照只执行过一次 `npm test`，180 秒后超时；已有输出中的测试套件没有报告失败，但整条命令没有完成，不能记录为 full test passed，也没有重跑同一全量命令。
+- **当前正式事实**：旧 `quality/verify.json` 仍绑定旧快照，当前代码变化后应保持 stale/incomplete；本轮没有重新调用 provider，没有生成新的 Stage Agent outcome，没有伪造逐 AC、finding disposition、exceptions 或 human confirmation。
+- **mini-task**：本轮没有新增需求，不启动 mini-task；该修复属于当前任务既定的 verify/close 共同边界。现有 mini-task design/implementation 路由没有新增未清理对象。
+- **交接**：候选分支和 main 都有未提交的同类修复；3rd-review、ModelTest 的用户脏改动保持原样。commit、merge、push、archive、cleanup 和正式 close 仍未执行。
+
+#### 本轮根因修复补充（2026-08-17）
+
+- **根因**：`verifyFinalSubject` 原来只给 `build-code integration` 放行执行状态区回写，普通 `verify-code` 仍把同一类回写当成新快照；`task-close` 还使用另一套绝对 tree 相等规则。两套规则叠加，造成“审查完成→写回结果→快照过期→重复审查或 close 卡住”。
+- **修复**：普通 `verify-code` 也只在 `tasks.md` 的“执行状态填写区”变化时复用原审查；代码、需求、AC、接口、测试和配置变化仍会让审查过期。close 交付发现同类纯回写时给出无需重跑质量审查的明确计划刷新提示，其他变化仍 fail-closed。
+- **回归**：候选 `review-runner` `60/60`、vNext close/freshness `32/32` 通过；其中真实 Git fixture 证明普通 `verify-code` 的执行状态回写不会再次调用 provider。
+- **合同边界**：撤掉未登记的 `semantic-ac-evidence.v1` 和 `semantic-contract-test-evidence.v1`，不新增 schema/控制面；继续使用现有 `acceptance-evidence.v1`、`workflowhub-receipt.v1` 和已登记 AC 证据合同。
+- **全量测试**：此前 `npm test` 的 `600000ms` 官方预算运行曾 exit 0（safe `162` 个文件、`1697` passed、`1` skipped；exclusive `31` passed），但本轮随后又改了审查/close 合同，因此不能把旧收据写成当前最终快照的 `full_tests_fresh`；本轮没有再次触发 provider 或重试旧审查。
+- **mini-task 判断**：没有新增用户需求，不启动 mini-task；这是当前主任务已有的 verify/close 边界修复。现有 mini-task design/implementation 没有新增对象，也没有待清理 worktree/lock。
+
+#### T047 审查轮次策略根因修复（2026-08-17）
+
+- **根因**：合同写的是普通阶段一轮 findings 即停，但 host 配置把 `build-spec`、`build-plan`、`verify-code` 设成 `full_on_structural_rework`，并把非 `build-code` 硬编码成该模式；`mini_task.design` 还用了同一模式，`mini_task.implementation` 用了 `full_only`。这会把普通 finding 误当成继续返工/重审信号。
+- **修复**：普通五阶段（`make-decision` 的 direction/detail 仍按既有 single_round 逻辑）统一要求 `single_round`；`mini_task.design` 和 `mini_task.implementation` 也统一要求 `single_round`；只有 `build-code` 保留 `full_only`，由其 phase 严重 finding 收敛规则决定是否再做一次聚焦复审。配置中的 reviewer 列表没有改变，不动态增减 provider。
+- **验证**：候选 skill closure `ok`；审查配置与 runner 定向回归 `2 files / 84 passed`；真实配置解析结果为正式阶段 `single_round, single_round, single_round, full_only, single_round`，两个 mini-task route 均为 `single_round`；没有调用真实 provider。
+- **范围和停止**：没有再跑全量测试；此前中止的全量命令不写成通过；没有改三个公开监控文件，没有动 Multica，没有启动新 mini-task。
+
+#### T048 当前 Git 对象图审计（2026-08-17）
+
+- [x] 只读检查确认当前 `HEAD`、`HEAD^{tree}` 和 `git ls-tree -r HEAD` 均可读取；当前交付分支的可达对象图没有发现读取失败。
+- [x] `git fsck --full` 仍在若干历史/辅助 refs 和 dangling objects 上报告 missing/broken links；这些不是当前 `HEAD` 的可达文件，不能把局部可读写成整个仓库对象库已修复。
+- [x] 没有执行删除 refs、repack、prune 或其他破坏性 Git 修复；保留现有例外事实，等待明确的仓库维护授权和可恢复方案。
+- [ ] 该环境例外仍不能冒充正式 close 已完成；正式 verify-code 六项事实和人工 close 授权仍未补齐。
+
+#### T049 过期执行锁清理（2026-08-17）
+
+- [x] 检查到当前任务唯一的 `test-capture.execution.lock` 对应 PID 已不存在，确认是中止全量捕获留下的过期锁。
+- [x] 已删除这一个过期执行锁；没有删除任何 mini-task 记录、review、receipt、公开监控文件或其他任务对象。

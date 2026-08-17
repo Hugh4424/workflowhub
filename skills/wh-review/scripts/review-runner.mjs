@@ -944,7 +944,10 @@ export function runReviewFixture(options) { return runReview({ ...options, fixtu
 export function verifyFinalSubject({ result, current, integrationSubject = null, taskId = null } = {}) {
   if (!result || typeof result !== "object" || !current || typeof current !== "object") throw new TypeError("result and current source are required");
   const isIntegration = result.stage === "build-code" && result.review_scope === "integration" && integrationSubject !== null;
-  const recordOnlyWriteback = isIntegration && isExecutionRecordOnlyMaterialDelta(current.sourceRoot, result.snapshot_tree, current.snapshotTree, taskId);
+  // Writing executor facts into the task card does not change the reviewed
+  // implementation. This narrow exception applies to every final review
+  // stage, including verify-code; all other material changes remain stale.
+  const recordOnlyWriteback = isExecutionRecordOnlyMaterialDelta(current.sourceRoot, result.snapshot_tree, current.snapshotTree, taskId);
   const expected = isIntegration ? integrationSubject : { base_commit: current.baseCommit, base_tree: current.baseTree, snapshot_tree: current.snapshotTree };
   if (!expected || typeof expected !== "object" || expected.base_commit !== result.source.base_commit || expected.base_tree !== result.base_tree || (isIntegration && expected.snapshot_tree !== current.snapshotTree && !recordOnlyWriteback)) {
     const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
@@ -965,7 +968,7 @@ export function verifyFinalSubject({ result, current, integrationSubject = null,
   // subject are the freshness boundary. Requiring target HEAD equality here
   // makes an unrelated main-repository advance force a duplicate review for
   // the same candidate snapshot.
-  if (subjectMismatch || phaseMismatch || current.capturedHead !== result.source.captured_head || result.source.base_commit !== expected.base_commit || result.source.base_tree !== expected.base_tree) {
+  if (subjectMismatch || phaseMismatch || (!recordOnlyWriteback && current.capturedHead !== result.source.captured_head) || result.source.base_commit !== expected.base_commit || result.source.base_tree !== expected.base_tree) {
     const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error;
   }
   return { status: "finalized", snapshotTree: current.snapshotTree };
