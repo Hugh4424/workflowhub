@@ -2168,3 +2168,10 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 关键事实：3rd-review `main` 当前有用户未提交修改和 `.worker-mode/spool/spool-events.jsonl`；ModelTest `main` 也有用户未提交内容，ModelTest 候选没有独有提交且工作树干净。
 - 决定：不在脏的 3rd-review/ModelTest `main` 上 merge、reset、stash、删除分支或删除 worktree；这些候选分支暂时保留，避免覆盖别的任务。
 - 延期交接：由对应仓库 owner 先确认并处理 `main` 的脏改动，再决定是否把 3rd-review 两个候选提交合并、压缩和清理；当前不能宣称 3rd-review 分支已完全收口。
+
+### 3rd-review 合并演练事实（2026-08-17，追加）
+
+- 只读合并演练结果：`3rd-review main` 与 `codex/3rd-review-main-integration` 的提交树可以无冲突合并。
+- 完整候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 与 `main` 合并时，在 `lib/workflowhub-result-v3.mjs` 和 `test/workflowhub-result-v3.test.mjs` 发生 add/add 冲突；两个候选互合也有同样冲突。
+- 当前配置的 3rd-review command 指向完整候选 worktree，因此当前 WorkflowHub 使用的是干净且包含完整 v3 producer 变更的候选，而不是未合并的 integration worktree。
+- 决定：不替 owner 选择两套 v3 producer 实现，不在脏 `main` 上做 merge/reset/stash，也不删除候选分支；保留可运行候选和冲突事实，等待 owner 处理。
