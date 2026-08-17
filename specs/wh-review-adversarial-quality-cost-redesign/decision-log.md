@@ -2160,3 +2160,11 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 范围保护：只提交当前任务的 13 个文件；main 上与本任务无关的 `docs/research/m16-experience-loop-repair-research.md` 和 `tmp/` 保持未改动。
 - mini-task：没有新增需求，没有创建 mini-task；当前任务的 mini-task worktree/lock 已清理，候选分支保留供 close 前回读。
 - 边界：实现已经进入 main，但正式 close 仍未执行；六项正式 verify-code 事实、Git 全局对象库例外和人工 close 授权继续如实保留。
+
+### mini-task 与 3rd-review 分支清理核查（2026-08-17，追加）
+
+- 关键事实：WorkflowHub 候选分支工作树干净，且已并入 WorkflowHub `main`；当前任务没有独立 mini-task 分支、worktree 或锁。
+- 关键事实：3rd-review 的 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 工作树干净但有 3 个未并入 `main` 的提交；`codex/3rd-review-main-integration` 工作树干净但有 1 个未并入 `main` 的提交。
+- 关键事实：3rd-review `main` 当前有用户未提交修改和 `.worker-mode/spool/spool-events.jsonl`；ModelTest `main` 也有用户未提交内容，ModelTest 候选没有独有提交且工作树干净。
+- 决定：不在脏的 3rd-review/ModelTest `main` 上 merge、reset、stash、删除分支或删除 worktree；这些候选分支暂时保留，避免覆盖别的任务。
+- 延期交接：由对应仓库 owner 先确认并处理 `main` 的脏改动，再决定是否把 3rd-review 两个候选提交合并、压缩和清理；当前不能宣称 3rd-review 分支已完全收口。
