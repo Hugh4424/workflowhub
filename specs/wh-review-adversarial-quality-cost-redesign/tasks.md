@@ -1442,3 +1442,12 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - [x] `3rd-review main` 与完整候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 在 `lib/workflowhub-result-v3.mjs`、`test/workflowhub-result-v3.test.mjs` 出现 add/add 冲突；两个候选彼此合并时也有同样冲突。
 - [x] 当前 `/Users/Hugh/.config/workflowhub/config.json` 实际指向完整候选 worktree；该 worktree 干净，当前运行不会读到未合并的 integration worktree。
 - [ ] 没有在脏的 3rd-review `main` 上 merge、reset、stash 或删除分支；冲突需要 owner 选择保留哪套 v3 producer 语义后再处理。
+
+#### T053 3rd-review 候选分支最终清理核查（2026-08-17）
+
+- [x] 已在干净的 `codex/3rd-review-main-integration` 上合并完整候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign`，合并提交 `1457e0c6` 的两个父提交分别是 integration 基线和完整候选；候选提交已进入当前运行树。
+- [x] 冲突只涉及 `lib/workflowhub-result-v3.mjs` 与 `test/workflowhub-result-v3.test.mjs`；最终保留更完整的私有路径测试，并保留 Unicode 斜杠边界测试。语法检查和定向回归 `126/126` 通过，`git diff --check` 通过。
+- [x] 已把 `/Users/Hugh/.config/workflowhub/config.json` 的 3rd-review command 切换到 `/Users/Hugh/Hugh/Project/3rd-review-main-integration/scripts/3rd-review.mjs`。
+- [x] 已删除已被集成替代的旧候选 worktree 和分支 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign`；保留干净的 active integration worktree `codex/3rd-review-main-integration`。
+- [x] 当前任务没有独立 mini-task；任务 `locks/` 为空，没有 mini-task worktree、分支或锁残留。
+- [ ] 3rd-review `main` 仍有 owner 的未提交修改和 worker spool；没有擅自合并、重置或清理它们。该脏工作树不是本任务新建分支的残留。

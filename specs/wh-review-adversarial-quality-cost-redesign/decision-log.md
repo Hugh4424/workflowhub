@@ -2175,3 +2175,12 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 完整候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 与 `main` 合并时，在 `lib/workflowhub-result-v3.mjs` 和 `test/workflowhub-result-v3.test.mjs` 发生 add/add 冲突；两个候选互合也有同样冲突。
 - 当前配置的 3rd-review command 指向完整候选 worktree，因此当前 WorkflowHub 使用的是干净且包含完整 v3 producer 变更的候选，而不是未合并的 integration worktree。
 - 决定：不替 owner 选择两套 v3 producer 实现，不在脏 `main` 上做 merge/reset/stash，也不删除候选分支；保留可运行候选和冲突事实，等待 owner 处理。
+
+### 3rd-review 候选分支最终清理核查（2026-08-17，追加）
+
+- 关键事实：已在干净的 `codex/3rd-review-main-integration` 上完成完整候选合并，合并提交为 `1457e0c6`，其两个父提交分别是 integration 基线和完整候选 `3416bab8`；完整候选的提交已进入当前运行树。
+- 冲突处置：`lib/workflowhub-result-v3.mjs` 只保留一个 `safeUsage` 实现；`test/workflowhub-result-v3.test.mjs` 保留三类私有路径回归，同时保留 Unicode 斜杠边界回归。语法检查和受影响定向回归共 `126/126` 通过，`git diff --check` 通过。
+- 运行配置：`/Users/Hugh/.config/workflowhub/config.json` 已切到 `/Users/Hugh/Hugh/Project/3rd-review-main-integration/scripts/3rd-review.mjs`，不再依赖旧候选 worktree。
+- 清理结果：已删除旧候选 worktree `/Users/Hugh/Hugh/Project/3rd-review-wh-review-adversarial-quality-cost-redesign` 和分支 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign`；保留干净的 active integration worktree 和分支，作为当前 3rd-review 运行入口。
+- mini-task：本轮没有新增需求，没有创建 mini-task；当前任务 `locks/` 为空，没有 mini-task 分支、worktree 或锁残留。
+- 边界：3rd-review `main` 仍有 owner 的未提交修改和 worker spool，未做 merge/reset/stash/delete；这不是本任务新建候选残留，继续由 owner 自己处理。没有触碰公开 monitor 三文件，没有动 Multica。
