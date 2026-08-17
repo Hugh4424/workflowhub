@@ -27,7 +27,7 @@ export function validateAcceptanceEvidence(value, label = "acceptance evidence")
   for (const key of Object.keys(value)) if (!["schema_version", "acceptance_criterion_id", "result", "refs", "snapshot_tree", "source_digest", "summary"].includes(key)) throw new Error(`${label} has unknown field ${key}`);
   if (value.schema_version !== "acceptance-evidence.v1") throw new Error(`${label} schema_version must be acceptance-evidence.v1`);
   if (typeof value.acceptance_criterion_id !== "string" || !ACCEPTANCE_ID.test(value.acceptance_criterion_id)) throw new Error(`${label} acceptance_criterion_id must be stable and non-empty`);
-  if (!new Set(["pass", "fail"]).has(value.result)) throw new Error(`${label} result must be pass or fail`);
+  if (!new Set(["pass", "fail", "inconclusive", "deferred"]).has(value.result)) throw new Error(`${label} result must be pass, fail, inconclusive, or deferred`);
   if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
   const refs = value.refs.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);

@@ -58,9 +58,14 @@ function readBound(binding, read, dependencies, key) {
   return raw;
 }
 
-function expectedPassed(status, passed, failed) {
+function expectedPassed(status, passed, failed, nonterminal) {
   if (status === "passed") return passed;
   if (status === "failed") return failed;
+  // A missing quality fact is the canonical projection for an acceptance
+  // subject that is inconclusive/deferred. Preserve that distinction in the
+  // bound leaf without treating it as either a pass or an implementation
+  // failure.
+  if (status === "missing") return nonterminal === "inconclusive" || nonterminal === "deferred";
   return false;
 }
 
@@ -112,7 +117,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
       const acceptance = validateAcceptanceEvidence(value);
       if (acceptance.acceptance_criterion_id !== fact.subject) throw new Error("acceptance subject mismatch");
       if (acceptance.snapshot_tree !== undefined && acceptance.snapshot_tree !== fact.snapshot_tree) throw new Error("acceptance tree mismatch");
-      if (!expectedPassed(fact.status, acceptance.result === "pass", acceptance.result === "fail")) throw new Error("acceptance outcome mismatch");
+      if (!expectedPassed(fact.status, acceptance.result === "pass", acceptance.result === "fail", acceptance.result)) throw new Error("acceptance outcome mismatch");
       for (const nested of acceptance.refs) {
         const nestedKey = `${key}:nested:${nested.ref}`;
         const nestedRaw = readBound(nested, read, dependencies, nestedKey);

@@ -10,7 +10,7 @@ import { buildAcEvidenceSummary } from "../ac-evidence-summary.mjs";
 function digest(raw) { return createHash("sha256").update(raw).digest("hex"); }
 function json(value) { return `${JSON.stringify(value)}\n`; }
 
-function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0, genericMetadata = false, genericOutcome = false, semanticProof = false, sharedAnchors = false } = {}) {
+function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0, genericMetadata = false, genericOutcome = false, semanticProof = false, sharedAnchors = false, leafResult = "pass" } = {}) {
   const task = createTask({ storageRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ac-summary-"))), manifest: {
     schema_version: "1.0.0", project_name: "Demo", task_id: `ac-${Math.random().toString(16).slice(2)}`,
     created_at: new Date().toISOString(), target_repo_root: "/repo", issue_ids: [], inputs: {},
@@ -55,7 +55,7 @@ function fixture({ duplicate = false, mismatchLeafSnapshot = false, exitCode = 0
   });
   const rawProof = publish("quality/evidence/ac-2-proof.txt", "provider raw output must never enter summary\n");
   const ac1 = publish("quality/evidence/ac-1.json", {
-    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", snapshot_tree: snapshotTree, source_digest: sourceDigest,
+    schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: leafResult, snapshot_tree: snapshotTree, source_digest: sourceDigest,
     refs: [observation],
   });
   const ac2 = publish("quality/evidence/ac-2.json", {
@@ -96,6 +96,19 @@ describe("per-AC evidence summary", () => {
     expect(summary.criteria).toEqual(expect.arrayContaining([
       expect.objectContaining({ result: "unknown", leaf_result: "pass", status: "incomplete" }),
     ]));
+  });
+
+  it("keeps inconclusive and deferred leaf results visible", () => {
+    for (const leafResult of ["inconclusive", "deferred"]) {
+      const summary = buildAcEvidenceSummary(fixture({ leafResult }));
+      expect(summary.criteria).toEqual(expect.arrayContaining([
+        expect.objectContaining({ acceptance_criterion_id: "AC-1", result: leafResult, leaf_result: leafResult, status: "incomplete" }),
+      ]));
+      const completeMetadata = buildAcEvidenceSummary(fixture({ leafResult, semanticProof: true }));
+      expect(completeMetadata.criteria).toEqual(expect.arrayContaining([
+        expect.objectContaining({ acceptance_criterion_id: "AC-1", result: leafResult, leaf_result: leafResult, status: "incomplete" }),
+      ]));
+    }
   });
 
   it("requires concrete implementation and test anchors before reporting pass", () => {

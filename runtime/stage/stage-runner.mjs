@@ -480,6 +480,14 @@ function evidenceCandidate(result, kind, subject, stage) {
   return matches.find((entry) => typeof entry?.sha256 === "string") ?? null;
 }
 
+export function acceptanceResultForSubjectStatus(status) {
+  if (status === "passed") return "pass";
+  if (status === "failed") return "fail";
+  if (status === "inconclusive") return "inconclusive";
+  if (status === "deferred" || status === "missing") return "deferred";
+  throw new Error(`unsupported acceptance subject status: ${status}`);
+}
+
 function currentConfirmationCandidate(ctx, snapshotTree) {
   const refs = typeof ctx.task.listCanonicalQualityFactRefs === "function"
     ? ctx.task.listCanonicalQualityFactRefs()
@@ -634,9 +642,11 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
     const confirmation = kind === "confirmation" ? confirmationEvidenceStatus(ctx.task, candidate) : null;
     const status = kind === "acceptance_criterion"
-      ? new Set(["passed", "failed", "missing"]).has(acceptanceSubject?.status)
-        ? acceptanceSubject.status
-        : "missing"
+      ? acceptanceSubject?.status === undefined
+        ? "missing"
+        : new Set(["passed", "failed", "inconclusive", "deferred", "missing"]).has(acceptanceSubject.status)
+          ? acceptanceSubject.status
+          : (() => { throw new Error(`unsupported acceptance subject status: ${acceptanceSubject.status}`); })()
       : kind === "review"
         ? review.status
       : kind === "test"
@@ -686,7 +696,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
       const acceptanceValue = {
         schema_version: "acceptance-evidence.v1",
         acceptance_criterion_id: subject,
-        result: status === "passed" ? "pass" : "fail",
+        result: acceptanceResultForSubjectStatus(status),
         refs: [{ ref: evidenceRef, sha256: evidenceHash }],
         snapshot_tree: snapshot.tree,
         summary: { actual_outcome: status, evidence_type: "stage quality fact" },
@@ -713,9 +723,10 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
       publishVNextEvidence(ctx, factEvidenceRef, missingRaw);
       factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
     }
+    const qualityFactStatus = new Set(["passed", "failed", "missing"]).has(status) ? status : "missing";
     const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
       kind,
-      status,
+      status: qualityFactStatus,
       subject,
       evidence: factEvidence.map(({ ref, sha256 }) => ({ ref, sha256, evidence_type: evidenceType })),
     });

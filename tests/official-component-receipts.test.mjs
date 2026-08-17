@@ -249,6 +249,15 @@ describe("official component receipt authority", () => {
     expect(() => writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref, sha256: createHash("sha256").update(raw).digest("hex") }] } })).toThrow(pattern);
   });
 
+  it.each(["pass", "fail", "inconclusive", "deferred"])("accepts the explicit acceptance result state: %s", (result) => {
+    expect(validateAcceptanceEvidence({
+      schema_version: "acceptance-evidence.v1",
+      acceptance_criterion_id: "AC-1",
+      result,
+      refs: [{ ref: "quality/evidence/proof.txt", sha256: "a".repeat(64) }],
+    }).result).toBe(result);
+  });
+
   it("keeps per-AC proof anchors structured and rejects host paths", () => {
     const value = validateAcceptanceEvidence({
       schema_version: "acceptance-evidence.v1",

@@ -181,11 +181,21 @@ function validReceiptRef(name, ref) {
 }
 
 function subjectFact(status, evidenceRefs = [], detail = null) {
+  if (!new Set(["passed", "failed", "inconclusive", "deferred", "missing"]).has(status)) {
+    throw new Error(`unsupported stage subject status: ${status}`);
+  }
   return Object.freeze({
-    status: new Set(["passed", "failed", "missing"]).has(status) ? status : "missing",
+    status,
     evidence_refs: Object.freeze(evidenceRefs.map(({ ref, sha256 }) => Object.freeze({ ref, sha256 }))),
     ...(detail ? { detail } : {}),
   });
+}
+
+export function classifyAcceptanceEvidenceResult(result) {
+  if (result === "pass") return "passed";
+  if (result === "fail") return "failed";
+  if (result === "inconclusive" || result === "deferred") return result;
+  throw new Error(`unsupported acceptance evidence result: ${result}`);
 }
 
 function sectionHasContent(markdown, heading) {
@@ -1522,6 +1532,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const criterionIds = new Set();
   const nestedEvidence = [];
   const failedEvidence = [];
+  const uncertainEvidence = [];
   for (const [index, ref] of evidence.value.refs.entries()) {
     object(ref, `evidence.refs[${index}]`);
     text(ref.ref, `evidence.refs[${index}].ref`);
@@ -1533,7 +1544,9 @@ HANDLERS.set("verify-code", async (worker, input) => {
     const acceptance = validateAcceptanceEvidence(entity.value, `acceptance evidence schema at evidence.refs[${index}]`);
     if (criterionIds.has(acceptance.acceptance_criterion_id)) throw new Error(`duplicate acceptance_criterion_id: ${acceptance.acceptance_criterion_id}`);
     criterionIds.add(acceptance.acceptance_criterion_id);
-    if (acceptance.result === "fail") failedEvidence.push(ref);
+    const evidenceDisposition = classifyAcceptanceEvidenceResult(acceptance.result);
+    if (evidenceDisposition === "failed") failedEvidence.push(ref);
+    else if (["inconclusive", "deferred"].includes(evidenceDisposition)) uncertainEvidence.push({ ref, result: evidenceDisposition });
     for (const [nestedIndex, nested] of acceptance.refs.entries()) {
       if (typeof worker.readEvidence !== "function") throw new Error("acceptance evidence schema requires authenticated evidence reader");
       const nestedRecord = object(worker.readEvidence(nested.ref), `${ref.ref} refs[${nestedIndex}] record`);
@@ -1599,6 +1612,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
     }
   }
   const acceptanceVerified = failedEvidence.length === 0
+    && uncertainEvidence.length === 0
     && expectedCriterionIds?.length > 0
     && sameStringSet([...criterionIds], expectedCriterionIds)
     && verificationItems.find((item) => item.id === "acceptance_criteria")?.status === "pass";
@@ -1619,6 +1633,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
       ...mismatches,
       ...dispositions.missing_items,
       ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []),
+      ...(uncertainEvidence.length ? uncertainEvidence.map((entry) => `${entry.result} acceptance evidence: ${entry.ref}`) : []),
     ],
   }, {
     worker,

@@ -176,9 +176,13 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
         // A leaf claim is not a verified pass when structured evidence or the
         // authenticated test receipt is incomplete. Preserve the claim for
         // provenance instead of silently presenting it as final proof.
-        result: item.evidence.result === "fail" ? "fail" : incomplete ? "unknown" : "pass",
+        result: item.evidence.result === "fail" ? "fail"
+          : item.evidence.result === "inconclusive" ? "inconclusive"
+            : item.evidence.result === "deferred" ? "deferred"
+              : incomplete ? "unknown" : "pass",
         leaf_result: item.evidence.result,
-        status: item.evidence.result === "fail" ? "failed" : incomplete ? "incomplete" : "passed",
+        status: item.evidence.result === "fail" ? "failed"
+          : ["inconclusive", "deferred"].includes(item.evidence.result) || incomplete ? "incomplete" : "passed",
         source_digest: sourceDigest,
         acceptance_leaf: { ref: item.leaf.ref, sha256: item.leaf.sha256 },
         nested_evidence: item.nested.map(({ ref, sha256 }) => ({ ref, sha256 })),
@@ -208,7 +212,9 @@ export function buildAcEvidenceSummary({ task, acceptanceCriteria, acceptanceEvi
     const sharedVerificationAnchor = new Set(verificationAnchors).size === 1 && verificationAnchors[0] !== "null";
     if (genericProse || genericActualOutcome || sharedNestedEvidence || sharedImplementationAnchor || sharedVerificationAnchor) {
       for (const item of summary.criteria) {
-        item.result = item.leaf_result === "fail" ? "fail" : "unknown";
+        item.result = item.leaf_result === "fail" ? "fail"
+          : item.leaf_result === "inconclusive" ? "inconclusive"
+            : item.leaf_result === "deferred" ? "deferred" : "unknown";
         item.status = item.leaf_result === "fail" ? "failed" : "incomplete";
         item.exceptions = [
           ...item.exceptions,
