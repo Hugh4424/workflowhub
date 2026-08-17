@@ -776,7 +776,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         ? evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, {
           material_revision: materialRevision,
           snapshot_tree: current.tree,
-        }, { read: context.task.readRecord })
+        }, {
+          read: context.task.readRecord,
+          workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          taskId: context.task.identity.taskId,
+        })
         : { status: "unknown", authenticated: false };
       observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
     }

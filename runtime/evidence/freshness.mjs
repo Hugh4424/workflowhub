@@ -4,13 +4,15 @@ import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validat
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { STAGE_ADVISORY_PREDICATES } from "../stage/completion-predicates.mjs";
+import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 
 // Only reviews explicitly declared advisory by the stage contract can survive
-// a later snapshot. verify-code independent_review is a required current
-// quality predicate, so it must go stale when the reviewed snapshot changes.
+// an arbitrary later snapshot. Required verify-code facts still go stale for
+// real material changes, but the narrow executor-only tasks.md writeback is
+// record keeping and may reuse the same quality fact.
 function isAdviceReviewFact(fact) {
   return fact?.kind === "review"
     && fact?.status === "recorded"
@@ -142,11 +144,15 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
   }
 }
 
-export function evaluateFactFreshness(fact, current, { read }) {
+export function evaluateFactFreshness(fact, current, { read, workspaceRoot = null, taskId = null } = {}) {
   const adviceReview = isAdviceReviewFact(fact);
+  const recordOnly = !adviceReview
+    && workspaceRoot
+    && typeof taskId === "string"
+    && isMaterialOnlySnapshotDelta(workspaceRoot, fact.snapshot_tree, current.snapshot_tree, taskId);
   const dependencies = {
-    material: adviceReview || fact.material_revision === current.material_revision ? "current" : "stale",
-    tree: adviceReview || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
+    material: adviceReview || recordOnly || fact.material_revision === current.material_revision ? "current" : "stale",
+    tree: adviceReview || recordOnly || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
     fact: "current",
   };
   const factRaw = readBound(fact, read, dependencies, "fact");

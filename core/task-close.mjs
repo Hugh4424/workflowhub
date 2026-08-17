@@ -217,7 +217,11 @@ function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), 
   if (value?.schema_version === "acceptance-evidence.v1") {
     const acceptance = validateAcceptanceEvidence(value, `nested ${binding.ref}`);
     if (!treeMatches || (context.status === "passed" && acceptance.result !== "pass")) throw new Error(`nested acceptance evidence is not current and passing: ${binding.ref}`);
-    for (const nested of acceptance.refs) authenticateStageQualityLeaf(task, nested, { ...context, status: acceptance.result === "pass" ? "passed" : "missing" }, nextSeen, depth + 1);
+    for (const nested of acceptance.refs) authenticateStageQualityLeaf(task, nested, {
+      ...context,
+      subject: acceptance.acceptance_criterion_id,
+      status: acceptance.result === "pass" ? "passed" : "missing",
+    }, nextSeen, depth + 1);
     return;
   }
   if (value?.schema_version === "workflowhub-verification-test-proof.v1") {
@@ -237,10 +241,14 @@ function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), 
     }
     return;
   }
-  if (value?.schema_version === "wh-review-result.v1") {
+  // Review results historically expose `version`, while stage-quality leaves
+  // use `schema_version`. Accept only the canonical result after schema
+  // validation; a marker alone is not review provenance.
+  if (value?.version === "wh-review-result.v1") {
     if (!taskMatches || !treeMatches || (value.stage !== context.stage && !(context.stage === "verify-code" && value.stage === "build-code"))) {
       throw new Error(`nested review provenance is invalid: ${binding.ref}`);
     }
+    validateSchema("result", value);
     authenticateReviewEvidence(task, value);
     return;
   }
@@ -287,7 +295,12 @@ function authenticateStageQualityEvidence(task, fact, stageQuality, nestedValues
   if (fact.subject !== "finding_dispositions" && fact.status === "passed" && subjectFact.evidence_refs.length === 0) {
     throw new Error(`passed stage-quality subject has no underlying evidence: ${fact.subject}`);
   }
-  for (const binding of subjectFact.evidence_refs) authenticateStageQualityLeaf(task, binding, { stage: fact.stage, snapshotTree: fact.snapshot_tree, status: fact.status });
+  for (const binding of subjectFact.evidence_refs) authenticateStageQualityLeaf(task, binding, {
+    stage: fact.stage,
+    subject: fact.subject,
+    snapshotTree: fact.snapshot_tree,
+    status: fact.status,
+  });
   if (fact.subject === "finding_dispositions" && fact.status === "passed") authenticateFindingDispositionEvidence(task, fact, nestedValues);
 }
 
@@ -1394,8 +1407,14 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             if (tip !== parent) throw new Error("task branch changed before publishing verified snapshot");
             git(root, ["update-ref", `refs/heads/${delivery.task_branch}`, delivery.task_commit, parent]);
           }
-  const snapshot = captureExecutionSnapshot(worktree);
-          if (snapshot.tree.toLowerCase() !== git(root, ["rev-parse", `${delivery.task_commit}^{tree}`]).toLowerCase()) throw new Error("task worktree bytes changed before snapshot publish");
+          const snapshot = captureExecutionSnapshot(worktree);
+          const plannedTree = git(root, ["rev-parse", `${delivery.task_commit}^{tree}`]).toLowerCase();
+          if (snapshot.tree.toLowerCase() !== plannedTree) {
+            if (isMaterialOnlySnapshotDelta(worktree, plannedTree, snapshot.tree, task.identity.taskId)) {
+              throw new Error("delivery plan is stale after executor-only tasks.md writeback; refresh the close plan without rerunning quality review");
+            }
+            throw new Error("task worktree bytes changed before snapshot publish");
+          }
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
           if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");
         },

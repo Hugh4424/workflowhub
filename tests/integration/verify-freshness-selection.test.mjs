@@ -1,6 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { assertFresh, evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+
+const roots = [];
+
+afterEach(() => {
+  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+});
 
 function store(raw = "{}") {
   const records = new Map([["evidence.json", raw]]);
@@ -135,6 +145,39 @@ describe("verify selects facts by freshness", () => {
       material_revision: "revision-new",
       snapshot_tree: "new-tree",
     }, { read: io.read }).status).toBe("stale");
+  });
+
+  it("keeps verify-code facts current when only the task execution-status block is written back", () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-freshness-record-only-"));
+    roots.push(root);
+    const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    git(["init", "-q", "-b", "main"]);
+    git(["config", "user.name", "WorkflowHub Tests"]);
+    git(["config", "user.email", "tests@workflowhub.local"]);
+    mkdirSync(join(root, "specs", "task"), { recursive: true });
+    writeFileSync(join(root, "specs", "task", "tasks.md"), "# tasks\n\n### 执行状态填写区\n- old\n\n### Verify\n- current\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "base"]);
+    const before = git(["rev-parse", "HEAD^{tree}"]);
+    writeFileSync(join(root, "specs", "task", "tasks.md"), "# tasks\n\n### 执行状态填写区\n- new\n\n### Verify\n- current\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "record writeback"]);
+    const after = git(["rev-parse", "HEAD^{tree}"]);
+    const fact = {
+      schema_version: "quality-fact.v1", fact_id: "verify-review-fact", task_id: "task",
+      stage: "verify-code", material_revision: "revision-old", snapshot_tree: before,
+      kind: "review", subject: "independent_review", status: "recorded",
+      ref: "fact.json", sha256: "", evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-new", snapshot_tree: after,
+    }, { read: io.read, workspaceRoot: root, taskId: "task" })).toMatchObject({
+      status: "current",
+      dependencies: { material: "current", tree: "current", fact: "current" },
+    });
   });
 
   it("keeps build-code review freshness strict", () => {

@@ -126,22 +126,12 @@ function validateRouteProfiles(route, profiles, label) {
 }
 
 function requireStageReviewMode(stage, configuredRoute, label) {
-  if (stage === "make-decision") {
-    if (!["single_round", "full_on_structural_rework"].includes(configuredRoute.mode)) {
-      throw new Error(`${label}.mode must be single_round or full_on_structural_rework`);
-    }
-    return;
-  }
-  const required = stage === "build-code" ? "full_only"
-      : "full_on_structural_rework";
+  const required = stage === "build-code" ? "full_only" : "single_round";
   if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
 }
 
 function requireMiniTaskReviewMode(reviewKind, configuredRoute, label) {
-  const required = reviewKind === "mini_task.design" ? "full_on_structural_rework" : "full_only";
-  if (!["single_round", required].includes(configuredRoute.mode)) {
-    throw new Error(`${label}.mode must be single_round or ${required}`);
-  }
+  if (configuredRoute.mode !== "single_round") throw new Error(`${label}.mode must be single_round`);
 }
 
 function routeEntries(stages) {
