@@ -41,7 +41,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 68434dc1bbb639526a4590de8f8f28d0f0f47346f8947242a029ef443d024342
+    local_bundle_hash: 9d57efee3ae588f836272b9cc936baa26dc2b25511ea431f2c15946297e563b2
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -83,7 +83,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a7146d90bce5239669883ba7437a067e1a03394229a2d53bfe8926e1afdc0599
+    local_bundle_hash: 9783d36400aa089a644ec6c5c1b21a0f736ccbc51c09887ab8bcf45bf98c2465
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -123,11 +123,11 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 6d27d6345f2df29a4f488aa6dc7b8c10fa71fe92842d599ea8494b7069ac511d
+    local_bundle_hash: a289147add6d7a46adc0c444829db4183a158c86a9851104ca273d935a6a9139
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
-    design_idea: 10 维扫描、最多五题、逐题写回
+    design_idea: 10 维扫描、独立问题成批、依赖问题拆批写回
     standalone: true
     used_by_stages: [build-spec]
     upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]

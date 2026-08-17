@@ -73,9 +73,11 @@ decision and questions to the user.
    Research runs only when its answer could materially change direction;
    otherwise record why it was skipped. Do not invent user answers.
    Ask only questions whose answers could change direction. Talk must cover both
-   architecture direction and product journey or user outcome. Talk asks exactly
-   one decision axis at a time, with 2-3 meaningful choices
-   and plain-language consequences and risks. Use the real
+   architecture direction and product journey or user outcome. Talk presents a batch of independent
+   questions, with each question containing one decision axis, 2-3 meaningful choices,
+   and plain-language consequences and risks. Talk groups independent decision axes in one batch;
+   each question still contains only one decision axis, while dependent questions move to a later
+   batch after the real reply. Use the real
    `ask -> wait/pause -> user reply -> resume -> re-rank` seam; never invent a
    reply. Do not run Clarify here; `build-spec` owns the only Clarify flow.
 4. Only after Talk round 2 has resumed and converged, run the direction advice

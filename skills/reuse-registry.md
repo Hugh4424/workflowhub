@@ -44,7 +44,7 @@
 - `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling) 与 [`domain-modeling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling)，MIT。保留完整交互、代码核实、CONTEXT/ADR 写入和四项退出合同；不使用 lite 或只读变体，真实阻塞才转人工。
 - `intake-decision-review` — `skills/intake-decision-review/`；native；make-decision direction 纯盲审 lens。只读 wh-review 冻结材料，不问用户、不调用 provider；wh-review 是唯一 provider owner。`upstream=[]`；随 wh-review 合同更新。
 - `simplicity-guard` — native；wh-review packet 内的 advisory lens。四阶梯最小路径审查；不生成 `*-facts`、invocation receipt、dispatcher 或独立 runtime，不成为继续工作的前置条件。`upstream=[]`；随宪法更新。
-- `talk-with-zhipeng` — `skills/talk-with-zhipeng/`；native；make-decision。一次一问、动态重排、阈值收敛。`upstream=[]`。
+- `talk-with-zhipeng` — `skills/talk-with-zhipeng/`；native；make-decision。独立问题成批、依赖问题拆批、动态重排、阈值收敛。`upstream=[]`。
 - `spec-research` — native；build-plan。fail-loud、可明确跳过、证据可追踪。`upstream=[]`。
 - `spec-specify` — adapted；build-spec。来源 [github/spec-kit@b7e67f5 specify](https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md)，MIT。去 git/.specify 耦合，改为 task-id、内置模板和 metrics。
 - `spec-clarify` — adapted；build-spec。来源 [github/spec-kit@b7e67f5 clarify](https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md)，MIT。保留十维扫描，去宿主耦合。
