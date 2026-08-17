@@ -2184,3 +2184,13 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 清理结果：已删除旧候选 worktree `/Users/Hugh/Hugh/Project/3rd-review-wh-review-adversarial-quality-cost-redesign` 和分支 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign`；保留干净的 active integration worktree 和分支，作为当前 3rd-review 运行入口。
 - mini-task：本轮没有新增需求，没有创建 mini-task；当前任务 `locks/` 为空，没有 mini-task 分支、worktree 或锁残留。
 - 边界：3rd-review `main` 仍有 owner 的未提交修改和 worker spool，未做 merge/reset/stash/delete；这不是本任务新建候选残留，继续由 owner 自己处理。没有触碰公开 monitor 三文件，没有动 Multica。
+
+### T054 deferred acceptance 语义修复与交接（2026-08-17）
+
+- 原始需求：处理 verify-code 经常因证据、快照和例外状态无法收口的问题；保留真实的 unavailable/inconclusive/deferred，不用空 findings 或测试绿灯伪造交付；同时遵守“不再全量测试”和“最终 close 前停下”。
+- 关键事实：旧验收合同只表达 pass/fail；stage runner、freshness、quality store 和 AC summary 对非终态结果的表达不一致，可能把“无法下结论”压成 missing 或 passed；mini-task focused receipt 也不能替代父任务 verify-code 全量事实。
+- 选择：启动一次独立 mini-task，只修复非终态验收语义和状态映射；普通阶段仍一轮审查，build-code 的既有严重 finding 收敛边界不变；reviewer 列表继续由配置决定。
+- 理由：这是影响正常交付和 close 真实性的现有流程缺口，必须用独立任务隔离实现、审查和清理；但它不需要新增需求、控制面或动态审查次数。
+- 结果：实现提交 `260267bd` 已合并到 WorkflowHub `main` 与父任务候选；mini-task 的设计审查、focused receipt、实现审查、失败预检和 quality fact 全部保留；worktree、分支和锁已清理。
+- 当前交接：mini-task implementation quality fact 仍因缺少人工确认而是 `incomplete`，这是诚实状态，不是代码失败。父任务因代码快照变化，旧 v56/full receipt 和旧 review 已过期；本轮未重跑父任务全量、未重新调用父任务 provider、未补写逐 AC/finding/例外/人工确认，也未执行 close。
+- 后续边界：若要正式 close，需要在当前父任务快照上补齐正式 verify-code 所需事实；在用户明确允许之前不做全量测试，不把 mini-task 的 focused 98 tests 或 canonical 空 findings 当作父任务正式通过。Git 全局对象库历史异常和 3rd-review `main` 的 owner 脏改动继续按既有延期记录处理，不在本任务擅自修复。

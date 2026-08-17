@@ -1451,3 +1451,15 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - [x] 已删除已被集成替代的旧候选 worktree 和分支 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign`；保留干净的 active integration worktree `codex/3rd-review-main-integration`。
 - [x] 当前任务没有独立 mini-task；任务 `locks/` 为空，没有 mini-task worktree、分支或锁残留。
 - [ ] 3rd-review `main` 仍有 owner 的未提交修改和 worker spool；没有擅自合并、重置或清理它们。该脏工作树不是本任务新建分支的残留。
+
+### T054 deferred acceptance 语义修复与父任务交接（2026-08-17）
+
+- **根因**：验收证据原来只区分 `pass`/`fail`；`inconclusive`/`deferred` 在 stage runner、freshness、quality store 和 AC summary 之间可能被压成缺失或通过，导致 verify-code 无法真实表达“证据还不能下结论”，也可能形成 false-green。
+- **补充需求判断**：这是当前任务已有的 verify/close 边界缺口，不是新增产品需求；按 mini-task 规则建立 `wh-review-deferred-exception-close`，未扩展 reviewer 数量、阶段路由或 public runtime 状态机。
+- **mini-task 设计审查**：按 `/Users/Hugh/.config/workflowhub/config.json` 的两个 reviewer 做一轮设计审查；发现并修正了材料范围、回滚、freshness 语义、状态集合和 unavailable 边界问题。原始 review、修正后的设计材料和处置事实均保留。
+- **实现**：验收 schema、freshness、quality store、AC summary、stage runner/handler 统一保留 `inconclusive`/`deferred`；两者始终是 `incomplete`，不会变成 `pass`；未知状态直接报错，不再落入 catch-all `missing`。
+- **mini-task focused receipt**：`quality/tests/mini-task-deferred-semantics-repair2.json`，4 个定向测试文件、98 tests、exit 0；覆盖 deferred 语义、官方 receipt、vNext close/freshness 和 AC summary。本轮没有重跑父任务全量测试。
+- **实现审查**：最终当前快照的独立审查结果 `quality/reviews/results/build-code-default-4ff6b1327ad6dec2a579c14b16ecd5f313fbaada-322869dd-4518-4e95-ae23-a19dc236dfc1.json` 为 available，canonical `findings=[]`。两次材料预检失败（禁止外部 output ref、AC 锚点越界）已分别保留为失败事实；修正后只执行一次有效 provider 请求，没有因同一问题循环重试。provider 原始输出提出“缺少真实 handler/stage-runner E2E”的风险，因未形成 canonical finding 不改写为空白事实，保留为后续风险。
+- **交付**：代码与 mini-task 材料提交为 `260267bd`，已 fast-forward 合并到 WorkflowHub `main` 和父任务候选分支；mini-task worktree、分支和锁已清理，任务 store 中的 review、receipt、quality fact 和失败记录保留不删。
+- **当前父任务状态**：合并代码后父任务快照已变化，旧 v56/full receipt、旧 review 不能直接复用；正式 verify-code 的 `full_tests_fresh`、独立审查、逐 AC、finding 处置、例外和人工确认仍不能伪造为完成。用户已要求不再全量测试，因此本轮不补跑父任务全量，也不执行 close。
+- **保护边界**：没有写入 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub-monitor.html`、`workflowhub-monitor-data.js`、`workflowhub-monitor-facts.jsonl`，没有动 Multica；main 上原有 `docs/research/m16-experience-loop-repair-research.md` 和 `tmp/` 保持不动；3rd-review active integration 保持不动。
