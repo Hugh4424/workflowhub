@@ -1419,3 +1419,10 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 
 - [x] 检查到当前任务唯一的 `test-capture.execution.lock` 对应 PID 已不存在，确认是中止全量捕获留下的过期锁。
 - [x] 已删除这一个过期执行锁；没有删除任何 mini-task 记录、review、receipt、公开监控文件或其他任务对象。
+
+#### T050 当前实现提交与合并事实（2026-08-17）
+
+- [x] 当前 wh-review 轮次修复、记录性写回复用、close 语义认证、定向回归和任务记录已提交到候选分支：`c050c955`。
+- [x] 已将同一批实现合并到 `main`：`a1ed7cf5`；没有 push，没有覆盖 main 上与本任务无关的 `docs/research/m16-experience-loop-repair-research.md` 和 `tmp/`。
+- [x] 没有新增 mini-task；当前任务没有 mini-task worktree 或锁残留。候选分支保留为已合并后的可回读分支，未删除其他任务的分支或工作树。
+- [ ] 这次是实现交付和 close 前准备，不等于正式 close；六项正式 verify-code 事实、全局 Git 对象库例外和人工 close 授权仍按原样保留。

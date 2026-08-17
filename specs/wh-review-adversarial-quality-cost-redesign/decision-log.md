@@ -2152,3 +2152,11 @@ T030 只证明了代码修复和确定性回归通过；最后一次 provider re
 - 关键事实：当前任务的 `test-capture.execution.lock` 记录 PID 已不存在，属于之前中止全量捕获留下的过期锁。
 - 决定：删除这一枚明确过期的执行锁；不删除 mini-task 记录、review、receipt 或其他任务对象。
 - 结果：当前任务没有残留的执行锁；本轮没有重新启动全量测试。
+
+### 当前实现提交与合并（2026-08-17，追加）
+
+- 关键事实：轮次策略修复、记录性写回复用、close 语义认证、定向回归和任务记录已提交到候选分支 `c050c955`。
+- 决定：把同一批实现合并到 `main`，合并提交为 `a1ed7cf5`；本轮不 push。
+- 范围保护：只提交当前任务的 13 个文件；main 上与本任务无关的 `docs/research/m16-experience-loop-repair-research.md` 和 `tmp/` 保持未改动。
+- mini-task：没有新增需求，没有创建 mini-task；当前任务的 mini-task worktree/lock 已清理，候选分支保留供 close 前回读。
+- 边界：实现已经进入 main，但正式 close 仍未执行；六项正式 verify-code 事实、Git 全局对象库例外和人工 close 授权继续如实保留。
