@@ -1435,3 +1435,10 @@ T001 (RED) → T002 (GREEN) → T003 (RED) → T004 (GREEN) → T005 (RED) → T
 - [x] 3rd-review `main` 存在用户未提交修改和 worker spool；没有擅自 merge、reset、删除分支或删除工作树，避免覆盖其他任务。
 - [x] ModelTest 候选工作树干净，候选分支没有独有提交；ModelTest `main` 仍有用户未提交内容，保持不动。
 - [ ] 3rd-review 两个候选分支不能称为“已完全清理”；需要在 3rd-review `main` 的脏改动由 owner 明确处理后，才能安全合并和删除候选工作树。
+
+#### T052 3rd-review 合并演练事实（2026-08-17）
+
+- [x] 只读 `git merge-tree` 证明 `3rd-review main` 与 `codex/3rd-review-main-integration` 的已提交树可无冲突合并。
+- [x] `3rd-review main` 与完整候选 `codex/3rd-review-wh-review-adversarial-quality-cost-redesign` 在 `lib/workflowhub-result-v3.mjs`、`test/workflowhub-result-v3.test.mjs` 出现 add/add 冲突；两个候选彼此合并时也有同样冲突。
+- [x] 当前 `/Users/Hugh/.config/workflowhub/config.json` 实际指向完整候选 worktree；该 worktree 干净，当前运行不会读到未合并的 integration worktree。
+- [ ] 没有在脏的 3rd-review `main` 上 merge、reset、stash 或删除分支；冲突需要 owner 选择保留哪套 v3 producer 语义后再处理。
