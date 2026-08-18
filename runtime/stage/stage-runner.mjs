@@ -97,9 +97,17 @@ function validateOutcomeCost(value, label) {
       && (!Number.isSafeInteger(cost[key]) || cost[key] < 0)) throw outcomeError(`${label}.${key} must be a non-negative integer or null`);
   }
   const status = outcomeText(cost.status, `${label}.status`);
-  if (!["recorded", "unavailable"].includes(status)) throw outcomeError(`${label}.status must be recorded or unavailable`);
-  if (status === "recorded" && (cost.duration_ms === null || cost.tokens === null)) {
+  if (!["recorded", "partial", "unavailable"].includes(status)) throw outcomeError(`${label}.status must be recorded, partial or unavailable`);
+  if (status === "recorded"
+      && (!Number.isSafeInteger(cost.duration_ms) || cost.duration_ms < 0
+        || !Number.isSafeInteger(cost.tokens) || cost.tokens < 0)) {
     throw outcomeError(`${label} recorded cost must include duration_ms and tokens`);
+  }
+  if (status === "partial") {
+    const durationRecorded = Number.isSafeInteger(cost.duration_ms) && cost.duration_ms >= 0;
+    const tokensRecorded = Number.isSafeInteger(cost.tokens) && cost.tokens >= 0;
+    if (durationRecorded === tokensRecorded) throw outcomeError(`${label} partial cost requires exactly one measured field`);
+    outcomeText(cost.reason, `${label}.reason`);
   }
   if (status === "unavailable") {
     if (cost.duration_ms !== null || cost.tokens !== null) {
@@ -288,7 +296,7 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
 
 function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   const ref = input?.receipts?.stage_outcomes;
-  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the Stage Agent`);
+  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the current WorkflowHub session`);
   const match = STAGE_OUTCOME_REF.exec(ref);
   if (!match || match[1] !== stage) throw outcomeError(`stage outcome ref must be content-addressed for ${stage}`);
   let raw;
@@ -609,7 +617,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   const analyzerResult = result.spec_analyze?.result;
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
-  // the Stage Agent repairs it in place instead of silently handing it down.
+  // the current WorkflowHub session repairs it in place instead of silently handing it down.
   if (analyzerResult?.status && analyzerResult.status !== "consistent") {
     allPassed = false;
     qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult.status}`);
@@ -723,7 +731,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
       publishVNextEvidence(ctx, factEvidenceRef, missingRaw);
       factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
     }
-    const qualityFactStatus = new Set(["passed", "failed", "missing"]).has(status) ? status : "missing";
+    const qualityFactStatus = kind === "review" && status === "recorded"
+      ? "recorded"
+      : new Set(["passed", "failed", "missing", "unavailable"]).has(status) ? status : "missing";
     const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
       kind,
       status: qualityFactStatus,
@@ -793,7 +803,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
  * Execute the low-level publication helper for a workflow stage.
  * The handler receives capabilities and already verified upstream data; it does
  * not discover task identity or publish records itself. Stage skills are read
- * and executed directly by the current host Stage Agent; this runtime only
+ * and executed directly by the current WorkflowHub session host; this runtime only
  * records the resulting task and quality facts.
  */
 export async function runStage(stage, context, handler, publication = {}, internal = {}) {

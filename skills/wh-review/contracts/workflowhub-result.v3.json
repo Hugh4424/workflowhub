@@ -115,9 +115,16 @@
         { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/usage_value" } }
       ]
     },
+    "cost_usage_value": {
+      "anyOf": [
+        { "type": "number", "minimum": 0, "maximum": 9007199254740991 },
+        { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/cost_usage_value" } }
+      ]
+    },
     "usage": {
       "type": "object",
       "minProperties": 1,
+      "properties": { "cost": { "$ref": "#/$defs/cost_usage_value" } },
       "additionalProperties": { "$ref": "#/$defs/usage_value" }
     }
   }

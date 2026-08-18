@@ -56,14 +56,14 @@ test("client marks every attachment for codex always_embed delivery", async () =
   expect(calls[0].attachments.entries[0].embed).toBe(true);
 });
 
-test("client defaults Codex-only delivery to always_embed instead of a guaranteed transport failure", async () => {
+test("client defaults to negotiated delivery so each provider gets its supported mode", async () => {
   const calls = [];
   const client = new ReviewProviderClient({ invoke: async (value) => {
     calls.push(value);
     return { exitCode: 0, stdout: `${JSON.stringify(group(["codex/luna"]))}\n`, stderr: "" };
   } });
   await client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review" });
-  expect(calls[0].attachmentDelivery).toBe("always_embed");
+  expect(calls[0].attachmentDelivery).toBe("negotiated");
 });
 
 test("client negotiates workflowhub-result.v3 and preserves one member per configured profile", async () => {
@@ -75,6 +75,7 @@ test("client negotiates workflowhub-result.v3 and preserves one member per confi
   const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), prompt: "review" });
   expect(calls).toHaveLength(1);
   expect(calls[0].request.required_result_protocol).toBe("workflowhub-result.v3");
+  expect(calls[0].attachmentDelivery).toBe("negotiated");
   expect(result.providers.map((item) => item.provider)).toEqual(["opencode/v4flash", "codex/luna"]);
   expect(result.providers[0].result_protocol).toBe("workflowhub-result.v3");
   expect(result.providers[0].identity.config_id).toBe("opencode/v4flash-config");
@@ -85,10 +86,24 @@ test("client negotiates workflowhub-result.v3 and preserves one member per confi
 
 test("client preserves numeric nested usage telemetry", async () => {
   const value = group(["opencode/v4flash"]);
-  value.providers[0].usage = { input: 10, output: 4, total: 14, cache: { read: 8, write: 1 } };
+  value.providers[0].usage = {
+    input: 10,
+    output: 4,
+    total: 14,
+    cache: { read: 8, write: 1 },
+    cost: { input: 0.0000014, output: 0.00058156, total: 0.0005908448 },
+  };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
   const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
   expect(result.providers[0].usage).toEqual(value.providers[0].usage);
+});
+
+test("client rejects decimal token usage while accepting provider cost decimals", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].usage = { total: 14.5 };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
 test("client rejects malformed usage telemetry instead of accepting it as cost evidence", async () => {

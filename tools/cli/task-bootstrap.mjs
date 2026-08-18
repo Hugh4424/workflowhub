@@ -10,9 +10,10 @@ import { authenticateOfficialInvocation } from "../../runtime/evidence/invocatio
 import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
+import { bindCodexSessionTask, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
-export function bootstrapTask(values, { env = process.env, home } = {}) {
+export function bootstrapTask(values, { env = process.env, home, cwd = process.cwd() } = {}) {
   if (Object.prototype.hasOwnProperty.call(values, "candidate-worktree") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) throw new TypeError("--candidate-worktree/--baseline-commit are no longer supported; make-decision owns worktree preparation");
   if (Object.prototype.hasOwnProperty.call(values, "task-path")) {
     for (const key of ["task-path", "project", "task"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required for existing task bootstrap`);
@@ -28,6 +29,7 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
       project: task.identity.projectName,
       task: task.identity.taskId,
       runner_identity: runnerIdentity,
+      session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: env.CODEX_THREAD_ID ?? null }),
     });
   }
   for (const key of ["project", "task", "target-repo"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required`);
@@ -42,7 +44,19 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
   const task = createTask({ storageRoot, manifest: { schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write", project_name: values.project, task_id: values.task, created_at: new Date().toISOString(), target_repo_root: target, issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [], inputs } });
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
-  return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch });
+  return Object.freeze({ task_path: task.taskPath, project: task.identity.projectName, task: task.identity.taskId, storage_root: authority.storage_root, cutover_epoch: authority.cutover_epoch, session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: env.CODEX_THREAD_ID ?? null }) });
+}
+
+function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null } = {}) {
+  const current = readCurrentCodexSession({ cwd, sessionId });
+  if (current.status !== "present") return Object.freeze({ status: current.status });
+  return bindCodexSessionTask({
+    projectName: task.identity.projectName,
+    taskId: task.identity.taskId,
+    taskPath: task.taskPath,
+    cwd,
+    sessionId,
+  });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

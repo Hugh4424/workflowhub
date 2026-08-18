@@ -76,7 +76,7 @@ const VERIFY_LEAF_KEYS = new Set([
 function validAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
     && typeof value.id === "string" && value.id.trim() !== ""
-    && typeof value.path === "string" && ANCHOR_PATH.test(value.path) && !value.path.includes("..")
+    && typeof value.path === "string" && ANCHOR_PATH.test(value.path) && !value.path.split("/").includes("..")
     && Number.isSafeInteger(value.start_line) && value.start_line >= 1
     && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
     && typeof value.role === "string" && value.role.trim() !== ""

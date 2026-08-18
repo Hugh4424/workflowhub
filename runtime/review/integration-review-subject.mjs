@@ -201,6 +201,13 @@ function isCanonicalImplementationReceipt(taskHandle, value) {
 
 function integrationContextPath(path) {
   const skillPath = (name) => ["skills", name, ""].join("/");
+  if (path.startsWith("node_modules/")
+      || path.startsWith(".git/")
+      || path.startsWith("dist/")
+      || path.startsWith("build/")
+      || path.startsWith("coverage/")
+      || path.startsWith("docs/")
+      || path.startsWith("specs/")) return false;
   if (path.startsWith("runtime/")
       || path.startsWith("core/")
       || path.startsWith("tools/")
@@ -209,7 +216,18 @@ function integrationContextPath(path) {
   if (path.startsWith(skillPath("wh-review")) || path.startsWith(skillPath("mini-task"))) {
     return !path.includes("/__tests__/");
   }
-  return path.startsWith("tests/contract/") || path.startsWith("tests/integration/");
+  if (path.startsWith("tests/contract/") || path.startsWith("tests/integration/")) return true;
+  // Integration review must work for arbitrary project repositories. Keep the
+  // WorkflowHub allowlist above, but also include ordinary source files from
+  // project-owned directories such as `paperbuilder/`, `frontend/`, or `src/`.
+  // Tests, fixtures, and generated assets are already represented by the
+  // explicit test evidence and should not become implementation anchors.
+  if (/(^|\/)(?:test|tests|__tests__|fixtures|fixture)(?:\/|$)/i.test(path)) return false;
+  return new Set([
+    ".c", ".cc", ".cpp", ".cxx", ".css", ".go", ".h", ".hpp", ".java",
+    ".js", ".jsx", ".mjs", ".php", ".py", ".rb", ".rs", ".scss", ".sql",
+    ".swift", ".ts", ".tsx", ".vue",
+  ]).has(extname(path).toLowerCase());
 }
 
 function finalSnapshotImplementationAnchors({ sourceRoot, baseTree, finalTree, executedEntryPoints = [] }) {

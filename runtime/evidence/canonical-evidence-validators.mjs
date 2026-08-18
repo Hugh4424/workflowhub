@@ -5,7 +5,7 @@ const OID = /^[a-f0-9]{40,64}$/;
 const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const FULL_TEST_COMMAND = "npm test";
 const IMPLEMENTATION_DIFF_REF = /^quality\/evidence\/implementation\/[a-f0-9]{64}\.diff$/;
-const SAFE_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+const SAFE_PATH = /^(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+))(?:\/(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+)))*$/;
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
 
 function object(value, label) {
@@ -154,7 +154,7 @@ export function validateMiniTaskAcTrace(value, {
       }
     }
     if (!Array.isArray(entry.anchors) || entry.anchors.length === 0 || entry.anchors.some((anchor) => !anchor || typeof anchor !== "object" || Array.isArray(anchor)
-        || typeof anchor.id !== "string" || anchor.id.trim() === "" || !SAFE_PATH.test(anchor.path ?? "")
+        || typeof anchor.id !== "string" || anchor.id.trim() === "" || !SAFE_PATH.test(anchor.path ?? "") || anchor.path.split("/").includes("..")
         || !Number.isSafeInteger(anchor.start_line) || anchor.start_line < 1
         || !Number.isSafeInteger(anchor.end_line) || anchor.end_line < anchor.start_line
         || typeof anchor.role !== "string" || anchor.role.trim() === ""
@@ -180,7 +180,7 @@ export function validateCanonicalImplementationReceipt(value, { taskId, snapshot
       || value.producer.component !== "implementation"
       || typeof value.producer.version !== "string" || value.producer.version.trim() === ""
       || !Array.isArray(value.changed)
-      || value.changed.some((path) => typeof path !== "string" || !SAFE_PATH.test(path) || path.includes(".."))
+      || value.changed.some((path) => typeof path !== "string" || !SAFE_PATH.test(path) || path.split("/").includes(".."))
       || !OID.test(value.snapshot_head ?? "")
       || !OID.test(value.snapshot_tree ?? "")
       || !OID.test(value.snapshot_commit ?? "")
@@ -205,7 +205,7 @@ export function validateCanonicalImplementationReceipt(value, { taskId, snapshot
       || typeof diff.patch !== "string"
       || !Array.isArray(diff.untracked)
       || diff.untracked.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry)
-        || typeof entry.path !== "string" || !SAFE_PATH.test(entry.path) || entry.path.includes("..")
+        || typeof entry.path !== "string" || !SAFE_PATH.test(entry.path) || entry.path.split("/").includes("..")
         || !OID.test(entry.blob_oid ?? ""))) {
     throw new Error("canonical implementation diff evidence provenance is invalid");
   }

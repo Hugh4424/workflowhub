@@ -1007,3 +1007,18 @@ M15 页面要展示很多宿主内部事实，但当前 Codex 运行时并没有
 - **延期交接**：build-spec 只能把本决策写成可测试规格；build-code 前先做真实 capability spike；M16 只接收可靠事实，不在本任务实现。
 - **当前阶段状态**：用户确认已收到；interaction aggregate 待按当前 decision-log hash 写入，随后才能发布本次 decision。
 - **coverage_disposition**：`current`；本步已执行并记录真实结果。
+
+## 方案 A 确认：同一真实 Codex 会话贯穿五个阶段（2026-08-18）
+
+- **用户实际回复**：`按A继续`。
+- **当前问题的事实**：最新 fresh M15 run 已经包含五个阶段和预期拓扑记录，但只有 `make-decision` 的 source 状态为 `present`；`build-spec`、`build-plan`、`build-code`、`verify-code` 都是 `no_registered_source`。这证明主要缺口是来源在阶段切换时丢失，不是页面单纯漏画。
+- **Decision**：真实 WorkflowHub 任务在第一个正式阶段自动绑定当前 Codex source；后续阶段复用同一个不可变绑定，不为每个阶段重新注册，不要求用户手填 task id，不启动 Stage Agent。
+- **实现边界**：沿用现有 session handoff 和 canonical facts；不新增公共命令、不新增第二套事实存储、不扫描历史 transcript 目录、不从旧数据推算新数据。正常 Codex 阶段找不到已绑定 source 时直接暴露明确错误，不能继续伪造完整记录。
+- **真实记录规则**：实际执行的 step/skill 必须分别记录状态、token、耗时和证据；跳过、未执行、不可用、失败和不完整必须保留真实原因；整轮 token 不能平均分配到 step/skill。
+- **页面规则**：页面只显示 canonical facts 的投影；来源断开、step/skill 缺失、外部审查不可用分别显示，不能合并成“流程退化”或“已完成”。
+- **后果**：本次修复必须先修五阶段来源交接，再验证 step/skill 成本和证据，最后才处理页面文字和布局；只改页面不能收口。
+- **未选择方案**：不采用“每个阶段手动重新注册 source”；不采用“从旧 transcript、固定拓扑或历史事实猜测缺失数据”。这两种做法会再次制造看起来完整但无法核对的页面。
+- **非目标**：历史数据不回填；不实现 M16；不读取、不修改、不验收 Multica；不在 M15 扩大到多 CLI。
+- **延期交接**：opencode、kimi、pi、grok、claude code 等 CLI 的统一接入交给 M17；M16 只读取本任务最终证明过的真实事实。
+- **当前阶段状态**：本次方向已由用户确认；下一步按现有材料进入规格和实施准备，仍不能把代码完成或 M15 close 写成已完成。
+- **coverage_disposition**：`current`；本条只记录本次方向确认和范围，不改写历史决策。

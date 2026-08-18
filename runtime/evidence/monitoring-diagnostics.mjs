@@ -354,6 +354,7 @@ function failureDiagnostics(facts) {
 
 function costDiagnostics(facts, topology = { stages: [] }) {
   const tokens = new Map(), outcomeTokenRows = new Map(), tokenRows = new Map(), tokenGroups = new Map(), toolRows = new Map(), toolGroups = new Map(), retryGroups = new Map(), retryRows = new Map(), retries = new Set(), durationGroups = new Map(), durationRows = new Map(), durationEntries = new Map(), durationConflicts = new Set();
+  const regularTokenStages = new Set();
   const breakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
   const durationBreakdown = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
   const breakdownEvidence = { stage: {}, step: {}, skill: {}, session: {}, subagent: {} };
@@ -502,6 +503,7 @@ function costDiagnostics(facts, topology = { stages: [] }) {
     if (row.grain === 'stage_outcome') outcomeTokenRows.set(group.rows[0], row);
     else {
       tokens.set(group.rows[0], row.amount);
+      regularTokenStages.add(row.stage ?? 'unknown');
       for (const [key, field] of dimensions) {
         if (typeof field === 'string' && field) {
           breakdown[key][field] = (breakdown[key][field] ?? 0) + row.amount;
@@ -548,6 +550,7 @@ function costDiagnostics(facts, topology = { stages: [] }) {
   const durationAttributions = [...durationEntries.values()];
   const regularDurationAttributions = durationAttributions.filter((row) => row.grain !== 'stage_outcome');
   const outcomeDurationAttributions = durationAttributions.filter((row) => row.grain === 'stage_outcome');
+  const regularDurationStages = new Set(regularDurationAttributions.map((row) => row.stage ?? 'unknown'));
   const durationBreakdownKeys = new Set();
   for (const row of regularDurationAttributions) for (const [key, field] of [['stage', row.stage], ['step', stepKey(row)], ['skill', row.skill], ['session', row.session], ['subagent', row.subagent]]) {
     if (typeof field === 'string' && field) {
@@ -562,9 +565,59 @@ function costDiagnostics(facts, topology = { stages: [] }) {
       addBreakdown(key, field, row.duration_ms, row.evidence_refs);
     }
   }
-  const durations = (regularDurationAttributions.length ? regularDurationAttributions : outcomeDurationAttributions).map((row) => row.duration_ms);
-  const tokenValues = tokens.size ? [...tokens.values()] : [...outcomeTokenRows.values()].map((row) => row.amount);
-  return { token_count: tokenValues.length ? tokenValues.reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durations.length ? durations.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown, duration_breakdown: durationBreakdown, breakdown_evidence: breakdownEvidence };
+  const outcomeRowsForTotal = (rows) => {
+    const byStage = new Map();
+    for (const row of rows) {
+      const stage = typeof row.stage === 'string' && row.stage ? row.stage : 'unknown';
+      const group = byStage.get(stage) ?? [];
+      group.push(row);
+      byStage.set(stage, group);
+    }
+    const selected = [];
+    for (const group of byStage.values()) {
+      const stageRows = group.filter((row) => row.step === null && row.skill === null);
+      const stepRows = group.filter((row) => row.step !== null && row.step !== undefined && row.skill === null);
+      const skillRows = group.filter((row) => row.skill !== null && row.skill !== undefined && row.step === null);
+      // Stage/step/skill outcome costs are inclusive scopes.  Pick the
+      // coarsest available scope per stage for the overall total so nested
+      // step+skill rows never inflate the task cost.  The per-dimension
+      // breakdown above still exposes every measured subject separately.
+      if (stageRows.length) selected.push(...stageRows);
+      else if (stepRows.length) selected.push(...stepRows);
+      else selected.push(...skillRows);
+    }
+    return selected;
+  };
+  const totalTokenRows = [
+    ...[...tokens.entries()].map(([rowKey, amount]) => ({ ...tokenRows.get(rowKey), amount })),
+    ...outcomeRowsForTotal([...outcomeTokenRows.values()])
+      .filter((row) => !regularTokenStages.has(row.stage ?? 'unknown')),
+  ];
+  breakdown.stage = {};
+  breakdownEvidence.stage = {};
+  for (const row of totalTokenRows) {
+    const stage = typeof row.stage === 'string' && row.stage ? row.stage : 'unknown';
+    breakdown.stage[stage] = (breakdown.stage[stage] ?? 0) + row.amount;
+    addBreakdown('stage', stage, row.amount, row.evidence_refs);
+  }
+  const totalDurationRows = [
+    ...regularDurationAttributions,
+    ...outcomeRowsForTotal(outcomeDurationAttributions)
+      .filter((row) => !regularDurationStages.has(row.stage ?? 'unknown')),
+  ];
+  durationBreakdown.stage = {};
+  for (const row of totalDurationRows) {
+    const stage = typeof row.stage === 'string' && row.stage ? row.stage : 'unknown';
+    durationBreakdown.stage[stage] = (durationBreakdown.stage[stage] ?? 0) + row.duration_ms;
+  }
+  const durationValues = totalDurationRows.map((row) => row.duration_ms);
+  const tokenValues = totalTokenRows.map((row) => row.amount);
+  /*
+   * Stage totals and overall totals intentionally use the same rows. Step and
+   * skill breakdowns remain inclusive detail, so their sum is not expected to
+   * equal the task total.
+  */
+  return { token_count: tokenValues.length ? tokenValues.reduce((sum, n) => sum + n, 0) : null, tool_use_count: toolUseCount, retry_count: retries.size ? retries.size : null, duration_ms: durationValues.length ? durationValues.reduce((sum, n) => sum + n, 0) : null, conflicts, token_waste: tokenConflicts ? { status: 'present', value: tokenConflicts, reason: 'duplicate_id_conflict' } : { status: 'unknown', value: null, reason: 'no_duplicate_conflict_evidence' }, breakdown, duration_breakdown: durationBreakdown, breakdown_evidence: breakdownEvidence };
 }
 
 function automationDiagnostics(facts) {

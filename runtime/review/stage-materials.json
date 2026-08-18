@@ -29,7 +29,7 @@
     "build-code/integration": {
       "contract": "contracts/build-code.md",
       "problem_order": ["user_flow", "cross_phase_seams", "interfaces", "failure_recovery", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "test_evidence", "open_risks"]
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "implementation_context", "test_evidence", "open_risks"]
     },
     "verify-code": {
       "contract": "contracts/verify-code.md",

@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, renameSync, fsyncSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { deriveMonitoringDiagnostics, deriveMonitoringViewReadiness, VIEW_REQUIRED_FIELDS } from './monitoring-diagnostics.mjs';
-import { safePublicRef } from './monitoring-facts.mjs';
-import { readMonitoringFacts } from '../task/task-store.mjs';
+import { isHistoricalMonitoringFact, isMonitoringFact, safePublicRef, validateMonitoringFact } from './monitoring-facts.mjs';
 
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const STALE_LOCK_MS = 10 * 60 * 1000;
@@ -11,6 +10,8 @@ const LOCK_RETRY_LIMIT = 200;
 const LOCK_RETRY_MS = 10;
 const LOCK_SLEEP = new Int32Array(new SharedArrayBuffer(4));
 const HASH = /^[a-f0-9]{64}$/;
+const TASK_FACT_KEYS = Object.freeze(['task_id', 'stage', 'material_digest', 'source_digest', 'invocation_id', 'source', 'status', 'content_hash', 'created_at', 'output_ref']);
+const STAGES = new Set(['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code']);
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const factsDigest = (facts) => sha256(`${facts.map((fact) => JSON.stringify(fact)).join('\n')}${facts.length ? '\n' : ''}`);
@@ -283,6 +284,68 @@ function readProjectionFiles(storageRoot) {
   return projections.sort((a, b) => (a.value?.project_name ?? a.path).localeCompare(b.value?.project_name ?? b.path) || (a.value?.task_id ?? a.path).localeCompare(b.value?.task_id ?? b.path));
 }
 
+/**
+ * The projector is a read-only compatibility boundary.  A historical
+ * monitoring row with an old value shape must not make every valid row for
+ * the same task disappear.  Keep valid rows, expose the invalid row as an
+ * error, and never rewrite facts.jsonl here.
+ */
+function readMonitoringFactsForProjection(taskRoot, { taskId, projectName }) {
+  const factsPath = join(taskRoot, 'facts.jsonl');
+  const raw = readFileSync(factsPath, 'utf8');
+  const facts = [];
+  const errors = [];
+  let fatal = false;
+  const taskKeys = [...TASK_FACT_KEYS].sort().join('\0');
+  for (const [index, line] of raw.trimEnd() === '' ? [] : raw.trimEnd().split('\n').entries()) {
+    let value;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      errors.push(`facts.jsonl line ${index + 1}: invalid JSON`);
+      fatal = true;
+      continue;
+    }
+    if (isMonitoringFact(value) || isHistoricalMonitoringFact(value)) {
+      if (value.task_id !== taskId || value.project_name !== projectName) {
+        errors.push(`facts.jsonl line ${index + 1}: monitoring fact identity mismatch`);
+        fatal = true;
+      } else {
+        facts.push(value);
+      }
+      continue;
+    }
+    if (value?.schema_version === 'monitoring-fact.v1') {
+      let reason = 'invalid monitoring fact';
+      try { validateMonitoringFact(value); } catch (error) { reason = `invalid monitoring fact: ${error?.message ?? 'contract mismatch'}`; }
+      errors.push(`facts.jsonl line ${index + 1}: ${reason}`);
+      continue;
+    }
+    if (['quality-fact.v1', 'quality-verify.v1'].includes(value?.schema_version)) {
+      errors.push(`facts.jsonl line ${index + 1}: quality facts must be stored under quality/facts`);
+      fatal = true;
+      continue;
+    }
+    // Legacy task facts are not monitoring inputs.  They remain untouched,
+    // but malformed task facts still fail closed instead of disappearing.
+    const validTaskFact = Object.keys(value ?? {}).sort().join('\0') === taskKeys
+      && value.task_id === taskId
+      && STAGES.has(value.stage)
+      && HASH.test(value.material_digest ?? '')
+      && HASH.test(value.source_digest ?? '')
+      && HASH.test(value.content_hash ?? '')
+      && typeof value.invocation_id === 'string' && value.invocation_id.trim() !== ''
+      && typeof value.source === 'string' && value.source.trim() !== ''
+      && typeof value.status === 'string'
+      && typeof value.output_ref === 'string'
+      && Number.isFinite(Date.parse(value.created_at));
+    if (validTaskFact) continue;
+    errors.push(`facts.jsonl line ${index + 1}: unsupported canonical record`);
+    fatal = true;
+  }
+  return { facts, errors, fatal };
+}
+
 function readCanonicalTaskFacts(storageRoot) {
   const projectsRoot = join(storageRoot, 'Projects');
   if (!existsSync(projectsRoot)) return { found: false, entries: [], errors: [] };
@@ -313,8 +376,9 @@ function readCanonicalTaskFacts(storageRoot) {
           if (readFileSync(factsPath, 'utf8').trim() === '') continue;
           throw new Error('canonical task identity mismatch');
         }
-        const facts = readMonitoringFacts(taskRoot);
-        entries.push({ projectName: projectEntry.name, taskId: taskEntry.name, taskRoot, facts });
+        const factRead = readMonitoringFactsForProjection(taskRoot, { taskId: taskEntry.name, projectName: projectEntry.name });
+        if (factRead.fatal) throw new Error(factRead.errors[0] ?? 'canonical monitoring facts unavailable');
+        entries.push({ projectName: projectEntry.name, taskId: taskEntry.name, taskRoot, facts: factRead.facts, factErrors: factRead.errors });
       } catch (error) {
         const message = error?.message ?? 'canonical facts unavailable';
         errors.push(`${relative(storageRoot, taskRoot)}: ${message}`);
@@ -373,7 +437,7 @@ export function rebuildGlobalMonitoringSnapshot({ storageRoot, generatedAt, topo
     if (canonical.found) {
       entries = canonical.entries.map((entry) => {
         try {
-          const value = validateMonitoringProjection(projectionFor({ projectName: entry.projectName, taskId: entry.taskId, facts: entry.facts, topology, generatedAt }));
+          const value = validateMonitoringProjection(projectionFor({ projectName: entry.projectName, taskId: entry.taskId, facts: entry.facts, topology, generatedAt, errors: entry.factErrors ?? [] }));
           const path = projectionPath(storageRoot, entry.projectName, entry.taskId);
           atomicWrite(path, json(value));
           return { path, value };

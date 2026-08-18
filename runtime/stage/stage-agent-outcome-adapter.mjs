@@ -45,9 +45,17 @@ function cost(value, label) {
     }
   }
   text(entry.status, `${label}.status`);
-  if (!new Set(["recorded", "unavailable"]).has(entry.status)) throw new TypeError(`${label}.status is invalid`);
-  if (entry.status === "recorded" && (entry.duration_ms === null || entry.tokens === null)) {
+  if (!new Set(["recorded", "partial", "unavailable"]).has(entry.status)) throw new TypeError(`${label}.status is invalid`);
+  if (entry.status === "recorded"
+      && (!Number.isSafeInteger(entry.duration_ms) || entry.duration_ms < 0
+        || !Number.isSafeInteger(entry.tokens) || entry.tokens < 0)) {
     throw new TypeError(`${label} recorded cost requires duration_ms and tokens`);
+  }
+  if (entry.status === "partial") {
+    const durationRecorded = Number.isSafeInteger(entry.duration_ms) && entry.duration_ms >= 0;
+    const tokensRecorded = Number.isSafeInteger(entry.tokens) && entry.tokens >= 0;
+    if (durationRecorded === tokensRecorded) throw new TypeError(`${label} partial cost requires exactly one measured field`);
+    text(entry.reason, `${label}.reason`);
   }
   if (entry.status === "unavailable") {
     if (entry.duration_ms !== null || entry.tokens !== null) throw new TypeError(`${label} unavailable cost requires null usage`);
@@ -281,9 +289,13 @@ export function publishStageAgentOutcome({
   const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
   const input = object(execution, "Stage Agent execution");
   const provenance = object(input.provenance, "Stage Agent execution.provenance");
-  if (provenance.kind !== "stage-agent") throw new Error("Stage Agent provenance.kind must be stage-agent");
-  text(provenance.host, "Stage Agent provenance.host");
-  text(provenance.agent_run_id, "Stage Agent provenance.agent_run_id");
+  if (!new Set(["stage-agent", "workflowhub-session"]).has(provenance.kind)) throw new Error("execution provenance.kind must be stage-agent or workflowhub-session");
+  text(provenance.host, "execution provenance.host");
+  text(provenance.agent_run_id, "execution provenance.agent_run_id");
+  if (provenance.kind === "workflowhub-session") {
+    text(provenance.session_id, "execution provenance.session_id");
+    text(provenance.source_ref, "execution provenance.source_ref");
+  }
   const stageStatus = status(input.status, "Stage Agent execution.status");
   text(attemptId, "attemptId");
   if (!Array.isArray(input.steps) || !Array.isArray(input.skills)) throw new TypeError("Stage Agent execution must include steps and skills arrays");
@@ -348,7 +360,13 @@ export function publishStageAgentOutcome({
     ...(workflowRunId === null ? {} : { run_id: text(workflowRunId, "workflowRunId") }),
     attempt_id: attemptId,
     status: stageStatus,
-    producer: { kind: "stage-agent", host: provenance.host, agent_run_id: provenance.agent_run_id },
+    producer: {
+      kind: provenance.kind,
+      host: provenance.host,
+      agent_run_id: provenance.agent_run_id,
+      ...(provenance.session_id ? { session_id: provenance.session_id } : {}),
+      ...(provenance.source_ref ? { source_ref: provenance.source_ref } : {}),
+    },
     snapshot_tree: snapshot.tree,
     material_revision: materials.revision,
     material_hashes: materials.hashes,
@@ -365,6 +383,204 @@ export function publishStageAgentOutcome({
   const ref = `quality/evidence/stage-outcomes/${stage}/${digest}.json`;
   safeKernel.publishCanonicalRecord(ref, raw);
   return Object.freeze({ ref, sha256: digest, value: Object.freeze(value) });
+}
+
+function clockValue(now, label) {
+  const value = now();
+  const timestamp = value instanceof Date ? value.getTime() : value;
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw new TypeError(`${label} must return a non-negative integer timestamp`);
+  return timestamp;
+}
+
+function usageTokens(value, label) {
+  if (value === undefined || value === null) return null;
+  const input = object(value, label);
+  const direct = input.tokens ?? input.total_tokens;
+  if (direct !== undefined && (!Number.isSafeInteger(direct) || direct < 0)) {
+    throw new TypeError(`${label}.tokens must be a non-negative integer`);
+  }
+  const inputTokens = input.input_tokens;
+  const outputTokens = input.output_tokens;
+  for (const [name, count] of [["input_tokens", inputTokens], ["output_tokens", outputTokens]]) {
+    if (count !== undefined && (!Number.isSafeInteger(count) || count < 0)) throw new TypeError(`${label}.${name} must be a non-negative integer`);
+  }
+  const pair = inputTokens === undefined || outputTokens === undefined ? null : inputTokens + outputTokens;
+  if (direct !== undefined && pair !== null && direct !== pair) throw new Error(`${label} total token usage conflicts with input/output usage`);
+  return direct ?? pair;
+}
+
+function lifecycleCost({ startedAt, endedAt, usage }) {
+  const durationMs = endedAt >= startedAt ? endedAt - startedAt : null;
+  const tokens = usageTokens(usage, "session usage");
+  if (durationMs !== null && tokens !== null) return { duration_ms: durationMs, tokens, status: "recorded" };
+  if (durationMs !== null || tokens !== null) {
+    return {
+      duration_ms: durationMs,
+      tokens,
+      status: "partial",
+      reason: durationMs === null ? "duration_unavailable" : "tokens_unavailable",
+    };
+  }
+  return { duration_ms: null, tokens: null, status: "unavailable", reason: "duration_and_tokens_unavailable" };
+}
+
+function lifecycleEvidence({ sourceRef, sessionId, subjectKind, subjectId, startedAt = null, endedAt = null, usage }) {
+  return {
+    kind: "workflowhub-session-lifecycle",
+    source_ref: sourceRef,
+    session_id: sessionId,
+    subject_kind: subjectKind,
+    subject_id: subjectId,
+    ...(startedAt === null ? {} : { started_at_ms: startedAt }),
+    ...(endedAt === null ? {} : { ended_at_ms: endedAt }),
+    ...(usage?.event_id || usage?.message_id ? { usage_event_id: usage.event_id ?? usage.message_id } : {}),
+  };
+}
+
+function sessionManifest(stage) {
+  const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
+  const skillsRaw = readFileSync(new URL(`../../workflows/${stage}/skill-deps.yaml`, import.meta.url), "utf8");
+  const skillManifest = yaml.load(skillsRaw);
+  return { steps: manifest.steps, skills: Array.isArray(skillManifest?.skills) ? skillManifest.skills : [] };
+}
+
+/**
+ * Record the lifecycle of the current WorkflowHub session.
+ *
+ * The host calls this from the same session that is executing the workflow.
+ * It measures wall time at begin/end and accepts only usage explicitly bound
+ * to that subject. It never starts another agent, reads a transcript path, or
+ * fills a missing token count. The returned outcome still goes through the
+ * existing authenticated adapter and single TaskKernel writer.
+ */
+export function createWorkflowHubSessionRecorder({
+  task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-workflowhub-session-1", workflowRunId = null,
+  host, sessionId, sourceRef, now = () => Date.now(),
+} = {}) {
+  const safeTask = assertTaskHandle(task);
+  const safeKernel = assertTaskKernel(kernel);
+  if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+  const active = activeWorkspace({ workspace, candidateWorkspace });
+  const safeArtifacts = artifacts instanceof ArtifactDir ? artifacts : ArtifactDir.open(active.worktreeRoot, safeTask);
+  const safeHost = text(host, "host");
+  const safeSessionId = text(sessionId, "sessionId");
+  const safeSourceRef = text(sourceRef, "sourceRef");
+  if (safeSourceRef.startsWith("/") || safeSourceRef.includes("..") || safeSourceRef.includes("\\")) {
+    throw new TypeError("sourceRef must be an opaque non-path reference");
+  }
+  text(attemptId, "attemptId");
+  const subjects = sessionManifest(stage);
+  const stepBySlug = new Map(subjects.steps.map((entry) => [entry.step_slug, entry]));
+  const skillById = new Map(subjects.skills.map((entry) => [entry.name, entry]));
+  const activeSubjects = new Map();
+  const finishedSteps = new Map();
+  const finishedSkills = new Map();
+  let closed = false;
+
+  function begin(subjectKind, subjectId) {
+    if (closed) throw new Error("WorkflowHub session recorder is already closed");
+    const expected = subjectKind === "step" ? stepBySlug.get(subjectId) : skillById.get(subjectId);
+    if (!expected) throw new Error(`${stage} ${subjectKind} is not declared: ${subjectId}`);
+    const key = `${subjectKind}:${subjectId}`;
+    if (activeSubjects.has(key) || (subjectKind === "step" ? finishedSteps : finishedSkills).has(subjectId)) {
+      throw new Error(`${stage} ${subjectKind} was started more than once in the same attempt: ${subjectId}`);
+    }
+    const startedAt = clockValue(now, "session clock");
+    activeSubjects.set(key, { expected, startedAt });
+    return (result = {}) => {
+      if (closed) throw new Error("WorkflowHub session recorder is already closed");
+      const value = object(result, `${subjectKind} ${subjectId} result`);
+      const current = activeSubjects.get(key);
+      if (!current) throw new Error(`${stage} ${subjectKind} has no open lifecycle: ${subjectId}`);
+      const endedAt = clockValue(now, "session clock");
+      activeSubjects.delete(key);
+      const outcomeStatus = status(value.status, `${subjectKind} ${subjectId}.status`);
+      const resultSummary = text(value.result_summary, `${subjectKind} ${subjectId}.result_summary`);
+      if (outcomeStatus !== "completed") text(value.reason, `${subjectKind} ${subjectId}.reason`);
+      const evidence = Array.isArray(value.evidence) ? value.evidence.map((entry) => object(entry, `${subjectKind} ${subjectId}.evidence`)) : [];
+      const costValue = lifecycleCost({ startedAt: current.startedAt, endedAt, usage: value.usage });
+      const output = subjectKind === "step"
+        ? {
+            step_id: current.expected.step_id,
+            step_slug: current.expected.step_slug,
+            order: current.expected.order,
+            status: outcomeStatus,
+            input_refs: Array.isArray(value.input_refs) ? [...value.input_refs] : current.expected.entry_conditions.map(({ uri_or_path }) => uri_or_path),
+            result_summary: resultSummary,
+            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId, startedAt: current.startedAt, endedAt, usage: value.usage })],
+            ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
+            cost: costValue,
+          }
+        : {
+            skill_id: current.expected.name,
+            status: outcomeStatus,
+            trigger: value.trigger,
+            executed: value.executed,
+            version: text(value.version, `skill ${subjectId}.version`),
+            result_summary: resultSummary,
+            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId, startedAt: current.startedAt, endedAt, usage: value.usage })],
+            ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
+            cost: costValue,
+          };
+      if (subjectKind === "step") finishedSteps.set(subjectId, output);
+      else finishedSkills.set(subjectId, output);
+      return output;
+    };
+  }
+
+  const missingOutcome = (subjectKind, subjectId) => {
+    const reason = "session_lifecycle_event_unavailable";
+    return subjectKind === "step"
+      ? {
+          step_id: stepBySlug.get(subjectId).step_id,
+          step_slug: subjectId,
+          order: stepBySlug.get(subjectId).order,
+          status: "unavailable",
+          input_refs: [],
+          result_summary: `当前 WorkflowHub 会话未记录步骤 ${subjectId}`,
+          evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
+          reason,
+          cost: { duration_ms: null, tokens: null, status: "unavailable", reason },
+        }
+      : {
+          skill_id: subjectId,
+          status: "unavailable",
+          trigger: false,
+          executed: false,
+          version: "unavailable",
+          result_summary: `当前 WorkflowHub 会话未记录技能 ${subjectId}`,
+          evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
+          reason,
+          cost: { duration_ms: null, tokens: null, status: "unavailable", reason },
+        };
+  };
+
+  return Object.freeze({
+    startStep: (stepSlug) => begin("step", text(stepSlug, "stepSlug")),
+    startSkill: (skillId) => begin("skill", text(skillId, "skillId")),
+    finish({ status: stageStatus, spec_analyze } = {}) {
+      if (closed) throw new Error("WorkflowHub session recorder is already closed");
+      if (activeSubjects.size) throw new Error("WorkflowHub session recorder has unfinished step/skill lifecycles");
+      const steps = subjects.steps.map((entry) => finishedSteps.get(entry.step_slug) ?? missingOutcome("step", entry.step_slug));
+      const skills = subjects.skills.map((entry) => finishedSkills.get(entry.name) ?? missingOutcome("skill", entry.name));
+      const resolvedStatus = stageStatus ?? (steps.every((entry) => entry.status === "completed") && skills.every((entry) => entry.status === "completed") ? "completed" : "incomplete");
+      if (resolvedStatus === "completed" && [...steps, ...skills].some((entry) => entry.status !== "completed")) {
+        throw new Error("completed WorkflowHub session outcome cannot contain incomplete step/skill rows");
+      }
+      const execution = {
+        status: resolvedStatus,
+        provenance: { kind: "workflowhub-session", host: safeHost, agent_run_id: safeSessionId, session_id: safeSessionId, source_ref: safeSourceRef },
+        steps,
+        skills,
+        spec_analyze: object(spec_analyze, "spec_analyze"),
+      };
+      closed = true;
+      return publishStageAgentOutcome({
+        task: safeTask, kernel: safeKernel, artifacts: safeArtifacts, workspace, candidateWorkspace,
+        stage, attemptId, workflowRunId, execution,
+      });
+    },
+  });
 }
 
 /**

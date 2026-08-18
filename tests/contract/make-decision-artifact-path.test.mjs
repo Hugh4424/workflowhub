@@ -116,7 +116,7 @@ describe("make-decision current artifact path contract", () => {
         `--task=${state.task.identity.taskId}`,
         "--name=decision-log.md",
         `--input=${input}`,
-      ]);
+      ], { cwd: state.repo });
 
       expect(result.artifact_ref).toBe(
         `specs/${state.task.identity.taskId}/decision-log.md`,

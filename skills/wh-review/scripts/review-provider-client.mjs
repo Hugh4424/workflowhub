@@ -94,8 +94,10 @@ function validateV3Sha256(value, label) {
 
 function validateV3Usage(value, label = "v3 usage") {
   if (value === null) return null;
-  const visit = (current, path) => {
+  const visit = (current, path, allowDecimal = false) => {
     if (Number.isSafeInteger(current) && current >= 0) return current;
+    if (allowDecimal && typeof current === "number" && Number.isFinite(current)
+        && current >= 0 && current <= Number.MAX_SAFE_INTEGER) return current;
     if (!current || typeof current !== "object" || Array.isArray(current)) {
       throw failure("PROTOCOL_INCOMPATIBLE", `${path} must contain only non-negative safe integers or objects`);
     }
@@ -103,7 +105,7 @@ function validateV3Usage(value, label = "v3 usage") {
     if (keys.length === 0 || keys.some((key) => key.trim() === "")) {
       throw failure("PROTOCOL_INCOMPATIBLE", `${path} must not be empty`);
     }
-    return Object.fromEntries(keys.map((key) => [key, visit(current[key], `${path}.${key}`)]));
+    return Object.fromEntries(keys.map((key) => [key, visit(current[key], `${path}.${key}`, allowDecimal || (path === label && key === "cost"))]));
   };
   return visit(value, label);
 }
@@ -221,8 +223,8 @@ export class ReviewProviderClient {
   async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null } = {}) {
     if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
-    const effectiveAttachmentDelivery = attachmentDelivery ?? (providers.some((provider) => provider.split("/", 1)[0] === "codex") ? "always_embed" : "file_only");
-    if (!["file_only", "always_embed"].includes(effectiveAttachmentDelivery)) throw new TypeError("attachmentDelivery must be file_only or always_embed");
+    const effectiveAttachmentDelivery = attachmentDelivery ?? "negotiated";
+    if (!["file_only", "always_embed", "negotiated"].includes(effectiveAttachmentDelivery)) throw new TypeError("attachmentDelivery must be file_only, always_embed, or negotiated");
     const entries = (materials.deliveryManifest ?? materials.manifest ?? []).map(({ path, bytes, sha256 }) => ({ source: `${materials.sourcePrefix}/${path}`, destination: path, size: bytes, sha256, embed: effectiveAttachmentDelivery === "always_embed" }));
     // Each caller makes one public broker run. 3rd-review owns the group-level
     // heterologous filter, dispatch, native-session lifecycle, and all public

@@ -63,6 +63,7 @@ describe('M15 project/global projector', () => {
     expect(html).toContain('未采集');
     expect(html).toContain('步骤和技能名称来自固定流程清单');
     expect(html).toContain('不自动给修复建议');
+    expect(html).toContain('当前会话没有接入记录器，无法采集真实 token 和耗时');
   });
 
   it('keeps every stage and step discoverable and exposes evidence context without a hidden click', () => {
@@ -183,6 +184,27 @@ describe('M15 project/global projector', () => {
     expect(result.snapshot.records).toEqual([expect.objectContaining({ task_id: 'broken-task', status: 'stale', stale: true })]);
     expect(result.snapshot.records[0].errors).toEqual(expect.arrayContaining([expect.stringMatching(/invalid JSON/)]));
     expect(prior.value.status).toBe('partial');
+  });
+
+  it('keeps valid monitoring rows visible when an old row has unsupported value fields', () => {
+    const storageRoot = root();
+    const taskRoot = join(storageRoot, 'Projects', 'project-a', 'tasks', 'mixed-task');
+    mkdirSync(taskRoot, { recursive: true });
+    writeFileSync(join(taskRoot, 'task.json'), JSON.stringify({ project_name: 'project-a', task_id: 'mixed-task' }));
+    const valid = {
+      ...fact('mixed-task'), schema_version: 'monitoring-fact.v1', step_id: null, skill_id: null,
+      session_id: 'session-1', subagent_id: null, run_id: 'run-1', attempt_id: 'attempt-1', reason: null, error: null,
+      contract_version: 'm15', collector_version: 'm15', adapter_version: 'fixture', skill_version: null,
+    };
+    const invalid = { ...valid, fact_id: 'mixed-task:old-step', fact_type: 'step', value: { outcome: 'completed', old_lifecycle_field: 'old-lifecycle-field' } };
+    const factsRaw = `${JSON.stringify(valid)}\n${JSON.stringify(invalid)}\n`;
+    writeFileSync(join(taskRoot, 'facts.jsonl'), factsRaw);
+    const result = rebuildGlobalMonitoringSnapshot({ storageRoot, generatedAt: '2026-08-12T00:01:00.000Z' });
+    const record = result.snapshot.records.find((entry) => entry.task_id === 'mixed-task');
+    expect(record).toMatchObject({ task_id: 'mixed-task', status: 'partial', facts_summary: { count: 1 } });
+    expect(record.errors).toEqual(expect.arrayContaining([expect.stringMatching(/invalid monitoring fact/)]));
+    expect(result.snapshot.errors).toEqual(expect.arrayContaining([expect.stringMatching(/project-a\/mixed-task: facts\.jsonl line 2: invalid monitoring fact/)]));
+    expect(readFileSync(join(taskRoot, 'facts.jsonl'), 'utf8')).toBe(factsRaw);
   });
 
   it('does not let an empty historical task with a pre-cutover identity poison the current snapshot', () => {
