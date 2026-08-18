@@ -1079,6 +1079,42 @@ ${task("T002", "contract GREEN", 0, "T001")}
     })).rejects.toThrow(/must contain provider attempts/i);
   });
 
+  it("keeps a group-level unavailable attempt with no dispatched providers as an incomplete fact", async () => {
+    const stage = "build-code", attemptRef = "quality/reviews/attempts/group-unavailable/attempt.json";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "quality/evidence/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "quality/tests/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "group-unavailable", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "GROUP_OUTCOME_UNAVAILABLE", message: "review group ended before provider dispatch" },
+      },
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: createHash("sha256").update(values[ref]).digest("hex") })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: attemptRef, audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).resolves.toMatchObject({
+      facts: { review: { status: "unavailable" } },
+      completion: { system: { result: "incomplete" } },
+    });
+  });
+
   it("uses the current supplied integration review instead of legacy accepted review facts", async () => {
     const stage = "verify-code", values = {
       // verify-code may reuse the complete same-snapshot suite produced by

@@ -15,6 +15,7 @@ const buildSpec = read("workflows", "build-spec", "SKILL.md");
 const buildPlan = read("workflows", "build-plan", "SKILL.md");
 const hostProtocol = read("skills", "workflowhub-host-protocol", "SKILL.md");
 const makeSteps = readJson("workflows", "make-decision", "steps.json").steps;
+const WORKFLOW_STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const HASH = "a".repeat(64);
 
 function lifecycle(interaction_type, overrides = {}) {
@@ -50,6 +51,25 @@ function lifecycle(interaction_type, overrides = {}) {
 }
 
 describe("current interaction boundary", () => {
+  it("describes the normal WorkflowHub session as the execution owner", () => {
+    for (const stage of WORKFLOW_STAGES) {
+      const manifest = readJson("workflows", stage, "steps.json");
+      const text = JSON.stringify(manifest);
+      expect(text).toMatch(/current WorkflowHub session/i);
+      expect(text).not.toMatch(/Stage Agent|stage agent/);
+    }
+  });
+
+  it("requires every stage skill to emit same-session step and skill boundaries", () => {
+    for (const stage of WORKFLOW_STAGES) {
+      const skill = read("workflows", stage, "SKILL.md");
+      expect(skill).toContain("workflowhub-codex-session-event.mjs start");
+      expect(skill).toContain("workflowhub-codex-session-event.mjs finish");
+      expect(skill).toContain("record-spec-analyze");
+      expect(skill).toMatch(/不启动第二个 Agent/);
+    }
+  });
+
   it("keeps Talk and Grill exclusively in make-decision", () => {
     expect(read("workflows", "make-decision", "skill-deps.yaml")).toMatch(
       /name: grill-with-docs, path: skills\/grill-with-docs\/SKILL\.md, execution: inline/i,

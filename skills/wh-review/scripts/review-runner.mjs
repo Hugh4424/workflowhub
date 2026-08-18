@@ -182,6 +182,17 @@ function integrationMaterialFacts(integrationSubject) {
   return integrationSubject.ac_trace ? { ac_trace: integrationSubject.ac_trace } : {};
 }
 
+function integrationSemanticFacts(integrationSubject) {
+  const acTrace = integrationSubject?.ac_trace;
+  if (!acTrace || !Array.isArray(acTrace.implementation_anchors)) return {};
+  return {
+    implementation_context: {
+      schema_version: "wh-review-integration-implementation-context.v1",
+      anchors: acTrace.implementation_anchors,
+    },
+  };
+}
+
 function stringList(value, label) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) throw new TypeError(`${label} must be a string array`);
   return [...value];
@@ -771,7 +782,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const initialProjection = buildSemanticProjection({
       stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
       contract_id: contractId, contract_hash: contractHash, input: initialMaterials, materials: initialMaterials,
-      subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+      subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
     });
     const initialBundle = { ...bundle, contractId, contractHash, semanticHash: initialProjection.semantic_hash };
     const sequence = planDirectionReviewRequests({
@@ -805,7 +816,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       semanticProjection = buildSemanticProjection({
         stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
         contract_id: contractId, contract_hash: contractHash, input: challengeMaterials, materials: challengeMaterials,
-        subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+        subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
       });
       reviewBundle = { ...challengeBundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
       const challenged = rejectProfileMismatches(await reviewGroup({
@@ -823,7 +834,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     semanticProjection = buildSemanticProjection({
       stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
       contract_id: contractId, contract_hash: contractHash, input: fixedMaterials, materials: fixedMaterials,
-      subject, extra: integrationSubject ? integrationMaterialFacts(integrationSubject) : {},
+      subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
     });
     reviewBundle = { ...bundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
     const reusable = findReusableReviewResult({

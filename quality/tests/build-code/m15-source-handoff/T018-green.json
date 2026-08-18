@@ -1,0 +1,38 @@
+{
+  "schema_version": "workflowhub-test-evidence.v1",
+  "task_id": "m15-runtime-observability-repair",
+  "task_card": "T018",
+  "oracle": "M15_SOURCE_HANDOFF_CROSS_CWD",
+  "status": "green",
+  "commands": [
+    {
+      "command": "npx vitest run tests/m15-codex-session-hook.test.mjs --passWithNoTests=false",
+      "exit_code": 0,
+      "tests": "13 passed"
+    },
+    {
+      "command": "timeout 20s npx vitest run tests/m15-codex-session-hook.test.mjs tests/integration/vnext-official-stage-run.test.mjs -t \"same session across stage workspaces|public run automatically consume\" --passWithNoTests=false",
+      "exit_code": 0,
+      "tests": "2 passed, 27 skipped"
+    },
+    {
+      "command": "node tools/cli/verify-structure.mjs",
+      "exit_code": 0,
+      "result": "constitution structure pass"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "observed": {
+    "session_binding": "one exact session_id reused across five stages and changed cwd",
+    "private_event_cli": "CODEX_THREAD_ID locates the original handoff",
+    "source": "same Codex rollout source is readable from the later cwd"
+  },
+  "limits": [
+    "这是代码和隔离 CLI 证据，不等于当前对话已经重新加载项目 hook。",
+    "M15 仍需全新的正常 Codex 五阶段任务和浏览器回放。",
+    "没有修改历史 facts、Multica 或外部项目。"
+  ]
+}

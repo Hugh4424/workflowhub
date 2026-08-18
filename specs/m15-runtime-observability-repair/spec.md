@@ -144,6 +144,13 @@ M15 页面沿用既有四区产品范围：任务总览、流程退化、成本�
 - **When**：验收人员核对正式入口、canonical facts、证据、投影、HTML 和浏览器，再删除派生投影并重建。
 - **Then**：同一份 facts 的 hash 不变，重建结果一致，历史任务没有新增写入；宿主未证明能力仍只显示 unavailable、unsupported 或 unknown。
 
+### SCN-011：同一真实来源贯穿五个阶段
+
+- **角色**：WorkflowHub 用户和记录链。
+- **Given**：用户从正常 Codex WorkflowHub 入口开始一个没有历史回填的新任务。
+- **When**：任务依次进入五个正式阶段。
+- **Then**：第一个阶段自动绑定当前 Codex source；后续阶段复用同一个绑定和任务身份，不需要用户重新输入 task id，也不启动额外 Agent。若已绑定 source 在后续阶段丢失，阶段入口直接报告来源断开，并保留 incomplete/unavailable 事实，不能继续伪造完整成本或证据。
+
 ### 状态覆盖清单
 
 - [x] **默认态**：SCN-001、SCN-003、SCN-004、SCN-005。
@@ -226,6 +233,12 @@ M15 页面沿用既有四区产品范围：任务总览、流程退化、成本�
   - **证据或来源**：原始需求 R-009、D-001～D-004 和最终确认。
   - **关联**：FR-HANDOFF-001；AC-011。
 
+- **PFACT-010**：在本次方案 A 中，正常 Codex 任务的 source binding 属于整条任务会话，而不是某一个阶段；它只能由第一个正式入口创建一次，后续阶段必须复用同一个不可变绑定。绑定丢失不能靠目录扫描、时间猜测、旧事实或手工 task id 补回。
+  - **status**：`current`
+  - **证据或来源**：decision-log.md 的“方案 A 确认”；fresh M15 run 显示首阶段 source `present`、后四阶段 `no_registered_source`。
+  - **限制**：具体 host handoff 是否在所有正常入口都已贯通，仍需 build-code 的新鲜五阶段任务证明。
+  - **关联**：FR-CHAIN-001、FR-CHAIN-002、FR-CHAIN-003、FR-E2E-001；AC-001、AC-002、AC-010、AC-012。
+
 ## 5. 功能需求
 
 ### 真实入口与来源（CHAIN）
@@ -243,6 +256,13 @@ M15 页面沿用既有四区产品范围：任务总览、流程退化、成本�
   - **PFACT**：PFACT-002、PFACT-008。
   - **场景**：SCN-002、SCN-006、SCN-009。
   - **验收**：AC-002、AC-004、AC-010。
+
+- **FR-CHAIN-003**：正常 Codex 任务在第一个正式阶段自动创建一次 source binding；后续正式阶段必须复用同一个 `source_id`、session 绑定和 task/run/attempt 身份。后续阶段不能要求用户手工重新绑定；如果绑定不存在、切换到别的 task 或来源身份不一致，阶段入口必须失败并留下可读的 incomplete/unavailable 原因，不得把该阶段写成有完整来源的成功记录。
+  - **范围边界**：只约束当前 M15 的正常 Codex 入口；不新增公共命令、不新增第二套 facts、不扫描 transcript 目录、不推断缺失数据；多 CLI 交给 M17。
+  - **来源绑定**：R-002、R-004、R-008；D-003、D-006、D-007；2026-08-18 方案 A 确认；状态 `current`。
+  - **PFACT**：PFACT-001、PFACT-002、PFACT-010。
+  - **场景**：SCN-001、SCN-002、SCN-011。
+  - **验收**：AC-001、AC-002、AC-010、AC-012。
 
 ### canonical facts 与状态（FACT）
 
@@ -469,6 +489,13 @@ M15 页面沿用既有四区产品范围：任务总览、流程退化、成本�
   - **失败条件**：补写历史、把 M16 需求偷偷放入本期，或交接只给一张没有来源的页面快照。
   - **证据类型**：`evidence` + `manual`
 
+- [ ] **AC-012**：一条新的正常 Codex 任务从第一个正式阶段到第五个正式阶段，只自动绑定一次 source；五个阶段的 source identity、session、task/run/attempt 都能回指同一条绑定。用户不需要手填 task id，不需要启动 Stage Agent。
+  - **需求**：FR-CHAIN-003、FR-E2E-001
+  - **验证**：从真实 WorkflowHub `run` 入口启动 fresh 任务，依次执行五个阶段，分别回读每个阶段的 source fact 和任务事实；再制造一次后续阶段 source 丢失场景，检查入口是否明确失败而不是继续产出假完整记录。
+  - **通过条件**：五个阶段 source 均为 `present` 且使用同一合法绑定；step/skill 事实能回到同一 task/run/attempt；source 丢失时状态为 incomplete/unavailable 并有原因。
+  - **失败条件**：只有第一阶段有 source、后续阶段重新猜 source、需要用户重复输入、启动额外 Agent、跨 task 串数据，或 source 丢失后仍显示阶段完成。
+  - **证据类型**：`test` + `evidence` + `manual`
+
 ## 12. 风险、未决与交接
 
 - **RISK-001**：真实宿主来源或 caller 仍未接入所有声明事件。
@@ -509,6 +536,14 @@ M15 页面沿用既有四区产品范围：任务总览、流程退化、成本�
   - **影响**：会改变哪些页面字段能显示 present，以及首版能否达到 ready 还是 partial；不改变基础链和诚实缺失边界。
   - **处理 Stage**：`verify-code`
   - **关闭条件或 STOP**：一条 fresh task 给出来源登记、能力声明、实际事件、coverage、原因和页面对应关系；未闭合则保持 open，不宣称全采集。
+
+- **RISK-005**：阶段切换时 source handoff 仍可能丢失，导致第一阶段有真实来源、后续阶段只有拓扑或局部事实。
+  - **受影响 ID**：PFACT-010、FR-CHAIN-003、FR-E2E-001、AC-001、AC-002、AC-010、AC-012。
+  - **触发条件**：fresh 五阶段任务中任一后续阶段的 source_id、session 或 task/run/attempt 不能回到第一阶段的同一绑定。
+  - **后果**：页面会显示部分成本和证据，用户无法确认整条任务；若继续当作成功，会再次产生误导数据。
+  - **缓解或 STOP**：复用现有 session handoff；入口缺绑定就直接失败；保留 incomplete/unavailable；不使用目录扫描或历史回填。五阶段 source 未全部闭合时，M15 不得 close。
+  - **处理 Stage**：`build-code`，最终由 `verify-code` 用真实五阶段任务复核。
+  - **验证**：AC-012 的五阶段 source identity 对照和 source 丢失负面场景。
 
 - **D-003 最小证据清单**：后续实现和验证必须依次核对真实 source/task/run/session 绑定、runtime run/attempt/stage 事实、Expected topology 基线、宿主已声明事件、M14b/M10 正常 caller、facts→projection→HTML 全链，以及九个 `failure_domain` 值和 health 字段绑定；任何一项没有证据都保留 `unknown`/`unavailable`/`incomplete`，不能靠页面结果补齐。
 

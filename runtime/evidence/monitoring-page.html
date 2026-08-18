@@ -35,7 +35,7 @@
     *::-webkit-scrollbar { width: 9px; height: 9px; }
     *::-webkit-scrollbar-thumb { background: transparent; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
     *:hover::-webkit-scrollbar-thumb { background: var(--wh-border); background-clip: padding-box; }
-    html, body { min-height: 100%; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
     body { margin: 0; color: var(--wh-text); background: var(--wh-bg); font: 13px/1.45 Inter, "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
     button, input, select { font: inherit; }
     button { cursor: pointer; }
@@ -46,9 +46,9 @@
     .brand-mark { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #fff; background: var(--wh-accent); font-size: 0; }
     .brand-sub, .top-meta { color: var(--wh-text-muted); font-size: 12px; }
     .top-meta { text-align: right; }
-    .page { width: min(1600px, calc(100% - 48px)); margin: auto; padding: 20px 0 48px; }
-    .app-grid { display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: 0; align-items: stretch; }
-    .sidebar { position: sticky; top: 14px; min-height: calc(100vh - 90px); border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
+    .page { width: 100%; height: calc(100vh - 46px); margin: 0; padding: 0; }
+    .app-grid { display: grid; grid-template-columns: 312px minmax(0, 1fr); height: 100%; gap: 0; align-items: stretch; }
+    .sidebar { position: relative; top: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; border: 0; border-right: 1px solid var(--wh-border); border-radius: 0; background: var(--wh-panel-2); box-shadow: none; overflow: hidden; }
     .sidebar-head { padding: 14px 14px 12px; border-bottom: 1px solid var(--wh-border-soft); }
     .eyebrow { color: var(--wh-accent); font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
     .sidebar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0; }
@@ -64,7 +64,7 @@
     .tool-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
     .tool-row select { min-width: 0; padding: 6px 8px; font-size: 11.5px; appearance: none; cursor: pointer; }
     .filter-contract { grid-column: 1 / -1; color: var(--wh-text-faint); font-size: 10px; }
-    .task-list { padding: 0; border-top: 1px solid var(--wh-border-soft); max-height: calc(100vh - 236px); overflow-y: auto; }
+    .task-list { flex: 1; min-height: 0; padding: 0; border-top: 1px solid var(--wh-border-soft); max-height: none; overflow-y: auto; }
     .task-item { position: relative; width: 100%; display: block; padding: 9px 15px 9px 16px; border: 0; border-bottom: 1px solid var(--wh-border-soft); border-radius: 0; color: var(--wh-text); text-align: left; background: transparent; transition: background .1s ease; }
     .task-item:hover { background: var(--wh-panel-hover); }
     .task-item.selected { background: var(--wh-accent-soft); }
@@ -77,7 +77,7 @@
     .task-item-meta { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-top: 5px; color: var(--wh-text-muted); font-size: 11px; }
     .task-item-meta strong { display: inline; color: var(--wh-text-dim); font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; }
     .sidebar-foot { margin: 0; padding: 10px 14px; border-radius: 0; border-top: 1px solid var(--wh-border-soft); color: var(--wh-text-faint); background: transparent; font-size: 10.5px; line-height: 1.5; }
-    .main { min-width: 0; display: grid; gap: 12px; padding: 0 24px; }
+    .main { min-width: 0; height: 100%; display: grid; gap: 12px; padding: 20px 24px 48px; overflow-y: auto; }
     .fatal { padding: 20px; border: 1px solid var(--wh-danger); border-radius: var(--radius); color: var(--wh-danger); background: var(--wh-danger-soft); }
     .banner { padding: 11px 15px; border-radius: var(--radius); font-size: 11.5px; line-height: 1.45; }
     .banner strong { display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; }
@@ -213,14 +213,16 @@
     .ref-chip:hover { background: rgba(111,158,255,.28); }
     .empty { padding: 18px 16px; color: var(--wh-text-faint); text-align: center; font-size: 12px; }
     .empty button { margin-top: 10px; padding: 7px 14px; border: 1px solid var(--wh-border); border-radius: 6px; color: var(--wh-text); background: var(--wh-panel-2); }
-    #evidence-panel { display: none; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--wh-accent); border-radius: var(--radius); background: #18213a; }
-    #evidence-panel.visible { display: block; }
-    #evidence-panel h3 { margin: 0 0 4px; font-size: 15px; color: var(--wh-text); }
+    #evidence-panel { position: fixed; z-index: 20; top: 46px; right: 0; width: min(440px, calc(100vw - 24px)); height: calc(100vh - 46px); display: block; padding: 18px 20px 24px; border: 0; border-left: 1px solid var(--wh-accent); border-radius: 0; background: #18213a; box-shadow: -16px 0 32px rgba(0,0,0,.28); overflow-y: auto; transform: translateX(102%); transition: transform .18s ease; }
+    #evidence-panel.visible { transform: translateX(0); }
+    #evidence-panel h3 { margin: 0 0 4px; padding-right: 70px; font-size: 15px; color: var(--wh-text); }
     #evidence-panel p { margin: 0 0 8px; color: var(--wh-text-muted); font-size: 12px; }
     #evidence-panel code { display: block; overflow-wrap: anywhere; padding: 9px; border-radius: 5px; color: #d5e2ff; background: #101827; font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 11px; }
+    #evidence-panel .evidence-close { position: absolute; top: 14px; right: 16px; padding: 5px 9px; border: 1px solid var(--wh-border); border-radius: 4px; color: var(--wh-text-muted); background: transparent; font-size: 11px; }
+    #evidence-panel .evidence-close:hover { color: var(--wh-text); border-color: var(--wh-accent); background: var(--wh-accent-soft); }
     .table-scroll { overflow-x: auto; }
-    @media (max-width: 1300px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 0 16px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } .stage-toggle { min-width: 0; height: 78px; } .stage-summary-meta { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px 8px; } .stage-summary-meta > div { min-width: 0; gap: 1px; } .stage-summary-meta > div:last-child { display: none; } .stage-summary-meta .stage-cell strong, .stage-summary-meta .stage-cell span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stage-cell .metric-bar, .metric-unavailable { min-width: 0; } .metric-unavailable { overflow: hidden; } .metric-unavailable .metric-note { display: none; } }
-    @media (max-width: 760px) { .topbar-inner { width: calc(100% - 24px); } .page { width: 100%; } .main { padding: 16px 12px 36px; } .app-grid { grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; } .task-list { max-height: 260px; overflow: auto; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
+    @media (max-width: 1300px) { .app-grid { grid-template-columns: 280px minmax(0,1fr); } .main { padding: 20px 16px 48px; } .stage-toggle, .fact-grid { grid-template-columns: 36px minmax(130px,1.2fr) 96px minmax(140px,1.5fr) 100px 90px 70px; gap: 8px; } .stage-toggle { min-width: 0; height: 78px; } .stage-summary-meta { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px 8px; } .stage-summary-meta > div { min-width: 0; gap: 1px; } .stage-summary-meta > div:last-child { display: none; } .stage-summary-meta .stage-cell strong, .stage-summary-meta .stage-cell span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stage-cell .metric-bar, .metric-unavailable { min-width: 0; } .metric-unavailable { overflow: hidden; } .metric-unavailable .metric-note { display: none; } }
+    @media (max-width: 760px) { html, body { height: auto; min-height: 100%; overflow: auto; } .topbar-inner { width: calc(100% - 24px); } .page { width: 100%; height: auto; } .main { height: auto; min-height: 0; padding: 16px 12px 36px; overflow: visible; } .app-grid { height: auto; grid-template-columns: 1fr; } .sidebar { position: static; min-height: auto; height: auto; } .task-list { flex: none; max-height: 260px; overflow: auto; } #evidence-panel { top: 0; height: 100vh; } .task-head { display: block; } .task-head-right { justify-items: start; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .insight-grid { grid-template-columns: 1fr; } .stage-toggle, .fact-grid { grid-template-columns: 30px minmax(120px,1fr) minmax(76px,.7fr) 22px; } .stage-cell.hide-mid, .stage-cell.hide-narrow { display: none; } .fact-grid { min-width: 620px; } .table-scroll { overflow-x: auto; } .cost-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .breakdown { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -244,7 +246,7 @@
     const stageLabels = { 'make-decision': '做决定', 'build-spec': '规格设计', 'build-plan': '执行计划', 'build-code': '开发实现', 'verify-code': '验收检查' };
     const skillLabels = { 'talk-with-zhipeng': 'Talk 对话', 'grill-with-docs': '文档质询', 'decision-log': '决策记录', 'wh-review': '独立审查', 'spec-research': '规格调研', 'spec-clarify': '规格澄清', 'spec-specify': '规格编写', 'simplicity-guard': '简洁性检查', 'plan-ceo-review': '目标审查', 'plan-design-review': '设计审查', 'spec-plan': '计划编写', 'plan-eng-review': '工程审查', 'testing-system-blueprint': '测试蓝图', 'test-routing-advisor': '测试路由', 'spec-tasks': '任务拆分', 'spec-analyze': '规格分析', 'backend-testing': '后端测试', 'frontend-testing': '前端测试', 'fullstack-slice-testing': '全栈切片测试' };
     const statusLabels = { loading: '读取中', ready: '就绪', empty_valid: '合法为空', current: '当前', partial: '部分可见', stale: '已过期', fatal: '不可用', empty: '合法为空', sufficient: '样本充足', insufficient: '样本不足', present: '已记录', executed: '已执行', completed: '已完成', missing: '未记录', unknown: '无法判断', pending: '待开始', evidence_gap: '证据断链', out_of_order: '顺序异常', conflict: '来源冲突', failed: '失败', not_applicable: '不适用', skipped: '已跳过', insufficient_samples: '样本不足', mismatch: '口径不兼容', unavailable: '不可用', unsupported: '格式不支持', incomplete: '记录不完整' };
-    const reasonLabels = { stage_outcome_incomplete: '阶段记录不完整，当前阶段有步骤或技能缺口', stage_evidence_gap: '当前阶段没有阶段事实，后续阶段只提供了受控见证', step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '没有登记可读的运行来源', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据', automation_opportunity_denominator_unavailable: '没有可核实的自动化机会分母', expected_topology_unavailable: '没有拿到本次任务的固定流程清单', compatible_time_buckets_insufficient: '兼容的时间样本少于两段', run_id_missing: '事实没有绑定运行编号', attempt_id_missing: '事实没有绑定尝试编号', 'source.status_missing': '没有登记来源状态' };
+    const reasonLabels = { stage_outcome_incomplete: '阶段记录不完整，当前阶段有步骤或技能缺口', stage_evidence_gap: '当前阶段没有阶段事实，后续阶段只提供了受控见证', step_outcome_unavailable: '没有拿到步骤结果', skill_outcome_unavailable: '没有拿到技能结果', skill_skip_reason_unavailable: '技能未触发且没有登记理由', no_registered_source: '当前会话没有接入记录器，无法采集真实 token 和耗时', quality_review_missing: '审查结果没有生成', quality_review_unavailable: '审查结果不可读', duplicate_id_conflict: '同一事实出现冲突', no_duplicate_conflict_evidence: '没有可证明重复计数的证据', automation_opportunity_denominator_unavailable: '没有可核实的自动化机会分母', expected_topology_unavailable: '没有拿到本次任务的固定流程清单', compatible_time_buckets_insufficient: '兼容的时间样本少于两段', run_id_missing: '事实没有绑定运行编号', attempt_id_missing: '事实没有绑定尝试编号', 'source.status_missing': '没有登记来源状态' };
     const domainLabels = { transcript: '会话来源', review: '审查', verify: '验收', artifact_missing: '产物缺失', task_dir: '任务目录', worktree: '工作区', handoff: '交接', skill_missing: '技能缺失', token_waste: 'Token 重复计数', unknown: '未归类问题' };
     const gapStatuses = new Set(['missing', 'unknown', 'evidence_gap', 'out_of_order', 'partial', 'conflict', 'fatal', 'failed', 'unavailable', 'unsupported', 'incomplete']);
     const doneStatuses = new Set(['present', 'executed', 'completed', 'skipped', 'not_applicable']);
@@ -347,7 +349,7 @@
     function metricValue(value, suffix = '') { return value === null || value === undefined ? '未采集' : String(value) + suffix; }
     function stageToken(record, id) { const value = record.diagnostics.cost?.breakdown?.stage?.[id]; return value === undefined ? null : value; }
     function stepToken(record, stage, slug) { const value = record.diagnostics.cost?.breakdown?.step?.[stage + '+' + slug]; return value === undefined ? null : value; }
-    function skillToken(record, id) { const found = Object.entries(record.diagnostics.cost?.breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
+    function skillToken(record, id) { const values = record.diagnostics.cost?.breakdown?.skill || {}; const direct = values[id]; if (Number.isFinite(direct)) return direct; const found = Object.entries(values).find(([key]) => key.endsWith('+' + id) || key.includes('+' + id + '+')); return found ? found[1] : null; }
     function stageDuration(record, id) { const value = record.diagnostics.cost?.duration_breakdown?.stage?.[id]; return Number.isFinite(value) ? value : null; }
     function stepDuration(record, stage, slug) { const value = record.diagnostics.cost?.duration_breakdown?.step?.[stage + '+' + slug]; return Number.isFinite(value) ? value : null; }
     function skillDuration(record, id) { const direct = record.diagnostics.cost?.duration_breakdown?.skill?.[id]; if (Number.isFinite(direct)) return direct; const found = Object.entries(record.diagnostics.cost?.duration_breakdown?.skill || {}).find(([key]) => key.includes('+' + id + '+')); return found ? found[1] : null; }
@@ -894,17 +896,28 @@
       section.appendChild(body);
       return section;
     }
+    function closeEvidence() {
+      const panel = $('#evidence-panel');
+      panel.classList.remove('visible');
+      panel.removeAttribute('aria-label');
+    }
     function showEvidence(ref, detail = '') {
       const panel = $('#evidence-panel');
       panel.textContent = '';
       panel.classList.add('visible');
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-label', '受控来源引用');
+      const close = text('button', '关闭', 'evidence-close');
+      close.type = 'button';
+      close.addEventListener('click', closeEvidence);
+      panel.appendChild(close);
       panel.appendChild(text('h3', '受控来源引用'));
       panel.appendChild(text('p', '这是当前任务事实绑定的来源摘要；页面只读，不拼接绝对路径、不访问文件系统。'));
       panel.appendChild(text('h4', '证据摘要'));
       panel.appendChild(text('p', detail || '当前没有可回指的结构化摘要。'));
       panel.appendChild(text('h4', '受控引用'));
       panel.appendChild(text('code', ref));
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      panel.scrollTop = 0;
     }
     function renderNoRecord() {
       const state = uiStateFor(null);
@@ -985,6 +998,7 @@
       const chip = event.target.closest('.ref-chip');
       if (chip && chip.dataset.ref) showEvidence(chip.dataset.ref, chip.dataset.detail || '');
     });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeEvidence(); });
     setupFilters();
     render();
   })();

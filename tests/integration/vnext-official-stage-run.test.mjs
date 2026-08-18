@@ -11,14 +11,26 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { runOfficialStage, runStage } from "../../runtime/stage/stage-runner.mjs";
 import {
+  createWorkflowHubSessionRecorder,
   publishStageAgentOutcome,
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
+import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { readMonitoringFacts } from "../../runtime/task/task-store.mjs";
 import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import {
+  buildWorkflowHubSessionInput,
+  bindCodexSessionTask,
+  finishCodexSessionEvent,
+  registerCodexSession,
+  sessionHandoffPath,
+  startCodexSessionEvent,
+  recordCodexSessionSpecAnalyze,
+} from "../../tools/host/workflowhub-codex-session-state.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
@@ -55,7 +67,7 @@ function fixture(taskId = "vnext-stage-run") {
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
   for (const name of MATERIALS) artifacts.writeAtomic(name, `# ${name}\n`);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
-  return { task, candidate, kernel };
+  return { root, task, candidate, kernel };
 }
 
 function contextFor(stage, state) {
@@ -141,6 +153,98 @@ function stageOutcome(state, stage, { workspace = null, artifacts = null, attemp
 }
 
 describe("vNext official stage completion", () => {
+  it("rejects a session event that belongs to another stage", () => {
+    const state = fixture("workflowhub-session-stage-boundary");
+    const context = contextFor("make-decision", state);
+    expect(() => publishCurrentWorkflowHubSession({
+      context,
+      stage: "make-decision",
+      attemptId: "attempt-stage-boundary",
+      input: {
+        session: {
+          task_id: state.task.identity.taskId,
+          host: "codex-test",
+          session_id: "session-stage-boundary",
+          source_ref: "codex-session-stage-boundary",
+          events: [{
+            task_id: state.task.identity.taskId,
+            stage: "build-spec",
+            subject_kind: "step",
+            subject_id: "load-context",
+            started_at_ms: 1000,
+            ended_at_ms: 1100,
+            status: "completed",
+            result_summary: "wrong stage event",
+            evidence: [],
+          }],
+        },
+      },
+    })).toThrow(/stage does not match the current stage/i);
+  });
+
+  it("records the normal WorkflowHub session lifecycle without requiring a second agent", async () => {
+    const state = fixture("workflowhub-session-recorder");
+    const context = contextFor("make-decision", state);
+    const sourceEvidence = { kind: "codex-session-event", source_ref: "codex-rollout-thread-session", session_id: "session-1" };
+    let clock = 1000;
+    const recorder = createWorkflowHubSessionRecorder({
+      task: state.task,
+      kernel: state.kernel,
+      candidateWorkspace: state.candidate,
+      stage: "make-decision",
+      attemptId: "attempt-workflowhub-session",
+      workflowRunId: context.workflowRunId,
+      host: "codex-desktop",
+      sessionId: "session-1",
+      sourceRef: "codex-rollout-thread-session",
+      now: () => clock,
+    });
+    const fixtureExecution = stageAgentExecution("make-decision");
+    for (const step of fixtureExecution.steps) {
+      const finish = recorder.startStep(step.step_slug);
+      clock += 10;
+      finish({
+        status: "completed",
+        input_refs: step.input_refs,
+        result_summary: `当前会话完成 ${step.step_slug}`,
+        evidence: [sourceEvidence],
+        usage: step.step_slug === "load-context" ? undefined : { tokens: 2, event_id: `usage-${step.step_slug}` },
+      });
+    }
+    for (const skill of fixtureExecution.skills) {
+      const finish = recorder.startSkill(skill.skill_id);
+      clock += 10;
+      finish({
+        status: "completed",
+        trigger: true,
+        executed: true,
+        version: "workflowhub-session-skill-1",
+        result_summary: `当前会话完成 ${skill.skill_id}`,
+        evidence: [sourceEvidence],
+        usage: { tokens: 3, event_id: `usage-${skill.skill_id}` },
+      });
+    }
+    const outcome = recorder.finish({
+      status: "incomplete",
+      spec_analyze: fixtureExecution.spec_analyze,
+    });
+    expect(outcome.value.producer).toMatchObject({
+      kind: "workflowhub-session",
+      host: "codex-desktop",
+      session_id: "session-1",
+      source_ref: "codex-rollout-thread-session",
+    });
+    expect(outcome.value.step_outcomes[0].cost).toMatchObject({
+      status: "partial", duration_ms: 10, tokens: null, reason: "tokens_unavailable",
+    });
+    expect(outcome.value.step_outcomes[1].cost).toMatchObject({ status: "recorded", duration_ms: 10, tokens: 2 });
+    const result = await runOfficialStage("make-decision", context, {
+      attempt_id: "attempt-workflowhub-session",
+      receipts: { stage_outcomes: outcome.ref },
+    });
+    expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "incomplete", quality_status: "incomplete" });
+  });
+
   it("accepts a host-supplied Stage Agent result through the adapter and the official route", async () => {
     const state = fixture("stage-agent-adapter");
     const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
@@ -156,16 +260,37 @@ describe("vNext official stage completion", () => {
     const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
   });
-  it("accepts the same result through the private external-host bridge", () => {
+  it("accepts the same result through the private current-session bridge and official route", async () => {
     const state = fixture("stage-agent-host-bridge");
     const execution = stageAgentExecution("make-decision");
+    let timestamp = 1000;
+    const events = [
+      ...execution.steps.map((entry) => {
+        const started = timestamp;
+        timestamp += 10;
+        return { task_id: state.task.identity.taskId, subject_kind: "step", subject_id: entry.step_slug, stage: "make-decision", started_at_ms: started, ended_at_ms: timestamp, ...entry, usage: { tokens: entry.cost.tokens, event_id: `usage-${entry.step_slug}` } };
+      }),
+      ...execution.skills.map((entry) => {
+        const started = timestamp;
+        timestamp += 10;
+        return { task_id: state.task.identity.taskId, subject_kind: "skill", subject_id: entry.skill_id, stage: "make-decision", started_at_ms: started, ended_at_ms: timestamp, ...entry, usage: { tokens: entry.cost.tokens, event_id: `usage-${entry.skill_id}` } };
+      }),
+    ];
     const request = {
       project_name: state.task.identity.projectName,
       task_id: state.task.identity.taskId,
       stage: "make-decision",
       attempt_id: "attempt-external-host-bridge",
       task_path: state.task.taskPath,
-      execution,
+      session: {
+        host: "codex-desktop",
+        session_id: "session-bridge",
+        task_id: state.task.identity.taskId,
+        source_ref: "codex-rollout-bridge",
+        status: execution.status,
+        events,
+        spec_analyze: execution.spec_analyze,
+      },
     };
     const bridge = join(process.cwd(), "tools", "host", "workflowhub-stage-agent-bridge.mjs");
     const output = execFileSync(process.execPath, [bridge], {
@@ -181,8 +306,104 @@ describe("vNext official stage completion", () => {
       attempt_id: "attempt-external-host-bridge",
       outcome_status: "completed",
     });
+    expect(result.producer).toMatchObject({ kind: "workflowhub-session", session_id: "session-bridge", source_ref: "codex-rollout-bridge" });
     const raw = state.task.readRecord(result.outcome_ref);
     expect(createHash("sha256").update(raw).digest("hex")).toBe(result.outcome_sha256);
+    const official = await runOfficialStage("make-decision", contextFor("make-decision", state), {
+      attempt_id: "attempt-external-host-bridge",
+      receipts: { stage_outcomes: result.outcome_ref },
+    });
+    expect(official).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+  });
+
+  it("lets the public run automatically consume the same-session hook events", async () => {
+    const state = fixture("workflowhub-current-session-auto-run");
+    const execution = stageAgentExecution("make-decision");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-current-session-cwd-")));
+    const stageCwd = join(root, "later-stage-workspace");
+    mkdirSync(stageCwd, { recursive: true });
+    const home = join(root, "home");
+    const rollout = join(home, ".codex", "sessions", "2026", "08", "18", "rollout-2026-08-18T00-00-00-session-auto-run.jsonl");
+    mkdirSync(join(home, ".codex", "sessions", "2026", "08", "18"), { recursive: true });
+    const skillTokenAt = 1000 + stageAgentExecution("make-decision").steps.length * 11 + 5;
+    writeFileSync(rollout, [
+      {
+        timestamp: new Date(1005).toISOString(),
+        type: "event_msg",
+        payload: { type: "token_count", info: { last_token_usage: { input_tokens: 11, output_tokens: 4, total_tokens: 15 } } },
+      },
+      {
+        timestamp: new Date(skillTokenAt).toISOString(),
+        type: "event_msg",
+        payload: { type: "token_count", info: { last_token_usage: { input_tokens: 13, output_tokens: 5, total_tokens: 18 } } },
+      },
+    ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+    const sessionId = "session-auto-run";
+    try {
+      registerCodexSession({ sessionId, transcriptPath: rollout, cwd: root, home });
+      const stageEntryOutput = execFileSync(process.execPath, [
+        join(process.cwd(), "tools", "cli", "stage-runtime.mjs"),
+        "status",
+        "--action=begin",
+        "--stage=make-decision",
+        `--project=${state.task.identity.projectName}`,
+        `--task=${state.task.identity.taskId}`,
+      ], {
+        cwd: root,
+        encoding: "utf8",
+        env: { ...process.env, HOME: home, CODEX_THREAD_ID: sessionId, WORKFLOWHUB_TASK_DIR: state.root },
+      });
+      expect(JSON.parse(stageEntryOutput)).toMatchObject({ stage: "make-decision" });
+      let timestamp = 1000;
+      for (const entry of execution.steps) {
+        startCodexSessionEvent({ stage: "make-decision", subjectKind: "step", subjectId: entry.step_slug, cwd: root, startedAtMs: timestamp });
+        timestamp += 10;
+        finishCodexSessionEvent({ stage: "make-decision", subjectKind: "step", subjectId: entry.step_slug, cwd: root, endedAtMs: timestamp, status: entry.status, resultSummary: entry.result_summary, evidenceRefs: ["decision-log"] });
+        timestamp += 1;
+      }
+      for (const entry of execution.skills) {
+        startCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: entry.skill_id, cwd: root, startedAtMs: timestamp });
+        timestamp += 10;
+        finishCodexSessionEvent({ stage: "make-decision", subjectKind: "skill", subjectId: entry.skill_id, cwd: root, endedAtMs: timestamp, status: entry.status, resultSummary: entry.result_summary, evidenceRefs: ["decision-log"], trigger: entry.trigger, executed: entry.executed, version: entry.version });
+        timestamp += 1;
+      }
+      recordCodexSessionSpecAnalyze({ stage: "make-decision", value: execution.spec_analyze, cwd: root });
+      const sessionInput = buildWorkflowHubSessionInput({ cwd: root, stage: "make-decision" });
+      expect(sessionInput).toMatchObject({ task_id: state.task.identity.taskId, status_value: "completed" });
+      expect(sessionInput.events).toHaveLength(execution.steps.length + execution.skills.length);
+      const runtimeOutput = execFileSync(process.execPath, [
+        join(process.cwd(), "tools", "cli", "stage-runtime.mjs"),
+        "run",
+        "--action=execute",
+        "--stage=make-decision",
+      ], {
+        cwd: stageCwd,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          HOME: home,
+          CODEX_THREAD_ID: sessionId,
+          WORKFLOWHUB_TASK_DIR: state.root,
+          WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT: "0",
+        },
+      });
+      const official = JSON.parse(runtimeOutput);
+      expect(official).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+      const facts = readMonitoringFacts(state.task.taskPath);
+      const tokenFacts = facts.filter((fact) => fact.fact_type === "token" && fact.stage === "make-decision");
+      const durationFacts = facts.filter((fact) => fact.fact_type === "duration" && fact.stage === "make-decision");
+      expect(tokenFacts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: String(execution.steps[0].step_id), status: "present", value: expect.objectContaining({ tokens: 15 }) }),
+        expect.objectContaining({ skill_id: execution.skills[0].skill_id, status: "present", value: expect.objectContaining({ tokens: 18 }) }),
+      ]));
+      expect(durationFacts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: String(execution.steps[0].step_id), status: "present", value: expect.objectContaining({ duration_ms: 10 }) }),
+        expect.objectContaining({ skill_id: execution.skills[0].skill_id, status: "present", value: expect.objectContaining({ duration_ms: 10 }) }),
+      ]));
+    } finally {
+      rmSync(sessionHandoffPath(root), { force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
   });
   it("publishes a truthful unavailable outcome when the external Stage Agent produced no packet", async () => {
     const state = fixture("stage-agent-unavailable");

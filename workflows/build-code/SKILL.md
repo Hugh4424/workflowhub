@@ -11,14 +11,29 @@ version: 2.2.0
 Implement the current task with the smallest correct change, real tests,
 per-AC evidence, independent review, and explicit finding disposition.
 
-When the host provides an explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery
-comes before extended reporting: read the host stage input once, perform the
-smallest real verification needed for the current task, write the complete
-Stage Agent execution object to that exact path, verify that it parses, and
-stop. Do not spend the bounded host run rereading runtime adapters, replaying
-old phases, or repeating a full test suite after a current result exists. Any
-step not actually performed must be recorded as `incomplete` with its real
-reason; leaving the execution file unwritten is never an acceptable handoff.
+## 同一会话自动记录
+
+本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。
+
+阶段入口收到明确的 project/task context 时，会自动把当前已登记会话绑定到这个 task；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一绑定。绑定后下面的命令自动使用这个 task，不再手填 task id。一个会话只允许绑定一个 task，换 task 必须开新会话。
+
+```sh
+node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>
+node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> --subject-kind=step --subject-id=<step_slug> --status=<completed|failed|skipped|not_applicable> --summary="<真实结果>" --evidence=<真实证据引用>
+```
+
+skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 `node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>`，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
+
+When the host automatically binds the current WorkflowHub session to an
+explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery comes before extended
+reporting: read the host stage input once, perform the smallest real
+verification needed for the current task, write the complete current-session
+execution object to that exact path, verify that it parses, and stop. The user
+does not start another agent. Do not spend the bounded host run rereading
+runtime adapters, replaying old phases, or repeating a full test suite after a
+current result exists. Any step not actually performed must be recorded as
+`incomplete` with its real reason; leaving the execution file unwritten is
+never an acceptable handoff.
 
 ## Authority and entry
 

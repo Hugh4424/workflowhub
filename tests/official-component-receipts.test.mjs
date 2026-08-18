@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
-import { validateCanonicalTestReceipt } from "../runtime/evidence/canonical-evidence-validators.mjs";
+import { validateCanonicalImplementationReceipt, validateCanonicalTestReceipt } from "../runtime/evidence/canonical-evidence-validators.mjs";
 import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
@@ -97,6 +97,25 @@ describe("official component receipt authority", () => {
     });
     expect(implementation.value.changed).toEqual(["new.txt", "tracked.txt"]);
     expect(implementation.value).not.toHaveProperty("phase_completion");
+  });
+
+  it("allows legal double-dot filenames while still rejecting traversal segments", () => {
+    const { task, worktree, workspace } = fixture();
+    writeFileSync(join(worktree, "__init__.py"), "\n");
+    const implementation = writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation", payload: {},
+    });
+    expect(implementation.value.changed).toContain("__init__.py");
+    const value = JSON.parse(task.readRecord(implementation.ref));
+    expect(() => validateCanonicalImplementationReceipt(value, {
+      taskId: task.identity.taskId,
+      snapshotTree: value.snapshot_tree,
+      read: (ref) => task.readRecord(ref),
+    })).not.toThrow();
+    expect(() => validateCanonicalImplementationReceipt({ ...value, changed: ["src/../escape.py"] }, {
+      taskId: task.identity.taskId,
+      snapshotTree: value.snapshot_tree,
+    })).toThrow(/provenance is invalid/);
   });
 
   it("reuses a same-snapshot build-code full test receipt during verify capture", () => {

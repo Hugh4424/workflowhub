@@ -69,7 +69,7 @@ function expectedPassed(status, passed, failed, nonterminal) {
   return false;
 }
 
-function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
+function authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot = false }) {
   let value;
   try { value = JSON.parse(raw); } catch {
     dependencies[key] = "stale";
@@ -103,7 +103,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
         }
       } else {
         validateSchema("result", value);
-        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && value.snapshot_tree !== fact.snapshot_tree)) {
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && !allowMaterialOnlySnapshot && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
         const subjectMatches = fact.subject === "integration_review"
@@ -175,7 +175,7 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   for (const evidence of fact.evidence ?? []) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
-    if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key });
+    if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot: recordOnly });
   }
   const values = Object.values(dependencies);
   const status = values.includes("missing") ? "missing" : values.every((value) => value === "current") ? "current" : "stale";

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { ArtifactDir } from '../core/artifact-dir.mjs';
 import { createTask } from '../runtime/task/task-handle.mjs';
 import { createTaskKernel } from '../runtime/task/task-handle.mjs';
-import { initializeTaskStore, readTaskFacts } from '../runtime/task/task-store.mjs';
+import { initializeTaskStore, readMonitoringFacts, readTaskFacts } from '../runtime/task/task-store.mjs';
 import { prepareTaskWorkspace } from '../runtime/task/workspace.mjs';
 import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from '../runtime/evidence/codex-transcript-adapter.mjs';
 import { createTranscriptSourceReader } from '../runtime/evidence/fact-collector.mjs';
@@ -156,6 +156,36 @@ describe('M15 stage sidecar integration', () => {
     }
   });
 
+  it('uses a half-open transcript window and never treats cumulative usage as per-turn cost', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-codex-window-home-')));
+    const rolloutDir = join(home, '.codex', 'sessions', '2026', '08', '13');
+    const threadId = 'thread-m15-token-window';
+    const rolloutPath = join(rolloutDir, `rollout-2026-08-13T00-00-00-${threadId}.jsonl`);
+    const token = (timestamp, info) => ({ timestamp, type: 'event_msg', payload: { type: 'token_count', info } });
+    try {
+      mkdirSync(rolloutDir, { recursive: true });
+      writeFileSync(rolloutPath, [
+        token('2026-08-13T00:00:01.000Z', { last_token_usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10 }, total_token_usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 } }),
+        token('2026-08-13T00:00:01.200Z', { total_token_usage: { input_tokens: 200, output_tokens: 40, total_tokens: 240 } }),
+        token('2026-08-13T00:00:02.000Z', { last_token_usage: { input_tokens: 90, output_tokens: 10, total_tokens: 100 } }),
+      ].map((entry) => JSON.stringify(entry)).join('\n') + '\n');
+      const source = resolveDefaultMonitoringSource({
+        task_id: 'm15-token-window', run_id: 'run-token-window', attempt_id: 'attempt-token-window', context: { stage: 'build-code' },
+        env: { CODEX_THREAD_ID: threadId, CODEX_ROLLOUT_PATH: rolloutPath }, home,
+        startedAtMs: Date.parse('2026-08-13T00:00:00.500Z'),
+        endedAtMs: Date.parse('2026-08-13T00:00:01.500Z'),
+      });
+      const parsed = parseRegisteredCodexTranscript(source, { project_name: 'workflowhub', task_id: 'm15-token-window', run_id: 'run-token-window', attempt_id: 'attempt-token-window' });
+      const tokens = parsed.records.filter((record) => record.fact_type === 'token');
+      const present = tokens.filter((record) => record.status === 'present');
+      expect(present).toHaveLength(1);
+      expect(present[0].value.total_tokens).toBe(10);
+      expect(tokens.filter((record) => record.status !== 'present')).not.toHaveLength(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('records facts when the public stage-runtime success path starts without a facts store', () => {
     const state = publicRunFixture();
     try {
@@ -174,7 +204,7 @@ describe('M15 stage sidecar integration', () => {
       const result = spawnSync(process.execPath, [
         runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
       ], {
-        cwd: process.cwd(),
+        cwd: state.repo,
         env: isolatedPublicRuntimeEnv({ home: state.storageRoot, taskDir: state.storageRoot }),
         encoding: 'utf8',
       });
@@ -241,13 +271,17 @@ describe('M15 stage sidecar integration', () => {
         stageOutcome: {
           status: 'completed',
           step_outcomes: [{
-            step_id: '1', step_slug: 'read-decision-log', status: 'completed',
+          step_id: '1', step_slug: 'read-decision-log', status: 'completed',
             result_summary: '真实步骤结果', evidence_refs: ['quality/evidence/step-proof'],
-            cost: { status: 'recorded', duration_ms: 42, tokens: 123 },
+            execution_id: 'exec-step-read-decision-log',
+            started_at: '2026-08-15T00:00:00.000Z', completed_at: '2026-08-15T00:00:00.042Z',
+            cost: { status: 'partial', duration_ms: 42, tokens: null, reason: 'provider_usage_unavailable' },
           }],
           skill_outcomes: [{
             skill_id: 'spec-analyze', status: 'completed', trigger: true, executed: true,
             version: 'skill-v1', result_summary: '真实技能结果', evidence_refs: ['quality/evidence/skill-proof'],
+            execution_id: 'exec-skill-spec-analyze',
+            started_at: '2026-08-15T00:00:00.000Z', completed_at: '2026-08-15T00:00:00.007Z',
             cost: { status: 'recorded', duration_ms: 7, tokens: 11 },
           }],
         },
@@ -255,8 +289,9 @@ describe('M15 stage sidecar integration', () => {
         now: () => new Date('2026-08-15T00:00:00.000Z'),
       });
       const facts = readTaskFacts(state.task.taskPath);
+      expect(() => readMonitoringFacts(state.task.taskPath)).not.toThrow();
       expect(facts).toEqual(expect.arrayContaining([
-        expect.objectContaining({ fact_type: 'token', step_slug: 'read-decision-log', value: { message_id: expect.any(String), tokens: 123, grain: 'stage_outcome' } }),
+        expect.objectContaining({ fact_type: 'token', step_slug: 'read-decision-log', status: 'unavailable', value: null, reason: 'provider_usage_unavailable' }),
         expect.objectContaining({ fact_type: 'duration', step_slug: 'read-decision-log', value: { duration_ms: 42, event_id: expect.any(String), grain: 'stage_outcome' } }),
         expect.objectContaining({ fact_type: 'token', skill_id: 'spec-analyze', value: { message_id: expect.any(String), tokens: 11, grain: 'stage_outcome' } }),
         expect.objectContaining({ fact_type: 'duration', skill_id: 'spec-analyze', value: { duration_ms: 7, event_id: expect.any(String), grain: 'stage_outcome' } }),
@@ -311,6 +346,7 @@ describe('M15 stage sidecar integration', () => {
       await expect(stageRuntimeCliMain([
         'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
       ], {
+        cwd: state.repo,
         services: {
           runMonitoringSidecar: async () => { throw new Error('injected sidecar failure'); },
           publishStaleMonitoringSnapshot: () => { throw new Error('injected stale fallback failure'); },
@@ -347,7 +383,7 @@ describe('M15 stage sidecar integration', () => {
       const result = spawnSync(process.execPath, [
         runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
       ], {
-        cwd: process.cwd(),
+        cwd: state.repo,
         env: isolatedPublicRuntimeEnv({
           home: state.storageRoot,
           taskDir: state.storageRoot,
@@ -395,7 +431,7 @@ describe('M15 stage sidecar integration', () => {
       const result = spawnSync(process.execPath, [
         runtime, 'run', '--action=execute', '--stage=build-spec', '--project=workflowhub', '--task=m15-public-run', `--input=${inputPath}`,
       ], {
-        cwd: process.cwd(),
+        cwd: state.repo,
         env: isolatedPublicRuntimeEnv({
           home: state.storageRoot,
           taskDir: state.storageRoot,

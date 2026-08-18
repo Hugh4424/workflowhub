@@ -10,7 +10,7 @@ function validateSummaryAnchor(value, label) {
   const expectedRole = label.endsWith(".implementation_anchor") ? "implementation"
     : label.endsWith(".verification_anchor") ? "verification" : null;
   if (typeof value.id !== "string" || value.id.trim() === ""
-      || typeof value.path !== "string" || !ANCHOR_PATH.test(value.path) || value.path.includes("..")
+      || typeof value.path !== "string" || !ANCHOR_PATH.test(value.path) || value.path.split("/").includes("..")
       || !Number.isSafeInteger(value.start_line) || value.start_line < 1
       || !Number.isSafeInteger(value.end_line) || value.end_line < value.start_line
       || typeof value.role !== "string" || value.role.trim() === ""

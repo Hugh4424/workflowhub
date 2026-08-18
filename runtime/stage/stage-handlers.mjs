@@ -73,7 +73,7 @@ const text = (value, label) => { if (typeof value !== "string" || value.trim() =
 function semanticAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
     && typeof value.id === "string" && value.id.trim() !== ""
-    && typeof value.path === "string" && value.path.trim() !== "" && !value.path.includes("..") && !value.path.startsWith("/")
+    && typeof value.path === "string" && value.path.trim() !== "" && !value.path.split("/").includes("..") && !value.path.startsWith("/")
     && Number.isSafeInteger(value.start_line) && value.start_line >= 1
     && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
     && typeof value.role === "string" && value.role.trim() !== ""
@@ -682,8 +682,11 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   if (attempt.terminal_status !== "unavailable" || !attempt.error) throw new Error("review attempt ref must describe an unavailable review");
   if (!SHA256.test(item.evidence.sha256)) throw new Error("review unavailable attempt hash must be sha256");
   if (expectedTrack !== undefined && attempt.review_track !== expectedTrack) throw new Error(`review must use wh-review ${expectedTrack} track`);
+  // A broker group can terminate before dispatching any provider. Preserve
+  // that terminal transport fact as unavailable; do not accept an empty
+  // provider list for provider-specific failures or malformed results.
   if (attempt.provider_attempts.length === 0
-      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN"].includes(attempt.error.code)) {
+      && !["MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "GROUP_OUTCOME_UNAVAILABLE"].includes(attempt.error.code)) {
     throw new Error("review unavailable attempt must contain provider attempts");
   }
   const latestByProvider = new Map();
