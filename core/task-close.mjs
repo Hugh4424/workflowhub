@@ -1099,7 +1099,8 @@ function archiveFacts(root, ref, delivery) {
 function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
-  if (git(root, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("target repository must be clean");
+  const dirtySource = sourceWorktreeStatus(root);
+  if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
   if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
