@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { captureExecutionSnapshot, captureGitWorktreeSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
@@ -1007,6 +1007,14 @@ function gitResult(cwd, args) {
   return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
 }
 
+function sourceWorktreeStatus(root) {
+  const raw = git(root, ["status", "--porcelain", "--untracked-files=all"]);
+  return raw.split(/\r?\n/).filter(Boolean).filter((line) => {
+    const paths = line.slice(3).split(" -> ").map((value) => value.trim().replace(/^"|"$/g, ""));
+    return !paths.every((path) => EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix)));
+  }).join("\n");
+}
+
 function oid(value, label) {
   if (!/^[a-f0-9]{40}$/i.test(value ?? "")) throw new TypeError(`${label} must be a full commit OID`);
   return value.toLowerCase();
@@ -1203,7 +1211,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   if (!branchTip.ok) throw new Error("task branch does not exist");
   const tip = branchTip.stdout.toLowerCase();
   if (tip === taskCommit) {
-    if (git(worktree, ["status", "--porcelain"]) !== "") throw new Error("published task commit requires a clean task worktree");
+    if (sourceWorktreeStatus(worktree) !== "") throw new Error("published task commit requires a clean source worktree");
   } else {
     const parent = gitResult(root, ["rev-parse", `${taskCommit}^`]);
     const taskTree = gitResult(root, ["rev-parse", `${taskCommit}^{tree}`]);
@@ -1396,7 +1404,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     const targetTip = branchOid(root, delivery.target_branch);
     const referenced = contains(delivery.task_commit, taskTip) || contains(delivery.task_commit, targetTip);
     const staged = existsSync(worktree) ? gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout : "";
-    const advanced = !existsSync(worktree) || (contains(delivery.task_commit, git(worktree, ["rev-parse", "HEAD"])) && (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) === "" || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
+    const advanced = !existsSync(worktree) || (contains(delivery.task_commit, git(worktree, ["rev-parse", "HEAD"])) && (sourceWorktreeStatus(worktree) === "" || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
     return { satisfied: referenced && advanced, task_commit: delivery.task_commit };
   };
   const archived = () => {
@@ -1454,7 +1462,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             throw new Error("task worktree bytes changed before snapshot publish");
           }
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
-          if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");
+          if (sourceWorktreeStatus(worktree) !== "") throw new Error("published task source worktree is not clean");
         },
         verify: async (value) => value.satisfied && value.task_commit === delivery.task_commit,
       };
@@ -1465,7 +1473,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           if (!published().satisfied) throw new Error("verified snapshot is not published");
           const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(worktree, delivery.spec_source_path))) {
-            if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
+          if (sourceWorktreeStatus(worktree) !== "") throw new Error("task source worktree changed before spec archive");
             createArchiveParent(worktree, delivery.spec_archive_path);
             git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
           } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {

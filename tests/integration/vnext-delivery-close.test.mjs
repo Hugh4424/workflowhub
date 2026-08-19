@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -188,6 +188,22 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery).toMatchObject({
       task_commit: state.snapshot.commit, target_baseline: targetBaseline, remote_target_baseline: targetBaseline,
     });
+  });
+
+  it("ignores execution sidecars when checking source worktree cleanliness", () => {
+    const state = fixture();
+    mkdirSync(join(state.candidate.worktreeRoot, "quality", "tests"), { recursive: true });
+    writeFileSync(join(state.candidate.worktreeRoot, "quality", "tests", "stage-fact.json"), "{}\n");
+    const result = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    });
+    expect(result.plan.delivery.task_commit).toBe(state.snapshot.commit);
   });
 
   it("accepts the verify-code code-review fact without a second integration review", () => {
