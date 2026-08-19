@@ -69,25 +69,38 @@ function expectedPassed(status, passed, failed, nonterminal) {
   return false;
 }
 
-function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
+function authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot = false }) {
   let value;
   try { value = JSON.parse(raw); } catch {
     dependencies[key] = "stale";
     return;
   }
   try {
-    const reviewStage = fact.kind === "review"
+    const crossStageReview = fact.kind === "review"
       && fact.stage === "verify-code"
-      && fact.subject === "same_build_integration_review"
-      ? "build-code"
-      : fact.stage;
+      && value.stage === "build-code"
+      && (fact.subject === "same_build_integration_review"
+        || value.review_kind === "mini_task.implementation");
+    const reviewStage = crossStageReview ? "build-code" : fact.stage;
     if (evidence.evidence_type === "test_receipt") {
       if (fact.stage === "verify-code" && fact.subject === "full_tests_fresh") {
         validateCanonicalFullTestReceipt(value, { taskId: fact.task_id, snapshotTree: fact.snapshot_tree, requirePassed: false });
       } else {
+        const receiptStage = fact.stage;
+        const expectedProducerComponent = receiptStage === "build-code"
+          ? "build-code-test-capture"
+          : receiptStage === "verify-code"
+            ? "verify-code-test-capture"
+            : undefined;
+        if (value.stage !== receiptStage || expectedProducerComponent === undefined) {
+          throw new Error("test receipt stage is not bound to the quality fact");
+        }
         validateCanonicalTestReceipt(value, {
-          taskId: fact.task_id, stage: fact.stage, snapshotTree: fact.snapshot_tree,
-          subject: fact.subject, requirePassed: false,
+          taskId: fact.task_id,
+          stage: receiptStage,
+          snapshotTree: fact.snapshot_tree,
+          expectedProducerComponent,
+          requirePassed: false,
         });
       }
       if (!expectedPassed(fact.status, value.exit_code === 0, value.exit_code !== 0)) throw new Error("test outcome mismatch");
@@ -103,12 +116,31 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key }) {
         }
       } else {
         validateSchema("result", value);
-        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && value.snapshot_tree !== fact.snapshot_tree)) {
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && !allowMaterialOnlySnapshot && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
-        const subjectMatches = fact.subject === "integration_review"
-            ? value.subject_kind === "worktree" && value.review_scope === "integration"
-            : value.subject_kind === "worktree";
+        // review_kind is optional for the five formal stages.  Older and
+        // current wh-review writers may omit it rather than serializing null;
+        // both forms mean "formal stage review", while mini-task kinds remain
+        // explicit and must never satisfy a formal-stage subject.
+        const reviewKind = value.review_kind ?? null;
+        const subjectMatches = fact.subject === "same_build_integration_review"
+            ? reviewKind === null
+              && value.subject_kind === "worktree"
+              && value.phase_id === null
+              && value.review_scope === "integration"
+            : fact.subject === "integration_review"
+              ? reviewKind === null
+                && value.subject_kind === "worktree"
+                && value.phase_id === null
+                && value.review_scope === "integration"
+            : reviewKind === "mini_task.implementation"
+              ? value.subject_kind === "phase"
+                && value.phase_id === "mini-task-implementation"
+                && value.review_scope === "phase"
+              : reviewKind === null
+                && value.subject_kind === "worktree"
+                && value.phase_id === null;
         if (!subjectMatches) throw new Error("review subject mismatch");
         if (Object.hasOwn(value, "verdict")) throw new Error("current review result must not expose reviewer verdict");
         if (fact.status !== "recorded") throw new Error("review result requires a recorded review fact");
@@ -175,7 +207,7 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   for (const evidence of fact.evidence ?? []) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
-    if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key });
+    if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot: recordOnly });
   }
   const values = Object.values(dependencies);
   const status = values.includes("missing") ? "missing" : values.every((value) => value === "current") ? "current" : "stale";

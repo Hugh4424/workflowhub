@@ -27,7 +27,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   const manifest = JSON.parse(stepsManifestRaw);
   const skillManifest = yaml.load(skillsManifestRaw);
   const analyzerStep = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
-  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage] ?? { required_materials: [], required_evidence: [] };
   const materialText = Object.fromEntries(values.map(([file, content]) => [file, content]));
   const analyzerMaterials = Object.fromEntries(profile.required_materials.map((name) => [
     name,
@@ -102,8 +102,10 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     }],
     work_summary: `fixture ${stage} stage-end spec-analyze semantic/evidence check`,
   };
-  const analyzerResult = validateStageSpecAnalyzeProfile({ stage, packet: analyzerPacket });
-  if (!analyzerResult.ok) throw new Error(`stage outcome fixture analyzer packet is invalid: ${analyzerResult.errors.join("; ")}`);
+  const analyzerResult = STAGE_SPEC_ANALYZE_PROFILES[stage]
+    ? validateStageSpecAnalyzeProfile({ stage, packet: analyzerPacket })
+    : null;
+  if (analyzerResult && !analyzerResult.ok) throw new Error(`stage outcome fixture analyzer packet is invalid: ${analyzerResult.errors.join("; ")}`);
   const makeEvidence = ({ subjectKind, subjectId, outcomeStatus, resultSummary }) => {
     const proofRaw = `${JSON.stringify({
       schema_version: "workflowhub-stage-outcome-evidence.v1",
@@ -135,7 +137,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   const skillOutcomes = (skillManifest.skills ?? []).map(({ name }) => {
     const resultSummary = `resolved ${name}`;
     return {
-      skill_id: name, status, trigger: true, executed: name === "spec-analyze" || status === "completed", version: "fixture-1.0.0",
+      skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "dsh-code-review" || status === "completed", version: "fixture-1.0.0",
       result_summary: resultSummary,
       evidence_refs: makeEvidence({ subjectKind: "skill", subjectId: name, outcomeStatus: status, resultSummary }),
       cost: { duration_ms: null, tokens: null, status: "unavailable", reason: "fixture host did not expose usage" },
@@ -148,6 +150,23 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     steps_manifest_ref: stepsManifestRef, steps_manifest_hash: sha256(stepsManifestRaw),
     skills_manifest_ref: skillsManifestRef, skills_manifest_hash: sha256(skillsManifestRaw),
     step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes,
+    ...(stage === "verify-code" ? {
+      code_review: {
+        schema_version: "workflowhub-code-review-stage-outcome.v1",
+        stage,
+        snapshot_tree: snapshot.tree,
+        material_revision: revision,
+        step_slug: "code-review-closure",
+        skill_id: "dsh-code-review",
+        result: {
+          status: "clean",
+          findings: [],
+          summary: "fixture current implementation code review completed",
+          focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],
+          repairs: [],
+        },
+      },
+    } : {
     spec_analyze: {
       schema_version: "workflowhub-spec-analyze-stage-outcome.v1",
       stage,
@@ -160,6 +179,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       packet: analyzerPacket,
       result: analyzerResult,
     },
+    }),
   };
   const raw = `${JSON.stringify(value, null, 2)}\n`;
   const ref = `quality/evidence/stage-outcomes/${stage}/${sha256(raw)}.json`;

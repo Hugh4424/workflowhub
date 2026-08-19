@@ -1849,6 +1849,42 @@
       "consumer": "build-code and verify-code execution facts",
       "delete_condition": "retain with the task record; remove only with task archival policy",
       "content_change": "phase task cards, RED/GREEN evidence, AC trace, and append-only execution facts"
+    },
+    {
+      "source": ".codex/hooks.json",
+      "destination": ".codex/hooks.json",
+      "status": "add",
+      "owner": "M15 current-session host binding",
+      "consumer": "trusted WorkflowHub Codex project sessions",
+      "delete_condition": "remove when the host exposes a canonical WorkflowHub session lifecycle binding",
+      "content_change": "project-local SessionStart/UserPromptSubmit/SessionEnd source handoff"
+    },
+    {
+      "source": "tools/host/workflowhub-codex-session-hook.mjs",
+      "destination": "tools/host/workflowhub-codex-session-hook.mjs",
+      "status": "add",
+      "owner": "M15 current-session host binding",
+      "consumer": "trusted project hooks",
+      "delete_condition": "remove with the project hook contract",
+      "content_change": "registers exact host transcript metadata; never writes canonical facts"
+    },
+    {
+      "source": "tools/host/workflowhub-codex-session-state.mjs",
+      "destination": "tools/host/workflowhub-codex-session-state.mjs",
+      "status": "add",
+      "owner": "M15 current-session host binding",
+      "consumer": "session hook, event marker, and public stage run",
+      "delete_condition": "remove when a canonical host lifecycle source replaces the private handoff",
+      "content_change": "ephemeral session/source/event handoff; not a task facts writer"
+    },
+    {
+      "source": "tools/host/workflowhub-codex-session-event.mjs",
+      "destination": "tools/host/workflowhub-codex-session-event.mjs",
+      "status": "add",
+      "owner": "M15 current-session host binding",
+      "consumer": "WorkflowHub workflow skills",
+      "delete_condition": "remove when semantic step/skill events are supplied by the host",
+      "content_change": "same-session step/skill boundaries and transcript usage windows"
     }
   ]
 }

@@ -287,7 +287,15 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
     state.kernel.publishCanonicalRecord(outputRef, output);
     refs.push(record(state, `receipts/tests/${stage}-${testExit}${suffix}.json`, {
       schema_version: "workflowhub-receipt.v1", task_id: state.task.identity.taskId, stage,
-      producer: { stage, component: stage === "verify-code" ? "verify-code-test-capture" : "current-five-stage-test", version: "1.0.0" },
+      producer: {
+        stage,
+        component: stage === "verify-code"
+          ? "verify-code-test-capture"
+          : stage === "build-code"
+            ? "build-code-test-capture"
+            : "current-five-stage-test",
+        version: "1.0.0",
+      },
       command: stage === "verify-code" ? "npm test" : (testExit === 0 ? "true" : "false"),
       command_hash: sha256(stage === "verify-code" ? "npm test" : (testExit === 0 ? "true" : "false")), exit_code: testExit,
       material_revision: materialRevision, source_digest: snapshot.source_digest,
@@ -343,20 +351,50 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
 }
 
 describe("current vNext five-stage runtime", () => {
-  it("requires an authenticated stage-outcome receipt instead of accepting caller facts alone", () => {
+  it("keeps current stage work running when a supplied stage-outcome receipt is invalid", () => {
     const state = fixture("stage-outcome-receipt-required");
-    const result = publicRunRaw(state, "build-spec", { receipts: { review: "quality/reviews/results/missing.json" } });
-    expect(result.status).not.toBe(0);
-    expect(`${result.stdout}\n${result.stderr}`).toMatch(/stage[_ -]outcome|stage outcome|receipt/i);
+    const result = publicRunRaw(state, "build-spec", {
+      receipts: { stage_outcomes: "quality/evidence/stage-outcomes/build-spec/missing.json" },
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      stage: "build-spec",
+      work_status: "ready",
+      quality_status: "incomplete",
+      stage_outcome_ref: null,
+      stage_outcome_hash: null,
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
+    });
     const facts = readTaskFacts(state.task.taskPath);
     expect(facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ fact_type: "source_status", status: "missing", reason: "no_registered_source" }),
-      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_unavailable" }),
+      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_invalid" }),
     ]));
     const declaredSteps = JSON.parse(readFileSync(join(process.cwd(), "workflows/build-spec/steps.json"), "utf8")).steps;
     const declaredSkills = yaml.load(readFileSync(join(process.cwd(), "workflows/build-spec/skill-deps.yaml"), "utf8")).skills;
     expect(facts.filter((fact) => fact.fact_type === "step" && fact.stage === "build-spec")).toHaveLength(declaredSteps.length);
     expect(facts.filter((fact) => fact.fact_type === "skill" && fact.stage === "build-spec")).toHaveLength(declaredSkills.length);
+  });
+
+  it("allows public stage work without a host outcome and exposes the gap as unavailable", () => {
+    const state = fixture("stage-outcome-optional-for-work");
+    const result = publicRunRaw(state, "build-spec", { receipts: {} });
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout);
+    expect(output).toMatchObject({
+      stage: "build-spec",
+      work_status: "ready",
+      quality_status: "incomplete",
+      stage_outcome_ref: null,
+      stage_outcome_hash: null,
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+    });
+    const facts = readTaskFacts(state.task.taskPath);
+    expect(facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unavailable", reason: "stage_outcome_missing" }),
+    ]));
   });
 
   it("rejects evidence that is hashed correctly but belongs to another declared step", () => {
@@ -663,7 +701,7 @@ describe("current vNext five-stage runtime", () => {
     expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
-  it("rejects the public run route when the Stage Agent omits its outcome receipt", () => {
+  it("keeps the public run route usable when the Stage Agent omits its outcome receipt", () => {
     const state = fixture("public-run-missing-receipt");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const result = spawnSync(process.execPath, [
@@ -674,15 +712,18 @@ describe("current vNext five-stage runtime", () => {
       env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
-    expect(result.status, `${result.stdout}\n${result.stderr}`).not.toBe(0);
-    expect(`${result.stdout}\n${result.stderr}`).toMatch(/stage[_ -]outcome|stage outcome|receipt/i);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      stage: "build-spec",
+      work_status: "ready",
+      quality_status: "incomplete",
+    });
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
 
-  it("binds verify-code independent review evidence to quality_note, not build-code review", async () => {
+  it("binds verify-code only to the current code-review fact, not build-code review", async () => {
     const state = fixture("verify-review-evidence-binding");
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-    const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
     const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree });
     const reviewFact = (ref, reviewScope) => {
       const raw = state.task.readRecord(ref);
@@ -697,18 +738,17 @@ describe("current vNext five-stage runtime", () => {
         ...currentEvidence,
         facts: {
           ...currentEvidence.facts,
-          review: reviewFact(buildReview.resultRef, "integration"),
-          quality_note: reviewFact(qualityReview.resultRef, null),
+          code_review: reviewFact(qualityReview.resultRef, null),
         },
         missing_items: ["fixture only exercises review evidence binding"],
       };
     });
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.find((fact) => fact.subject === "same_build_integration_review")).toBeUndefined();
-    expect(facts.find((fact) => fact.subject === "independent_review")?.evidence[0]?.ref).toBe(qualityReview.resultRef);
+    expect(facts.find((fact) => fact.subject === "code_review")?.evidence[0]?.ref).toBe(qualityReview.resultRef);
   });
 
-  it("does not reuse a generic build-code review when verify-code quality_note is absent", async () => {
+  it("does not reuse a generic build-code review when the current code review is absent", async () => {
     const state = fixture("verify-review-evidence-missing-quality-note");
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
@@ -730,11 +770,11 @@ describe("current vNext five-stage runtime", () => {
         },
       };
     });
-    const independentReview = result.quality_fact_refs
+    const codeReview = result.quality_fact_refs
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
-      .find((fact) => fact.subject === "independent_review");
-    expect(independentReview.status).toBe("missing");
-    expect(independentReview.evidence[0]?.ref).not.toBe(buildReview.resultRef);
+      .find((fact) => fact.subject === "code_review");
+    expect(codeReview.status).toBe("missing");
+    expect(codeReview.evidence[0]?.ref).not.toBe(buildReview.resultRef);
   });
 
   it("runs build-spec through verify-code without inventing an audit gate", () => {
@@ -796,17 +836,9 @@ describe("current vNext five-stage runtime", () => {
     expect(publicStatus(state, "build-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 
     const verifySnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-    const verifyTests = publicTestReceipt(state, "verify-code", verifySnapshot);
     const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: verifySnapshot.tree });
-    const verifyProof = record(state, "quality/evidence/public-verify-code-proof.json", { verified: true, snapshot_tree: verifySnapshot.tree });
-    const evidenceReceipt = publicAcceptanceEvidence(state, verifySnapshot, verifyProof);
-    const verification = publicVerificationReceipt(state, verifyProof);
-    publicConfirm(state, "verify-code");
     const verifyRun = publicRun(state, "verify-code", {
-      receipts: {
-        tests: verifyTests.ref, review: buildReview.resultRef, quality_review: qualityReview.resultRef,
-        evidence: evidenceReceipt.ref, verification: verification.ref,
-      },
+      receipts: { quality_review: qualityReview.resultRef },
     });
     expect(verifyRun.status).toBe("completed");
     expect(publicStatus(state, "verify-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });
@@ -840,17 +872,14 @@ describe("current vNext five-stage runtime", () => {
         }
         if (stage === "verify-code") {
           const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
-          const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: snapshot.tree });
           const qualityReview = writeFormalReviewFixture({ task: state.task, stage: "verify-code", snapshotTree: snapshot.tree });
           const reviewFact = (ref, reviewScope) => ({
             status: "recorded", result_ref: ref, result_hash: sha256(state.task.readRecord(ref)),
             snapshot_tree: snapshot.tree, subject_kind: "worktree", phase_id: null, review_scope: reviewScope,
           });
-          facts.review = reviewFact(buildReview.resultRef, "integration");
-          facts.quality_note = reviewFact(qualityReview.resultRef, null);
+          facts.code_review = reviewFact(qualityReview.resultRef, null);
           currentEvidence.evidence_refs.push(
-            { ref: buildReview.resultRef, sha256: facts.review.result_hash },
-            { ref: qualityReview.resultRef, sha256: facts.quality_note.result_hash },
+            { ref: qualityReview.resultRef, sha256: facts.code_review.result_hash },
           );
         }
         return { ...currentEvidence, facts };

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const protocol = "workflowhub-result.v3";
+const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
@@ -94,8 +95,10 @@ function validateV3Sha256(value, label) {
 
 function validateV3Usage(value, label = "v3 usage") {
   if (value === null) return null;
-  const visit = (current, path) => {
+  const visit = (current, path, allowDecimal = false) => {
     if (Number.isSafeInteger(current) && current >= 0) return current;
+    if (allowDecimal && typeof current === "number" && Number.isFinite(current)
+        && current >= 0 && current <= Number.MAX_SAFE_INTEGER) return current;
     if (!current || typeof current !== "object" || Array.isArray(current)) {
       throw failure("PROTOCOL_INCOMPATIBLE", `${path} must contain only non-negative safe integers or objects`);
     }
@@ -103,7 +106,7 @@ function validateV3Usage(value, label = "v3 usage") {
     if (keys.length === 0 || keys.some((key) => key.trim() === "")) {
       throw failure("PROTOCOL_INCOMPATIBLE", `${path} must not be empty`);
     }
-    return Object.fromEntries(keys.map((key) => [key, visit(current[key], `${path}.${key}`)]));
+    return Object.fromEntries(keys.map((key) => [key, visit(current[key], `${path}.${key}`, allowDecimal || (path === label && key === "cost"))]));
   };
   return visit(value, label);
 }
@@ -148,7 +151,7 @@ function validateV3Member(value, providers, materialId, runtimeId, contractId = 
   }
   if (!value.timing || Object.keys(value.timing).sort().join("\0") !== ["completed_at_ms", "duration_ms", "started_at_ms"].join("\0")) throw failure("PROTOCOL_INCOMPATIBLE", "v3 timing is invalid");
   validateV3Timing(value.timing, "v3");
-  if (!(value.deadline_ms === null || (Number.isSafeInteger(value.deadline_ms) && value.deadline_ms >= 1)) || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
+  if (value.deadline_ms !== null || typeof value.continuable !== "boolean") throw failure("PROTOCOL_INCOMPATIBLE", "v3 execution facts are invalid");
   if (value.output !== null) validateV3String(value.output, "v3 output");
   if (value.session_id !== null) validateV3String(value.session_id, "v3 session_id");
   const usage = validateV3Usage(value.usage);
@@ -182,6 +185,37 @@ function validateV3Group(value, { hostProvider, providers, materialId, contractI
   if (received.size !== providers.size || [...providers].some((provider) => !received.has(provider))) throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review v3 omitted configured provider result(s)");
   if (containsPrivatePath(value)) throw failure("PUBLIC_RESULT_INVALID", "3rd-review v3 public group contains a private path");
   return Object.freeze({ ...value, providers: Object.freeze(members) });
+}
+
+function validateDirectionFlow(value) {
+  const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  const expectedSteps = [
+    { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+    { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+    { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+  ];
+  const stepsValid = Array.isArray(value?.steps)
+    && value.steps.length === expectedSteps.length
+    && value.steps.every((step, index) => {
+      const expected = expectedSteps[index];
+      return step && typeof step === "object" && !Array.isArray(step)
+        && step.id === expected.id
+        && (!expected.visible || same(step.visible, expected.visible))
+        && (!expected.after || same(step.after, expected.after))
+        && (!expected.hidden_until || step.hidden_until === expected.hidden_until)
+        && (!expected.output || step.output === expected.output)
+        && Object.keys(step).sort().join("\u0000") === Object.keys(expected).sort().join("\u0000");
+    });
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || value.version !== "direction-review.v1"
+      || value.public_request_count !== 1
+      || !stepsValid
+      || value.output?.one_provider_result !== true
+      || value.output?.one_logical_fact !== true
+      || containsPrivatePath(value)) {
+    throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 flow is invalid");
+  }
+  return structuredClone(value);
 }
 
 function parsePublicRun(wire) {
@@ -218,11 +252,24 @@ export class ReviewProviderClient {
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));
   }
 
-  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null } = {}) {
+  async runGroup({ hostProvider, providers, materials, prompt, attachmentDelivery = null, reviewFlow = null, reviewMode = null } = {}) {
     if (!(hostProvider && Array.isArray(providers) && providers.length > 0 && materials?.bundleRoot && materials?.materialId && prompt)) throw new TypeError("hostProvider, providers, materials, and prompt are required");
     if (providers.some((provider) => typeof provider !== "string" || provider.length === 0) || new Set(providers).size !== providers.length) throw new TypeError("providers must be a unique non-empty string array");
-    const effectiveAttachmentDelivery = attachmentDelivery ?? (providers.some((provider) => provider.split("/", 1)[0] === "codex") ? "always_embed" : "file_only");
-    if (!["file_only", "always_embed"].includes(effectiveAttachmentDelivery)) throw new TypeError("attachmentDelivery must be file_only or always_embed");
+    if (reviewMode !== null && !reviewModes.has(reviewMode)) throw new TypeError("reviewMode is unsupported");
+    if (reviewFlow && reviewMode !== "single_round") throw failure("PROTOCOL_INCOMPATIBLE", "direction-review.v1 requires single_round review mode");
+    // A v3 provider group may contain profiles with different attachment
+    // capabilities (for example Kimi/Antigravity=file_only and
+    // Codex=always_embed). Let 3rd-review negotiate per provider instead of
+    // deriving one group-wide mode from the presence of a Codex profile.
+    // Negotiated delivery keeps the shared material identity embed:false;
+    // the broker resolves the actual provider transport after capability
+    // selection. Explicit delivery remains available for single-provider or
+    // deliberately constrained callers.
+    const effectiveAttachmentDelivery = attachmentDelivery ?? "negotiated";
+    if (!["file_only", "always_embed", "negotiated"].includes(effectiveAttachmentDelivery)) throw new TypeError("attachmentDelivery must be file_only, always_embed, or negotiated");
+    if (providers.length > 1 && attachmentDelivery !== null && effectiveAttachmentDelivery !== "negotiated") {
+      throw failure("PROTOCOL_INCOMPATIBLE", "multi-provider review groups must use negotiated attachment delivery");
+    }
     const entries = (materials.deliveryManifest ?? materials.manifest ?? []).map(({ path, bytes, sha256 }) => ({ source: `${materials.sourcePrefix}/${path}`, destination: path, size: bytes, sha256, embed: effectiveAttachmentDelivery === "always_embed" }));
     // Each caller makes one public broker run. 3rd-review owns the group-level
     // heterologous filter, dispatch, native-session lifecycle, and all public
@@ -234,6 +281,12 @@ export class ReviewProviderClient {
       required_result_protocol: protocol,
       provider_allowlist: [...providers],
       prompt,
+      // A public WorkflowHub request never supplies a wall-clock deadline.
+      // The broker owns health/liveness termination and may only expose a
+      // PROCESS_STALLED terminal after its configured no-progress rule.
+      deadline_ms: null,
+      ...(reviewMode ? { review_mode: reviewMode } : {}),
+      ...(reviewFlow ? { review_flow: validateDirectionFlow(reviewFlow) } : {}),
       ...(materials.contractId ? { contract_id: materials.contractId } : {}),
       ...(materials.contractHash ? { contract_hash: materials.contractHash } : {}),
       ...(materials.semanticHash ? { semantic_hash: materials.semanticHash } : {}),

@@ -13,7 +13,7 @@ function observations(stage) {
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
-  it("reserves full-suite freshness for final verification", () => {
+  it("keeps verify-code completion on the current code-review fact", () => {
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("grill");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("research");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("decision_coverage");
@@ -26,9 +26,10 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");
     expect(STAGE_PREDICATES["build-code"].risk_tests_fresh).toBe("test");
-    expect(STAGE_PREDICATES["verify-code"].full_tests_fresh).toBe("test");
+    expect(STAGE_PREDICATES["verify-code"].code_review).toBe("review");
+    expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
-    expect(STAGE_PREDICATES["verify-code"].independent_review).toBe("review");
+    expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
     expect(STAGE_ADVISORY_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
   });
 
@@ -47,7 +48,7 @@ describe("five-stage completion predicates derive only from quality facts", () =
   it.each([
     ["build-code", "integration_review"],
     ["build-code", "acceptance_criteria"],
-    ["verify-code", "human_confirmation"],
+    ["verify-code", "code_review"],
   ])("%s cannot complete without required %s", (stage, subject) => {
     const facts = observations(stage).filter((entry) => entry.fact.value.subject !== subject);
     expect(() => assertStageCompleted(stage, facts)).toThrow(new RegExp(subject));

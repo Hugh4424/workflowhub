@@ -8,7 +8,7 @@ const member = (provider, adapter = provider.split("/", 1)[0], status = "complet
     kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 10, status,
   }],
   continuable: false,
-  deadline_ms: 360000,
+  deadline_ms: null,
   error: status === "completed" ? null : { code: "PROCESS_DEAD", message: "dead" },
   identity: { adapter, config_id: `${provider}-config`, model: null, provider, source_id: `${provider}-source` },
   material: { contract_hash: "contract-hash", contract_id: "contract-id", material_id: "material-id", semantic_hash: "semantic-hash" },
@@ -56,14 +56,31 @@ test("client marks every attachment for codex always_embed delivery", async () =
   expect(calls[0].attachments.entries[0].embed).toBe(true);
 });
 
-test("client defaults Codex-only delivery to always_embed instead of a guaranteed transport failure", async () => {
+test("client defaults to negotiated delivery so each provider gets its supported mode", async () => {
   const calls = [];
   const client = new ReviewProviderClient({ invoke: async (value) => {
     calls.push(value);
     return { exitCode: 0, stdout: `${JSON.stringify(group(["codex/luna"]))}\n`, stderr: "" };
   } });
   await client.runGroup({ hostProvider: "codex/terra", providers: ["codex/luna"], materials: materials(), prompt: "review" });
-  expect(calls[0].attachmentDelivery).toBe("always_embed");
+  expect(calls[0].attachmentDelivery).toBe("negotiated");
+  expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+});
+
+test("client negotiates attachment delivery for mixed provider groups", async () => {
+  const calls = [];
+  const client = new ReviewProviderClient({ invoke: async (value) => {
+    calls.push(value);
+    return { exitCode: 0, stdout: `${JSON.stringify(group(["kimi/coding", "antigravity/flash", "codex/luna"]))}\n`, stderr: "" };
+  } });
+  await client.runGroup({
+    hostProvider: "codex/terra",
+    providers: ["kimi/coding", "antigravity/flash", "codex/luna"],
+    materials: { ...materials(), deliveryManifest: [{ path: "subject.md", bytes: 12, sha256: "a".repeat(64) }] },
+    prompt: "review",
+  });
+  expect(calls[0].attachmentDelivery).toBe("negotiated");
+  expect(calls[0].attachments.entries[0].embed).toBe(false);
 });
 
 test("client negotiates workflowhub-result.v3 and preserves one member per configured profile", async () => {
@@ -75,17 +92,90 @@ test("client negotiates workflowhub-result.v3 and preserves one member per confi
   const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash", "codex/luna"], materials: materials(), prompt: "review" });
   expect(calls).toHaveLength(1);
   expect(calls[0].request.required_result_protocol).toBe("workflowhub-result.v3");
+  expect(calls[0].attachmentDelivery).toBe("negotiated");
   expect(result.providers.map((item) => item.provider)).toEqual(["opencode/v4flash", "codex/luna"]);
   expect(result.providers[0].result_protocol).toBe("workflowhub-result.v3");
   expect(result.providers[0].identity.config_id).toBe("opencode/v4flash-config");
   expect(result.providers[0].recovery.same_session_repair_count).toBe(0);
-  expect(result.providers[0].execution.deadline_ms).toBe(360000);
+  expect(result.providers[0].execution.deadline_ms).toBeNull();
   expect(result.providers[0].execution.recovery).toEqual(result.providers[0].recovery);
+});
+
+test("client rejects a positive provider deadline in a public v3 result", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].deadline_ms = 5_000;
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+});
+
+test("client rejects a direction flow that exposes the choice before the reveal boundary", async () => {
+  const calls = [];
+  const client = new ReviewProviderClient({ invoke: async (value) => {
+    calls.push(value);
+    return { exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" };
+  } });
+  await expect(client.runGroup({
+    hostProvider: "codex/terra",
+    providers: ["opencode/v4flash"],
+    materials: materials(),
+    prompt: "review",
+    reviewMode: "single_round",
+    reviewFlow: {
+      version: "direction-review.v1",
+      public_request_count: 1,
+      steps: [
+        { id: "reconstruct", visible: ["current_selection"], hidden_until: "reveal" },
+        { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+        { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+      ],
+      output: { one_provider_result: true, one_logical_fact: true },
+    },
+  })).rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+  expect(calls).toHaveLength(0);
+});
+
+test("client rejects direction flow without the single_round mode", async () => {
+  const reviewFlow = {
+    version: "direction-review.v1",
+    public_request_count: 1,
+    steps: [
+      { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+      { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+      { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+    ],
+    output: { one_provider_result: true, one_logical_fact: true },
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(group(["opencode/v4flash"]))}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review", reviewFlow }))
+    .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
 });
 
 test("client preserves numeric nested usage telemetry", async () => {
   const value = group(["opencode/v4flash"]);
-  value.providers[0].usage = { input: 10, output: 4, total: 14, cache: { read: 8, write: 1 } };
+  value.providers[0].usage = {
+    input: 10,
+    output: 4,
+    total: 14,
+    cache: { read: 8, write: 1 },
+    cost: { input: 0.0000014, output: 0.00058156, total: 0.0005908448 },
+  };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
+  expect(result.providers[0].usage).toEqual(value.providers[0].usage);
+});
+
+test("client rejects decimal token usage while accepting provider cost decimals", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].usage = { total: 14.5 };
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+});
+
+test("client preserves non-negative decimal cost telemetry only at usage.cost", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].usage = { input: 10, output: 4, cost: 0.125 };
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
   const result = await client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" });
   expect(result.providers[0].usage).toEqual(value.providers[0].usage);

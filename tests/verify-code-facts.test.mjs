@@ -140,4 +140,29 @@ describe("verify-code accepted-input and append-only attempt facts", () => {
     expect(overlapping.map((item) => item.status)).toEqual(["incomplete", "incomplete"]);
     expect(validateVerifyLeaves(overlapping, { sourceDigest }).map((item) => item.status)).toEqual(["incomplete", "incomplete"]);
   });
+
+  it("downgrades criterion claims that reuse generic semantics or nested proof", () => {
+    const sourceDigest = "b".repeat(64);
+    const base = {
+      result: "pass", source_digest: sourceDigest,
+      acceptance_leaf: { ref: "evidence/ac.json", sha256: "c".repeat(64) },
+      nested_evidence: [{ ref: "quality/tests/shared.json", sha256: "d".repeat(64) }],
+      scenario: "执行当前验收流程", oracle: "结果符合预期", actual_outcome: "测试通过",
+      evidence_type: "structured_observation", coverage_limits: ["未覆盖外部宿主"], exceptions: ["无"],
+      implementation_anchor: { id: "impl-1", path: "src/feature.mjs", start_line: 10, end_line: 12, role: "implementation" },
+      verification_anchor: { id: "test-1", path: "tests/feature.test.mjs", start_line: 10, end_line: 12, role: "verification" },
+    };
+    const output = validateVerifyLeaves([
+      { ...base, acceptance_criterion_id: "AC-1" },
+      {
+        ...base,
+        acceptance_criterion_id: "AC-2",
+        acceptance_leaf: { ref: "evidence/ac-2.json", sha256: "e".repeat(64) },
+        implementation_anchor: { ...base.implementation_anchor, id: "impl-2", start_line: 20, end_line: 22 },
+        verification_anchor: { ...base.verification_anchor, id: "test-2", start_line: 20, end_line: 22 },
+      },
+    ], { sourceDigest });
+    expect(output.map((item) => item.status)).toEqual(["incomplete", "incomplete"]);
+    expect(output.every((item) => item.exceptions.some((reason) => /generic semantics|nested evidence/i.test(reason)))).toBe(true);
+  });
 });

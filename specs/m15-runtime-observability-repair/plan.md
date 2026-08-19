@@ -8,10 +8,10 @@
 ## Quick Read
 
 - **要交付的结果**：一条新任务从正式 WorkflowHub `run` 入口开始，能在同一个 task 下留下真实的 run、attempt、stage、source status 和 canonical facts；投影和 HTML 只读这份 facts，并把“流程没发生”和“没采到”分开显示。
-- **真实宿主边界**：WorkflowHub runtime 不启动 Agent、不执行 Stage Skill，也不把 Codex session 当作执行入口。当前授权的 Codex/WorkflowHub host 在真实执行完 Stage Agent 后，调用 `runtime/stage/stage-agent-outcome-adapter.mjs` 提交逐步结果；adapter 只做严格校验、绑定和现有 `TaskKernel` canonical 写入/回读。禁止 fixture 冒充生产结果、扫描 session 目录、猜 task/run/session，也禁止第二套 writer。外部项目不属于本任务，禁止调用、修改、构建、测试或同步。
+- **真实入口边界**：用户正常使用 WorkflowHub 的当前会话就是唯一入口；不要求用户另开或手动启动“Stage Agent”。项目级 Codex hook 只登记 host 给出的精确 `session_id`、`transcript_path` 和 `cwd`；同一会话的私有事件命令记录 manifest step/skill 边界，`stage-runtime run` 自动调用现有 bridge 和 outcome adapter。WorkflowHub 不在 runtime 内启动另一个 Agent，也不扫描 session 目录或猜 task/run/session；不能提供的字段保留 `unavailable`/`unknown`，不能用模板或平均值补齐。外部项目不属于本任务，禁止调用、修改、构建、测试或同步。
 - **根因对应**：当前成功 run 没有保证先初始化 facts store；生产入口没有真实 source resolver；sidecar 按 topology 把没有 outcome 的 step/skill 批量写成 missing/unknown；投影没有固定的样本分母和视图字段覆盖；页面仍有固定五阶段、硬编码未拆分和 `innerHTML` 等旧契约。T001 先用 fresh public run 和只读 caller trace 复核这些判断；若证据不成立，保留 `unknown/incomplete/unavailable`，不按假设修复。
 - **实施顺序**：Phase 1 先修正式入口、来源状态、canonical facts 和 attempt 幂等；Phase 2 再修 projection、诊断、样本充分性、成本拆分和四区页面；最后在同一任务内用 fresh 入口做端到端回放、删除派生物重建和浏览器验收。
-- **Non-goals**：不回写历史任务；不做 M16 经验回路、候选池、候选排序、自动改法、质量分、canary、版本选择、线上回退、多 CLI、外部 registry 更新或新的事实存储。来源：`decision-log.md` 的 D-001～D-004、`spec.md` 的“明确不做与默认必须成立”、AC-011 及 M17/M17a 延期交接。
+- **Non-goals**：不回写历史任务；不做 M16 经验回路、候选池、候选排序、自动改法、质量分、canary、版本选择、线上回退、多 CLI、外部 registry 更新或新的事实存储；不增加用户可见的 Stage Agent 启动命令。来源：`decision-log.md` 的 D-005～D-007、`spec.md` 的“明确不做与默认必须成立”、AC-011 及 M17/M17a 延期交接。
 - **停止条件**：如果 fresh 任务不能稳定产生并绑定 task/run/attempt/stage，或页面不能读回同一任务，本期只记录真实证据缺口和延期，不能宣称 M15 基础链完成，M16 不得消费这条链。
 - **交接**：build-code 只按本计划执行；先做 RED，再做同命令 GREEN；宿主未证明的事件能力保持 `unavailable`、`unsupported` 或 `unknown`，不能为了页面好看补零。
 
@@ -30,20 +30,21 @@
 ### Current Failure Facts
 
 - `tools/cli/stage-runtime.mjs` 只在 missing-stage-outcome 异常分支显式调用 `initializeTaskStore`，成功 run 的 sidecar 直接读写 facts，导致真实成功入口可能没有 canonical facts store。
-- `runMonitoringSidecar` 的默认 `services` 没有 `resolveMonitoringSource`；三个生产 source registry 目前为空，测试却手工注入 `createRegisteredCodexSource`，因此“测试能写”不能证明“正式入口能采”。
-- `stageMonitoringFacts` 遍历完整 topology；没有 step/skill outcome 就写 `missing`/`unknown`，把记录缺口放大成流程缺口。
+- `runMonitoringSidecar` 的默认 `services` 只有在 host 明确提供当前 Codex source 时才可读取；当前正常会话没有自动 caller，测试却手工注入 `createRegisteredCodexSource`，因此“测试能写”不能证明“正常会话能采”。
+- `stageMonitoringFacts` 不能从 topology 猜执行事实；没有正常会话产生的 step/skill outcome 时必须记录采集缺口，不能把它解释成流程退化。
 - `runtime/evidence/monitoring-facts.mjs` 和 `runtime/schemas/monitoring-fact.v1.json` 仍使用旧的六状态集合；projection/diagnostics/page 也把 `partial`、`fatal` 混在事实和 UI 语义中。
 - `monitoring-diagnostics.mjs` 的 automation 比例没有显式适用机会分母，trend 小样本边界不完整；projector 没有固定四个视图的 required fields 与 sample sufficiency。
 - `runtime/evidence/monitoring-page.html` 仍固定展示旧阶段结构、duration 写死“未拆分”，过滤器不足七类，并残留 `innerHTML`；这些都是当前 M15 页面消费层的可见遗漏。
 
 ### Data and Lifecycle
 
-1. 正式 `run` 取得 task context 和 stage outcome，先保证 task-local facts store 存在，再调用唯一 monitoring sidecar。
-2. sidecar 只接受 launcher 传入的显式 registered source；解析结果与 task/run/attempt/session 绑定，不能从目录反推。
-3. stage、source、step、skill、quality、cost 和 health 事实追加到同一 `facts.jsonl`；同一 `fact_id` 幂等，重试产生新 `attempt_id`，冲突事实并存。
-4. projector 从 task facts 生成 project projection，再从 project projections 重建 global snapshot、`data.js` 和 HTML；任何派生失败都不改 facts。
-5. 页面把 snapshot 状态映射为 loading、ready、empty_valid、partial、stale、fatal，并为四个视图分别计算 fixed required fields、范围内任务数和 sample sufficiency。
-6. fresh E2E 逐段保存 task/run/attempt/stage/source/facts/projection/data/page 的受控引用；删除的只允许是隔离环境里的派生物。
+1. 正常 WorkflowHub 会话开始阶段时，私有执行上下文自动登记 task/run/attempt/stage；用户不执行额外命令。正式 `run` 仍是唯一 public writer seam，先保证 task-local facts store 存在，再调用唯一 monitoring sidecar。
+2. 项目级 hook 把精确 source handoff 留在临时 host 状态中；当前会话的私有事件命令把 step/skill 边界留在同一临时状态中。`stage-runtime run` 以明确的 project/task/stage context 读取这一条 handoff，自动调用现有 bridge/adapter；adapter 只认证绑定，不启动 Agent、不扫描 session、不猜路径。解析结果与 task/run/attempt/session 绑定。
+3. 每个 manifest step 和 declared skill 的开始、结束、结果、证据、duration 和真实 usage 都挂在同一执行编号；token 无法精确归因时记录未归因事实，不拆给 step/skill。
+4. stage、source、step、skill、quality、cost 和 health 事实追加到同一 `facts.jsonl`；同一 `fact_id` 幂等，重试产生新 `attempt_id`，冲突事实并存。
+5. projector 从 task facts 生成 project projection，再从 project projections 重建 global snapshot、`data.js` 和 HTML；任何派生失败都不改 facts。
+6. 页面把 snapshot 状态映射为 loading、ready、empty_valid、partial、stale、fatal，并为四个视图分别计算 fixed required fields、范围内任务数和 sample sufficiency。
+7. fresh E2E 逐段保存 task/run/attempt/stage/source/facts/projection/data/page 的受控引用；删除的只允许是隔离环境里的派生物。
 
 ## Code Anchors
 
@@ -53,7 +54,9 @@
 - `runtime/evidence/monitoring-diagnostics.mjs`：stage/step/skill/failure/cost/automation/trend 派生；P2 diagnostic owner。
 - `runtime/evidence/monitoring-projector.mjs` 与 `runtime/schemas/monitoring-projection.v1.json`：task projection、global rebuild、immutable derived output、schema validation；P2 projection owner。
 - `runtime/evidence/monitoring-page.html`：四区静态页面、共享筛选、状态/coverage/errors、受控证据引用和文本安全边界；P2 view owner。
-- `runtime/stage/stage-agent-outcome-adapter.mjs`：外部 Stage Agent 结果的唯一宿主接入契约；只接收已实际执行的 step/skill/spec-analyze 结果，绑定当前 snapshot/materials/manifest 后经 `TaskKernel` 写入。
+- `runtime/stage/stage-agent-outcome-adapter.mjs`：正常 WorkflowHub 会话的私有结果接入契约；只接收当前会话已经产生的 step/skill/spec-analyze 结果，绑定当前 snapshot/materials/manifest 后经 `TaskKernel` 写入；不作为用户入口。
+- `tools/host/workflowhub-stage-agent-bridge.mjs`、`tools/host/workflowhub-stage-agent-protocol.mjs`：保留为私有会话接线实现；必须由正常 WorkflowHub 会话自动调用，不能要求用户单独启动。
+- `.codex/hooks.json`、`tools/host/workflowhub-codex-session-hook.mjs`、`tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-event.mjs`：项目级 Codex source handoff 和同一会话 step/skill 边界；只写临时 host 状态，不是 facts writer，SessionEnd 后不作为历史事实保留。
 - `tests/m15-monitoring-integration.test.mjs`、`tests/m15-codex-transcript-adapter.test.mjs`、`tests/m15-monitoring-facts.test.mjs`：P1 RED/GREEN 和 fresh entry evidence。
 - `tests/m15-monitoring-diagnostics.test.mjs`、`tests/m15-monitoring-projector.test.mjs`：P2 RED/GREEN、schema、projection、page contract 和重建证据。
 - `runtime/evidence/fact-collector.mjs`、`tools/cli/collect-task-facts.mjs`、`workflows/verify-code/metrics-writer.mjs`、`metrics/collector.mjs`：M10/M14b caller 的只读追踪锚点；它们是否真正接入当前正式入口由 T001 evidence 证明，不自动升级为本轮 writer。
@@ -61,11 +64,11 @@
 
 ## Solution Design
 
-### A. 把记录动作接回正式入口
+### A. 把记录动作接回正常会话入口
 
 - 在正常 stage outcome 成功、失败和 missing-outcome 三条路径统一保证 `initializeTaskStore` 先于 sidecar；保留原始 stage run 错误，monitoring 不能吞掉执行错误。
-- sidecar 的 source resolver 只来自正式 launcher 的私有 `services` 能力。没有 resolver 时仍写一条与 task/run/attempt 绑定的 `source_status`，状态和 reason 明确为未登记/不可用；不把空 source 伪装为 present。
-- stage fact 由正式 stage outcome 产生；step/skill 只有 outcome 明确声明适用且有状态时才记录事件事实。没有宿主能力时记录 `unknown`/`unavailable`/`unsupported`/`incomplete` 及原因，不把整张 topology 当成已发生的事件清单。
+- 正常会话 host 自动向现有 private `services` 注入当前 source 和执行上下文；没有 source 时仍写一条与 task/run/attempt 绑定的 `source_status`，状态和 reason 明确为未登记/不可用；不把空 source 伪装为 present。
+- stage、step、skill 事实必须来自同一正常会话的生命周期事件或受控 outcome。没有真实事件时记录 `unknown`/`unavailable`/`unsupported`/`incomplete` 及原因，不把整张 topology 当成已发生的执行清单。
 
 ### B. 固定 canonical fact 语义
 
@@ -90,7 +93,7 @@
 
 ### E. fresh 证明和重建
 
-- fresh test 从公开 `run` 入口进入，不直接把 sidecar 当作正式入口；允许通过真实 launcher capability 注入已登记 source，若当前宿主没有该 capability，必须保存诚实 unavailable/unsupported/unknown 证据。
+- fresh test 从用户正常使用的 WorkflowHub 会话进入；会话内部自动调用现有 private `run`/bridge/adapter，不要求用户手工启动 Stage Agent。若当前 Codex host 没有可绑定的 source 或 step/skill usage，必须保存诚实 unavailable/unsupported/unknown 证据，不能把测试注入当生产证明。
 - 记录 facts hash，校验 project/global/data/page 都能回指这份 facts；在隔离 storage 中删除派生物后重建，比较 facts hash、projection 内容和 page input，确认不写历史 task。
 - 浏览器验收由 `isolated-browser-qa` 在 build-code 执行；本计划只固定场景、输入、oracle 和证据路径，不在 build-plan 运行浏览器。
 
@@ -98,17 +101,22 @@
 
 - T001 的第一步不是改代码，而是用一个隔离 fresh task 走 public `stage-runtime` `run`，保存 task/run/attempt/stage/source/session 绑定、Expected topology、facts→projection→HTML 读回和当前九个 failure domains/health 字段的只读证据。
 - 同一张证据卡要追踪 M10/M14b 的 `fact-collector`、`collect-task-facts`、`metrics-writer` caller：明确哪些是独立旧 CLI、哪些被正式 `run` 调用、哪些 registry 为空。证据不足时把结论标为 `unknown/incomplete`，不把“没有 caller”直接当修复前提。
-- 只有 fresh 证据确认“正式成功 run 没有 facts store/sidecar 记录动作”后，T002 才改入口；source capability 未证明时只修接入和缺失语义，不凭空制造 source caller。
+- fresh 证据必须确认“正常会话是否自动调用正式 run/sidecar、是否产生当前 source 和 step/skill 事件”；只证明 bridge 能接收一份手工结果不算 caller。source capability 未证明时只修自动接入和缺失语义，不凭空制造 source caller。
 
 ## File Boundary
 
-### NEW
-
-- `runtime/stage/stage-agent-outcome-adapter.mjs`：唯一宿主结果接入 adapter；不执行 Agent、不读取 session 目录、不创建第二套 writer。
-
 ### MODIFY
 
+- `runtime/stage/stage-agent-outcome-adapter.mjs`：唯一会话结果接入 adapter；不启动 Agent、不读取 session 目录、不创建第二套 writer。
 - `tools/cli/stage-runtime.mjs`
+- `runtime/stage/stage-runner.mjs`
+- `tools/host/workflowhub-stage-agent-bridge.mjs`
+- `tools/host/workflowhub-stage-agent-protocol.mjs`
+- `workflows/make-decision/SKILL.md`
+- `workflows/build-spec/SKILL.md`
+- `workflows/build-plan/SKILL.md`
+- `workflows/build-code/SKILL.md`
+- `workflows/verify-code/SKILL.md`
 - `runtime/evidence/codex-transcript-adapter.mjs`
 - `runtime/evidence/monitoring-facts.mjs`
 - `runtime/schemas/monitoring-fact.v1.json`
@@ -163,19 +171,19 @@
 - **Rejected**：新增 fixture-only E2E runner 或独立 history repair script。
 - **Consequence**：同一测试文件会同时包含 unit/integration/fullstack slice；每个行为仍用同命令 RED/GREEN 配对，browser 操作用独立 QA 技能产生 evidence。
 
-### DEC-E — 未证明宿主能力保持缺失状态
+### DEC-E — 未证明当前会话能力保持缺失状态
 
 - **Selected**：没有真实 registered source 时显示 `unavailable`/`unsupported`/`unknown` 和 reason，不补齐 transcript、skill 或 tool 数据。
-- **Why**：当前 source registry 为空且没有证明的 host caller；把 fixture 当生产接入会复现 M15 的根因。
+- **Why**：当前正常会话没有证明的自动 source/step/skill caller；把 fixture 或用户手工启动当生产接入会复现 M15 的根因。
 - **Rejected**：扫描本机 session 目录、按时间拼 source、用测试 source 当生产默认值。
 - **Consequence**：某些 fresh 页面可能是 partial，但这是真实能力边界；后续 M16 只能消费有来源、有 coverage、有状态的事实。
 
-### DEC-F — 宿主提交结果，runtime 只认证和落盘
+### DEC-F — 正常会话自动提交结果，runtime 只认证和落盘
 
-- **Selected**：增加窄的 `stage-agent-outcome-adapter.mjs` 作为 host-facing contract；真实 Stage Agent 仍由外部宿主执行，adapter 只校验当前绑定并调用既有 `TaskKernel`。
-- **Why**：当前缺口是生产宿主没有把真实逐步结果送进现有 outcome 链；把 runner 塞进 WorkflowHub 会违反薄核心边界，完全依赖 fixture 又无法证明真实入口。
-- **Rejected**：在 runtime 内启动 Codex/Agent、扫描 session 目录、把测试 helper 提升为生产 producer、或新增独立 facts writer。
-- **Consequence**：adapter contract 可以在仓库内先验收；只有当前授权的 WorkflowHub/Codex host 真实调用并生成 current stage outcome 后，入口链 AC-001/AC-010 才能正式闭合。没有该调用时必须保留 `incomplete/unavailable`。
+- **Selected**：复用窄的 `stage-agent-outcome-adapter.mjs`，但把它接到正常 WorkflowHub 会话的私有生命周期；当前会话 host 自动提交已经执行的结果，adapter 只校验当前绑定并调用既有 `TaskKernel`。
+- **Why**：用户真正使用的是当前会话；把结果交给一个需要另外启动的 Stage Agent 会继续绕开真实入口。把 Agent 启动逻辑塞进 runtime 仍违反薄核心边界，所以只补会话接线，不增加第二个 Agent 或第二个 writer。
+- **Rejected**：要求用户另开 Stage Agent、在 runtime 内启动 Codex/Agent、扫描 session 目录、把测试 helper 提升为生产 producer、或新增独立 facts writer。
+- **Consequence**：adapter contract 仍可在仓库内先验收；只有正常会话自动调用并生成 current stage outcome 后，入口链 AC-001/AC-010 才能正式闭合。没有该调用时必须保留 `incomplete/unavailable`。
 
 ## Test Strategy
 
@@ -192,11 +200,11 @@
 - `npm run check`。
 - 五个 M15 focused test：`tests/m15-codex-transcript-adapter.test.mjs`、`tests/m15-monitoring-facts.test.mjs`、`tests/m15-monitoring-integration.test.mjs`、`tests/m15-monitoring-diagnostics.test.mjs`、`tests/m15-monitoring-projector.test.mjs`。
 - `npx vitest run tests/integration/vnext-official-stage-run.test.mjs --passWithNoTests=false`。
-- `npx vitest run tests/e2e/vnext-five-stage-current.test.mjs --passWithNoTests=false`；若输入仍由 fixture stage outcome 组成，只能记为 contract E2E，不能替代 T014 的真实宿主证据。
+- `npx vitest run tests/e2e/vnext-five-stage-current.test.mjs --passWithNoTests=false`；若输入仍由 fixture stage outcome 组成，只能记为 contract E2E，不能替代 T014 的正常会话真实证据。
 - `isolated-browser-qa`：从当前 fresh projection 打开 `/Users/Hugh/Hugh/Project/workflowhub-monitor.html`，验证四区、筛选、下钻、刷新、状态/coverage 和 evidence 文本，证据放 `quality/tests/verify-code/m15-browser/`。
 - `npm test -- --run` 的已知失败只能作为基线架构漂移事实记录；不得改写为 M15 通过，也不得用它掩盖上述 M15 scope 的结果。基线失败需列出原始失败文件和是否触及本轮文件。
 
-最终成功 oracle 不是“所有宿主字段都有数字”，而是：真实宿主调用 adapter 产出 current stage outcome，public `run` 能回读同一 task 的 canonical facts，projection/HTML 读同一输入，宿主不可用能力诚实显示 `unavailable/unsupported/unknown`，历史 task 未写入；任何一项缺失都保持 `incomplete`。
+最终成功 oracle 不是“所有宿主字段都有数字”，而是：正常 WorkflowHub 会话自动调用 adapter 产出 current stage outcome/source，public `run` 能回读同一 task 的 canonical facts，projection/HTML 读同一输入，Codex 不可用能力诚实显示 `unavailable/unsupported/unknown`，历史 task 未写入；step/skill 核心字段任一缺失都保持 `incomplete`。
 
 ### Required scenarios
 
@@ -316,16 +324,20 @@ project/global/data.js/HTML 都是 derived；sample sufficiency 的分母和 req
 
 projection schema 变严会让旧派生物不可作为新交付证据；只在隔离 fresh storage 重建派生物，不触碰历史 facts。页面问题回滚只恢复 P2 MODIFY 文件，canonical facts 不随页面回滚。
 
-## Phase 3 — 真实宿主 outcome 与正式验收
+## Phase 3 — 正常会话自动 outcome 与正式验收
 
 ### Goal
 
-把“外部 Stage Agent 已实际执行”与 WorkflowHub canonical outcome 之间的边界落成可验证契约，并用真实宿主调用证明 current task 的完整入口链；没有真实宿主调用时，不宣称 M15 正式完成。
+把正常 WorkflowHub 会话的真实执行边界、Codex source、canonical outcome 和页面串成一条自动链；用户不手工启动第二个 Agent。没有正常会话自动调用和真实 step/skill usage 时，不宣称 M15 正式完成。
 
 ### Files
 
-- **NEW**：`runtime/stage/stage-agent-outcome-adapter.mjs`
-- **MODIFY**：`tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY**：`runtime/stage/stage-agent-outcome-adapter.mjs`、`runtime/stage/stage-runner.mjs`、`tools/cli/stage-runtime.mjs`
+- **MODIFY**：`tools/host/workflowhub-stage-agent-bridge.mjs`
+- **MODIFY**：`tools/host/workflowhub-stage-agent-protocol.mjs`
+- **NEW**：`.codex/hooks.json`、`tools/host/workflowhub-codex-session-hook.mjs`、`tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-event.mjs`
+- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`
+- **MODIFY**：`tests/integration/vnext-official-stage-run.test.mjs`、`tests/m15-codex-session-hook.test.mjs`
 - **MODIFY**：`tests/e2e/vnext-five-stage-current.test.mjs`
 - **MODIFY**：`specs/m15-runtime-observability-repair/tasks.md`
 - **READ ONLY**：`tools/cli/stage-runtime.mjs`、`runtime/evidence/monitoring-projector.mjs`、`runtime/evidence/monitoring-page.html`
@@ -335,29 +347,29 @@ projection schema 变严会让旧派生物不可作为新交付证据；只在�
 ### Tasks
 
 - T013：定义并验证 adapter contract；拒绝错误绑定、stale snapshot、缺失逐步结果、fixture 和第二 writer。
-- T014：让真实宿主执行一个 current stage，并调用 adapter 产出 content-addressed stage outcome；无实际宿主调用时记录 `incomplete/unavailable`。
+- T014：把 adapter 接入正常 WorkflowHub 会话的私有生命周期；正常会话自动产生 current stage/step/skill outcome 和当前 source，用户不手工启动 Stage Agent。
 - T015：执行 formal acceptance，核对 public run、facts、projection、HTML、浏览器和历史边界；不把 advisory review 写成 pass。
 - T016：按 Final aggregate scope 汇总所有命令、exit、oracle、证据和基线失败边界。
 
 ### Verify
 
-T013 由 integration contract test 证明，T014 必须有真实宿主调用路径和非 fixture 的 stage outcome ref，T015/T016 才能引用该 ref 做正式验收。`tests/helpers/stage-outcome.mjs` 只能作为测试输入，不能满足 T014。
+T013 由 integration contract test 证明，T014 必须有正常 WorkflowHub 会话自动调用路径和非 fixture 的 stage outcome/source ref，T015/T016 才能引用该 ref 做正式验收。`tests/helpers/stage-outcome.mjs` 只能作为测试输入，不能满足 T014。
 
 ### Knowledge
 
-宿主执行证据的 owner 是外部 Stage Agent/host；WorkflowHub 只持有认证后的 canonical outcome 和事实。没有 host receipt 时，M15 基础链仍是不完整事实。
+执行证据的 owner 是当前 WorkflowHub 会话及其 Codex host 接线；WorkflowHub runtime 只持有认证后的 canonical outcome 和事实。没有自动会话 caller 或 host receipt 时，M15 基础链仍是不完整事实。
 
 ### STOP
 
-若只能手工构造 outcome、使用 fixture、扫描 session、猜 path，或 adapter 绕过 `TaskKernel` 直接写 facts，停止并把 T014 记为 `incomplete/unavailable`。
+若只能手工构造 outcome、要求用户另开 Stage Agent、使用 fixture、扫描 session、猜 path，或 adapter 绕过 `TaskKernel` 直接写 facts，停止并把 T014 记为 `incomplete/unavailable`。
 
 ### Done
 
-T013 contract 通过；T014 有真实宿主 current outcome；T015/T016 逐项完成并且 AC-001、AC-010 有可回读证据。宿主部分能力不可用仍以诚实状态展示，不阻塞已证明的基础链之外的事实。
+T013 contract 通过；T014 有正常会话自动产生的 current outcome/source；T015/T016 逐项完成并且 AC-001、AC-010 有可回读证据。Codex 部分能力不可用仍以诚实状态展示，但 step/skill 核心硬要求未满足时不能 close。
 
 ### Risks and rollback
 
-adapter 只新增宿主接入边界，不改变 public stage 语义；失败时保留 canonical facts 和原始宿主错误，删除范围仅限隔离派生物。若本机没有宿主调用，不回退到 fixture，延期给 host integration owner。
+adapter 只新增正常会话接入边界，不改变 public stage 语义；失败时保留 canonical facts 和原始 host 错误，删除范围仅限隔离派生物。若本机没有自动会话调用，不回退到 fixture，保留 incomplete 并交接 host integration owner。
 
 ## Implementation Order
 
@@ -368,7 +380,7 @@ adapter 只新增宿主接入边界，不改变 public stage 语义；失败时�
 5. P2-T008/T009：先改 diagnostics、projection 和 projection schema，让数据 contract 先于页面。
 6. P2-T010/T011：再改 HTML 四区、共享筛选、成本拆分、状态映射和文本安全。
 7. P2-T012：执行全量 focused aggregate，确认所有 FR/AC 都有 task/oracle/evidence path。
-8. build-code 完成后才进入 verify-code；verify-code 必须使用 current snapshot 和真实宿主 outcome，不能复用本计划的 fixture 结果或历史页面。
+8. build-code 完成后才进入 verify-code；verify-code 必须使用 current snapshot 和正常会话自动产生的 outcome，不能复用本计划的 fixture 结果或历史页面。
 9. T013/T014/T015/T016 是同一 current task 的修复与验收卡，不新增 public stage；T014 未完成时，正式结果只能是 `incomplete`。
 
 ## Dependencies and Parallelism
@@ -376,7 +388,7 @@ adapter 只新增宿主接入边界，不改变 public stage 语义；失败时�
 - 所有任务串行，`并行：否`；原因是 P1 改变 fact contract，P2 依赖 P1 的状态和 identity 语义，且同一测试文件需要按 RED/GREEN 顺序修改。
 - T002 依赖 T001 的 RED；T004 依赖 T003；T006 依赖 T005；T009 依赖 T008；T011 依赖 T010；每个 GREEN 必须引用前一个 RED 的实际失败证据。
 - P2 不改 P1 文件；P1 的 stage/source/fact owner 与 P2 的 diagnostics/projector/page owner 分开，避免同时写同一文件。
-- 真实 host source capability 是外部依赖。能力不存在不阻塞同任务修复，但必须把结果记录为 unavailable/unsupported/unknown，不能伪造 present。
+- Codex host source/usage capability 是外部依赖。能力不存在不阻塞同任务修复，但必须把结果记录为 unavailable/unsupported/unknown，不能伪造 present；用户不需要手工补数据。
 - browser QA 依赖 build-code 的本地静态页面输入和 `isolated-browser-qa` skill；本阶段只设计，不调用浏览器。
 
 ## Requirement and Verification Traceability
@@ -426,3 +438,44 @@ adapter 只新增宿主接入边界，不改变 public stage 语义；失败时�
 - **S6**：source registration、append-only facts、derived projection 和 browser QA 采用已核对的项目/外部惯例。
 - **S7**：本轮只推进 build-plan 计划文件；build-code、verify-code 各自保留阶段边界。
 - **S8**：所有决策、命令、oracle 和 evidence path 可脱离本对话被 build-code/verify-code 读取。
+
+## 方案 A 的当前实施修正（2026-08-18）
+
+### Goal
+
+让同一条正常 Codex 会话在阶段切换、工作目录变化或不同的官方 CLI 进程之间仍复用同一个 source binding；不要求用户重复输入 task，不启动 Stage Agent，也不扫描 transcript 目录。
+
+### Exact boundary
+
+- **MODIFY**：`tools/host/workflowhub-codex-session-state.mjs`、`tools/host/workflowhub-codex-session-event.mjs`、`tests/m15-codex-session-hook.test.mjs`、`tests/integration/vnext-official-stage-run.test.mjs`。
+- **REUSE**：现有临时 session handoff；只新增按精确 `session_id` 定位 handoff 的临时索引，不新增 canonical facts、公共命令或任务目录对象。该索引的唯一 consumer 是 stage-runtime 和私有 session event，owner 是 `workflowhub-codex-session-state.mjs`，SessionEnd/临时目录清理时一并失效；未来移除跨 cwd handoff 时删除它。
+- **DO NOT TOUCH**：历史 facts、外部项目、Multica、M16、旧页面派生物。
+
+### Design
+
+1. Codex hook 登记 session 时，同时保存一个由精确 `session_id` 定位的临时 handoff 位置。
+2. 后续 stage-runtime、私有 step/skill 事件和 spec-analyze 命令优先用当前 host 提供的精确 `CODEX_THREAD_ID` 找回同一个 handoff；如果没有精确索引，才按当前目录走现有路径，不能枚举目录猜来源。
+3. 绑定内容仍只有一份：原始 handoff 文件里的 session、task、transcript 和事件；索引只存位置，不复制事件。
+4. 找不到精确 session 或绑定不一致时继续 fail-loud；不能读到另一个 task，也不能把 source missing 写成完成。
+5. 显式传入未知或已失效的 `session_id` 时只返回 `unregistered`，绝不退回当前目录的另一份 handoff；只有 SessionStart 为新会话建立 handoff 时，才允许清理失效 locator 后使用当前目录。
+
+### Verify
+
+- RED：从一个目录登记并绑定 session，再从另一个目录读取同一 session，现有实现必须失败，锁定“按 cwd 找不到同一 source”的断点。
+- GREEN：同一场景从五个阶段的官方 CLI 入口分别回读 source、step/skill 事件和 token/duration；再验证错误 session/task 不会串入。
+- 真实限制：该测试只证明代码允许跨阶段 handoff；M15 最终仍需一条用户正常新 Codex 会话的真实五阶段回放，当前会话已绑定其他 task，不能冒充。
+- 安全回归：未知精确 `session_id` 不得读到当前会话；SessionEnd 失效 locator，避免失效临时路径在新会话中复用。
+
+### STOP
+
+如果实现需要扫描 `/tmp`、`~/.codex/sessions` 或按时间挑文件，或需要新增 public `record-*`/第二 facts writer，立即停止并回退本修正；继续保持真实 source 缺失为 incomplete/unavailable。
+
+### Done
+
+代码测试证明同一精确 session binding 可跨阶段复用，且错误绑定 fail-closed；随后才重新跑一条真正新鲜的 M15 五阶段会话。五阶段真实 source 未全部 `present` 前，不能把 T015/T016 改成完成，不能 close。
+
+### Tasks
+
+- **T017**：RED 锁定跨工作目录阶段切换时 source handoff 丢失。
+- **T018**：GREEN 让精确 session binding 跨目录、跨阶段复用，并回读真实 step/skill 成本。
+- **依赖**：T017 → T018 → T015 → T016；T014 的历史 incomplete 事实保留，不被新测试覆盖。

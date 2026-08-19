@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "c42ba400cf01fdc7551a1e58688879fa4cc030fba3ba6bfa1c70d0b8e8f2fb13"
+      "sha256": "187567a97fee99dbb364af89ccedbe6824b5dc31dfda643e258b0f0e2e181f99"
     },
     {
       "path": "contracts/build-code.md",
@@ -20,7 +20,7 @@
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "3ee6040f559aa8c2fbeeb1bf042f6e7bd581663e6fa2b4f6fb801d8b96bc9b0a"
+      "sha256": "f4f2d1a4731dd07c62e44ea1a06585edc6bd47973e34548b3de19669b4252610"
     },
     {
       "path": "contracts/mini-task-design.md",
@@ -32,11 +32,11 @@
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "ff68582268bca10492085ec772bd4eefecdf8b0664b1a049d3832b969ee6f334"
+      "sha256": "af5e0f3cfc2c1ec9e3db1f2cb8c301c02a14fa4a91f0b63ec54490d4095f76ea"
     },
     {
       "path": "contracts/verify-code.md",
-      "sha256": "287df56197faa26929d3c2885a81947b316e0e9ec0a61080a937297cb2f37a48"
+      "sha256": "306dc0f39ae2341122774fa3b37c84abf67a743109f8feb775669ab1ce4eb003"
     },
     {
       "path": "contracts/workflowhub-result.v1.json",
@@ -64,11 +64,11 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "1a67da4127c241f4a45f101696b78cde382fd845a4297ed312e5e702f88fb139"
+      "sha256": "384c2663cb029274c319d8c7ba768c056c53ce42b8936a09f5eba3b41eb1a6ae"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
-      "sha256": "cc945007efb78e7bff2ffc21e394f865b5552b3174e3fd15bb1dc0a0b569326d"
+      "sha256": "a48bacfa9e476f5a19868bd66534067f1745c5dd6268b5de3be56da872f29409"
     },
     {
       "path": "scripts/review-output.mjs",
@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "f95fd7dbb7e3e4ae3397c374e26a8626e560821fb7daca5bd55466d8388616a6"
+      "sha256": "5affeadb0edad7e67ebbf138177921e7cc79d93a092dc9bf6e03094fb3365432"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "0863b76d7038c99580ea38459421d05f837d418a308341ba0221af0c783c31ce"
+      "sha256": "47df3b6c58a4df1684e215ee137544968cc0831f43cacc2a6849c18efd8c3cd2"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -100,7 +100,7 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "d78f88b4bc40ca9992c7bd5b0c2bb804f53c8d442aa6b8de39bd7c4c7f223b81"
+      "sha256": "2774fcf68683075c6fd87b64dba6a68765d3a883f645376c48ae1e3c7bfe6895"
     },
     {
       "path": "scripts/wh-review-cli.mjs",

@@ -78,9 +78,9 @@ export function validateMonitoringFact(value) {
     catch { throw new Error("monitoring fact evidence_refs is invalid"); }
   }
   const allowedValueKeys = {
-    stage: ["outcome", "reason", "result_summary"], step: ["outcome", "reason", "result_summary"], skill: ["trigger", "reason", "executed", "version", "result_summary"],
-    session: ["duration_ms", "retry_id", "event_id", "event", "timestamp"], subagent: ["parent_id", "origin", "duration_ms"], duration: ["duration_ms", "event_id", "grain"], retry: ["retry_id", "retry_count", "attempt_id", "grain"],
-    token: ["message_id", "input_tokens", "output_tokens", "total_tokens", "tokens", "retry_id", "grain"],
+    stage: ["outcome", "reason", "result_summary", "execution_id", "started_at", "completed_at"], step: ["outcome", "reason", "result_summary", "execution_id", "started_at", "completed_at"], skill: ["trigger", "reason", "executed", "version", "result_summary", "execution_id", "started_at", "completed_at"],
+    session: ["duration_ms", "retry_id", "event_id", "event", "timestamp"], subagent: ["parent_id", "origin", "duration_ms"], duration: ["duration_ms", "event_id", "grain", "execution_id"], retry: ["retry_id", "retry_count", "attempt_id", "grain"],
+    token: ["message_id", "input_tokens", "output_tokens", "total_tokens", "tokens", "retry_id", "grain", "execution_id"],
     tool_use: ["tool_use_id", "name", "retry_id", "grain"], review: ["invoked", "independent", "outcome", "freshness", "source_ref"],
     test: ["invoked", "independent", "outcome", "freshness", "source_ref"], verify: ["invoked", "fresh", "outcome", "source_ref"], artifact: ["record_kind", "ref", "hash", "name"],
     health: ["domain", "status", "friction_type", "error_code", "configured", "used", "expected", "actual", "mismatch"],
@@ -94,6 +94,17 @@ export function validateMonitoringFact(value) {
     }
     const optionalText = (field) => {
       if (field in value.value && value.value[field] !== null) text(value.value[field], `${value.fact_type}.${field}`);
+    };
+    const optionalOpaqueRef = (field) => {
+      if (field in value.value && value.value[field] !== null) {
+        text(value.value[field], `${value.fact_type}.${field}`);
+        if (!SAFE_REF.test(value.value[field])) throw new Error(`monitoring fact ${value.fact_type}.${field} must be an opaque identifier`);
+      }
+    };
+    const optionalTimestamp = (field) => {
+      if (field in value.value && value.value[field] !== null && (typeof value.value[field] !== "string" || !Number.isFinite(Date.parse(value.value[field])))) {
+        throw new Error(`monitoring fact ${value.fact_type}.${field} is invalid`);
+      }
     };
     const nonNegativeInteger = (field) => {
       if (!(field in value.value) || !Number.isInteger(value.value[field]) || value.value[field] < 0) {
@@ -119,6 +130,9 @@ export function validateMonitoringFact(value) {
       case "step":
         optionalText("reason");
         optionalText("result_summary");
+        optionalOpaqueRef("execution_id");
+        optionalTimestamp("started_at");
+        optionalTimestamp("completed_at");
         if (!("outcome" in value.value)) throw new Error(`monitoring fact ${value.fact_type}.outcome is required`);
         text(value.value.outcome, `${value.fact_type}.outcome`);
         break;
@@ -128,6 +142,9 @@ export function validateMonitoringFact(value) {
         optionalText("reason");
         optionalText("version");
         optionalText("result_summary");
+        optionalOpaqueRef("execution_id");
+        optionalTimestamp("started_at");
+        optionalTimestamp("completed_at");
         break;
       case "session":
         optionalNonNegativeInteger("duration_ms");
@@ -143,6 +160,7 @@ export function validateMonitoringFact(value) {
         nonNegativeInteger("duration_ms");
         optionalText("event_id");
         optionalText("grain");
+        optionalOpaqueRef("execution_id");
         if ("grain" in value.value && !SAFE_REF.test(value.value.grain)) throw new Error("monitoring fact duration.grain must be an opaque identifier");
         break;
       case "retry":
@@ -160,6 +178,7 @@ export function validateMonitoringFact(value) {
         if (!hasPair && !hasAggregate) throw new Error("monitoring fact token requires input/output pair or aggregate token count");
         for (const field of tokenFields) nonNegativeInteger(field);
         optionalText("retry_id");
+        optionalOpaqueRef("execution_id");
         text(value.value.grain, "token.grain");
         if (!SAFE_REF.test(value.value.grain)) throw new Error("monitoring fact token.grain must be an opaque identifier");
         break;

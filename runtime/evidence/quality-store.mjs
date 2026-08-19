@@ -76,7 +76,7 @@ const VERIFY_LEAF_KEYS = new Set([
 function validAnchor(value, expectedRole = null) {
   return value && typeof value === "object" && !Array.isArray(value)
     && typeof value.id === "string" && value.id.trim() !== ""
-    && typeof value.path === "string" && ANCHOR_PATH.test(value.path) && !value.path.includes("..")
+    && typeof value.path === "string" && ANCHOR_PATH.test(value.path) && !value.path.split("/").includes("..")
     && Number.isSafeInteger(value.start_line) && value.start_line >= 1
     && Number.isSafeInteger(value.end_line) && value.end_line >= value.start_line
     && typeof value.role === "string" && value.role.trim() !== ""
@@ -107,6 +107,30 @@ function verifyLeafStatus(criterion) {
     || !validAnchor(criterion.implementation_anchor, "implementation")
     || !validAnchor(criterion.verification_anchor, "verification")
     ? "incomplete" : "passed";
+}
+
+function normalizeCriterionText(value) {
+  return String(value ?? "").replace(/\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g, "AC-*").trim();
+}
+
+function semanticProofWarnings(criterion, all) {
+  if (all.length < 2) return [];
+  const warnings = [];
+  const signatures = all.map((item) => JSON.stringify([
+    normalizeCriterionText(item.scenario),
+    normalizeCriterionText(item.oracle),
+    normalizeCriterionText(item.actual_outcome),
+  ]));
+  if (new Set(signatures).size === 1) warnings.push("criterion-specific scenario/oracle/outcome are generic or shared across acceptance criteria");
+
+  const outcomes = all.map((item) => normalizeCriterionText(item.actual_outcome));
+  if (outcomes.every((value) => /^(?:pass|passed|result|通过|测试通过|当前快照测试通过)$/i.test(value))) {
+    warnings.push("actual outcome is generic across acceptance criteria");
+  }
+
+  const nested = all.map((item) => JSON.stringify(item.nested_evidence));
+  if (new Set(nested).size === 1) warnings.push("nested evidence is shared across acceptance criteria");
+  return warnings;
 }
 
 export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
@@ -157,8 +181,12 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
     const shared = all.some((other) => other !== criterion
       && [criterion.implementation_anchor, criterion.verification_anchor].some((left) =>
         [other.implementation_anchor, other.verification_anchor].some((right) => anchorsOverlap(left, right))));
-    const normalized = shared
-      ? Object.freeze({ ...criterion, status: "incomplete", exceptions: [...criterion.exceptions, "proof anchor is shared across acceptance criteria"] })
+    const warnings = [
+      ...(shared ? ["proof anchor is shared across acceptance criteria"] : []),
+      ...semanticProofWarnings(criterion, all),
+    ];
+    const normalized = warnings.length
+      ? Object.freeze({ ...criterion, status: "incomplete", exceptions: [...criterion.exceptions, ...warnings] })
       : criterion;
     if (suppliedStatuses[_index] !== undefined && suppliedStatuses[_index] !== normalized.status) throw new TypeError(`verify criterion ${_index} status does not match its evidence fields`);
     return normalized;

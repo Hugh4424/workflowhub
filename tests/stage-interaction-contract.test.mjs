@@ -15,6 +15,7 @@ const buildSpec = read("workflows", "build-spec", "SKILL.md");
 const buildPlan = read("workflows", "build-plan", "SKILL.md");
 const hostProtocol = read("skills", "workflowhub-host-protocol", "SKILL.md");
 const makeSteps = readJson("workflows", "make-decision", "steps.json").steps;
+const WORKFLOW_STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const HASH = "a".repeat(64);
 
 function lifecycle(interaction_type, overrides = {}) {
@@ -50,6 +51,25 @@ function lifecycle(interaction_type, overrides = {}) {
 }
 
 describe("current interaction boundary", () => {
+  it("describes the normal WorkflowHub session as the execution owner", () => {
+    for (const stage of WORKFLOW_STAGES) {
+      const manifest = readJson("workflows", stage, "steps.json");
+      const text = JSON.stringify(manifest);
+      expect(text).toMatch(/current WorkflowHub session/i);
+      expect(text).not.toMatch(/Stage Agent|stage agent/);
+    }
+  });
+
+  it("requires every stage skill to emit same-session step and skill boundaries", () => {
+    for (const stage of WORKFLOW_STAGES) {
+      const skill = read("workflows", stage, "SKILL.md");
+      expect(skill).toContain("workflowhub-codex-session-event.mjs start");
+      expect(skill).toContain("workflowhub-codex-session-event.mjs finish");
+      expect(skill).toContain("record-spec-analyze");
+      expect(skill).toMatch(/不启动第二个 Agent/);
+    }
+  });
+
   it("keeps Talk and Grill exclusively in make-decision", () => {
     expect(read("workflows", "make-decision", "skill-deps.yaml")).toMatch(
       /name: grill-with-docs, path: skills\/grill-with-docs\/SKILL\.md, execution: inline/i,
@@ -79,14 +99,13 @@ describe("current interaction boundary", () => {
 
   it("keeps user-reply append seams informational and append-only", () => {
     const buildPlanHandoff = readJson("workflows", "build-plan", "steps.json").steps.find((step) => step.step_slug === "publish-plan-result");
-    const verifyHandoff = readJson("workflows", "verify-code", "steps.json").steps.find((step) => step.step_slug === "approve-verification");
-    for (const observable of [buildPlanHandoff?.observable_result, verifyHandoff?.observable_result]) {
+    for (const observable of [buildPlanHandoff?.observable_result]) {
       expect(observable).toMatch(/(?:actual reply|实际验收回复)[\s\S]*(?:执行事实|human-alignment)/i);
       expect(observable).toMatch(/(?:does not|without changing|不改变)[\s\S]*(?:status|completion|完成)/i);
       expect(observable).toMatch(/(?:not|不)[\s\S]*(?:work gate|工作许可证|授权 close)/i);
     }
     expect(buildPlan).toMatch(/append that reply to the final[\s\S]*(?:execution fact|执行事实)[\s\S]*(?:append-only|带标签)[\s\S]*(?:does not change|changes neither|不改变) `status`/i);
-    expect(read("workflows", "verify-code", "SKILL.md")).toMatch(/用户的实际回复和最终大白话\s*交接追加到当前 `tasks\.md` 最终 aggregate[\s\S]*执行事实[\s\S]*(?:append-only|单一 append-only)[\s\S]*不改变 `status`/i);
+    expect(read("workflows", "verify-code", "SKILL.md")).toMatch(/不要求用户补交 verify-code 证据|不把交接确认当作代码 review 的证据门禁/i);
     const catalog = yaml.load(readFileSync(join(root, "skills", "catalog.yaml"), "utf8"));
     const decisionLog = catalog.skills.find(({ name }) => name === "decision-log");
     expect(decisionLog.local_changes).toMatch(/唯一当前 consumer 是 make-decision[\s\S]*owner 是 make-decision[\s\S]*tests\/stage-interaction-contract\.test\.mjs/i);
@@ -94,7 +113,7 @@ describe("current interaction boundary", () => {
 
   it("lets four readable materials drive work while quality facts restrict completion", () => {
     expect(hostProtocol).toMatch(/build-code.*四材料可读即可.*实现、测试和修复/i);
-    expect(hostProtocol).toMatch(/verify-code.*四材料可读即可.*最终判断/i);
+    expect(hostProtocol).toMatch(/verify-code.*四材料可读即可.*代码.*review/i);
     expect(hostProtocol).toMatch(/材料存在只证明可以工作，不证明质量完成/);
     for (const skill of [makeDecision, buildSpec, buildPlan])
       expect(skill).toMatch(/quality|质量/i);

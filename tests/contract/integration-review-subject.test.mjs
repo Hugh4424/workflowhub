@@ -188,4 +188,25 @@ describe("integration review subject current-material boundary", () => {
     const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree, current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" } });
     expect(subject.ac_trace.acceptance_ids).toEqual(expect.arrayContaining(["AC-001", "AC-SOURCE-001", "AC-E2E-001"]));
   });
+
+  it("anchors ordinary project source directories outside WorkflowHub", () => {
+    const f = fixture();
+    mkdirSync(join(f.root, "paperbuilder"), { recursive: true });
+    writeFileSync(join(f.root, "paperbuilder", "service.py"), "def run():\n    return True\n");
+    mkdirSync(join(f.root, "frontend"), { recursive: true });
+    writeFileSync(join(f.root, "frontend", "App.tsx"), "export function App() { return null; }\n");
+    execFileSync("git", ["add", "paperbuilder", "frontend"], { cwd: f.root });
+    const tree = execFileSync("git", ["write-tree"], { cwd: f.root, encoding: "utf8" }).trim();
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+
+    expect(subject.ac_trace.implementation_anchors.map(({ path }) => path)).toEqual(
+      expect.arrayContaining(["paperbuilder/service.py", "frontend/App.tsx"]),
+    );
+  });
 });

@@ -37,9 +37,7 @@ export const STAGE_PREDICATES = Object.freeze({
     acceptance_criteria: "acceptance_criterion", finding_dispositions: "acceptance_criterion", integration_review: "review",
   }),
   "verify-code": Object.freeze({
-    full_tests_fresh: "test", independent_review: "review",
-    finding_dispositions: "acceptance_criterion", acceptance_criteria: "acceptance_criterion",
-    exceptions: "acceptance_criterion", human_confirmation: "confirmation",
+    code_review: "review",
   }),
 });
 
@@ -113,6 +111,7 @@ export function deriveStageProgress(stage, observations = [], materials = null) 
   return Object.freeze({
     stage,
     work_status: ready ? "ready" : "blocked_by_missing_material",
+    continuation_allowed: ready,
     work_authority: "current-four-materials-and-plan-tasks",
     readiness_source: "current-material-presence",
     required_materials: Object.freeze([...materialNames]),

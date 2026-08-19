@@ -43,7 +43,7 @@ const stageSkills = Object.freeze({
     "wh-review",
     "spec-analyze",
   ],
-  "verify-code": ["wh-review", "spec-analyze"],
+  "verify-code": ["dsh-code-review", "wh-review"],
 });
 
 describe("direct stage package contract", () => {

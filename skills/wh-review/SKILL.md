@@ -12,7 +12,7 @@ description: Freeze current materials, ask the configured 3rd-review broker for 
 1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks. The stage matrix is the allowlist; do not add a whole repository or a historical review bundle.
 2. Add any applicable `simplicity-guard` and `plan-ceo-review` files as read-only advisory lenses in this same packet. Do not invoke either lens as a separate skill or create a second output path.
 3. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
-4. Resolve provider/model from trusted 3rd-review configuration. Call the broker through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary. Ordinary surfaces use one broker request; `make-decision.direction` uses exactly two ordered requests (blind reconstruction, then reveal challenge) but writes one logical fact. The broker owns any internal provider recovery and returns the terminal facts. WorkflowHub does not add outer retries, format correction, provider fallback, or same-source fallback.
+4. Resolve provider/model from trusted 3rd-review configuration. Call the broker through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary. Every non-build-code surface, including `make-decision.direction`, uses one broker group request; direction carries a broker-owned `direction-review.v1` flow with reconstruct → reveal → challenge and one logical fact. The broker owns any internal provider recovery and returns the terminal facts. WorkflowHub does not add outer retries, format correction, provider fallback, or same-source fallback.
 5. Preserve the broker's real public result and provenance, including findings and transport status, as an immutable review fact.
 6. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
 
@@ -106,7 +106,7 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 - `build-spec`: current decision and draft specification.
 - `build-plan`: current decision/specification and draft plan/tasks.
 - `build-code`: current diff, risk-relevant tests and acceptance trace.
-- `verify-code`: current acceptance summary, final test facts, open risks and implementation assessment.
+- `verify-code`: current code diff, real consumers, implementation assessment, relevant test context and open code risks.
 
 Phase build-code review 的 subject 由宿主从 `phase_id` 和 Git 工作树推导。调用方只提供
 `phase_id`，不得从 `tasks.md` 传入 `execution_file_paths`、`phasePaths` 或其他路径选择器。

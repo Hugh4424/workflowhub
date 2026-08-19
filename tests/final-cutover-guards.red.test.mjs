@@ -882,6 +882,45 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ facts: { review: { subject_kind: "worktree", phase_id: null, review_scope: "integration" } } });
   });
 
+  it("downgrades generic or shared AC proof at build-code intake", async () => {
+    const stage = "build-code";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "quality/evidence/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "quality/tests/tests.json": testsReceipt(stage),
+      "quality/reviews/results/review.json": reviewReceipt(stage),
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+      "evidence/ac2.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: diffHash })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    const semantic = (id, line) => ({
+      acceptance_criterion_id: id, status: "covered", evidence_refs: [{ ref: `evidence/${id.toLowerCase()}.json`, sha256: sha }],
+      scenario: "执行当前验收流程", oracle: "结果符合预期", actual_outcome: "测试通过", coverage_limits: "未覆盖外部宿主",
+      implementation_anchor: { id: `impl-${id}`, path: "src/feature.mjs", start_line: line, end_line: line + 1, role: "implementation" },
+      verification_anchor: { id: `test-${id}`, path: "tests/feature.test.mjs", start_line: line, end_line: line + 1, role: "verification" },
+    });
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1", "AC2"], items: [semantic("AC1", 10), semantic("AC2", 20)] },
+    })).resolves.toMatchObject({
+      facts: { acceptance_coverage: { items: [
+        { acceptance_criterion_id: "AC1", status: "unknown", evidence_refs: [] },
+        { acceptance_criterion_id: "AC2", status: "unknown", evidence_refs: [] },
+      ] } },
+    });
+  });
+
   it("rejects a forged current global test receipt before task audit is considered", async () => {
     const stage = "build-code";
     const forgedTests = testsReceipt(stage);
@@ -1077,6 +1116,42 @@ ${task("T002", "contract GREEN", 0, "T001")}
       receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: attemptRef, audit: worker.auditRef },
       acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [] },
     })).rejects.toThrow(/must contain provider attempts/i);
+  });
+
+  it("keeps a group-level unavailable attempt with no dispatched providers as an incomplete fact", async () => {
+    const stage = "build-code", attemptRef = "quality/reviews/attempts/group-unavailable/attempt.json";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "quality/evidence/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "quality/tests/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: "group-unavailable", task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        error: { code: "GROUP_OUTCOME_UNAVAILABLE", message: "review group ended before provider dispatch" },
+      },
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    const worker = {
+      ...workerFor(stage, values),
+      workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: createHash("sha256").update(values[ref]).digest("hex") })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    await expect(officialStageHandler(stage)(worker, {
+      receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: attemptRef, audit: worker.auditRef },
+      acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1"], items: [{ acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }] }] },
+    })).resolves.toMatchObject({
+      facts: { review: { status: "unavailable" } },
+      completion: { system: { result: "incomplete" } },
+    });
   });
 
   it("uses the current supplied integration review instead of legacy accepted review facts", async () => {

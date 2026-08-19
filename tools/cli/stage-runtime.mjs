@@ -30,6 +30,8 @@ import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from "../
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
+import { bindCodexSessionTask, readCurrentCodexSession, buildWorkflowHubSessionInput } from "../host/workflowhub-codex-session-state.mjs";
+import { publishCurrentWorkflowHubSession } from "../host/workflowhub-stage-agent-bridge.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
@@ -42,6 +44,36 @@ const GIT_OID = /^[a-f0-9]{40,64}$/;
 const MONITORING_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
 const CODEX_THREAD_ID = /^[A-Za-z0-9._:-]{8,128}$/;
 const CODEX_ROLLOUT_STARTED_AT = "WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT";
+
+function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
+  const hasProject = typeof values.project === "string" && values.project.trim() !== "";
+  const hasTask = typeof values.task === "string" && values.task.trim() !== "";
+  if (hasProject !== hasTask) throw new TypeError("--project and --task must be supplied together, or omitted inside a bound WorkflowHub session");
+  const current = readCurrentCodexSession({ cwd, sessionId: process.env.CODEX_THREAD_ID ?? null });
+  if (current.status === "conflict") throw new Error("current WorkflowHub session has multiple active Codex sessions");
+  const binding = current.status === "present" ? current.task_binding : null;
+  if (binding) {
+    if (hasProject && (values.project !== binding.project_name || values.task !== binding.task_id)) {
+      throw new Error("explicit project/task does not match the current WorkflowHub session binding");
+    }
+    return Object.freeze({ project: binding.project_name, task: binding.task_id, taskPath: binding.task_path, source: "session-binding" });
+  }
+  if (!hasProject) throw new Error("current WorkflowHub session has no task binding; run task-bootstrap in this session first");
+  return Object.freeze({ project: values.project, task: values.task, taskPath: undefined, source: "explicit" });
+}
+
+function bindExplicitWorkflowHubIdentity(context, cwd) {
+  const sessionId = process.env.CODEX_THREAD_ID ?? null;
+  const current = readCurrentCodexSession({ cwd, sessionId });
+  if (current.status !== "present" || current.task_binding) return null;
+  return bindCodexSessionTask({
+    projectName: context.identity.projectName,
+    taskId: context.identity.taskId,
+    taskPath: context.task.taskPath,
+    cwd,
+    sessionId,
+  });
+}
 
 function safeRolloutId(value) {
   return String(value).replace(/[^A-Za-z0-9._:-]/g, "_");
@@ -64,14 +96,30 @@ function isSafeCodexRolloutPath(candidate, { home, threadId }) {
     : null;
 }
 
-function locateCodexRollout({ env = process.env, home = homedir() } = {}) {
+function locateCodexRollout({ env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
   const threadId = env.CODEX_THREAD_ID;
-  if (typeof threadId !== "string" || !CODEX_THREAD_ID.test(threadId)) return null;
   const explicit = env.CODEX_ROLLOUT_PATH ?? env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
-  if (typeof explicit !== "string" || explicit.trim() === "") return null;
-  const target = isSafeCodexRolloutPath(explicit, { home, threadId });
-  if (!target) throw new Error("CODEX_ROLLOUT_PATH must point to the current .codex/sessions rollout for CODEX_THREAD_ID");
-  return { threadId, target };
+  if (typeof explicit === "string" && explicit.trim() !== "") {
+    if (typeof threadId !== "string" || !CODEX_THREAD_ID.test(threadId)) return null;
+    const target = isSafeCodexRolloutPath(explicit, { home, threadId });
+    if (!target) throw new Error("CODEX_ROLLOUT_PATH must point to the current .codex/sessions rollout for CODEX_THREAD_ID");
+    return { threadId, target };
+  }
+  const handoff = readCurrentCodexSession({
+    cwd,
+    sessionId: typeof threadId === "string" && CODEX_THREAD_ID.test(threadId) ? threadId : null,
+  });
+  if (handoff.status === "conflict") throw new Error("WorkflowHub Codex session handoff has multiple active sessions for this workspace");
+  if (handoff.status !== "present") return null;
+  const handoffThreadId = handoff.session_id;
+  if (!CODEX_THREAD_ID.test(handoffThreadId)) throw new Error("WorkflowHub Codex session handoff has an invalid session_id");
+  if (!handoff.transcript_path) return null;
+  const target = isSafeCodexRolloutPath(handoff.transcript_path, { home, threadId: handoffThreadId });
+  // A handoff from another isolated HOME is not evidence we may read.  Treat
+  // it as an unavailable source so the official run can still publish honest
+  // stage/step/skill facts instead of dropping the whole sidecar write.
+  if (!target) return null;
+  return { threadId: handoffThreadId, target };
 }
 
 function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
@@ -85,7 +133,7 @@ function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
   return numeric;
 }
 
-function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAtMs }) {
+function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER }) {
   const records = [];
   for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
@@ -93,7 +141,7 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAt
     try { outer = JSON.parse(line); } catch { continue; }
     if (!outer || typeof outer !== "object" || !outer.payload || typeof outer.payload !== "object") continue;
     const occurredAt = rolloutTimestamp(outer);
-    if (occurredAt !== null && occurredAt < startedAtMs) continue;
+    if (occurredAt !== null && (occurredAt < startedAtMs || occurredAt >= endedAtMs)) continue;
     const payload = outer.payload;
     const payloadType = typeof payload.type === "string" ? payload.type : "unknown";
     const sourceEventId = safeRolloutId(payload.id ?? outer.id ?? `${index}-${payloadType}`);
@@ -108,11 +156,13 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAt
       // response_item/message.  Keep the per-turn usage (not the cumulative
       // total) so the monitoring adapter can deduplicate and aggregate it as
       // an ordinary token fact without inventing step or skill attribution.
-      const usage = payload.info?.last_token_usage ?? payload.info?.total_token_usage;
+      // total_token_usage is cumulative for the rollout and cannot be safely
+      // assigned to this stage window.  Only the per-turn usage is eligible.
+      const usage = payload.info?.last_token_usage;
       const inputTokens = usage?.input_tokens;
       const outputTokens = usage?.output_tokens;
       const totalTokens = usage?.total_tokens;
-      if (Number.isInteger(inputTokens) && inputTokens >= 0
+      if (occurredAt !== null && Number.isInteger(inputTokens) && inputTokens >= 0
           && Number.isInteger(outputTokens) && outputTokens >= 0
           && Number.isInteger(totalTokens) && totalTokens >= 0) {
         records.push(JSON.stringify({
@@ -169,8 +219,8 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAt
  * The launcher owns the host path and turns it into a private reader capability.
  * Runtime facts only receive the opaque thread reference and normalized events.
  */
-export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, startedAtMs = Date.now(), env = process.env, home = homedir() } = {}) {
-  const located = locateCodexRollout({ env, home });
+export function resolveDefaultMonitoringSource({ context, task_id, run_id, attempt_id, startedAtMs = Date.now(), endedAtMs = Number.MAX_SAFE_INTEGER, env = process.env, home = homedir(), cwd = process.cwd() } = {}) {
+  const located = locateCodexRollout({ env, home, cwd });
   if (!located) return null;
   const sourceRef = `codex-rollout-${safeRolloutId(located.threadId)}`;
   return createRegisteredCodexSource({
@@ -192,8 +242,51 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
       attemptId: attempt_id ?? context?.attempt_id ?? null,
       stage: context?.stage ?? null,
       startedAtMs,
+      endedAtMs,
     })),
   });
+}
+
+function currentSessionAttemptId(sessionId, taskId, stage) {
+  return `attempt-${sha256(`workflowhub-session:${sessionId}:${taskId}:${stage}`).slice(0, 32)}`;
+}
+
+/**
+ * The public run is the automatic caller for a normal WorkflowHub session.
+ * It consumes the exact hook handoff and boundary events, then reuses the
+ * existing authenticated bridge.  An explicit receipt remains authoritative
+ * for compatibility; no session directory scan or task/path inference occurs.
+ */
+export function bindCurrentSessionOutcome({ context, stage, input, cwd = process.cwd() } = {}) {
+  if (typeof input?.receipts?.stage_outcomes === "string" && input.receipts.stage_outcomes.trim()) return input;
+  const taskId = context?.identity?.taskId;
+  const session = buildWorkflowHubSessionInput({ cwd, stage, taskId, sessionId: process.env.CODEX_THREAD_ID ?? null });
+  if (session.status !== "present") return input;
+  if (!session.spec_analyze || typeof session.spec_analyze !== "object" || Array.isArray(session.spec_analyze)) return input;
+  const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
+    ? input.attempt_id
+    : currentSessionAttemptId(session.session_id, taskId, stage);
+  const published = publishCurrentWorkflowHubSession({
+    context,
+    stage,
+    attemptId,
+    input: {
+      session: {
+        host: session.host,
+        session_id: session.session_id,
+        task_id: session.task_id,
+        source_ref: session.source_ref,
+        status: session.status_value,
+        events: session.events,
+        spec_analyze: session.spec_analyze,
+      },
+    },
+  });
+  return {
+    ...input,
+    attempt_id: attemptId,
+    receipts: { ...(input.receipts ?? {}), stage_outcomes: published.ref },
+  };
 }
 
 export function monitoringTopology(repoRoot = RUNNER_ROOT) {
@@ -237,6 +330,21 @@ function bindStageOutcomeAttemptId(context, stageOutcome) {
   }
 }
 
+function stageOutcomeSessionId(context, stageOutcome) {
+  const direct = stageOutcome?.producer?.session_id;
+  if (typeof direct === 'string' && direct.trim()) return direct;
+  const ref = stageOutcome?.stage_outcome_ref;
+  if (typeof ref !== 'string' || !ref.trim()) return null;
+  try {
+    const record = JSON.parse(context.task.readRecord(ref));
+    return typeof record?.producer?.session_id === 'string' && record.producer.session_id.trim()
+      ? record.producer.session_id
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeOutcomeStatus(outcome, kind) {
   const semanticStatus = typeof outcome?.status === "string" ? outcome.status : null;
   if (semanticStatus === "completed" || semanticStatus === "failed") {
@@ -261,7 +369,7 @@ function normalizeOutcomeStatus(outcome, kind) {
 function normalizeOutcomeCost(outcome) {
   const cost = outcome?.cost;
   if (!cost || typeof cost !== 'object' || Array.isArray(cost)) return null;
-  const status = cost.status === 'recorded' || cost.status === 'unavailable' ? cost.status : null;
+  const status = ['recorded', 'partial', 'unavailable'].includes(cost.status) ? cost.status : null;
   const durationMs = cost.duration_ms;
   const tokens = cost.tokens;
   if (!status) return null;
@@ -269,6 +377,12 @@ function normalizeOutcomeCost(outcome) {
       && Number.isSafeInteger(durationMs) && durationMs >= 0
       && Number.isSafeInteger(tokens) && tokens >= 0) {
     return { status, duration_ms: durationMs, tokens };
+  }
+  if (status === 'partial') {
+    const durationRecorded = Number.isSafeInteger(durationMs) && durationMs >= 0;
+    const tokensRecorded = Number.isSafeInteger(tokens) && tokens >= 0;
+    if (durationRecorded === tokensRecorded || typeof cost.reason !== 'string' || !cost.reason.trim()) return null;
+    return { status, duration_ms: durationMs ?? null, tokens: tokens ?? null, reason: cost.reason.trim() };
   }
   if (status === 'unavailable'
       && (durationMs === null || durationMs === undefined)
@@ -295,27 +409,31 @@ function outcomeCostFacts({ task, factIdentity, stage, kind, id, stepSlug = null
     step_id: kind === 'step' ? id : null,
     step_slug: kind === 'step' ? stepSlug : null,
     skill_id: kind === 'skill' ? skillId : null,
-    coverage: { observed: cost.status === 'recorded' ? 1 : 0, expected: 1 },
+    coverage: { observed: 1, expected: 1 },
     evidence_refs: evidenceRefs,
   };
-  const status = cost.status === 'recorded' ? 'present' : 'unavailable';
-  const reason = status === 'present' ? null : cost.reason;
+  const tokenPresent = Number.isSafeInteger(cost.tokens) && cost.tokens >= 0;
+  const durationPresent = Number.isSafeInteger(cost.duration_ms) && cost.duration_ms >= 0;
+  const tokenStatus = tokenPresent ? 'present' : 'unavailable';
+  const durationStatus = durationPresent ? 'present' : 'unavailable';
   return [
     createMonitoringFact({
       ...common,
       fact_id: `token:${factIdentity}:${subject}`,
       fact_type: 'token',
-      status,
-      value: status === 'present' ? { message_id: `stage-outcome:${factIdentity}:${subject}`, tokens: cost.tokens, grain: 'stage_outcome' } : null,
-      reason,
+      status: tokenStatus,
+      value: tokenPresent ? { message_id: `stage-outcome:${factIdentity}:${subject}`, tokens: cost.tokens, grain: 'stage_outcome' } : null,
+      coverage: { observed: tokenPresent ? 1 : 0, expected: 1 },
+      reason: tokenPresent ? null : (cost.reason ?? 'tokens_unavailable'),
     }),
     createMonitoringFact({
       ...common,
       fact_id: `duration:${factIdentity}:${subject}`,
       fact_type: 'duration',
-      status,
-      value: status === 'present' ? { duration_ms: cost.duration_ms, event_id: `stage-outcome:${factIdentity}:${subject}`, grain: 'stage_outcome' } : null,
-      reason,
+      status: durationStatus,
+      value: durationPresent ? { duration_ms: cost.duration_ms, event_id: `stage-outcome:${factIdentity}:${subject}`, grain: 'stage_outcome' } : null,
+      coverage: { observed: durationPresent ? 1 : 0, expected: 1 },
+      reason: durationPresent ? null : (cost.reason ?? 'duration_unavailable'),
     }),
   ];
 }
@@ -333,6 +451,7 @@ function outcomeCoverage(status) {
 function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   const stage = typeof context.stage === "string" ? context.stage : null;
   const attemptId = deriveMonitoringAttemptId(context, stageOutcome);
+  const sessionId = stageOutcomeSessionId(context, stageOutcome);
   const factIdentity = `${context.workflowRunId ?? "unknown"}:${attemptId ?? "default"}`;
   const source = {
     kind: "stage",
@@ -345,6 +464,7 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
     project_name: context.identity.projectName,
     run_id: context.workflowRunId ?? null,
     attempt_id: attemptId,
+    session_id: sessionId,
     stage,
     source,
     observed_at: now().toISOString(),
@@ -352,8 +472,11 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   const stageOutcomeStatus = typeof stageOutcome?.stage_outcome_status === "string"
     ? stageOutcome.stage_outcome_status
     : stageOutcome?.status;
+  const stageOutcomeDiagnostic = stageOutcome?.stage_outcome_diagnostic;
   const stageState = normalizeOutcomeStatus(
-    stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
+    stageOutcomeDiagnostic && typeof stageOutcomeDiagnostic === "object"
+      ? { status: "unavailable", reason: stageOutcomeDiagnostic.reason, error: stageOutcomeDiagnostic.error_code ?? null }
+      : stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
     "stage",
   );
   const records = [createMonitoringFact({
@@ -657,8 +780,9 @@ export async function runMonitoringSidecar({ context, services = {}, stageOutcom
   const boundStageOutcome = bindStageOutcomeAttemptId(context, stageOutcome);
   const attemptId = deriveMonitoringAttemptId(context, boundStageOutcome);
   const monitoringContext = attemptId === (context.attempt_id ?? null) ? context : { ...context, attempt_id: attemptId };
+  const sidecarEndedAtMs = now().getTime();
   const binding = typeof services.resolveMonitoringSource === "function"
-    ? await services.resolveMonitoringSource({ context: monitoringContext, taskPath: context.task.taskPath, task_id: context.identity.taskId, run_id: context.workflowRunId })
+    ? await services.resolveMonitoringSource({ context: monitoringContext, taskPath: context.task.taskPath, task_id: context.identity.taskId, run_id: context.workflowRunId, endedAtMs: sidecarEndedAtMs })
     : null;
   const parsed = parseRegisteredCodexTranscript(binding, {
     project_name: monitoringContext.identity.projectName,
@@ -704,7 +828,7 @@ export function publishStaleMonitoringSnapshot({ context, services = {}, message
   return Object.freeze({ projection, snapshot });
 }
 
-export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {} } = {}) {
+export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
@@ -721,13 +845,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (!new Set(["commit", "push", "merge", "archive", "cleanup"]).has(values.operation)) throw new TypeError("authorize-operation requires --operation=commit|push|merge|archive|cleanup");
     if (typeof values["subject-ref"] !== "string" || values["subject-ref"].trim() === "") throw new TypeError("authorize-operation requires --subject-ref=<quality/confirmations/<sha256>.json>");
   }
+  const identity = resolveWorkflowHubIdentity(values, cwd);
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
-    projectName: values.project,
-    taskId: values.task,
+    projectName: identity.project,
+    taskId: identity.task,
+    taskPath: identity.taskPath,
     runnerRoot: RUNNER_ROOT,
     readOnly: command === "status",
   });
+  if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
   const input = new Set(["review-risk-pause", "capture-tests", "run"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
@@ -853,14 +980,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(suppliedInput.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
-    const controlledInput = {
+    const controlledInput = bindCurrentSessionOutcome({
+      context,
+      stage: values.stage,
+      cwd,
+      input: {
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
-    };
-    // The Stage Agent runs before this public delivery command.  A plain
-    // Date.now() here starts the window too late and drops the real agent's
-    // transcript and token events.  The host records the agent start before
-    // launching it and passes that boundary through this private env var.
+      },
+    });
+    // The current WorkflowHub session runs before this public delivery command. A plain
+    // Date.now() here starts the window too late and drops the real session's
+    // transcript and token events. The project hook records the exact session
+    // source; the private event marker records semantic boundaries.
     const monitoringStartedAt = resolveRolloutStartedAt(process.env);
     const monitoringServices = services.monitoring === false
       ? services
@@ -869,13 +1001,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         resolveMonitoringSource: services.resolveMonitoringSource ?? ((sourceInput) => resolveDefaultMonitoringSource({
           ...sourceInput,
           startedAtMs: monitoringStartedAt,
+          cwd,
         })),
       };
     let attempt;
     try {
       attempt = await runOfficialStage(values.stage, context, controlledInput);
     } catch (error) {
-      // A missing or stale Stage Agent outcome is an execution fact, not a
+      // A missing or stale current-session outcome is an execution fact, not a
       // reason to hide the gap. Preserve the fail-loud run error and publish
       // the existing monitoring facts as unknown so status cannot look green.
       if (error?.code === "MATERIAL_INCOMPLETE"
@@ -920,7 +1053,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         // failed run having created the file.
         initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
         const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
-        await runSidecar({ context, services: monitoringServices, stageOutcome: bindStageOutcomeAttemptId(context, attempt) });
+        const monitoringStageOutcome = attempt?.stage_outcome_ref
+          ? bindStageOutcomeAttemptId(context, attempt)
+          : {
+            ...attempt,
+            stage_outcome_status: "unavailable",
+            step_outcomes: [],
+            skill_outcomes: [],
+          };
+        await runSidecar({ context, services: monitoringServices, stageOutcome: monitoringStageOutcome });
       }
       catch (error) {
         const message = `monitoring sidecar failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -973,6 +1114,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
 export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   delegate = stageRuntimeMain,
   services = {},
+  cwd = process.cwd(),
   skillBundleContract = LOCAL_SKILL_BUNDLE_CONTRACT,
   runnerContract = LOCAL_RUNNER_CONTRACT,
 } = {}) {
@@ -1020,13 +1162,13 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   return invokeRuntimeCommand(
     behavior,
     Object.freeze({ action, argv: delegatedArgv }),
-    ({ argv: internalArgv }) => delegate(internalArgv, { services }),
+    ({ argv: internalArgv }) => delegate(internalArgv, { services, cwd }),
     { skillBundleContract, runnerContract },
     internalOperation,
   );
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   stageRuntimeCliMain().then((result) => {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   }).catch((error) => {

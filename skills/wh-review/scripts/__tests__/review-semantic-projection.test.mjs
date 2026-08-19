@@ -38,6 +38,22 @@ test("integration semantic projection ignores host-only AC evidence trace", asyn
   expect(api.buildSemanticProjection(base).semantic_hash).toBe(api.buildSemanticProjection(changed).semantic_hash);
 });
 
+test("integration semantic projection changes when implementation context changes", async () => {
+  const api = await projectionApi();
+  expect(api).toBeTruthy();
+  const base = {
+    stage: "build-code", review_scope: "integration", contract_id: "build-code", contract_hash: "contract-1",
+    materials: {
+      approved_spec: "same", acceptance_criteria: ["AC-1"], implementation_summary: "works",
+      implementation_context: { schema_version: "wh-review-integration-implementation-context.v1", anchors: [{ id: "service", path: "src/service.py", start_line: 1, end_line: 4, role: "implementation" }] },
+      test_evidence: { exit_code: 0 },
+    },
+  };
+  const changed = structuredClone(base);
+  changed.materials.implementation_context.anchors[0].path = "src/other.py";
+  expect(api.buildSemanticProjection(base).semantic_hash).not.toBe(api.buildSemanticProjection(changed).semantic_hash);
+});
+
 test("projection ignores execution-status writeback but keeps task-material changes semantic", async () => {
   const api = await projectionApi();
   expect(api).toBeTruthy();

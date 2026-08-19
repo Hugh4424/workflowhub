@@ -86,6 +86,20 @@ describe("M15 monitoring facts", () => {
     expect(() => fact({ fact_type: "stage", value: { reason: "missing outcome" } })).toThrow(/outcome.*required/i);
   });
 
+  it("keeps execution metadata readable without accepting paths or invalid timestamps", () => {
+    const lifecycle = {
+      execution_id: "exec-step-1",
+      started_at: "2026-08-18T00:00:00.000Z",
+      completed_at: "2026-08-18T00:00:01.000Z",
+    };
+    expect(validateMonitoringFact(fact({ fact_type: "step", value: { outcome: "completed", ...lifecycle } }))).toEqual(expect.objectContaining({ fact_type: "step" }));
+    expect(validateMonitoringFact(fact({ fact_type: "skill", value: { trigger: true, executed: true, ...lifecycle } }))).toEqual(expect.objectContaining({ fact_type: "skill" }));
+    expect(validateMonitoringFact(fact({ fact_type: "token", value: { message_id: "message-1", total_tokens: 3, grain: "message", execution_id: "exec-token-1" } }))).toEqual(expect.objectContaining({ fact_type: "token" }));
+    expect(validateMonitoringFact(fact({ fact_type: "duration", value: { duration_ms: 3, grain: "step", execution_id: "exec-duration-1" } }))).toEqual(expect.objectContaining({ fact_type: "duration" }));
+    expect(() => fact({ fact_type: "step", value: { outcome: "completed", ...lifecycle, execution_id: "/private/exec" } })).toThrow(/opaque identifier/i);
+    expect(() => fact({ fact_type: "step", value: { outcome: "completed", ...lifecycle, started_at: "not-a-timestamp" } })).toThrow(/started_at is invalid/i);
+  });
+
   it("ships field ownership, source, consumer view, and version metadata for every schema field", () => {
     const schema = JSON.parse(readFileSync(new URL("../runtime/schemas/monitoring-fact.v1.json", import.meta.url), "utf8"));
     const required = new Set(schema.required);

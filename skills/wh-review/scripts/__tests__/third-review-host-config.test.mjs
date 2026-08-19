@@ -260,31 +260,40 @@ describe("trusted third-review host configuration", () => {
     })).toThrow(/insufficient enabled heterologous providers/i);
   });
 
-  it("fails closed when an enabled quorum candidate has no source identity", () => {
+  it("uses the configured profile key when an enabled candidate has no raw source identity", () => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
     delete broker.providers.kimi.source_id;
     writeFileSync(brokerConfig, JSON.stringify(broker));
-    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", {
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex", {
       initial: ["kimi"], mode: "full_only", minimum_heterologous: 1,
-    })).toThrow(/source_id/i);
+    })).toMatchObject({
+      providers: ["kimi"],
+      requestedProfiles: ["kimi"],
+      eligibleProfiles: ["kimi"],
+      sameSourceExcluded: [],
+    });
   });
 
-  it("uses explicit source identity for host exclusion and fails closed if the host identity is absent", () => {
+  it("uses the exact configured profile key for host exclusion without requiring raw source identity", () => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
     broker.providers["codex/host"] = { enabled: true, source_id: "shared-codex-source" };
-    broker.providers["codex/reviewer"] = { enabled: true, source_id: "shared-codex-source" };
+    broker.providers["codex/reviewer"] = { enabled: true };
     writeFileSync(brokerConfig, JSON.stringify(broker));
-    const route = { initial: ["codex/reviewer", "kimi"], mode: "full_only", minimum_heterologous: 1 };
+    const route = { initial: ["codex/host", "kimi"], mode: "full_only", minimum_heterologous: 1 };
     expect(selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toMatchObject({
-      providers: ["codex/reviewer", "kimi"],
+      providers: ["codex/host", "kimi"],
       eligibleProfiles: ["kimi"],
-      sameSourceExcluded: ["codex/reviewer"],
+      sameSourceExcluded: ["codex/host"],
     });
     delete broker.providers["codex/host"].source_id;
     writeFileSync(brokerConfig, JSON.stringify(broker));
-    expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toThrow(/host provider.*source_id/i);
+    expect(selectTrustedReviewProviderSelection(brokerConfig, "codex/host", route)).toMatchObject({
+      providers: ["codex/host", "kimi"],
+      eligibleProfiles: ["kimi"],
+      sameSourceExcluded: ["codex/host"],
+    });
   });
 
   it("pins declared profile tuples, requires priority order, and preserves those pins for dispatch", () => {

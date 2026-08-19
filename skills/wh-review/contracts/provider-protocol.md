@@ -15,6 +15,15 @@
   `content_sha256` 的重复材料名；provider 只读取 `canonical_path` 一次，不把 alias
   当成缺失材料，也不为 alias 产生额外 finding。
 
+## 附件传输协商
+
+v3 provider group 默认请求 `negotiated` delivery。WorkflowHub 发送一个共享的
+`embed:false` manifest，3rd-review broker 再按每个 provider 的 capability 选择实际传输：
+`file_only` provider 从私有 workspace 读取，`always_embed` provider 由 broker 渲染完整
+附件 prompt。这样不同附件能力的 provider 仍属于同一个 configured group，不拆成多次
+审查，也不把某个 provider 的能力提升为整组的传输模式。显式 `file_only` 或
+`always_embed` 只允许由单 provider 或明确受限的调用方使用。
+
 ## 3rd-review 公共结果：workflowhub-result.v3
 
 普通审查面每一轮 `wh-review` attempt 只发起一次同步 public request：
@@ -48,8 +57,8 @@ request 同时声明本次审查合同和语义材料身份：
 
 WorkflowHub 把本 stage 配置的完整 candidate profile 列表交给 3rd-review；同一个
 显式 source identity 才算同源并返回 `SAME_SOURCE`。不能因为 adapter 名称相同就跳过
-另一个已配置 profile。不同附件能力的 profile 可以被 WorkflowHub 拆成多个兼容小组并行
-调用；每个配置 profile 都必须有一条公共结果。WorkflowHub 不实现 advisory lock、process
+另一个已配置 profile。不同附件能力的 profile 在默认 `negotiated` delivery 下仍进入同一
+个 broker group；每个配置 profile 都必须有一条公共结果。WorkflowHub 不实现 advisory lock、process
 flight、polling、poll interval、session lifecycle 或额外 timeout；这些 provider lifecycle
 事实由 3rd-review broker 负责。`run` 阻塞到 broker 返回 terminal group；exit code `3`
 的 stdout 仍是合法的 unavailable terminal group，必须按公开协议读取，不能丢弃或改写为空
@@ -62,11 +71,12 @@ findings。被排除的成员返回 `SAME_SOURCE` 诊断，绝不能被当成没
 再次审查，必须由上层因为真实材料/代码变化产生新的审查调用，不能为了拿到空 findings
 重复同一主题。
 
-唯一例外是 `make-decision.direction`：一次逻辑审查事实严格包含两个有序的 public
-request。第一请求只做盲问题重建；只有第一请求的成员都得到可信终态后，第二请求才揭示
-`current_selection` 并消费第一请求的重建。两次请求不建立 continuation/session/recovery
-状态，也不产生第二条 WorkflowHub review fact；两次请求的 transport、usage 和 timing
-都并入同一 attempt 的 provider attempts。第一请求失败时不发送第二请求。
+`make-decision.direction` 不再是例外：它也只发一个 public group request。请求必须携带
+`review_flow.version=direction-review.v1`、`public_request_count=1` 和
+`steps=[reconstruct,reveal,challenge]`。broker 在同一请求内部保存 reconstruct 结果，并在
+reveal 边界之后才呈现 `current_selection`；最终返回一个 provider result 和一个逻辑 fact。
+如果 broker 不支持该 flow 或不能给出顺序/reveal 事实，WorkflowHub 记录
+`PROTOCOL_INCOMPATIBLE`/`unavailable`，不得退回第二次请求或把两次请求拼成一轮。
 
 每个 provider 的公开结果最少包含：
 
@@ -84,7 +94,7 @@ request。第一请求只做盲问题重建；只有第一请求的成员都得�
     "status": "completed"
   }],
   "continuable": false,
-  "deadline_ms": 360000,
+  "deadline_ms": null,
   "error": null,
   "identity": {
     "provider": "opencode",

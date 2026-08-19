@@ -16,30 +16,30 @@ const validCycle = () => ({
   conclusion: "passed",
 });
 
-describe("verify-code bounded architect acceptance", () => {
-  it("declares one independent review between two bounded repair opportunities", () => {
+describe("verify-code bounded code review", () => {
+  it("declares one independent code review between two bounded repair opportunities", () => {
     const deps = yaml.load(read("workflows/verify-code/skill-deps.yaml"));
-    expect(deps.skills.map(({ name }) => name)).toEqual(["wh-review", "spec-analyze"]);
+    expect(deps.skills.map(({ name }) => name)).toEqual(["dsh-code-review", "wh-review"]);
     const steps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
     const evidenceKind = (step, kind) => step.completion_evidence.some((entry) => entry.kind === kind);
-    const reviewIndexes = steps.flatMap((step, index) => evidenceKind(step, "review") ? [index] : []);
+    const reviewStep = steps.find((step) => step.step_slug === "run-one-independent-code-review");
     const repairIndexes = steps.flatMap((step, index) => evidenceKind(step, "repair") ? [index] : []);
 
-    expect(reviewIndexes).toHaveLength(1);
+    expect(reviewStep).toBeDefined();
     expect(repairIndexes).toHaveLength(2);
-    expect(repairIndexes[0]).toBeLessThan(reviewIndexes[0]);
-    expect(reviewIndexes[0]).toBeLessThan(repairIndexes[1]);
-    expect(steps[reviewIndexes[0]].observable_result).toMatch(/异源|independent/i);
+    expect(repairIndexes[0]).toBeLessThan(steps.indexOf(reviewStep));
+    expect(steps.indexOf(reviewStep)).toBeLessThan(repairIndexes[1]);
+    expect(reviewStep.observable_result).toMatch(/代码|code|异源|independent/i);
   });
 
   it("keeps the independent-review packet focused on current acceptance facts", () => {
     const verify = JSON.parse(read("runtime/review/stage-materials.json")).stages["verify-code"];
     expect(verify.required).toEqual(expect.arrayContaining([
-      "acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "review_instructions",
+      "changed_files", "implementation_assessment", "test_context", "open_risks", "review_instructions",
     ]));
     expect(verify.v2_required_maps).toEqual([]);
     const contract = read("skills/wh-review/contracts/verify-code.md");
-    expect(contract).toMatch(/异源架构验收|independent.*architect/i);
+    expect(contract).toMatch(/异源代码审查|independent.*code/i);
     expect(contract).toMatch(/(?:只调用[\s\S]{0,50}wh-review[\s\S]{0,30}一次)|(?:wh-review[\s\S]{0,50}once)/i);
     expect(contract).toMatch(/unavailable[\s\S]{0,120}(?:incomplete|缺事实)/i);
   });
@@ -60,9 +60,20 @@ describe("verify-code bounded architect acceptance", () => {
 
   it("requires semantic reverse checking and forbids a review loop", () => {
     const skill = read("workflows/verify-code/SKILL.md");
-    expect(skill).toMatch(/语义反向检查/);
-    expect(skill).toMatch(/每个适用\s*AC|every applicable acceptance criterion/i);
-    expect(skill).toMatch(/(?:不再开启新的\s*review\s*轮)|(?:不因[\s\S]{0,80}verdict[\s\S]{0,80}反复循环)/i);
-    expect(skill).toMatch(/证据缺失不能算\s*`?pass`?/i);
+    expect(skill).toMatch(/代码审查|code review/i);
+    expect(skill).toMatch(/真实入口|real entry/i);
+    expect(skill).toMatch(/不再开启(?:新的|第三轮)?\s*review|do not.*repeat.*review/i);
+    expect(skill).toMatch(/不要求.*证据|not.*evidence/i);
+  });
+
+  it("keeps DeepSeek quality lenses inside one code-review invocation", () => {
+    const skill = read("skills/dsh-code-review/SKILL.md");
+    for (const lens of ["dsh-find-simplifications", "dsh-doc-standards", "dsh-prose-standard", "dsh-trim-cot-leakage"]) {
+      expect(skill).toContain(lens);
+    }
+    expect(skill).toMatch(/不新增 skill dispatch、provider 调用、receipt、控制面或 verify-code 轮次/);
+    expect(skill).toMatch(/push、merge 和发布.*独立操作/);
+    expect(skill).toMatch(/无 consumer|没有真实 consumer/);
+    expect(skill).toMatch(/不创建额外记录/);
   });
 });

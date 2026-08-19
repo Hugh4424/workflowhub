@@ -9,6 +9,7 @@ projects:
   debate: &debate { github_url: "https://github.com/Hugh4424/debate", commit: "af121a1e24ae3af48f5e132d3de1342d16eccf31", commit_url: "https://github.com/Hugh4424/debate/commit/af121a1e24ae3af48f5e132d3de1342d16eccf31", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
   anysearch: &anysearch { github_url: "https://github.com/anysearch-ai/anysearch-skill", commit: "db3d76e5597aec7261257be5322dd211c9d9bb87", commit_url: "https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87", license: "Apache-2.0", reviewed_at: "2026-07-14", review_outcome: accepted }
   spec-kit: &speckit { github_url: "https://github.com/github/spec-kit", commit: "b7e67f55bf7a937aaa57dbe0a8198774e285de3a", commit_url: "https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  deepseek-harness: &deepseek { github_url: "https://github.com/deepseek-ai/deepseek-harness", commit: "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", commit_url: "https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
 
 skills:
   - name: anysearch
@@ -143,7 +144,7 @@ skills:
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
@@ -169,16 +170,35 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 0d7e50546eeec770dc0218ccfc8b98f5f211470bf253ac0c0691896bca107926
+    local_bundle_hash: 22b60611fff46f9e3461cc3794cef7fc25f21158faab04a33e685bae8ab71ace
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
     design_idea: report-only packet lens
-    used_by_stages: [build-plan]
+    used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，五个 stage 结尾由 Stage Agent 调用，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；owner 是 review-materials.mjs、runtime/stage/stage-content-contracts.mjs 与 stage-runner.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当现有 consumer 移除且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；只由四个产物阶段在收尾调用，verify-code 改用 dsh-code-review；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；owner 是 review-materials.mjs、runtime/stage/stage-content-contracts.mjs 与 stage-runner.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当现有 consumer 移除且无历史材料引用时删除
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
+  - name: dsh-code-review
+    path: skills/dsh-code-review/SKILL.md
+    local_version: 1.1.0
+    local_bundle_hash: 7f19cda6dbf81b472c996781f29ff19c2038517267d1cd10c154d8585f842027
+    last_reviewed_at: "2026-07-14"
+    status: adapted
+    purpose: verify-code 当前实现的高质量代码审查 lens
+    design_idea: correctness、lifecycle、security、consumer fit 和真实测试强度
+    standalone: true
+    used_by_stages: [verify-code]
+    upstream:
+      - { <<: *deepseek, path: ".agents/skills/dsh-code-review/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review" }
+      - { <<: *deepseek, path: ".agents/skills/dsh-find-simplifications/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-find-simplifications" }
+      - { <<: *deepseek, path: ".agents/skills/dsh-doc-standards/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-doc-standards" }
+      - { <<: *deepseek, path: ".agents/skills/dsh-prose-standard/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-prose-standard" }
+      - { <<: *deepseek, path: ".agents/skills/dsh-trim-cot-leakage/SKILL.md", skill_url: "https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage" }
+    local_changes: 将代码审查、简化、文档、prose 和过程叙述检查合并进一次 dsh-code-review 调用；删除宿主绑定，不新增 dispatch/provider/receipt/control-plane；不检查材料、AC、receipt 或证据完整性
+    dependency_closure: [skills/dsh-code-review]
+    update_policy: 上游代码审查规则变更时人工复核，不恢复材料门禁
   - name: stage-step-receipts
     path: skills/stage-step-receipts/SKILL.md
     local_version: 1.0.0
@@ -224,7 +244,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: faac5007323adb146aafda8843597f7e6c271aa130bb70f51518a0a4efe00907
+    local_bundle_hash: dfda167d1427105f09adaf9e1912fa8d697bf07c4487b894edde554724415c38
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -252,7 +272,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 8d7c56f813b3197185a34d93553d01f3cd4289e7f827cefef74424e082d09b6c
+    local_bundle_hash: e35880abef9ddfb579a40b7060299333d8b0b24e0cb89c16c752d4b04ca4d1c2
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

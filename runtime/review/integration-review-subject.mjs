@@ -168,15 +168,16 @@ function completedTasks(task, taskText) {
   return output;
 }
 
-function isCanonicalPassingBuildCodeTest(taskHandle, value) {
+function isCanonicalPassingBuildCodeTest(taskHandle, value, { finalTree, sourceRoot } = {}) {
   try {
+    const receiptSnapshot = receiptSnapshotForCurrent(value, { finalTree, sourceRoot, taskId: taskHandle.identity.taskId });
+    if (receiptSnapshot === null) return false;
     validateCanonicalTestReceipt(value, {
       taskId: taskHandle.identity.taskId,
       stage: "build-code",
-      snapshotTree: value?.snapshot_tree,
-      subject: "build-code-test-capture",
+      snapshotTree: receiptSnapshot,
+      expectedProducerComponent: "build-code-test-capture",
       allowedProducerComponents: ["build-code-test-capture"],
-      expectedCommand: "npm test",
       requirePassed: true,
     });
     const output = taskHandle.readRecord(value.output_ref);
@@ -186,11 +187,13 @@ function isCanonicalPassingBuildCodeTest(taskHandle, value) {
   }
 }
 
-function isCanonicalImplementationReceipt(taskHandle, value) {
+function isCanonicalImplementationReceipt(taskHandle, value, { finalTree, sourceRoot } = {}) {
   try {
+    const receiptSnapshot = receiptSnapshotForCurrent(value, { finalTree, sourceRoot, taskId: taskHandle.identity.taskId });
+    if (receiptSnapshot === null) return false;
     validateCanonicalImplementationReceipt(value, {
       taskId: taskHandle.identity.taskId,
-      snapshotTree: value?.snapshot_tree,
+      snapshotTree: receiptSnapshot,
       read: (ref) => taskHandle.readRecord(ref),
     });
     return true;
@@ -201,6 +204,13 @@ function isCanonicalImplementationReceipt(taskHandle, value) {
 
 function integrationContextPath(path) {
   const skillPath = (name) => ["skills", name, ""].join("/");
+  if (path.startsWith("node_modules/")
+      || path.startsWith(".git/")
+      || path.startsWith("dist/")
+      || path.startsWith("build/")
+      || path.startsWith("coverage/")
+      || path.startsWith("docs/")
+      || path.startsWith("specs/")) return false;
   if (path.startsWith("runtime/")
       || path.startsWith("core/")
       || path.startsWith("tools/")
@@ -209,7 +219,18 @@ function integrationContextPath(path) {
   if (path.startsWith(skillPath("wh-review")) || path.startsWith(skillPath("mini-task"))) {
     return !path.includes("/__tests__/");
   }
-  return path.startsWith("tests/contract/") || path.startsWith("tests/integration/");
+  if (path.startsWith("tests/contract/") || path.startsWith("tests/integration/")) return true;
+  // Integration review must work for arbitrary project repositories. Keep the
+  // WorkflowHub allowlist above, but also include ordinary source files from
+  // project-owned directories such as `paperbuilder/`, `frontend/`, or `src/`.
+  // Tests, fixtures, and generated assets are already represented by the
+  // explicit test evidence and should not become implementation anchors.
+  if (/(^|\/)(?:test|tests|__tests__|fixtures|fixture)(?:\/|$)/i.test(path)) return false;
+  return new Set([
+    ".c", ".cc", ".cpp", ".cxx", ".css", ".go", ".h", ".hpp", ".java",
+    ".js", ".jsx", ".mjs", ".php", ".py", ".rb", ".rs", ".scss", ".sql",
+    ".swift", ".ts", ".tsx", ".vue",
+  ]).has(extname(path).toLowerCase());
 }
 
 function finalSnapshotImplementationAnchors({ sourceRoot, baseTree, finalTree, executedEntryPoints = [] }) {
@@ -261,6 +282,19 @@ function snapshotMatchesCurrent(value, finalTree, sourceRoot, taskId) {
       && isExecutionRecordOnlyMaterialDelta(sourceRoot, value?.snapshot_tree, finalTree, taskId));
 }
 
+function receiptSnapshotForCurrent(value, { finalTree, sourceRoot, taskId } = {}) {
+  if (value?.snapshot_tree === finalTree) return finalTree;
+  // A tasks.md execution-fact writeback does not change the implementation.
+  // Preserve that narrow reuse rule, but only after proving the candidate
+  // transition is execution-record-only; never let the receipt choose its own
+  // freshness boundary.
+  if (typeof sourceRoot === "string"
+      && isExecutionRecordOnlyMaterialDelta(sourceRoot, value?.snapshot_tree, finalTree, taskId)) {
+    return value.snapshot_tree;
+  }
+  return null;
+}
+
 function currentBinding(tasks, finalTree, kind, taskHandle, currentRef, sourceRoot) {
   const snapshotCurrent = (value) => snapshotMatchesCurrent(value, finalTree, sourceRoot, taskHandle.identity.taskId);
   const selected = [];
@@ -268,8 +302,9 @@ function currentBinding(tasks, finalTree, kind, taskHandle, currentRef, sourceRo
     const value = item.value;
     const implementation = kind === "implementation"
       && (item.ref.startsWith("quality/evidence/implementation/") || item.ref === "quality/evidence/implementation.json")
-      && isCanonicalImplementationReceipt(taskHandle, value);
-    const green = kind === "green" && item.ref.startsWith("quality/tests/") && isCanonicalPassingBuildCodeTest(taskHandle, value);
+      && isCanonicalImplementationReceipt(taskHandle, value, { finalTree, sourceRoot });
+    const green = kind === "green" && item.ref.startsWith("quality/tests/")
+      && isCanonicalPassingBuildCodeTest(taskHandle, value, { finalTree, sourceRoot });
     if ((implementation || green) && snapshotCurrent(value)) selected.push(item);
   }
   if (typeof currentRef === "string" && currentRef !== "") {
@@ -277,9 +312,11 @@ function currentBinding(tasks, finalTree, kind, taskHandle, currentRef, sourceRo
     try { raw = taskHandle.readRecord(currentRef); }
     catch (error) { if (error?.code === "ENOENT") raw = null; else throw error; }
     if (raw !== null) {
-      const value = JSON.parse(raw);
-      const validImplementation = kind === "implementation" && isCanonicalImplementationReceipt(taskHandle, value);
-      const validGreen = kind === "green" && isCanonicalPassingBuildCodeTest(taskHandle, value);
+      let value;
+      try { value = JSON.parse(raw); }
+      catch { incomplete(`current ${kind} receipt is not JSON`); }
+      const validImplementation = kind === "implementation" && isCanonicalImplementationReceipt(taskHandle, value, { finalTree, sourceRoot });
+      const validGreen = kind === "green" && isCanonicalPassingBuildCodeTest(taskHandle, value, { finalTree, sourceRoot });
       if ((validImplementation || validGreen) && snapshotCurrent(value)) selected.push({ ref: currentRef, sha256: sha256(raw), value });
     }
   }
@@ -360,7 +397,7 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, artifacts, fin
     const explicitTests = [...new Map(items.flatMap((item) => item.evidence ?? [])
       .filter((item) => item.ref.startsWith("quality/tests/")
         && snapshotMatchesCurrent(item.value, finalTree, sourceRoot, safeTask.identity.taskId)
-        && isCanonicalPassingBuildCodeTest(safeTask, item.value))
+        && isCanonicalPassingBuildCodeTest(safeTask, item.value, { finalTree, sourceRoot }))
       .map((item) => [item.ref, { receipt_ref: item.ref, receipt_hash: item.sha256 }])).values()];
     const hasExplicitTest = explicitTests.length > 0;
     return Object.freeze({

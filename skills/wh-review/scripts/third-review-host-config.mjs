@@ -354,20 +354,11 @@ function effectiveProfile(config, provider) {
   };
 }
 
-function configuredSourceId(config, provider, label = "3rd-review provider") {
-  const sourceId = config.providers[provider]?.source_id;
-  if (typeof sourceId !== "string" || sourceId.trim() === "") {
-    throw new Error(`${label} ${provider} source_id is missing`);
-  }
-  return sourceId;
-}
-
-function sameSourceProfile(config, provider, hostProvider) {
-  if (provider === hostProvider) return true;
-  const providerSource = configuredSourceId(config, provider);
-  if (!config.providers[hostProvider]) return false;
-  const hostSource = configuredSourceId(config, hostProvider, "host provider");
-  return providerSource === hostSource;
+function sameSourceProfile(_config, provider, hostProvider) {
+  // WorkflowHub route/profile keys are the only configured dispatch identity.
+  // Broker identity.source_id remains result provenance and is validated at
+  // the public result boundary; it is not a second pre-dispatch config gate.
+  return provider === hostProvider;
 }
 
 function highestPriorityProfilesByAdapter(providers) {
@@ -415,9 +406,6 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
       if (configuredRoute && config.providers[provider].enabled !== true) {
         throw new Error("wh_review route references disabled 3rd-review provider " + provider);
       }
-    }
-    for (const provider of tier) {
-      if (config.providers[provider]?.enabled === true) configuredSourceId(config, provider);
     }
     const sameSourceExcluded = tier.filter((provider) => config.providers[provider]?.enabled === true && sameSourceProfile(config, provider, hostProvider));
     const enabledHeterologous = tier.filter((provider) => config.providers[provider]?.enabled === true && !sameSourceProfile(config, provider, hostProvider));

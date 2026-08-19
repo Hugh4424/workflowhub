@@ -394,8 +394,8 @@ describe("spec-analyze completeness contract", () => {
     expect(analyze.observable_result).toMatch(/DEFER|OPEN|report-only|strict/i);
   });
 
-  it("places a stage-end spec-analyze step before publish in every stage", () => {
-    for (const stage of ["make-decision", "build-spec", "build-code", "verify-code"]) {
+  it("places a stage-end spec-analyze step before publish in every authoring stage", () => {
+    for (const stage of ["make-decision", "build-spec", "build-code"]) {
       const steps = JSON.parse(readFileSync(new URL(`../../workflows/${stage}/steps.json`, import.meta.url), "utf8")).steps;
       const analyze = steps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze");
       const publish = steps.find(({ step_slug }) => step_slug.startsWith("publish-") && step_slug !== "publish-verification-attempt");
@@ -407,5 +407,8 @@ describe("spec-analyze completeness contract", () => {
       ]));
       expect(analyze.observable_result).toMatch(/original requirement|原始需求/i);
     }
+    const verifySteps = JSON.parse(readFileSync(new URL("../../workflows/verify-code/steps.json", import.meta.url), "utf8")).steps;
+    expect(verifySteps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze")).toBeUndefined();
+    expect(verifySteps.find(({ step_slug }) => step_slug === "code-review-closure")).toBeDefined();
   });
 });

@@ -97,9 +97,17 @@ function validateOutcomeCost(value, label) {
       && (!Number.isSafeInteger(cost[key]) || cost[key] < 0)) throw outcomeError(`${label}.${key} must be a non-negative integer or null`);
   }
   const status = outcomeText(cost.status, `${label}.status`);
-  if (!["recorded", "unavailable"].includes(status)) throw outcomeError(`${label}.status must be recorded or unavailable`);
-  if (status === "recorded" && (cost.duration_ms === null || cost.tokens === null)) {
+  if (!["recorded", "partial", "unavailable"].includes(status)) throw outcomeError(`${label}.status must be recorded, partial or unavailable`);
+  if (status === "recorded"
+      && (!Number.isSafeInteger(cost.duration_ms) || cost.duration_ms < 0
+        || !Number.isSafeInteger(cost.tokens) || cost.tokens < 0)) {
     throw outcomeError(`${label} recorded cost must include duration_ms and tokens`);
+  }
+  if (status === "partial") {
+    const durationRecorded = Number.isSafeInteger(cost.duration_ms) && cost.duration_ms >= 0;
+    const tokensRecorded = Number.isSafeInteger(cost.tokens) && cost.tokens >= 0;
+    if (durationRecorded === tokensRecorded) throw outcomeError(`${label} partial cost requires exactly one measured field`);
+    outcomeText(cost.reason, `${label}.reason`);
   }
   if (status === "unavailable") {
     if (cost.duration_ms !== null || cost.tokens !== null) {
@@ -286,9 +294,45 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
   return Object.freeze({ analyzer, analysis });
 }
 
+function validateCodeReviewOutcome(record, stage, snapshot, materialRevision, manifest, skillManifest) {
+  const review = outcomeObject(record.code_review, "stage outcome code_review");
+  if (review.schema_version !== "workflowhub-code-review-stage-outcome.v1") {
+    throw outcomeError("stage outcome code_review schema_version is invalid");
+  }
+  if (review.stage !== stage || review.snapshot_tree !== snapshot.tree || review.material_revision !== materialRevision) {
+    throw outcomeError("stage outcome code_review is not bound to the current stage snapshot and materials");
+  }
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "code-review-closure");
+  if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to code-review-closure");
+  const reviewSkill = skillManifest.skills?.find((skill) => skill.name === "dsh-code-review");
+  if (!reviewSkill || review.skill_id !== reviewSkill.name) throw outcomeError("stage outcome code_review must bind dsh-code-review");
+  const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === reviewSkill.name);
+  const stepOutcome = record.step_outcomes.find((entry) => entry?.step_slug === reviewStep.step_slug);
+  if (!skillOutcome?.trigger || skillOutcome.executed !== true) throw outcomeError("verify-code code-review skill was not executed");
+  if (!stepOutcome) throw outcomeError("verify-code code-review closure step outcome is missing");
+  const result = outcomeObject(review.result, "stage outcome code_review.result");
+  if (!new Set(["clean", "findings", "unavailable"]).has(result.status)) throw outcomeError("stage outcome code_review.result.status is invalid");
+  if (!Array.isArray(result.findings) || typeof result.summary !== "string" || result.summary.trim() === "") {
+    throw outcomeError("stage outcome code_review.result must contain findings and summary");
+  }
+  for (const [index, finding] of result.findings.entries()) {
+    if (!finding || typeof finding !== "object" || Array.isArray(finding)
+        || !["blocking", "major", "minor"].includes(finding.severity)
+        || typeof finding.path !== "string" || finding.path.trim() === ""
+        || typeof finding.issue !== "string" || finding.issue.trim() === ""
+        || typeof finding.recommendation !== "string" || finding.recommendation.trim() === "") {
+      throw outcomeError(`stage outcome code_review.result.findings[${index}] is invalid`);
+    }
+  }
+  if (record.status === "completed" && (skillOutcome.status !== "completed" || stepOutcome.status !== "completed")) {
+    throw outcomeError("completed verify-code stage must complete the code-review skill and closure step");
+  }
+  return Object.freeze({ review });
+}
+
 function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   const ref = input?.receipts?.stage_outcomes;
-  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the Stage Agent`);
+  if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the current WorkflowHub session`);
   const match = STAGE_OUTCOME_REF.exec(ref);
   if (!match || match[1] !== stage) throw outcomeError(`stage outcome ref must be content-addressed for ${stage}`);
   let raw;
@@ -335,7 +379,9 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   };
   const stepOutcomes = record.step_outcomes.map((entry, index) => validateStepOutcome(ctx, stage, entry, manifest.steps[index], index, binding));
   const skillOutcomes = record.skill_outcomes.map((entry, index) => validateSkillOutcome(ctx, entry, skillManifest.skills[index], index, binding));
-  const specAnalyze = validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materials.revision, materials, manifest, skillManifest);
+  const stageReview = stage === "verify-code"
+    ? validateCodeReviewOutcome(record, stage, snapshot, materials.revision, manifest, skillManifest)
+    : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materials.revision, materials, manifest, skillManifest);
   return Object.freeze({
     ref,
     sha256: actualHash,
@@ -343,11 +389,37 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
     // official stage run.  The publication path still captures a fresh
     // snapshot at the end, so external material changes remain detectable.
     snapshot,
-    value: Object.freeze({ ...record, step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes, spec_analyze: specAnalyze.analyzer }),
+    value: Object.freeze({ ...record, step_outcomes: stepOutcomes, skill_outcomes: skillOutcomes, ...(stage === "verify-code" ? { code_review: stageReview.review } : { spec_analyze: stageReview.analyzer }) }),
     step_outcomes: stepOutcomes,
     skill_outcomes: skillOutcomes,
-    spec_analyze: specAnalyze.analyzer,
+    ...(stage === "verify-code" ? { code_review: stageReview.review } : { spec_analyze: stageReview.analyzer }),
   });
+}
+
+/**
+ * An external Stage Agent outcome is diagnostic execution evidence, not a
+ * permission to run the current WorkflowHub handler. Missing, unreadable, or
+ * invalid external evidence stays visible as unavailable; the handler still
+ * runs and its own material/quality/publication errors remain fail-loud.
+ */
+function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
+  const supplied = input?.receipts?.stage_outcomes;
+  if (supplied === undefined) {
+    return Object.freeze({ value: null, diagnostic: { status: "unavailable", reason: "stage_outcome_missing" } });
+  }
+  try {
+    return Object.freeze({ value: authenticateStageOutcome(ctx, stage, input, expectedBinding), diagnostic: null });
+  } catch (error) {
+    const invalid = error?.code === "MATERIAL_INCOMPLETE";
+    return Object.freeze({
+      value: null,
+      diagnostic: {
+        status: "unavailable",
+        reason: invalid ? "stage_outcome_invalid" : "stage_outcome_unavailable",
+        error_code: typeof error?.code === "string" && error.code.trim() ? error.code : "STAGE_OUTCOME_UNAVAILABLE",
+      },
+    });
+  }
 }
 
 function upstreamForStage(ctx, stage) {
@@ -437,9 +509,9 @@ function specAnalyzeDisclosure(value) {
 function evidenceCandidate(result, kind, subject, stage) {
   const facts = result?.facts ?? {};
   const subjectFact = kind === "review"
-    ? stage === "verify-code" && subject === "independent_review"
-      ? facts.quality_note
-      : subject === "same_build_integration_review"
+    ? stage === "verify-code" && subject === "code_review"
+      ? facts.code_review
+      : ["same_build_integration_review", "integration_review", "independent_review"].includes(subject)
         ? facts.review
         : subject === "direction_review"
           ? facts.reviews?.direction
@@ -609,7 +681,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   const analyzerResult = result.spec_analyze?.result;
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
-  // the Stage Agent repairs it in place instead of silently handing it down.
+  // the current WorkflowHub session repairs it in place instead of silently handing it down.
   if (analyzerResult?.status && analyzerResult.status !== "consistent") {
     allPassed = false;
     qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult.status}`);
@@ -723,7 +795,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
       publishVNextEvidence(ctx, factEvidenceRef, missingRaw);
       factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
     }
-    const qualityFactStatus = new Set(["passed", "failed", "missing"]).has(status) ? status : "missing";
+    const qualityFactStatus = kind === "review"
+      ? (new Set(["recorded", "unavailable", "missing"]).has(status) ? status : "missing")
+      : (new Set(["passed", "failed", "missing"]).has(status) ? status : "missing");
     const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
       kind,
       status: qualityFactStatus,
@@ -763,6 +837,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     stage: ctx.stage,
     status: completion.status,
     work_status: readiness.work_status,
+    continuation_allowed: readiness.continuation_allowed,
     readiness,
     completion,
     quality_status: allPassed && !result.verification_failure && !(result.missing_items?.length) ? "passed" : "incomplete",
@@ -776,15 +851,17 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     quality_fact_refs: Object.freeze(qualityFactRefs),
     quality_advisory_fact_refs: Object.freeze(qualityAdvisoryFactRefs),
     ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
+    stage_outcome_ref: typeof result.stage_outcome_ref === "string" ? result.stage_outcome_ref : null,
+    stage_outcome_hash: typeof result.stage_outcome_hash === "string" ? result.stage_outcome_hash : null,
+    stage_outcome_status: typeof result.stage_outcome_status === "string" ? result.stage_outcome_status : "unavailable",
     ...(typeof result.stage_outcome_ref === "string" ? {
-      stage_outcome_ref: result.stage_outcome_ref,
-      stage_outcome_hash: result.stage_outcome_hash,
-      stage_outcome_status: result.stage_outcome_status,
       step_outcomes: Object.freeze([...(result.step_outcomes ?? [])]),
       skill_outcomes: Object.freeze([...(result.skill_outcomes ?? [])]),
       spec_analyze: result.spec_analyze,
+      code_review: result.code_review,
       stage_outcome_summary: stageOutcomeSummary,
     } : {}),
+    ...(result.stage_outcome_diagnostic ? { stage_outcome_diagnostic: Object.freeze({ ...result.stage_outcome_diagnostic }) } : {}),
     ...(result.missing_items?.length ? { missing_items: [...result.missing_items] } : {}),
   });
 }
@@ -793,7 +870,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
  * Execute the low-level publication helper for a workflow stage.
  * The handler receives capabilities and already verified upstream data; it does
  * not discover task identity or publish records itself. Stage skills are read
- * and executed directly by the current host Stage Agent; this runtime only
+ * and executed directly by the current WorkflowHub session host; this runtime only
  * records the resulting task and quality facts.
  */
 export async function runStage(stage, context, handler, publication = {}, internal = {}) {
@@ -884,7 +961,7 @@ function verifyEvidenceReference(ctx, entry, label = "evidence") {
 function verifyOfficialEvidence(ctx, result) {
   for (const [index, entry] of (result.evidence_refs ?? []).entries()) verifyEvidenceReference(ctx, entry, `evidence_refs[${index}]`);
   const tests = result.facts?.tests;
-  if (tests) {
+  if (tests && typeof tests.output_ref === "string" && typeof tests.output_hash === "string") {
     // output_ref is independently re-read; a valid receipt cannot vouch for a
     // missing or subsequently replaced command output.
     const output_ref = tests.output_ref;
@@ -908,16 +985,23 @@ export function runOfficialStage(stage, context, invocation, publication) {
     stage,
     ctx,
     async (_worker, _upstream, preflight) => {
-      const stageOutcome = authenticateStageOutcome(ctx, stage, input, preflight);
+      const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
+      if (handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)) {
+        delete handlerInput.receipts.stage_outcomes;
+      }
       const result = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), handlerInput));
       return {
         ...result,
-        stage_outcome_ref: stageOutcome.ref,
-        stage_outcome_hash: stageOutcome.sha256,
-        stage_outcome_status: stageOutcome.value.status,
-        step_outcomes: stageOutcome.step_outcomes,
-        skill_outcomes: stageOutcome.skill_outcomes,
-        spec_analyze: specAnalyzeDisclosure(stageOutcome.spec_analyze),
+        ...(stageOutcome.value ? {
+          stage_outcome_ref: stageOutcome.value.ref,
+          stage_outcome_hash: stageOutcome.value.sha256,
+          stage_outcome_status: stageOutcome.value.value.status,
+          step_outcomes: stageOutcome.value.step_outcomes,
+          skill_outcomes: stageOutcome.value.skill_outcomes,
+          spec_analyze: specAnalyzeDisclosure(stageOutcome.value.spec_analyze),
+          code_review: stageOutcome.value.code_review ?? null,
+        } : {}),
+        ...(stageOutcome.diagnostic ? { stage_outcome_diagnostic: stageOutcome.diagnostic } : {}),
       };
     },
     publication,

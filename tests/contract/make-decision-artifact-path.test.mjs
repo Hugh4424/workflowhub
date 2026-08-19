@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -20,6 +21,8 @@ import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
+function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
@@ -116,7 +119,7 @@ describe("make-decision current artifact path contract", () => {
         `--task=${state.task.identity.taskId}`,
         "--name=decision-log.md",
         `--input=${input}`,
-      ]);
+      ], { cwd: state.repo });
 
       expect(result.artifact_ref).toBe(
         `specs/${state.task.identity.taskId}/decision-log.md`,
@@ -187,5 +190,45 @@ describe("make-decision current artifact path contract", () => {
 
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
     expect(result.quality_warnings ?? []).not.toContain(expect.stringContaining("review does not bind the final current snapshot"));
+  });
+
+  it("reuses Talk/Clarify evidence after downstream workspace changes when the decision is unchanged", async () => {
+    const state = fixture("p1-interaction-after-downstream-change");
+    const decisionLog = "# current decision\n\n## 范围\n当前范围。\n\n## 非目标\n不扩大范围。\n\n## 风险与延期交接\n风险已记录。\n";
+    state.artifacts.writeAtomic("decision-log.md", decisionLog);
+    const decisionRef = state.artifacts.reference("decision-log.md");
+    const decisionHash = sha256(decisionLog);
+    const interactionSnapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
+    const interactionValue = {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: state.task.identity.taskId,
+      stage: "make-decision",
+      snapshot_tree: interactionSnapshot.tree,
+      talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true },
+      clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "user_reply" },
+      decision_ref: decisionRef,
+      decision_hash: decisionHash,
+    };
+    const interactionRaw = `${JSON.stringify(interactionValue, null, 2)}\n`;
+    const interactionRef = `quality/evidence/interactions/${sha256(interactionRaw)}.json`;
+    state.context.kernel.publishCanonicalRecord(interactionRef, interactionRaw);
+
+    writeFileSync(join(state.context.candidateWorkspace.worktreeRoot, "downstream-change.txt"), "implemented\n");
+    const currentSnapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
+    expect(currentSnapshot.tree).not.toBe(interactionSnapshot.tree);
+    const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: currentSnapshot.tree, reviewTrack: "direction" });
+    const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: currentSnapshot.tree, reviewTrack: "detail" });
+
+    const result = await runOfficialStage("make-decision", state.context, {
+      receipts: {
+        interaction: interactionRef,
+        direction_review: direction.resultRef,
+        detail_review: detail.resultRef,
+      },
+    });
+
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts.find((fact) => fact.subject === "talk_clarify")).toMatchObject({ status: "passed" });
+    expect(result.completion.missing).not.toContain("talk_clarify");
   });
 });

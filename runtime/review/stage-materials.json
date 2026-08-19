@@ -4,7 +4,7 @@
     "make-decision/direction": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["problem", "constraints", "failure_consequence", "smaller_reversible_option"],
-      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction"]
+      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow"]
     },
     "make-decision/detail": {
       "contract": "contracts/make-decision.md",
@@ -29,12 +29,12 @@
     "build-code/integration": {
       "contract": "contracts/build-code.md",
       "problem_order": ["user_flow", "cross_phase_seams", "interfaces", "failure_recovery", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "test_evidence", "open_risks"]
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "implementation_context", "test_evidence", "open_risks"]
     },
     "verify-code": {
       "contract": "contracts/verify-code.md",
-      "problem_order": ["claim_coverage", "implementation", "consumer", "assertion", "result", "weak_oracle"],
-      "semantic_fields": ["acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "acceptance_evidence"]
+      "problem_order": ["implementation", "consumer", "correctness", "lifecycle_security", "test_strength"],
+      "semantic_fields": ["changed_files", "implementation_assessment", "test_context", "open_risks", "architect_assessment"]
     },
     "mini-task/design": {
       "contract": "contracts/mini-task-design.md",
@@ -53,7 +53,7 @@
         "direction": {
           "source_bundle": "none",
           "required": ["raw_requirement", "objective_facts", "review_instructions"],
-          "optional": ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"],
+          "optional": ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction", "direction_flow"],
           "generated": ["review_instructions"],
           "forbidden": ["proposed_solution", "decision_log", "spec", "plan", "changes_diff", "changed_files"],
           "minimum_reviewers": 1,
@@ -111,11 +111,11 @@
       }
     },
     "verify-code": {
-      "source_bundle": "none",
-      "required": ["acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "review_instructions"],
-      "optional": ["acceptance_evidence", "context_map", "evidence_map"],
+      "source_bundle": "diff",
+      "required": ["changed_files", "implementation_assessment", "test_context", "open_risks", "review_instructions"],
+      "optional": ["approved_spec", "architect_assessment", "context_map"],
       "generated": ["review_instructions"],
-      "forbidden": [],
+      "forbidden": ["acceptance_criteria", "acceptance_evidence", "evidence_map", "final_test_summary", "quality_verify", "requirement_replay"],
       "minimum_reviewers": 1,
       "v2_required_maps": []
     }

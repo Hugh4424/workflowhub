@@ -11,11 +11,10 @@
 2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
    真实暴露。
-3. 每个 stage 的最后一个一致性步骤都复用 `spec-analyze` 公共核心，检查实际语义和产物
-   证据，不只检查编号、路径、hash 或文件是否存在。Stage Agent 必须把 packet 和 validator
-   result 绑定到现有 stage outcome；runtime 会验证它对应声明的 analyzer step、
-   `spec-analyze` skill、当前快照和四份材料。发现问题就在当前 stage 修复；没有问题时输出
-   六项大白话摘要。它是事实和摘要，不是第二套推进状态机，也不是新 gate。
+3. `make-decision`、`build-spec`、`build-plan`、`build-code` 各自在本 stage 收尾调用
+   `spec-analyze`，检查实际语义和产物事实。`verify-code` 不调用它，改由 `dsh-code-review`
+   做当前实现的代码审查。两类结果都只是事实和摘要，不是第二套推进状态机或新 gate；缺失
+   事实不能阻止同 task 修复，也不能被伪造成通过。
 
 ## 五个 stage 的总览
 
@@ -25,7 +24,7 @@
 | `build-spec` | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
 | `build-plan` | 原始需求、decision-log、spec | `plan.md`、`tasks.md` | build-code 的实施任务 |
 | `build-code` | 四份材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
-| `verify-code` | 四份材料、实现和全部证据 | `quality/verify.json`、验收事实 | 用户确认；随后才谈 close |
+| `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 用户确认；随后才谈 close |
 
 每个 stage 还会产生既有 `quality/evidence/`、`quality/tests/`、
 `quality/reviews/` 或 stage outcome 事实。它们用于证明实际发生了什么，不会覆盖四份
@@ -66,11 +65,13 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 
 ### stage 结束
 
-阶段结束前，调用对应的 `spec-analyze` profile，并把以下六项摘要交给用户：
+`make-decision`、`build-spec`、`build-plan`、`build-code` 在各自 stage 结束前调用对应的
+`spec-analyze` profile；`verify-code` 改用 `dsh-code-review` 和一次异源代码 review。并把
+与本 stage 职责对应的摘要交给用户：
 
 1. 当前阶段做了什么；
-2. 原始需求覆盖到什么程度；
-3. 与上游产物、实际语义和证据是否一致；
+2. 本 stage 负责的需求、实现或代码风险覆盖到什么程度；
+3. 与上游产物、实际语义和必要事实是否一致；
 4. 当前阶段当场修复了什么；
 5. 剩余风险、未决和延期；
 6. 下游可以直接消费什么、不能自行猜什么。
@@ -116,7 +117,7 @@ commit、merge、push、cleanup 和正式 close 始终是独立授权与物理�
 ### 完成与失败边界
 
 完成是：用户确认的 decision-log 含完整需求边界、事实、选择、理由、风险、非目标、延期、
-前置准备和真实 stage outcome。方向未定、页面/依赖材料未准备、错误回复未匹配或关键语义
+前置准备和真实 stage outcome（外部宿主执行时），或真实的 unavailable 执行事实。方向未定、页面/依赖材料未准备、错误回复未匹配或关键语义
 被猜测时，不能发布成已确认决定；应在本 stage 继续询问、修复或如实保留未决。
 
 ### 下游交接
@@ -133,7 +134,7 @@ build-spec 只消费已确认的方向和真实事实，不再替用户补产品
 
 ### 标准输入
 
-原始需求、已确认 `decision-log.md`、已有当前 `spec.md`（如有）、前置事实和 stage outcome。
+原始需求、已确认 `decision-log.md`、已有当前 `spec.md`（如有）、前置事实和可用的 stage outcome。
 
 ### 标准步骤与最小结果
 
@@ -250,7 +251,7 @@ build-code 只能按 `plan.md`/`tasks.md` 的当前 phase 执行；它以真实�
 ### 产物、完成与失败边界
 
 核心产物是实现变更、phase task facts、canonical test receipts、review facts、AC trace、
-final aggregate 和 build-code stage outcome。不能只凭“代码改了”“测试绿了”或“review 空了”
+final aggregate 和 build-code stage outcome（或真实的 unavailable 执行事实）。不能只凭“代码改了”“测试绿了”或“review 空了”
 宣称完成；provider failure、测试失败、缺 AC 证据、缺 step outcome、snapshot 漂移和 serious
 finding 必须原样保留。它们是质量事实，不得伪造，但也不应被错误地扩展成新的工作许可证。
 
@@ -262,50 +263,46 @@ finding 必须原样保留。它们是质量事实，不得伪造，但也不应
 
 ### 下游交接
 
-verify-code 消费当前实现和全部真实证据，不能只消费 tasks.md 的文字状态。未授权的 commit、
+verify-code 消费当前实现、真实 consumer 和相关测试上下文，不能只消费 tasks.md 的文字状态；
+它不重新审计 AC、材料或 evidence tree。未授权的 commit、
 push、merge、cleanup 不在 build-code 中自动执行。
 
-## `verify-code`：反向验收并在 close 前停下
+## `verify-code`：代码审查并在 close 前停下
 
 ### 标准输入
 
-四份当前材料、真实代码和 worktree、最终 aggregate、逐 AC trace、测试/运行事实、全部 review
-provenance、风险和交付事实。
+当前代码 diff、真实入口和 consumer、实现评估、相关测试上下文、失败/恢复边界和开放代码风险。
+四份材料只作为理解意图的背景，不在本阶段重新验收。
 
 ### 标准步骤与最小结果
 
-1. `read-current-materials-and-code`：读取材料、代码和当前证据。
-2. `architect-acceptance-review`：按“原始需求 → decision → spec → 完整用户流程 → plan/tasks
-   → AC → 测试/证据”反向检查；逐 AC 给出结论。
-3. `main-agent-repair-batch-1`：修复属于 verify 的问题；材料归属问题回原 owner 记录，不
-   把缺口伪装成通过。
-4. `run-declared-check-before-independent-review`：运行计划声明的风险相关检查。
-5. `run-one-independent-architecture-review`：做一次异源 review，保留 provider、transport、
-   findings 和 provenance；不因无新 finding 无限循环。
-6. `main-agent-repair-batch-2`：处置异源 finding，修复同 task 影响交付的问题。
-7. `run-final-check-and-handoff`：运行最终必要检查，逐 AC 和完整用户流程给出最终事实。
-8. `publish-verification-attempt`：写入当前 verify 事实。
-9. `approve-verification`：记录验收事实，不把用户确认当成 Git 授权。
-10. `stage-end-spec-analyze`：检查原始需求、四份材料、实现、测试、review、runtime 和
-    delivery 的实际语义与证据。
-11. `publish-verification-result`：给用户大白话汇报并在 close 前停下。
+1. `read-current-materials-and-code`：读取代码审查 skill、当前改动和上游材料背景。
+2. `architect-code-review`：沿真实入口、consumer、接口、状态、生命周期、安全和失败边界做一次架构代码审查。
+3. `main-agent-repair-batch-1`：修复影响代码交付的有效 finding。
+4. `inspect-real-entry-and-tests`：检查真实入口和相关测试强度，只跑必要的受影响检查。
+5. `run-one-independent-code-review`：使用 `dsh-code-review` 和一次异源 provider 只审查当前代码 findings。
+6. `main-agent-repair-batch-2`：处置这一轮异源代码 findings，不循环审查。
+7. `run-final-code-check-and-handoff`：做必要的最终代码检查并交接剩余代码风险。
+8. `publish-code-review-fact`：写入当前代码 review 质量事实。
+9. `handoff-code-review`：用大白话交接代码入口、consumer、修复和风险。
+10. `code-review-closure`：整理一次代码审查结论；不补材料、不补 AC、不补证据树。
+11. `publish-code-review-result`：汇报代码审查结果并在 close 前停下。
 
 ### 产物、完成与失败边界
 
-核心产物是 `quality/verify.json`、逐 AC 验收事实、架构师检查、一次异源复核和最终风险处置。
-`passed` 只表示当前材料、完整用户流程、实现、适用 AC、风险测试和独立 review 证据都足够；
-`failed` 表示明确失败；`incomplete` 表示必要事实缺失或不可用。测试绿色、review unavailable、
-Git merge 或 close 记录不能互相替代。
+核心产物是当前实现代码 review、一次异源 findings、finding 处置和必要的窄检查事实。
+`passed` 只表示当前代码没有未处置的 actionable serious finding；`failed` 表示代码明确失败；
+`incomplete` 表示代码 review unavailable 或仍有 actionable code finding。AC、材料、测试 receipt
+和 evidence tree 由所属 stage 负责，不能在 verify-code 变成兜底门禁。
 
 ### 专业质量
 
-本阶段的专业质量由架构师反向验收、风险相关测试、一次异源复核和最终收尾检查形成；检查
-链必须从原始需求、Design 和完整用户流程一直追到实现与证据。任何缺失证据只能保持
-`unknown/incomplete`，不能被 close、merge 或测试绿色覆盖。
+本阶段的专业质量由架构师代码审查、真实 consumer/lifecycle/security 检查、一次异源代码复核
+和最终收尾检查形成。上游材料问题回对应 stage 处理；verify-code 不重新构造它们的证据。
 
 ### 下游交接和停止点
 
-verify-code 结束时只汇报需求实现、质量验收、Git 交付和正式 close 四层状态。若用户另行授权，
+verify-code 结束时只汇报代码入口、consumer、修复、异源 findings、必要检查和剩余代码风险。若用户另行授权，
 后续才执行计划内 commit、merge、push、cleanup 和物理读回；本规范不把 close 自动塞进 verify，
 也不在缺失证据时用补救式重跑掩盖问题。
 
