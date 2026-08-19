@@ -1557,11 +1557,17 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const invalidEvidenceFindings = Array.isArray(review.value?.adjudication?.clusters)
     ? review.value.adjudication.clusters.filter((cluster) => cluster?.disposition === "invalid_evidence" || cluster?.evidence_status === "invalid_anchor")
     : [];
+  const reviewDiagnostics = invalidEvidenceFindings.map((cluster, index) => ({
+    kind: "invalid_evidence",
+    status: "advisory",
+    cluster_id: cluster.id ?? `invalid-evidence-${index + 1}`,
+    evidence_status: cluster.evidence_status ?? "invalid_anchor",
+    finding_count: Number.isSafeInteger(cluster.finding_count) ? cluster.finding_count : null,
+    reason: "invalid evidence anchor retained as a review fact; it is not a verify-code completion gate",
+  }));
   const reviewMissing = review.facts.status === "unavailable"
     ? [...(review.missing_items ?? [])]
-    : invalidEvidenceFindings.length > 0
-      ? ["code review contains " + invalidEvidenceFindings.length + " finding(s) with invalid evidence anchors; do not treat them as empty findings"]
-      : actionableFindings.length > 0
+    : actionableFindings.length > 0
       ? ["code review has " + actionableFindings.length + " actionable delivery finding(s); repair them in verify-code"]
       : [];
 
@@ -1572,11 +1578,13 @@ HANDLERS.set("verify-code", async (worker, input) => {
         finding_count: findings.length,
         actionable_finding_count: actionableFindings.length,
         invalid_evidence_finding_count: invalidEvidenceFindings.length,
+        review_diagnostics: reviewDiagnostics,
         status: review.facts.status,
       },
+      review_diagnostics: reviewDiagnostics,
       completion_subjects: {
         code_review: subjectFact(
-          review.facts.status === "recorded" && actionableFindings.length === 0 && invalidEvidenceFindings.length === 0 ? "passed" : "missing",
+          review.facts.status === "recorded" && actionableFindings.length === 0 ? "passed" : "missing",
           review.evidence ? [review.evidence] : [],
           "current implementation code review",
         ),

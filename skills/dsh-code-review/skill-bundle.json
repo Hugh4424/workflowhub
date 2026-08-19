@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "skill": "dsh-code-review",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "a5bdb9d1e0c81e5a66dcb9af2041b1b96f06df2fd6134aaa02c86bf24d1d3f8c"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+      "path": ".agents/skills/dsh-code-review/SKILL.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+      "path": ".agents/skills/dsh-find-simplifications/SKILL.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+      "path": ".agents/skills/dsh-doc-standards/SKILL.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+      "path": ".agents/skills/dsh-prose-standard/SKILL.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+      "path": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

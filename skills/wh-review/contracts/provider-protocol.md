@@ -198,7 +198,7 @@ adapter 的多个 profile 不能互相凑出异源 quorum，adapter/source 只�
 
 每个冻结 snapshot 的每一轮 public request 只允许一次语义 findings 审查；不得用同一个
 snapshot 重放真实 finding。修改后生成新 snapshot 时，才开始一次新的初始审查；旧结果只作为历史质量事实。`build-code` 永远是完整 phase/integration
-审查，`verify-code` 还要绑定新鲜测试和独立审查。response ledger、resolution record
+审查，`verify-code` 只审查当前实现代码并记录代码 finding，不把测试、材料、AC 或其他证据重新设为本阶段门禁。response ledger、resolution record
 和旧 namespace 不属于当前生产审查输入。
 
 不要求 reviewer 输出 checklist、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误直接记录为 `OUTPUT_INVALID` / `unavailable`；WorkflowHub 不发起 continuation、session 恢复或 format-correction 第二次 broker 调用。broker 如需内部重试，必须在同一次 public request 内完成并通过公开 retry facts 报告。公共 attempt 只保留规范化诊断，不复制 provider 原文。每次失败都保持为失败事实，不能伪装成格式修复，也不能因为失败次数伪造或阻断语义审查。

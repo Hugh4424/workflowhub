@@ -47,13 +47,13 @@ description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任�
 这条链只负责把真实事实写入当前 task；它不是开始工作、继续工作或宣称完成的门禁：
 
 1. 用 `tools/cli/stage-runtime.mjs doctor`、`status` 查看当前能力和四材料状态；缺失的辅助能力只记录事实，不暂停同一 task。
-2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 严格发起两次有序 public 请求但只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
+2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 的 Talk、reveal 和 challenge 在同一个 broker 请求内按顺序完成，不再发起第二个 public 请求，只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
 3. `build-code` 通过 workflow 的 capture 脚本生成测试事实；`verify-code` 只写当前代码 review fact；需要落盘时统一由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录，宿主不手写替代 receipt。
 4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
 
 ### Stage Agent outcome producer
 
-每个 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。
+每个外部 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。没有外部 Stage Agent 时，标准 WorkflowHub 流程继续执行，并把 outcome 记为 `unavailable` 诊断，不把它变成阶段门禁。
 
 - 记录只能通过现有 `TaskKernel.publishCanonicalRecord` 写入
   `quality/evidence/stage-outcomes/<stage>/<sha256>.json`，不得新增 ledger、receipt 系统或 writer。
