@@ -3,7 +3,7 @@ import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { assertTaskHandle } from "../../core/task-capability.mjs";
-import { captureExecutionSnapshot } from "../task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES } from "../task/git-worktree-snapshot.mjs";
 
 const WORKSPACES = new WeakSet();
 const CANDIDATE_WORKSPACES = new WeakSet();
@@ -57,6 +57,10 @@ function isKnownIgnoredGenerated(path) {
     || KNOWN_IGNORED_GENERATED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+function isExecutionSidecar(path) {
+  return EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix));
+}
+
 function cleanupError(scan) {
   const detail = [
     ...scan.tracked.map((entry) => `tracked:${entry.path}`),
@@ -79,13 +83,15 @@ export function inspectWorktreeCleanup(worktreeRoot) {
   }));
   const tracked = [];
   const untracked = [];
+  const execution_sidecars = [];
   const ignored_generated = [];
   const ignored_unknown = [];
   for (const field of raw.split("\0").filter(Boolean)) {
     const status = field.slice(0, 2);
     const path = relativeWorktreePath(field.slice(3), "task worktree cleanup scan");
     const entry = Object.freeze({ status, path });
-    if (status === "??") untracked.push(entry);
+    if ((status === "??" || status === "!!") && isExecutionSidecar(path)) execution_sidecars.push(entry);
+    else if (status === "??") untracked.push(entry);
     else if (status === "!!") {
       (isKnownIgnoredGenerated(path) ? ignored_generated : ignored_unknown).push(entry);
     } else tracked.push(entry);
@@ -95,6 +101,7 @@ export function inspectWorktreeCleanup(worktreeRoot) {
     worktree_root: root,
     tracked: Object.freeze(tracked),
     untracked: Object.freeze(untracked),
+    execution_sidecars: Object.freeze(execution_sidecars),
     ignored_generated: Object.freeze(ignored_generated),
     ignored_unknown: Object.freeze(ignored_unknown),
     safe: tracked.length === 0 && untracked.length === 0 && ignored_unknown.length === 0,
@@ -115,6 +122,23 @@ function removeKnownIgnoredGenerated(root, entry) {
     // Generated environments such as .venv contain launcher symlinks.  The
     // target is still safe to remove because only the symlink itself is
     // unlinked; we never follow it outside the authenticated worktree.
+    rmSync(target, { recursive: false, force: false });
+    return;
+  }
+  rmSync(target, { recursive: true, force: false });
+}
+
+function removeKnownExecutionSidecar(root, entry) {
+  if (!isExecutionSidecar(entry.path)) throw cleanupError({
+    tracked: [], untracked: [], ignored_unknown: [entry], ignored_generated: [], execution_sidecars: [],
+  });
+  const target = resolve(root, entry.path);
+  const rel = relative(root, target);
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw new Error("execution sidecar path escapes task worktree");
+  let stat;
+  try { stat = lstatSync(target); }
+  catch (error) { if (error?.code === "ENOENT") return; throw error; }
+  if (stat.isSymbolicLink()) {
     rmSync(target, { recursive: false, force: false });
     return;
   }
@@ -460,6 +484,7 @@ export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
       const cleanup = inspectWorktreeCleanup(expected.worktreeRoot);
       if (!cleanup.safe) throw cleanupError(cleanup);
       for (const entry of cleanup.ignored_generated) removeKnownIgnoredGenerated(expected.worktreeRoot, entry);
+      for (const entry of cleanup.execution_sidecars) removeKnownExecutionSidecar(expected.worktreeRoot, entry);
       const afterCleanup = inspectWorktreeCleanup(expected.worktreeRoot);
       if (!afterCleanup.safe) throw cleanupError(afterCleanup);
       execFileSync("git", ["worktree", "remove", "--", expected.worktreeRoot], { cwd: expected.targetRepoRoot, stdio: ["ignore", "pipe", "pipe"] });

@@ -41,4 +41,21 @@ describe("task worktree cleanup classification", () => {
       "node_modules/.bin/vitest",
     ]);
   });
+
+  it("treats execution sidecars as safe cleanup-owned content", () => {
+    const root = gitFixture();
+    mkdirSync(join(root, "quality", "tests"), { recursive: true });
+    mkdirSync(join(root, "evidence"), { recursive: true });
+    writeFileSync(join(root, "quality", "tests", "run.json"), "{}\n", "utf8");
+    writeFileSync(join(root, "evidence", "stage.json"), "{}\n", "utf8");
+
+    const scan = inspectWorktreeCleanup(root);
+
+    expect(scan.safe).toBe(true);
+    expect(scan.untracked).toEqual([]);
+    expect(scan.execution_sidecars.map(({ path }) => path)).toEqual([
+      "evidence/stage.json",
+      "quality/tests/run.json",
+    ]);
+  });
 });
