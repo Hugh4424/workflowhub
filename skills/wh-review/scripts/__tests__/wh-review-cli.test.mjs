@@ -10,6 +10,29 @@ import { reviewInstructionsFor } from "../review-materials.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
+const reviewTree = "a".repeat(40);
+const reviewMaterialId = "b".repeat(64);
+const reviewSource = {
+  target_commit: reviewTree,
+  base_commit: reviewTree,
+  base_tree: reviewTree,
+  captured_head: reviewTree,
+};
+const reviewResultRecord = {
+  version: "wh-review-result.v1", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
+  subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
+  snapshot_tree: reviewTree, material_id: reviewMaterialId,
+  attempt_ref: "quality/reviews/attempts/one/attempt.json",
+  provider_results: [{ provider: "codex", output: { findings: [] } }], findings: [],
+  adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+};
+const reviewAttemptRecord = {
+  version: "wh-review-attempt.v1", attempt_id: "one", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
+  subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
+  snapshot_tree: reviewTree, material_id: reviewMaterialId, provider_attempts: [],
+  terminal_status: "unavailable", error: { code: "AUTH", message: "provider unavailable" },
+};
+const reviewSemanticAttemptRecord = { ...reviewAttemptRecord, terminal_status: "semantic", error: null };
 function git(cwd, args) { return String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim(); }
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
@@ -31,6 +54,75 @@ describe("wh-review production CLI", () => {
     expect(mod.ensureResolutionFlowHead).toBeUndefined();
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.runReviewRecovery).toBe("function");
+  });
+
+  it("binds one verify-code review result to the vNext code_review fact", async () => {
+    const { publishStageReviewFact } = await import(cli.href);
+    const raw = `${JSON.stringify(reviewResultRecord)}\n`;
+    const attemptRaw = `${JSON.stringify(reviewSemanticAttemptRecord)}\n`;
+    const published = [];
+    const ref = "quality/reviews/results/one.json";
+    const attemptRef = reviewResultRecord.attempt_ref;
+    const factRef = publishStageReviewFact({
+      trusted: {
+        task: { readRecord: (candidate) => candidate === ref ? raw : candidate === attemptRef ? attemptRaw : (() => { throw new Error("unexpected ref"); })() },
+        taskId: "task",
+        kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/code_review-one.json" }; } },
+      },
+      stage: "verify-code",
+      reviewKind: null,
+      result: { status: "available", resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null },
+    });
+    expect(factRef).toBe("quality/facts/verify-code/code_review-one.json");
+    expect(published).toEqual([{
+      stage: "verify-code",
+      value: {
+        kind: "review", status: "recorded", subject: "code_review",
+        evidence: [{ ref, sha256: expect.any(String), evidence_type: "review_result" }],
+      },
+    }]);
+  });
+
+  it("keeps unavailable terminal facts honest and excludes mini-task reviews", async () => {
+    const { publishStageReviewFact } = await import(cli.href);
+    const ref = "quality/reviews/attempts/one/attempt.json";
+    const raw = `${JSON.stringify(reviewAttemptRecord)}\n`;
+    const published = [];
+    const trusted = {
+      task: { readRecord: (candidate) => candidate === ref ? raw : (() => { throw new Error("unexpected ref"); })() },
+      taskId: "task",
+      kernel: {
+        currentVNextSnapshot: () => ({ tree: reviewTree }),
+        publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/unavailable.json" }; },
+      },
+    };
+    publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
+      status: "unavailable", resultRef: null, attemptRef: ref, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null,
+    } });
+    expect(published[0].value.status).toBe("unavailable");
+    expect(publishStageReviewFact({ trusted, stage: "build-code", reviewKind: "mini_task.implementation", result: {
+      status: "available", resultRef: "quality/reviews/results/mini.json", attemptRef: null,
+    } })).toBeNull();
+    expect(published).toHaveLength(1);
+  });
+
+  it("rejects a standard fact when its attempt is unavailable or mini-task scoped", async () => {
+    const { publishStageReviewFact } = await import(cli.href);
+    const ref = "quality/reviews/results/one.json";
+    const attemptRef = reviewResultRecord.attempt_ref;
+    const resultRaw = `${JSON.stringify(reviewResultRecord)}\n`;
+    const miniAttemptRaw = `${JSON.stringify({ ...reviewSemanticAttemptRecord, review_kind: "mini_task.implementation" })}\n`;
+    const trusted = {
+      task: { readRecord: (candidate) => candidate === ref ? resultRaw : miniAttemptRaw },
+      taskId: "task",
+      kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }) },
+    };
+    expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
+      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null,
+    } })).toThrow(/semantic terminal attempt|current review request/);
+    expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
+      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
+    } })).toThrow(/worktree-scoped final review/);
   });
 
   it("fails loudly on retired response-ledger and round inputs", async () => {
@@ -142,6 +234,15 @@ describe("wh-review production CLI", () => {
       snapshot_tree: "tree-1",
       material_id: "material-1",
     });
+  });
+
+  it("preserves review refs when stage-fact publication fails", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const review = { status: "available", attemptRef: "quality/reviews/attempts/one/attempt.json", resultRef: "quality/reviews/results/one.json", reportRef: "quality/reviews/reports/one.md" };
+    const result = await runReviewRecovery({}, {
+      runRound: async () => { throw Object.assign(new Error("stale review"), { code: "QUALITY_FACT_PUBLISH_FAILED", reviewResult: review }); },
+    });
+    expect(result).toMatchObject({ status: "unavailable", attempt_ref: review.attemptRef, result_ref: review.resultRef, report_ref: review.reportRef });
   });
 
   it("keeps a code-less local exception out of provider failure taxonomy", async () => {
@@ -334,7 +435,7 @@ process.stdout.write(JSON.stringify({
   host_provider: request.host_provider, material_id: attachments.bundle_id, selected_tier: 0,
   providers: [{
     attempts: [{ attempt_id: "fixture-attempt-" + count, completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "failed" }],
-    continuable: false, deadline_ms: 360000, error,
+    continuable: false, deadline_ms: null, error,
     identity: { adapter: "kimi", config_id: "fixture-config", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
     material: {
       contract_hash: request.contract_hash ?? "fixture-contract-hash",

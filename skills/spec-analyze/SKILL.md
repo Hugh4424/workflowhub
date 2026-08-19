@@ -7,13 +7,12 @@ description: Report-only packet lens for consistency between supplied specificat
 
 Mode: `lens-only`. Delivery: `file_only`.
 
-The same skill is reused at the end of every stage through five narrow profiles. The Stage Agent invokes the profile on the current stage packet, and the runtime authenticates the resulting semantic packet and validator result inside the existing stage-outcome evidence. This is an evidence check, not a second workflow engine or progression gate:
+This skill is used at the end of the four authoring stages through narrow profiles. The Stage Agent invokes the profile on the current stage packet, and the runtime authenticates the resulting semantic packet and validator result inside the existing stage-outcome fact. verify-code is deliberately excluded: it uses the separate `dsh-code-review` code-review skill. This is an evidence check, not a second workflow engine or progression gate:
 
 - `make-decision`: original requirement + `decision-log.md`;
 - `build-spec`: the above + `spec.md`;
 - `build-plan`: the above + `plan.md` + `tasks.md`;
-- `build-code`: the above + implementation, tests, and acceptance evidence;
-- `verify-code`: the above + review, runtime, and delivery evidence.
+- `build-code`: the above + implementation, tests, and acceptance evidence.
 
 The profile checks actual behavior meaning, state/scenario/boundary coverage,
 artifact references, and fresh evidence. IDs and existing files are only
@@ -54,7 +53,7 @@ summary, generated from current facts:
 
 ## Review semantics
 
-This report-only lens is read-only and 不阻断. At every stage it is invoked after findings disposition and the last stage-material revision, immediately before publish or handoff. The Stage Agent records the returned lens result in the existing stage-outcome evidence; a manifest entry or prose declaration that the check happened is not execution evidence. Scan categories: inconsistency, duplicate, ambiguity, underdefined, deferred/open handoff, and constitution-alignment. Constitution alignment is record-only, 不阻断. It is never a provider review, `pass` predicate, or new quality gate. A missing analyzer outcome is a missing step/evidence fact and fails closed as a silent-step-loss error; a returned `inconsistent` or `material_incomplete` result remains a quality fact for same-stage repair and cannot be relabeled as consistent.
+This report-only lens is read-only and 不阻断. At the end of each of the four authoring stages it is invoked after findings disposition and the last stage-material revision, immediately before publish or handoff. `verify-code` does not invoke this lens; it uses `dsh-code-review` for current implementation review. The Stage Agent records the returned lens result in the existing stage-outcome evidence; a manifest entry or prose declaration that the check happened is not execution evidence. Scan categories: inconsistency, duplicate, ambiguity, underdefined, deferred/open handoff, and constitution-alignment. Constitution alignment is record-only, 不阻断. It is never a provider review, `pass` predicate, or new quality gate. A missing analyzer outcome is a missing step/evidence fact and fails closed as a silent-step-loss error; a returned `inconsistent` or `material_incomplete` result remains a quality fact for same-stage repair and cannot be relabeled as consistent.
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, `line_or_anchor`, `impact`, `suggested_correction`, and `disposition`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 

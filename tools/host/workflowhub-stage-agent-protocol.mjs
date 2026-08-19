@@ -42,7 +42,7 @@ const ANALYZER_PROFILES = Object.freeze({
   "build-spec": { materials: ["original_requirement", "decision_log", "spec"], evidence: ["decision-log", "spec"] },
   "build-plan": { materials: ["original_requirement", "decision_log", "spec", "plan", "tasks"], evidence: ["decision-log", "spec", "plan", "tasks"] },
   "build-code": { materials: ["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"], evidence: ["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"] },
-  "verify-code": { materials: ["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"], evidence: ["decision-log", "spec", "plan", "tasks", "implementation", "tests", "review", "runtime", "delivery"] },
+  "verify-code": { materials: [], evidence: [] },
 });
 
 function writeTemplate(argv) {
@@ -107,35 +107,51 @@ function writeTemplate(argv) {
       reason: "template is not an execution result; replace with the real reason",
       cost: incompleteCost,
     })),
-    spec_analyze: {
-      packet: {
-        original_requirements: [{
-          id: "replace-with-requirement-id",
-          summary: "replace with one requirement from the current decision-log",
-        }],
-        coverage: [{
-          requirement_id: "replace-with-requirement-id",
-          expected_behavior: "replace with the requirement's expected behavior",
-          actual_behavior: "replace with what this run actually observed",
-          semantic_match: false,
-          scenario_refs: ["replace-with-real-scenario-ref"],
-          oracle_refs: ["replace-with-real-oracle-ref"],
-          artifact_refs: ["decision_log"],
-          evidence_refs: ["decision-log"],
-          status: "incomplete",
-        }],
-        current_stage_repairs: [],
-        work_summary: "replace with the truthful current stage-end spec-analyze result",
+    ...(stage === "verify-code" ? {
+      code_review: {
+        schema_version: "workflowhub-code-review-stage-outcome.v1",
+        stage,
+        snapshot_tree: null,
+        material_revision: null,
+        step_slug: stepId("code-review-closure"),
+        skill_id: "dsh-code-review",
+        result: {
+          status: "unavailable",
+          findings: [],
+          summary: "模板不是实际代码审查结果；请替换为本次真实 review",
+        },
       },
-      ...(profile.materials.includes("implementation") ? {
-        implementation_material: "replace with the current implementation/change summary; required for build-code and verify-code",
-        implementation_evidence_subject: { subject_kind: "step", subject_id: evidenceSubjectIds.implementation },
-      } : {}),
-      evidence_subjects: Object.fromEntries(profile.evidence.map((ref) => [ref, {
-        subject_kind: "step",
-        subject_id: evidenceSubjectIds[ref],
-      }])),
-    },
+    } : {
+      spec_analyze: {
+        packet: {
+          original_requirements: [{
+            id: "replace-with-requirement-id",
+            summary: "replace with one requirement from the current decision-log",
+          }],
+          coverage: [{
+            requirement_id: "replace-with-requirement-id",
+            expected_behavior: "replace with the requirement's expected behavior",
+            actual_behavior: "replace with what this run actually observed",
+            semantic_match: false,
+            scenario_refs: ["replace-with-real-scenario-ref"],
+            oracle_refs: ["replace-with-real-oracle-ref"],
+            artifact_refs: ["decision_log"],
+            evidence_refs: ["decision-log"],
+            status: "incomplete",
+          }],
+          current_stage_repairs: [],
+          work_summary: "replace with the truthful current stage-end spec-analyze result",
+        },
+        ...(profile.materials.includes("implementation") ? {
+          implementation_material: "replace with the current implementation/change summary; required for build-code",
+          implementation_evidence_subject: { subject_kind: "step", subject_id: evidenceSubjectIds.implementation },
+        } : {}),
+        evidence_subjects: Object.fromEntries(profile.evidence.map((ref) => [ref, {
+          subject_kind: "step",
+          subject_id: evidenceSubjectIds[ref],
+        }])),
+      },
+    })
   };
   writeAtomic(outputPath, value);
   process.stdout.write(`${JSON.stringify({ status: "template", output_path: outputPath, step_count: steps.length, skill_count: skills.length })}\n`);

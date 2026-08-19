@@ -203,4 +203,95 @@ describe("verify selects facts by freshness", () => {
       snapshot_tree: "new-tree",
     }, { read: io.read }).status).toBe("stale");
   });
+
+  it("does not accept a receipt from another stage for build-code risk tests", () => {
+    const snapshotTree = "b".repeat(40);
+    const command = "npm test";
+    const output = "pass\n";
+    const receipt = {
+      schema_version: "workflowhub-receipt.v1",
+      task_id: "task",
+      stage: "verify-code",
+      producer: { stage: "verify-code", component: "verify-code-test-capture", version: "1.0.0" },
+      command,
+      command_hash: sha256(command),
+      exit_code: 0,
+      snapshot_tree: snapshotTree,
+      output_ref: "quality/tests/output/verify-code.output",
+      output_hash: sha256(output),
+    };
+    const receiptRaw = JSON.stringify(receipt);
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "fact",
+      task_id: "task",
+      stage: "build-code",
+      material_revision: "revision",
+      snapshot_tree: snapshotTree,
+      kind: "test",
+      subject: "risk_tests_fresh",
+      status: "passed",
+      ref: "fact.json",
+      sha256: "",
+      evidence: [{ ref: "receipt.json", sha256: sha256(receiptRaw), evidence_type: "test_receipt" }],
+    };
+    const factRaw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, factRaw);
+    io.records.set("receipt.json", receiptRaw);
+    io.records.set(receipt.output_ref, output);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(factRaw) }, {
+      material_revision: fact.material_revision,
+      snapshot_tree: snapshotTree,
+    }, { read: io.read }).status).toBe("stale");
+  });
+
+  it("keeps a mini-task implementation review current across its trusted stage boundary", () => {
+    const snapshotTree = "c".repeat(40);
+    const review = {
+      version: "wh-review-result.v1",
+      task_id: "task",
+      stage: "build-code",
+      review_track: null,
+      review_kind: "mini_task.implementation",
+      subject_kind: "phase",
+      phase_id: "mini-task-implementation",
+      review_scope: "phase",
+      base_tree: snapshotTree,
+      candidate_tree: snapshotTree,
+      source: { target_commit: "d".repeat(40), base_commit: "d".repeat(40), base_tree: snapshotTree, captured_head: "d".repeat(40) },
+      snapshot_tree: snapshotTree,
+      material_id: "e".repeat(64),
+      attempt_ref: "quality/reviews/attempts/mini-task.json",
+      provider_results: [{ provider: "fixture", output: { findings: [] } }],
+      findings: [],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    };
+    const reviewRaw = JSON.stringify(review);
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "mini-review-fact",
+      task_id: "task",
+      stage: "verify-code",
+      material_revision: "revision",
+      snapshot_tree: snapshotTree,
+      kind: "review",
+      subject: "independent_review",
+      status: "recorded",
+      ref: "fact.json",
+      sha256: "",
+      evidence: [{ ref: "review.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+    };
+    const factRaw = JSON.stringify({ ...fact, schema_version: "quality-fact.v1" });
+    const io = store();
+    io.records.set("fact.json", factRaw);
+    io.records.set("review.json", reviewRaw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(factRaw) }, {
+      material_revision: fact.material_revision,
+      snapshot_tree: snapshotTree,
+    }, { read: io.read })).toMatchObject({
+      status: "current",
+      authenticated: true,
+    });
+  });
 });

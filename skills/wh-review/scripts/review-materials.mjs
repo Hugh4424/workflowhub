@@ -24,7 +24,6 @@ const HASH = /^[0-9a-f]{64}$/i;
 const ACCEPTANCE_ID = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/;
 const ACCEPTANCE_IDS = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/g;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
-const FULL_TEST_COMMAND = "npm test";
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
 export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 330 * 1024;
@@ -72,6 +71,69 @@ const FULL_PHASE_DIFF_CODE_EXTENSIONS = new Set([
   ".swift", ".ts", ".tsx", ".vue", ".zsh",
 ]);
 
+// verify-code reviews the current implementation, not every test, fixture,
+// report, and workflow note changed while the task was being executed. Keep
+// the production seams complete and deliver the directly relevant contract
+// tests; all other changed paths remain represented by bounded summaries and
+// the canonical diff archive. This is packet slicing only, not evidence
+// deletion or a second review scope.
+const VERIFY_CODE_FULL_DIFF_PREFIXES = [
+  "core/",
+  "runtime/",
+  "skills/wh-review/scripts/",
+  "skills/dsh-code-review/",
+  "tools/cli/",
+  "tools/host/",
+];
+const VERIFY_CODE_FULL_DIFF_FILES = new Set([
+  "skills/catalog.yaml",
+  "skills/wh-review/SKILL.md",
+  "skills/wh-review/contracts/provider-protocol.md",
+  "skills/wh-review/contracts/verify-code.md",
+  "skills/wh-review/skill-bundle.json",
+  "runtime/review/stage-materials.json",
+  "workflows/verify-code/SKILL.md",
+  "workflows/verify-code/skill-deps.yaml",
+  "workflows/verify-code/steps.json",
+]);
+const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
+  "tests/contract/review-materials-contract.test.mjs",
+  "tests/contract/stage-completion.test.mjs",
+  "tests/contract/verify-architect-acceptance.test.mjs",
+  "tests/e2e/vnext-five-stage-current.test.mjs",
+  "tests/integration/vnext-official-stage-run.test.mjs",
+  "tests/stage-review-cost-policy.test.mjs",
+  "tests/verify-code-facts.test.mjs",
+]);
+// The broker packet has a hard transport ceiling. For a large final diff,
+// retain the complete canonical archive but send a deterministic, production-
+// first selected context. This budget leaves room for the review contract,
+// source/index, and the actual implementation assessment.
+const VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES = 200 * 1024;
+const VERIFY_CODE_PACKET_METADATA_RESERVE_BYTES = 128 * 1024;
+const VERIFY_CODE_FULL_INLINE_LIMIT_BYTES = 160 * 1024;
+const VERIFY_CODE_DIFF_PRIORITY = [
+  "skills/wh-review/scripts/wh-review-cli.mjs",
+  "skills/wh-review/scripts/review-runner.mjs",
+  "skills/wh-review/scripts/review-materials.mjs",
+  "skills/wh-review/scripts/review-provider-client.mjs",
+  "skills/wh-review/scripts/third-review-host-config.mjs",
+  "runtime/stage/stage-handlers.mjs",
+  "runtime/stage/stage-runner.mjs",
+  "runtime/stage/stage-agent-outcome-adapter.mjs",
+  "runtime/stage/stage-content-contracts.mjs",
+  "runtime/stage/completion-predicates.mjs",
+  "core/task-close.mjs",
+  "runtime/evidence/quality-store.mjs",
+  "runtime/evidence/freshness.mjs",
+  "runtime/evidence/canonical-evidence-validators.mjs",
+  "runtime/review/integration-review-subject.mjs",
+  "tools/host/workflowhub-stage-agent-protocol.mjs",
+  "tools/cli/stage-runtime.mjs",
+  ...[...VERIFY_CODE_RELEVANT_TEST_FILES].sort(),
+];
+const VERIFY_CODE_DIFF_PRIORITY_INDEX = new Map(VERIFY_CODE_DIFF_PRIORITY.map((path, index) => [path, index]));
+
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
  * directly own the current contract complete. Configuration, generic skill
@@ -86,6 +148,33 @@ export function phaseDiffDeliveryForPath(path) {
     || FULL_PHASE_DIFF_CODE_EXTENSIONS.has(extname(path).toLowerCase())
     ? "included"
     : "summary";
+}
+
+export function verifyCodeDiffDeliveryForPath(path) {
+  return VERIFY_CODE_RELEVANT_TEST_FILES.has(path)
+    || VERIFY_CODE_FULL_DIFF_FILES.has(path)
+    || VERIFY_CODE_FULL_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
+    ? "included"
+    : "summary";
+}
+
+function boundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, sourceDiffBytes, budgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES) {
+  if (stage !== "verify-code" || selectedChangeIds.size > 0 || sourceDiffBytes <= VERIFY_CODE_FULL_INLINE_LIMIT_BYTES) return null;
+  let remaining = budgetBytes;
+  const included = new Set();
+  const candidates = sections
+    .filter((section) => verifyCodeDiffDeliveryForPath(section.path) === "included")
+    .sort((left, right) =>
+      (VERIFY_CODE_DIFF_PRIORITY_INDEX.get(left.path) ?? Number.MAX_SAFE_INTEGER) - (VERIFY_CODE_DIFF_PRIORITY_INDEX.get(right.path) ?? Number.MAX_SAFE_INTEGER)
+      || left.path.localeCompare(right.path),
+    );
+  for (const section of candidates) {
+    if (section.bytes.length <= remaining) {
+      included.add(section.path);
+      remaining -= section.bytes.length;
+    }
+  }
+  return included;
 }
 
 
@@ -262,18 +351,43 @@ function validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps }
   }
   let receipt;
   try { receipt = JSON.parse(raw); } catch { throw new Error("MATERIAL_INCOMPLETE: build-code test receipt must be JSON"); }
-  if (receipt.snapshot_tree !== source.snapshotTree || receipt.exit_code !== 0) {
+  validateCanonicalTestReceipt(receipt, {
+    taskId: task.identity.taskId,
+    stage: "build-code",
+    // Phase tests may use the phase's declared focused command; unlike the
+    // final integration receipt, they are not required to be npm test.
+    snapshotTree: receipt.snapshot_tree,
+    expectedProducerComponent: "build-code-test-capture",
+    requirePassed: true,
+  });
+  const output = task.readRecord(receipt.output_ref);
+  if (sha256(output) !== receipt.output_hash) {
+    throw new Error("MATERIAL_INCOMPLETE: build-code test output hash mismatch");
+  }
+  const snapshotCurrent = receipt.snapshot_tree === source.snapshotTree
+    || (typeof source.sourceRoot === "string"
+      && isExecutionRecordOnlyMaterialDelta(source.sourceRoot, receipt.snapshot_tree, source.snapshotTree, task.identity.taskId));
+  if (!snapshotCurrent || receipt.exit_code !== 0) {
     throw new Error("MATERIAL_INCOMPLETE: build-code test evidence is not a passing current-snapshot fact");
   }
 }
 
 function validateIntegrationFreshTests({ task, source, materials }) {
   const evidence = materials.test_evidence;
-  if (evidence?.status === "unavailable") {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+    throw new Error("MATERIAL_INCOMPLETE: integration test evidence is missing or invalid");
+  }
+  if (evidence.status === "unavailable" || evidence.status === "missing") {
     if (typeof evidence.reason !== "string" || evidence.reason.trim() === "") {
-      throw new Error("MATERIAL_INCOMPLETE: unavailable integration test evidence requires a reason");
+      throw new Error("MATERIAL_INCOMPLETE: missing integration test evidence requires a reason");
     }
     return;
+  }
+  if (evidence.status !== undefined && evidence.status !== "passed") {
+    throw new Error("MATERIAL_INCOMPLETE: integration test evidence status is unsupported");
+  }
+  if (typeof evidence.receipt_ref !== "string" || !HASH.test(evidence.receipt_hash ?? "")) {
+    throw new Error("MATERIAL_INCOMPLETE: integration test evidence requires receipt_ref and receipt_hash");
   }
   const handle = assertTaskHandle(task);
   const raw = handle.readRecord(evidence.receipt_ref);
@@ -287,9 +401,9 @@ function validateIntegrationFreshTests({ task, source, materials }) {
     // Validate the receipt's own immutable snapshot first, then apply the
     // narrow semantic-delta check below.
     snapshotTree: receipt.snapshot_tree,
-    subject: "build-code-test-capture",
+    expectedProducerComponent: "build-code-test-capture",
     allowedProducerComponents: ["build-code-test-capture"],
-    expectedCommand: FULL_TEST_COMMAND,
+    expectedCommand: "npm test",
     requirePassed: true,
   });
   const output = handle.readRecord(receipt.output_ref);
@@ -734,6 +848,9 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
   if (stage === "make-decision" && track === "direction" && directionMode === "reconstruct") {
     return `First request: independently reconstruct the problem, user flow, hard constraints, non-goals, failure consequences, and the smallest reversible boundary from only the raw requirement and objective facts. Do not look for or infer a current choice.${ordered}`;
   }
+  if (stage === "make-decision" && track === "direction" && directionMode === "combined") {
+    return `One public request: execute the broker-owned direction-review.v1 flow in order reconstruct -> reveal -> challenge. The reconstruct step may see only the raw requirement and objective facts; reveal the current choice only after the internal reconstruction is recorded; challenge the revealed choice and report one final findings object. Do not create a second public request.${ordered}`;
+  }
   if (stage === "make-decision" && track === "direction" && directionMode === "challenge") {
     return `Second request: use the blind reconstruction, then inspect the revealed current choice, alternatives, rationale, and assumptions. Attack the choice, failure modes, and smaller reversible alternatives; report only delivery-threatening findings.${ordered}`;
   }
@@ -756,7 +873,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
     return `Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.${ordered}`;
   }
   if (stage === "verify-code") {
-    return `Focus on the current acceptance summary, final test facts, implementation assessment, and open delivery risks. Report advice only; do not emit a provider verdict.${ordered}`;
+    return `Focus on the current code diff, real entry points, direct consumers, lifecycle and failure paths, security boundaries, test strength, and open implementation risks. Do not audit materials, acceptance criteria, receipts, lineage, or evidence completeness; report code findings only.${ordered}`;
   }
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
@@ -768,8 +885,10 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
   if (["build-code", "verify-code"].includes(stage) && selectedSkills.length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
   const scope = reviewKind ?? (stage === "make-decision" ? `${stage}/${track}` : stage === "build-code" ? `${stage}/${reviewScope ?? "phase"}` : stage);
-  const blind = stage === "make-decision" && track === "direction" && directionMode !== "challenge"
+  const blind = stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
+    : stage === "verify-code"
+    ? "Judge only the supplied implementation and code-review contract; the upstream stage materials are context, not a verification target."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const reviewInstruction = "This is a full review of the supplied current stage subject.";
@@ -777,9 +896,9 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const verifyBound = reviewKind
     ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
-    ? "This is one bounded post-repair architect review. Inspect the compact acceptance summary, the architect assessment, the final test summary, and open risks. Do not demand a full evidence tree, historical replay, provider pass, or another review; report only findings that can affect delivery."
+    ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
     : `${blind} ${reviewInstruction}`;
-  const adviceBoundary = "Every stage produces heterologous advice as a quality fact only. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
+  const adviceBoundary = "Every stage produces heterologous advice as a quality fact only; this is advice only, not a completion license. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
   const buildCodeBoundary = stage === "build-code" && reviewKind === null
     ? "For build-code, a review cycle is clean only when the current trusted semantic result has no actionable major or blocking finding. If one exists, allow one focused review only after an actual repair or subject change; repeated findings, no actual change, or no trusted terminal result stop automatic continuation and remain visible as needs_human, unavailable, or incomplete."
     : "";
@@ -796,6 +915,8 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     ? "Read only the raw requirement and objective facts; the current choice is intentionally absent."
     : stage === "make-decision" && track === "direction" && directionMode === "challenge"
     ? "Read the raw requirement, objective facts, revealed current choice, alternatives, rationale, assumptions, and the blind reconstruction; do not treat the reconstruction as a verdict."
+    : stage === "make-decision" && track === "direction" && directionMode === "combined"
+    ? "Read the direction-review.v1 flow and all declared fields, but rely on the broker-enforced reveal boundary: the reconstruct step must not read current_selection before reveal."
     : "Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority.";
   const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
   return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
@@ -977,7 +1098,7 @@ function compactIntegrationAcceptanceCriteria(value, archive) {
   const sections = markdownSections(value, "build-code integration acceptance_criteria");
   const acceptanceSections = sections.filter(({ heading }) => heading && /验收|acceptance criteria/i.test(heading));
   const selectedText = (acceptanceSections.length ? acceptanceSections : sections).map(({ text }) => text).join("\n\n");
-  const selectedIds = [...requirementIds(selectedText)].filter((id) => /^AC-\d+$/.test(id)).sort();
+  const selectedIds = [...requirementIds(selectedText)].filter((id) => /^AC-/.test(id)).sort();
   const blocks = selectedText.split(/\n{2,}/).filter((block) => selectedIds.some((id) => block.includes(id)));
   return {
     schema_version: "wh-review-acceptance-excerpts.v1",
@@ -1125,6 +1246,18 @@ function semanticAnchorRanges(change, anchor) {
   };
 }
 
+function newLineRangesFor(change) {
+  return (change.hunks ?? []).flatMap((hunk) => {
+    const match = hunk.header?.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+    if (!match) return [];
+    const startLine = Number(match[1]);
+    const lineCount = match[2] === undefined ? 1 : Number(match[2]);
+    return lineCount > 0
+      ? [{ start_line: startLine, end_line: startLine + lineCount - 1 }]
+      : [];
+  });
+}
+
 function selectedPhaseChangeIds(materials) {
   const selected = new Set();
   for (const key of ["phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
@@ -1143,11 +1276,12 @@ function selectedPhaseChangeIds(materials) {
   return selected;
 }
 
-function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials }) {
+function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage = "build-code", includedDiffBudgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES }) {
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
   const selectedChangeIds = selectedPhaseChangeIds(materials);
   const sections = diffSections(source);
+  const boundedIncludedPaths = boundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, source.diffBytes, includedDiffBudgetBytes);
   const shards = [];
   let ordinal = 0;
   for (const section of sections) {
@@ -1159,9 +1293,13 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     // earlier dirty-phase code hunk into the current review packet.  Unselected
     // changes remain in the canonical archive and indexed summary, so this is
     // a delivery bound, not an evidence deletion.
-    const delivery = selectedChangeIds.size > 0
+    const defaultDelivery = stage === "verify-code"
+      ? verifyCodeDiffDeliveryForPath(section.path)
+      : phaseDiffDeliveryForPath(section.path);
+    let delivery = selectedChangeIds.size > 0
       ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
-      : (phaseDiffDeliveryForPath(section.path) === "included" ? "included" : "summary");
+      : defaultDelivery;
+    if (boundedIncludedPaths !== null && delivery === "included" && !boundedIncludedPaths.has(section.path)) delivery = "summary";
     const bodies = delivery === "included"
       ? Array.from({ length: Math.ceil(section.bytes.length / PHASE_DIFF_SHARD_TARGET_BYTES) }, (_value, index) => {
         const offset = index * PHASE_DIFF_SHARD_TARGET_BYTES;
@@ -1202,6 +1340,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const compactChanges = changeMap.changes.map((change) => ({
     change_id: change.change_id,
     path: change.path,
+    new_line_ranges: newLineRangesFor(change),
     shards: shards.filter((shard) => shard._source_path === change.path)
       .map(({ _source_path, ...shard }) => shard),
   }));
@@ -1215,9 +1354,10 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     anchors: selectedAnchors(materials).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
-      if (selectedChangeIds.size > 0
-        ? !selectedChangeIds.has(change.change_id)
-        : phaseDiffDeliveryForPath(anchor.path) !== "included") return canonicalAnchorSource({ reviewDataRoot, source, anchor });
+      const anchorHasIncludedDiff = boundedIncludedPaths !== null
+        ? boundedIncludedPaths.has(anchor.path)
+        : (stage === "verify-code" ? verifyCodeDiffDeliveryForPath(anchor.path) : phaseDiffDeliveryForPath(anchor.path)) === "included";
+      if (selectedChangeIds.size > 0 ? !selectedChangeIds.has(change.change_id) : !anchorHasIncludedDiff) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
       const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
       const shard = change.shards.find(({ delivery }) => delivery === "included");
       if (!shard) throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
@@ -1228,7 +1368,7 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   return index;
 }
 
-export function validateDiffIndexBundle(bundleRoot) {
+export function validateDiffIndexBundle(bundleRoot, { stage = "build-code" } = {}) {
   const indexPath = join(bundleRoot, "diff-index.json");
   if (!existsSync(indexPath)) return;
   let index;
@@ -1243,9 +1383,17 @@ export function validateDiffIndexBundle(bundleRoot) {
   for (const change of index.changes ?? []) {
     covered.add(change.change_id);
     const shards = Array.isArray(change.shards) ? change.shards : [];
+    if (!Array.isArray(change.new_line_ranges) || change.new_line_ranges.some((range) =>
+      !range || !Number.isSafeInteger(range.start_line) || !Number.isSafeInteger(range.end_line)
+      || range.start_line < 1 || range.end_line < range.start_line)) {
+      throw new Error(`MATERIAL_INCOMPLETE: changed path ${change.path ?? change.change_id} has invalid new-line ranges`);
+    }
+    const defaultDelivery = stage === "verify-code"
+      ? verifyCodeDiffDeliveryForPath(change.path ?? "")
+      : phaseDiffDeliveryForPath(change.path ?? "");
     const requiresFullDiff = selectedChangeIds.size > 0
       ? selectedChangeIds.has(change.change_id)
-      : phaseDiffDeliveryForPath(change.path ?? "") === "included";
+      : stage !== "verify-code" && defaultDelivery === "included";
     if (!shards.some(({ delivery }) => delivery === "included") && (requiresFullDiff || !shards.some(({ delivery }) => delivery === "summary"))) {
       throw new Error(`MATERIAL_INCOMPLETE: changed path ${change.path ?? change.change_id} has no provider-visible diff shard`);
     }
@@ -1303,7 +1451,7 @@ function excludedPacketMaterial(rule, stage) {
   if (stage === "build-plan") {
     excluded.push({ category: "generated:planning_artifacts", reason: "stage-local spec-analyze projection duplicates declared provider materials" });
   }
-  if (stage === "verify-code") excluded.push({ category: "canonical_acceptance_evidence_tree", reason: "reduced_to_structured_per_ac_summary" });
+  if (stage === "verify-code") excluded.push({ category: "canonical_acceptance_evidence_tree", reason: "not a code-review input" });
   if (stage === "build-code" && rule.source_bundle === "none") {
     excluded.push({ category: "material:ac_trace", reason: "host-only AC binding; provider reviews delivery behavior instead" });
     excluded.push({ category: "provider_context_overflow", reason: "provider receives a bounded set of delivery-critical implementation excerpts; host retains the complete authenticated anchor set" });
@@ -1469,7 +1617,7 @@ function writeSelectedContext({ bundleRoot, reviewDataRoot, source, materials, c
 
 function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = null, reviewKind = null, integration = false }) {
   const evidence = materials.test_evidence;
-  if (integration && evidence?.status === "unavailable") {
+  if (integration && (evidence?.status === "unavailable" || evidence?.status === "missing")) {
     if (typeof evidence.reason !== "string" || evidence.reason.trim() === "") throw new Error("MATERIAL_INCOMPLETE: unavailable integration test evidence requires a reason");
     write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify({
       schema_version: "wh-review-test-summary.v1",
@@ -1522,11 +1670,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       },
     };
   }
-  for (const key of rule.required) if (!(key in materials) || !materialPresent(materials[key])) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${key}`);
+  const missingRequired = rule.required.filter((key) => !(key in materials) || !materialPresent(materials[key]));
+  if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
   validateMaterialAllowlist(rule, materials);
   if (stage === "make-decision" && reviewTrack === "direction") {
     const allowed = new Set([...rule.required, ...rule.optional]);
-    if (directionMode !== "challenge") {
+    if (!["challenge", "combined"].includes(directionMode)) {
       for (const key of ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"]) {
         allowed.delete(key);
       }
@@ -1541,13 +1690,12 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
   if (stage === "verify-code") {
-    validateVerifyAcceptanceSummary(materials.acceptance_criteria, {
-      expectedCriterionIds: currentSpecCriterionIds(task),
-    });
+    // verify-code reviews code. AC and evidence completeness are owned by the
+    // earlier stage that produced them and are not provider prerequisites.
   }
-  validateVerifyEvidenceRoots(stage, materials);
-  if (stage === "build-code" && effectiveScope !== "integration"
-      && (reviewKind === null || reviewKind === "mini_task.implementation")) {
+  if (stage === "build-code" && effectiveScope !== "integration" && reviewKind === null) {
+    // Mini-task implementation has its own bounded AC/test/evidence contract
+    // below. Do not apply the ordinary phase receipt contract to that packet.
     validateBuildCodeTestEvidence({ task, source, materials, strictV2Maps });
   }
   rejectDirectRawEvidence(materials);
@@ -1559,11 +1707,8 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     validateIntegrationMaterials({ task, source, materials });
   }
   if (stage === "build-code" && effectiveScope === "phase" && reviewKind === null) validateBuildCodeContextSelection({ source, materials, diffIndex });
-  const acEvidenceSummary = stage === "verify-code" && materials.acceptance_evidence
-    ? buildAcEvidenceSummary({ task, acceptanceCriteria: materials.acceptance_criteria, acceptanceEvidence: materials.acceptance_evidence })
-    : null;
   let providerMaterials = deduplicateDecisionMaterials(
-    Object.fromEntries(Object.entries(materials).filter(([key]) => key !== "acceptance_evidence")),
+    Object.fromEntries(Object.entries(materials)),
   );
   if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") {
     // raw_requirement is the bounded source view. Keep the full decision log
@@ -1651,7 +1796,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       openItems: rawRequirement && typeof rawRequirement === "object" ? rawRequirement.open_items ?? null : null,
     });
   }
-  if (acEvidenceSummary !== null) providerMaterials.ac_evidence_summary = acEvidenceSummary;
   providerMaterials = redactProviderHostPaths(providerMaterials);
   const providerMaterialDeduplication = deduplicateProviderMaterials(providerMaterials, rule);
   providerMaterials = providerMaterialDeduplication.materials;
@@ -1660,6 +1804,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   mkdirSync(packetRoot, { recursive: true });
   const bundleRoot = mkdtempSync(join(packetRoot, `bundle-${stage}-${reviewTrack ?? "default"}-`));
   let bundleDiffIndex = null;
+  const boundedVerifyCodeDiff = stage === "verify-code" && source.diffBytes > VERIFY_CODE_FULL_INLINE_LIMIT_BYTES;
   if (rule.source_bundle === "diff") {
     write(bundleRoot, "source.json", Buffer.from(`${JSON.stringify({
       target_commit: source.targetCommit,
@@ -1669,7 +1814,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       snapshot_tree: source.snapshotTree,
       ...(source.phaseEvidenceBinding === undefined ? {} : { phase_evidence: source.phaseEvidenceBinding }),
     })}\n`));
-    if (source.diffBytes <= PHASE_DIFF_INLINE_LIMIT_BYTES) {
+    if (source.diffBytes <= PHASE_DIFF_INLINE_LIMIT_BYTES && !boundedVerifyCodeDiff) {
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(changeMap, null, 2)}\n`));
       const copiedDiff = source.copyDiffTo(join(bundleRoot, "changes.diff"));
       if (copiedDiff.bytes !== source.diffBytes || copiedDiff.sha256 !== source.diffSha256) {
@@ -1691,28 +1836,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
-      bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials });
+      if (!boundedVerifyCodeDiff) bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage });
     }
   }
-  // Context is never inferred from repository size or file membership. Every
-  // provider-visible source excerpt is named by a validated stage map anchor.
-  writeSelectedContext({
-    bundleRoot,
-    reviewDataRoot,
-    source,
-    // Integration material is deliberately compacted before provider
-    // delivery. Use that projected view for context capture as well; using
-    // the original AC trace here would silently re-expand all implementation
-    // anchors after the trace itself had been bounded.
-    materials: providerMaterials,
-    integration: stage === "build-code" && effectiveScope === "integration",
-    // Large diff packets still need the explicitly selected bounded excerpts
-    // in the provider bundle. The complete source remains canonical; only
-    // map-selected excerpts are embedded here.
-    canonicalOnly: false,
-    diffIndex: bundleDiffIndex,
-  });
-
   const stagePlan = stagePlanFor(stage, reviewTrack, reviewKind);
   if (!stagePlan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${reviewKind ?? `${stage}/${reviewTrack ?? "default"}`}`);
   const contractName = reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage === "make-decision" ? "make-decision" : stage;
@@ -1731,7 +1857,25 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration: stage === "build-code" && effectiveScope === "integration" });
   writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree: source.snapshotTree, reviewKind, integration: stage === "build-code" && effectiveScope === "integration" });
-  validateDiffIndexBundle(bundleRoot);
+  if (boundedVerifyCodeDiff) {
+    const fixedDeliveryBytes = filesUnder(bundleRoot).reduce((total, path) => total + statSync(join(bundleRoot, ...path.split("/"))).size, 0);
+    const includedDiffBudgetBytes = Math.max(0, REVIEW_PACKET_MAX_DELIVERY_BYTES - fixedDeliveryBytes - VERIFY_CODE_PACKET_METADATA_RESERVE_BYTES);
+    bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage, includedDiffBudgetBytes });
+  }
+  // Context is never inferred from repository size or file membership. Every
+  // provider-visible source excerpt is named by a validated stage map anchor.
+  // Deferred verify-code packets build the diff index first so a shard-backed
+  // anchor is not delivered a second time as context.
+  writeSelectedContext({
+    bundleRoot,
+    reviewDataRoot,
+    source,
+    materials: providerMaterials,
+    integration: stage === "build-code" && effectiveScope === "integration",
+    canonicalOnly: false,
+    diffIndex: bundleDiffIndex,
+  });
+  validateDiffIndexBundle(bundleRoot, { stage });
   const packetPlan = writePacketPlan({ bundleRoot, stage, reviewTrack, reviewScope: effectiveScope, reviewKind, rule, deduplicatedMaterials: providerMaterialDeduplication.deduplicated });
   const payloadFiles = filesUnder(bundleRoot);
   const fullEntries = payloadFiles.map((path) => {
@@ -1767,11 +1911,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
 }
 
 function freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration = false }) {
-  // Verify-code reviews consume the bounded acceptance summary and open-risk
-  // facts. The full canonical evidence index is intentionally excluded from
-  // that packet; writing an empty placeholder would make the provider treat
-  // an audit-only file as review material and spend tokens on evidence
-  // governance instead of delivery risk.
+  // Verify-code does not build a canonical evidence packet. The code-review
+  // subject is the current diff and its implementation context; writing an
+  // empty placeholder would turn a code review into evidence governance.
   if (stage !== "build-code" || integration) return;
   const entries = [];
   if (stage === "build-code" && materials.ac_trace) {

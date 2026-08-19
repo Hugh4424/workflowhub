@@ -189,17 +189,20 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(read("workflows/build-code/SKILL.md")).toMatch(/may mark testing not applicable with a plain\s+reason/i);
   });
 
-  it("requires verify-code to reverse-check requirements, design, flow, and unknown evidence", () => {
+  it("keeps verify-code focused on current implementation code review", () => {
     const verify = read("workflows/verify-code/SKILL.md");
-    expect(verify).toMatch(/原始需求[\s\S]*决策[\s\S]*spec\.md[\s\S]*完整用户流程[\s\S]*plan\.md[\s\S]*tasks\.md[\s\S]*AC[\s\S]*测试\/证据/);
-    expect(verify).toContain("unknown");
-    expect(verify).toMatch(/证据缺失不能算 `pass`/);
+    expect(verify).toMatch(/只审查代码，不做材料审计、AC 覆盖审计或证据树审计/);
+    expect(verify).toMatch(/真实入口、真实 consumer/);
+    expect(verify).toMatch(/生命周期、并发、取消/);
+    expect(verify).toMatch(/权限、安全边界/);
+    expect(verify).not.toContain("stage-end-spec-analyze");
+    expect(verify).not.toMatch(/逐条.*AC/);
   });
 
   it("uses four-material readiness while real quality facts limit only completion", () => {
     const protocol = read("skills/workflowhub-host-protocol/SKILL.md");
     expect(protocol).toContain("`build-code`：四材料可读即可在任务 worktree 实现、测试和修复");
-    expect(protocol).toContain("`verify-code`：四材料可读即可做需求回放、逐 AC、风险测试、异源 review 和最终判断");
+    expect(protocol).toContain("`verify-code`：四材料可读即可做当前实现的代码、consumer、生命周期、安全和失败边界 review；不做逐 AC 或 evidence tree 审计。");
     expect(protocol).toContain("材料存在只证明可以工作，不证明质量完成");
     expect(protocol).toContain("不能阻止同一 task 修复");
   });

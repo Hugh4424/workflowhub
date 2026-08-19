@@ -10,6 +10,12 @@ import makeDecisionSteps from "../../workflows/make-decision/steps.json" with { 
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const HASH = /^[a-f0-9]{64}$/;
+// One AC grammar for every current-material parser. Keep the legacy compact
+// forms (AC1/AC-001) while accepting the namespaced form used by spec-content
+// v3 (AC-{DOMAIN}-{NNN}).
+const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
+const ACCEPTANCE_CRITERION_ID = new RegExp(String.raw`\b${ACCEPTANCE_CRITERION_SOURCE}\b`, "g");
+const ACCEPTANCE_CRITERION_EXACT = new RegExp(`^${ACCEPTANCE_CRITERION_SOURCE}$`);
 const ajv = new Ajv2020({ allErrors: true, strict: false, formats: { "date-time": true } });
 const validateEntrySchema = ajv.compile(decisionEntrySchema);
 const validateAmbiguityLedgerV2Schema = ajv.compile(ambiguityLedgerV2Schema);
@@ -1211,16 +1217,15 @@ function taskCompletionFact(task, completionEvidence) {
     evidence_refs: Object.freeze(Array.isArray(evidenceRefs) ? structuredClone(evidenceRefs) : []),
     actual_changes: task.fields.actual_changes ?? null,
     executed_commands: task.fields.executed_commands ?? null,
-    covered_ac: Object.freeze(identifiers(task.fields.covered_ac ?? "", /\bAC-?\d+\b/g)),
+    covered_ac: Object.freeze(identifiers(task.fields.covered_ac ?? "", ACCEPTANCE_CRITERION_ID)),
     review_fact: task.fields.review_fact ?? null,
     completed_at: task.fields.completed_at ?? null,
   });
 }
 
 function sourceRows(document) {
-  return [...String(document ?? "").matchAll(
-    /^\|\s*([A-Z][A-Z0-9-]+)\s*\|\s*(SCN-\d+)\s*\|\s*(FR-[A-Z0-9-]+)\s*\|\s*(AC-?\d+)\s*\|\s*([^|]+)\|$/gm,
-  )].map((match) => Object.freeze({
+  const pattern = new RegExp(String.raw`^\|\s*([A-Z][A-Z0-9-]+)\s*\|\s*(SCN-\d+)\s*\|\s*(FR-[A-Z0-9-]+)\s*\|\s*(${ACCEPTANCE_CRITERION_SOURCE})\s*\|\s*([^|]+)\|$`, "gm");
+  return [...String(document ?? "").matchAll(pattern)].map((match) => Object.freeze({
     source: match[1],
     scenario: match[2],
     fr: match[3],
@@ -1250,7 +1255,7 @@ function sourceCoverageFacts({ spec, plan, tasks, acceptedFrs, acceptedAcs, task
 const SPEC_ANALYZE_SOURCE_ID = /\bR-[0-9]{3}\b/g;
 const SPEC_ANALYZE_DECISION_ID = /\bD-[0-9]{3}\b/g;
 const SPEC_ANALYZE_FR_ID = /\bFR-[A-Z0-9]+(?:-[0-9]{3})?\b/g;
-const SPEC_ANALYZE_AC_ID = /\bAC(?:-[A-Z0-9]+(?:-[0-9]{2,3})?|[0-9]+)\b/g;
+const SPEC_ANALYZE_AC_ID = new RegExp(String.raw`\b${ACCEPTANCE_CRITERION_SOURCE}\b`, "g");
 const SPEC_ANALYZE_TASK_ID = /\bT[0-9]{3}\b/g;
 const SPEC_ANALYZE_DEFERRED_OPEN_ID = /\b(?:DEFER|OPEN)-[0-9]{3}\b/g;
 const SPEC_ANALYZE_DEFERRED_OPEN_ID_EXACT = /^(?:DEFER|OPEN)-[0-9]{3}$/;
@@ -1914,7 +1919,8 @@ export function validateSpecAnalyzeCompleteness({
 }
 
 /**
- * Narrow, report-only consistency profiles used at the end of every stage.
+ * Narrow, report-only consistency profiles used at the end of the four
+ * authoring stages. verify-code uses the separate code-review outcome.
  * These profiles consume the current packet; they never create a material,
  * writer, status gate, or fifth source of truth.
  */
@@ -1938,11 +1944,6 @@ export const STAGE_SPEC_ANALYZE_PROFILES = Object.freeze({
     required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"]),
     required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"]),
     next_stage: "verify-code",
-  }),
-  "verify-code": Object.freeze({
-    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"]),
-    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "review", "runtime", "delivery"]),
-    next_stage: "close",
   }),
 });
 
@@ -2675,7 +2676,7 @@ export function validateExecutablePlanTaskMinimum({ spec, plan, tasks } = {}) {
     const id = task.heading_id;
     const dependencies = identifiers(task.fields.依赖 ?? "", /\bT\d+\b/g);
     const frs = identifiers(task.fields.FR ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
-    const acs = identifiers(task.fields.AC ?? "", /\bAC-?\d+\b/g);
+    const acs = identifiers(task.fields.AC ?? "", ACCEPTANCE_CRITERION_ID);
     const files = new Set([
       ...inlinePaths(task.fields["精确文件"]),
       ...boundaryPaths(task.fields.boundary),
@@ -2775,7 +2776,6 @@ export function buildPlanTaskContract({
 }
 
 const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
-const ACCEPTANCE_CRITERION_ID = /\bAC(?:-\d{1,3}|-ROBUST-\d{3}|\d{1,3})\b/g;
 const V2_AC = ACCEPTANCE_CRITERION_ID;
 
 function activeAcceptanceCriterionIds(spec) {
@@ -2783,10 +2783,9 @@ function activeAcceptanceCriterionIds(spec) {
   const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|Acceptance Criteria)\s*$/mi);
   if (!heading) return identifiers(text, ACCEPTANCE_CRITERION_ID);
   const body = text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0];
-  const activeId = /^AC(?:-\d{1,3}|-ROBUST-\d{3}|\d{1,3})$/;
   const headingIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
     .map(([, id]) => id.trim())
-    .filter((id) => activeId.test(id));
+    .filter((id) => ACCEPTANCE_CRITERION_EXACT.test(id));
   return [...new Set(headingIds)];
 }
 

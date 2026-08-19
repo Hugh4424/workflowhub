@@ -62,8 +62,8 @@ describe("workflow quality regression and historical replay", () => {
     }
   });
 
-  it("requires all five workflow manifests to wire the same end-of-stage analyzer", () => {
-    for (const stage of STAGES) {
+  it("keeps spec-analyze on authoring stages and code review on verify-code", () => {
+    for (const stage of STAGES.filter((stage) => stage !== "verify-code")) {
       const manifest = json(`workflows/${stage}/steps.json`);
       expect(manifest.stage_slug).toBe(stage);
       const analyzer = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
@@ -71,6 +71,9 @@ describe("workflow quality regression and historical replay", () => {
       expect(analyzer.observable_result).toMatch(/checks|检查|evidence|证据/i);
       expect(analyzer.completion_evidence.some((item) => item.kind === "stage_outcome")).toBe(true);
     }
+    const verify = json("workflows/verify-code/steps.json");
+    expect(verify.steps.find((step) => step.step_slug === "code-review-closure")).toBeTruthy();
+    expect(verify.steps.find((step) => step.step_slug === "stage-end-spec-analyze")).toBeUndefined();
   });
 
   it("keeps mini-task and bundle governance connected to real consumers", () => {

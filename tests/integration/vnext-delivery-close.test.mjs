@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,7 +19,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid" } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -119,13 +119,18 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
   if (testVariant !== "missing") kernel.publishCanonicalRecord(testRef, testRaw);
   const testEvidence = { ref: testRef, sha256: sha256(testRaw), evidence_type: "test_receipt" };
   kernel.publishVNextQualityFact("verify-code", { kind: "test", status: "passed", subject: "full_tests_fresh", evidence: [testEvidence] });
-  for (const subject of ["same_build_integration_review", "independent_review"]) {
+  for (const subject of ["code_review"]) {
     if (omitSubjects.includes(subject)) continue;
-    const review = writeFormalReviewFixture({ task, stage: "verify-code", snapshotTree: snapshot.tree, provider: "fixture" });
-    const ref = review.resultRef;
+    const review = writeFormalReviewFixture({
+      task,
+      stage: crossStageIntegrationReview && subject === "same_build_integration_review" ? "build-code" : "verify-code",
+      snapshotTree: snapshot.tree,
+      provider: "fixture",
+    });
+    const ref = nonterminalAttempt ? review.attemptRef : review.resultRef;
     const raw = task.readRecord(ref);
     kernel.publishVNextQualityFact("verify-code", {
-      kind: "review", status: reviewStatus, subject,
+      kind: "review", status: reviewStatus, subject: "code_review",
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
   }
@@ -160,7 +165,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
     const current = captureGitWorktreeSnapshot(worktreeRoot);
     return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: current };
   }
-  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: receiptSnapshot };
+  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot };
 }
 
 describe("vNext formal delivery close", () => {
@@ -185,7 +190,36 @@ describe("vNext formal delivery close", () => {
     });
   });
 
-  it("does not let an unavailable current review reach the close consumer", () => {
+  it("ignores execution sidecars when checking source worktree cleanliness", () => {
+    const state = fixture();
+    mkdirSync(join(state.candidate.worktreeRoot, "quality", "tests"), { recursive: true });
+    writeFileSync(join(state.candidate.worktreeRoot, "quality", "tests", "stage-fact.json"), "{}\n");
+    const result = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    });
+    expect(result.plan.delivery.task_commit).toBe(state.snapshot.commit);
+  });
+
+  it("accepts the verify-code code-review fact without a second integration review", () => {
+    const state = fixture({ crossStageIntegrationReview: true });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
+  });
+
+  it("does not let an unavailable current code review reach the close consumer", () => {
     const state = fixture({ reviewStatus: "unavailable" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -195,7 +229,20 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts are incomplete:.*independent_review/);
+    })).toThrow(/current verify-code quality facts are incomplete:.*code_review/);
+  });
+
+  it("rejects a non-terminal code-review attempt used as a non-recorded quality fact", () => {
+    const state = fixture({ reviewStatus: "failed", nonterminalAttempt: true });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/unavailable terminal fact/);
   });
 
   it("accepts a clean task-head snapshot commit", () => {
@@ -205,7 +252,7 @@ describe("vNext formal delivery close", () => {
       kernel: state.kernel,
       delivery: {
         remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
-        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        task_commit: state.snapshot.head, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     });
@@ -239,10 +286,10 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
-  it("normalizes an empty quality evidence reference before close", () => {
+  it("ignores unrelated legacy quality references during code-review close", () => {
     const state = fixture();
     state.kernel.publishVNextQualityFact("verify-code", {
-      kind: "review", status: "recorded", subject: "independent_review",
+      kind: "review", status: "recorded", subject: "legacy_independent_review",
       evidence: [{ ref: "quality/", sha256: "a".repeat(64), evidence_type: "review_result" }],
     });
     expect(() => prepareDeliveryClosePlan({
@@ -253,7 +300,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/QUALITY_FACT_INVALID/);
+    })).not.toThrow();
   });
 
   it("does not treat a failed review fact as a formal close fact", () => {
@@ -266,24 +313,24 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/independent_review/);
+    })).toThrow(/code_review/);
   });
 
-  it("reads an unavailable review disclosure and reports the missing close fact", () => {
-    const state = fixture({ omitSubjects: ["independent_review"] });
-    const ref = "quality/evidence/stage-quality-missing/verify-code/independent_review-test.json";
+  it("reads an unavailable code-review disclosure and reports the missing close fact", () => {
+    const state = fixture({ omitSubjects: ["code_review"] });
+    const ref = "quality/evidence/stage-quality-missing/verify-code/code_review-test.json";
     const raw = `${JSON.stringify({
       schema_version: "stage-quality-missing.v1",
       task_id: state.taskId,
       stage: "verify-code",
-      subject: "independent_review",
+      subject: "code_review",
       status: "missing",
       snapshot_tree: state.snapshot.tree,
       reason: "the independent review execution was unavailable",
     }, null, 2)}\n`;
     state.kernel.publishCanonicalRecord(ref, raw);
     state.kernel.publishVNextQualityFact("verify-code", {
-      kind: "review", status: "missing", subject: "independent_review",
+      kind: "review", status: "missing", subject: "code_review",
       evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }],
     });
     expect(() => prepareDeliveryClosePlan({
@@ -294,7 +341,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/current verify-code quality facts are incomplete:.*independent_review/);
+    })).toThrow(/current verify-code quality facts are incomplete:.*code_review/);
   });
 
   it("accepts the canonical recorded status used by review quality facts", () => {
@@ -310,7 +357,7 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
-  it("rejects a passed acceptance fact whose bound evidence says fail", () => {
+  it("ignores acceptance-result variants because close consumes the code review only", () => {
     const state = fixture({ acceptanceResult: "fail" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -320,10 +367,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/non-pass result/);
+    })).not.toThrow();
   });
 
-  it("rejects an acceptance fact whose nested stage-quality subject is detached", () => {
+  it("ignores detached legacy acceptance evidence during code-review close", () => {
     const state = fixture({ nestedAcceptanceVariant: "wrong-task" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -333,10 +380,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/nested stage-quality subject/);
+    })).not.toThrow();
   });
 
-  it("rejects a passed acceptance fact whose stage-quality wrapper has no underlying evidence", () => {
+  it("ignores legacy acceptance wrappers without underlying evidence", () => {
     const state = fixture({ nestedAcceptanceVariant: "missing-subject-evidence" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -346,11 +393,11 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/underlying evidence|stage-quality subject fact|stage-quality/);
+    })).not.toThrow();
   });
 
-  it.each(["independent_review", "finding_dispositions", "acceptance_criteria", "exceptions", "human_confirmation"])(
-    "rejects close when the formal verify fact is missing: %s",
+  it.each(["code_review"])(
+    "rejects close when the formal code-review fact is missing: %s",
     (subject) => {
       const state = fixture({ omitSubjects: [subject] });
       expect(() => prepareDeliveryClosePlan({
@@ -365,15 +412,8 @@ describe("vNext formal delivery close", () => {
     },
   );
 
-  it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent", "failed-receipt"])("rejects an unauthenticated test snapshot: %s", (testVariant) => {
+  it.each(["missing", "tree-mismatch", "commit-mismatch", "extra-parent", "failed-receipt"])("ignores verify test snapshot variants: %s", (testVariant) => {
     const state = fixture({ testVariant });
-    const expectedError = {
-      missing: /stage-quality evidence is unavailable: missing quality\/tests\/verify-code\.json/,
-      "tree-mismatch": /stage-quality receipt provenance is invalid: quality\/tests\/verify-code\.json/,
-      "commit-mismatch": /verify-code test receipt snapshot_commit is unavailable/,
-      "extra-parent": /verify-code test receipt snapshot_commit is unavailable/,
-      "failed-receipt": /canonical test receipt did not pass/,
-    }[testVariant];
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
       kernel: state.kernel,
@@ -382,10 +422,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(expectedError);
+    })).not.toThrow();
   });
 
-  it("does not accept a focused build-code receipt as verify-code full tests", () => {
+  it("does not require a verify-code full-test receipt", () => {
     const state = fixture({ testVariant: "focused-build-receipt" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -395,10 +435,10 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/unsupported stage-quality receipt producer|verify-code test receipt snapshot_commit is unavailable/);
+    })).not.toThrow();
   });
 
-  it("does not let a mini-task focused receipt replace the parent verify-code full suite", () => {
+  it("does not let a mini-task receipt become a code-review prerequisite", () => {
     const state = fixture({ testVariant: "focused-mini-receipt" });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -408,6 +448,6 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).toThrow(/unsupported stage-quality receipt producer|verify-code test receipt snapshot_commit is unavailable/);
+    })).not.toThrow();
   });
 });

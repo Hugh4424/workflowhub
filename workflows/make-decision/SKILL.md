@@ -93,6 +93,18 @@ decision and questions to the user.
    batch after the real reply. Use the real
    `ask -> wait/pause -> user reply -> resume -> re-rank` seam; never invent a
    reply. Do not run Clarify here; `build-spec` owns the only Clarify flow.
+
+   Host execution binds that seam separately for every Talk round:
+   - Talk round 1 uses `ask -> wait -> user reply -> resume -> re-rank` for the
+     initial independent direction questions.
+   - Talk round 2 uses the same real lifecycle for the remaining independent
+     scope, non-goal, and risk questions after research.
+   - Talk round 3 uses the same real lifecycle for only the remaining
+     direction-advice questions.
+   Each round must publish its own `ask`, pause at `wait`, accept only the
+   matching real user `reply`, and then `resume` and re-rank before the next
+   owning step. A previous round's decision-log text, aggregate, or default
+   choice is never a reply for another round.
 4. Only after Talk round 2 has resumed and converged, run the direction advice
    review (step 6). It is independent advice, not a `pass` gate. Preserve the
    actual provider, transport status, findings, and provenance; unavailable,

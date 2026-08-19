@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -7,6 +8,7 @@ import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { recordMissingRouteUnavailable, runReview, verifyFinal } from "./review-runner.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace } from "../../../runtime/stage/stage-context.mjs";
+import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 
@@ -63,6 +65,92 @@ function providerClient(stage = null, reviewTrack = null, reviewKind = null) {
 
 const RETIRED_RECOVERY_FIELDS = ["previous_result_ref", "previousResultRef", "review_round", "reviewRound", "review_delta", "reviewDelta", "request_id", "requestId", "prior_attempt_refs", "priorAttemptRefs", "dispatch_sequence", "dispatchSequence"];
 /** One WorkflowHub call. Provider recovery and lifecycle belong to 3rd-review. */
+
+const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/;
+
+function publishReviewFactOrThrow(args) {
+  try {
+    return publishStageReviewFact(args);
+  } catch (error) {
+    // Preserve the immutable review refs when the stage-fact write fails. The
+    // recovery envelope must not turn a real review into an untraceable local
+    // unavailable result.
+    error.reviewResult = args.result;
+    throw error;
+  }
+}
+
+export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
+  // The broker result is the review fact.  Bind it to the vNext stage quality
+  // predicate at the same write boundary so a direct wh-review invocation
+  // cannot leave an immutable result that stage-runtime status/close cannot
+  // discover.  Mini-task reviews are deliberately excluded: they have their
+  // own acceptance-evidence contract and must not masquerade as verify-code.
+  if (stage !== "verify-code" || reviewKind !== null) return null;
+  if (!new Set(["available", "unavailable"]).has(result?.status)) {
+    throw new Error("verify-code review status must be available or unavailable");
+  }
+  const currentSnapshot = typeof trusted.kernel.currentVNextSnapshot === "function"
+    ? trusted.kernel.currentVNextSnapshot()
+    : null;
+  if (typeof result.snapshotTree !== "string" || !currentSnapshot?.tree || result.snapshotTree !== currentSnapshot.tree) {
+    throw new Error("verify-code review result is stale before quality-fact publication");
+  }
+  if (result.subjectKind !== "worktree" || result.phaseId !== null || result.reviewScope !== null) {
+    throw new Error("verify-code quality fact requires a worktree-scoped final review");
+  }
+  const evidenceRef = result.status === "available" ? result.resultRef : result.attemptRef;
+  const expectedRefPattern = result.status === "available" ? REVIEW_RESULT_REF : REVIEW_ATTEMPT_REF;
+  if (typeof evidenceRef !== "string" || !expectedRefPattern.test(evidenceRef)) {
+    throw new Error("verify-code review did not return a canonical quality review reference");
+  }
+  let evidence;
+  let evidenceRaw;
+  try {
+    evidenceRaw = trusted.task.readRecord(evidenceRef);
+    evidence = JSON.parse(evidenceRaw);
+  } catch {
+    throw new Error("verify-code review evidence is missing or invalid JSON");
+  }
+  validateSchema(result.status === "available" ? "result" : "attempt", evidence);
+  if (evidence.task_id !== trusted.taskId || evidence.stage !== stage || evidence.subject_kind !== "worktree"
+    || evidence.phase_id !== null || evidence.review_scope !== null || evidence.snapshot_tree !== result.snapshotTree) {
+    throw new Error("verify-code review evidence is not bound to the current task, stage, or snapshot");
+  }
+  if (result.status === "available") {
+    if (evidence.attempt_ref !== result.attemptRef || evidence.review_kind !== reviewKind || evidence.terminal_status === "unavailable") {
+      throw new Error("verify-code review result is not bound to the current review request");
+    }
+    if (typeof evidence.attempt_ref !== "string" || !REVIEW_ATTEMPT_REF.test(evidence.attempt_ref)) {
+      throw new Error("verify-code review result does not reference a canonical attempt");
+    }
+    let attempt;
+    try { attempt = JSON.parse(trusted.task.readRecord(evidence.attempt_ref)); }
+    catch { throw new Error("verify-code review attempt is missing or invalid JSON"); }
+    validateSchema("attempt", attempt);
+    const attemptRefMatch = REVIEW_ATTEMPT_REF.exec(evidence.attempt_ref);
+    if (attempt.task_id !== trusted.taskId || attempt.stage !== stage || attempt.subject_kind !== "worktree"
+      || attempt.phase_id !== null || attempt.review_scope !== null || attempt.review_kind !== reviewKind
+      || attempt.attempt_id !== attemptRefMatch?.[1]
+      || attempt.snapshot_tree !== result.snapshotTree || attempt.terminal_status !== "semantic" || attempt.error !== null) {
+      throw new Error("verify-code review result is not bound to a semantic terminal attempt");
+    }
+  } else if (evidence.terminal_status !== "unavailable") {
+    throw new Error("verify-code unavailable fact requires an unavailable terminal attempt");
+  } else if (evidence.review_kind !== reviewKind || evidence.attempt_id !== REVIEW_ATTEMPT_REF.exec(evidenceRef)?.[1]) {
+    throw new Error("verify-code unavailable attempt is not bound to the current review request");
+  }
+  const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
+  const fact = trusted.kernel.publishVNextQualityFact(stage, {
+    kind: "review",
+    status: result.status === "available" ? "recorded" : "unavailable",
+    subject: "code_review",
+    evidence: [{ ref: evidenceRef, sha256: evidenceHash, evidence_type: "review_result" }],
+  });
+  return fact.ref;
+}
+
 export async function runReviewRecovery(input, { runRound = runReviewRound, sameSourceFallback = null } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review recovery input is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
@@ -73,11 +161,15 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, same
     return await runRound(request);
   } catch (error) {
     const diagnostic = safeRecoveryError(error);
+    const review = error?.reviewResult;
     return {
       status: "unavailable", recovery: "run_round_exception", error_code: diagnostic.code,
       error: diagnostic,
       ...(request.snapshot_tree === undefined ? {} : { snapshot_tree: request.snapshot_tree }),
       ...(request.material_id === undefined ? {} : { material_id: request.material_id }),
+      ...(review?.attemptRef ? { attempt_ref: review.attemptRef } : {}),
+      ...(review?.resultRef ? { result_ref: review.resultRef } : {}),
+      ...(review?.reportRef ? { report_ref: review.reportRef } : {}),
     };
   }
 }
@@ -132,6 +224,7 @@ export async function runReviewRound(input) {
       reviewTrack,
       reviewKind,
     });
+    const qualityFactRef = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
     return {
       status: result.status,
       attempt_ref: result.attemptRef,
@@ -145,6 +238,7 @@ export async function runReviewRound(input) {
       review_scope: result.reviewScope,
       base_tree: result.baseTree,
       candidate_tree: result.candidateTree,
+      ...(qualityFactRef ? { quality_fact_ref: qualityFactRef } : {}),
       error_code: "REVIEW_ROUTE_UNAVAILABLE",
       ...(result.errorCode ? { error_code: result.errorCode } : {}),
       ...(reviewKind ? { review_kind: reviewKind } : {}),
@@ -176,6 +270,7 @@ export async function runReviewRound(input) {
     // pre-filter; policy still records the eligible heterologous quorum.
     providers: selection.providers, reviewPolicy, providerClient: client,
   });
+  const qualityFactRef = publishReviewFactOrThrow({ trusted, stage, reviewKind, result });
   let errorCode = null;
   if (result.status === "unavailable" && result.attemptRef) {
     const attempt = JSON.parse(trusted.task.readRecord(result.attemptRef));
@@ -188,6 +283,7 @@ export async function runReviewRound(input) {
     report_ref: result.reportRef,
     snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
     subject_kind: result.subjectKind, phase_id: result.phaseId, review_scope: result.reviewScope, base_tree: result.baseTree, candidate_tree: result.candidateTree,
+    ...(qualityFactRef ? { quality_fact_ref: qualityFactRef } : {}),
     ...(errorCode ? { error_code: errorCode } : {}),
     ...(reviewKind ? { review_kind: reviewKind } : {}),
     ...(thirdReview.routeWarnings?.length ? { config_warnings: thirdReview.routeWarnings } : {}),

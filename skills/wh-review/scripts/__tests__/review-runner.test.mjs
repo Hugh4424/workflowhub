@@ -67,7 +67,7 @@ function publicV3Provider(provider, {
       attempt_id: `${provider}-attempt`, completed_at_ms: 2, duration_ms: 1,
       error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status,
     }],
-    continuable: false, deadline_ms: 360000, error,
+    continuable: false, deadline_ms: null, error,
     identity: identityFor(provider),
     material: { contract_hash: contractHash, contract_id: contractId, material_id: material, semantic_hash: semanticHash },
     output: status === "completed" ? output : null,
@@ -131,6 +131,34 @@ function anchoredMaterialBuilder() {
   const content = "export const value = 1;\n";
   writeFileSync(join(bundleRoot, "a.js"), content);
   return () => ({ bundleRoot, materialId, manifest: [{ path: "a.js", bytes: Buffer.byteLength(content), sha256: createHash("sha256").update(content).digest("hex") }] });
+}
+
+function logicalDiffAnchoredMaterialBuilder() {
+  const bundleRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-review-diff-bundle-")));
+  temporary.push(bundleRoot);
+  const shardPath = join(bundleRoot, "diff-shards", "S-0001.diff");
+  mkdirSync(join(bundleRoot, "diff-shards"));
+  const shard = "@@ -1,3 +1,3 @@\n+export const value = 2;\n";
+  writeFileSync(shardPath, shard);
+  const diffIndex = JSON.stringify({
+    schema_version: "wh-review-diff-index.v1",
+    delivery_mode: "selected_context",
+    changes: [{
+      change_id: "C-0001",
+      path: "runtime/stage/stage-handlers.mjs",
+      new_line_ranges: [{ start_line: 1, end_line: 3 }],
+      shards: [{ shard_id: "S-0001", delivery: "included" }],
+    }],
+  });
+  writeFileSync(join(bundleRoot, "diff-index.json"), diffIndex);
+  return () => ({
+    bundleRoot,
+    materialId,
+    manifest: [
+      { path: "diff-index.json", bytes: Buffer.byteLength(diffIndex), sha256: createHash("sha256").update(diffIndex).digest("hex") },
+      { path: "diff-shards/S-0001.diff", bytes: Buffer.byteLength(shard), sha256: createHash("sha256").update(shard).digest("hex") },
+    ],
+  });
 }
 
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
@@ -306,13 +334,13 @@ describe("review output and facts", () => {
     expect(calls[0].prompt).not.toMatch(/complete frozen bundle/i);
   });
 
-  it("executes direction as blind reconstruction then reveal, while publishing one fact", async () => {
+  it("executes direction as one broker-owned blind/reveal/challenge flow, while publishing one fact", async () => {
     const calls = [];
     const { attachmentRoot, task } = fixture("review-direction-reveal-");
     const providerClient = {
       runGroup: async (request) => {
         calls.push(request);
-        return { runtimeId: `direction-runtime-${calls.length}`, providers: [publicProvider("kimi", { output: pass })] };
+        return { runtimeId: `direction-runtime-${calls.length}`, providers: [publicProvider("kimi", { output: pass, identity: identityFor("kimi") })] };
       },
     };
     const result = await runReviewFixture({
@@ -320,16 +348,23 @@ describe("review output and facts", () => {
       materials: { raw_requirement: "需要可靠交付。", objective_facts: ["当前审查重复"] },
       directionSelection: { current_selection: "方案 A", selection_rationale: "减少重复调用" },
       hostProvider: "codex", providers: ["kimi"], providerClient,
+      reviewPolicy: {
+        source: "wh_review.v2", mode: "single_round", minimum_heterologous: 1,
+        requested_profiles: ["kimi"], eligible_profiles: ["kimi"], same_source_exclusions: [],
+        effective_profiles: [{ provider: "kimi", adapter: "kimi", model: null, effort: null, thinking: null }],
+      },
       captureSource: () => source,
     });
     expect(result.status).toBe("available");
-    expect(calls).toHaveLength(2);
-    expect(calls[0].prompt).toMatch(/reconstruct/i);
-    expect(calls[1].prompt).toMatch(/reveal|current choice|blind reconstruction/i);
-    expect(existsSync(join(calls[0].materials.bundleRoot, "requirements/current_selection.md"))).toBe(false);
-    expect(readFileSync(join(calls[1].materials.bundleRoot, "requirements/current_selection.md"), "utf8")).toMatch(/方案 A/);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toMatch(/direction-review\.v1/i);
+    expect(calls[0].reviewMode).toBe("single_round");
+    expect(calls[0].reviewFlow).toMatchObject({ version: "direction-review.v1", public_request_count: 1 });
+    expect(calls[0].reviewFlow.steps.map((step) => step.id)).toEqual(["reconstruct", "reveal", "challenge"]);
+    expect(readFileSync(join(calls[0].materials.bundleRoot, "requirements/current_selection.md"), "utf8")).toMatch(/方案 A/);
+    expect(readFileSync(join(calls[0].materials.bundleRoot, "requirements/direction_flow.json"), "utf8")).toMatch(/direction-review\.v1/);
     const attempt = JSON.parse(task.readRecord(result.attemptRef));
-    expect(attempt.provider_attempts).toHaveLength(2);
+    expect(attempt.provider_attempts).toHaveLength(1);
     expect(JSON.parse(task.readRecord(result.resultRef))).toMatchObject({ findings: [], review_track: "direction" });
   });
 });
@@ -337,16 +372,28 @@ describe("review output and facts", () => {
 describe("broker boundary", () => {
   it("uses one public broker run for a provider group and preserves runtime facts", async () => {
     const calls = [];
+    const reviewFlow = {
+      version: "direction-review.v1", public_request_count: 1,
+      steps: [
+        { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+        { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+        { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+      ],
+      output: { one_provider_result: true, one_logical_fact: true },
+    };
     const client = new ReviewProviderClient({
       invoke: async (request) => {
         calls.push(request);
         return { exitCode: 0, stdout: JSON.stringify(publicV3GroupForRequest(request, "kimi/k3")), stderr: "" };
       },
     });
-    const result = await client.runGroup({ hostProvider: "codex", providers: ["kimi/k3"], materials: { bundleRoot: "/tmp/bundle", attachmentRoot: "/tmp", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review" });
+    const result = await client.runGroup({ hostProvider: "codex", providers: ["kimi/k3"], materials: { bundleRoot: "/tmp/bundle", attachmentRoot: "/tmp", sourcePrefix: ".wh-review-packets/bundle", materialId, manifest: [] }, prompt: "review", reviewMode: "single_round", reviewFlow });
     expect(calls).toHaveLength(1);
     expect(calls[0].command).toBe("run");
     expect(calls[0].request).not.toHaveProperty("continuation");
+    expect(calls[0].request.deadline_ms).toBeNull();
+    expect(calls[0].request.review_flow).toEqual(reviewFlow);
+    expect(calls[0].request.review_mode).toBe("single_round");
     expect(result.runtimeId).toBe("run");
     expect(result.outcome).toBe("completed");
     expect(result.round).toBe(1);
@@ -370,7 +417,7 @@ describe("broker boundary", () => {
     await expect(v1.runGroup({ hostProvider: "codex", providers: ["kimi"], materials, prompt: "review" })).rejects.toThrow(/PROTOCOL_INCOMPATIBLE/);
   });
 
-  it("delivers review bundles as file-only attachments without embedding their bytes", async () => {
+  it("negotiates review bundle delivery without embedding bytes in the shared request", async () => {
     const calls = [];
     const client = new ReviewProviderClient({ invoke: async (request) => {
       calls.push(request);
@@ -382,7 +429,7 @@ describe("broker boundary", () => {
       prompt: "review bundle",
     });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ command: "run", attachmentDelivery: "file_only", request: { prompt: "review bundle" } });
+    expect(calls[0]).toMatchObject({ command: "run", attachmentDelivery: "negotiated", request: { prompt: "review bundle" } });
     expect(calls[0].attachments.entries).toEqual([{ source: ".wh-review-packets/bundle/changes.diff", destination: "changes.diff", size: 800000, sha256: "f".repeat(64), embed: false }]);
   });
 
@@ -718,6 +765,38 @@ describe("broker boundary", () => {
     expect(JSON.parse(task.readRecord(result.resultRef)).adjudication.clusters[0]).toMatchObject({ disposition: "actionable", evidence_status: "direct" });
   });
 
+  it("accepts a logical changed-file anchor through the selected diff index", async () => {
+    const { attachmentRoot, task } = fixture("review-logical-diff-anchor-");
+    const finding = JSON.stringify({ findings: [{
+      severity: "major", path: "runtime/stage/stage-handlers.mjs", line: 3,
+      issue: "unsafe branch", root_cause: "missing guard", recommendation: "fix it",
+      evidence_kind: "direct", evidence: "stage handler line 3 accepts the unsafe branch",
+    }] });
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: groupClient([publicProvider("kimi", { output: finding })]), captureSource: () => source,
+      buildMaterials: logicalDiffAnchoredMaterialBuilder(),
+    });
+    expect(result.status).toBe("available");
+    expect(JSON.parse(task.readRecord(result.resultRef)).adjudication.clusters[0]).toMatchObject({ disposition: "actionable", evidence_status: "direct" });
+  });
+
+  it("rejects a logical changed-file anchor outside the selected diff hunk", async () => {
+    const { attachmentRoot, task } = fixture("review-logical-diff-anchor-outside-hunk-");
+    const finding = JSON.stringify({ findings: [{
+      severity: "major", path: "runtime/stage/stage-handlers.mjs", line: 99,
+      issue: "unsafe branch", root_cause: "missing guard", recommendation: "fix it",
+      evidence_kind: "direct", evidence: "stage handler line 99 accepts the unsafe branch",
+    }] });
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: groupClient([publicProvider("kimi", { output: finding })]), captureSource: () => source,
+      buildMaterials: logicalDiffAnchoredMaterialBuilder(),
+    });
+    expect(result.status).toBe("available");
+    expect(JSON.parse(task.readRecord(result.resultRef)).adjudication.clusters[0]).toMatchObject({ disposition: "invalid_evidence", evidence_status: "invalid_anchor" });
+  });
+
   it("sends mixed attachment-delivery profiles in one complete broker group", async () => {
     const calls = [];
     const { attachmentRoot, task } = fixture("review-mixed-delivery-group-");
@@ -863,7 +942,22 @@ describe("material and workspace boundaries", () => {
     const diffPath = join(attachmentRoot, "phase.diff");
     writeFileSync(diffPath, diff);
     const diffSha256 = createHash("sha256").update(diff).digest("hex");
-    const receipt = `${JSON.stringify({ command: "npx vitest run focused", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`;
+    const command = "npx vitest run focused";
+    const outputRef = "quality/tests/output/phase.output";
+    const output = "phase focused tests passed\n";
+    task.createRecordAtomic(outputRef, output);
+    const receipt = `${JSON.stringify({
+      schema_version: "workflowhub-receipt.v1",
+      task_id: "task",
+      stage: "build-code",
+      producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+      command,
+      command_hash: createHash("sha256").update(command).digest("hex"),
+      exit_code: 0,
+      snapshot_tree: source.snapshotTree,
+      output_ref: outputRef,
+      output_hash: createHash("sha256").update(output).digest("hex"),
+    })}\n`;
     const receiptRef = "quality/tests/phase.json";
     task.createRecordAtomic(receiptRef, receipt);
     const bundle = buildReviewMaterials({

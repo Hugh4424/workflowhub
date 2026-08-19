@@ -1,6 +1,6 @@
 ---
 name: workflowhub-host-protocol
-description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调度、任务事实和完成结论分开。
+description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任务事实和完成结论分开。
 ---
 
 # WorkflowHub 宿主协议
@@ -29,7 +29,7 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 - `build-spec`：读取 decision，维护 `spec.md`；只处理规格歧义，不重做产品方向 Talk/Grill。
 - `build-plan`：读取 decision/spec，研究代码库，维护 `plan.md`、`tasks.md`；不 Talk、不 Grill、不执行 RED/GREEN。
 - `build-code`：四材料可读即可在任务 worktree 实现、测试和修复。
-- `verify-code`：四材料可读即可做需求回放、逐 AC、风险测试、异源 review 和最终判断。
+- `verify-code`：四材料可读即可做当前实现的代码、consumer、生命周期、安全和失败边界 review；不做逐 AC 或 evidence tree 审计。
 
 任何阶段都可以继续修复自己的材料或代码。缺测试、逐 AC、finding 处置或交接时，只能把完成状态记为 `incomplete` 或真实 `unavailable`，不能假绿，也不能阻止同一 task 修复。`build-code` 之外的异源 review 只是建议事实：必须照实记录，不把 unavailable 追成 pass，也不把它当阶段完成门槛。
 
@@ -47,13 +47,13 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 这条链只负责把真实事实写入当前 task；它不是开始工作、继续工作或宣称完成的门禁：
 
 1. 用 `tools/cli/stage-runtime.mjs doctor`、`status` 查看当前能力和四材料状态；缺失的辅助能力只记录事实，不暂停同一 task。
-2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 严格发起两次有序 public 请求但只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
-3. `build-code` 和 `verify-code` 通过各自 workflow 的 capture 脚本生成测试/验证事实，再由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录；宿主不手写替代 receipt。
+2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 的 Talk、reveal 和 challenge 在同一个 broker 请求内按顺序完成，不再发起第二个 public 请求，只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
+3. `build-code` 通过 workflow 的 capture 脚本生成测试事实；`verify-code` 只写当前代码 review fact；需要落盘时统一由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录，宿主不手写替代 receipt。
 4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
 
 ### Stage Agent outcome producer
 
-每个 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。
+每个外部 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。没有外部 Stage Agent 时，标准 WorkflowHub 流程继续执行，并把 outcome 记为 `unavailable` 诊断，不把它变成阶段门禁。
 
 - 记录只能通过现有 `TaskKernel.publishCanonicalRecord` 写入
   `quality/evidence/stage-outcomes/<stage>/<sha256>.json`，不得新增 ledger、receipt 系统或 writer。
@@ -61,15 +61,17 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 - 每个 step/skill 的 `evidence_refs` 必须指向结构化的
   `workflowhub-stage-outcome-evidence.v1` 记录，并绑定同一 task、stage、snapshot、material revision、具体 step/skill、状态和实际结果摘要；不能用一份通用 proof 冒充所有产物。
 - step 的状态只能是 `completed`、`skipped`、`incomplete`、`unavailable`；跳过/失败/未知必须保留原因，耗时/token 拿不到就写 `unavailable`，不补零。
-- 生成完成后把该内容寻址 ref 放进 `tools/cli/stage-runtime.mjs run` 的
-  `receipts.stage_outcomes`。缺失或不匹配时正式 run 明确失败，并由 monitoring 保留 missing/unknown 事实；不能把 caller 自报的 facts 当执行证明。
+- 如果外部宿主真实生成了 outcome，把内容寻址 ref 放进 `tools/cli/stage-runtime.mjs run` 的
+  `receipts.stage_outcomes`，runtime 会对它做完整认证；已提供但缺失、错绑或不匹配时正式
+  run 明确失败。没有外部宿主 outcome 时，正式 run 不因缺少宿主而拒绝当前工作，monitoring
+  必须保留 `unavailable` 执行事实；不能把 caller 自报的 facts 当执行证明。
 - 阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate、工作就绪、Git 或 close 状态。
 
-### Multica 宿主的实际接线
+### 外部宿主接线（可选）
 
-这不是“测试里调用一下 adapter”就算接通。生产宿主必须在同一个真实任务上做到下面几件事：
+这不是“测试里调用一下 adapter”就算接通。只有确实采用外部宿主时，生产宿主才需要在同一个真实任务上做到下面几件事。WorkflowHub 标准流程不要求 Multica，也不从当前任务启动或推断任何外部宿主：
 
-1. 用一份显式绑定文件按 Multica Issue ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用本次 claim 的 Multica `task.ID` 替代；`attempt_id` 可留空并由宿主生成当前 claim 的稳定标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
+1. 用一份显式绑定文件按宿主自己的任务 ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用宿主 claim ID 替代；`attempt_id` 可留空并由宿主生成当前 claim 的稳定标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
 2. 启动 Stage Agent 前，把当前绑定、宿主专用的 outcome 文件路径和正式 run 输入文件路径注入它：`WORKFLOWHUB_STAGE_OUTCOME_PATH` 写 Stage Agent 的 `execution`，`WORKFLOWHUB_STAGE_RUN_INPUT_PATH` 写正式 run 所需的真实 receipts、AC 覆盖和 finding 处置。Agent 执行完后，必须自己写出这两份结构化结果，不能由宿主根据最终评论反推步骤、技能或质量事实。
 3. 宿主在启动 Agent 前记录本次 Agent 执行开始时间，并在正式 run 时通过 `WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT` 传入 Unix 毫秒或 RFC3339 时间。这样正式入口能读取 Agent 已经产生、但早于 delivery command 的真实 transcript/token/tool 事件；没有这个边界时不得用历史会话回填。
 4. Agent 结束后，宿主用 WorkflowHub 私有桥接入口把这个真实结果交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。缺文件、身份不符、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。

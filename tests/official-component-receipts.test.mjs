@@ -118,6 +118,21 @@ describe("official component receipt authority", () => {
     })).toThrow(/provenance is invalid/);
   });
 
+  it("accepts implementation receipts for paths with underscore segments", () => {
+    const { task, worktree, workspace } = fixture();
+    mkdirSync(join(worktree, "__tests__"), { recursive: true });
+    writeFileSync(join(worktree, "__tests__", "receipt.test.mjs"), "test\n");
+    const implementation = writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation", payload: {},
+    });
+    expect(implementation.value.changed).toContain("__tests__/receipt.test.mjs");
+    expect(() => validateCanonicalImplementationReceipt(implementation.value, {
+      taskId: task.identity.taskId,
+      snapshotTree: implementation.value.snapshot_tree,
+      read: (ref) => task.readRecord(ref),
+    })).not.toThrow();
+  });
+
   it("reuses a same-snapshot build-code full test receipt during verify capture", () => {
     const { task, worktree, workspace } = fixture();
     writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "echo ok" } }));
@@ -315,6 +330,24 @@ describe("official component receipt authority", () => {
       snapshot_tree: "a".repeat(40), command, command_hash: createHash("sha256").update(command).digest("hex"),
       exit_code: 0, output_ref: "quality/evidence/not-a-test-output.txt", output_hash: "b".repeat(64),
     }, { taskId: "receipt-task", stage: "build-code", snapshotTree: "a".repeat(40) })).toThrow(/output_ref|namespace|provenance/i);
+  });
+
+  it("binds canonical test receipt provenance to the expected producer component", () => {
+    const command = "true";
+    const receipt = {
+      schema_version: "workflowhub-receipt.v1", task_id: "receipt-task", stage: "build-code",
+      producer: { stage: "build-code", component: "build-code-test-capture" },
+      snapshot_tree: "a".repeat(40), command, command_hash: createHash("sha256").update(command).digest("hex"),
+      exit_code: 0, output_ref: "quality/tests/output/receipt.output", output_hash: "b".repeat(64),
+    };
+    expect(() => validateCanonicalTestReceipt(receipt, {
+      taskId: "receipt-task", stage: "build-code", snapshotTree: receipt.snapshot_tree,
+      expectedProducerComponent: "build-code-test-capture",
+    })).not.toThrow();
+    expect(() => validateCanonicalTestReceipt(receipt, {
+      taskId: "receipt-task", stage: "build-code", snapshotTree: receipt.snapshot_tree,
+      expectedProducerComponent: "verify-code-test-capture",
+    })).toThrow(/provenance|producer component/i);
   });
 
   it("rejects duplicate acceptance criterion identities", () => {

@@ -64,11 +64,9 @@ function reviewScopeFor(stage, phaseId) {
 }
 
 /**
- * Direction review is intentionally two small, ordered semantic requests:
- * the first reconstructs the problem without seeing the current choice; the
- * second reveals the choice and consumes the first answer. The caller keeps
- * the returned pair in memory and writes one logical review fact, so this is
- * not a persisted review state machine or a second completion record.
+ * Direction review is one broker request containing an internal, ordered flow.
+ * The broker must enforce the reveal boundary; WorkflowHub must not emulate it
+ * with two public calls because that violates the one-round review contract.
  */
 function directionInputError(message) {
   const error = new Error(`MATERIAL_INCOMPLETE: ${message}`);
@@ -88,32 +86,28 @@ function normalizeDirectionSelection(value) {
   return Object.freeze(selection);
 }
 
-function directionSelectionMaterials(selection, reconstruction) {
-  return {
-    ...selection,
-    independent_reconstruction: structuredClone(reconstruction),
-  };
-}
-
 export function planDirectionReviewRequests({ raw_requirement, objective_facts, current_selection, reconstruction_result = null } = {}) {
   if (typeof raw_requirement !== "string" || raw_requirement.trim() === "") throw new TypeError("raw_requirement is required");
   const selection = normalizeDirectionSelection(current_selection);
   const facts = objective_facts === undefined ? null : structuredClone(objective_facts);
-  const first = Object.freeze({
-    request_id: "direction-reconstruct",
-    reveal_selection: false,
-    depends_on: [],
-    input: Object.freeze({ raw_requirement, objective_facts: facts }),
-    prompt: "先独立重建问题、约束、失败后果和可逆边界；不要猜测或评价当前选择。",
+  const flow = Object.freeze({
+    version: "direction-review.v1",
+    public_request_count: 1,
+    steps: Object.freeze([
+      Object.freeze({ id: "reconstruct", visible: Object.freeze(["raw_requirement", "objective_facts"]), hidden_until: "reveal" }),
+      Object.freeze({ id: "reveal", after: Object.freeze(["reconstruct"]), visible: Object.freeze(["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"]) }),
+      Object.freeze({ id: "challenge", after: Object.freeze(["reveal"]), visible: Object.freeze(["revealed_choice", "independent_reconstruction"]), output: "findings" }),
+    ]),
+    output: Object.freeze({ one_provider_result: true, one_logical_fact: true }),
   });
-  const second = Object.freeze({
-    request_id: "direction-challenge",
-    reveal_selection: true,
-    depends_on: [first.request_id],
-    input: Object.freeze({ ...selection, raw_requirement, objective_facts: facts, independent_reconstruction: reconstruction_result ?? "inject-result-from-direction-reconstruct" }),
-    prompt: "现在揭示当前选择，针对它做反方论证，并寻找更小、更可逆的替代；只报告会伤害交付的真实问题。",
+  const request = Object.freeze({
+    request_id: "direction-review",
+    public_request_count: 1,
+    flow,
+    input: Object.freeze({ ...selection, raw_requirement, objective_facts: facts, ...(reconstruction_result === null ? {} : { independent_reconstruction: structuredClone(reconstruction_result) }) }),
+    prompt: "在同一次 public request 内严格执行 reconstruct → reveal → challenge：reconstruct 阶段不得读取当前选择；reveal 后才呈现当前选择和独立重建；challenge 只报告真实交付风险。不要拆成第二次 public request。",
   });
-  return Object.freeze({ requests: Object.freeze([first, second]), logical_fact_count: 1 });
+  return Object.freeze({ requests: Object.freeze([request]), request, flow, logical_fact_count: 1 });
 }
 
 function subjectRecord(source, stage, phaseId, integrationSubject = null) {
@@ -478,11 +472,20 @@ function reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, re
 function evidenceAnchorsFor(reviewed, bundle) {
   if (!Array.isArray(bundle.manifest) || bundle.manifest.length === 0) return reviewed;
   const manifestPaths = new Set(bundle.manifest.map(({ path }) => path));
+  let diffIndex = null;
+  if (manifestPaths.has("diff-index.json")) {
+    try { diffIndex = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8")); }
+    catch { diffIndex = null; }
+  }
   return reviewed.map((item) => {
     if (!item.review) return item;
     const evidenceAnchors = item.review.findings.map((finding) => {
       if (!["direct", "machine"].includes(finding.evidence_kind)) return true;
-      if (!manifestPaths.has(finding.path)) return false;
+      const logicalDiffPath = Array.isArray(diffIndex?.changes)
+        ? diffIndex.changes.find((change) => change.path === finding.path)
+        : null;
+      if (!manifestPaths.has(finding.path) && !logicalDiffPath) return false;
+      if (logicalDiffPath && (!Array.isArray(logicalDiffPath.shards) || !logicalDiffPath.shards.some((shard) => shard.delivery === "included"))) return false;
       // The provider contract allows a packet-relative path anchor without a
       // guessed line when the excerpt is the smallest reliable unit. Keep
       // rejecting a bare "path exists" claim, but do not throw away a real
@@ -493,8 +496,16 @@ function evidenceAnchorsFor(reviewed, bundle) {
         return evidence !== path && evidence !== `${path} exists`;
       }
       if (!Number.isSafeInteger(finding.line) || finding.line < 1) return false;
-      try { return readFileSync(join(bundle.bundleRoot, ...finding.path.split("/")), "utf8").split(/\r?\n/).length >= finding.line; }
-      catch { return false; }
+      if (manifestPaths.has(finding.path)) {
+        try { return readFileSync(join(bundle.bundleRoot, ...finding.path.split("/")), "utf8").split(/\r?\n/).length >= finding.line; }
+        catch { return false; }
+      }
+      // In selected-context packets the provider names the logical changed
+      // file while the manifest carries diff shards. The diff-index is the
+      // authenticated bridge; require the line to fall inside a delivered
+      // unified-diff hunk instead of accepting any positive integer.
+      return Array.isArray(logicalDiffPath?.new_line_ranges)
+        && logicalDiffPath.new_line_ranges.some(({ start_line: start, end_line: end }) => finding.line >= start && finding.line <= end);
     });
     return { ...item, evidenceAnchors };
   });
@@ -620,14 +631,14 @@ function reviewGroupOutcome(provider, result, runtimeId) {
   }
 }
 
-async function reviewGroup({ providerClient, providers, hostProvider, materials, prompt = providerPrompt }) {
+async function reviewGroup({ providerClient, providers, hostProvider, materials, prompt = providerPrompt, reviewFlow = null, reviewMode = null }) {
   if (typeof providerClient?.runGroup !== "function") throw new TypeError("providerClient.runGroup is required; review dispatch is one broker group call");
   let group;
   try {
     // Attachment delivery is a broker transport decision. The complete
     // configured profile group must reach one public run so the broker can
     // apply quorum, source filtering, and profile identity atomically.
-    group = await providerClient.runGroup({ hostProvider, providers, materials, prompt });
+    group = await providerClient.runGroup({ hostProvider, providers, materials, prompt, ...(reviewMode ? { reviewMode } : {}), ...(reviewFlow ? { reviewFlow } : {}) });
   } catch (error) {
     // One broker invocation failed before it produced provider-level facts.
     // Keep the configured provider list for coverage, but do not turn one
@@ -659,16 +670,6 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   });
   const reviewedByProvider = new Map(reviewedGroups.map((item) => [item.provider, item]));
   return providers.map((provider) => reviewedByProvider.get(provider));
-}
-
-function mergeDirectionReviews(reconstructed, challenged) {
-  if (challenged.some((item) => item.group_failure)) return challenged;
-  const byProvider = new Map(challenged.map((item) => [item.provider, item]));
-  return reconstructed.map((first) => {
-    const second = byProvider.get(first.provider);
-    if (!second) return first;
-    return { ...second, calls: [...first.calls, ...second.calls] };
-  });
 }
 
 async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
@@ -725,18 +726,22 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     };
     if (isDirectionReview) {
       const selection = normalizeDirectionSelection(directionSelection);
+      const sequence = planDirectionReviewRequests({
+        raw_requirement: baseMaterials.raw_requirement,
+        objective_facts: baseMaterials.objective_facts,
+        current_selection: selection,
+      });
       fixedMaterials = {
         ...baseMaterials,
-        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind, "reconstruct"),
+        ...selection,
+        direction_flow: sequence.flow,
+        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind, "combined"),
       };
       bundle = buildMaterials({
         reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, reviewKind,
-        reviewScope: subject.review_scope, uiScope, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2", directionMode: "reconstruct",
+        reviewScope: subject.review_scope, uiScope, materials: fixedMaterials, strictV2Maps: policy?.source === "wh_review.v2", directionMode: "combined",
       });
-      // Keep the normalized selection private to this runner until the blind
-      // request has produced its reconstruction. It is deliberately absent
-      // from the first provider-visible bundle.
-      fixedMaterials = Object.freeze({ ...fixedMaterials, __direction_selection: selection, __direction_base_materials: baseMaterials });
+      fixedMaterials = Object.freeze({ ...fixedMaterials, __direction_flow: sequence.flow });
     } else {
       fixedMaterials = {
         ...baseMaterials,
@@ -774,59 +779,23 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   let reviewBundle;
   let reviewed;
   if (isDirectionReview) {
-    const selection = fixedMaterials.__direction_selection;
-    const baseMaterials = fixedMaterials.__direction_base_materials;
-    const initialMaterials = Object.fromEntries(Object.entries(fixedMaterials).filter(([key]) => !key.startsWith("__direction_")));
+    const directionMaterials = Object.fromEntries(Object.entries(fixedMaterials).filter(([key]) => !key.startsWith("__direction_")));
+    const directionFlow = fixedMaterials.__direction_flow;
     contractId = bundle.contractId ?? "wh-review.contract.make-decision.v1";
-    contractHash = bundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: initialMaterials.review_instructions });
-    const initialProjection = buildSemanticProjection({
+    contractHash = bundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: directionMaterials.review_instructions, direction_flow: directionFlow });
+    semanticProjection = buildSemanticProjection({
       stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
-      contract_id: contractId, contract_hash: contractHash, input: initialMaterials, materials: initialMaterials,
+      contract_id: contractId, contract_hash: contractHash, input: directionMaterials, materials: directionMaterials,
       subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
     });
-    const initialBundle = { ...bundle, contractId, contractHash, semanticHash: initialProjection.semantic_hash };
-    const sequence = planDirectionReviewRequests({
-      raw_requirement: initialMaterials.raw_requirement,
-      objective_facts: initialMaterials.objective_facts,
-      current_selection: selection,
-    });
-    const reconstructed = rejectProfileMismatches(await reviewGroup({
-      providerClient, providers, hostProvider, materials: initialBundle,
-      prompt: `${providerPrompt} ${sequence.requests[0].prompt} Return findings as a compact reconstruction of delivery-threatening problem gaps; do not mention or infer any current choice.`,
+    reviewBundle = { ...bundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
+    reviewed = rejectProfileMismatches(await reviewGroup({
+      providerClient, providers, hostProvider, materials: reviewBundle, reviewFlow: directionFlow,
+      reviewMode: policy?.mode ?? null,
+      prompt: `${providerPrompt} ${directionMaterials.review_instructions} Execute the declared direction-review.v1 flow inside this one public request. Return one findings object after challenge; do not create a second public request.`,
     }), policy);
-    if (reconstructed.some((item) => !item.review)) {
-      fixedMaterials = initialMaterials;
-      bundle = initialBundle;
-      semanticProjection = initialProjection;
-      reviewBundle = initialBundle;
-      reviewed = reconstructed;
-    } else {
-      const independentReconstruction = reconstructed.map((item) => ({ provider: item.provider, findings: item.review.findings }));
-      const challengeMaterials = {
-        ...baseMaterials,
-        ...directionSelectionMaterials(selection, independentReconstruction),
-        review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope, subject.review_scope, reviewKind, "challenge"),
-      };
-      const challengeBundle = buildMaterials({
-        reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, phaseId, reviewTrack, reviewKind,
-        reviewScope: subject.review_scope, uiScope, materials: challengeMaterials, strictV2Maps: policy?.source === "wh_review.v2", directionMode: "challenge",
-      });
-      contractId = challengeBundle.contractId ?? contractId;
-      contractHash = challengeBundle.contractHash ?? hashCanonical({ contract_id: contractId, review_instructions: challengeMaterials.review_instructions });
-      semanticProjection = buildSemanticProjection({
-        stage, review_track: reviewTrack, review_scope: subject.review_scope, review_kind: reviewKind,
-        contract_id: contractId, contract_hash: contractHash, input: challengeMaterials, materials: challengeMaterials,
-        subject, extra: integrationSubject ? integrationSemanticFacts(integrationSubject) : {},
-      });
-      reviewBundle = { ...challengeBundle, contractId, contractHash, semanticHash: semanticProjection.semantic_hash };
-      const challenged = rejectProfileMismatches(await reviewGroup({
-        providerClient, providers, hostProvider, materials: reviewBundle,
-        prompt: `${providerPrompt} ${sequence.requests[1].prompt} The blind reconstruction is in requirements/independent_reconstruction.json; consume it, then report only concrete findings about the revealed current choice.`,
-      }), policy);
-      reviewed = mergeDirectionReviews(reconstructed, challenged);
-      fixedMaterials = challengeMaterials;
-      bundle = challengeBundle;
-    }
+    fixedMaterials = directionMaterials;
+    bundle = reviewBundle;
     source.dispose?.();
   } else {
     contractId = bundle.contractId ?? `wh-review.contract.${reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage}.v1`;
@@ -858,7 +827,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
       source.dispose?.();
       return reusedResult;
     }
-    reviewed = rejectProfileMismatches(await reviewGroup({ providerClient, providers, hostProvider, materials: reviewBundle }), policy);
+    reviewed = rejectProfileMismatches(await reviewGroup({ providerClient, providers, hostProvider, materials: reviewBundle, reviewMode: policy?.mode ?? null }), policy);
   }
   const attemptId = randomUUID();
   const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(taskHandle) });

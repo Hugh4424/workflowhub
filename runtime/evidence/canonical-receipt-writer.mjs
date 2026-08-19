@@ -483,7 +483,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
           }),
         };
         validateCanonicalTestReceipt(receipt, {
-          taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, subject: component,
+          taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, expectedProducerComponent: component,
         });
         const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
         return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });

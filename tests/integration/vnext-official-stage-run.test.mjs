@@ -125,6 +125,17 @@ function stageAgentExecution(stage) {
     status: "completed",
     provenance: { kind: "stage-agent", host: "test-host", agent_run_id: `real-${stage}-run` },
     steps, skills,
+    ...(stage === "verify-code" ? {
+    code_review: {
+      result: {
+        status: "clean",
+        findings: [],
+        summary: "Stage Agent 实际执行当前实现代码审查并未发现可交付阻塞",
+        focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],
+        repairs: [],
+      },
+    },
+    } : {
     spec_analyze: {
       packet: {
         original_requirements: [{ id: "R-001", summary: "当前用户需求" }],
@@ -138,6 +149,7 @@ function stageAgentExecution(stage) {
       },
       evidence_subjects: { "decision-log": { subject_kind: "step", subject_id: steps[0].step_slug } },
     },
+    }),
   };
 }
 
@@ -259,6 +271,34 @@ describe("vNext official stage completion", () => {
     expect(proof.host_evidence).toEqual({ kind: "host-command", command: "stage-agent-test", exit_code: 0, output: "actual host result" });
     const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+  });
+  it("executes the current handler when no external Stage Agent outcome exists", async () => {
+    const state = fixture("stage-agent-optional");
+    const result = await runOfficialStage("make-decision", contextFor("make-decision", state), {});
+    expect(result).toMatchObject({
+      stage: "make-decision",
+      work_status: "ready",
+      quality_status: "incomplete",
+      stage_outcome_ref: null,
+      stage_outcome_hash: null,
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+    });
+  });
+  it("keeps the current handler running when a supplied external outcome is invalid", async () => {
+    const state = fixture("stage-agent-invalid-optional");
+    const result = await runOfficialStage("make-decision", contextFor("make-decision", state), {
+      receipts: { stage_outcomes: `quality/evidence/stage-outcomes/make-decision/${"0".repeat(64)}.json` },
+    });
+    expect(result).toMatchObject({
+      stage: "make-decision",
+      work_status: "ready",
+      quality_status: "incomplete",
+      stage_outcome_ref: null,
+      stage_outcome_hash: null,
+      stage_outcome_status: "unavailable",
+      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
+    });
   });
   it("accepts the same result through the private current-session bridge and official route", async () => {
     const state = fixture("stage-agent-host-bridge");
@@ -666,13 +706,19 @@ describe("vNext official stage completion", () => {
         stage, task: state.task, kernel, identity: state.task.identity,
         workflowRunId: kernel.deriveStageWorkflowRunId(stage), manifest: state.task.manifest,
         candidateWorkspace: state.candidate, artifacts,
-      }, { receipts: { stage_outcomes: stageOutcome(state, stage).ref } });
+      }, { receipts: {} });
       expect(result).toMatchObject({ stage, status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+      expect(result).toMatchObject({
+        stage_outcome_ref: null,
+        stage_outcome_hash: null,
+        stage_outcome_status: "unavailable",
+        stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+      });
       expect(result.quality_fact_refs.length).toBeGreaterThan(0);
     }
   });
 
-  it("does not mark verify finding dispositions passed when verification evidence is absent", async () => {
+  it("does not turn missing code review into a materials or evidence audit", async () => {
     const state = fixture("vnext-verify-missing-dispositions");
     const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
     const result = await runOfficialStage("verify-code", {
@@ -682,14 +728,14 @@ describe("vNext official stage completion", () => {
     }, { receipts: { stage_outcomes: stageOutcome(state, "verify-code").ref } });
 
     expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
-    expect(result.completion.predicates.finding_dispositions).toMatchObject({ status: "missing", fact_ref: null });
+    expect(result.completion.predicates.code_review).toMatchObject({ status: "missing", fact_ref: null });
     const dispositionFact = result.quality_fact_refs
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
       .find((fact) => fact.subject === "finding_dispositions");
-    expect(dispositionFact).toMatchObject({ subject: "finding_dispositions", status: "missing" });
+    expect(dispositionFact).toBeUndefined();
   });
 
-  it("keeps verify finding dispositions incomplete when tests exist but review is unavailable", async () => {
+  it("ignores unrelated test and acceptance receipts when reviewing code", async () => {
     const state = fixture("vnext-verify-review-unavailable-dispositions");
     const workspace = openCurrentTaskWorkspace(state.task);
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, state.task);
@@ -728,14 +774,14 @@ describe("vNext official stage completion", () => {
       stage: "verify-code", task: state.task, kernel, identity: state.task.identity,
       workflowRunId: kernel.deriveStageWorkflowRunId("verify-code"), manifest: state.task.manifest,
       workspace, artifacts,
-    }, { receipts: { tests: testRef, evidence: evidence.ref, stage_outcomes: stageOutcome({ ...state, kernel }, "verify-code", { workspace, artifacts }).ref } });
+    }, { receipts: { stage_outcomes: stageOutcome({ ...state, kernel }, "verify-code", { workspace, artifacts }).ref } });
 
     expect(result).toMatchObject({ status: "in_progress", quality_status: "incomplete" });
-    expect(result.completion.predicates.finding_dispositions).toMatchObject({ status: "missing", fact_ref: null });
+    expect(result.completion.predicates.code_review).toMatchObject({ status: "missing", fact_ref: null });
     const dispositionFact = result.quality_fact_refs
       .map((ref) => JSON.parse(state.task.readRecord(ref)))
       .find((fact) => fact.subject === "finding_dispositions");
-    expect(dispositionFact).toMatchObject({ subject: "finding_dispositions", status: "missing" });
+    expect(dispositionFact).toBeUndefined();
   });
 
   it("publishes acceptance predicates from canonical completion facts even when another quality item is open", async () => {
@@ -776,8 +822,8 @@ describe("vNext official stage completion", () => {
       evidence_refs: [], missing_items: ["independent review remains open"], completion,
     }));
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-    expect(facts.find((fact) => fact.subject === "acceptance_criteria")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
-    expect(facts.find((fact) => fact.subject === "exceptions")).toMatchObject({ kind: "acceptance_criterion", status: "passed" });
+    expect(facts.find((fact) => fact.subject === "acceptance_criteria")).toBeUndefined();
+    expect(facts.find((fact) => fact.subject === "exceptions")).toBeUndefined();
     expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");

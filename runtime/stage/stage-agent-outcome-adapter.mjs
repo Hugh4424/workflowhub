@@ -201,6 +201,29 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
   };
 }
 
+function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifest, skills }) {
+  const input = object(execution.code_review, "execution.code_review");
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "code-review-closure");
+  const reviewSkill = skills.skills?.find((skill) => skill.name === "dsh-code-review");
+  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and code-review-closure");
+  const result = object(input.result, "execution.code_review.result");
+  const allowed = new Set(["status", "findings", "summary", "focus", "repairs"]);
+  const unknown = Object.keys(result).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`execution.code_review.result contains unsupported fields: ${unknown.join(", ")}`);
+  if (!new Set(["clean", "findings", "unavailable"]).has(result.status)) throw new Error("execution.code_review.result.status is invalid");
+  if (!Array.isArray(result.findings)) throw new TypeError("execution.code_review.result.findings must be an array");
+  text(result.summary, "execution.code_review.result.summary");
+  return {
+    schema_version: "workflowhub-code-review-stage-outcome.v1",
+    stage,
+    snapshot_tree: snapshot.tree,
+    material_revision: materials.revision,
+    step_slug: reviewStep.step_slug,
+    skill_id: reviewSkill.name,
+    result: structuredClone(result),
+  };
+}
+
 /**
  * Build a truthful host-protocol failure result when the external Stage Agent
  * did not produce its structured execution object.  This is deliberately not
@@ -236,16 +259,34 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
   const skillsOutcomes = skills.skills.map((skill) => ({
     skill_id: skill.name,
     status: "unavailable",
-    trigger: skill.name === "spec-analyze",
-    executed: skill.name === "spec-analyze",
+    trigger: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
+    executed: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
     version: "unavailable",
     result_summary: `Stage Agent 未提供 ${skill.name} 的真实执行结果`,
     evidence: evidence("skill", skill.name),
     reason: safeReason,
     cost: unavailableCost,
   }));
+  if (stage === "verify-code") {
+    return {
+      status: "unavailable",
+      provenance: { kind: "stage-agent", host: text(host, "unavailable host"), agent_run_id: text(agentRunId, "unavailable agent run id") },
+      steps: steps,
+      skills: skillsOutcomes,
+      code_review: {
+        schema_version: "workflowhub-code-review-stage-outcome.v1",
+        stage,
+        snapshot_tree: null,
+        material_revision: null,
+        step_slug: "code-review-closure",
+        skill_id: "dsh-code-review",
+        result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
+      },
+    };
+  }
+  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
   const evidenceSubjects = Object.fromEntries(
-    STAGE_SPEC_ANALYZE_PROFILES[stage].required_evidence.map((logicalRef) => [logicalRef, firstSubject]),
+    profile.required_evidence.map((logicalRef) => [logicalRef, firstSubject]),
   );
   const specAnalyze = {
     packet: {
@@ -255,7 +296,7 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
       work_summary: `宿主未收到 Stage Agent 结果：${safeReason}`,
     },
     evidence_subjects: evidenceSubjects,
-    ...(STAGE_SPEC_ANALYZE_PROFILES[stage].required_materials.includes("implementation")
+    ...(profile.required_materials.includes("implementation")
       ? {
           implementation_material: `unavailable: ${safeReason}`,
           implementation_evidence_subject: firstSubject,
@@ -352,7 +393,9 @@ export function publishStageAgentOutcome({
     steps: input.steps.map((entry, index) => ({ ...entry, __adapter_result: { evidenceRefs: stepOutcomes[index].evidence_refs } })),
     skills: input.skills.map((entry, index) => ({ ...entry, __adapter_result: { evidenceRefs: skillOutcomes[index].evidence_refs } })),
   };
-  const analyzer = buildAnalyzer({ execution: adapterInput, taskId: safeTask.identity.taskId, stage, snapshot, materials, manifest, skills });
+  const stageReview = stage === "verify-code"
+    ? buildCodeReviewOutcome({ execution: adapterInput, stage, snapshot, materials, manifest, skills })
+    : buildAnalyzer({ execution: adapterInput, taskId: safeTask.identity.taskId, stage, snapshot, materials, manifest, skills });
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1",
     task_id: safeTask.identity.taskId,
@@ -376,7 +419,7 @@ export function publishStageAgentOutcome({
     skills_manifest_hash: sha256(skillsManifestRaw),
     step_outcomes: stepOutcomes,
     skill_outcomes: skillOutcomes,
-    spec_analyze: analyzer,
+    ...(stage === "verify-code" ? { code_review: stageReview } : { spec_analyze: stageReview }),
   };
   const raw = canonicalJson(value);
   const digest = sha256(raw);

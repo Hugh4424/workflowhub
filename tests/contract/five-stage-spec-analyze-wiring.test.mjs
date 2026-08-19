@@ -37,11 +37,11 @@ function packet(overrides = {}) {
   };
 }
 
-describe("five stage spec-analyze profiles", () => {
-  it("defines cumulative inputs and evidence for every stage", () => {
+describe("authoring-stage spec-analyze profiles", () => {
+  it("defines cumulative inputs and evidence for the four authoring stages", () => {
     expect(contracts.STAGE_SPEC_ANALYZE_PROFILES).toBeDefined();
     expect(Object.keys(contracts.STAGE_SPEC_ANALYZE_PROFILES)).toEqual([
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
+      "make-decision", "build-spec", "build-plan", "build-code",
     ]);
     expect(contracts.STAGE_SPEC_ANALYZE_PROFILES["build-plan"].required_materials).toEqual(
       expect.arrayContaining(["decision_log", "spec", "plan", "tasks"]),
@@ -52,9 +52,7 @@ describe("five stage spec-analyze profiles", () => {
     expect(contracts.STAGE_SPEC_ANALYZE_PROFILES["build-code"].required_evidence).toEqual(
       expect.arrayContaining(["tests", "ac-trace"]),
     );
-    expect(contracts.STAGE_SPEC_ANALYZE_PROFILES["verify-code"].required_evidence).toEqual(
-      expect.arrayContaining(["review", "runtime", "delivery"]),
-    );
+    expect(contracts.STAGE_SPEC_ANALYZE_PROFILES["verify-code"]).toBeUndefined();
   });
 
   it("returns a six-part plain-language summary only after semantic and evidence checks", () => {

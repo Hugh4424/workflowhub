@@ -59,14 +59,14 @@ const COMPLETION_COPY = Object.freeze({
   "build-spec": { objective: "把已接受的决定写成完整需求规格", approach: "解决重大歧义并用正式审查验证最终规格", effect: "实施计划可以从稳定规格继续", next_owner: "build-plan" },
   "build-plan": { objective: "把需求规格拆成可验证的实施计划", approach: "生成计划和任务清单并完成工程审查", effect: "实现阶段获得明确顺序、边界和验收方法", next_owner: "build-code" },
   "build-code": { objective: "按已接受计划完成实现", approach: "分阶段实现、测试并完成最终集成审查", effect: "验证阶段可以检查同一份最终实现", next_owner: "verify-code" },
-  "verify-code": { objective: "独立验证最终实现是否满足验收条件", approach: "复用正式实现证据并执行独立质量检查", effect: "任务获得可关闭或返回修复的明确结论", next_owner: "task owner" },
+  "verify-code": { objective: "对当前实现完成一次高质量代码审查", approach: "沿真实入口、consumer、生命周期、安全和失败边界检查代码", effect: "任务获得代码风险结论或回同一 task 修复", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
   "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
   "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
   "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "stage_outcomes"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes"]),
-  "verify-code": new Set(["tests", "review", "quality_review", "quality_risk_acceptance", "evidence", "verification", "risk_acceptance", "audit", "stage_outcomes"]),
+  "verify-code": new Set(["quality_review", "stage_outcomes"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
@@ -84,6 +84,26 @@ function anchorsOverlap(left, right) {
     && left.path === right.path
     && left.start_line <= right.end_line
     && right.start_line <= left.end_line;
+}
+function normalizeAcceptanceText(value) {
+  return String(value ?? "").replace(/\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g, "AC-*").trim();
+}
+function acceptanceSemanticWarnings(item, coveredItems) {
+  if (coveredItems.length < 2) return [];
+  const warnings = [];
+  const signatures = coveredItems.map((entry) => JSON.stringify([
+    normalizeAcceptanceText(entry.scenario),
+    normalizeAcceptanceText(entry.oracle),
+    normalizeAcceptanceText(entry.actual_outcome),
+  ]));
+  if (new Set(signatures).size === 1) warnings.push("criterion-specific scenario/oracle/outcome are generic or shared across acceptance criteria");
+  const outcomes = coveredItems.map((entry) => normalizeAcceptanceText(entry.actual_outcome));
+  if (outcomes.every((value) => /^(?:pass|passed|result|通过|测试通过|当前快照测试通过)$/i.test(value))) {
+    warnings.push("actual outcome is generic across acceptance criteria");
+  }
+  const evidence = coveredItems.map((entry) => JSON.stringify(entry.evidence_refs));
+  if (new Set(evidence).size === 1) warnings.push("evidence refs are shared across acceptance criteria");
+  return warnings;
 }
 function completionReview(records) {
   const reviews = records.filter(Boolean);
@@ -231,7 +251,7 @@ function interactionAggregateFacts(worker, invocation, expected) {
       || value.task_id !== worker.identity.taskId || value.stage !== "make-decision"
       || value.snapshot_tree !== expected.snapshot_tree
       || value.decision_ref !== expected.decision_ref || value.decision_hash !== expected.decision_hash) {
-    throw new Error("interaction aggregate does not bind the current task, snapshot, and decision");
+    throw new Error("interaction aggregate does not bind the current task, decision snapshot, and decision");
   }
   const talk = object(value.talk, "interaction aggregate talk");
   const clarify = object(value.clarify, "interaction aggregate clarify");
@@ -345,6 +365,38 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
   };
 }
 
+function unavailableTestFacts(worker, name, reason) {
+  const snapshot = worker.snapshotWorkspace?.().tree ?? null;
+  return {
+    facts: {
+      status: "unavailable",
+      ...(snapshot ? { snapshot_tree: snapshot } : {}),
+      reason,
+    },
+    evidence: null,
+    missing_items: [`${name} unavailable: ${reason}`],
+  };
+}
+
+function optionalTestFacts(worker, invocation, name = "tests", producerStage = worker.stage) {
+  if (invocation.receipts?.[name] === undefined) {
+    return unavailableTestFacts(worker, name, "no current test receipt was supplied");
+  }
+  return testFacts(worker, invocation, name, producerStage);
+}
+
+function optionalEvidence(worker, invocation) {
+  if (invocation.receipts?.evidence === undefined) {
+    return {
+      ref: null,
+      value: { refs: [] },
+      evidence: null,
+      missing_items: ["evidence unavailable: no current acceptance aggregate was supplied"],
+    };
+  }
+  return receipt(worker, invocation, "evidence");
+}
+
 function confirmationFacts(worker, invocation) {
   const ref = text(object(invocation.receipts, "receipts").confirmation, "confirmation receipt ref");
   if (!validReceiptRef("confirmation", ref)) throw new Error("confirmation receipt ref is outside its canonical namespace");
@@ -411,8 +463,10 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   });
   if (declared.size) throw new Error("acceptance_coverage is missing an accepted criterion");
   const proofOwners = [];
+  const coveredItems = items.filter((item) => item.status === "covered");
   const normalizedItems = items.map((item) => {
     if (item.status !== "covered") return item;
+    const semanticWarnings = acceptanceSemanticWarnings(item, coveredItems);
     for (const anchor of [item.implementation_anchor, item.verification_anchor]) {
       const previous = proofOwners.find(({ anchor: previousAnchor, criterionId }) => criterionId !== item.acceptance_criterion_id && anchorsOverlap(previousAnchor, anchor));
       if (previous !== undefined) {
@@ -424,6 +478,14 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
         };
       }
       proofOwners.push({ anchor, criterionId: item.acceptance_criterion_id });
+    }
+    if (semanticWarnings.length > 0) {
+      return {
+        acceptance_criterion_id: item.acceptance_criterion_id,
+        status: "unknown",
+        evidence_refs: [],
+        semantic_gap: semanticWarnings.join("; "),
+      };
     }
     return item;
   });
@@ -947,7 +1009,7 @@ function requirementReplayFacts(worker, verification, currentTree) {
   };
 }
 
-function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
+function reviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage, options = {}) {
   const item = receipt(worker, invocation, name, producerStage);
   if (expectedTrack !== undefined && item.value.review_track !== expectedTrack) throw new Error(`${name} must use wh-review ${expectedTrack} track`);
   if (REVIEW_ATTEMPT_REF.test(item.ref)) {
@@ -974,11 +1036,13 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
   const riskAcceptanceName = expectedTrack !== undefined
     ? `${expectedTrack}_risk_acceptance`
     : (name === "quality_review" ? "quality_risk_acceptance" : "risk_acceptance");
-  const riskAcceptance = canonicalReviewFindings(item.value).some(isActionableSeriousFinding)
+  const riskAcceptance = options.requireRiskAcceptance === false
+    ? { verified: false, evidence: [] }
+    : canonicalReviewFindings(item.value).some(isActionableSeriousFinding)
     ? riskAcceptanceForReview(worker, invocation, { ref: item.ref, evidence: item.evidence, value: item.value }, expectedTrack, riskAcceptanceName, producerStage)
     : { verified: false, evidence: [] };
   const riskEvidence = riskAcceptance.evidence;
-  const dispositionWarnings = reviewDispositionWarnings(
+  const dispositionWarnings = options.requireDispositions === false ? [] : reviewDispositionWarnings(
     worker,
     { ref: item.ref, evidence: item.evidence, value: item.value },
     riskAcceptance,
@@ -1016,8 +1080,8 @@ function unavailableReviewFacts(worker, invocation, name, expectedTrack, produce
   };
 }
 
-function safeReviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage) {
-  try { return reviewFacts(worker, invocation, name, expectedTrack, producerStage); }
+function safeReviewFacts(worker, invocation, name = "review", expectedTrack, producerStage = worker.stage, options = {}) {
+  try { return reviewFacts(worker, invocation, name, expectedTrack, producerStage, options); }
   catch (error) {
     // A missing/material-incomplete review is an honest quality fact and may
     // be disclosed without becoming a progression gate.  A malformed,
@@ -1026,6 +1090,16 @@ function safeReviewFacts(worker, invocation, name = "review", expectedTrack, pro
     if (error?.code !== "MATERIAL_INCOMPLETE" && error?.code !== "ENOENT") throw error;
     return unavailableReviewFacts(worker, invocation, name, expectedTrack, producerStage, error);
   }
+}
+
+function codeReviewFacts(worker, invocation, name = "quality_review") {
+  // A verify-code review authenticates the review packet itself, but it does
+  // not make risk cards, finding-disposition receipts, AC evidence, or test
+  // receipts prerequisites for reviewing the implementation.
+  return safeReviewFacts(worker, invocation, name, undefined, "verify-code", {
+    requireRiskAcceptance: false,
+    requireDispositions: false,
+  });
 }
 
 function declaredFinalTestScope(tasks) {
@@ -1474,191 +1548,65 @@ HANDLERS.set("build-code", async (worker, input) => {
 });
 
 HANDLERS.set("verify-code", async (worker, input) => {
-  // Verification may disclose missing evidence, but it cannot turn missing
-  // evidence into a same-task recovery/rebind gate.
-  if (worker.manifest?.record_model === "vnext-single-write"
-      && (input.receipts.tests === undefined || input.receipts.evidence === undefined)) {
-    const current = currentMaterialContent(worker, "tasks.md");
-    return addCompletion("verify-code", {
-      facts: {
-        completion_subjects: {
-          acceptance_criteria: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
-          exceptions: subjectFact("missing", [], "verification test/evidence facts are not yet recorded"),
-        },
-        finding_dispositions: { status: "missing", items: [] },
-        audit_gaps: ["current verification test/evidence facts are unavailable; current four materials remain the work authority"],
-      },
-      evidence_refs: [],
-      missing_items: ["current verification test/evidence facts are unavailable; record them when available"],
-    }, {
-      worker,
-      artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
-      reviews: [],
-      businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
-      audit: null,
-      verification: "当前四份材料可继续；验证测试和证据尚未提供",
-    });
-  }
-  const audit = (() => {
-    try {
-      const candidate = auditFacts(worker, input);
-      const currentTree = worker.snapshotWorkspace?.().tree;
-      if (candidate.value.snapshot_tree !== currentTree) return null;
-      return candidate;
-    }
-    catch { return null; }
-  })();
-  const auditMissingItems = audit ? [] : ["audit summary unavailable/unverified; disclosed as audit-only"];
-  // A complete same-snapshot suite is reusable across build-code and
-  // verify-code. The verify-only focused check remains a separate receipt.
-  const tests = testFacts(worker, input, "tests", ["build-code", "verify-code"]);
-  const review = safeReviewFacts(worker, input, "review", undefined, "build-code");
-  const qualityReview = safeReviewFacts(worker, input, "quality_review", undefined, "verify-code");
-  const current = worker.snapshotWorkspace();
-  const workspaceRoot = worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot ?? null;
-  // Only the current verify-code review can supply verify-code finding
-  // dispositions.  The build-code review remains visible as historical audit
-  // context, but it must not substitute for an unavailable current review.
-  const dispositions = findingDispositions([qualityReview], input, "verify-code", current.tree, workspaceRoot, worker.identity.taskId);
-  // The build-code integration review is historical audit context for verify-code.
-  // It must not be re-authenticated as the current verify review flow: doing so
-  // turns a missing/stale flow record into an unnecessary ordinary-work blocker.
-  const evidence = receipt(worker, input, "evidence");
-  const verification = input.receipts.verification === undefined ? null : receipt(worker, input, "verification");
-  if (verification !== null && !Array.isArray(verification.value.items)) throw new TypeError("verification.items must be array");
-  const replay = requirementReplayFacts(worker, verification, current.tree);
-  const reviewBindingWarnings = [];
-  let qualityReviewBinding = { evidence: [] };
-  try { qualityReviewBinding = bindFinalReview(worker, input, qualityReview, current.tree, { stage: "verify-code" }); }
-  catch (error) { reviewBindingWarnings.push(`verify-code review binding unavailable: ${error.message}`); }
-  if (!Array.isArray(evidence.value.refs)) throw new TypeError("evidence.refs must be array");
-  const criterionIds = new Set();
-  const nestedEvidence = [];
-  const failedEvidence = [];
-  const uncertainEvidence = [];
-  for (const [index, ref] of evidence.value.refs.entries()) {
-    object(ref, `evidence.refs[${index}]`);
-    text(ref.ref, `evidence.refs[${index}].ref`);
-    text(ref.sha256, `evidence.refs[${index}].sha256`);
-    const currentOnly = worker.manifest?.record_model === "vnext-single-write";
-    if ((currentOnly ? !ref.ref.startsWith("quality/evidence/") : !ref.ref.startsWith("evidence/") && !ref.ref.startsWith("quality/evidence/")) || ref.ref.includes("..")) throw new Error("verify evidence ref must use canonical evidence namespace");
-    const entity = object(worker.readReceipt(ref.ref), `evidence.refs[${index}] record`);
-    if (entity.sha256 !== ref.sha256) throw new Error(`evidence.refs[${index}] hash mismatch`);
-    const acceptance = validateAcceptanceEvidence(entity.value, `acceptance evidence schema at evidence.refs[${index}]`);
-    if (criterionIds.has(acceptance.acceptance_criterion_id)) throw new Error(`duplicate acceptance_criterion_id: ${acceptance.acceptance_criterion_id}`);
-    criterionIds.add(acceptance.acceptance_criterion_id);
-    const evidenceDisposition = classifyAcceptanceEvidenceResult(acceptance.result);
-    if (evidenceDisposition === "failed") failedEvidence.push(ref);
-    else if (["inconclusive", "deferred"].includes(evidenceDisposition)) uncertainEvidence.push({ ref, result: evidenceDisposition });
-    for (const [nestedIndex, nested] of acceptance.refs.entries()) {
-      if (typeof worker.readEvidence !== "function") throw new Error("acceptance evidence schema requires authenticated evidence reader");
-      const nestedRecord = object(worker.readEvidence(nested.ref), `${ref.ref} refs[${nestedIndex}] record`);
-      if (nestedRecord.sha256 !== nested.sha256) throw new Error(`${ref.ref} refs[${nestedIndex}] hash mismatch`);
-      nestedEvidence.push(nested);
-    }
-  }
-  const mismatches = [];
-  const taskContract = validatePlanTaskContract({
-    spec: worker.readArtifact("spec.md"),
-    plan: worker.readArtifact("plan.md"),
-    tasks: worker.readArtifact("tasks.md"),
-    completionEvidence: (entry) => authenticateTaskCompletionEvidence(worker, entry),
-  });
-  const completion = taskContract.facts?.task_completion;
-  const auditGaps = [...auditMissingItems, ...reviewBindingWarnings];
-  if (review.facts.status === "unavailable") auditGaps.push("build-code integration review advice is unavailable; retained as advisory fact");
-  if (qualityReview.facts.status === "unavailable") auditGaps.push("verify-code independent review advice is unavailable; retained as advisory fact");
-  if (!completion || completion.total_count === 0 || completion.completed_count !== completion.total_count) {
-    auditGaps.push("tasks.md completion history is incomplete; current implementation, tests, and AC facts remain authoritative");
-  }
-  if (tests.facts.exit_code !== 0) mismatches.push("verify-code tests must pass");
-  // Requirement replay is an audit of the raw decision chain. Keep missing
-  // rows visible and let the core_gaps verification item prevent a green
-  // conclusion, but do not turn the row itself into a review/retry loop.
-  auditGaps.push(...replay.missing_items);
-  const expectedCriterionIds = taskContract.facts?.ac_coverage?.accepted_ids;
-  if (!Array.isArray(expectedCriterionIds) || expectedCriterionIds.length === 0) {
-    mismatches.push("verify-code current spec acceptance criteria are unavailable");
-  } else if (!sameStringSet([...criterionIds], expectedCriterionIds)) {
-    mismatches.push("verify-code acceptance evidence criterion set differs from the current spec AC set");
-  }
-  const finalTestRoute = declaredFinalTestScope(worker.readArtifact("tasks.md"));
-  if (finalTestRoute.status !== "declared") auditGaps.push(finalTestRoute.reason);
-  else if (tests.facts.test_scope !== finalTestRoute.scope) {
-    auditGaps.push(`verify-code test scope differs from plan (${finalTestRoute.scope}); current focused M15 validation retained as audit fact`);
-  }
-  const currentWorkspaceRoot = worker.workspace?.worktreeRoot ?? workspaceRoot;
-  const qualitySnapshotTree = qualityReview.facts.snapshot_tree;
-  const qualitySnapshotMatches = qualityReview.facts.status === "unavailable"
-    || equivalentWorkspaceTrees(currentWorkspaceRoot, qualitySnapshotTree, current.tree);
-  const testSnapshotMatches = currentWorkspaceRoot
-    && (equivalentWorkspaceTrees(currentWorkspaceRoot, tests.facts.snapshot_tree, current.tree)
-      || isMaterialOnlySnapshotDelta(currentWorkspaceRoot, tests.facts.snapshot_tree, current.tree, worker.identity.taskId))
-    && (tests.facts.source_digest === undefined
-      || current.source_digest === undefined
-      || tests.facts.source_digest === current.source_digest);
-  // Reviews are quality facts, not delivery gates. A historical or unavailable
-  // review remains visible in audit_gaps; only the current full test receipt
-  // must bind the current implementation snapshot for verification.
-  if (!qualitySnapshotMatches) auditGaps.push("verify-code independent review is historical/stale; retained as audit-only quality fact");
-  if (!testSnapshotMatches) mismatches.push("tests and current Workspace snapshot must match");
-  const verificationItems = verification?.value.items ?? [];
-  if (verification === null) mismatches.push("canonical verification receipt is missing");
-  const businessCriticalVerification = new Set([
-    "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
-    "browser_qa", "core_gaps", "human_handoff",
-  ]);
-  for (const item of verificationItems) {
-    if (businessCriticalVerification.has(item.id)
-        && !new Set(["pass", "not_applicable"]).has(item.status)) {
-      mismatches.push(`verify item ${item.id} is ${item.status}: ${item.reason}`);
-    }
-  }
-  const acceptanceVerified = failedEvidence.length === 0
-    && uncertainEvidence.length === 0
-    && expectedCriterionIds?.length > 0
-    && sameStringSet([...criterionIds], expectedCriterionIds)
-    && verificationItems.find((item) => item.id === "acceptance_criteria")?.status === "pass";
-  const exceptionsVerified = mismatches.length === 0
-    && verificationItems.filter((item) => new Set(["core_gaps", "human_handoff"]).has(item.id))
-      .every((item) => new Set(["pass", "not_applicable"]).has(item.status));
+  // Verify-code is a code-review stage. It authenticates one current code-review
+  // result and exposes its findings; it does not audit materials, AC coverage,
+  // test receipts, verification receipts, or requirement replay.
+  const review = codeReviewFacts(worker, input, "quality_review");
+  const findings = Array.isArray(review.value?.findings) ? review.value.findings : [];
+  const actionableFindings = findings.filter(isActionableSeriousFinding);
+  const invalidEvidenceFindings = Array.isArray(review.value?.adjudication?.clusters)
+    ? review.value.adjudication.clusters.filter((cluster) => cluster?.disposition === "invalid_evidence" || cluster?.evidence_status === "invalid_anchor")
+    : [];
+  const reviewDiagnostics = invalidEvidenceFindings.map((cluster, index) => ({
+    kind: "invalid_evidence",
+    status: "advisory",
+    cluster_id: cluster.id ?? `invalid-evidence-${index + 1}`,
+    evidence_status: cluster.evidence_status ?? "invalid_anchor",
+    finding_count: Number.isSafeInteger(cluster.finding_count) ? cluster.finding_count : null,
+    reason: "invalid evidence anchor retained as a review fact; it is not a verify-code completion gate",
+  }));
+  const reviewMissing = review.facts.status === "unavailable"
+    ? [...(review.missing_items ?? [])]
+    : actionableFindings.length > 0
+      ? ["code review has " + actionableFindings.length + " actionable delivery finding(s); repair them in verify-code"]
+      : [];
+
   const result = addCompletion("verify-code", {
     facts: {
-      tests: tests.facts, review: review.facts, quality_note: qualityReview.facts,
-      completion_subjects: {
-        acceptance_criteria: subjectFact(acceptanceVerified ? "passed" : "missing", evidence.value.refs, "current acceptance evidence and verification item"),
-        exceptions: subjectFact(exceptionsVerified ? "passed" : "missing", verification ? [verification.evidence] : [], "current verification exceptions and gaps"),
+      code_review: review.facts,
+      code_review_summary: {
+        finding_count: findings.length,
+        actionable_finding_count: actionableFindings.length,
+        invalid_evidence_finding_count: invalidEvidenceFindings.length,
+        review_diagnostics: reviewDiagnostics,
+        status: review.facts.status,
       },
-      finding_dispositions: dispositions.facts, requirement_replay: replay.facts, evidence_refs: evidence.value.refs, ...(verification ? { verification_items: verificationItems } : {}), audit_gaps: auditGaps, ...(audit?.facts ?? {}),
+      review_diagnostics: reviewDiagnostics,
+      completion_subjects: {
+        code_review: subjectFact(
+          review.facts.status === "recorded" && actionableFindings.length === 0 ? "passed" : "missing",
+          review.evidence ? [review.evidence] : [],
+          "current implementation code review",
+        ),
+      },
     },
-    evidence_refs: [tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(qualityReview.evidence ? [qualityReview.evidence] : []), ...qualityReviewBinding.evidence, evidence.evidence, ...(verification ? [verification.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...qualityReview.risk_evidence, ...evidence.value.refs, ...nestedEvidence],
-    missing_items: [
-      ...mismatches,
-      ...dispositions.missing_items,
-      ...(failedEvidence.length ? failedEvidence.map((entry) => `failed acceptance evidence: ${entry.ref}`) : []),
-      ...(uncertainEvidence.length ? uncertainEvidence.map((entry) => `${entry.result} acceptance evidence: ${entry.ref}`) : []),
-    ],
+    evidence_refs: review.evidence ? [review.evidence] : [],
+    missing_items: reviewMissing,
   }, {
     worker,
-    artifacts: [{ label: "验证结果", ref: evidence.ref, hash: evidence.evidence.sha256 }],
-    reviews: [review, qualityReview],
+    artifacts: [],
+    reviews: [review],
     businessFacts: {
-      content: "present",
-      code: "complete",
-      tests: tests.facts.exit_code === 0 ? "passed" : "failed",
-      // The verification item is only meaningful when the current evidence
-      // set matches the current spec and contains no failed criterion.  Do
-      // not let a caller-supplied "pass" summary cover an empty/mismatched
-      // acceptance set.
-      acceptance_criteria: acceptanceVerified ? "covered" : (failedEvidence.length ? "missing" : "unknown"),
+      content: "not_applicable",
+      code: review.facts.status === "recorded" ? "reviewed" : "unknown",
+      tests: "not_applicable",
+      acceptance_criteria: "not_applicable",
     },
-    audit,
-    verification: `${mismatches.length || failedEvidence.length ? "独立验证发现未满足项" : "正式测试已完成"}；已绑定审查质量事实：${boundReviewQualityFacts([["build-code final", review], ["verify-code independent", qualityReview]])}`,
+    verification: review.facts.status === "recorded"
+      ? "完成一次当前实现代码审查；发现 " + findings.length + " 条 finding，其中 " + actionableFindings.length + " 条需要修复、" + invalidEvidenceFindings.length + " 条证据锚点无效；不再重复做材料或证据审计"
+      : "当前代码审查 unavailable；已保留真实原因，不把 unavailable 改成空 findings 或通过",
   });
-  if (mismatches.length || failedEvidence.length) {
-    return { ...result, verification_failure: true, reason: "verify-code verification failed: " + [...mismatches, ...(failedEvidence.length ? [`${failedEvidence.length} acceptance criterion(s) failed`] : [])].join("; ") };
-  }
   return result;
 });
 
-export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = new Set(stage === "build-code" ? ["receipts", "acceptance_coverage", "finding_dispositions"] : ["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }
+export function officialStageHandler(stage) { const handler = HANDLERS.get(stage); if (!handler) throw new TypeError(`no official handler for stage: ${stage}`); return async (worker, invocation) => { const value = object(invocation, "official stage input"); const allowedTopLevel = stage === "build-code" ? new Set(["receipts", "acceptance_coverage", "finding_dispositions"]) : stage === "verify-code" ? new Set(["receipts"]) : new Set(["receipts", "finding_dispositions"]); const unknownTopLevel = Object.keys(value).filter((key) => !allowedTopLevel.has(key)); if (unknownTopLevel.length) throw new Error(`${stage} official run input must contain only ${[...allowedTopLevel].join(" and ")}; unknown fields: ${unknownTopLevel.join(", ")}`); const normalized = { ...value, receipts: value.receipts === undefined ? {} : value.receipts }; const refs = object(normalized.receipts, "receipts"); const unexpectedReceiptKeys = Object.keys(refs).filter((key) => !RECEIPT_KEYS[stage].has(key)); if (unexpectedReceiptKeys.length) throw new Error(`${stage} official run has unexpected receipt fields: ${unexpectedReceiptKeys.join(", ")}`); if (stage !== "build-plan") { for (const [name, ref] of Object.entries(refs)) { const candidateRefs = name.endsWith("risk_acceptance") && Array.isArray(ref) ? ref : [ref]; if (candidateRefs.length === 0 || candidateRefs.some((candidateRef) => !validReceiptRef(name, candidateRef))) throw new Error(`${name} receipt ref is outside its canonical namespace`); } } return handler(worker, normalized); }; }

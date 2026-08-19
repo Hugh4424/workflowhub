@@ -472,8 +472,11 @@ function stageMonitoringFacts({ context, stageOutcome, topology, now }) {
   const stageOutcomeStatus = typeof stageOutcome?.stage_outcome_status === "string"
     ? stageOutcome.stage_outcome_status
     : stageOutcome?.status;
+  const stageOutcomeDiagnostic = stageOutcome?.stage_outcome_diagnostic;
   const stageState = normalizeOutcomeStatus(
-    stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
+    stageOutcomeDiagnostic && typeof stageOutcomeDiagnostic === "object"
+      ? { status: "unavailable", reason: stageOutcomeDiagnostic.reason, error: stageOutcomeDiagnostic.error_code ?? null }
+      : stageOutcomeStatus === undefined ? null : { ...stageOutcome, status: stageOutcomeStatus },
     "stage",
   );
   const records = [createMonitoringFact({
@@ -1050,7 +1053,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         // failed run having created the file.
         initializeTaskStore(context.task.taskPath, { taskId: context.identity.taskId });
         const runSidecar = services.runMonitoringSidecar ?? runMonitoringSidecar;
-        await runSidecar({ context, services: monitoringServices, stageOutcome: bindStageOutcomeAttemptId(context, attempt) });
+        const monitoringStageOutcome = attempt?.stage_outcome_ref
+          ? bindStageOutcomeAttemptId(context, attempt)
+          : {
+            ...attempt,
+            stage_outcome_status: "unavailable",
+            step_outcomes: [],
+            skill_outcomes: [],
+          };
+        await runSidecar({ context, services: monitoringServices, stageOutcome: monitoringStageOutcome });
       }
       catch (error) {
         const message = `monitoring sidecar failed: ${error instanceof Error ? error.message : String(error)}`;

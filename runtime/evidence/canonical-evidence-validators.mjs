@@ -14,13 +14,14 @@ function object(value, label) {
 }
 
 export function validateCanonicalTestReceipt(value, {
-  taskId, stage, snapshotTree, subject, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false,
+  taskId, stage, snapshotTree, expectedProducerComponent = undefined, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false,
 } = {}) {
   object(value, "canonical test receipt");
   if (value.schema_version !== "workflowhub-receipt.v1"
       || value.task_id !== taskId || value.stage !== stage
       || value.producer?.stage !== stage
       || typeof value.producer?.component !== "string" || value.producer.component.trim() === ""
+      || (expectedProducerComponent !== undefined && value.producer.component !== expectedProducerComponent)
       || value.snapshot_tree !== snapshotTree || !OID.test(value.snapshot_tree ?? "")
       || !HASH.test(value.command_hash ?? "")
       || hashText(value.command ?? "") !== value.command_hash
@@ -58,7 +59,6 @@ export function validateCanonicalFullTestReceipt(value, {
     taskId,
     stage: value.stage,
     snapshotTree,
-    subject: "full_tests_fresh",
     allowedProducerComponents,
     ...(isMiniTaskFocused ? {} : { expectedCommand: FULL_TEST_COMMAND }),
     requirePassed,

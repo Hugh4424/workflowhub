@@ -10,6 +10,7 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **debate**, copyright © 2026 Zhipeng. Source: [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/tree/af121a1e24ae3af48f5e132d3de1342d16eccf31).
 - **AgentHub**, source: [Hugh4424/AgentHub@258f5a2](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9).
 - **Spec Kit**, source: [github/spec-kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a). 该固定版本是首次 workflowhub 改造提交之前可验证的上游版本。
+- **DeepSeek Harness**, source: [deepseek-ai/deepseek-harness@99f6f02](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills). WorkflowHub 将 `dsh-code-review` 与 `dsh-find-simplifications`、`dsh-doc-standards`、`dsh-prose-standard`、`dsh-trim-cot-leakage` 的规则合并为一次 verify-code 代码审查调用；未引入 push、merge、翻译、归档或 GIF 运行时。
 
 MIT License
 

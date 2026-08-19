@@ -109,6 +109,30 @@ function verifyLeafStatus(criterion) {
     ? "incomplete" : "passed";
 }
 
+function normalizeCriterionText(value) {
+  return String(value ?? "").replace(/\bAC-[A-Za-z0-9][A-Za-z0-9._-]*\b/g, "AC-*").trim();
+}
+
+function semanticProofWarnings(criterion, all) {
+  if (all.length < 2) return [];
+  const warnings = [];
+  const signatures = all.map((item) => JSON.stringify([
+    normalizeCriterionText(item.scenario),
+    normalizeCriterionText(item.oracle),
+    normalizeCriterionText(item.actual_outcome),
+  ]));
+  if (new Set(signatures).size === 1) warnings.push("criterion-specific scenario/oracle/outcome are generic or shared across acceptance criteria");
+
+  const outcomes = all.map((item) => normalizeCriterionText(item.actual_outcome));
+  if (outcomes.every((value) => /^(?:pass|passed|result|通过|测试通过|当前快照测试通过)$/i.test(value))) {
+    warnings.push("actual outcome is generic across acceptance criteria");
+  }
+
+  const nested = all.map((item) => JSON.stringify(item.nested_evidence));
+  if (new Set(nested).size === 1) warnings.push("nested evidence is shared across acceptance criteria");
+  return warnings;
+}
+
 export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
   if (!Array.isArray(criteria) || criteria.length === 0) throw new TypeError("verify criteria must contain at least one leaf");
   if (!HASH.test(sourceDigest ?? "")) throw new TypeError("verify source digest is required");
@@ -157,8 +181,12 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
     const shared = all.some((other) => other !== criterion
       && [criterion.implementation_anchor, criterion.verification_anchor].some((left) =>
         [other.implementation_anchor, other.verification_anchor].some((right) => anchorsOverlap(left, right))));
-    const normalized = shared
-      ? Object.freeze({ ...criterion, status: "incomplete", exceptions: [...criterion.exceptions, "proof anchor is shared across acceptance criteria"] })
+    const warnings = [
+      ...(shared ? ["proof anchor is shared across acceptance criteria"] : []),
+      ...semanticProofWarnings(criterion, all),
+    ];
+    const normalized = warnings.length
+      ? Object.freeze({ ...criterion, status: "incomplete", exceptions: [...criterion.exceptions, ...warnings] })
       : criterion;
     if (suppliedStatuses[_index] !== undefined && suppliedStatuses[_index] !== normalized.status) throw new TypeError(`verify criterion ${_index} status does not match its evidence fields`);
     return normalized;

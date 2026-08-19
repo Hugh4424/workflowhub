@@ -63,6 +63,19 @@ afterEach(() => {
 });
 
 describe("current review material and capture contracts", () => {
+  it("reports all missing verify-code materials in one preflight", () => {
+    const { root, task } = taskFixture();
+    expect(() => buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: sourceForPlanFixture,
+      task,
+      taskId: "review-materials-contract",
+      stage: "verify-code",
+      materials: {},
+    })).toThrow("MATERIAL_INCOMPLETE: missing or empty changed_files, implementation_assessment, test_context, open_risks, review_instructions");
+  });
+
   it("redacts local host paths only in the provider-derived view", () => {
     const source = { approved_direction: "See /Users/Hugh/Downloads/report.md and /tmp/private.json", refs: ["repo/spec.md"] };
     expect(redactProviderHostPaths(source)).toEqual({
@@ -149,7 +162,7 @@ describe("current review material and capture contracts", () => {
     writeFileSync(join(bundleRoot, "diff-index.json"), `${JSON.stringify({
       schema_version: "wh-review-diff-index.v1", delivery_mode: "selected_context",
       coverage: { change_ids_total: 1, change_ids_indexed: 1 },
-      changes: [{ change_id: "C-1", path: "src.mjs", shards: [{ delivery: "included", shard_id: "shard-1", bytes: Buffer.byteLength(shard), sha256: sha256(shard) }] }],
+      changes: [{ change_id: "C-1", path: "src.mjs", new_line_ranges: [{ start_line: 1, end_line: 1 }], shards: [{ delivery: "included", shard_id: "shard-1", bytes: Buffer.byteLength(shard), sha256: sha256(shard) }] }],
     })}\n`);
     expect(() => validateDiffIndexBundle(bundleRoot)).not.toThrow();
     writeFileSync(join(bundleRoot, "diff-shards", "shard-1.diff"), `${shard}tampered`);
@@ -423,7 +436,76 @@ describe("current review material and capture contracts", () => {
           test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
           review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
         },
-      })).toThrow(/current[- ]snapshot/);
+      })).toThrow(/canonical test receipt provenance is invalid/);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("accepts a phase test receipt across execution-status-only tasks writeback", async () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const tasksRoot = join(workspace.worktreeRoot, "specs", taskId);
+    mkdirSync(tasksRoot, { recursive: true });
+    const taskCard = "# Tasks\n\n### 设计\n- P4 phase remains unchanged.\n\n### 执行状态填写区\n- status: pending\n";
+    const tasksPath = join(tasksRoot, "tasks.md");
+    writeFileSync(tasksPath, taskCard);
+    writeFileSync(join(workspace.worktreeRoot, "phase.mjs"), "phase changed\n");
+    const before = captureReviewSource({ workspace, reviewDataRoot: root, taskId, phaseId: "P4", includeDiff: true });
+    const receiptRef = "quality/tests/phase-writeback.json";
+    const receipt = await runBuildCapture("true", receiptRef, {
+      task,
+      workspace,
+      outputRef: "quality/tests/output/phase-writeback.output",
+    });
+    writeFileSync(tasksPath, taskCard.replace("status: pending", "status: completed"));
+    const after = captureReviewSource({ workspace, reviewDataRoot: root, taskId, phaseId: "P4", includeDiff: true });
+    try {
+      expect(after.snapshotTree).not.toBe(before.snapshotTree);
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source: after,
+        task,
+        taskId,
+        stage: "build-code",
+        phaseId: "P4",
+        materials: {
+          approved_spec: "AC-1：阶段测试必须绑定当前 snapshot。",
+          acceptance_criteria: "AC-1：阶段测试必须绑定当前 snapshot。",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: receipt.receipt_hash },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
+        },
+      })).not.toThrow();
+    } finally {
+      before.dispose();
+      after.dispose();
+    }
+  });
+
+  it("rejects a phase test receipt without canonical provenance", () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "phase.mjs"), "phase changed\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, phaseId: "P4", includeDiff: true });
+    try {
+      const receipt = `${JSON.stringify({ command: "true", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`;
+      const receiptRef = "quality/tests/phase-forged.json";
+      task.createRecordAtomic(receiptRef, receipt);
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: "review-materials-contract",
+        stage: "build-code",
+        phaseId: "P4",
+        materials: {
+          approved_spec: "AC-1：阶段测试必须绑定当前 snapshot。",
+          acceptance_criteria: "AC-1：阶段测试必须绑定当前 snapshot。",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
+        },
+      })).toThrow(/canonical test receipt provenance is invalid/);
     } finally {
       source.dispose();
     }
@@ -478,6 +560,50 @@ describe("current review material and capture contracts", () => {
     }
   });
 
+  it("rejects a current build-code integration receipt whose command is not npm test", async () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const receiptRef = "quality/tests/integration-custom-command.json";
+    await runBuildCapture("printf integration", receiptRef, {
+      task,
+      workspace,
+      outputRef: "quality/tests/output/integration-custom-command.output",
+    });
+    const receipt = task.readRecord(receiptRef);
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    try {
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "# Spec\n\nAC-01：实现结果正确。\n",
+          acceptance_criteria: "# Acceptance\n\nAC-01：实现结果正确。\n",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              change: [{ task_id: "T001", summary: "实现已完成" }],
+              test: [{ receipt_ref: receiptRef, receipt_hash: sha256(receipt) }],
+              evidence: [{ ref: receiptRef, sha256: sha256(receipt) }],
+              anchors: [{ id: "implementation-custom-command", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现" }],
+            }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      })).toThrow(/canonical test receipt provenance is invalid/);
+    } finally {
+      source.dispose();
+    }
+  });
+
   it("still builds a semantic integration packet when the test receipt is unavailable", () => {
     const { root, task, workspace } = taskFixture();
     const taskId = task.identity.taskId;
@@ -518,6 +644,52 @@ describe("current review material and capture contracts", () => {
       expect(bundle.files).toContain("evidence/test-summary.json");
       expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({ status: "unavailable" });
       expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).included.required).toContain("evidence/test-summary.json");
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("treats an explicit missing integration test receipt as unavailable", () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    try {
+      const bundle = buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "# Spec\n\nAC-01：用户得到正确结果。\n",
+          acceptance_criteria: "# Acceptance\n\nAC-01：用户得到正确结果。\n",
+          test_evidence: { status: "missing", reason: "当前会话没有提供测试回执" },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "当前测试回执缺失",
+              change: [{ task_id: null, summary: "当前实现" }],
+              test: [],
+              evidence: [],
+              evidence_status: "unavailable",
+              evidence_reason: "当前测试回执缺失",
+              anchors: [{ id: "missing-test-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+            }],
+            implementation_anchors: [{ id: "missing-test-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      });
+      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({
+        status: "unavailable",
+        reason: "当前会话没有提供测试回执",
+      });
     } finally {
       source.dispose();
     }

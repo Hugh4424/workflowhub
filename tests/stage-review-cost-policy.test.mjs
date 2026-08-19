@@ -25,7 +25,7 @@ describe("non-code review policy", () => {
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "fullstack-slice-testing", "wh-review", "spec-analyze",
     ]);
-    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["wh-review", "spec-analyze"]);
+    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["dsh-code-review", "wh-review"]);
     for (const manifest of [buildSpec, buildPlan, buildCode, verifyCode]) {
       expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
       expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);

@@ -39,11 +39,11 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 
 审查重点：真实问题、方向对位、更小更稳的路径、关键前提、范围和时机。
 
-审查顺序固定为两次短请求、一个逻辑 review fact：第一次只让 reviewer 从原始需求和事实
-重建“要解决什么、不能做什么、失败会怎样”；第二次才揭示当前选择，要求它攻击选择和
-更小的替代路径。第一次不得看到当前选择，第二次必须消费第一次的重建结果；两次都只
-报告会伤害交付的具体问题。不要把时间花在材料命名、快照、流程、receipt 或“是否完整
-走过步骤”上。
+审查顺序固定为一次 public request、一个逻辑 review fact：请求携带 broker-owned
+`direction-review.v1` flow。内部先从原始需求和事实重建“要解决什么、不能做什么、失败会
+怎样”，到 reveal 边界后才呈现当前选择，再挑战选择和更小的替代路径。reconstruct 不得
+读取当前选择；WorkflowHub 不得用第二次 public request 拼出这个顺序。只报告会伤害交付的
+具体问题。不要把时间花在材料命名、快照、流程、receipt 或“是否完整走过步骤”上。
 
 ## detail
 
@@ -88,10 +88,10 @@ rationale、disposition。`complete` entry 必须使用可验证 anchors（id、
 
 findings、传输状态和材料绑定都是异源 review 的质量事实，不是 WorkflowHub stage 的
 通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings
-自动发起后续复审；它不表示 direction 只能发一个 broker request。direction 固定由两个
-有顺序的短请求组成：先盲重建，再揭示选择并挑战；两次合并成一个逻辑 fact。detail 只发
-一个短请求。finding 处理和最终快照变化属于业务材料变更。材料变化后的新 attempt 仍
-完整交付当前材料；旧 findings 不被改写，也不生成独立 resolution action。
+自动发起后续复审；direction 也只发一个 broker group request，内部 flow 必须提供可观察
+的 reconstruct/reveal/challenge 顺序和 reveal boundary。detail 也只发一个短请求。finding
+处理和最终快照变化属于业务材料变更。材料变化后的新 attempt 仍完整交付当前材料；旧
+findings 不被改写，也不生成独立 resolution action。
 
 ## 处置边界
 

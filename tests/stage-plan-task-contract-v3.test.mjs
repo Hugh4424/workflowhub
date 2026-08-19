@@ -6,6 +6,7 @@ import {
   validateTasksOnlyCompletionSeam,
   validatePlanTaskContract,
   validatePlanTaskContractV2,
+  validateExecutablePlanTaskMinimum,
 } from "../runtime/stage/stage-content-contracts.mjs";
 import { certifyCurrentTaskCompletion } from "../runtime/stage/stage-handlers.mjs";
 
@@ -265,6 +266,21 @@ describe("plan-task.v3 structural contract", () => {
       errors: [],
       facts: { ac_coverage: { accepted_ids: ["AC-ROBUST-001"], covered_ids: ["AC-ROBUST-001"] } },
     });
+  });
+
+  it("uses the same namespaced AC grammar in structural and executable validation", () => {
+    const namespacedSpec = spec.replaceAll("AC1", "AC-REV-004");
+    const namespacedPlan = plan.replaceAll("AC1", "AC-REV-004");
+    const namespacedTasks = tasks.replaceAll("AC1", "AC-REV-004");
+    expect(validatePlanTaskContract({ spec: namespacedSpec, plan: namespacedPlan, tasks: namespacedTasks })).toMatchObject({
+      ok: true,
+      facts: { ac_coverage: { accepted_ids: ["AC-REV-004"], covered_ids: ["AC-REV-004"] } },
+    });
+    expect(validateExecutablePlanTaskMinimum({
+      spec: namespacedSpec,
+      plan: namespacedPlan,
+      tasks: namespacedTasks,
+    })).toMatchObject({ ok: true, errors: [] });
   });
 
   it("does not treat accepted history as task completion and rejects contradictory completed claims", () => {

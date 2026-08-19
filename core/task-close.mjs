@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
 import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { captureExecutionSnapshot, captureGitWorktreeSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, captureGitWorktreeSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../runtime/evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateMiniTaskAcTrace } from "../runtime/evidence/canonical-evidence-validators.mjs";
@@ -375,21 +375,69 @@ function authenticatedQualityEvidence(task, fact) {
       const schema = value?.version === "wh-review-result.v1" ? "result" : value?.version === "wh-review-attempt.v1" ? "attempt" : null;
       if (schema === null) throw new Error(`review evidence is not a canonical wh-review result or attempt: ${entry.ref}`);
       validateSchema(schema, value);
-      const miniImplementationReview = fact.stage === "verify-code"
+      // The verify-code fact `same_build_integration_review` intentionally
+      // points at the build-code integration review produced for the same
+      // snapshot. Keep this cross-stage binding identical to freshness.mjs;
+      // mini-task implementation reviews use the same trusted exception.
+      const crossStageReview = fact.stage === "verify-code"
         && value.stage === "build-code"
-        && value.review_kind === "mini_task.implementation";
+        && (fact.subject === "same_build_integration_review"
+          || value.review_kind === "mini_task.implementation");
       if (value.task_id !== task.identity.taskId
-          || (value.stage !== fact.stage && !miniImplementationReview)
+          || (value.stage !== fact.stage && !crossStageReview)
           || value.snapshot_tree !== fact.snapshot_tree) {
         throw new Error(`review evidence is not bound to the current task/stage/snapshot: ${entry.ref}`);
       }
-      if (fact.status === "recorded" && schema !== "result") throw new Error(`recorded review fact must reference a semantic result: ${entry.ref}`);
-      if (schema === "result") authenticateReviewEvidence(task, value);
+      const reviewKind = value.review_kind ?? null;
+      const subjectMatches = fact.subject === "code_review"
+        ? value.stage === "verify-code"
+          && reviewKind === null
+          && value.subject_kind === "worktree"
+          && value.phase_id === null
+        : fact.subject === "same_build_integration_review"
+        ? value.stage === "build-code"
+          && reviewKind === null
+          && value.subject_kind === "worktree"
+          && value.phase_id === null
+          && value.review_scope === "integration"
+        : fact.subject === "integration_review"
+          ? reviewKind === null
+            && value.subject_kind === "worktree"
+            && value.phase_id === null
+            && value.review_scope === "integration"
+          : reviewKind === "mini_task.implementation"
+            ? value.stage === "build-code"
+              && value.subject_kind === "phase"
+              && value.phase_id === "mini-task-implementation"
+              && value.review_scope === "phase"
+            : reviewKind === null
+              && value.subject_kind === "worktree"
+              && value.phase_id === null;
+      if (!subjectMatches) throw new Error(`review evidence subject does not match quality fact: ${entry.ref}`);
+      if (schema === "attempt") {
+        if (fact.status !== "unavailable" || value.terminal_status !== "unavailable") {
+          throw new Error(`review attempt evidence must be an unavailable terminal fact: ${entry.ref}`);
+        }
+      } else {
+        authenticateReviewEvidence(task, value);
+      }
     } else if (fact.kind === "test") {
       const receiptStage = value?.stage;
-      const crossStageReuse = fact.stage === "verify-code" && receiptStage === "build-code";
-      if (receiptStage !== fact.stage && !crossStageReuse) throw new Error(`test evidence stage does not match quality fact: ${entry.ref}`);
-      validateCanonicalTestReceipt(value, { taskId: task.identity.taskId, stage: receiptStage, snapshotTree: fact.snapshot_tree, subject: fact.subject, requirePassed: fact.status === "passed" });
+      const expectedProducerComponent = receiptStage === "build-code"
+        ? "build-code-test-capture"
+        : receiptStage === "verify-code"
+          ? "verify-code-test-capture"
+          : undefined;
+      if (receiptStage !== fact.stage || expectedProducerComponent === undefined) {
+        throw new Error(`test evidence stage is not bound to the quality fact: ${entry.ref}`);
+      }
+      validateCanonicalTestReceipt(value, {
+        taskId: task.identity.taskId,
+        stage: receiptStage,
+        snapshotTree: fact.snapshot_tree,
+        expectedProducerComponent,
+        requirePassed: fact.status === "passed",
+      });
       const output = task.readRecord(value.output_ref);
       if (sha256(output) !== value.output_hash) throw new Error(`test evidence output hash mismatch: ${value.output_ref}`);
     } else if (fact.kind === "acceptance_criterion") {
@@ -412,7 +460,7 @@ function authenticatedQualityEvidence(task, fact) {
           taskId: task.identity.taskId,
           stage: testReceipt.stage,
           snapshotTree: fact.snapshot_tree,
-          subject: "mini-task-focused-tests",
+          expectedProducerComponent: "mini-task-focused-tests",
           // The packet is also referenced by the acceptance-criteria and
           // exception facts. Those facts describe whether the mini-task is
           // deliverable; they do not change a failed focused-test receipt
@@ -590,8 +638,27 @@ function factMatchesExpected(value, expected, root, taskId) {
 }
 
 function currentVerifyFacts(task, expected = {}) {
+  const relevantSubjects = new Set(Object.keys(STAGE_PREDICATES["verify-code"]));
   const allValues = task.listCanonicalQualityFactRefs()
-    .map((ref) => ({ ref, value: currentQualityValue(task, ref) }))
+    .map((ref) => {
+      try {
+        return { ref, value: currentQualityValue(task, ref) };
+      } catch (error) {
+        // Historical verify subjects are not part of the code-review close
+        // contract. Preserve them for audit, but do not let their retired
+        // evidence shape block a current code-review close.
+        try {
+          const value = JSON.parse(task.readRecord(ref));
+          // Only an explicitly retired non-vNext record may be ignored here.
+          // A malformed current quality-fact record must remain an integrity
+          // error; otherwise close could silently discard corrupted facts.
+          if (value?.stage === "verify-code" && !relevantSubjects.has(value.subject)) return { ref, value: null };
+        } catch {
+          // Keep the original integrity error for unreadable current facts.
+        }
+        throw error;
+      }
+    })
     .filter(({ value }) => value?.stage !== undefined);
   const currentValues = allValues
     .filter(({ value }) => factMatchesExpected(value, expected, expected.worktreeRoot, task.identity.taskId));
@@ -614,41 +681,15 @@ function currentVerifyFacts(task, expected = {}) {
       bySubject.set(item.value.subject, item);
     }
   }
-  const requiredSubjects = Object.keys({ ...STAGE_PREDICATES["verify-code"], independent_review: "review" });
+  const requiredSubjects = Object.keys(STAGE_PREDICATES["verify-code"]);
   const facts = Object.fromEntries(requiredSubjects.map((subject) => {
     const item = bySubject.get(subject);
-    return [subject, item && subject !== "full_tests_fresh" ? authenticatedQualityEvidence(task, item.value) : item?.value ?? null];
+    return [subject, item ? authenticatedQualityEvidence(task, item.value) : null];
   }));
-  const test = facts.full_tests_fresh;
-  const allowMiniTaskFocused = expected.allowMiniTaskFocused === true;
-  // A mini-task focused receipt is valid only inside the dedicated mini-task
-  // delivery path. It must never weaken the ordinary verify-code full-suite
-  // requirement for the parent task.
-  const receiptSnapshotCommit = test
-    ? authenticatedTestSnapshotCommit(task, test, {
-      currentSnapshotTree: expected.snapshotTree ?? test.snapshot_tree,
-      sourceDigest: expected.sourceDigest ?? null,
-      allowMiniTaskFocused,
-    })
-    : null;
-  // A reused test receipt proves the implementation/source snapshot. Delivery
-  // still binds the current full workspace snapshot, which may contain a
-  // material-only writeback after the test ran.
-  const snapshotCommit = test ? (expected.snapshotCommit ?? receiptSnapshotCommit) : null;
   return Object.freeze({
     vnext: true,
     facts: {
-      tests: test ? {
-        kind: test.kind,
-        snapshot_tree: test.snapshot_tree,
-        material_revision: test.material_revision,
-        snapshot_commit: snapshotCommit,
-        receipt_snapshot_commit: receiptSnapshotCommit,
-        status: test.status,
-      } : null,
-      ...Object.fromEntries(requiredSubjects
-        .filter((subject) => subject !== "full_tests_fresh")
-        .map((subject) => [subject, facts[subject]
+      ...Object.fromEntries(requiredSubjects.map((subject) => [subject, facts[subject]
           ? { kind: facts[subject].kind, snapshot_tree: facts[subject].snapshot_tree, status: facts[subject].status }
           : null])),
     },
@@ -855,7 +896,7 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, c
   if (acceptedVerify?.vnext !== true) {
     return Object.freeze({ current: false, reason: "legacy delivery close is retired; current verify-code quality facts are required" });
   }
-  const requiredKinds = { ...STAGE_PREDICATES["verify-code"], independent_review: "review" };
+  const requiredKinds = { ...STAGE_PREDICATES["verify-code"] };
   const requiredSubjects = Object.keys(requiredKinds);
   const required = requiredSubjects.map((subject) => acceptedVerify?.facts?.[subject === "full_tests_fresh" ? "tests" : subject]);
   const missing = requiredSubjects.filter((subject, index) => {
@@ -866,12 +907,9 @@ function verifyFactsFreshForClose(acceptedVerify, worktreeRoot, taskId = null, c
   });
   if (missing.length) {
     const state = existsSync(worktreeRoot) ? "current verify-code quality facts are incomplete" : "current verify-code quality facts are incomplete after worktree removal";
-    const failedTest = missing.includes("full_tests_fresh") && acceptedVerify?.facts?.tests?.status === "failed";
     return Object.freeze({
       current: false,
-      reason: failedTest
-        ? `${state}: focused test failed; delivery remains incomplete (${missing.join(", ")})`
-        : `${state}: ${missing.join(", ")}`,
+      reason: `${state}: ${missing.join(", ")}`,
     });
   }
   const snapshot = existsSync(worktreeRoot)
@@ -969,6 +1007,14 @@ function gitResult(cwd, args) {
   return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
 }
 
+function sourceWorktreeStatus(root) {
+  const raw = git(root, ["status", "--porcelain", "--untracked-files=all"]);
+  return raw.split(/\r?\n/).filter(Boolean).filter((line) => {
+    const paths = line.slice(3).split(" -> ").map((value) => value.trim().replace(/^"|"$/g, ""));
+    return !paths.every((path) => EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix)));
+  }).join("\n");
+}
+
 function oid(value, label) {
   if (!/^[a-f0-9]{40}$/i.test(value ?? "")) throw new TypeError(`${label} must be a full commit OID`);
   return value.toLowerCase();
@@ -1053,7 +1099,8 @@ function archiveFacts(root, ref, delivery) {
 function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
-  if (git(root, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("target repository must be clean");
+  const dirtySource = sourceWorktreeStatus(root);
+  if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
   if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
@@ -1158,14 +1205,14 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
-  if (taskCommit !== oid(acceptedVerify.facts.tests.snapshot_commit, "accepted verify-code snapshot_commit")) {
-    throw new Error(`delivery task_commit does not match the accepted verify-code snapshot (${taskCommit} !== ${acceptedVerify.facts.tests.snapshot_commit})`);
+  if (taskCommit !== deliverySnapshotCommit) {
+    throw new Error(`delivery task_commit does not match the current verified Workspace snapshot (${taskCommit} !== ${deliverySnapshotCommit})`);
   }
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
   if (!branchTip.ok) throw new Error("task branch does not exist");
   const tip = branchTip.stdout.toLowerCase();
   if (tip === taskCommit) {
-    if (git(worktree, ["status", "--porcelain"]) !== "") throw new Error("published task commit requires a clean task worktree");
+    if (sourceWorktreeStatus(worktree) !== "") throw new Error("published task commit requires a clean source worktree");
   } else {
     const parent = gitResult(root, ["rev-parse", `${taskCommit}^`]);
     const taskTree = gitResult(root, ["rev-parse", `${taskCommit}^{tree}`]);
@@ -1358,7 +1405,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
     const targetTip = branchOid(root, delivery.target_branch);
     const referenced = contains(delivery.task_commit, taskTip) || contains(delivery.task_commit, targetTip);
     const staged = existsSync(worktree) ? gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout : "";
-    const advanced = !existsSync(worktree) || (contains(delivery.task_commit, git(worktree, ["rev-parse", "HEAD"])) && (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) === "" || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
+    const advanced = !existsSync(worktree) || (contains(delivery.task_commit, git(worktree, ["rev-parse", "HEAD"])) && (sourceWorktreeStatus(worktree) === "" || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
     return { satisfied: referenced && advanced, task_commit: delivery.task_commit };
   };
   const archived = () => {
@@ -1416,7 +1463,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
             throw new Error("task worktree bytes changed before snapshot publish");
           }
           git(worktree, ["reset", "--mixed", delivery.task_commit]);
-          if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");
+          if (sourceWorktreeStatus(worktree) !== "") throw new Error("published task source worktree is not clean");
         },
         verify: async (value) => value.satisfied && value.task_commit === delivery.task_commit,
       };
@@ -1427,7 +1474,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           if (!published().satisfied) throw new Error("verified snapshot is not published");
           const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(worktree, delivery.spec_source_path))) {
-            if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
+          if (sourceWorktreeStatus(worktree) !== "") throw new Error("task source worktree changed before spec archive");
             createArchiveParent(worktree, delivery.spec_archive_path);
             git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
           } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
