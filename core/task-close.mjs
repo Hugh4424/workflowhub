@@ -638,6 +638,7 @@ function factMatchesExpected(value, expected, root, taskId) {
 }
 
 function currentVerifyFacts(task, expected = {}) {
+  const relevantSubjects = new Set(Object.keys(STAGE_PREDICATES["verify-code"]));
   const allValues = task.listCanonicalQualityFactRefs()
     .map((ref) => {
       try {
@@ -651,9 +652,7 @@ function currentVerifyFacts(task, expected = {}) {
           // Only an explicitly retired non-vNext record may be ignored here.
           // A malformed current quality-fact record must remain an integrity
           // error; otherwise close could silently discard corrupted facts.
-          if (value?.stage === "verify-code"
-              && value.subject !== "code_review"
-              && value.schema_version !== "quality-fact.v1") return { ref, value: null };
+          if (value?.stage === "verify-code" && !relevantSubjects.has(value.subject)) return { ref, value: null };
         } catch {
           // Keep the original integrity error for unreadable current facts.
         }

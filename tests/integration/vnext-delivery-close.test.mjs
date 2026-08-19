@@ -165,7 +165,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
     const current = captureGitWorktreeSnapshot(worktreeRoot);
     return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: current };
   }
-  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: receiptSnapshot };
+  return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot };
 }
 
 describe("vNext formal delivery close", () => {
@@ -236,7 +236,7 @@ describe("vNext formal delivery close", () => {
       kernel: state.kernel,
       delivery: {
         remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
-        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        task_commit: state.snapshot.head, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     });
