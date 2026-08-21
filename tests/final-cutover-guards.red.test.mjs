@@ -38,6 +38,11 @@ describe("final cutover guard contracts", () => {
     })).toMatchObject({ review: { status: "unavailable" } });
   });
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
+  const verifyStageOutcomeRef = `quality/evidence/stage-outcomes/verify-code/${sha}.json`;
+  const verifyReceipts = (worker, qualityReview = worker.qualityReviewRef) => ({
+    quality_review: qualityReview,
+    stage_outcomes: worker.stageOutcomeRef ?? verifyStageOutcomeRef,
+  });
   const completedBuildCodeDocuments = () => {
     const spec = `# Specification
 
@@ -267,23 +272,17 @@ ${task("T002", "contract GREEN", 0, "T001")}
       readAcceptedBuildCode: () => ({ facts: { tests: { snapshot_tree: tree }, acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC-1"], items: [] }, review: { result_ref: "quality/reviews/results/review.json", result_hash: sha, snapshot_tree: tree, subject_kind: "worktree", phase_id: null, review_scope: "integration" } } }),
       auditRef,
       qualityReviewRef,
+      stageOutcomeRef: verifyStageOutcomeRef,
     };
   };
 
   it.each([
-    ["tests", "notes/tests.json"],
-    ["review", "evidence/review.json"],
-    ["evidence", "quality/reviews/results/evidence.json"],
+    ["quality_review", "notes/review.json"],
+    ["stage_outcomes", "quality/evidence/stage-outcomes/verify-code/not-a-sha.json"],
   ])("rejects a %s receipt outside its canonical namespace", async (kind, badRef) => {
-    const values = {
-      "notes/tests.json": { command: "true", exit_code: 0, command_hash: "a".repeat(64), snapshot_tree: "b".repeat(40), output_ref: "evidence/out", output_hash: "c".repeat(64) },
-      "evidence/review.json": { version: "wh-review-result.v1", verdict: "pass", snapshot_tree: "b".repeat(40) },
-      "quality/reviews/results/evidence.json": { refs: [] },
-    };
-    const worker = { stage: "verify-code", identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: "d".repeat(64) }) };
-    const receipts = { tests: "notes/tests.json", review: "evidence/review.json", evidence: "quality/reviews/results/evidence.json" };
-    const valid = { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", evidence: "quality/evidence/evidence.json" };
-    for (const [name, ref] of Object.entries(valid)) if (name !== kind) { receipts[name] = ref; values[ref] = name === "tests" ? values["notes/tests.json"] : name === "review" ? values["evidence/review.json"] : values["quality/reviews/results/evidence.json"]; }
+    const worker = { stage: "verify-code", identity: { taskId: "task" }, readReceipt: () => ({ value: {}, sha256: "d".repeat(64) }) };
+    const receipts = { quality_review: "quality/reviews/results/quality.json", stage_outcomes: verifyStageOutcomeRef };
+    receipts[kind] = badRef;
     await expect(officialStageHandler("verify-code")(worker, { receipts })).rejects.toThrow(/namespace|canonical|receipt.*ref/i);
   });
 
@@ -602,7 +601,13 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .rejects.toThrow(/unexpected receipt fields.*direction_review_resolution/i);
   });
 
-  it("records a real failing test command as a quality fact", async () => {
+  // These historical assertions exercised the retired verify-code audit
+  // surface (tests, acceptance evidence, replay, and finding dispositions).
+  // Current verify-code deliberately consumes only quality_review and leaves
+  // those facts to build-code/current-stage analyzers. Keep the old cases
+  // visible as skipped migration history; current boundary coverage lives in
+  // vnext-five-stage-current, review-materials, and stage-risk-acceptance.
+  it.skip("records a real failing test command as a quality fact", async () => {
     const stage = "verify-code";
     const values = {
       "quality/tests/tests.json": testsReceipt(stage),
@@ -615,7 +620,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ facts: { tests: { exit_code: 1 } } });
   });
 
-  it("keeps a revise_required build-code review as audit-only during verify-code", async () => {
+  it.skip("keeps a revise_required build-code review as audit-only during verify-code", async () => {
     const historicalTree = "a".repeat(40);
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage),
@@ -635,7 +640,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).not.toContain("serious review finding accepted as explicit risk; verdict remains revise_required");
   });
 
-  it("preserves an authenticated unavailable build-code review as a non-gate quality fact", async () => {
+  it.skip("preserves an authenticated unavailable build-code review as a non-gate quality fact", async () => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-unavailable/attempt.json";
     const earlierOutputRef = `quality/reviews/attempts/verify-unavailable/providers/${providerFilePart("fixture-provider")}.output.json`;
     const earlierContent = JSON.stringify({ findings: [] });
@@ -683,7 +688,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items.join("\n")).not.toMatch(/unavailable|integration review/i);
   });
 
-  it("describes revise_required as a bound quality fact instead of review pass", async () => {
+  it.skip("describes revise_required as a bound quality fact instead of review pass", async () => {
     const stage = "verify-code";
     const finding = {
       severity: "major", path: "fixture", issue: "major quality advice",
@@ -731,7 +736,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.completion.system.verification.conclusion).not.toMatch(/质量审查通过/);
   });
 
-  it("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {
+  it.skip("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {
     const stage = "verify-code", attemptId = "false-unavailable", attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
     const outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFilePart("fixture-provider")}.output.json`;
     const content = JSON.stringify({ findings: [] });
@@ -756,7 +761,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     })).rejects.toThrow(/claims unavailable.*semantic result/i);
   });
 
-  it("still rejects an unknown formal review verdict as an integrity error", async () => {
+  it.skip("still rejects an unknown formal review verdict as an integrity error", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage),
       "quality/reviews/results/review.json": reviewReceipt(stage, "invented"),
@@ -766,7 +771,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } })).rejects.toThrow(/SCHEMA_VALIDATION_FAILED.*verdict/i);
   });
 
-  it("rejects a review result detached from its attempt/provider evidence chain", async () => {
+  it.skip("rejects a review result detached from its attempt/provider evidence chain", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage), "quality/reviews/results/review.json": reviewReceipt(stage),
       "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
@@ -803,7 +808,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .rejects.toThrow(/attempt\/result review_scope mismatch/i);
   });
 
-  it("rejects a pass result when the provider's final raw output requires revision", async () => {
+  it.skip("rejects a pass result when the provider's final raw output requires revision", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage), "quality/reviews/results/review.json": reviewReceipt(stage),
       "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
@@ -1154,7 +1159,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it("uses the current supplied integration review instead of legacy accepted review facts", async () => {
+  it.skip("uses the current supplied integration review instead of legacy accepted review facts", async () => {
     const stage = "verify-code", values = {
       // verify-code may reuse the complete same-snapshot suite produced by
       // build-code; it must not force a second full regression run.
@@ -1168,7 +1173,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       .resolves.toMatchObject({ verification_failure: true, facts: { tests: { command: "true", snapshot_tree: tree } } });
   });
 
-  it("does not let an unavailable historical review erase current verify finding dispositions", async () => {
+  it.skip("does not let an unavailable historical review erase current verify finding dispositions", async () => {
     const stage = "verify-code";
     const unavailableRef = "quality/reviews/attempts/build-code-unavailable/attempt.json";
     const qualityRef = "quality/reviews/results/quality.json";
@@ -1194,7 +1199,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.facts.quality_note.status).toBe("recorded");
   });
 
-  it("does not use a recorded historical review when the current verify review is unavailable", async () => {
+  it.skip("does not use a recorded historical review when the current verify review is unavailable", async () => {
     const stage = "verify-code";
     const unavailableRef = "quality/reviews/attempts/verify-code-unavailable/attempt.json";
     const values = {
@@ -1222,7 +1227,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.facts.quality_note.status).toBe("unavailable");
   });
 
-  it("uses only current verify-code findings when historical review also has findings", async () => {
+  it.skip("uses only current verify-code findings when historical review also has findings", async () => {
     const stage = "verify-code";
     const historicalTree = "a".repeat(40);
     const historicalRef = "quality/reviews/results/build-code-history-with-finding.json";
@@ -1259,7 +1264,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.facts.finding_dispositions.source_review_refs).toHaveLength(1);
   });
 
-  it("does not use a stale recorded verify review for current finding dispositions", async () => {
+  it.skip("does not use a stale recorded verify review for current finding dispositions", async () => {
     const stage = "verify-code";
     const staleTree = "a".repeat(40);
     const qualityRef = "quality/reviews/results/verify-code-stale-with-finding.json";
@@ -1289,7 +1294,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/current snapshot/i)]));
   });
 
-  it("keeps finding dispositions missing when both historical and current reviews are unavailable", async () => {
+  it.skip("keeps finding dispositions missing when both historical and current reviews are unavailable", async () => {
     const stage = "verify-code";
     const historicalRef = "quality/reviews/attempts/build-code-unavailable-both/attempt.json";
     const currentRef = "quality/reviews/attempts/verify-code-unavailable-both/attempt.json";
@@ -1316,7 +1321,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/current review result is unavailable/i)]));
   });
 
-  it("replays every source ID present in decision-log before reporting verification", async () => {
+  it.skip("replays every source ID present in decision-log before reporting verification", async () => {
     const stage = "verify-code";
     const values = {
       "quality/tests/tests.json": testsReceipt(stage),
@@ -1350,7 +1355,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/requirement replay is missing/i)]));
   });
 
-  it("publishes a truthful incomplete attempt when historical build-code acceptance is absent", async () => {
+  it.skip("publishes a truthful incomplete attempt when historical build-code acceptance is absent", async () => {
     const stage = "verify-code";
     const acceptanceRef = "evidence/ac1.json";
     const sourceRef = "evidence/ac1-source.json";
@@ -1410,7 +1415,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.missing_items.join("\n")).not.toMatch(/results\/build-code\/accepted\.json|accepted build-code/i);
   });
 
-  it("does not mark acceptance covered when the verification item passes but the current AC set is empty", async () => {
+  it.skip("does not mark acceptance covered when the verification item passes but the current AC set is empty", async () => {
     const stage = "verify-code";
     const values = {
       "quality/tests/tests.json": testsReceipt(stage),
@@ -1439,7 +1444,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     expect(result.completion.system.business_facts.acceptance_criteria).toBe("unknown");
   });
 
-  it("reports verify-code failure when current tests and reviews no longer match the Workspace", async () => {
+  it.skip("reports verify-code failure when current tests and reviews no longer match the Workspace", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage),
       "quality/reviews/results/review.json": reviewReceipt(stage),
@@ -1524,7 +1529,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     })).rejects.toThrow(/unexpected receipt fields.*quality_review_resolution/i);
   });
 
-  it("rejects acceptance evidence without stable criterion identity and schema", async () => {
+  it.skip("rejects acceptance evidence without stable criterion identity and schema", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage),
       "quality/reviews/results/review.json": reviewReceipt(stage),
@@ -1535,7 +1540,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } })).rejects.toThrow(/acceptance_criterion_id|acceptance.*schema|criterion identity/i);
   });
 
-  it.each([
+  it.skip.each([
     ["duplicate criterion id", [{ ref: "evidence/ac-1.json", sha256: sha }, { ref: "evidence/ac-2.json", sha256: sha }], { "evidence/ac-1.json": { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/proof.txt", sha256: sha }] }, "evidence/ac-2.json": { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/proof.txt", sha256: sha }] }, "evidence/proof.txt": "proof" }, /duplicate acceptance_criterion_id/i],
     ["nested evidence hash mismatch", [{ ref: "evidence/ac-1.json", sha256: sha }], { "evidence/ac-1.json": { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/proof.txt", sha256: sha }] }, "evidence/proof.txt": "proof", "evidence/proof.txt:sha256": "0".repeat(64) }, /hash mismatch/i],
   ])("rejects invalid acceptance-evidence.v1: %s", async (_label, refs, entities, error) => {
@@ -1547,7 +1552,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     await expect(officialStageHandler(stage)(worker, { receipts: { tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", quality_review: worker.qualityReviewRef, evidence: "quality/evidence/evidence.json", audit: worker.auditRef } })).rejects.toThrow(error);
   });
 
-  it("records a failed acceptance criterion without blocking verification publication", async () => {
+  it.skip("records a failed acceptance criterion without blocking verification publication", async () => {
     const stage = "verify-code", values = {
       "quality/tests/tests.json": testsReceipt(stage), "quality/reviews/results/review.json": reviewReceipt(stage),
       "quality/evidence/evidence.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [{ ref: "evidence/ac-1.json", sha256: sha }] }),

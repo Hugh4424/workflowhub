@@ -277,7 +277,7 @@ test("client classifies a spawn failure separately from a malformed public resul
 });
 
 test("client rejects provider results that expose unlisted absolute Unix paths", async () => {
-  for (const path of ["/workspace/subject.md", "/srv/review/subject.md"]) {
+  for (const path of ["/workspace/subject.md", "/srv/review/subject.md", "/secret/data", "//server/share/review.md", "C:\\private\\review.md"]) {
     const bad = group(["opencode/v4flash"]);
     bad.providers[0].output = JSON.stringify({ findings: [{ severity: "major", path, issue: "leak", recommendation: "remove" }] });
     const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(bad)}\n`, stderr: "" }) });
@@ -291,6 +291,16 @@ test("client allows slash notation that follows a Unicode word", async () => {
   value.providers[0].output = JSON.stringify({ findings: [{
     severity: "major", path: "requirements/open_risks.json",
     issue: "代码/AC/oracle/接口变化需要重新绑定事实", recommendation: "补齐当前事实",
+  }] });
+  const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
+  await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))
+    .resolves.toMatchObject({ providers: [{ status: "completed" }] });
+});
+
+test("client allows provider-relative API routes", async () => {
+  const value = group(["opencode/v4flash"]);
+  value.providers[0].output = JSON.stringify({ findings: [{
+    severity: "major", path: "/api/items/:id", issue: "保持既有 API 语义", recommendation: "保留当前路由契约",
   }] });
   const client = new ReviewProviderClient({ invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(value)}\n`, stderr: "" }) });
   await expect(client.runGroup({ hostProvider: "codex/terra", providers: ["opencode/v4flash"], materials: materials(), prompt: "review" }))

@@ -21,12 +21,14 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { appendMonitoringFacts, initializeTaskStore, readMonitoringFacts } from "../../runtime/task/task-store.mjs";
 import { createMonitoringFact } from "../../runtime/evidence/monitoring-facts.mjs";
-import { createRegisteredCodexSource, parseRegisteredCodexTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
+import { createRegisteredCodexSource, parseRegisteredCodexTranscript, parseRegisteredRequirementTranscript } from "../../runtime/evidence/codex-transcript-adapter.mjs";
 import { createTranscriptSourceReader } from "../../runtime/evidence/fact-collector.mjs";
 import { publishTaskMonitoringProjection, rebuildGlobalMonitoringSnapshot } from "../../runtime/evidence/monitoring-projector.mjs";
 import { CANONICAL_STAGE_SLUGS, loadStageManifest } from "../../runtime/stage/step-manifest.mjs";
@@ -133,7 +135,7 @@ function resolveRolloutStartedAt(env = process.env, now = Date.now()) {
   return numeric;
 }
 
-function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER }) {
+function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, sessionId, startedAtMs, endedAtMs = Number.MAX_SAFE_INTEGER }) {
   const records = [];
   for (const [index, line] of String(raw).split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
@@ -151,6 +153,20 @@ function normalizeCodexRollout(raw, { taskId, runId, attemptId, stage, startedAt
       stage,
       ...(attemptId ? { attempt_id: attemptId } : {}),
     };
+    if (payloadType === "requirement_message") {
+      records.push(JSON.stringify({
+        id: safeRolloutId(payload.id ?? `${index}-requirement`),
+        type: "requirement_message",
+        ...common,
+        session_id: sessionId,
+        source_version: typeof payload.source_version === "string" ? payload.source_version : "v1",
+        order: payload.order,
+        message_class: payload.message_class,
+        content: payload.content,
+        content_hash: payload.content_hash,
+      }));
+      continue;
+    }
     if (outer.type === "event_msg" && payloadType === "token_count") {
       // Codex records usage as event_msg/token_count rather than as a
       // response_item/message.  Keep the per-turn usage (not the cumulative
@@ -235,12 +251,13 @@ export function resolveDefaultMonitoringSource({ context, task_id, run_id, attem
     source_version: "v1",
     cli_version: env.CODEX_CLI_VERSION ?? "codex-host",
     adapter_version: "codex-rollout-adapter.v1",
-    capabilities: ["transcript_event", "token", "tool_use"],
+    capabilities: ["transcript_event", "token", "tool_use", "requirement_message"],
     reader: createTranscriptSourceReader(() => normalizeCodexRollout(readFileSync(located.target, "utf8"), {
       taskId: task_id ?? context?.identity?.taskId,
       runId: run_id ?? context?.workflowRunId,
       attemptId: attempt_id ?? context?.attempt_id ?? null,
       stage: context?.stage ?? null,
+      sessionId: safeRolloutId(located.threadId),
       startedAtMs,
       endedAtMs,
     })),
@@ -266,10 +283,21 @@ export function bindCurrentSessionOutcome({ context, stage, input, cwd = process
   const attemptId = typeof input?.attempt_id === "string" && input.attempt_id.trim()
     ? input.attempt_id
     : currentSessionAttemptId(session.session_id, taskId, stage);
+  const requirementAuthentication = stage === "make-decision"
+    ? parseRegisteredRequirementTranscript(resolveDefaultMonitoringSource({
+      context,
+      task_id: taskId,
+      run_id: context.workflowRunId,
+      attempt_id: attemptId,
+      startedAtMs: resolveRolloutStartedAt(),
+      cwd,
+    }), { stage })
+    : null;
   const published = publishCurrentWorkflowHubSession({
     context,
     stage,
     attemptId,
+    requirementAuthentication,
     input: {
       session: {
         host: session.host,
@@ -761,6 +789,19 @@ export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
   });
 }
 
+function currentProductReleaseView({ context, currentSnapshot, materialRevision, materials }) {
+  return deriveCurrentProductRelease({
+    task_id: context.identity.taskId,
+    read: context.task.readRecord,
+    refs: context.task.listCanonicalQualityFactRefs(),
+    snapshot_tree: currentSnapshot?.tree,
+    material_revision: materialRevision,
+    snapshot_root: context.workspace?.worktreeRoot ?? null,
+    expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
+    evaluate_freshness: evaluateFactFreshness,
+  });
+}
+
 function parseArgs(argv) {
   const [command, ...raw] = argv;
   const values = {};
@@ -888,7 +929,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           throw error;
         }
       });
-      materialRevision = `revision-${sha256(JSON.stringify(materialValues))}`;
+      materialRevision = materialRevisionFromValues(materialValues);
     }
     const observations = [];
     for (const ref of context.task.listCanonicalQualityFactRefs()) {
@@ -913,12 +954,23 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     const quality = deriveStageCompletion(values.stage, observations);
     const progression = deriveStageProgress(values.stage, observations, materials);
+    const productRelease = current
+      ? currentProductReleaseView({ context, currentSnapshot: current, materialRevision, materials })
+      : deriveProductRelease({
+        stage_completions: [],
+        acceptance_results: [],
+        expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
+        verify_confirmation: null,
+      });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,
       quality_missing: quality.missing,
       quality_fact_refs: Object.freeze(observations.map(({ fact }) => fact.ref).sort()),
       quality_predicates: quality.predicates,
+      product_release_status: productRelease.status,
+      product_release_reasons: productRelease.reasons,
+      product_release_input_refs: productRelease.input_refs,
     });
   }
   authenticateStageWriteBoundary(context, {

@@ -12,9 +12,11 @@
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
    真实暴露。
 3. `make-decision`、`build-spec`、`build-plan`、`build-code` 各自在本 stage 收尾调用
-   `spec-analyze`，检查实际语义和产物事实。`verify-code` 不调用它，改由 `dsh-code-review`
-   做当前实现的代码审查。两类结果都只是事实和摘要，不是第二套推进状态机或新 gate；缺失
-   事实不能阻止同 task 修复，也不能被伪造成通过。
+   `spec-analyze`。它是这四个 stage 的唯一 stage-end 语义检查和质量事实契约 owner；
+   `verify-code` 不调用它，改由 `dsh-code-review` 做当前实现的代码审查。现有 stage
+   publication 是唯一写入路径，原子写入 `quality/facts` 与 acceptance evidence。
+   `spec-analyze` 不直接改四份材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
+   缺失或 `unavailable` 不等于通过，也不能阻止同 task 修复。
 
 ## 五个 stage 的总览
 
@@ -26,9 +28,23 @@
 | `build-code` | 四份材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
 | `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 用户确认；随后才谈 close |
 
-每个 stage 还会产生既有 `quality/evidence/`、`quality/tests/`、
-`quality/reviews/` 或 stage outcome 事实。它们用于证明实际发生了什么，不会覆盖四份
-材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
+每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
+`quality/reviews/results/` 或 `quality/reviews/attempts/`，以及 stage outcome 事实。前四 stage 的 `spec-analyze` 结果由现有 stage
+publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
+什么，不会覆盖四份材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
+
+## 四个状态视角和十个读取入口
+
+四个视角只从当前事实即时派生：`work_progress` 看能否继续修复，`stage_quality` 看本阶段
+质量是否闭合，`product_release` 由 `completion-predicates.mjs` 的
+`deriveProductRelease()` 读取五阶段 current completion、逐 AC 结果和 verify-code 当前确认，
+同时接收批准 spec 的完整适用 AC ID 集合；缺失、重复、意外、非 current 或身份未绑定的输入
+只能得到 `not_released`，延期/不适用项不能被猜成通过。
+`physical_delivery` 只看 close 的真实物理结果。它们不是新状态机，也不是继续工作的许可证。
+
+host、doctor、status、monitor、run、review、verify、confirm、authorize、close 只按职责读取
+这些视角；先给主结论，再给当前绑定、失败原因、未改变事实和唯一下一步。任何入口都不能把
+“还能继续修复”、`unavailable`、`not_released` 或 physical delivery 已完成显示成正常完成。
 
 ## 通用执行合同
 
@@ -65,7 +81,7 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 
 ### stage 结束
 
-`make-decision`、`build-spec`、`build-plan`、`build-code` 在各自 stage 结束前调用对应的
+`make-decision`、`build-spec`、`build-plan`、`build-code` 在各自 stage 结束前唯一调用对应的
 `spec-analyze` profile；`verify-code` 改用 `dsh-code-review` 和一次异源代码 review。并把
 与本 stage 职责对应的摘要交给用户：
 
@@ -76,7 +92,9 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 5. 剩余风险、未决和延期；
 6. 下游可以直接消费什么、不能自行猜什么。
 
-摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实；Git
+发现的 finding 必须先在当前 stage 修复，再重跑受影响的 `spec-analyze` profile；不能静默
+交给下游。六项摘要和 `unavailable`/`incomplete` 事实随现有 stage outcome 交接，不新建
+store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实；Git
 commit、merge、push、cleanup 和正式 close 始终是独立授权与物理读回动作。
 
 ## `make-decision`：把需求和前置条件一次弄清楚
@@ -101,9 +119,9 @@ commit、merge、push、cleanup 和正式 close 始终是独立授权与物理�
 9. `write-decision-draft`：把原始需求、关键事实、选择、理由、风险、非目标和延期写入
    同一份 `decision-log.md`。
 10. `detail-advice`：审查细节，不改变用户未确认的方向。
-11. `stage-end-spec-analyze`：检查原始需求、决策语义、用户流程、前置材料和证据，并在本
-    stage 修复缺口。
-12. `approve-decision`：记录用户真实确认或拒绝，不推断答案。
+11. `approve-decision`：记录用户真实确认或拒绝，并把确认绑定到当前 decision-log 和交互事实。
+12. `stage-end-spec-analyze`：检查原始需求、决策语义、完整交互、最终确认、用户流程、前置
+    材料和证据，并在本 stage 修复缺口；若修复改变方向，重新确认后再分析。
 13. `publish-decision`：交接已确认的 `decision-log.md` 和阶段事实。
 
 ### 本阶段必须形成的内容
@@ -285,8 +303,8 @@ push、merge、cleanup 不在 build-code 中自动执行。
 7. `run-final-code-check-and-handoff`：做必要的最终代码检查并交接剩余代码风险。
 8. `publish-code-review-fact`：写入当前代码 review 质量事实。
 9. `handoff-code-review`：用大白话交接代码入口、consumer、修复和风险。
-10. `code-review-closure`：整理一次代码审查结论；不补材料、不补 AC、不补证据树。
-11. `publish-code-review-result`：汇报代码审查结果并在 close 前停下。
+10. `approve-verification`：整理一次代码审查结论并取得 verify-code 确认；不补材料、不补 AC、不补证据树。
+11. `publish-verification-result`：汇报代码审查结果并在 close 前停下。
 
 ### 产物、完成与失败边界
 
@@ -303,7 +321,7 @@ push、merge、cleanup 不在 build-code 中自动执行。
 ### 下游交接和停止点
 
 verify-code 结束时只汇报代码入口、consumer、修复、异源 findings、必要检查和剩余代码风险。若用户另行授权，
-后续才执行计划内 commit、merge、push、cleanup 和物理读回；本规范不把 close 自动塞进 verify，
+后续才执行计划内 commit、archive、merge、push、cleanup 和物理读回；本规范不把 close 自动塞进 verify，
 也不在缺失证据时用补救式重跑掩盖问题。
 
 ## `mini-task` 的位置
@@ -314,6 +332,23 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 它适合边界清楚、单一结果、影响面有限且没有重大架构/迁移/权限/安全决定的功能；用户明确
 指定时可以使用，但 Agent 必须说明风险。来自 A 的 mini-task 完成后，A 按普通 stage 重新调用
 继续，不把 mini-task 结果伪装成 A 已完成。
+
+## close 的两条执行路径
+
+正常 close 和 `manual-close` 都必须先冻结同一份 delivery plan，再分别取得 close confirmation 和
+commit、archive、merge、push、cleanup 的独立授权。close executor 每一步都先探测、再执行、再写入
+不可变 operation fact；中途失败只重试尚未完成且安全的动作，目标漂移就重新 prepare/confirm/authorize。
+
+- **正常 close**：要求五阶段质量、产品发布和物理交付前置都已闭合，完成后写
+  `operations/close/completed.json`（`task-close-completed.v1`）。
+- **`manual-close`**：只在用户明确接受质量/发布风险后使用。`prepare --risk-close=true` 把风险理由、延期项
+  和质量缺口绑定进 plan；`manual-close --plan-hash=... --confirmation-ref=...` 仍执行同一套真实物理动作。
+  物理动作完成后写 `quality/evidence/manual-risk-close/<hash>.json`，其中
+  `physical_actions_completed=true`；不写 normal completion，也不把 `stage_quality`、`product_release`
+  或顶层任务改成完成。
+
+`manual-close` 不是“只记一条风险记录”的快捷方式，也不是新的 stage、FSM、store 或公共 runtime 行为。
+没有独立授权时它必须在第一步前失败并保持零物理写。
 
 ## 四层状态的最终读法
 

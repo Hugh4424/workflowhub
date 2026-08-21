@@ -14,6 +14,7 @@ const KNOWN_IGNORED_GENERATED = Object.freeze([
   ".pytest_cache",
   "test-results",
   "node_modules",
+  "frontend/test-results",
   "frontend/node_modules",
   "frontend/dist",
   "data/local-qa-m08",
@@ -54,6 +55,7 @@ function relativeWorktreePath(value, label) {
 function isKnownIgnoredGenerated(path) {
   return path === ".DS_Store"
     || path.split("/").includes("__pycache__")
+    || path.split("/").includes(".venv")
     || KNOWN_IGNORED_GENERATED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
@@ -80,6 +82,7 @@ export function inspectWorktreeCleanup(worktreeRoot) {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 32 * 1024 * 1024,
   }));
   const tracked = [];
   const untracked = [];
@@ -90,7 +93,7 @@ export function inspectWorktreeCleanup(worktreeRoot) {
     const status = field.slice(0, 2);
     const path = relativeWorktreePath(field.slice(3), "task worktree cleanup scan");
     const entry = Object.freeze({ status, path });
-    if ((status === "??" || status === "!!") && isExecutionSidecar(path)) execution_sidecars.push(entry);
+    if (isExecutionSidecar(path)) execution_sidecars.push(entry);
     else if (status === "??") untracked.push(entry);
     else if (status === "!!") {
       (isKnownIgnoredGenerated(path) ? ignored_generated : ignored_unknown).push(entry);
@@ -145,6 +148,16 @@ function removeKnownExecutionSidecar(root, entry) {
   rmSync(target, { recursive: true, force: false });
 }
 
+function restoreTrackedExecutionSidecar(root, entry) {
+  if (!isExecutionSidecar(entry.path)) throw cleanupError({
+    tracked: [], untracked: [], ignored_unknown: [entry], ignored_generated: [], execution_sidecars: [],
+  });
+  execFileSync("git", ["restore", "--worktree", "--", entry.path], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
 function deterministicWorkspace(task) {
   const targetRepoRoot = realGitToplevel(task.manifest.target_repo_root, "target repository");
   const branch = `task/${task.identity.projectName}/${task.identity.taskId}`;
@@ -159,6 +172,7 @@ function inspectTargetStatus(targetRepoRoot) {
     cwd: targetRepoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 32 * 1024 * 1024,
   }));
   const entries = raw.split("\0").filter(Boolean).map((field) => {
     const status = field.slice(0, 2);
@@ -484,7 +498,10 @@ export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
       const cleanup = inspectWorktreeCleanup(expected.worktreeRoot);
       if (!cleanup.safe) throw cleanupError(cleanup);
       for (const entry of cleanup.ignored_generated) removeKnownIgnoredGenerated(expected.worktreeRoot, entry);
-      for (const entry of cleanup.execution_sidecars) removeKnownExecutionSidecar(expected.worktreeRoot, entry);
+      for (const entry of cleanup.execution_sidecars) {
+        if (entry.status === "??" || entry.status === "!!") removeKnownExecutionSidecar(expected.worktreeRoot, entry);
+        else restoreTrackedExecutionSidecar(expected.worktreeRoot, entry);
+      }
       const afterCleanup = inspectWorktreeCleanup(expected.worktreeRoot);
       if (!afterCleanup.safe) throw cleanupError(afterCleanup);
       execFileSync("git", ["worktree", "remove", "--", expected.worktreeRoot], { cwd: expected.targetRepoRoot, stdio: ["ignore", "pipe", "pipe"] });

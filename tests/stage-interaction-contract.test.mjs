@@ -128,7 +128,7 @@ describe("current interaction boundary", () => {
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
   });
 
-  it("executes the 13 steps in Talk -> direction advice -> Grill -> detail advice -> consistency -> confirmation order", () => {
+  it("executes the 13 steps in Talk -> direction advice -> Grill -> detail advice -> confirmation -> consistency order", () => {
     expect(makeSteps.map(({ step_slug }) => step_slug)).toEqual([
       "load-context",
       "triage-scope",
@@ -140,8 +140,8 @@ describe("current interaction boundary", () => {
       "grill-with-docs",
       "write-decision-draft",
       "detail-advice",
-      "stage-end-spec-analyze",
       "approve-decision",
+      "stage-end-spec-analyze",
       "publish-decision",
     ]);
     expect(makeSteps.find((step) => step.step_slug === "direction-advice").order)

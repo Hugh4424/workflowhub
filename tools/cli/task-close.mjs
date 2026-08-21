@@ -15,7 +15,6 @@ import {
   executeClosePlan,
   inspectDeliveryCloseState,
   prepareDeliveryClosePlan,
-  recordManualDeliveryClose,
 } from "../../core/task-close.mjs";
 
 const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -61,12 +60,12 @@ function optionalCompletion(task) {
 function usage() {
   return [
     "Usage:",
-    "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=...",
+    "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=... [--risk-close=true --risk-reason=... --deferred-items=a,b]",
     "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout",
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... --plan-hash=...",
-    "  task-close.mjs manual-close --task-path=... --project=... --task=... --source-ref=... --risk-accepted=true --risk-reason=... [--source-hash=...] [--deferred-items=a,b]",
+    "  task-close.mjs manual-close --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
   ].join("\n");
 }
 
@@ -92,21 +91,8 @@ async function main() {
     });
     return result;
   };
-  if (command === "manual-close") {
-    const result = recordManualDeliveryClose({
-      task,
-      kernel,
-      sourceRef: required(values, "source-ref"),
-      riskAccepted: values["risk-accepted"] === "true",
-      riskReason: required(values, "risk-reason"),
-      deferredItems: values["deferred-items"] === undefined
-        ? []
-        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
-      ...(values["source-hash"] === undefined ? {} : { sourceHash: values["source-hash"] }),
-    });
-    return finish(result, result.output_ref);
-  }
   if (command === "prepare") {
+    const riskClose = values["risk-close"] === "true" || values["risk-accepted"] === "true";
     const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
       task_branch: required(values, "task-branch"),
       target_branch: required(values, "target-branch"),
@@ -114,7 +100,15 @@ async function main() {
       task_commit: required(values, "task-commit"),
       spec_source_path: required(values, "spec-source"),
       spec_archive_path: required(values, "spec-archive"),
-    } });
+    },
+    riskClose,
+    ...(riskClose ? {
+      riskReason: required(values, "risk-reason"),
+      deferredItems: values["deferred-items"] === undefined
+        ? []
+        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
+    } : {}),
+    });
     return finish(result, `operations/close/plans/${result.plan_hash}/plan.json`);
   }
   const plan = preparedPlan(task, required(values, "plan-hash"));
@@ -123,6 +117,7 @@ async function main() {
     return finish(result, result.ref);
   }
   if (command === "execute") {
+    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan must use manual-close");
     const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
     const sourceRef = result.status === "completed"
       ? "operations/close/completed.json"
@@ -132,6 +127,17 @@ async function main() {
   if (command === "complete") {
     const result = await completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
     return finish(result, "operations/close/completed.json");
+  }
+  if (command === "manual-close") {
+    const result = await executeClosePlan({
+      task,
+      kernel,
+      plan,
+      riskClose: true,
+      closeConfirmationRef: required(values, "confirmation-ref"),
+      executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }),
+    });
+    return finish(result, result.status === "completed_with_risk" ? result.output_ref : required(values, "confirmation-ref"));
   }
   const completion = optionalCompletion(task);
   if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {

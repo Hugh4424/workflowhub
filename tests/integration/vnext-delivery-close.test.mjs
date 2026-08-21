@@ -8,18 +8,138 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { prepareDeliveryClosePlan } from "../../core/task-close.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { publishVerifySummary } from "../../runtime/evidence/quality-store.mjs";
+import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
+import { writeCanonicalStageMaterials } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot }) {
+  const publishFixtureFact = (stage, kind, subject, status = "passed") => {
+    const base = `quality/evidence/release-fixture/${stage}-${subject}`;
+    let ref;
+    let raw;
+    let evidenceType;
+    if (kind === "acceptance_criterion") {
+      const nestedRef = `${base}-proof.json`;
+      const nestedRaw = `${JSON.stringify({ schema_version: "workflowhub-release-fixture-proof.v1", task_id: task.identity.taskId, stage, subject, snapshot_tree: snapshot.tree })}\n`;
+      kernel.publishCanonicalRecord(nestedRef, nestedRaw);
+      ref = `${base}.json`;
+      raw = `${JSON.stringify({
+        schema_version: "acceptance-evidence.v1",
+        acceptance_criterion_id: subject,
+        result: status === "passed" ? "pass" : "fail",
+        refs: [{ ref: nestedRef, sha256: sha256(nestedRaw) }],
+        snapshot_tree: snapshot.tree,
+        summary: { actual_outcome: status === "passed" ? "fixture passed" : "fixture failed" },
+      })}\n`;
+      evidenceType = "acceptance_evidence";
+    } else if (kind === "test") {
+      const outputRef = `quality/tests/output/release-fixture/${stage}-${subject}.output`;
+      const outputRaw = status === "passed" ? "fixture passed\n" : "fixture failed\n";
+      kernel.publishCanonicalRecord(outputRef, outputRaw);
+      ref = `${base}.json`;
+      const command = "true";
+      raw = `${JSON.stringify({
+        schema_version: "workflowhub-receipt.v1",
+        task_id: task.identity.taskId,
+        stage,
+        producer: { stage, component: "build-code-test-capture", version: "fixture" },
+        command,
+        command_hash: sha256(command),
+        exit_code: status === "passed" ? 0 : 1,
+        snapshot_head: snapshot.head,
+        snapshot_tree: snapshot.tree,
+        snapshot_commit: snapshot.commit,
+        output_ref: outputRef,
+        output_hash: sha256(outputRaw),
+      })}\n`;
+      evidenceType = "test_receipt";
+    } else {
+      throw new Error(`unsupported release fixture fact kind: ${kind}`);
+    }
+    kernel.publishCanonicalRecord(ref, raw);
+    kernel.publishVNextQualityFact(stage, {
+      kind,
+      status,
+      subject,
+      evidence: [{ ref, sha256: sha256(raw), evidence_type: evidenceType }],
+    });
+  };
+
+  for (const subject of ["scope", "non_goals", "risks", "talk_clarify", "stage_end_spec_analyze", "finding_dispositions"]) {
+    publishFixtureFact("make-decision", "acceptance_criterion", subject);
+  }
+  kernel.publishHumanConfirmation("make-decision", { decision: "accepted", subject_ref: "fixture/make-decision" });
+  for (const subject of ["zero_major_ambiguities", "stage_end_spec_analyze", "finding_dispositions"]) {
+    publishFixtureFact("build-spec", "acceptance_criterion", subject);
+  }
+  for (const subject of ["fr_coverage", "ac_coverage", "dependencies", "deletion_proofs", "executable_tasks", "stage_end_spec_analyze", "finding_dispositions"]) {
+    publishFixtureFact("build-plan", "acceptance_criterion", subject);
+  }
+  kernel.publishHumanConfirmation("build-plan", { decision: "accepted", subject_ref: "fixture/build-plan" });
+  publishFixtureFact("build-code", "test", "risk_tests_fresh");
+  publishFixtureFact("build-code", "acceptance_criterion", "acceptance_criteria");
+  publishFixtureFact("build-code", "acceptance_criterion", "stage_end_spec_analyze");
+  publishFixtureFact("build-code", "acceptance_criterion", "finding_dispositions");
+  const review = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: snapshot.tree, provider: "fixture", verdict: "pass" });
+  const reviewRaw = task.readRecord(review.resultRef);
+  kernel.publishVNextQualityFact("build-code", {
+    kind: "review",
+    status: "recorded",
+    subject: "integration_review",
+    evidence: [{ ref: review.resultRef, sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+  });
+
+  const materialRevision = materialRevisionFromValues(
+    ["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, artifacts.read(name)]),
+  );
+  const sourceDigest = "c".repeat(64);
+  const acceptanceLeafRaw = `${JSON.stringify({
+    schema_version: "acceptance-evidence.v1",
+    acceptance_criterion_id: "AC-001",
+    result: "pass",
+    refs: [{ ref: "quality/evidence/release-fixture/ac-001-proof.json", sha256: sha256("ac-001-proof\n") }],
+    snapshot_tree: snapshot.tree,
+    source_digest: sourceDigest,
+    summary: { actual_outcome: "fixture passed" },
+  })}\n`;
+  kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-leaf.json", acceptanceLeafRaw);
+  kernel.publishCanonicalRecord("quality/evidence/release-fixture/ac-001-proof.json", "ac-001-proof\n");
+  publishVerifySummary(task.taskPath, {
+    schema_version: "quality-verify.v1",
+    status: "passed",
+    source_digest: sourceDigest,
+    material_digest: materialRevision.slice("revision-".length),
+    material_revision: materialRevision,
+    snapshot_tree: snapshot.tree,
+    criteria: [{
+      acceptance_criterion_id: "AC-001",
+      result: "pass",
+      source_digest: sourceDigest,
+      acceptance_leaf: { ref: "quality/evidence/release-fixture/ac-001-leaf.json", sha256: sha256(acceptanceLeafRaw) },
+      nested_evidence: [{ ref: "quality/evidence/release-fixture/ac-001-proof.json", sha256: sha256("ac-001-proof\n") }],
+      scenario: "执行当前夹具并读取结果",
+      oracle: "结果状态为通过",
+      actual_outcome: "当前夹具结果为通过",
+      evidence_type: "fixture",
+      coverage_limits: ["仅覆盖当前夹具"],
+      exceptions: ["无"],
+      implementation_anchor: { id: "fixture-implementation", path: "src/app.txt", start_line: 1, end_line: 1, role: "implementation" },
+      verification_anchor: { id: "fixture-verification", path: "tests/fixture.test.mjs", start_line: 1, end_line: 1, role: "verification" },
+    }],
+  });
+}
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
+function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewVerdict = "pass", reviewFindingSeverity = "major", acceptanceResult = "pass", duplicateHumanConfirmation = false, materialOnlyWriteback = false, omitSubjects = [], nestedAcceptanceVariant = "valid", nonterminalAttempt = false, crossStageIntegrationReview = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-vnext-delivery-close-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -41,15 +161,11 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
     created_at: "2026-08-04T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {},
     record_model: "vnext-single-write",
   } });
+  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   const candidate = prepareTaskWorkspace(task);
   const worktreeRoot = candidate.worktreeRoot;
   const artifacts = ArtifactDir.open(worktreeRoot, task);
-  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
-    const content = name === "tasks.md"
-      ? "# tasks.md\n\n### 执行状态填写区\n- pending\n\n### Verify\n- current\n"
-      : `# ${name}\n`;
-    artifacts.writeAtomic(name, content);
-  }
+  writeCanonicalStageMaterials(artifacts);
   if (testVariant === "clean-head") {
     git(worktreeRoot, ["add", "specs"]);
     git(worktreeRoot, ["commit", "-qm", "publish current materials"]);
@@ -126,6 +242,8 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
       stage: crossStageIntegrationReview && subject === "same_build_integration_review" ? "build-code" : "verify-code",
       snapshotTree: snapshot.tree,
       provider: "fixture",
+      verdict: reviewVerdict,
+      findingSeverity: reviewFindingSeverity,
     });
     const ref = nonterminalAttempt ? review.attemptRef : review.resultRef;
     const raw = task.readRecord(ref);
@@ -159,9 +277,10 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", acceptanceR
       kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new" });
     }
   }
+  seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot });
   const receiptSnapshot = { ...snapshot, commit: testValue.snapshot_commit };
   if (materialOnlyWriteback) {
-    artifacts.writeAtomic("tasks.md", "# tasks.md\n\n### 执行状态填写区\n- result written back\n\n### Verify\n- current\n");
+    artifacts.writeAtomic("tasks.md", `${artifacts.read("tasks.md")}\n### 执行状态填写区\n- result written back\n`);
     const current = captureGitWorktreeSnapshot(worktreeRoot);
     return { task, kernel, repo, taskId, candidate, artifacts, receiptSnapshot, snapshot: current };
   }
@@ -273,7 +392,7 @@ describe("vNext formal delivery close", () => {
     })).not.toThrow();
   });
 
-  it("selects the newest duplicate current quality fact", () => {
+  it("rejects duplicate current quality facts instead of selecting by timestamp", () => {
     const state = fixture({ duplicateHumanConfirmation: true });
     expect(() => prepareDeliveryClosePlan({
       task: state.task,
@@ -283,7 +402,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    })).toThrow(/current verify-code quality facts conflict: human_confirmation/);
   });
 
   it("ignores unrelated legacy quality references during code-review close", () => {
@@ -314,6 +433,32 @@ describe("vNext formal delivery close", () => {
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     })).toThrow(/code_review/);
+  });
+
+  it("does not let a recorded verify-code review with open findings satisfy close", () => {
+    const state = fixture({ reviewVerdict: "findings" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/code_review/);
+  });
+
+  it("keeps nonblocking minor review advice from blocking close", () => {
+    const state = fixture({ reviewVerdict: "findings", reviewFindingSeverity: "minor" });
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).not.toThrow();
   });
 
   it("reads an unavailable code-review disclosure and reports the missing close fact", () => {

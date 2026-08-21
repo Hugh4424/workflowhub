@@ -386,7 +386,7 @@ describe("spec-analyze completeness contract", () => {
     expect(analyze).toMatchObject({ completion_evidence: expect.arrayContaining([
       { kind: "plan", uri_or_path: "plan.md" },
       { kind: "tasks", uri_or_path: "tasks.md" },
-      { kind: "quality_facts", uri_or_path: "quality/evidence/" },
+      { kind: "quality_facts", uri_or_path: "quality/facts/" },
     ]) });
     expect(publish).toBeDefined();
     expect(disposition.order).toBeLessThan(analyze.order);
@@ -403,12 +403,12 @@ describe("spec-analyze completeness contract", () => {
       expect(publish, stage).toBeDefined();
       expect(analyze.order).toBeLessThan(publish.order);
       expect(analyze.completion_evidence).toEqual(expect.arrayContaining([
-        { kind: "quality_facts", uri_or_path: "quality/evidence/" },
+        { kind: "quality_facts", uri_or_path: "quality/facts/" },
       ]));
       expect(analyze.observable_result).toMatch(/original requirement|原始需求/i);
     }
     const verifySteps = JSON.parse(readFileSync(new URL("../../workflows/verify-code/steps.json", import.meta.url), "utf8")).steps;
     expect(verifySteps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze")).toBeUndefined();
-    expect(verifySteps.find(({ step_slug }) => step_slug === "code-review-closure")).toBeDefined();
+    expect(verifySteps.find(({ step_slug }) => step_slug === "approve-verification")).toBeDefined();
   });
 });

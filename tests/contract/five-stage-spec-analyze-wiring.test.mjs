@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
 
 const MATERIALS = {
@@ -11,9 +12,9 @@ const MATERIALS = {
   implementation: "实现了当前阶段行为",
 };
 
-const EVIDENCE = [
+  const EVIDENCE = [
   ...["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace", "review", "runtime", "delivery"]
-    .map((ref) => ({ ref, kind: ref, status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) })),
+    .map((ref) => ({ ref, kind: ref, status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40), ...(ref === "tests" ? { test_result: { command: "true", expected_exit: 0, actual_exit: 0, oracle: "ORACLE-001", actual_outcome: "当前结果" } } : {}) })),
 ];
 
 function packet(overrides = {}) {
@@ -38,6 +39,20 @@ function packet(overrides = {}) {
 }
 
 describe("authoring-stage spec-analyze profiles", () => {
+  it("makes the current stage-end analyzer an explicit quality subject for every authoring stage", () => {
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
+      expect(STAGE_PREDICATES[stage].stage_end_spec_analyze, stage).toBe("acceptance_criterion");
+    }
+    expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("stage_end_spec_analyze");
+  });
+
+  it("routes make-decision interaction receipts through the per-round lifecycle validator", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("../../runtime/stage/stage-handlers.mjs", import.meta.url), "utf8");
+    expect(source).toMatch(/validateInteractionLifecycleSequence/);
+    expect(source).toMatch(/interactionAggregateFacts[\s\S]*validateInteractionAggregateLifecycle/);
+  });
+
   it("defines cumulative inputs and evidence for the four authoring stages", () => {
     expect(contracts.STAGE_SPEC_ANALYZE_PROFILES).toBeDefined();
     expect(Object.keys(contracts.STAGE_SPEC_ANALYZE_PROFILES)).toEqual([
@@ -53,6 +68,90 @@ describe("authoring-stage spec-analyze profiles", () => {
       expect.arrayContaining(["tests", "ac-trace"]),
     );
     expect(contracts.STAGE_SPEC_ANALYZE_PROFILES["verify-code"]).toBeUndefined();
+  });
+
+  it("does not accept an AC chain produced by another stage", () => {
+    const tree = "b".repeat(40);
+    const row = {
+      acceptance_criterion_id: "AC-001",
+      status: "covered",
+      task_id: "task",
+      material_revision: "revision-1",
+      snapshot_tree: tree,
+      producer_stage: "build-plan",
+      source_ids: ["R-001"],
+      decision_ids: ["D-001"],
+      fr_ids: ["FR-001"],
+      task_ids: ["T001"],
+      file_symbol: "runtime/example.mjs#run",
+      implementation_anchor: { id: "impl", path: "runtime/example.mjs", start_line: 1, end_line: 2, role: "implementation" },
+      verification_anchor: { id: "verify", path: "tests/example.test.mjs", start_line: 1, end_line: 2, role: "verification" },
+      gate: { command: "true", expected_exit: 0, oracle: "ORACLE-001" },
+      scenario: "当前场景",
+      actual_outcome: "当前结果",
+      coverage_limits: "不覆盖外部 provider",
+      evidence_refs: [{ ref: "tests", hash: "a".repeat(64), snapshot_tree: tree }],
+      test_result: { evidence_ref: "tests", command: "true", expected_exit: 0, actual_exit: 0, oracle: "ORACLE-001", actual_outcome: "当前结果" },
+      review_ref: { ref: "review", hash: "a".repeat(64), snapshot_tree: tree },
+      stage_end_ref: { ref: "ac-trace", hash: "a".repeat(64), snapshot_tree: tree },
+    };
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage: "build-code",
+      packet: packet({ expected_ac_ids: ["AC-001"], acceptance_coverage: [row] }),
+      strict_material_contracts: true,
+      identity: { task_id: "task", stage: "build-code", material_revision: "revision-1", snapshot_tree: tree },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/producer_stage is stale/);
+  });
+
+  it("does not let build-code self-report a smaller AC set than the current spec", () => {
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage: "build-code",
+      packet: packet({
+        materials: { ...MATERIALS, spec: "## Acceptance Criteria\n- **AC-001** first\n- **AC-002** second" },
+        expected_ac_ids: ["AC-001"],
+        acceptance_coverage: [],
+      }),
+      strict_material_contracts: true,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/expected_ac_ids must exactly match the active AC set/);
+  });
+
+  it("fails closed on malformed Clarify skip lifecycle data", () => {
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage: "build-spec",
+      packet: packet({
+        clarify: {
+          status: "resolved",
+          trigger: false,
+          reason: "当前材料已经回答规格问题",
+          open_direction_changing_questions: 0,
+          lifecycle_rounds: { malformed: true },
+        },
+      }),
+      strict_material_contracts: true,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/lifecycle_rounds/);
+  });
+
+  it("rejects a PFACT that declares more than one state", () => {
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage: "build-spec",
+      packet: packet({
+        materials: {
+          ...MATERIALS,
+          spec: "## 速读卡\n当前任务。\n## 1. 问题与紧迫性\n需要明确事实。\n## 4. 产品事实与假设（PFACT）\n- **PFACT-001**：verified；inferred\nFR-001 AC-001",
+        },
+      }),
+      strict_material_contracts: true,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "pfact_contract_gap", line_or_anchor: "PFACT-001" }),
+    ]));
   });
 
   it("returns a six-part plain-language summary only after semantic and evidence checks", () => {

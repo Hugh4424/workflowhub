@@ -24,6 +24,7 @@ function observations(stage) {
     },
     freshness: { status: "current" },
     authenticated: true,
+    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean" } : {}),
   }));
 }
 

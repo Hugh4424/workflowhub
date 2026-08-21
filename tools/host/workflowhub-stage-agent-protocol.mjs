@@ -113,7 +113,7 @@ function writeTemplate(argv) {
         stage,
         snapshot_tree: null,
         material_revision: null,
-        step_slug: stepId("code-review-closure"),
+        step_slug: stepId("approve-verification"),
         skill_id: "dsh-code-review",
         result: {
           status: "unavailable",

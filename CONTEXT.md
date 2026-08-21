@@ -70,6 +70,13 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 
 **规范决策日志（canonical decision-log）**：
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
+vNext 的当前文件位于认证 worktree 根目录 `decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
+
+**工作继续（work continuation）**：
+同一 task 在质量事实缺失、不一致或不可用时仍可继续编辑、补证据和修复；它不表示 stage 已完成。
+
+**当前阶段质量修复（stage-local quality repair）**：
+stage-end 检查发现问题后，在同一 stage 修材料、补事实并只重跑受影响检查，直到问题关闭或形成完整的延期/不适用处置；不创建 blocked、reopen 或 recovery 控制链。
 
 **运行事实**：
 可由已登记机器来源直接证明的一条任务执行信息；没有来源或证据时只记录状态，不补造数值。
@@ -122,7 +129,7 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 的测试、AC 和审查事实；旧 hash、阶段记录和 run 只作为只读审计上下文。
 
 **当前材料版本（current material revision）**：
-同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
+认证 worktree 根目录中同一任务的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 当前可读版本及其追加的
 变更来源。旧版本、hash 和历史状态保留为历史；它们不阻止当前材料继续开发或验证。
 
 **consumer/evidence matrix**：
@@ -181,6 +188,8 @@ snapshot 控制面，也不把 review verdict 改写成 stage pass。
 ## 当前治理边界
 
 四材料决定是否可以继续工作；测试、审查、历史、inventory 和复杂度报告只提供事实，不是推进许可证。正式完成仍必须如实呈现测试、逐条验收、独立审查或 unavailable、交接和不可逆操作授权；旧条目到新条目的映射只记录治理演进，不生成新的控制链。历史 task 和历史 bytes 只读，provenance 与原始失败事实保留；新增机制必须登记职责、真实 consumer、owner、测试和删除/保留条件。
+
+关系：**工作继续**始终允许同 task 修复；**当前阶段质量修复**消费 stage-end finding；只有 current revision 上适用问题处理完毕，才能满足**阶段完成判据**。三者不得压成一个 `completed` 或 `blocked` 状态。
 
 **AC（验收标准 / acceptance criteria）**：
 沿用既有定义，指 spec 文档里列出的验收标准条目。当前测试、证据和审查缺口原样记录，
@@ -258,4 +267,4 @@ build-code/verify-code 的当前 `decision-log.md`、`spec.md`、`plan.md`、`ta
 核心 publication 写成功前共享的结构预检。它认证 canonical task、实际 worktree、当次运行内容、目标仓库和声明写集合；错误必须 fail-loud 且不得留下部分成功。它不判断 reviewer 质量，也不是编辑代码的准入 gate。
 
 **阶段完成判据（stage completion criteria）**：
-与推进资格不同的谓词。只有阶段核心交付、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。
+与推进资格不同的派生谓词。只有当前 task、stage、material revision 和适用 snapshot 上的阶段核心交付、声明步骤与技能、stage-end 检查、风险相关测试、逐 AC 结果、独立 review（或真实 unavailable）和人类交接真实齐全，才可宣称完成。automatic accepted、`live_plan_execution` 或四材料可读不能单独证明完成。

@@ -17,28 +17,14 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const projectName = "WorkflowHub";
 const taskId = "interrupted-same-task";
 const materialFiles = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 const runtimeCli = fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url));
-const materials = Object.freeze({
-  "decision-log.md": "# Decision\n\nContinue work in the existing task after interruption.\n",
-  "spec.md": "# Spec\n\nFR-1: Continue the same task.\n\nAC-1: The public runtime reports the task ready.\n",
-  "plan.md": "# Plan\n\nUse the existing task and its four current materials.\n",
-  "tasks.md": `# Tasks
-
-### T001 - Continue the existing task
-
-- **FR**: FR-1
-- **AC**: AC-1
-- **精确文件**: src/app.txt
-- **依赖**: none
-- **gate_cmd**: \`node --test\`
-`,
-});
+const materials = canonicalStageMaterials();
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });

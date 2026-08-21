@@ -11,6 +11,10 @@ const AUTO_MANAGED_RUNTIME_BLOCK = /<!-- BEGIN ([A-Z][A-Z0-9_-]*-RUNTIME) \(auto
 const SNAPSHOT_OBJECT_ROOT = resolve(tmpdir(), "workflowhub-git-snapshots");
 const LFS_POINTER_VERSION = "version https://git-lfs.github.com/spec/v1";
 const HASH = /^[a-f0-9]{64}$/;
+// Large evaluation worktrees can contain thousands of evidence paths. Git
+// output is still bounded machine data, but Node's default buffer is too small
+// and otherwise turns a valid snapshot into an opaque ENOBUFS failure.
+const MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /** Files written while recording execution facts are not source material. */
 // Host-owned sidecar state is not WorkflowHub source or M15 evidence. Keep it
@@ -25,13 +29,26 @@ function isCurrentMaterialPath(path, taskId = null) {
 }
 
 function git(root, args, options = {}) {
-  return execFileSync("git", args, {
-    cwd: root,
-    encoding: options.encoding ?? "utf8",
-    stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-    ...(options.input === undefined ? {} : { input: options.input }),
-    ...(options.env === undefined ? {} : { env: options.env }),
-  });
+  try {
+    return execFileSync("git", args, {
+      cwd: root,
+      encoding: options.encoding ?? "utf8",
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      ...(options.input === undefined ? {} : { input: options.input }),
+      ...(options.env === undefined ? {} : { env: options.env }),
+    });
+  } catch (error) {
+    if (error?.code === "ENOBUFS") {
+      const limited = new Error(`SNAPSHOT_OUTPUT_LIMIT: git ${args.join(" ")} exceeded ${MAX_GIT_OUTPUT_BYTES} bytes`);
+      limited.code = "SNAPSHOT_OUTPUT_LIMIT";
+      limited.git_args = [...args];
+      limited.max_bytes = MAX_GIT_OUTPUT_BYTES;
+      limited.cause = error;
+      throw limited;
+    }
+    throw error;
+  }
 }
 
 function gitText(root, args) { return String(git(root, args)).trim(); }
@@ -375,7 +392,7 @@ export function isMaterialOnlySnapshotDelta(root, expectedTree, actualTree, task
     && isExecutionRecordOnlyMaterialDelta(root, expectedTree, actualTree, taskId);
 }
 
-function taskExecutionRecordOnly(text) {
+export function taskExecutionRecordOnly(text) {
   const lines = String(text ?? "").split(/\r?\n/);
   const kept = [];
   let skipLevel = null;
@@ -392,6 +409,23 @@ function taskExecutionRecordOnly(text) {
     kept.push(line);
   }
   return kept.join("\n").replace(/\s+$/u, "").replace(/\r\n/g, "\n");
+}
+
+/**
+ * The executor's status block is bookkeeping written after quality facts
+ * exist. It is excluded from material identity; substantive edits to any of
+ * the four handoff records still produce a new revision.
+ */
+export function materialRevisionFromValues(values) {
+  if (!Array.isArray(values)) throw new TypeError("material values must be an array");
+  const normalized = values.map((entry, index) => {
+    if (!Array.isArray(entry) || entry.length !== 2) throw new TypeError(`material value ${index} must be [path, content]`);
+    const [file, content] = entry;
+    return [file, file === "tasks.md" && content !== null && content !== undefined
+      ? taskExecutionRecordOnly(content)
+      : content];
+  });
+  return `revision-${sha256(JSON.stringify(normalized))}`;
 }
 
 /**

@@ -156,7 +156,18 @@ repair the decision and its facts.
     "status": "completed",
     "round_count": 3,
     "architecture_direction_covered": true,
-    "user_outcome_covered": true
+    "user_outcome_covered": true,
+    "lifecycle_rounds": [
+      {
+        "interaction_type": "talk",
+        "events": [
+          { "event": "ask", "round": 1, "card_ref": "...", "card_hash": "...", "questions": [] },
+          { "event": "wait", "round": 1, "card_ref": "...", "card_hash": "..." },
+          { "event": "reply", "round": 1, "card_ref": "...", "card_hash": "...", "reply_ref": "...", "reply_hash": "...", "source": "user", "answers": [] },
+          { "event": "resume", "round": 1, "card_ref": "...", "card_hash": "...", "reply_ref": "...", "reply_hash": "...", "status": "resumed" }
+        ]
+      }
+    ]
   },
   "clarify": {
     "status": "resolved",
@@ -171,11 +182,14 @@ repair the decision and its facts.
 Serialize the aggregate once, hash those exact bytes with SHA-256, and write it
 directly to `quality/evidence/interactions/<sha256>.json`. The path hash must
 match the stored bytes. Bind only the current task, `make-decision` stage,
-current material context, and user-confirmed decision. The `snapshot_tree`
+current material context, and user-confirmed decision. `lifecycle_rounds` 只保留
+当前会话用于验证 round、card、reply 和顺序的最小结构化事实；正式 handler 会在
+接受 aggregate 前逐轮调用现有 lifecycle validator。它仍是 aggregate 内的一部分，
+不是独立 per-round writer、历史 ledger 或新的状态机。`snapshot_tree`
 field binds the current source tree for evidence integrity only; it is not
 snapshot lineage, a selector, or a delivery gate. Do not create a run,
 revision, latest pointer,
-ledger, controlled-writer protocol, per-round record, question-card archive, or
+ledger, controlled-writer protocol, per-round writer, question-card archive, or
 Grill history. If the accepted decision changes before completion, assemble a
 new aggregate from the new final decision; never mutate an existing hash path.
 Retire this fact only when the named current consumers are removed or replaced
@@ -211,13 +225,15 @@ user to repeat Talk or Grill, and they need no index of the decision process.
 
 ## Stage-end consistency
 
-Run `stage-end-spec-analyze` after detail advice and before the user's final
-confirmation. Invoke the existing `spec-analyze` skill on the original requirement, the current
-`decision-log.md`, the requirements-preparation facts, and all evidence actually
-produced in this stage. Check semantic coverage and real outcome evidence, not
-IDs, paths, hashes, or document existence alone. Repair any finding in
-make-decision before asking for confirmation; do not move it to build-spec. Only
-after the user confirms this checked decision may `publish-decision` run. End
-with the shared six-part plain-language summary: current stage work,
-requirement coverage, upstream alignment, repairs made here, remaining risks,
-and the next stage boundary.
+Ask for the user's final confirmation, assemble the immutable interaction
+aggregate, and then run `stage-end-spec-analyze` before `publish-decision`.
+Invoke the existing `spec-analyze` skill on the original requirement, the
+current `decision-log.md`, the authenticated requirement projection, the
+complete Grill and review facts, the aggregate, the final confirmation, and
+all evidence actually produced in this stage. Check semantic coverage and real
+outcome evidence, not IDs, paths, hashes, or document existence alone. Repair
+any finding in make-decision; if a repair changes the decision, ask for
+confirmation again and rebuild the aggregate from the new decision. Do not
+move the gap to build-spec. End with the shared six-part plain-language
+summary: current stage work, requirement coverage, upstream alignment,
+repairs made here, remaining risks, and the next stage boundary.

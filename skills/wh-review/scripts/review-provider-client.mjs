@@ -9,18 +9,23 @@ const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_s
 
 function failure(code, message) { const error = new Error(`${code}: ${message}`); error.code = code; return error; }
 
-// Reject absolute filesystem paths, not ordinary review terms such as
-// `map/AC`. A provider must use packet-relative anchors; the old allowlist of
-// known host roots missed paths such as `/workspace` and `/srv`.
-// Keep the boundary aligned with the broker: a slash after a Unicode letter
-// or number can be ordinary review notation such as `中文/AC/oracle`, not a
-// host absolute path. A slash at the start or after punctuation/whitespace is
-// still treated as a path boundary, including unlisted Unix roots.
-const absolutePathPattern = /(?:^|[^\p{L}\p{N}A-Za-z0-9._~\/%-])\/(?![\/\s])(?:[\p{L}\p{N}A-Za-z0-9._~%-]+(?:\/[\p{L}\p{N}A-Za-z0-9._~%-]+)*)(?=$|[\s"'`,.;:!?)]|\/)|[A-Za-z]:[\\/]/u;
+// Keep the public consumer aligned with the 3rd-review v3 contract: reject
+// every host/container absolute path, while allowing only the explicit
+// provider-relative API route notation `/api/...` and prose such as
+// `中文/AC/oracle`.
+const absoluteUnixPathPattern = /(?:^|[^\p{L}\p{N}:A-Za-z0-9._~\/%-])(\/[^\s"'`<>()[\]{}]+)/gu;
+const absoluteWindowsPathPattern = /(?:[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+|\\\\[^\s"'`<>()[\]{}]+)/;
+const providerRelativeRoutePattern = /^\/api(?:\/[A-Za-z0-9._~:%-]+)*$/;
 const fileUriPathPattern = /\bfile:\/\//i;
 
 function containsPrivatePath(value) {
-  if (typeof value === "string") return absolutePathPattern.test(value) || fileUriPathPattern.test(value);
+  if (typeof value === "string") {
+    if (fileUriPathPattern.test(value) || absoluteWindowsPathPattern.test(value)) return true;
+    for (const match of value.matchAll(absoluteUnixPathPattern)) {
+      if (!providerRelativeRoutePattern.test(match[1])) return true;
+    }
+    return false;
+  }
   if (!value || typeof value !== "object") return false;
   return Array.isArray(value) ? value.some(containsPrivatePath) : Object.values(value).some(containsPrivatePath);
 }

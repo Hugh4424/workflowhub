@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -16,6 +17,8 @@ import {
   startCodexSessionEvent,
 } from "../tools/host/workflowhub-codex-session-state.mjs";
 import { resolveDefaultMonitoringSource } from "../tools/cli/stage-runtime.mjs";
+import { createRegisteredCodexSource, parseRegisteredRequirementTranscript } from "../runtime/evidence/codex-transcript-adapter.mjs";
+import { createTranscriptSourceReader } from "../runtime/evidence/fact-collector.mjs";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-codex-hook-test-"));
@@ -39,6 +42,102 @@ function bind(state, taskId = state.taskId) {
 }
 
 describe("WorkflowHub current Codex session handoff", () => {
+  it("authenticates requirement messages without retaining raw transcript content", () => {
+    const state = fixture();
+    const content = "用户要把当前需求完整落实到五阶段流程。";
+    const source = createRegisteredCodexSource({
+      source_id: "codex-requirements",
+      source_ref: "codex-requirements-ref",
+      registration_id: "registration-requirements",
+      required: true,
+      task_id: state.taskId,
+      run_id: "run-requirements",
+      session_id: state.sessionId,
+      source_format: "jsonl",
+      source_version: "v1",
+      cli_version: "codex-test",
+      adapter_version: "adapter-test",
+      reader: createTranscriptSourceReader(() => JSON.stringify({
+        id: "requirement-1",
+        type: "requirement_message",
+        source_version: "v1",
+        task_id: state.taskId,
+        session_id: state.sessionId,
+        stage: "make-decision",
+        order: 1,
+        message_class: "goal",
+        content,
+        content_hash: createHash("sha256").update(content).digest("hex"),
+      })),
+    });
+    try {
+      const result = parseRegisteredRequirementTranscript(source, { stage: "make-decision" });
+      expect(result).toMatchObject({ status: "present", source_id: "codex-requirements" });
+      expect(result.messages).toEqual([expect.objectContaining({
+        id: "requirement-1",
+        order: 1,
+        message_class: "goal",
+        content_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        task_id: state.taskId,
+        session_id: state.sessionId,
+        stage: "make-decision",
+      })]);
+      expect(result.messages[0].content).toBeUndefined();
+    } finally {
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an unregistered requirement transcript source before authentication", () => {
+    const result = parseRegisteredRequirementTranscript({ reader: () => "{}" }, { stage: "make-decision", task_id: "task-hook-source" });
+    expect(result).toMatchObject({
+      status: "unsupported",
+      source_id: null,
+      source_ref: null,
+      source_version: null,
+      messages: [],
+      errors: ["SOURCE_REGISTRATION_INVALID: registered transcript source is not launcher-registered"],
+      coverage: { observed: 0, expected: 0 },
+    });
+  });
+
+  it("rejects a requirement message with wrong identity, order, or content hash", () => {
+    const state = fixture();
+    const source = createRegisteredCodexSource({
+      source_id: "codex-requirements",
+      source_ref: "codex-requirements-ref",
+      registration_id: "registration-requirements",
+      required: true,
+      task_id: state.taskId,
+      run_id: "run-requirements",
+      session_id: state.sessionId,
+      source_format: "jsonl",
+      source_version: "v1",
+      cli_version: "codex-test",
+      adapter_version: "adapter-test",
+      reader: createTranscriptSourceReader(() => JSON.stringify({
+        id: "requirement-1",
+        type: "requirement_message",
+        source_version: "v1",
+        task_id: "other-task",
+        session_id: state.sessionId,
+        stage: "make-decision",
+        order: 2,
+        message_class: "goal",
+        content: "原始需求",
+        content_hash: "0".repeat(64),
+      })),
+    });
+    try {
+      const result = parseRegisteredRequirementTranscript(source, { stage: "make-decision" });
+      expect(result.status).toBe("conflict");
+      expect(result.errors.join("; ")).toMatch(/task|order|hash/i);
+      expect(result.messages).toEqual([]);
+    } finally {
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("registers the exact hook transcript and measures a semantic event without a second agent", () => {
     const state = fixture();
     try {

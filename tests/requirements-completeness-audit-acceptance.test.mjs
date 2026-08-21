@@ -13,9 +13,9 @@ const tasks = read(historicalTasks);
 // the corresponding current AC. The referenced test files are also executed
 // by the normal Vitest run.
 const cases = [
-  ["AC-001", "make-decision only reads current material", "runtime/stage/stage-handlers.mjs", "current_materials", "tests/e2e/vnext-five-stage-current.test.mjs", "confirms make-decision before future-stage materials exist"],
+  ["AC-001", "make-decision only reads current material", "runtime/stage/completion-predicates.mjs", "STAGE_MATERIALS", "tests/e2e/vnext-five-stage-current.test.mjs", "confirms make-decision before future-stage materials exist"],
   ["AC-002", "non-ENOENT material errors remain loud", "runtime/stage/stage-handlers.mjs", "MATERIAL_INCOMPLETE", "tests/e2e/vnext-five-stage-current.test.mjs", "fails loudly on non-ENOENT current-material reads and does not create future materials"],
-  ["AC-003", "all original sources are replayed", "runtime/stage/stage-handlers.mjs", "function requirementReplayFacts", "tests/verify-requirement-replay-contract.test.mjs", "requires a reverse trace from the requirement through every applicable AC"],
+  ["AC-003", "front-four spec-analyze replays the original source index", "runtime/stage/stage-content-contracts.mjs", "validateSpecAnalyzeCompleteness", "tests/contract/spec-analyze-completeness.test.mjs", "checks semantic behavior and evidence"],
   ["AC-004", "Talk and Grill belong only to make-decision", "workflows/make-decision/SKILL.md", "Only the main agent may execute user-facing Talk", "tests/stage-interaction-contract.test.mjs", "keeps Talk and Grill exclusively in make-decision"],
   ["AC-005", "stage-end communication informs humans without gating work", "skills/workflowhub-host-protocol/SKILL.md", "评论是给人看的通知，不是第二套状态机", "tests/stage-interaction-contract.test.mjs", "keeps stage-end communication informative without making it a work gate"],
   ["AC-006", "specification stays source-bound", "runtime/stage/stage-content-contracts.mjs", "validateAcceptanceDesignMinimum", "tests/spec-content-profile.test.mjs", "requires an observable scenario and oracle before build-plan"],
@@ -43,7 +43,7 @@ const cases = [
   ["AC-028", "build-code executes checks against the actual changed scope", "workflows/build-code/SKILL.md", "actual changed files", "tests/contract/build-code-apply-contract.test.mjs", "reroutes concrete testing against real scope"],
   ["AC-029", "restored content skills have auditable provenance", historicalDecisionLog, "c3e1b1c5b29e5c0aa35beca7718787b4c7a95faf", "tests/contract/spec-stage-artifact-closure.test.mjs", "keeps the recovered content skills declared by their owning stage"],
   ["AC-030", "work readiness derives only from current material presence", "runtime/stage/completion-predicates.mjs", "deriveStageProgress", "tests/contract/stage-progress-contract.test.mjs", "derives only work readiness from material presence"],
-  ["AC-031", "missing semantic evidence stays incomplete", "runtime/stage/stage-handlers.mjs", "semantic proof is incomplete", "tests/verify-requirement-replay-contract.test.mjs", "requires a reverse trace from the requirement through every applicable AC"],
+  ["AC-031", "missing semantic evidence stays incomplete in stage-end analysis", "runtime/stage/stage-content-contracts.mjs", "semantic coverage is required", "tests/contract/spec-analyze-completeness.test.mjs", "checks semantic behavior and evidence"],
 ];
 
 describe("requirements-completeness-audit current acceptance matrix", () => {
@@ -57,10 +57,11 @@ describe("requirements-completeness-audit current acceptance matrix", () => {
   }
 
   it("AC-003 keeps research conditional and missing research evidence incomplete", () => {
-    const skill = read("workflows/verify-code/SKILL.md");
+    const skill = read("workflows/make-decision/SKILL.md");
     const decision = read(historicalDecisionLog);
-    expect(skill).toMatch(/decision-log\s*明确引用了研究/);
-    expect(skill).toMatch(/unknown\/incomplete/);
+    expect(skill).toContain("Research runs only when its answer could materially change direction");
+    expect(skill).toContain("otherwise record why it was skipped");
+    expect(skill).toMatch(/unavailable.*never.*pass|不可用.*通过/i);
     expect(decision).toContain("13 个研究角色");
     expect(decision).toContain("五份报告均已读");
   });

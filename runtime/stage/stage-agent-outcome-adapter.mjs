@@ -6,17 +6,33 @@ import yaml from "js-yaml";
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureExecutionSnapshot } from "../task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
-import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
+import {
+  STAGE_SPEC_ANALYZE_PROFILES,
+  validateInteractionLifecycleSequence,
+  validateStageSpecAnalyzeProfile,
+} from "./stage-content-contracts.mjs";
+import { isAuthenticatedRequirementResult } from "../evidence/codex-transcript-adapter.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable"]);
+const STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const REPOSITORY_ROOT = new URL("../../", import.meta.url);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
+
+/**
+ * Validate the ordered rounds supplied by the host for one declared skill.
+ * This returns an in-memory fact only; the existing interaction receipt
+ * writer remains the persistence owner.
+ */
+export function validateStageAgentInteractionRounds(value) {
+  const result = validateInteractionLifecycleSequence(value);
+  if (!result.ok) throw new TypeError(`stage interaction rounds are invalid: ${result.errors.join("; ")}`);
+  return result;
+}
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -79,7 +95,7 @@ function readMaterials(artifacts) {
       throw error;
     }
   });
-  const revision = `revision-${sha256(JSON.stringify(values))}`;
+  const revision = materialRevisionFromValues(values);
   return Object.freeze({
     values: Object.freeze(values),
     revision,
@@ -130,7 +146,22 @@ function materialTextMap(materials) {
   return Object.fromEntries(materials.values.map(([file, content]) => [file, content]));
 }
 
-function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest, skills }) {
+function bindAnalyzerPacketIdentity(packet, identity) {
+  const bound = structuredClone(packet);
+  for (const key of ["clarify", "clarify_outcome", "grill", "grill_summary", "confirmation", "final_confirmation"]) {
+    if (bound[key] && typeof bound[key] === "object" && !Array.isArray(bound[key])) {
+      bound[key] = { ...identity, ...bound[key] };
+    }
+  }
+  for (const key of ["acceptance_coverage"]) {
+    if (Array.isArray(bound[key])) {
+      bound[key] = bound[key].map((row) => ({ ...identity, producer_stage: identity.stage, ...row }));
+    }
+  }
+  return bound;
+}
+
+function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest, skills, requirementAuthentication = null }) {
   const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
   const input = object(execution.spec_analyze, "execution.spec_analyze");
   const packetInput = object(input.packet, "execution.spec_analyze.packet");
@@ -143,9 +174,11 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     : null;
   const subjects = object(input.evidence_subjects, "execution.spec_analyze.evidence_subjects");
   const proofBySubject = new Map();
+  const executionBySubject = new Map();
   for (const [kind, entries] of [["step", execution.steps], ["skill", execution.skills]]) {
     for (const entry of entries) {
       const id = kind === "step" ? entry.step_slug : entry.skill_id;
+      executionBySubject.set(`${kind}:${id}`, entry);
       const proof = entry.__adapter_result?.evidenceRefs?.[0];
       if (proof) proofBySubject.set(`${kind}:${id}`, proof);
     }
@@ -157,7 +190,26 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     const proof = proofBySubject.get(subjectKey);
     if (!proof) throw new Error(`${stage} analyzer evidence ${logicalRef} must bind an actual step or skill evidence record`);
     analyzerEvidenceBindings[logicalRef] = { ...proof, snapshot_tree: snapshot.tree };
-    return { ref: logicalRef, kind: logicalRef, status: "fresh", hash: proof.sha256, snapshot_tree: snapshot.tree };
+    const sourceEntry = executionBySubject.get(subjectKey);
+    const hostEvidence = sourceEntry?.evidence?.find((entry) => entry && typeof entry === "object" && !Array.isArray(entry)
+      && ["command", "expected_exit", "actual_exit", "exit_code", "oracle", "actual_outcome"].some((key) => entry[key] !== undefined));
+    const testResult = hostEvidence
+      ? Object.fromEntries([
+        ["command", hostEvidence.command],
+        ["expected_exit", hostEvidence.expected_exit],
+        ["actual_exit", hostEvidence.actual_exit ?? hostEvidence.exit_code],
+        ["oracle", hostEvidence.oracle],
+        ["actual_outcome", hostEvidence.actual_outcome],
+      ].filter(([, value]) => value !== undefined))
+      : null;
+    return {
+      ref: logicalRef,
+      kind: logicalRef,
+      status: "fresh",
+      hash: proof.sha256,
+      snapshot_tree: snapshot.tree,
+      ...(testResult && Object.keys(testResult).length > 0 ? { test_result: testResult } : {}),
+    };
   });
   const analyzerMaterials = Object.fromEntries(profile.required_materials.map((name) => {
     if (name === "original_requirement" || name === "decision_log") return [name, materialText["decision-log.md"]];
@@ -178,8 +230,33 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
       analyzerBindings[name] = { source_ref: sourceRef, sha256: sha256(materialText[sourceRef]), snapshot_tree: snapshot.tree };
     }
   }
-  const packet = { ...structuredClone(packetInput), materials: analyzerMaterials, evidence: analyzerEvidence };
-  const analysis = validateStageSpecAnalyzeProfile({ stage, packet });
+  const identity = {
+    task_id: taskId,
+    stage,
+    material_revision: materials.revision,
+    snapshot_tree: snapshot.tree,
+  };
+  const authenticatedMessages = stage === "make-decision"
+    && isAuthenticatedRequirementResult(requirementAuthentication)
+    && requirementAuthentication.status === "present"
+    ? requirementAuthentication.messages
+    : [];
+  const packet = {
+    ...bindAnalyzerPacketIdentity(packetInput, identity),
+    materials: analyzerMaterials,
+    evidence: analyzerEvidence,
+    ...(stage === "make-decision" ? {
+      // The launcher-authenticated projection is the only accepted source for
+      // original requirement messages. A packet cannot self-report this list.
+      authenticated_requirement_messages: authenticatedMessages,
+    } : {}),
+  };
+  const analysis = validateStageSpecAnalyzeProfile({
+    stage,
+    packet,
+    strict_material_contracts: true,
+    identity,
+  });
   // A delivered packet may honestly contain incomplete or unavailable
   // step/skill work.  Keep the analyzer result and let the public route expose
   // quality=incomplete; only a top-level completed packet requires a
@@ -203,9 +280,9 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
 
 function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifest, skills }) {
   const input = object(execution.code_review, "execution.code_review");
-  const reviewStep = manifest.steps.find((step) => step.step_slug === "code-review-closure");
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "approve-verification");
   const reviewSkill = skills.skills?.find((skill) => skill.name === "dsh-code-review");
-  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and code-review-closure");
+  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and approve-verification");
   const result = object(input.result, "execution.code_review.result");
   const allowed = new Set(["status", "findings", "summary", "focus", "repairs"]);
   const unknown = Object.keys(result).filter((key) => !allowed.has(key));
@@ -278,7 +355,7 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
         stage,
         snapshot_tree: null,
         material_revision: null,
-        step_slug: "code-review-closure",
+        step_slug: "approve-verification",
         skill_id: "dsh-code-review",
         result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
       },
@@ -322,6 +399,7 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
  */
 export function publishStageAgentOutcome({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-agent-1", workflowRunId = null, execution,
+  requirementAuthentication = null,
 } = {}) {
   const safeTask = assertTaskHandle(task);
   const safeKernel = assertTaskKernel(kernel);
@@ -395,7 +473,7 @@ export function publishStageAgentOutcome({
   };
   const stageReview = stage === "verify-code"
     ? buildCodeReviewOutcome({ execution: adapterInput, stage, snapshot, materials, manifest, skills })
-    : buildAnalyzer({ execution: adapterInput, taskId: safeTask.identity.taskId, stage, snapshot, materials, manifest, skills });
+    : buildAnalyzer({ execution: adapterInput, taskId: safeTask.identity.taskId, stage, snapshot, materials, manifest, skills, requirementAuthentication });
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1",
     task_id: safeTask.identity.taskId,
@@ -498,7 +576,7 @@ function sessionManifest(stage) {
  */
 export function createWorkflowHubSessionRecorder({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-workflowhub-session-1", workflowRunId = null,
-  host, sessionId, sourceRef, now = () => Date.now(),
+  host, sessionId, sourceRef, now = () => Date.now(), requirementAuthentication = null,
 } = {}) {
   const safeTask = assertTaskHandle(task);
   const safeKernel = assertTaskKernel(kernel);
@@ -539,6 +617,10 @@ export function createWorkflowHubSessionRecorder({
       activeSubjects.delete(key);
       const outcomeStatus = status(value.status, `${subjectKind} ${subjectId}.status`);
       const resultSummary = text(value.result_summary, `${subjectKind} ${subjectId}.result_summary`);
+      if (subjectKind === "skill" && outcomeStatus === "not_applicable"
+          && (value.trigger !== false || value.executed !== false)) {
+        throw new TypeError(`${subjectKind} ${subjectId} not_applicable requires trigger=false and executed=false`);
+      }
       if (outcomeStatus !== "completed") text(value.reason, `${subjectKind} ${subjectId}.reason`);
       const evidence = Array.isArray(value.evidence) ? value.evidence.map((entry) => object(entry, `${subjectKind} ${subjectId}.evidence`)) : [];
       const costValue = lifecycleCost({ startedAt: current.startedAt, endedAt, usage: value.usage });
@@ -620,7 +702,7 @@ export function createWorkflowHubSessionRecorder({
       closed = true;
       return publishStageAgentOutcome({
         task: safeTask, kernel: safeKernel, artifacts: safeArtifacts, workspace, candidateWorkspace,
-        stage, attemptId, workflowRunId, execution,
+        stage, attemptId, workflowRunId, execution, requirementAuthentication,
       });
     },
   });

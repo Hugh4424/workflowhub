@@ -42,7 +42,7 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9d57efee3ae588f836272b9cc936baa26dc2b25511ea431f2c15946297e563b2
+    local_bundle_hash: f8d1add6bd0ef34343fdf710c2ebc6765b0a8488856bf8ba9b74c4e7b8b17eb8
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
@@ -170,14 +170,14 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 22b60611fff46f9e3461cc3794cef7fc25f21158faab04a33e685bae8ab71ace
+    local_bundle_hash: 1e6d106ffd91e937b75eabc4f7cbffc8669aebe04887065b3e863a6d9334e1e7
     last_reviewed_at: "2026-07-14"
     status: native
-    purpose: 独立检查 spec、plan、tasks 一致性
-    design_idea: report-only packet lens
+    purpose: 前四 stage 收尾唯一语义检查与质量事实契约 owner
+    design_idea: report-only packet lens with existing atomic quality publication
     used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；只由四个产物阶段在收尾调用，verify-code 改用 dsh-code-review；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；owner 是 review-materials.mjs、runtime/stage/stage-content-contracts.mjs 与 stage-runner.mjs；没有 runtime work gate、provider pass predicate 或新质量 gate；当现有 consumer 移除且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；spec-analyze 是前四个产物 stage 收尾唯一的 stage-end 语义检查与质量事实契约 owner，verify-code 改用 dsh-code-review；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
   - name: dsh-code-review
@@ -244,7 +244,7 @@ skills:
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: dfda167d1427105f09adaf9e1912fa8d697bf07c4487b894edde554724415c38
+    local_bundle_hash: 077e6e0f93cff0f62a9f580a655fe95e43451e6c01af0c67365917efefaa1406
     last_reviewed_at: "2026-07-14"
     status: adapted
     standalone: true
@@ -272,7 +272,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: e35880abef9ddfb579a40b7060299333d8b0b24e0cb89c16c752d4b04ca4d1c2
+    local_bundle_hash: b58fa8faa2308a07db13cda40f4fb19e96e53ec6284130eaa072c308d869f95c
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -285,7 +285,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 042ab00b6a04e5e79074aa519b86af366f8da2f4387b89c9cac2ae17c70eac90
+    local_bundle_hash: 5f942380c0e4a61d51e0ca64b3714740ef8411160e510a08485870bcd4304952
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A

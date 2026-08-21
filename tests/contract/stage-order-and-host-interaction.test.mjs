@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { validateInteractionLifecycleContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { validateInteractionLifecycleContract, validateInteractionLifecycleSequence } from "../../runtime/stage/stage-content-contracts.mjs";
+import { validateStageAgentInteractionRounds } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
@@ -42,6 +43,16 @@ function lifecycle(interaction_type) {
 }
 
 describe("P1 stage order and real host interaction contract", () => {
+  it("accepts ordered rounds for one declared interaction and rejects a duplicate lifecycle", () => {
+    const first = lifecycle("talk");
+    const second = lifecycle("talk");
+    second.events.forEach((event) => { event.round = 2; event.card_ref = "conversation/talk/card-2"; event.reply_ref = "host-message://talk/reply-2"; });
+    expect(validateStageAgentInteractionRounds({ interaction_type: "talk", rounds: [first, second] })).toMatchObject({ ok: true });
+
+    const duplicate = lifecycle("talk");
+    expect(() => validateStageAgentInteractionRounds({ interaction_type: "talk", rounds: [first, duplicate] })).toThrow(/duplicate|started more than once|invalid/i);
+  });
+
   it("requires every Talk round to use the real ask-wait-reply-resume seam", () => {
     const makeDecision = read("workflows", "make-decision", "SKILL.md");
     expect(makeDecision).toMatch(/Talk round 1[\s\S]{0,240}real[\s\S]*ask[\s\S]*wait[\s\S]*user reply[\s\S]*resume/i);

@@ -15,7 +15,7 @@ import { createQualityFact } from '../runtime/evidence/quality-fact.mjs';
 import { publishVerifySummary } from '../runtime/evidence/quality-store.mjs';
 import { publishStaleMonitoringSnapshot, resolveDefaultMonitoringSource, runMonitoringSidecar } from '../tools/cli/stage-runtime.mjs';
 import { monitoringTopology, stageRuntimeCliMain } from '../tools/cli/stage-runtime.mjs';
-import { writeStageOutcomeFixture } from './helpers/stage-outcome.mjs';
+import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from './helpers/stage-outcome.mjs';
 
 function fixture() {
   const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), 'workflowhub-m15-integration-')));
@@ -40,7 +40,7 @@ function publicRunFixture() {
   } });
   const candidate = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
-  for (const file of ['decision-log.md', 'spec.md', 'plan.md', 'tasks.md']) artifacts.writeAtomic(file, `# ${file}\n`);
+  writeCanonicalStageMaterials(artifacts);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate, artifacts });
   return { storageRoot, repo, task, candidate, artifacts, kernel };
 }

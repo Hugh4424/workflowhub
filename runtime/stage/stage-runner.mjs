@@ -11,9 +11,14 @@ import { deriveStageCompletion, deriveStageProgress, STAGE_ADVISORY_PREDICATES, 
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
+import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
 import { validateCanonicalFullTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
+import { validateSchema } from "../review/schema-validator.mjs";
+import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
+import { parseReviewerOutput } from "../review/review-output.mjs";
+import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -31,7 +36,7 @@ const UPSTREAM_INPUT = Object.freeze({
 });
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
-const OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable"]);
+const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
 const SHA256 = /^[a-f0-9]{64}$/;
 
@@ -148,6 +153,9 @@ function validateSkillOutcome(ctx, actual, expected, index, binding) {
   if (typeof value.trigger !== "boolean" || typeof value.executed !== "boolean") {
     throw outcomeError(`skill_outcomes[${index}] requires boolean trigger and executed`);
   }
+  if (value.status === "not_applicable" && (value.trigger !== false || value.executed !== false)) {
+    throw outcomeError(`skill_outcomes[${index}] not_applicable requires trigger=false and executed=false`);
+  }
   outcomeText(value.version, `skill_outcomes[${index}].version`);
   outcomeText(value.result_summary, `skill_outcomes[${index}].result_summary`);
   if (!Array.isArray(value.evidence_refs)) throw outcomeError(`skill_outcomes[${index}].evidence_refs must be an array`);
@@ -180,7 +188,7 @@ function currentMaterialBinding(ctx) {
       throw error;
     }
   });
-  const revision = `revision-${createHash("sha256").update(JSON.stringify(values)).digest("hex")}`;
+  const revision = materialRevisionFromValues(values);
   return { values, revision, hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : createHash("sha256").update(content).digest("hex")])) };
 }
 
@@ -281,7 +289,17 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
   }
   if (!analyzerStepOutcome) throw outcomeError(`${stage} stage-end analyzer step outcome is missing`);
 
-  const analysis = validateStageSpecAnalyzeProfile({ stage, packet: analyzer.packet });
+  const analysis = validateStageSpecAnalyzeProfile({
+    stage,
+    packet: analyzer.packet,
+    strict_material_contracts: true,
+    identity: {
+      task_id: ctx.task?.identity?.taskId ?? ctx.identity?.taskId,
+      stage,
+      material_revision: materialRevision,
+      snapshot_tree: snapshot.tree,
+    },
+  });
   const profileDefinition = STAGE_SPEC_ANALYZE_PROFILES[stage];
   validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage);
   const supplied = outcomeObject(analyzer.result, "stage outcome spec_analyze.result");
@@ -302,8 +320,8 @@ function validateCodeReviewOutcome(record, stage, snapshot, materialRevision, ma
   if (review.stage !== stage || review.snapshot_tree !== snapshot.tree || review.material_revision !== materialRevision) {
     throw outcomeError("stage outcome code_review is not bound to the current stage snapshot and materials");
   }
-  const reviewStep = manifest.steps.find((step) => step.step_slug === "code-review-closure");
-  if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to code-review-closure");
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "approve-verification");
+  if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to approve-verification");
   const reviewSkill = skillManifest.skills?.find((skill) => skill.name === "dsh-code-review");
   if (!reviewSkill || review.skill_id !== reviewSkill.name) throw outcomeError("stage outcome code_review must bind dsh-code-review");
   const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === reviewSkill.name);
@@ -323,6 +341,10 @@ function validateCodeReviewOutcome(record, stage, snapshot, materialRevision, ma
         || typeof finding.recommendation !== "string" || finding.recommendation.trim() === "") {
       throw outcomeError(`stage outcome code_review.result.findings[${index}] is invalid`);
     }
+  }
+  const actionableFindings = canonicalReviewFindings(result).filter(isActionableSeriousFinding);
+  if (record.status === "completed" && (result.status === "unavailable" || actionableFindings.length > 0)) {
+    throw outcomeError("completed verify-code stage requires a code review with no actionable serious findings");
   }
   if (record.status === "completed" && (skillOutcome.status !== "completed" || stepOutcome.status !== "completed")) {
     throw outcomeError("completed verify-code stage must complete the code-review skill and closure step");
@@ -588,7 +610,49 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
   return null;
 }
 
-function reviewEvidenceStatus(task, candidate) {
+function authenticateStageReviewResult(task, result) {
+  validateSchema("result", result);
+  const attempt = JSON.parse(task.readRecord(result.attempt_ref));
+  validateSchema("attempt", attempt);
+  if (attempt.task_id !== task.identity.taskId
+      || attempt.stage !== result.stage
+      || attempt.review_track !== result.review_track
+      || attempt.snapshot_tree !== result.snapshot_tree
+      || attempt.material_id !== result.material_id
+      || attempt.terminal_status !== "semantic"
+      || attempt.error !== null) {
+    throw new Error("review attempt/result binding is invalid");
+  }
+  const attemptId = result.attempt_ref.match(/^quality\/reviews\/attempts\/([A-Za-z0-9._-]+)\/attempt\.json$/)?.[1];
+  if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt identity is invalid");
+  const latest = new Map();
+  for (const providerAttempt of attempt.provider_attempts) latest.set(providerAttempt.provider, providerAttempt);
+  const providerOutputs = [];
+  for (const providerAttempt of latest.values()) {
+    if (providerAttempt.status !== "completed" || typeof providerAttempt.output_ref !== "string") continue;
+    const output = JSON.parse(task.readRecord(providerAttempt.output_ref));
+    if (output.schema_version !== "wh-review-provider-output.v1"
+        || output.task_id !== task.identity.taskId
+        || output.stage !== attempt.stage
+        || output.attempt_id !== attemptId
+        || output.provider !== providerAttempt.provider
+        || typeof output.content !== "string"
+        || output.content_hash !== createHash("sha256").update(output.content).digest("hex")) {
+      throw new Error(`review provider output provenance is invalid: ${providerAttempt.provider}`);
+    }
+    providerOutputs.push({
+      ref: providerAttempt.output_ref,
+      provider: providerAttempt.provider,
+      ...(providerAttempt.identity ? { identity: providerAttempt.identity } : {}),
+      ...(providerAttempt.execution ? { execution: providerAttempt.execution } : {}),
+      ...(output.evidence_anchor_valid === undefined ? {} : { evidenceAnchors: output.evidence_anchor_valid }),
+      review: parseReviewerOutput(output.content, { requireEvidence: result.adjudication !== undefined }),
+    });
+  }
+  return authenticateCanonicalReviewResult({ attempt, result, providerOutputs });
+}
+
+function reviewEvidenceStatus(task, candidate, { stage = null, subject = null } = {}) {
   if (!candidate) return { status: "missing" };
   let record;
   let raw;
@@ -607,7 +671,21 @@ function reviewEvidenceStatus(task, candidate) {
         && !Object.hasOwn(record, "verdict")
         && Array.isArray(record.provider_results)
         && Array.isArray(record.findings)
-        && record.adjudication?.version === "wh-review-adjudication.v1") {
+      && record.adjudication?.version === "wh-review-adjudication.v1") {
+      if (stage === "verify-code" && subject === "code_review") {
+        try {
+          // An empty findings array is only meaningful after the immutable
+          // attempt, terminal provider members, provider outputs, and
+          // aggregation have all been authenticated. Do not let a copied or
+          // partially failed result satisfy the final code-review predicate.
+          authenticateStageReviewResult(task, record);
+          return canonicalReviewFindings(record).some(isActionableSeriousFinding)
+            ? { status: "missing", review_status: "findings" }
+            : { status: "recorded", review_status: "clean" };
+        } catch {
+          return { status: "missing" };
+        }
+      }
       return { status: "recorded" };
     }
     return { status: "missing" };
@@ -664,6 +742,89 @@ function assertVNextSourceStable(ctx, expectedSnapshot) {
   return observed;
 }
 
+/**
+ * The authoring-stage spec-analyze result is the owner of the stage-end
+ * quality fact. Keep its evidence publication in one place so the generic
+ * predicate loop cannot silently manufacture a completion fact without a
+ * current analyzer result.
+ */
+function publishAcceptanceQualityFact(ctx, snapshot, {
+  subject,
+  status,
+  detail,
+  evidenceRefs = [],
+  dispositionItems,
+  sourceReviewRefs,
+  riskAcceptanceRefs,
+}) {
+  const subjectEvidence = evidenceRefs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
+  const evidenceValue = {
+    schema_version: "stage-quality-evidence.v1",
+    task_id: ctx.identity.taskId,
+    stage: ctx.stage,
+    subject,
+    status,
+    snapshot_tree: snapshot.tree,
+    subject_fact: {
+      status,
+      detail: detail ?? "stage did not provide a subject-specific completion fact",
+      evidence_refs: subjectEvidence,
+      ...(dispositionItems ? {
+        disposition_items: dispositionItems ?? [],
+        source_review_refs: sourceReviewRefs ?? [],
+        risk_acceptance_refs: riskAcceptanceRefs ?? [],
+      } : {}),
+    },
+  };
+  const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
+  const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
+  const evidenceRef = `quality/evidence/stage-quality/${ctx.stage}/${subject}-${evidenceHash}.json`;
+  publishVNextEvidence(ctx, evidenceRef, evidenceRaw);
+
+  const acceptanceValue = {
+    schema_version: "acceptance-evidence.v1",
+    acceptance_criterion_id: subject,
+    result: acceptanceResultForSubjectStatus(status),
+    refs: [{ ref: evidenceRef, sha256: evidenceHash }],
+    snapshot_tree: snapshot.tree,
+    summary: { actual_outcome: status, evidence_type: "stage quality fact" },
+  };
+  const acceptanceRaw = `${JSON.stringify(acceptanceValue, null, 2)}\n`;
+  const acceptanceHash = createHash("sha256").update(acceptanceRaw).digest("hex");
+  const acceptanceRef = `quality/evidence/acceptance/${ctx.stage}/${subject}-${acceptanceHash}.json`;
+  publishVNextEvidence(ctx, acceptanceRef, acceptanceRaw);
+
+  const qualityFactStatus = new Set(["passed", "failed", "missing"]).has(status) ? status : "missing";
+  const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
+    kind: "acceptance_criterion",
+    status: qualityFactStatus,
+    subject,
+    evidence: [{ ref: acceptanceRef, sha256: acceptanceHash, evidence_type: "acceptance_evidence" }],
+  });
+  return Object.freeze({
+    fact,
+    evidence: Object.freeze({ ref: acceptanceRef, sha256: acceptanceHash }),
+  });
+}
+
+function publishStageEndSpecAnalyzeFact(ctx, result, snapshot) {
+  if (!Object.prototype.hasOwnProperty.call(STAGE_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze")) return null;
+  const analyzerResult = result.spec_analyze?.result;
+  const consistent = analyzerResult?.status === "consistent";
+  const stageOutcomeEvidence = typeof result.stage_outcome_ref === "string"
+    && typeof result.stage_outcome_hash === "string"
+    ? [{ ref: result.stage_outcome_ref, sha256: result.stage_outcome_hash }]
+    : [];
+  return publishAcceptanceQualityFact(ctx, snapshot, {
+    subject: "stage_end_spec_analyze",
+    status: consistent ? "passed" : "missing",
+    detail: consistent
+      ? "current stage-end spec-analyze is semantically consistent"
+      : `current stage-end spec-analyze is ${analyzerResult?.status ?? "unavailable"}`,
+    evidenceRefs: stageOutcomeEvidence,
+  });
+}
+
 function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   // Quality facts and canonical records are content-addressed and written
   // atomically by the TaskKernel. A stage-level publication lock would be a
@@ -675,6 +836,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   }
   const qualityFactRefs = [];
   const qualityAdvisoryFactRefs = [];
+  const reviewStatuses = new Map();
   let allPassed = true;
   const qualityWarnings = [];
   const qualityAdvisories = [];
@@ -682,12 +844,18 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
   // the current WorkflowHub session repairs it in place instead of silently handing it down.
-  if (analyzerResult?.status && analyzerResult.status !== "consistent") {
+  const stageAnalyzeFact = publishStageEndSpecAnalyzeFact(ctx, result, snapshot);
+  if (stageAnalyzeFact) {
+    qualityFactRefs.push(stageAnalyzeFact.fact.ref);
+  }
+  if (stageAnalyzeFact && analyzerResult?.status !== "consistent") {
     allPassed = false;
-    qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult.status}`);
+    qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult?.status ?? "unavailable"}`);
   }
   const predicateEntries = [
-    ...Object.entries(STAGE_PREDICATES[ctx.stage]).map(([subject, kind]) => ({ subject, kind, gating: true })),
+    ...Object.entries(STAGE_PREDICATES[ctx.stage])
+      .filter(([subject]) => subject !== "stage_end_spec_analyze")
+      .map(([subject, kind]) => ({ subject, kind, gating: true })),
     ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}).map(([subject, kind]) => ({ subject, kind, gating: false })),
   ];
   for (const { subject, kind, gating } of predicateEntries) {
@@ -710,7 +878,8 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
         })()
         : result.facts?.completion_subjects?.[subject]
       : null;
-    const review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate) : null;
+    const review = kind === "review" ? reviewEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
+    if (kind === "review" && review?.review_status) reviewStatuses.set(subject, review.review_status);
     const test = kind === "test" ? testEvidenceStatus(ctx.task, candidate, { stage: ctx.stage, subject }) : null;
     const confirmation = kind === "confirmation" ? confirmationEvidenceStatus(ctx.task, candidate) : null;
     const status = kind === "acceptance_criterion"
@@ -739,45 +908,25 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     let factEvidenceRef = kind === "acceptance_criterion" ? undefined : candidate?.ref;
     let factEvidenceHash = kind === "acceptance_criterion" ? undefined : candidate?.sha256;
     const factEvidence = kind === "acceptance_criterion" ? [] : candidate ? [candidate] : [];
+    let acceptanceFact = null;
     if (kind === "acceptance_criterion") {
       const subjectEvidence = Array.isArray(acceptanceSubject?.evidence_refs)
         ? acceptanceSubject.evidence_refs.filter((entry) => typeof entry?.ref === "string" && typeof entry?.sha256 === "string")
         : [];
-      const evidenceValue = {
-        schema_version: "stage-quality-evidence.v1",
-        task_id: ctx.identity.taskId,
-        stage: ctx.stage,
+      acceptanceFact = publishAcceptanceQualityFact(ctx, snapshot, {
         subject,
         status,
-        snapshot_tree: snapshot.tree,
-        subject_fact: {
-          status,
-          detail: acceptanceSubject?.detail ?? "handler did not provide a subject-specific completion fact",
-          evidence_refs: subjectEvidence,
-          ...(subject === "finding_dispositions" ? {
-            disposition_items: acceptanceSubject?.disposition_items ?? [],
-            source_review_refs: acceptanceSubject?.source_review_refs ?? [],
-            risk_acceptance_refs: acceptanceSubject?.risk_acceptance_refs ?? [],
-          } : {}),
-        },
-      };
-      const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
-      const evidenceHash = createHash("sha256").update(evidenceRaw).digest("hex");
-      const evidenceRef = `quality/evidence/stage-quality/${ctx.stage}/${subject}-${evidenceHash}.json`;
-      publishVNextEvidence(ctx, evidenceRef, evidenceRaw);
-      const acceptanceValue = {
-        schema_version: "acceptance-evidence.v1",
-        acceptance_criterion_id: subject,
-        result: acceptanceResultForSubjectStatus(status),
-        refs: [{ ref: evidenceRef, sha256: evidenceHash }],
-        snapshot_tree: snapshot.tree,
-        summary: { actual_outcome: status, evidence_type: "stage quality fact" },
-      };
-      const acceptanceRaw = `${JSON.stringify(acceptanceValue, null, 2)}\n`;
-      factEvidenceHash = createHash("sha256").update(acceptanceRaw).digest("hex");
-      factEvidenceRef = `quality/evidence/acceptance/${ctx.stage}/${subject}-${factEvidenceHash}.json`;
-      publishVNextEvidence(ctx, factEvidenceRef, acceptanceRaw);
-      factEvidence.push({ ref: factEvidenceRef, sha256: factEvidenceHash });
+        detail: acceptanceSubject?.detail,
+        evidenceRefs: subjectEvidence,
+        ...(subject === "finding_dispositions" ? {
+          dispositionItems: acceptanceSubject?.disposition_items ?? [],
+          sourceReviewRefs: acceptanceSubject?.source_review_refs ?? [],
+          riskAcceptanceRefs: acceptanceSubject?.risk_acceptance_refs ?? [],
+        } : {}),
+      });
+      factEvidenceRef = acceptanceFact.evidence.ref;
+      factEvidenceHash = acceptanceFact.evidence.sha256;
+      factEvidence.push(acceptanceFact.evidence);
     }
     if (factEvidenceRef === undefined) {
       const missingValue = {
@@ -798,12 +947,14 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     const qualityFactStatus = kind === "review"
       ? (new Set(["recorded", "unavailable", "missing"]).has(status) ? status : "missing")
       : (new Set(["passed", "failed", "missing"]).has(status) ? status : "missing");
-    const fact = ctx.kernel.publishVNextQualityFact(ctx.stage, {
-      kind,
-      status: qualityFactStatus,
-      subject,
-      evidence: factEvidence.map(({ ref, sha256 }) => ({ ref, sha256, evidence_type: evidenceType })),
-    });
+    const fact = kind === "acceptance_criterion"
+      ? acceptanceFact.fact
+      : ctx.kernel.publishVNextQualityFact(ctx.stage, {
+        kind,
+        status: qualityFactStatus,
+        subject,
+        evidence: factEvidence.map(({ ref, sha256 }) => ({ ref, sha256, evidence_type: evidenceType })),
+      });
     qualityFactRefs.push(fact.ref);
     if (!gating) qualityAdvisoryFactRefs.push(fact.ref);
   }
@@ -813,10 +964,12 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
   assertVNextSourceStable(ctx, preflightSnapshot);
   const observations = qualityFactRefs.map((ref) => {
     const raw = ctx.task.readRecord(ref);
+    const value = JSON.parse(raw);
     return {
-      fact: { ref, value: JSON.parse(raw) },
+      fact: { ref, value },
       authenticated: true,
       freshness: { status: "current" },
+      ...(reviewStatuses.has(value.subject) ? { review_status: reviewStatuses.get(value.subject) } : {}),
     };
   });
   const readiness = deriveStageProgress(ctx.stage, observations, currentMaterialTexts(ctx));

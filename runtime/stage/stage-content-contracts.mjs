@@ -52,6 +52,20 @@ function object(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function semanticAnchor(value, expectedRole = null) {
+  return object(value)
+    && nonEmptyString(value.id)
+    && nonEmptyString(value.path)
+    && !value.path.startsWith("/")
+    && !value.path.split("/").includes("..")
+    && Number.isSafeInteger(value.start_line)
+    && value.start_line >= 1
+    && Number.isSafeInteger(value.end_line)
+    && value.end_line >= value.start_line
+    && nonEmptyString(value.role)
+    && (expectedRole === null || value.role === expectedRole);
+}
+
 const GIT_OID = /^[a-f0-9]{40,64}$/i;
 
 /**
@@ -356,6 +370,103 @@ export function validateInteractionLifecycleContract(value) {
       round: ask?.round ?? null,
       user_reply_ref: reply?.reply_ref ?? null,
     }),
+  });
+}
+
+/** Validate several real interaction rounds without treating them as duplicate skills. */
+export function validateInteractionLifecycleSequence(value) {
+  const errors = [];
+  const rounds = Array.isArray(value) ? value : value?.rounds;
+  const expectedType = Array.isArray(value) ? null : value?.interaction_type ?? value?.kind;
+  if (!Array.isArray(rounds) || rounds.length === 0) {
+    return Object.freeze({ ok: false, errors: Object.freeze(["interaction lifecycle sequence must contain one or more rounds"]), facts: Object.freeze({}) });
+  }
+  const seenRounds = new Set();
+  const seenCards = new Set();
+  let previousRound = 0;
+  for (const [index, round] of rounds.entries()) {
+    const lifecycle = round?.lifecycle ?? round;
+    const interactionType = lifecycle?.interaction_type ?? lifecycle?.kind;
+    if (expectedType !== null && interactionType !== expectedType) errors.push(`interaction round ${index + 1} has a different interaction type`);
+    const result = validateInteractionLifecycleContract(lifecycle);
+    if (!result.ok) errors.push(...result.errors.map((error) => `round ${index + 1}: ${error}`));
+    const roundNumber = lifecycle?.events?.[0]?.round;
+    const cardRef = lifecycle?.events?.[0]?.card_ref;
+    if (!validInteractionRound(roundNumber)) errors.push(`interaction round ${index + 1} must contain a positive round`);
+    if (seenRounds.has(roundNumber)) errors.push(`interaction round ${roundNumber} was started more than once`);
+    if (seenCards.has(cardRef)) errors.push(`interaction card ${cardRef} was started more than once`);
+    if (validInteractionRound(roundNumber) && roundNumber <= previousRound) errors.push("interaction rounds must be strictly ordered");
+    seenRounds.add(roundNumber);
+    seenCards.add(cardRef);
+    if (validInteractionRound(roundNumber)) previousRound = roundNumber;
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({ interaction_type: expectedType ?? rounds[0]?.interaction_type ?? rounds[0]?.kind ?? null, rounds: rounds.length }),
+  });
+}
+
+const REQUIREMENT_COVERAGE_CLASSES = new Set([
+  "goal",
+  "flow_or_surface",
+  "data_or_state",
+  "success_failure_acceptance",
+  "constraint_non_goal_defer",
+]);
+const REQUIREMENT_IMPACTS = new Set(["high", "medium", "low"]);
+const REQUIREMENT_DISPOSITIONS = new Set(["selected", "represented", "explicitly_deferred", "not_asked"]);
+
+/**
+ * Validate the semantic output produced after authenticated messages are
+ * classified by a product skill. The runtime checks bindings and omissions;
+ * it does not classify natural language itself.
+ */
+export function validateRequirementCoverage({ messages, outputs } = {}) {
+  const errors = [];
+  if (!Array.isArray(messages) || messages.length === 0) errors.push("authenticated requirement messages are required");
+  if (!Array.isArray(outputs)) errors.push("requirement coverage outputs are required");
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: Object.freeze({}) });
+  const byId = new Map();
+  for (const message of messages) {
+    if (!nonEmptyString(message?.id) || !validHash(message?.content_hash) || !REQUIREMENT_COVERAGE_CLASSES.has(message?.message_class)) {
+      errors.push("authenticated message identity, hash, and class are required");
+      continue;
+    }
+    if (byId.has(message.id)) errors.push(`authenticated message ${message.id} is duplicated`);
+    byId.set(message.id, message);
+  }
+  const coveredClasses = new Set();
+  const coveredMessages = new Set();
+  const coveredAxes = new Set();
+  for (const [index, output] of outputs.entries()) {
+    const message = byId.get(output?.message_id);
+    if (!message) { errors.push(`coverage output ${index + 1} must bind an authenticated message`); continue; }
+    if (output.message_hash !== message.content_hash) errors.push(`coverage output ${index + 1} message hash binding mismatch`);
+    if (output.message_class !== message.message_class) errors.push(`coverage output ${index + 1} message class mismatch`);
+    if (!nonEmptyString(output.axis_id)) errors.push(`coverage output ${index + 1} axis_id is required`);
+    if (!REQUIREMENT_IMPACTS.has(output.impact)) errors.push(`coverage output ${index + 1} impact is invalid`);
+    if (!REQUIREMENT_DISPOSITIONS.has(output.disposition)) errors.push(`coverage output ${index + 1} disposition is invalid`);
+    const ids = ["decision_ids", "requirement_ids", "fr_ids", "ac_ids"];
+    for (const field of ids) {
+      if (!Array.isArray(output[field]) || output[field].length === 0 || output[field].some((id) => !nonEmptyString(id))) errors.push(`coverage output ${index + 1} ${field} must be non-empty`);
+    }
+    if (["high", "medium"].includes(output.impact) && output.disposition === "explicitly_deferred" && !nonEmptyString(output.skip_reason)) {
+      errors.push(`coverage output ${index + 1} explicitly_deferred needs skip_reason`);
+    }
+    if (["high", "medium"].includes(output.impact) && output.disposition === "not_asked" && !nonEmptyString(output.skip_reason)) {
+      errors.push(`coverage output ${index + 1} not_asked needs skip_reason`);
+    }
+    coveredClasses.add(message.message_class);
+    coveredMessages.add(message.id);
+    if (nonEmptyString(output.axis_id)) coveredAxes.add(output.axis_id);
+  }
+  for (const message of messages) if (!coveredMessages.has(message.id)) errors.push(`authenticated message ${message.id} has no coverage output`);
+  for (const category of REQUIREMENT_COVERAGE_CLASSES) if (!coveredClasses.has(category)) errors.push(`requirement message class ${category} has no coverage output`);
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    facts: Object.freeze({ message_count: messages.length, output_count: outputs.length, class_count: coveredClasses.size, axis_count: coveredAxes.size }),
   });
 }
 
@@ -2047,11 +2158,361 @@ function hasEvidenceBinding(entry) {
     && GIT_OID.test(entry?.snapshot_tree ?? "");
 }
 
+function addStageContractError(errors, findings, {
+  type = "stage_contract_gap",
+  artifact,
+  anchor,
+  message,
+  correction = "在当前 stage 修复该产物或事实，并用同一 current revision 重跑 spec-analyze",
+}) {
+  errors.push(message);
+  findings.push(stageAnalyzeFinding({
+    type,
+    artifact,
+    targetArtifact: artifact,
+    lineOrAnchor: anchor,
+    rule: "production-stage-material-contract",
+    impact: message,
+    correction,
+  }));
+}
+
+function hasStructuredSpecMaterial(markdown) {
+  return typeof markdown === "string"
+    && /^##\s+速读卡(?:（30 秒）)?\s*$/m.test(markdown)
+    && /^##\s+1\.\s+/m.test(markdown);
+}
+
+function hasPlanTaskV3Material(markdown) {
+  return typeof markdown === "string"
+    && (templateVersion(markdown) === PLAN_TASK_V3 || /\bplan-task\.v3\b/i.test(markdown));
+}
+
+function validateSpecFailureConditions(markdown) {
+  const errors = [];
+  const lines = markdown.split(/\r?\n/);
+  const starts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^\s*-\s+\[[ xX]\]\s+\*\*AC-[A-Za-z0-9_-]+\*\*/i.test(lines[index])) starts.push(index);
+  }
+  for (const [position, start] of starts.entries()) {
+    const block = lines.slice(start, starts[position + 1] ?? lines.length).join("\n");
+    const id = lines[start].match(/\bAC-[A-Za-z0-9_-]+\b/i)?.[0] ?? `AC-${position + 1}`;
+    if (!/(?:^|\n)\s*失败\s*[:：]/m.test(block)
+        && !/(?:^|\n)\s*(?:failure condition|failure)\s*[:：]/im.test(block)) {
+      errors.push(`${id} acceptance design is missing a failure condition`);
+    }
+  }
+  return errors;
+}
+
+function validateStructuredSpecContracts({ markdown, packet, identity }) {
+  const errors = [];
+  const findings = [];
+  const structure = validateSpecContentProfile(markdown);
+  for (const error of structure.errors) addStageContractError(errors, findings, {
+    type: "spec_contract_gap", artifact: "spec", anchor: "spec-content.v3", message: error,
+  });
+  const acceptance = validateAcceptanceDesignMinimum(markdown);
+  for (const error of acceptance.errors) addStageContractError(errors, findings, {
+    type: "acceptance_contract_gap", artifact: "spec", anchor: "验收标准", message: error,
+  });
+  for (const error of validateSpecFailureConditions(markdown)) addStageContractError(errors, findings, {
+    type: "acceptance_contract_gap", artifact: "spec", anchor: "验收标准/失败条件", message: error,
+  });
+
+  const mappingStart = markdown.search(/^###\s+来源与决策映射\s*$/m);
+  const mapping = mappingStart < 0 ? "" : markdown.slice(mappingStart);
+  if (mappingStart < 0 || !/\bR-\d+\b/.test(mapping) || !/\bD-\d+\b/.test(mapping)
+      || !/\bFR-[A-Z][A-Z0-9]*-\d{3}\b/.test(mapping) || !/\bAC-[A-Za-z0-9_-]+\b/.test(mapping)) {
+    addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: "来源与决策映射",
+      message: "spec source/decision to FR/AC mapping is missing or incomplete",
+    });
+  }
+
+  const frIds = identifiers(markdown, /\bFR-[A-Z][A-Z0-9]*-\d{3}\b/g);
+  const acIds = identifiers(markdown, /\bAC-[A-Za-z0-9_-]+\b/g);
+  for (const id of frIds) {
+    if ((markdown.match(new RegExp(`\\b${id}\\b`, "g")) ?? []).length < 2) addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: id,
+      message: `${id} has no downstream source/decision or acceptance reference`,
+    });
+  }
+  for (const id of acIds) {
+    if ((markdown.match(new RegExp(`\\b${id}\\b`, "g")) ?? []).length < 2) addStageContractError(errors, findings, {
+      type: "traceability_gap", artifact: "spec", anchor: id,
+      message: `${id} has no upstream FR/source mapping reference`,
+    });
+  }
+
+  const pfactLines = markdown.split(/\r?\n/).filter((line) => /^\s*-\s+\*\*PFACT-[^*]+\*\*/.test(line));
+  for (const line of pfactLines) {
+    const id = line.match(/\*\*(PFACT-[^*]+)\*\*/)?.[1] ?? "PFACT";
+    const states = line.match(/\b(?:verified|inferred|unknown|not_applicable)\b/gi) ?? [];
+    if (states.length !== 1) addStageContractError(errors, findings, {
+      type: "pfact_contract_gap", artifact: "spec", anchor: id,
+      message: `${id} must declare exactly one PFACT state: verified, inferred, unknown, or not_applicable`,
+    });
+  }
+
+  const clarification = packet?.clarify_outcome ?? packet?.clarify;
+  if (clarification !== undefined) {
+    const clarifyErrors = validateClarifyOutcome(clarification, { stage: "build-spec", identity });
+    for (const error of clarifyErrors) addStageContractError(errors, findings, {
+      type: "clarify_contract_gap", artifact: "clarify", anchor: "spec-clarify", message: error,
+    });
+  } else if (!/spec-clarify[\s\S]{0,260}(?:trigger\s*=\s*false|trigger=false|executed)/i.test(markdown)) {
+    addStageContractError(errors, findings, {
+      type: "clarify_contract_gap", artifact: "spec", anchor: "spec-clarify",
+      message: "build-spec production profile has no current Clarify outcome or explicit trigger=false reason",
+    });
+  }
+  return { errors, findings };
+}
+
+function validateIdentityBinding(value, identity, label, errors) {
+  if (!object(value)) {
+    errors.push(`${label} is required`);
+    return;
+  }
+  for (const [field, expected] of Object.entries(identity ?? {})) {
+    if (expected === undefined || expected === null) continue;
+    if (value[field] !== expected) errors.push(`${label}.${field} is not bound to the current ${field}`);
+  }
+}
+
+function validateLifecycleEvents(value, label, errors) {
+  const events = value?.events ?? value?.lifecycle_events;
+  if (!Array.isArray(events) || events.map((entry) => entry?.event).join(",") !== "ask,wait,reply,resume") {
+    errors.push(`${label} must contain the real ask -> wait -> reply -> resume lifecycle`);
+  }
+}
+
+function validateClarifyOutcome(value, { stage = "build-spec", identity } = {}) {
+  const errors = [];
+  if (!object(value)) return [`${stage} Clarify outcome is required`];
+  if (!new Set(["resolved", "completed"]).has(value.status)) errors.push("Clarify outcome status must be resolved or completed");
+  validateIdentityBinding(value, identity, "Clarify outcome", errors);
+  if (value.trigger === false) {
+    if (!nonEmptyString(value.reason)) errors.push("Clarify trigger=false requires a concrete reason");
+    if (value.open_direction_changing_questions !== undefined
+        && value.open_direction_changing_questions !== 0) {
+      errors.push("Clarify trigger=false must have zero open direction-changing questions");
+    }
+    if (value.lifecycle_rounds !== undefined
+        && (!Array.isArray(value.lifecycle_rounds) || value.lifecycle_rounds.length > 0)) {
+      errors.push("Clarify trigger=false must omit lifecycle_rounds or provide an empty array");
+    }
+  } else if (value.trigger === true) {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: value.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors);
+  } else {
+    errors.push("Clarify outcome must explicitly declare trigger=true or trigger=false");
+  }
+  return errors;
+}
+
+function validateGrillSummary(value, { identity } = {}) {
+  const errors = [];
+  if (!object(value)) return ["make-decision analyzer requires the completed full-requirement Grill summary"];
+  if (value.status !== "completed") errors.push("Grill summary must be completed");
+  validateIdentityBinding(value, identity, "Grill summary", errors);
+  const coverage = value.requirement_coverage;
+  const expected = ["goal", "flow_or_surface", "data_or_state", "success_failure_acceptance", "constraint_non_goal_defer"];
+  if (!object(coverage) || coverage.status !== "complete") errors.push("Grill requirement_coverage must be complete");
+  if (!expected.every((kind) => coverage?.message_classes?.includes(kind))) errors.push("Grill must cover all five original-requirement message classes");
+  if (!Array.isArray(coverage?.uncovered) || coverage.uncovered.length !== 0) errors.push("Grill must not leave an uncovered requirement class or axis");
+  for (const [name, status] of Object.entries(value.exit_checks ?? {})) if (status !== "pass") errors.push(`Grill exit check ${name} is not pass`);
+  return errors;
+}
+
+function validateFinalConfirmation(value, { stage = "make-decision", identity } = {}) {
+  const errors = [];
+  if (!object(value)) return [`${stage} analyzer requires the current final confirmation fact`];
+  if (value.decision !== "accepted" && value.status !== "accepted") errors.push("final confirmation must be accepted");
+  validateIdentityBinding(value, identity, "final confirmation", errors);
+  if (!nonEmptyString(value.subject_ref) && !nonEmptyString(value.subject_id)) errors.push("final confirmation subject binding is required");
+  if (!HASH.test(value.material_hash ?? value.decision_hash ?? "") && !nonEmptyString(value.material_revision)) errors.push("final confirmation must bind the current material identity");
+  validateLifecycleEvents(value, "final confirmation", errors);
+  return errors;
+}
+
+function validateEvidenceEntry(entry, evidenceByRef, identity, label, errors) {
+  if (!object(entry)) {
+    errors.push(`${label} must be an object with ref/hash/snapshot_tree`);
+    return;
+  }
+  if (!hasEvidenceBinding(entry)) errors.push(`${label} ref/hash/snapshot_tree binding is invalid`);
+  const current = evidenceByRef.get(entry.ref);
+  if (!current || current.status !== "fresh" || current.hash !== entry.hash || current.snapshot_tree !== entry.snapshot_tree) {
+    errors.push(`${label} does not bind a fresh current evidence entry`);
+  }
+  if (identity?.snapshot_tree && entry.snapshot_tree !== identity.snapshot_tree) errors.push(`${label} snapshot_tree is stale`);
+}
+
+function containsMaterialIdentifier(value, identifier) {
+  if (!nonEmptyString(value) || !nonEmptyString(identifier)) return false;
+  const escaped = identifier.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)`).test(value);
+}
+
+function validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors) {
+  const test = row.test_result;
+  if (!object(test)) {
+    errors.push(`${label}.test_result must bind the gate to an actual test result`);
+    return;
+  }
+  const testRef = test.evidence_ref ?? test.ref;
+  if (!nonEmptyString(testRef)) errors.push(`${label}.test_result.evidence_ref is required`);
+  if (!nonEmptyString(test.command)) errors.push(`${label}.test_result.command is required`);
+  if (!Number.isInteger(test.expected_exit)) errors.push(`${label}.test_result.expected_exit is required`);
+  if (!Number.isInteger(test.actual_exit)) errors.push(`${label}.test_result.actual_exit is required`);
+  if (!nonEmptyString(test.oracle)) errors.push(`${label}.test_result.oracle is required`);
+  if (!nonEmptyString(test.actual_outcome)) errors.push(`${label}.test_result.actual_outcome is required`);
+  const gate = row.gate ?? {};
+  if (test.command !== (gate.command ?? row.gate_command)) errors.push(`${label}.test_result.command does not match gate.command`);
+  if (test.expected_exit !== (gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.test_result.expected_exit does not match gate.expected_exit`);
+  if (test.oracle !== (gate.oracle ?? row.oracle)) errors.push(`${label}.test_result.oracle does not match gate.oracle`);
+  if (Number.isInteger(test.expected_exit) && Number.isInteger(test.actual_exit) && test.expected_exit !== test.actual_exit) {
+    errors.push(`${label}.test_result actual_exit does not satisfy expected_exit`);
+  }
+  if (!Array.isArray(row.evidence_refs) || !row.evidence_refs.some((entry) => entry?.ref === testRef)) {
+    errors.push(`${label}.test_result.evidence_ref must be one of evidence_refs`);
+  }
+  const evidence = evidenceByRef.get(testRef);
+  if (!evidence || !object(evidence.test_result)) {
+    errors.push(`${label}.test_result must bind a test_result-bearing current evidence entry`);
+    return;
+  }
+  const bound = evidence.test_result;
+  for (const field of ["command", "expected_exit", "actual_exit", "oracle", "actual_outcome"]) {
+    if (bound[field] !== test[field]) errors.push(`${label}.test_result.${field} does not match bound evidence`);
+  }
+  if (identity?.snapshot_tree && evidence.snapshot_tree !== identity.snapshot_tree) {
+    errors.push(`${label}.test_result evidence snapshot_tree is stale`);
+  }
+}
+
+function validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity } = {}) {
+  const errors = [];
+  const findings = [];
+  const currentSpecIds = activeAcceptanceCriterionIds(packet?.materials?.spec ?? "");
+  const explicitExpectedIds = packet?.expected_ac_ids ?? packet?.accepted_ac_ids;
+  const expectedIds = currentSpecIds;
+  if (explicitExpectedIds !== undefined
+      && (!Array.isArray(explicitExpectedIds)
+        || explicitExpectedIds.length !== currentSpecIds.length
+        || new Set(explicitExpectedIds).size !== currentSpecIds.length
+        || explicitExpectedIds.some((id) => !currentSpecIds.includes(id)))) {
+    errors.push("build-code acceptance chain expected_ac_ids must exactly match the active AC set in spec.md");
+  }
+  const rows = packet?.acceptance_coverage ?? packet?.ac_trace?.entries;
+  if (!Array.isArray(rows) || rows.length === 0) return { errors: [...errors, "build-code acceptance chain is missing"], findings: [stageAnalyzeFinding({ type: "acceptance_chain_gap", artifact: "ac-trace", targetArtifact: "build-code", frOrTaskId: "AC", lineOrAnchor: "acceptance-chain", impact: "逐 AC 结果没有完整 current lineage", correction: "在当前 build-code 记录每条 AC 修复该字段并重跑 stage-end spec-analyze" })] };
+  if (!Array.isArray(expectedIds) || expectedIds.length === 0) {
+    errors.push("build-code acceptance chain requires a non-empty current AC set from spec.md or expected_ac_ids");
+  }
+  const seen = new Set();
+  for (const [index, row] of rows.entries()) {
+    const label = `build-code acceptance chain[${index}]`;
+    if (!object(row)) { errors.push(`${label} must be an object`); continue; }
+    const acId = row.acceptance_criterion_id ?? row.ac_id;
+    if (!nonEmptyString(acId)) errors.push(`${label}.acceptance_criterion_id is required`);
+    const keyParts = [row.task_id, acId, row.material_revision, row.snapshot_tree, row.producer_stage];
+    if (keyParts.some((part) => !nonEmptyString(part))) errors.push(`${label} exact identity key task_id + AC id + material_revision + snapshot_tree + producer_stage is required`);
+    if (identity) {
+      if (row.task_id !== identity.task_id) errors.push(`${label}.task_id is stale`);
+      if (row.material_revision !== identity.material_revision) errors.push(`${label}.material_revision is stale`);
+      if (row.snapshot_tree !== identity.snapshot_tree) errors.push(`${label}.snapshot_tree is stale`);
+      if (row.producer_stage !== identity.stage) errors.push(`${label}.producer_stage is stale`);
+    }
+    const key = keyParts.join("|");
+    if (seen.has(key)) errors.push(`${label} conflicts with another result for the same exact identity key`);
+    seen.add(key);
+    if (row.status !== "covered") errors.push(`${label} status must be covered for a complete analyzer chain`);
+    for (const field of ["source_ids", "decision_ids", "fr_ids", "task_ids"]) {
+      if (!Array.isArray(row[field]) || row[field].length === 0 || row[field].some((id) => !nonEmptyString(id))) errors.push(`${label}.${field} must be non-empty`);
+    }
+    const materials = packet.materials ?? {};
+    const requirementIds = new Set((packet.original_requirements ?? []).map((entry) => entry?.id).filter(nonEmptyString));
+    for (const id of row.source_ids ?? []) if (!requirementIds.has(id)) errors.push(`${label}.source_ids contains an unknown original requirement: ${id}`);
+    for (const id of row.decision_ids ?? []) if (!containsMaterialIdentifier(materials.decision_log, id)) errors.push(`${label}.decision_ids is not present in decision-log.md: ${id}`);
+    for (const id of row.fr_ids ?? []) if (!containsMaterialIdentifier(materials.spec, id)) errors.push(`${label}.fr_ids is not present in spec.md: ${id}`);
+    for (const id of row.task_ids ?? []) if (!containsMaterialIdentifier(materials.tasks, id)) errors.push(`${label}.task_ids is not present in tasks.md: ${id}`);
+    if (!nonEmptyString(row.file_symbol)) errors.push(`${label}.file_symbol is required`);
+    const implementationAnchor = row.implementation_anchor;
+    const verificationAnchor = row.verification_anchor;
+    if (!semanticAnchor(implementationAnchor, "implementation")) errors.push(`${label}.implementation_anchor is invalid`);
+    if (!semanticAnchor(verificationAnchor, "verification")) errors.push(`${label}.verification_anchor is invalid`);
+    if (implementationAnchor?.path === verificationAnchor?.path && implementationAnchor?.start_line === verificationAnchor?.start_line) errors.push(`${label} implementation and verification must be independently anchored`);
+    const gate = row.gate ?? {};
+    if (!nonEmptyString(gate.command ?? row.gate_command)) errors.push(`${label}.gate.command is required`);
+    if (!Number.isInteger(gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.gate.expected_exit is required`);
+    if (!nonEmptyString(gate.oracle ?? row.oracle)) errors.push(`${label}.gate.oracle is required`);
+    for (const field of ["scenario", "actual_outcome", "coverage_limits"]) if (!nonEmptyString(row[field])) errors.push(`${label}.${field} is required`);
+    if (!Array.isArray(row.evidence_refs) || row.evidence_refs.length === 0) errors.push(`${label}.evidence_refs is required`);
+    else for (const [refIndex, entry] of row.evidence_refs.entries()) validateEvidenceEntry(entry, evidenceByRef, identity, `${label}.evidence_refs[${refIndex}]`, errors);
+    validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors);
+    validateEvidenceEntry(row.review_ref, evidenceByRef, identity, `${label}.review_ref`, errors);
+    validateEvidenceEntry(row.stage_end_ref, evidenceByRef, identity, `${label}.stage_end_ref`, errors);
+  }
+  if (Array.isArray(expectedIds) && expectedIds.length > 0) {
+    const actual = new Set(rows.map((row) => row?.acceptance_criterion_id ?? row?.ac_id).filter(nonEmptyString));
+    for (const id of expectedIds) if (!actual.has(id)) errors.push(`acceptance chain is missing ${id}`);
+    for (const id of actual) if (!expectedIds.includes(id)) errors.push(`acceptance chain contains unexpected ${id}`);
+  }
+  for (const error of errors) findings.push(stageAnalyzeFinding({ type: "acceptance_chain_gap", artifact: "ac-trace", targetArtifact: "build-code", frOrTaskId: "AC", lineOrAnchor: "acceptance-chain", impact: error, correction: "在当前 build-code 修复该字段并重跑 stage-end spec-analyze" }));
+  return { errors, findings };
+}
+
+function validateStageMaterialContracts({ stage, materials, packet, evidenceByRef, identity } = {}) {
+  const errors = [];
+  const findings = [];
+  if (stage === "make-decision") {
+    const messages = packet?.authenticated_requirement_messages;
+    const outputs = packet?.requirement_coverage_outputs ?? packet?.requirement_outputs;
+    const coverage = validateRequirementCoverage({ messages, outputs });
+    for (const error of coverage.errors) addStageContractError(errors, findings, {
+      type: "requirement_coverage_gap", artifact: "registered-requirements", anchor: "requirement-coverage", message: error,
+    });
+    for (const error of validateGrillSummary(packet?.grill_summary ?? packet?.grill, { identity })) addStageContractError(errors, findings, {
+      type: "grill_coverage_gap", artifact: "grill", anchor: "full-requirement-matrix", message: error,
+    });
+    for (const error of validateFinalConfirmation(packet?.final_confirmation ?? packet?.confirmation, { identity })) addStageContractError(errors, findings, {
+      type: "confirmation_contract_gap", artifact: "confirmation", anchor: "final-confirmation", message: error,
+    });
+  }
+  if (stage === "build-spec") {
+    const checked = validateStructuredSpecContracts({ markdown: typeof materials?.spec === "string" ? materials.spec : "", packet, identity });
+    errors.push(...checked.errors); findings.push(...checked.findings);
+  }
+  if (stage === "build-plan") {
+    const structural = validatePlanTaskContract({
+      spec: typeof materials?.spec === "string" ? materials.spec : "",
+      plan: typeof materials?.plan === "string" ? materials.plan : "",
+      tasks: typeof materials?.tasks === "string" ? materials.tasks : "",
+    });
+    const executable = validateExecutablePlanTaskMinimum({
+      spec: typeof materials?.spec === "string" ? materials.spec : "",
+      plan: typeof materials?.plan === "string" ? materials.plan : "",
+      tasks: typeof materials?.tasks === "string" ? materials.tasks : "",
+    });
+    for (const error of [...structural.errors, ...executable.errors]) addStageContractError(errors, findings, {
+      type: "plan_task_contract_gap", artifact: "plan/tasks", anchor: "plan-task.v3", message: error,
+    });
+  }
+  if (stage === "build-code") {
+    const chain = validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity });
+    errors.push(...chain.errors); findings.push(...chain.findings);
+  }
+  return { errors, findings };
+}
+
 /**
  * Check actual semantic coverage and evidence bindings, not just IDs or file
  * existence. Missing packet input is explicitly material_incomplete.
  */
-export function validateStageSpecAnalyzeProfile({ stage, packet } = {}) {
+export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material_contracts = false, identity } = {}) {
   const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
   if (!profile) throw new TypeError(`unknown stage spec-analyze profile: ${stage}`);
   if (!object(packet)) return Object.freeze({ ok: false, status: "material_incomplete", stage, errors: Object.freeze(["MATERIAL_INCOMPLETE: packet is required"]), findings: Object.freeze([]), summary: stageAnalyzeSummary(stage, {}, "material_incomplete", [], ["MATERIAL_INCOMPLETE: packet is required"]) });
@@ -2063,6 +2524,14 @@ export function validateStageSpecAnalyzeProfile({ stage, packet } = {}) {
   const evidenceByRef = new Map(evidence.map((entry) => [entry?.ref, entry]));
   const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
   const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
+
+  if (strict_material_contracts) {
+    const materialContracts = validateStageMaterialContracts({
+      stage, materials, packet, evidenceByRef, identity,
+    });
+    errors.push(...materialContracts.errors);
+    findings.push(...materialContracts.findings);
+  }
 
   if (requirements.length === 0) errors.push("MATERIAL_INCOMPLETE: original_requirements is required");
   if (coverage.length === 0) errors.push("MATERIAL_INCOMPLETE: semantic coverage is required");
@@ -2778,15 +3247,20 @@ export function buildPlanTaskContract({
 const V2_FR = /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g;
 const V2_AC = ACCEPTANCE_CRITERION_ID;
 
-function activeAcceptanceCriterionIds(spec) {
+export function activeAcceptanceCriterionIds(spec) {
   const text = String(spec ?? "");
   const heading = text.match(/^##\s+(?:\d+\.\s*)?(?:验收标准|Acceptance Criteria)\s*$/mi);
-  if (!heading) return identifiers(text, ACCEPTANCE_CRITERION_ID);
-  const body = text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0];
+  const body = heading
+    ? text.slice(heading.index + heading[0].length).split(/^##\s+/m, 1)[0]
+    : text;
   const headingIds = [...body.matchAll(/^\s*[-*]\s*(?:\[[ xX]\]\s*)?\*\*([^*]+)\*\*/gm)]
-    .map(([, id]) => id.trim())
-    .filter((id) => ACCEPTANCE_CRITERION_EXACT.test(id));
-  return [...new Set(headingIds)];
+    .map(([, label]) => label.trim().match(new RegExp(String.raw`^(${ACCEPTANCE_CRITERION_SOURCE})(?=$|[\s（(])`, "i"))?.[1])
+    .filter(Boolean);
+  const deferredIds = new Set([...text.matchAll(new RegExp(
+    String.raw`\b(${ACCEPTANCE_CRITERION_SOURCE})\b[^\n]{0,180}\b(?:deferred|延期|不计入|not_applicable)\b`, "gi",
+  ))].map(([, id]) => id));
+  return [...new Set(headingIds.length ? headingIds : identifiers(text, ACCEPTANCE_CRITERION_ID))]
+    .filter((id) => !deferredIds.has(id));
 }
 
 function parseReferenceList(value) {

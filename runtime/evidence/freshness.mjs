@@ -3,11 +3,13 @@ import { createHash } from "node:crypto";
 import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { STAGE_ADVISORY_PREDICATES } from "../stage/completion-predicates.mjs";
+import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
+const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
 
 // Only reviews explicitly declared advisory by the stage contract can survive
 // an arbitrary later snapshot. Required verify-code facts still go stale for
@@ -17,6 +19,14 @@ function isAdviceReviewFact(fact) {
   return fact?.kind === "review"
     && fact?.status === "recorded"
     && Object.hasOwn(STAGE_ADVISORY_PREDICATES[fact.stage] ?? {}, fact.subject);
+}
+
+// An execution-status writeback is intentionally reusable only for a
+// registered formal stage predicate. Arbitrary quality facts must still go
+// stale when material identity changes; this keeps the existing bookkeeping
+// exception narrow without adding another control plane.
+function isRegisteredStagePredicate(fact) {
+  return STAGE_PREDICATES[fact?.stage]?.[fact?.subject] === fact?.kind;
 }
 
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -144,6 +154,10 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
         if (!subjectMatches) throw new Error("review subject mismatch");
         if (Object.hasOwn(value, "verdict")) throw new Error("current review result must not expose reviewer verdict");
         if (fact.status !== "recorded") throw new Error("review result requires a recorded review fact");
+        if (fact.stage === "verify-code" && fact.subject === "code_review"
+            && canonicalReviewFindings(value).some(isActionableSeriousFinding)) {
+          throw new Error("verify-code code_review has actionable serious findings");
+        }
       }
     } else if (evidence.evidence_type === "acceptance_evidence") {
       const acceptance = validateAcceptanceEvidence(value);
@@ -156,17 +170,19 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
         if (nestedRaw !== undefined) dependencies[nestedKey] = "current";
       }
     } else if (evidence.evidence_type === "human_confirmation") {
+      const closeConfirmation = fact.subject === "close_confirmation";
       validateHumanConfirmation(value, {
         taskId: fact.task_id,
         stage: fact.stage,
-        subject: value.attempt_ref,
+        subject: closeConfirmation ? undefined : value.attempt_ref,
         requireAccepted: false,
         // Stage confirmation facts may confirm the current stage outcome
         // without pointing at a provider attempt. Close/irreversible
         // authorization has its own stricter subject_ref validation.
-        requireSubjectRef: false,
+        requireSubjectRef: closeConfirmation,
       });
-      if (fact.subject !== "human_confirmation") throw new Error("confirmation subject mismatch");
+      if (!closeConfirmation && fact.subject !== "human_confirmation") throw new Error("confirmation subject mismatch");
+      if (closeConfirmation && !CLOSE_PLAN_REF.test(value.subject_ref ?? "")) throw new Error("close confirmation subject mismatch");
       if (value.schema_version === "human-confirmation.v2"
         && (value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree)) {
         throw new Error("confirmation provenance mismatch");
@@ -184,6 +200,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
 export function evaluateFactFreshness(fact, current, { read, workspaceRoot = null, taskId = null } = {}) {
   const adviceReview = isAdviceReviewFact(fact);
   const recordOnly = !adviceReview
+    && isRegisteredStagePredicate(fact)
     && workspaceRoot
     && typeof taskId === "string"
     && isMaterialOnlySnapshotDelta(workspaceRoot, fact.snapshot_tree, current.snapshot_tree, taskId);
@@ -204,9 +221,20 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
           || (parsed.status === "recorded" && parsed.kind !== "review")) dependencies.fact = "stale";
     } catch { dependencies.fact = "stale"; }
   }
+  let reviewStatus = null;
   for (const evidence of fact.evidence ?? []) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
+    if (raw !== undefined && fact.stage === "verify-code" && fact.subject === "code_review" && evidence.evidence_type === "review_result") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed?.version === "wh-review-result.v1" && Array.isArray(parsed.findings)) {
+          reviewStatus = canonicalReviewFindings(parsed).some(isActionableSeriousFinding) ? "findings" : "clean";
+        }
+      } catch {
+        // authenticateNested records the actual integrity failure below.
+      }
+    }
     if (raw !== undefined) authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot: recordOnly });
   }
   const values = Object.values(dependencies);
@@ -214,5 +242,6 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   return Object.freeze({
     fact_ref: fact.ref, status, authenticated: status === "current",
     dependencies: Object.freeze(dependencies),
+    ...(reviewStatus ? { review_status: reviewStatus } : {}),
   });
 }

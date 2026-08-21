@@ -63,7 +63,7 @@ describe("build-code apply quality contract", () => {
     const publish = steps.steps.find((step) => step.step_slug === "publish-code-result");
     expect(publish.completion_evidence.map((item) => item.kind)).toEqual(["tasks", "test", "review", "stage_outcome"]);
     expect(publish.completion_evidence.map((item) => item.uri_or_path)).toEqual([
-      "tasks.md", "quality/tests/", "quality/reviews/", "quality/evidence/stage-outcomes/build-code/<sha256>.json",
+      "tasks.md", "quality/tests/", "quality/reviews/results/", "quality/evidence/stage-outcomes/build-code/<sha256>.json",
     ]);
     expect(publish.observable_result).toMatch(/plain-language handoff/);
   });

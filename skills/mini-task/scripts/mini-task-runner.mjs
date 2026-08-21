@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { createCanonicalReceiptWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
-import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../../../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
@@ -178,9 +178,13 @@ function readQualityFact(task, ref) {
       invalid.code = "QUALITY_FACT_INVALID";
       throw invalid;
     }
-    if (value.kind !== "review") return null;
     if (!MINI_REVIEW_STATUSES.has(value.status)) {
-      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has an invalid review status`);
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has an invalid quality status`);
+      invalid.code = "QUALITY_FACT_INVALID";
+      throw invalid;
+    }
+    if (value.status === "recorded" && value.kind !== "review") {
+      const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has recorded status for a non-review fact`);
       invalid.code = "QUALITY_FACT_INVALID";
       throw invalid;
     }
@@ -194,15 +198,31 @@ function readQualityFact(task, ref) {
   }
 }
 
-function latestMiniQualityFacts(task) {
+function latestMiniQualityFacts(task, { worktreeRoot, snapshotTree, materialRevision, snapshotMode = "required", subjects = ["mini_task_design_review", "mini_task_implementation_review"] } = {}) {
   const facts = task.listCanonicalQualityFactRefs()
     .map((ref) => ({ ref, value: readQualityFact(task, ref) }))
-    .filter(({ value }) => ["mini_task_design_review", "mini_task_implementation_review"].includes(value?.subject));
+    .filter(({ value }) => subjects.includes(value?.subject))
+    .filter(({ value }) => {
+      if (!value || typeof materialRevision !== "string") return true;
+      if (value.material_revision === materialRevision && snapshotMode === "material") return true;
+      if (typeof worktreeRoot !== "string" || typeof snapshotTree !== "string") return value.material_revision === materialRevision;
+      const recordOnlyDelta = value.snapshot_tree !== snapshotTree && (
+        isExecutionRecordOnlyMaterialDelta(worktreeRoot, value.snapshot_tree, snapshotTree, task.identity.taskId)
+        || isMaterialOnlySnapshotDelta(worktreeRoot, value.snapshot_tree, snapshotTree, task.identity.taskId)
+      );
+      return (snapshotMode === "material" || value.snapshot_tree === snapshotTree || recordOnlyDelta)
+        && (value.material_revision === materialRevision || recordOnlyDelta);
+    });
   const current = new Map();
   for (const item of facts) {
-    const previous = current.get(item.value.subject);
-    if (!previous || Date.parse(item.value.recorded_at) > Date.parse(previous.value.recorded_at)
-        || (item.value.recorded_at === previous.value.recorded_at && item.ref > previous.ref)) current.set(item.value.subject, item);
+    const subject = item.value.subject;
+    if (!current.has(subject)) current.set(subject, item);
+    else if (current.get(subject) !== null) {
+      // Multiple current facts are a conflict. Do not guess by recorded_at or
+      // ref ordering; the caller must keep delivery incomplete and repair the
+      // same task's facts.
+      current.set(subject, null);
+    }
   }
   return current;
 }
@@ -216,7 +236,7 @@ function currentMaterialRevision(task, worktreeRoot) {
       throw error;
     }
   });
-  return `revision-${hash(JSON.stringify(values))}`;
+  return materialRevisionFromValues(values);
 }
 
 function currentMiniTaskMaterials(task, worktreeRoot) {
@@ -449,13 +469,30 @@ function writeMiniFindingDispositionEvidence({ task, kernel, reviewResult, dispo
 function assertMiniTaskQualityForDelivery(task) {
   const workspace = openCurrentTaskWorkspace(task);
   const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
-  const facts = latestMiniQualityFacts(task);
-  const design = facts.get("mini_task_design_review")?.value;
+  const materialRevision = currentMaterialRevision(task, workspace.worktreeRoot);
+  const facts = new Map([
+    ...latestMiniQualityFacts(task, {
+      worktreeRoot: workspace.worktreeRoot,
+      snapshotTree: snapshot.tree,
+      materialRevision,
+      snapshotMode: "material",
+      subjects: ["mini_task_design_review"],
+    }),
+    ...latestMiniQualityFacts(task, {
+      worktreeRoot: workspace.worktreeRoot,
+      snapshotTree: snapshot.tree,
+      materialRevision,
+      subjects: ["mini_task_implementation_review"],
+    }),
+  ]);
+  const designFact = facts.get("mini_task_design_review");
+  if (designFact === null) throw new Error("mini-task design review facts conflict for the current materials");
+  const design = designFact?.value;
   if (!design || !MINI_REVIEW_CLOSE_STATUSES.has(design.status)) throw new Error("mini-task design review is incomplete for the current materials");
   const designSnapshotReusable = design.snapshot_tree === snapshot.tree
     || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId)
     || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId);
-  if (design.material_revision !== currentMaterialRevision(task, workspace.worktreeRoot) && !designSnapshotReusable) {
+  if (design.material_revision !== materialRevision && !designSnapshotReusable) {
     throw new Error("mini-task design review is stale for the current materials");
   }
   const designResult = readBoundJson(task, design.evidence[0], "mini-task design review");
@@ -477,7 +514,9 @@ function assertMiniTaskQualityForDelivery(task) {
     throw new Error("mini-task design finding disposition status is inconsistent");
   }
 
-  const implementation = facts.get("mini_task_implementation_review")?.value;
+  const implementationFact = facts.get("mini_task_implementation_review");
+  if (implementationFact === null) throw new Error("mini-task implementation review facts conflict for the current snapshot");
+  const implementation = implementationFact?.value;
   if (!implementation || !MINI_REVIEW_CLOSE_STATUSES.has(implementation.status)) throw new Error("mini-task implementation review is incomplete for the current snapshot");
   const packet = readBoundJson(task, implementation.evidence[0], "mini-task implementation evidence");
   const implementationSnapshotReusable = packet.snapshot_tree === snapshot.tree
@@ -517,7 +556,7 @@ function assertMiniTaskQualityForDelivery(task) {
   const testOutput = task.readRecord(testReceipt.output_ref);
   if (hash(testOutput) !== testReceipt.output_hash) throw new Error("mini-task focused test output hash mismatch");
   if (testReceipt.exit_code !== 0) {
-    throw new Error(`mini-task focused test failed (exit_code=${testReceipt.exit_code}); delivery remains incomplete`);
+    throw new Error(`mini-task focused test failed; delivery remains incomplete (exit_code=${testReceipt.exit_code})`);
   }
   const userResult = readBoundJson(task, packet.user_result, "mini-task user result");
   if (userResult.schema_version !== "workflowhub-mini-task-user-result.v1"
@@ -787,16 +826,24 @@ export function evaluateMiniTaskScope(input = {}) {
 export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, delivery } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task TaskHandle/TaskKernel mismatch");
-  const focusedTestFact = task.listCanonicalQualityFactRefs()
-    .map((ref) => ({ ref, value: readQualityFact(task, ref) }))
-    .filter(({ value }) => value?.subject === "full_tests_fresh")
-    .sort((left, right) => Date.parse(right.value.recorded_at) - Date.parse(left.value.recorded_at) || right.ref.localeCompare(left.ref))[0];
+  const workspace = openCurrentTaskWorkspace(task);
+  const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
+  const focusedFacts = latestMiniQualityFacts(task, {
+    worktreeRoot: workspace.worktreeRoot,
+    snapshotTree: snapshot.tree,
+    materialRevision: currentMaterialRevision(task, workspace.worktreeRoot),
+    subjects: ["full_tests_fresh"],
+  });
+  if (focusedFacts.get("full_tests_fresh") === null) {
+    throw new Error("mini-task full_tests_fresh quality facts conflict for the current snapshot");
+  }
+  const focusedTestFact = focusedFacts.get("full_tests_fresh");
   if (focusedTestFact?.value?.status === "failed") {
     const evidence = focusedTestFact.value.evidence?.find((entry) => entry.evidence_type === "test_receipt");
     if (evidence) {
       const receipt = readBoundJson(task, evidence, "mini-task focused test");
       if (receipt.exit_code !== 0) {
-        throw new Error(`mini-task focused test failed (exit_code=${receipt.exit_code}); delivery remains incomplete`);
+        throw new Error(`mini-task focused test failed; delivery remains incomplete (exit_code=${receipt.exit_code})`);
       }
     }
   }

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import factsContract from "../../contracts/facts-subschema.json" with { type: "json" };
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureExecutionSnapshot } from "./git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { deriveStageCompletion } from "../stage/completion-predicates.mjs";
@@ -22,6 +22,7 @@ const OID = /^[a-f0-9]{40,64}$/i;
 const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
 const AUTHORIZATION_OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup"]);
+const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
 const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
   Object.entries(factsContract.stages).map(([stage, contract]) => [stage, Object.freeze([...contract.required_keys])]),
 ));
@@ -177,11 +178,12 @@ export function buildTaskKernel(taskHandle, {
         throw error;
       }
     });
-    const materialDigest = hash(JSON.stringify(values));
+    const revisionId = materialRevisionFromValues(values);
+    const materialDigest = revisionId.slice("revision-".length);
     const revision = {
       schema_version: "vnext-material-context.v1",
       task_id: task.identity.taskId,
-      revision_id: `revision-${materialDigest}`,
+      revision_id: revisionId,
       material_digest: materialDigest,
       source: "current-four-materials",
     };
@@ -248,6 +250,15 @@ export function buildTaskKernel(taskHandle, {
       const { revision, snapshot } = currentContext();
       const value = { schema_version: "human-confirmation.v2", task_id: task.identity.taskId, stage: name, decision: input.decision, subject_ref: input.subject_ref ?? null, material_revision: revision.revision_id, snapshot_tree: snapshot.tree, confirmed_at: now() };
       const qualityStatus = input.decision === "accepted" ? "passed" : "failed";
+      // A close-plan confirmation authorizes an irreversible close operation;
+      // it is not the verify-code stage's human quality confirmation. Keep the
+      // canonical human-confirmation record unchanged, but give its quality
+      // fact a distinct internal subject so strict current-fact conflict
+      // detection cannot merge two different meanings. This is not a new
+      // stage, public command, or progression permit.
+      const qualitySubject = CLOSE_PLAN_REF.test(input.subject_ref ?? "")
+        ? "close_confirmation"
+        : "human_confirmation";
       for (const qualityRef of task.listCanonicalQualityFactRefs()) {
         try {
           const qualityRaw = task.readRecord(qualityRef);
@@ -258,7 +269,7 @@ export function buildTaskKernel(taskHandle, {
             && quality.material_revision === value.material_revision
             && quality.snapshot_tree === value.snapshot_tree
             && quality.status === qualityStatus
-            && quality.subject === "human_confirmation"
+            && quality.subject === qualitySubject
             ? quality.evidence?.[0]?.ref
             : null;
           if (!evidenceRef) continue;
@@ -280,7 +291,7 @@ export function buildTaskKernel(taskHandle, {
           snapshotTree: snapshot.tree,
           kind: "confirmation",
           status: qualityStatus,
-          subject: "human_confirmation",
+          subject: qualitySubject,
           evidence: [{ ref: record.ref, sha256: record.sha256, evidence_type: "human_confirmation" }],
           recordedAt: value.confirmed_at,
         }),
