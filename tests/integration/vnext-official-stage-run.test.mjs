@@ -20,8 +20,9 @@ import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/ta
 import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { readMonitoringFacts } from "../../runtime/task/task-store.mjs";
-import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { createRequirementAuthenticationFixture, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 import {
   buildWorkflowHubSessionInput,
   bindCodexSessionTask,
@@ -65,7 +66,7 @@ function fixture(taskId = "vnext-stage-run") {
   });
   const candidate = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
-  for (const name of MATERIALS) artifacts.writeAtomic(name, `# ${name}\n`);
+  writeCanonicalStageMaterials(artifacts);
   const kernel = createTaskKernel(task, { candidateWorkspace: candidate });
   return { root, task, candidate, kernel };
 }
@@ -104,6 +105,30 @@ function publishReviewFixture(state) {
   const ref = "quality/reviews/results/vnext-build-spec.json";
   state.kernel.publishCanonicalRecord(ref, raw);
   return { ref, sha256: sha256(raw) };
+}
+
+const REQUIREMENT_CLASSES = ["goal", "flow_or_surface", "data_or_state", "success_failure_acceptance", "constraint_non_goal_defer"];
+function analyzerRequirementFixture() {
+  const messages = REQUIREMENT_CLASSES.map((message_class, index) => ({
+    id: `message-${index + 1}`,
+    content_hash: sha256(`message-${index + 1}`),
+    message_class,
+  }));
+  return {
+    authenticated_requirement_messages: messages,
+    requirement_coverage_outputs: messages.map((message, index) => ({
+      message_id: message.id,
+      message_hash: message.content_hash,
+      message_class: message.message_class,
+      axis_id: `axis-${index + 1}`,
+      impact: index < 2 ? "high" : "medium",
+      disposition: "represented",
+      decision_ids: [`D-${index + 1}`],
+      requirement_ids: [`R-${index + 1}`],
+      fr_ids: [`FR-${index + 1}`],
+      ac_ids: [`AC-${index + 1}`],
+    })),
+  };
 }
 
 function stageAgentExecution(stage) {
@@ -146,6 +171,17 @@ function stageAgentExecution(stage) {
           artifact_refs: ["decision_log"], evidence_refs: ["decision-log"], status: "covered",
         }],
         work_summary: "Stage Agent 实际执行 stage-end spec-analyze",
+        ...analyzerRequirementFixture(),
+        grill_summary: {
+          status: "completed",
+          requirement_coverage: { status: "complete", message_classes: [...REQUIREMENT_CLASSES], uncovered: [] },
+          exit_checks: { external_interfaces: "pass", canonical_names: "pass", failure_semantics: "pass", scope_boundaries: "pass" },
+        },
+        final_confirmation: {
+          decision: "accepted",
+          subject_ref: "fixture/decision",
+          events: ["ask", "wait", "reply", "resume"].map((event, index) => ({ event, sequence: index + 1 })),
+        },
       },
       evidence_subjects: { "decision-log": { subject_kind: "step", subject_id: steps[0].step_slug } },
     },
@@ -210,6 +246,7 @@ describe("vNext official stage completion", () => {
       sessionId: "session-1",
       sourceRef: "codex-rollout-thread-session",
       now: () => clock,
+      requirementAuthentication: createRequirementAuthenticationFixture({ taskId: state.task.identity.taskId, runId: context.workflowRunId, sessionId: "session-1" }),
     });
     const fixtureExecution = stageAgentExecution("make-decision");
     for (const step of fixtureExecution.steps) {
@@ -263,7 +300,9 @@ describe("vNext official stage completion", () => {
     const context = contextFor("make-decision", state);
     const outcome = publishStageAgentOutcome({
       task: state.task, kernel: state.kernel, artifacts, candidateWorkspace: state.candidate,
-      stage: "make-decision", attemptId: "attempt-real-stage-agent", workflowRunId: context.workflowRunId, execution: stageAgentExecution("make-decision"),
+      stage: "make-decision", attemptId: "attempt-real-stage-agent", workflowRunId: context.workflowRunId,
+      execution: stageAgentExecution("make-decision"),
+      requirementAuthentication: createRequirementAuthenticationFixture({ taskId: state.task.identity.taskId, runId: context.workflowRunId }),
     });
     expect(outcome.value.producer).toMatchObject({ kind: "stage-agent", host: "test-host" });
     expect(outcome.value.run_id).toBe(context.workflowRunId);
@@ -271,6 +310,66 @@ describe("vNext official stage completion", () => {
     expect(proof.host_evidence).toEqual({ kind: "host-command", command: "stage-agent-test", exit_code: 0, output: "actual host result" });
     const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
+  });
+
+  it("does not complete verify-code when the current code review still has findings", async () => {
+    const state = fixture("stage-agent-review-findings");
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const context = contextFor("verify-code", state);
+    const execution = stageAgentExecution("verify-code");
+    execution.code_review.result = {
+      ...execution.code_review.result,
+      status: "findings",
+      findings: [{
+        severity: "major",
+        path: "runtime/example.mjs",
+        issue: "当前实现仍有未修复问题",
+        recommendation: "在当前任务内修复并重跑审查",
+      }],
+    };
+    const outcome = publishStageAgentOutcome({
+      task: state.task, kernel: state.kernel, artifacts, candidateWorkspace: state.candidate,
+      stage: "verify-code", attemptId: "attempt-review-findings", workflowRunId: context.workflowRunId, execution,
+    });
+    const result = await runOfficialStage("verify-code", context, {
+      attempt_id: "attempt-review-findings",
+      receipts: { stage_outcomes: outcome.ref },
+    });
+    expect(result).toMatchObject({
+      status: "in_progress",
+      quality_status: "incomplete",
+      // The Stage Agent execution is valid; the serious review finding keeps
+      // verify-code quality incomplete so the current stage can repair it.
+      stage_outcome_status: "completed",
+    });
+    expect(result.completion.missing).toContain("code_review");
+  });
+
+  it("does not turn a nonblocking minor code finding into a stage-outcome failure", async () => {
+    const state = fixture("stage-agent-review-minor");
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const context = contextFor("verify-code", state);
+    const execution = stageAgentExecution("verify-code");
+    execution.code_review.result = {
+      ...execution.code_review.result,
+      status: "findings",
+      findings: [{
+        severity: "minor",
+        path: "runtime/example.mjs",
+        issue: "存在非阻断建议",
+        recommendation: "后续迭代可优化",
+      }],
+    };
+    const outcome = publishStageAgentOutcome({
+      task: state.task, kernel: state.kernel, artifacts, candidateWorkspace: state.candidate,
+      stage: "verify-code", attemptId: "attempt-review-minor", workflowRunId: context.workflowRunId, execution,
+    });
+    const result = await runOfficialStage("verify-code", context, {
+      attempt_id: "attempt-review-minor",
+      receipts: { stage_outcomes: outcome.ref },
+    });
+    expect(result.stage_outcome_status).toBe("completed");
+    expect(result.stage_outcome_diagnostic).toBeUndefined();
   });
   it("executes the current handler when no external Stage Agent outcome exists", async () => {
     const state = fixture("stage-agent-optional");
@@ -332,13 +431,28 @@ describe("vNext official stage completion", () => {
         spec_analyze: execution.spec_analyze,
       },
     };
-    const bridge = join(process.cwd(), "tools", "host", "workflowhub-stage-agent-bridge.mjs");
-    const output = execFileSync(process.execPath, [bridge], {
-      cwd: process.cwd(),
-      input: `${JSON.stringify(request)}\n`,
-      encoding: "utf8",
+    const requirementAuthentication = createRequirementAuthenticationFixture({
+      taskId: state.task.identity.taskId,
+      runId: state.kernel.deriveStageWorkflowRunId("make-decision"),
+      sessionId: "session-bridge",
     });
-    const result = JSON.parse(output);
+    const published = publishCurrentWorkflowHubSession({
+      context: contextFor("make-decision", state),
+      input: request,
+      stage: "make-decision",
+      attemptId: "attempt-external-host-bridge",
+      requirementAuthentication,
+    });
+    const result = {
+      schema_version: "workflowhub-stage-agent-bridge-result.v1",
+      task_id: state.task.identity.taskId,
+      stage: "make-decision",
+      attempt_id: "attempt-external-host-bridge",
+      outcome_ref: published.ref,
+      outcome_sha256: published.sha256,
+      outcome_status: published.value.status,
+      producer: published.value.producer,
+    };
     expect(result).toMatchObject({
       schema_version: "workflowhub-stage-agent-bridge-result.v1",
       task_id: state.task.identity.taskId,
@@ -365,7 +479,20 @@ describe("vNext official stage completion", () => {
     const home = join(root, "home");
     const rollout = join(home, ".codex", "sessions", "2026", "08", "18", "rollout-2026-08-18T00-00-00-session-auto-run.jsonl");
     mkdirSync(join(home, ".codex", "sessions", "2026", "08", "18"), { recursive: true });
+    const sessionId = "session-auto-run";
     const skillTokenAt = 1000 + stageAgentExecution("make-decision").steps.length * 11 + 5;
+    const requirementMessages = ["goal", "flow_or_surface", "data_or_state", "success_failure_acceptance", "constraint_non_goal_defer"].map((message_class, index) => {
+      const id = `message-${index + 1}`;
+      return {
+        timestamp: new Date(1002 + index).toISOString(),
+        type: "event_msg",
+        payload: {
+          type: "requirement_message", id, source_version: "v1", task_id: state.task.identity.taskId,
+          session_id: sessionId, stage: "make-decision", order: index + 1, message_class,
+          content: id, content_hash: sha256(id),
+        },
+      };
+    });
     writeFileSync(rollout, [
       {
         timestamp: new Date(1005).toISOString(),
@@ -377,8 +504,8 @@ describe("vNext official stage completion", () => {
         type: "event_msg",
         payload: { type: "token_count", info: { last_token_usage: { input_tokens: 13, output_tokens: 5, total_tokens: 18 } } },
       },
+      ...requirementMessages,
     ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
-    const sessionId = "session-auto-run";
     try {
       registerCodexSession({ sessionId, transcriptPath: rollout, cwd: root, home });
       const stageEntryOutput = execFileSync(process.execPath, [
@@ -528,11 +655,11 @@ describe("vNext official stage completion", () => {
       }),
     );
 
-    expect(result).toMatchObject({ stage: "build-spec", status: "completed", work_status: "ready", quality_status: "passed" });
-    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result).toMatchObject({ stage: "build-spec", status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result.completion).toMatchObject({ status: "in_progress", missing: ["stage_end_spec_analyze"] });
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(3);
+    expect(result.quality_fact_refs).toHaveLength(4);
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
@@ -541,7 +668,7 @@ describe("vNext official stage completion", () => {
     const state = fixture("vnext-confirmation-path");
     const snapshot = state.candidate.captureSnapshot();
     const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
-    const materialRevision = `revision-${sha256(JSON.stringify(MATERIALS.map((file) => [file, artifacts.read(file)])))}`;
+    const materialRevision = materialRevisionFromValues(MATERIALS.map((file) => [file, artifacts.read(file)]));
     const reviewRaw = `${JSON.stringify({
       version: "wh-review-result.v1", task_id: state.task.identity.taskId, stage: "build-plan", review_track: null,
       subject_kind: "worktree", phase_id: null, review_scope: null,
@@ -569,8 +696,8 @@ describe("vNext official stage completion", () => {
         { ref: confirmationRef, sha256: createHash("sha256").update(confirmationRaw).digest("hex") },
       ],
     }));
-    expect(result).toMatchObject({ status: "completed", work_status: "ready", quality_status: "passed" });
-    expect(result.completion).toMatchObject({ status: "completed", missing: [] });
+    expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
+    expect(result.completion).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["stage_end_spec_analyze"]) });
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
   });
@@ -663,7 +790,7 @@ describe("vNext official stage completion", () => {
     expect(result.quality_advisories).toContain("independent_review:unavailable");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(3);
+    expect(result.quality_fact_refs).toHaveLength(4);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);

@@ -15,7 +15,7 @@ function step(step_id, order, depends_on = [], entry_conditions = null) {
     order,
     entry_conditions: entry_conditions ?? (
       depends_on.length > 0
-        ? depends_on.map((dependencyId) => ({ kind: "precondition", uri_or_path: `step://${dependencyId}` }))
+        ? depends_on.map((dependencyId) => ({ kind: "evidence", uri_or_path: `step://${dependencyId}` }))
         : [{ kind: "precondition", uri_or_path: `memory://${step_id}/entry` }]
     ),
     completion_evidence: [{ kind: "evidence", uri_or_path: `memory://${step_id}/done` }],
@@ -75,7 +75,28 @@ describe("canonical step manifest", () => {
     ]));
 
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/entry_conditions.*step:\/\/prepare|dependency.*entry evidence/i);
+    expect(result.errors.join("\n")).toMatch(/entry_conditions.*step:\/\/prepare|dependency.*entry evidence|completion_evidence.*step:\/\/1/i);
+  });
+
+  it("requires a step reference kind to be declared by the previous completion evidence", () => {
+    const previous = step(1, 1);
+    previous.completion_evidence = [{ kind: "test", uri_or_path: "quality/tests/" }];
+    const current = step(2, 2, [1], [{ kind: "review", uri_or_path: "step://1" }]);
+
+    const result = validateStepManifest(manifest([previous, current]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/review.*step:\/\/1.*completion_evidence|completion_evidence.*review/i);
+  });
+
+  it("rejects a step reference to a later step", () => {
+    const result = validateStepManifest(manifest([
+      step(1, 1, [], [{ kind: "evidence", uri_or_path: "step://2" }]),
+      step(2, 2),
+    ]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/step:\/\/2.*previous step|forward dependency/i);
   });
 
   it("rejects a forward dependency even when its entry evidence is declared", () => {
@@ -146,6 +167,27 @@ describe("canonical step manifest", () => {
             expect(evidence.uri_or_path, `${stage}/${stepItem.step_slug} must use a real path or host-visible input`)
               .not.toMatch(/^[a-z][a-z0-9_-]*:\/\//i);
           }
+        }
+      }
+    }
+  });
+
+  it("uses runtime canonical namespaces for the manifests owned by this change", () => {
+    const ownedStages = ["make-decision", "build-spec", "build-code", "verify-code"];
+    const canonical = {
+      research: "quality/tests/",
+      review: "quality/reviews/results/",
+      quality_facts: "quality/facts/",
+      confirmation: "quality/confirmations/",
+      tasks: "tasks.md",
+    };
+
+    for (const stage of ownedStages) {
+      const item = loadStageManifest(stage, repoRoot);
+      for (const evidence of item.steps.flatMap((stepItem) => [...stepItem.entry_conditions, ...stepItem.completion_evidence])) {
+        if (canonical[evidence.kind] && !evidence.uri_or_path.startsWith("step://")) {
+          expect(evidence.uri_or_path, `${stage} ${evidence.kind} must use its canonical namespace`)
+            .toBe(canonical[evidence.kind]);
         }
       }
     }

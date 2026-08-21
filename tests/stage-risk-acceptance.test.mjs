@@ -175,15 +175,15 @@ describe("current quality boundary", () => {
   it("keeps verify-code completion bound to current AC, test, and independent-review facts", () => {
     const verifyCode = read("workflows/verify-code/SKILL.md");
     const verifySteps = JSON.parse(read("workflows/verify-code/steps.json")).steps;
-    const reviewSteps = verifySteps.filter(({ completion_evidence: evidence }) =>
-      evidence.some(({ kind }) => kind === "review"));
+    const reviewSteps = verifySteps.filter(({ step_slug }) => step_slug === "run-one-independent-code-review");
 
     expect(reviewSteps).toHaveLength(1);
     expect(reviewSteps[0].observable_result).toMatch(/异源|independent/i);
-    expect(verifyCode).toMatch(/语义反向检查/);
-    expect(verifyCode).toMatch(/每个适用\s*AC|every applicable acceptance criterion/i);
+    expect(verifyCode).toMatch(/不重新检查其完整性/);
+    expect(verifyCode).toMatch(/不列 AC 逐条结论/);
+    expect(verifyCode).not.toMatch(/语义反向检查/);
     expect(verifyCode).toMatch(/unavailable[\s\S]{0,120}(?:绝不是|不能算)[\s\S]{0,30}pass/i);
-    expect(verifyCode).toMatch(/最终测试[\s\S]{0,160}(?:通过|green)/i);
+    expect(verifyCode).toMatch(/不为了 verify-code 重跑全量测试/i);
   });
 });
 

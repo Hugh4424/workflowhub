@@ -14,6 +14,18 @@ import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const baseline = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseline/v1/baseline.json", "utf8"));
 const candidate = JSON.parse(readFileSync("tests/fixtures/public-behavior-baseline/v1/candidate.json", "utf8"));
+const TEN_ENTRY_MATRIX = Object.freeze([
+  ["host", "work_progress", "user-facing current conclusion"],
+  ["doctor", "work_progress", "capability and parse errors"],
+  ["status", "all four views", "current task state"],
+  ["monitor", "all four views", "read-only projection"],
+  ["run", "work_progress/stage_quality", "stage publication"],
+  ["review", "stage_quality", "review facts and unavailable"],
+  ["verify", "stage_quality/product_release", "AC and code result"],
+  ["confirm", "work_progress/stage_quality", "human decision"],
+  ["authorize", "physical_delivery", "explicit physical permission"],
+  ["close", "product_release/physical_delivery", "itemized delivery result"],
+]);
 
 describe("public behavior baseline", () => {
   let evidence;
@@ -35,6 +47,14 @@ describe("public behavior baseline", () => {
         },
       })
       : candidate;
+  });
+
+  it("keeps the ten-entry consumer matrix explicit without adding public commands", () => {
+    expect(TEN_ENTRY_MATRIX).toHaveLength(10);
+    expect(new Set(TEN_ENTRY_MATRIX.map(([entry]) => entry)).size).toBe(10);
+    expect(TEN_ENTRY_MATRIX.every(([, views, conclusion]) => views && conclusion)).toBe(true);
+    expect(Object.keys(evidence)).toEqual(expect.arrayContaining(["doctor", "status", "run", "review", "verify", "confirm", "authorize"]));
+    expect(Object.keys(evidence)).not.toEqual(expect.arrayContaining(["host", "monitor", "close"]));
   });
 
   it.runIf(liveProbe)("executes every public behavior successfully in the real probe", () => {

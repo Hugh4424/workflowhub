@@ -32,7 +32,7 @@
     },
     {
       "path": "contracts/provider-protocol.md",
-      "sha256": "af5e0f3cfc2c1ec9e3db1f2cb8c301c02a14fa4a91f0b63ec54490d4095f76ea"
+      "sha256": "ab886b8f7351ad1b80cde0aa1555fb4fe72ed0e267b2b1d3488d039b8dd8787a"
     },
     {
       "path": "contracts/verify-code.md",
@@ -48,7 +48,7 @@
     },
     {
       "path": "contracts/workflowhub-result.v3.json",
-      "sha256": "0af2065e6e8cbacaa11abcfb27b1c05b1cb7ad03af649d66491049576cb9856a"
+      "sha256": "8f45390e0885f568defbee45576097d4d69319739ba83d97e19de553d1585ff5"
     },
     {
       "path": "manifest.json",
@@ -64,7 +64,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "384c2663cb029274c319d8c7ba768c056c53ce42b8936a09f5eba3b41eb1a6ae"
+      "sha256": "e47fa726fca841042e5ab59be75d950add81b236aaf517250e98a9e4e8402eb0"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "5affeadb0edad7e67ebbf138177921e7cc79d93a092dc9bf6e03094fb3365432"
+      "sha256": "f2d940e9c15f62b6a976e0eb8dfd38d5bf5bb5ca1f6d4af7a700109bab7b098e"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "47df3b6c58a4df1684e215ee137544968cc0831f43cacc2a6849c18efd8c3cd2"
+      "sha256": "f21f5e2bab199c650388f43bc4f752185d22df0f97a98b910acd5d3732169a56"
     },
     {
       "path": "scripts/review-semantic-projection.mjs",
@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "a3b0f4e24ec89a38f92a374920f9c4a7e3310f1ca3914ddf00d1d254573cc703"
+      "sha256": "622fdab67cab0a653443dae83fc2c064498d1a1dc5d3582fa0344979bdc9bf20"
     },
     {
       "path": "stage-skill-plan.json",

@@ -11,7 +11,12 @@ import { validateSchema } from "../review/schema-validator.mjs";
 import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
-import { validateAcceptanceDesignMinimum, validateExecutablePlanTaskMinimum, validatePlanTaskContract } from "../stage/stage-content-contracts.mjs";
+import {
+  validateAcceptanceDesignMinimum,
+  validateExecutablePlanTaskMinimum,
+  validateInteractionLifecycleSequence,
+  validatePlanTaskContract,
+} from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
 const HANDLERS = new Map();
@@ -64,7 +69,7 @@ const COMPLETION_COPY = Object.freeze({
 const RECEIPT_KEYS = Object.freeze({
   "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
   "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
-  "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "stage_outcomes"]),
+  "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes"]),
   "verify-code": new Set(["quality_review", "stage_outcomes"]),
 });
@@ -193,6 +198,7 @@ const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
   if (name === "interaction") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "confirmation") return /^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
@@ -238,6 +244,31 @@ function sectionHasContent(markdown, heading) {
   });
 }
 
+/**
+ * Validate lifecycle details when the current aggregate carries them inline.
+ * The details remain part of the existing content-addressed interaction
+ * aggregate; no per-round writer or second interaction store is introduced.
+ */
+export function validateInteractionAggregateLifecycle(value) {
+  const errors = [];
+  const talkRounds = value?.talk?.lifecycle_rounds;
+  if (!Array.isArray(talkRounds) || talkRounds.length === 0) {
+    errors.push("interaction aggregate talk.lifecycle_rounds must contain the real Talk rounds");
+  } else {
+    const result = validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: talkRounds });
+    if (!result.ok) errors.push(...result.errors);
+    if (Number.isSafeInteger(value.talk.round_count) && value.talk.round_count !== result.facts.rounds) {
+      errors.push("interaction aggregate Talk round_count does not match lifecycle rounds");
+    }
+  }
+  const clarifyRounds = value?.clarify?.lifecycle_rounds;
+  if (clarifyRounds !== undefined) {
+    const result = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: clarifyRounds });
+    if (!result.ok) errors.push(...result.errors.map((error) => `Clarify: ${error}`));
+  }
+  return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+}
+
 function interactionAggregateFacts(worker, invocation, expected) {
   const ref = text(object(invocation.receipts, "receipts").interaction, "interaction aggregate ref");
   if (!validReceiptRef("interaction", ref)) throw materialIncomplete("make-decision interaction aggregate must use content-addressed quality/evidence/interactions/<sha256>.json");
@@ -249,9 +280,9 @@ function interactionAggregateFacts(worker, invocation, expected) {
   if (unknown.length) throw new Error(`interaction aggregate has unknown fields: ${unknown.join(", ")}`);
   if (value.schema_version !== "workflowhub-interaction-aggregate.v1"
       || value.task_id !== worker.identity.taskId || value.stage !== "make-decision"
-      || value.snapshot_tree !== expected.snapshot_tree
+      || !/^[a-f0-9]{40}$/.test(value.snapshot_tree ?? "")
       || value.decision_ref !== expected.decision_ref || value.decision_hash !== expected.decision_hash) {
-    throw new Error("interaction aggregate does not bind the current task, decision snapshot, and decision");
+    throw new Error("interaction aggregate does not bind the current task and decision");
   }
   const talk = object(value.talk, "interaction aggregate talk");
   const clarify = object(value.clarify, "interaction aggregate clarify");
@@ -263,6 +294,8 @@ function interactionAggregateFacts(worker, invocation, expected) {
       || !new Set(["user_reply", "no_direction_changing_ambiguity"]).has(clarify.resolved_by)) {
     throw new Error("interaction aggregate does not prove resolved Clarify");
   }
+  const lifecycle = validateInteractionAggregateLifecycle(value);
+  if (!lifecycle.ok) throw new Error(`interaction aggregate lifecycle is invalid: ${lifecycle.errors.join("; ")}`);
   return Object.freeze({ ref, value: Object.freeze(value), evidence: Object.freeze({ ref, sha256: record.sha256 }) });
 }
 function assertCurrentNamespace(worker, ref) {
@@ -397,11 +430,14 @@ function optionalEvidence(worker, invocation) {
   return receipt(worker, invocation, "evidence");
 }
 
-function confirmationFacts(worker, invocation) {
+function confirmationFacts(worker, invocation, { requireV2 = false } = {}) {
   const ref = text(object(invocation.receipts, "receipts").confirmation, "confirmation receipt ref");
   if (!validReceiptRef("confirmation", ref)) throw new Error("confirmation receipt ref is outside its canonical namespace");
   const record = object(worker.readReceipt(ref), "human confirmation record");
+  const contentHash = ref.slice("quality/confirmations/".length, -".json".length);
+  if (record.sha256 !== contentHash) throw new Error("human confirmation ref is not content-addressed to its canonical bytes");
   const value = validateHumanConfirmation(record.value, { taskId: worker.identity.taskId, stage: worker.stage, requireAccepted: false });
+  if (requireV2 && value.schema_version !== "human-confirmation.v2") throw new Error("build-plan confirmation must use human-confirmation.v2");
   return { facts: { decision: value.decision, confirmation_ref: ref, confirmation_hash: record.sha256, snapshot_tree: value.snapshot_tree }, evidence: { ref, sha256: record.sha256 } };
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
@@ -1381,6 +1417,10 @@ HANDLERS.set("build-plan", async (worker, input) => {
     auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
   }
   const review = safeReviewFacts(worker, input);
+  const confirmation = input.receipts?.confirmation === undefined
+    ? null
+    : confirmationFacts(worker, input, { requireV2: true });
+  if (confirmation?.evidence) evidenceRefs.push(confirmation.evidence);
   const result = bindFinalReview(worker, input, review, before.tree, { stage: "build-plan" });
   if (review.evidence) evidenceRefs.push(review.evidence);
   evidenceRefs.push(...(review.risk_evidence ?? []), ...result.evidence);
@@ -1410,6 +1450,7 @@ HANDLERS.set("build-plan", async (worker, input) => {
         executable_tasks: subjectFact(executable.ok && structural.facts?.command_oracle_checks?.valid === true ? "passed" : "missing", [tasksEvidence], "task command/oracle executability"),
       },
       review: review.facts,
+      ...(confirmation ? { human_confirmation: confirmation.facts } : {}),
       finding_dispositions: dispositions.facts,
       ...(audit ? audit.facts : {}),
     },
@@ -1568,7 +1609,7 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const reviewMissing = review.facts.status === "unavailable"
     ? [...(review.missing_items ?? [])]
     : actionableFindings.length > 0
-      ? ["code review has " + actionableFindings.length + " actionable delivery finding(s); repair them in verify-code"]
+      ? ["code review has " + actionableFindings.length + " actionable serious finding(s); repair them in verify-code"]
       : [];
 
   const result = addCompletion("verify-code", {

@@ -22,6 +22,34 @@ import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+function talkLifecycleRounds() {
+  return [1, 2, 3].map((round) => {
+    const cardRef = `conversation/talk/card-${round}`;
+    const replyRef = `host-message://talk/reply-${round}`;
+    const question = {
+      question_id: `axis-${round}`,
+      axis: `axis-${round}`,
+      independent: true,
+      options: [
+        { number: 1, label: "保守", meaning: "先少做", consequence: "范围较小", risk: "收益较慢" },
+        { number: 2, label: "推荐", meaning: "直接解决", consequence: "一次完成", risk: "改动较多" },
+      ],
+      recommended_option: 2,
+      recommendation_reason: "当前事实支持",
+    };
+    const card = { card_ref: cardRef, card_hash: sha256(cardRef), round };
+    const reply = { ...card, source: "user", reply_ref: replyRef, reply_hash: sha256(replyRef) };
+    return {
+      interaction_type: "talk",
+      events: [
+        { event: "ask", ...card, questions: [question] },
+        { event: "wait", ...card, status: "waiting-for-user" },
+        { event: "reply", ...reply, answers: [{ question_id: question.question_id, number: 2 }], remaining_question_ids: [], re_ranked: true },
+        { event: "resume", ...reply, status: "resumed" },
+      ],
+    };
+  });
+}
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
@@ -108,9 +136,17 @@ describe("make-decision current artifact path contract", () => {
     const previous = {
       HOME: process.env.HOME,
       WORKFLOWHUB_TASK_DIR: process.env.WORKFLOWHUB_TASK_DIR,
+      CODEX_THREAD_ID: process.env.CODEX_THREAD_ID,
+      CODEX_ROLLOUT_PATH: process.env.CODEX_ROLLOUT_PATH,
+      WORKFLOWHUB_CODEX_ROLLOUT_PATH: process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH,
+      CODEX_CLI_VERSION: process.env.CODEX_CLI_VERSION,
     };
     process.env.HOME = state.home;
     process.env.WORKFLOWHUB_TASK_DIR = state.storage;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_ROLLOUT_PATH;
+    delete process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+    delete process.env.CODEX_CLI_VERSION;
     try {
       const result = await stageRuntimeMain([
         "artifact",
@@ -137,6 +173,14 @@ describe("make-decision current artifact path contract", () => {
       else process.env.HOME = previous.HOME;
       if (previous.WORKFLOWHUB_TASK_DIR === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
       else process.env.WORKFLOWHUB_TASK_DIR = previous.WORKFLOWHUB_TASK_DIR;
+      if (previous.CODEX_THREAD_ID === undefined) delete process.env.CODEX_THREAD_ID;
+      else process.env.CODEX_THREAD_ID = previous.CODEX_THREAD_ID;
+      if (previous.CODEX_ROLLOUT_PATH === undefined) delete process.env.CODEX_ROLLOUT_PATH;
+      else process.env.CODEX_ROLLOUT_PATH = previous.CODEX_ROLLOUT_PATH;
+      if (previous.WORKFLOWHUB_CODEX_ROLLOUT_PATH === undefined) delete process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+      else process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH = previous.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
+      if (previous.CODEX_CLI_VERSION === undefined) delete process.env.CODEX_CLI_VERSION;
+      else process.env.CODEX_CLI_VERSION = previous.CODEX_CLI_VERSION;
     }
   });
 
@@ -204,7 +248,7 @@ describe("make-decision current artifact path contract", () => {
       task_id: state.task.identity.taskId,
       stage: "make-decision",
       snapshot_tree: interactionSnapshot.tree,
-      talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true },
+      talk: { status: "completed", round_count: 3, architecture_direction_covered: true, user_outcome_covered: true, lifecycle_rounds: talkLifecycleRounds() },
       clarify: { status: "resolved", open_direction_changing_questions: 0, resolved_by: "user_reply" },
       decision_ref: decisionRef,
       decision_hash: decisionHash,

@@ -45,7 +45,17 @@ Grill 的临时交互事实必须能回放为 `ask`、`wait`、`reply`、`resume
 普通工具错误只说明当前状态和完成条件，不让用户处理技术细节。完整 grill 未完成时保持阻塞，
 不得用“跳过”冒充完成。
 
-**退出条件（客观 checklist，不是主观判断）**：不再用"用户能否复述四件事"这类主观标准判断是否可以退出。退出前必须逐项记录下面四项：
+**全需求覆盖优先**：Grill 先建立一张覆盖矩阵，再做专项挑战。矩阵至少包含以下五类原始消息：
+
+1. 目标和成功意图（`goal`）；
+2. 用户旅程和页面/入口范围（`flow_or_surface`）；
+3. 数据、状态和状态变化（`data_or_state`）；
+4. 成功、失败、取消和验收边界（`success_failure_acceptance`）；
+5. 约束、非目标、延期和风险（`constraint_non_goal_defer`）。
+
+每条已认证原始消息都必须落到一个决策轴；高/中影响轴必须有用户选择，或明确记录“不提问”的事实理由，并绑定 decision、FR、AC。缺少整个消息类、缺少整条轴、只有 spec-analyze/review 细节而没有全需求覆盖时，Grill 不能返回 completed。覆盖矩阵是当前调用内的临时验证视图，不是第五份材料，也不持久化原文。
+
+**退出条件（客观 checklist，不是主观判断）**：不再用“用户能否复述四件事”这类主观标准判断是否可以退出。先逐类完成全需求覆盖，再逐项记录下面四项：
 
 外部接口必须按真实定义核实；字段和路径命名必须有唯一权威来源。
 
@@ -76,6 +86,10 @@ grill_summary:
   context: { status: changed | no-change, reason: "...", file_references: [] }
   adr: { status: created | not-needed, reason: "...", file_references: [] }
   conflicts: { status: resolved | none, disposition: "..." }
+  requirement_coverage:
+    status: complete | incomplete
+    message_classes: [goal, flow_or_surface, data_or_state, success_failure_acceptance, constraint_non_goal_defer]
+    uncovered: []
   exit_checks:
     external_interfaces: pass | unresolved
     canonical_names: pass | unresolved

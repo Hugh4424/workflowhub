@@ -18,8 +18,8 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | make-decision | 8 | grill-with-docs | S7 | main agent communicates with user |
 | make-decision | 9 | write-decision-draft | S7 | write the current decision log |
 | make-decision | 10 | detail-advice | S7 | retain advisory findings |
-| make-decision | 11 | stage-end-spec-analyze | S8.5 | report-only consistency check before publish |
-| make-decision | 12 | approve-decision | S9 | only real user confirmation counts |
+| make-decision | 11 | approve-decision | S9 | only real user confirmation counts |
+| make-decision | 12 | stage-end-spec-analyze | S9.5 | final consistency check after confirmation and aggregate |
 | make-decision | 13 | publish-decision | S10 | publish the current artifact snapshot |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
 | build-spec | 2 | conditional-spec-research | research | real question only; else skipped |
@@ -61,15 +61,15 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 14 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
 | build-code | 15 | publish-code-result | handoff | after all Phase and final facts |
 | verify-code | 1 | read-current-materials-and-code | pre-read | read all four current materials and implementation |
-| verify-code | 2 | architect-acceptance-review | architecture check | reverse-check requirements, Design, and full user flow |
+| verify-code | 2 | architect-code-review | architecture check | inspect current implementation and real consumers |
 | verify-code | 3 | main-agent-repair-batch-1 | repair | fix only valid delivery findings |
-| verify-code | 4 | run-declared-check-before-independent-review | verification | run affected checks before review |
-| verify-code | 5 | run-one-independent-architecture-review | wh-review | one异源 architecture review |
+| verify-code | 4 | inspect-real-entry-and-tests | verification | inspect real entry, consumers, tests and failure paths |
+| verify-code | 5 | run-one-independent-code-review | wh-review | one异源 code review |
 | verify-code | 6 | main-agent-repair-batch-2 | final repair | inspect findings and repair once |
-| verify-code | 7 | run-final-check-and-handoff | handoff | run final check and preserve unknown |
-| verify-code | 8 | publish-verification-attempt | verification facts | retain unknown/failure facts |
-| verify-code | 9 | approve-verification | confirmation | record actual user conclusion |
-| verify-code | 10 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
+| verify-code | 7 | run-final-code-check-and-handoff | handoff | run final check and preserve unknown |
+| verify-code | 8 | publish-code-review-fact | review facts | retain code review facts |
+| verify-code | 9 | handoff-code-review | handoff | explain code review conclusion and remaining risks |
+| verify-code | 10 | approve-verification | confirmation | record actual user conclusion |
 | verify-code | 11 | publish-verification-result | handoff | close remains separate authorization |
 
 ## P0 boundary

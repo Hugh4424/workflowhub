@@ -42,6 +42,41 @@ function lifecycle(interaction_type) {
 }
 
 describe("batched interaction contract", () => {
+  it("requires every authenticated requirement class and axis to reach a decision or explicit defer", () => {
+    const messages = [
+      { id: "m-goal", content_hash: "a".repeat(64), message_class: "goal" },
+      { id: "m-flow", content_hash: "b".repeat(64), message_class: "flow_or_surface" },
+      { id: "m-data", content_hash: "c".repeat(64), message_class: "data_or_state" },
+      { id: "m-acceptance", content_hash: "d".repeat(64), message_class: "success_failure_acceptance" },
+      { id: "m-boundary", content_hash: "e".repeat(64), message_class: "constraint_non_goal_defer" },
+    ];
+    const outputs = messages.map((message, index) => ({
+      message_id: message.id,
+      message_hash: message.content_hash,
+      message_class: message.message_class,
+      axis_id: `axis-${index + 1}`,
+      impact: index < 2 ? "high" : "medium",
+      disposition: index === 4 ? "explicitly_deferred" : "selected",
+      ...(index === 4 ? { skip_reason: "当前 host 没有真实 renderer 接口", defer_id: "DEFER-002" } : {}),
+      decision_ids: [`D-${index + 1}`],
+      requirement_ids: [`R-${index + 1}`],
+      fr_ids: [`FR-${index + 1}`],
+      ac_ids: [`AC-${index + 1}`],
+    }));
+    expect(contracts.validateRequirementCoverage({ messages, outputs })).toMatchObject({ ok: true });
+
+    const missingClass = outputs.slice(1);
+    const missingResult = contracts.validateRequirementCoverage({ messages, outputs: missingClass });
+    expect(missingResult.ok).toBe(false);
+    expect(missingResult.errors.join("; ")).toMatch(/goal|class|coverage/i);
+
+    const missingAxis = outputs.map((item) => ({ ...item }));
+    delete missingAxis[1].decision_ids;
+    const axisResult = contracts.validateRequirementCoverage({ messages, outputs: missingAxis });
+    expect(axisResult.ok).toBe(false);
+    expect(axisResult.errors.join("; ")).toMatch(/axis|decision|FR|AC/i);
+  });
+
   it("accepts one user-visible batch for Talk and spec-clarify while preserving lifecycle binding", () => {
     for (const kind of ["talk", "spec-clarify"]) {
       const result = contracts.validateInteractionLifecycleContract(lifecycle(kind));

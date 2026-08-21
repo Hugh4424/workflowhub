@@ -6,7 +6,7 @@ import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 /** Write a complete create-only wh-review attempt/provider/result chain for tests. */
-export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain } = {}) {
+export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", findingSeverity = "major", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain } = {}) {
   const attemptId = randomUUID();
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
   const reviewRoot = task.manifest.record_model === "vnext-single-write" ? "quality/reviews" : "reviews";
@@ -15,7 +15,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const resultRef = `${reviewRoot}/results/${stage}-${reviewTrack ?? "default"}-${attemptId}.json`;
   const source = { target_commit: snapshotTree, base_commit: snapshotTree, base_tree: snapshotTree, captured_head: snapshotTree };
   const finding = {
-    severity: "major",
+    severity: findingSeverity,
     path: "fixture",
     issue: "fixture finding",
     root_cause: "fixture intentionally models an anchored review finding",

@@ -1,11 +1,38 @@
 import { createMonitoringFact, safePublicRef } from "./monitoring-facts.mjs";
-import { isTranscriptSourceReader } from "./fact-collector.mjs";
+import { authenticateRegisteredRequirementMessages, isTranscriptSourceReader, requirementMessageStatus } from "./fact-collector.mjs";
 
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const TYPED_FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "review", "test", "verify", "artifact", "health", "automation", "human_intervention", "transcript_event"]);
-const CAPABILITY_FACT_TYPES = new Set([...TYPED_FACT_TYPES, "token", "tool_use", "duration", "retry"]);
+const CAPABILITY_FACT_TYPES = new Set([...TYPED_FACT_TYPES, "token", "tool_use", "duration", "retry", "requirement_message"]);
 const FACT_STATUSES = new Set(["present", "missing", "skipped", "not_applicable", "unknown", "unavailable", "unsupported", "conflict", "incomplete"]);
 const REGISTERED_SOURCES = new WeakSet();
+const AUTHENTICATED_REQUIREMENT_RESULTS = new WeakSet();
+
+/**
+ * Keep the Codex adapter as the single entry seam for requirement-message
+ * authentication. The collector owns the identity/hash checks; this wrapper
+ * prevents callers from reaching around the registered Codex source adapter.
+ */
+export function parseRegisteredRequirementTranscript(source, options = {}) {
+  const mark = (value) => {
+    AUTHENTICATED_REQUIREMENT_RESULTS.add(value);
+    return value;
+  };
+  if (!sourceShape(source)) {
+    return mark(requirementMessageStatus(
+      "unsupported",
+      null,
+      ["SOURCE_REGISTRATION_INVALID: registered transcript source is not launcher-registered"],
+      [],
+      0,
+    ));
+  }
+  return mark(authenticateRegisteredRequirementMessages(source, options));
+}
+
+export function isAuthenticatedRequirementResult(value) {
+  return AUTHENTICATED_REQUIREMENT_RESULTS.has(value);
+}
 
 function text(value, label) {
   if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be a non-empty string`);

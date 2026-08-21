@@ -9,10 +9,21 @@ function observations(stage) {
     },
     freshness: { status: "current" },
     authenticated: true,
+    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean" } : {}),
   }));
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
+  it("keeps every authoring stage incomplete until its current stage-end analyzer fact is present", () => {
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
+      const facts = observations(stage).filter((entry) => entry.fact.value.subject !== "stage_end_spec_analyze");
+      expect(deriveStageCompletion(stage, facts), stage).toMatchObject({
+        status: "in_progress",
+        missing: expect.arrayContaining(["stage_end_spec_analyze"]),
+      });
+    }
+  });
+
   it("keeps verify-code completion on the current code-review fact", () => {
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("grill");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("research");
@@ -31,6 +42,16 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
     expect(STAGE_ADVISORY_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
+  });
+
+  it("does not treat a recorded verify-code review without a clean result as complete", () => {
+    const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "code_review"
+      ? { ...entry, review_status: undefined }
+      : entry);
+    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["code_review"]),
+    });
   });
 
   for (const stage of Object.keys(STAGE_PREDICATES)) {
@@ -71,6 +92,28 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
     facts[0] = { ...observations("build-plan")[0], fact: { ...facts[0].fact, value: { ...facts[0].fact.value, kind: "test" } } };
     expect(deriveStageCompletion("build-plan", facts).status).toBe("in_progress");
+  });
+
+  it("keeps a stage incomplete when two current facts claim the same predicate", () => {
+    const facts = observations("build-code");
+    const original = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    facts.push(structuredClone(original));
+    const result = deriveStageCompletion("build-code", facts);
+    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["integration_review"]) });
+    expect(result.predicates.integration_review).toMatchObject({ status: "conflict", fact_ref: null });
+  });
+
+  it("keeps a failed and a passed current fact in conflict instead of filtering the failed one", () => {
+    const facts = observations("verify-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "code_review");
+    facts.push({
+      ...structuredClone(review),
+      fact: { ...review.fact, value: { ...review.fact.value, status: "failed", fact_id: "failed-code-review" } },
+      review_status: "findings",
+    });
+    const result = deriveStageCompletion("verify-code", facts);
+    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["code_review"]) });
+    expect(result.predicates.code_review).toMatchObject({ status: "conflict", fact_ref: null });
   });
 
   it("keeps a real unavailable review visible without declaring stage completion", () => {

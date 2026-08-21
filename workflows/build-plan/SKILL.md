@@ -66,12 +66,16 @@ Do not run Talk, Clarify, or Grill here. Do not run `talk-with-zhipeng` as a
 substitute. Those activities belong to `make-decision`; build-plan consumes
 their current conclusions in
 `decision-log.md`. Do not invent a product choice from code, history, or a
-review suggestion. If confirmation is needed, do not invent the user's actual
-reply; return the direction-changing question upstream. Present the completed
-plan in plain language and obtain the user's actual reply before claiming that
-build-plan itself is accepted. This confirmation does not turn confirmation
-into a machine work permit. Missing review facts do not block continued work:
-continue research, planning, or repair in this same task.
+review suggestion. Build-plan's business confirmation is required at handoff:
+do not invent the user's actual reply. Present the completed plan in plain
+language and obtain the user's actual reply before claiming that build-plan
+itself is accepted; the current session must then publish that reply as the
+existing `human-confirmation.v2` record under
+`quality/confirmations/<sha256>.json`, then pass its ref to the official handler
+for validation before claiming that build-plan itself is accepted. This
+confirmation does not turn confirmation into a machine work permit. Missing
+review facts do not block continued work: continue research, planning, or
+repair in this same task.
 Do not implement code or execute RED/GREEN; plan the test scenarios, commands,
 expected outcomes, and evidence for `build-code` to execute later.
 
@@ -152,7 +156,7 @@ product decision is a STOP back to the owning material.
 
 Review, test, research, and evidence are quality facts. `unknown`,
 `unavailable`, and `incomplete` remain visible and lower the completion claim;
-they do not stop same-task repair. A review cannot grant a pass or block the
+continue research, planning, or repair in this same task. A review cannot grant a pass or block the
 next safe work item. Do not claim the plan is ready when a source/FR/AC/task
 mapping, command, boundary, or serious finding is unexplained.
 The final `spec-analyze` is the last report-only consistency fact before
@@ -163,8 +167,13 @@ End in plain language: what will be built, how phases and files are split, how
 testing will prove it, key risks/unknowns, review findings and dispositions, and
 what `build-code` should do next without guessing. The handoff is notification,
 not a machine work permit and not authorization to commit, push, merge, archive,
-or clean up. After the user's actual reply, append that reply to the final
-aggregate verification card's existing `执行事实` field in `tasks.md`; this is
-one append-only human-alignment fact and changes neither `status` nor any other
-completion field. Do not add a handoff field or a second record.
+or clean up. After the user's actual reply, the current session must publish
+the existing `human-confirmation.v2` record at
+`quality/confirmations/<sha256>.json`; the official build-plan handler consumes
+that ref and includes `facts.human_confirmation` plus its evidence in the
+existing completion. It may also append that reply to the final aggregate
+verification card's existing `执行事实` field in `tasks.md` as a labeled,
+append-only human-alignment fact; this does not change `status` or completion
+and cannot substitute for the confirmation record. Do not add a handoff field
+or a second record.
 This stage does not create a new task to bypass a missing fact or finding.

@@ -40,7 +40,7 @@ function requiredTimestamp(value, label) {
   return value;
 }
 
-export function publishCurrentWorkflowHubSession({ context, input, stage, attemptId }) {
+export function publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication = null }) {
   const session = input.session;
   if (!session || typeof session !== "object" || Array.isArray(session)) throw new TypeError("session must be an object");
   if (!Array.isArray(session.events)) throw new TypeError("session.events must be an array");
@@ -59,6 +59,7 @@ export function publishCurrentWorkflowHubSession({ context, input, stage, attemp
     sessionId: requiredText(session.session_id, "session.session_id"),
     sourceRef: requiredText(session.source_ref, "session.source_ref"),
     now: () => clock,
+    requirementAuthentication,
   });
   for (const [index, event] of session.events.entries()) {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError(`session.events[${index}] must be an object`);

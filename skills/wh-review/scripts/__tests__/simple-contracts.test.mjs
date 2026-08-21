@@ -199,7 +199,7 @@ describe("simple wh-review contracts", () => {
     const qualityReview = steps.find(({ step_slug }) => step_slug === "run-one-independent-code-review");
     const publish = steps.find(({ step_slug }) => step_slug === "publish-code-review-fact");
     expect(qualityReview).toMatchObject({ order: 5, depends_on: [4], completion_evidence: expect.arrayContaining([
-      { kind: "review", uri_or_path: "quality/reviews/" },
+      { kind: "review", uri_or_path: "quality/reviews/results/" },
     ]) });
     expect(qualityReview.completion_evidence).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "skill_invocation" }),

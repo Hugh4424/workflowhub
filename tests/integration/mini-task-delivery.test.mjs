@@ -523,7 +523,7 @@ describe("mini-task delivery RED contract", () => {
     const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
     authorizeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     await expect(executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref }))
-      .rejects.toThrow(/aggregation|provider evidence|review attempt|canonical semantic review result/i);
+      .rejects.toThrow(/aggregation|provider evidence|review attempt|canonical semantic review result|conflict/i);
     expect(existsSync(state.candidate.worktreeRoot)).toBe(true);
   });
 
@@ -539,7 +539,7 @@ describe("mini-task delivery RED contract", () => {
     const quality = publishMiniTaskQualityFixture(state, { implementationStatus: "failed" });
     expect(quality.status).toBe("incomplete");
     expect(() => prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery }))
-      .toThrow(/independent_review/);
+      .toThrow(/code_review/);
     expect(existsSync(state.candidate.worktreeRoot)).toBe(true);
   });
 
@@ -657,8 +657,7 @@ function deliveryFixture() {
   const testOutput = "mini-task focused tests passed\n";
   const testRaw = `${JSON.stringify({ schema_version: "workflowhub-receipt.v1", task_id: taskId, stage: "verify-code", producer: { stage: "verify-code", component: "mini-task-focused-tests", version: "1.0.0" }, command: "printf mini-task", command_hash: sha256("printf mini-task"), exit_code: 0, snapshot_head: snapshot.head, snapshot_tree: snapshot.tree, snapshot_commit: snapshot.commit, source_digest: snapshot.source_digest, started_at: "2026-08-04T00:00:00.000Z", completed_at: "2026-08-04T00:00:01.000Z", output_ref: "quality/tests/output/mini-task.output", output_hash: sha256(testOutput) }, null, 2)}\n`;
   kernel.publishCanonicalRecord("quality/tests/output/mini-task.output", testOutput); kernel.publishCanonicalRecord("quality/tests/mini-task.json", testRaw);
-  kernel.publishVNextQualityFact("verify-code", { kind: "test", status: "passed", subject: "full_tests_fresh", evidence: [{ ref: "quality/tests/mini-task.json", sha256: sha256(testRaw), evidence_type: "test_receipt" }] });
-  for (const subject of ["same_build_integration_review", "independent_review"]) {
+  for (const subject of ["same_build_integration_review"]) {
     const raw = verifyReviewRawFor({ taskId, snapshotTree: snapshot.tree, subject });
     const ref = `quality/reviews/results/${subject}.json`; publishReviewChain({ kernel }, { ref, raw });
     kernel.publishVNextQualityFact("verify-code", { kind: "review", status: "recorded", subject, evidence: [{ ref, sha256: sha256(raw), evidence_type: "review_result" }] });

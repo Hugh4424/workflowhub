@@ -29,6 +29,11 @@ function isEvidenceRef(value) {
     && isNonEmptyString(value.kind) && isNonEmptyString(value.uri_or_path);
 }
 
+function stepReference(value) {
+  const match = /^step:\/\/([1-9]\d*)$/.exec(value?.uri_or_path ?? "");
+  return match ? Number(match[1]) : null;
+}
+
 function validateEvidenceRefs(stepId, field, refs, errors) {
   if (!Array.isArray(refs)) return;
   refs.forEach((ref, index) => {
@@ -104,6 +109,29 @@ export function validateStepManifest(manifest) {
         isEvidenceRef(entryCondition) && entryCondition.uri_or_path === `step://${dependencyId}`
       ))) {
         errors.push(`step ${step.step_id} dependency ${dependencyId} must have matching entry evidence step://${dependencyId}`);
+      }
+    }
+  }
+
+  for (const step of manifest.steps) {
+    if (!step || !Array.isArray(step.entry_conditions) || !Number.isInteger(step.step_id)) continue;
+    for (const entryCondition of step.entry_conditions) {
+      if (!isEvidenceRef(entryCondition)) continue;
+      const previousStepId = stepReference(entryCondition);
+      if (previousStepId === null) continue;
+      const previousStep = byId.get(previousStepId);
+      if (!previousStep) {
+        errors.push(`step ${step.step_id} entry condition ${entryCondition.uri_or_path} references undeclared step ${previousStepId}`);
+        continue;
+      }
+      if (Number.isInteger(previousStep.order) && Number.isInteger(step.order) && previousStep.order >= step.order) {
+        errors.push(`step ${step.step_id} entry condition ${entryCondition.uri_or_path} must reference a previous step`);
+      }
+      const completionKinds = new Set((previousStep.completion_evidence ?? [])
+        .filter(isEvidenceRef)
+        .map((evidence) => evidence.kind));
+      if (!completionKinds.has(entryCondition.kind)) {
+        errors.push(`step ${step.step_id} entry condition kind ${entryCondition.kind} for ${entryCondition.uri_or_path} must be declared by step ${previousStepId} completion_evidence`);
       }
     }
   }
