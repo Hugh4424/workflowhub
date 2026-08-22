@@ -572,7 +572,7 @@ capability_decisions:
   - name: superpowers-requesting-code-review
     status: absorbed
     purpose: 请求独立 code review
-    design_idea: 审查必须异源、有 receipt；每次都是新的 broker public request
+    design_idea: 审查必须异源、有 receipt；普通审查面只记录一次 advice，phase 按真实修复决定是否聚焦复审
     used_by_stages: [build-code]
     local_path: skills/wh-review
     upstream: [{ <<: *superpowers, path: "skills/requesting-code-review", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/requesting-code-review" }]

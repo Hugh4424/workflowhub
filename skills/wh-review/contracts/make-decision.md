@@ -12,9 +12,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与这些材料一致的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
-每次审查都完整交付当前材料；材料变化后重新调用会产生新的不可变 attempt，
-不读取上一轮结果，也不生成增量材料或增量审查范围。
+同一 task 的同一 track 只记录一次 semantic advice result；runner 仍完整校验首轮
+材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
+如果首轮只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
 
 缺少必需材料时，本次 attempt 返回 `unavailable`，并作为当前 track 下
 `quality/reviews/attempts/*` 的不可变质量事实保留；它没有 findings，也不能写成
@@ -90,8 +90,8 @@ findings、传输状态和材料绑定都是异源 review 的质量事实，不�
 通过/不通过。`single_round` 表示一个逻辑 review fact 完成后，不再为了追求空 findings
 自动发起后续复审；direction 也只发一个 broker group request，内部 flow 必须提供可观察
 的 reconstruct/reveal/challenge 顺序和 reveal boundary。detail 也只发一个短请求。finding
-处理和最终快照变化属于业务材料变更。材料变化后的新 attempt 仍完整交付当前材料；旧
-findings 不被改写，也不生成独立 resolution action。
+处理和最终快照变化属于业务材料变更；旧 findings 不被改写，也不生成独立 resolution
+action。普通阶段不会因为这些变化再次调用 provider。
 
 ## 处置边界
 

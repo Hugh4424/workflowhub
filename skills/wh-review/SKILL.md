@@ -51,7 +51,7 @@ Read `runtime/review/stage-materials.json` before building input. The common sha
 ```
 
 - `task_path`, project, task and stage identify where the canonical quality fact is written. They do not grant access to source paths.
-- Callers cannot select provider, model, effort, thinking, credentials, broker config or fallback. Each invocation is one fresh review request; trusted configuration owns routing.
+- Callers cannot select provider, model, effort, thinking, credentials, broker config or fallback. Trusted configuration owns routing; the runner may return an existing immutable semantic advice result for a single-round ordinary review surface instead of starting another broker request.
 - The stage matrix is a strict material allowlist. Current `decision-log.md`, `spec.md`, `plan.md`, `tasks.md` are the authoritative design inputs.
 - `context_map` and `evidence_map` are optional packet optimizations. When supplied they must be well formed and path safe; when absent, the runner derives the minimum useful context from the supplied current materials. Their absence must not stop a provider call or same-task work.
 - `review_kind` is optional for the five formal stages. `mini_task.design` and `mini_task.implementation` are non-stage review kinds with separate trusted routes and contracts; they are not substitutes for a stage and must not be mixed with `review_track` or `review_scope`.
@@ -93,7 +93,8 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 
 - Keep every original finding and source attribution.
 - The Stage Agent records one disposition per finding: fixed, rejected with reason, accepted risk with authority, or needs human decision.
-- Review only a changed material/snapshot or a specifically repaired risk. Record-only changes to decision-log, plan/task facts, receipts, or other provenance do not force a non-build-code advice review. Never rerun an unchanged review merely to obtain an empty findings list.
+- `make-decision`, `build-spec`, and `build-plan` each receive one semantic advice result per task/review surface. After that result, finding repairs or material changes do not start another provider request; preserve the original findings and dispositions. An `unavailable` attempt contains no advice and may be retried after the missing route/material is repaired.
+- `build-code` and `verify-code` remain freshness-bound to their current implementation snapshot. Their existing reuse and focused-review rules still apply; never rerun an unchanged review merely to obtain an empty findings list.
 - Every stage is advice-only. The provider never supplies a WorkflowHub stage verdict, and the absence of a provider `pass` is not a failure.
 - For build-code, the current review cycle is clean only when the trusted semantic result has no actionable `major` or `blocking` finding. After an actual repair or subject change, one focused review is allowed; a repeated finding, no real change, or no trusted terminal result stops automatic continuation and stays visible as `needs_human`, `unavailable`, or `incomplete`. This is a pure review fact, not a new state object or quality gate.
 - Same-adapter profiles are not multiple independent sources. Aggregation keeps actual adapter independence and concrete anchors visible.

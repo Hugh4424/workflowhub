@@ -12,9 +12,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-如果这是已有 `pass` 基线后的增量审查，当前必需材料仍由 runner 完整校验，
-每次审查都完整交付当前材料；材料变化后重新调用会产生新的不可变 attempt，
-不读取上一轮结果，也不生成增量材料或增量审查范围。
+同一 task 的同一普通审查面只记录一次 semantic advice result；runner 仍完整校验首轮
+材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
+如果首轮只有 `unavailable`，它没有 advice，修复缺失路由或材料后才可重新调用。
 
 `context_map` 和 `evidence_map` 是可选优化。提供时每张 map 都必须有
 `state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
@@ -31,7 +31,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 首轮 findings 是质量事实，不是 stage gate。主 agent 应直接修复；普通修复不做二审。
 外置审计记录若存在，缺失或不能验证时明确为
-`unverified`，不得声称已修复或通过。材料变化后的新 attempt 仍完整交付当前材料。
+`unverified`，不得声称已修复或通过。首轮 advice 事实保留，不循环也不阻断 stage 推进。
 若修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略，
 新 attempt 的事实只供改进，不循环也不阻断 stage 推进。`accepted_risk` 仅记录，必须
 在本阶段的人类确认摘要中显式展示。
@@ -46,7 +46,7 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 ## 处置边界
 
-build-plan 只消费可信异源 advice，不要求 provider `pass` 或 findings=[]。无最终文本、timeout、路径/协议错误、坏 JSON 和其他 transport failure 只能记录为 `unavailable`/`incomplete`，不能变成空 findings 或通过。普通计划修复不自动追求二审；记录性 decision-log、plan、tasks 或 receipt 变化不强制重审，除非被审主题真实变化并且确需新意见。
+build-plan 只消费可信异源 advice，不要求 provider `pass` 或 findings=[]。无最终文本、timeout、路径/协议错误、坏 JSON 和其他 transport failure 只能记录为 `unavailable`/`incomplete`，不能变成空 findings 或通过。首轮 semantic advice 已存在时，即使被审材料变化也不再发起普通 attempt；`unavailable` 只在修复缺失路由或材料后重试。
 
 ## 审查重点
 

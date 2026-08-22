@@ -109,9 +109,10 @@ decision and questions to the user.
    review (step 6). It is independent advice, not a `pass` gate. Preserve the
    actual provider, transport status, findings, and provenance; unavailable,
    failure, timeout, and `MATERIAL_INCOMPLETE` remain facts. Dispose each
-   finding; do not re-review unchanged material just to manufacture empty
-   findings. An unavailable review is never `pass` and never becomes an empty
-   findings claim.
+   finding; this track records one semantic advice result and does not start a
+   second provider request after finding repair or material edits. An unavailable
+   review is never `pass` and never becomes an empty findings claim; it may be
+   retried only after its missing route/material is repaired.
 5. After direction advice, resume Talk round 3 (step 7) so the user can address
    blind-review findings, contradictions, key assumptions, and remaining risks.
    Only after that, run `grill-with-docs` (step 8). Grill is
@@ -124,7 +125,8 @@ decision and questions to the user.
 6. Write the decision draft after Grill (step 9), then run the detail advice
    review (step 10). This is also advice-only, not a `pass` gate. The detail
    review must happen after Grill and the draft, never before. Preserve real
-   transport and finding facts and stop rather than loop on unchanged material.
+   transport and finding facts. This track records one semantic advice result;
+   finding repair or decision-log edits do not start another provider request.
 7. Present the final plain-language decision card at the approval/publish steps: direction,
    scope, non-goals, success criteria, risks, advice facts, unresolved items,
    and deferred work. Ask for the user's actual confirmation and preserve it.

@@ -47,7 +47,7 @@ description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任�
 这条链只负责把真实事实写入当前 task；它不是开始工作、继续工作或宣称完成的门禁：
 
 1. 用 `tools/cli/stage-runtime.mjs doctor`、`status` 查看当前能力和四材料状态；缺失的辅助能力只记录事实，不暂停同一 task。
-2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；普通审查面每次发起一次新的 broker 请求，`make-decision.direction` 的 Talk、reveal 和 challenge 在同一个 broker 请求内按顺序完成，不再发起第二个 public 请求，只记录一条逻辑 review fact。结果为 `unavailable` 时照实记录，继续不依赖审查的工作。
+2. 需要异源审查时调用 `skills/wh-review/scripts/wh-review-cli.mjs run`；`make-decision`、`build-spec`、`build-plan` 每个 review surface 只记录一次 semantic advice，已有结果不再发起新的 broker 请求。`build-code`/`verify-code` 仍按当前 snapshot 的 freshness 和 focused-review 规则执行。`unavailable` 没有 advice，可在修复缺失路由或材料后重试；结果照实记录，继续不依赖审查的工作。
 3. `build-code` 通过 workflow 的 capture 脚本生成测试事实；`verify-code` 只写当前代码 review fact；需要落盘时统一由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录，宿主不手写替代 receipt。
 4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
 

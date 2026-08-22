@@ -56,6 +56,47 @@ describe("wh-review production CLI", () => {
     expect(typeof mod.runReviewRecovery).toBe("function");
   });
 
+  it("reuses one early-stage advice result and leaves code reviews freshness-bound", async () => {
+    const { findExistingOrdinaryReview } = await import(cli.href);
+    const resultRef = "quality/reviews/results/one.json";
+    const attemptRef = reviewResultRecord.attempt_ref;
+    const adviceResultRecord = { ...reviewResultRecord, stage: "build-spec" };
+    const adviceAttemptRecord = { ...reviewSemanticAttemptRecord, stage: "build-spec" };
+    const records = new Map([
+      [resultRef, `${JSON.stringify(adviceResultRecord)}\n`],
+      [attemptRef, `${JSON.stringify(adviceAttemptRecord)}\n`],
+    ]);
+    const task = {
+      readRecord: (ref) => {
+        if (!records.has(ref)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return records.get(ref);
+      },
+      listCanonicalReviewResultRefs: () => [resultRef],
+      listCanonicalReviewAttemptRefs: () => [attemptRef],
+      listCanonicalQualityFactRefs: () => [],
+    };
+    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-spec" }))
+      .toMatchObject({ status: "available", result_ref: resultRef, attempt_ref: attemptRef });
+    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "verify-code" })).toBeNull();
+    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-code", phaseId: "P1" })).toBeNull();
+    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-code", reviewKind: "mini_task.design" })).toBeNull();
+  });
+
+  it("does not treat provider unavailability as obtained advice", async () => {
+    const { findExistingOrdinaryReview } = await import(cli.href);
+    const attemptRef = "quality/reviews/attempts/one/attempt.json";
+    const task = {
+      readRecord: (ref) => {
+        if (ref !== attemptRef) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return `${JSON.stringify(reviewAttemptRecord)}\n`;
+      },
+      listCanonicalReviewResultRefs: () => [],
+      listCanonicalReviewAttemptRefs: () => [attemptRef],
+      listCanonicalQualityFactRefs: () => [],
+    };
+    expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-plan" })).toBeNull();
+  });
+
   it("binds one verify-code review result to the vNext code_review fact", async () => {
     const { publishStageReviewFact } = await import(cli.href);
     const raw = `${JSON.stringify(reviewResultRecord)}\n`;
@@ -136,7 +177,7 @@ describe("wh-review production CLI", () => {
       ["dispatch_sequence", 1],
     ]) {
       await expect(runReviewRound({ task_path: "/tmp/task", stage: "build-code", [field]: value }))
-        .rejects.toThrow(/retired|fresh broker public run/i);
+        .rejects.toThrow(/retired|prior review state/i);
     }
     await expect(runReviewRound({ task_path: "/tmp/task", stage: "build-code", materials: { response_ledger: {} } }))
       .rejects.toThrow(/materials\.response_ledger.*retired/i);
@@ -192,7 +233,7 @@ describe("wh-review production CLI", () => {
         task_path: "/tmp/task",
         stage: "build-code",
         [field]: { opencode: "old-runtime" },
-      })).rejects.toThrow(/runtime continuation is retired.*new broker public request/i);
+      })).rejects.toThrow(/runtime continuation is retired.*runner-owned/i);
     }
   });
 
