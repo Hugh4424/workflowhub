@@ -901,7 +901,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     material_revision: materialRevision,
     material_scope_revisions: stageMaterialScopeRevisions(materials),
     snapshot_root: context.workspace?.worktreeRoot ?? null,
-    expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
+    expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
     evaluate_freshness: evaluateFactFreshness,
   });
 }
@@ -1128,7 +1128,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       : deriveProductRelease({
         stage_completions: [],
         acceptance_results: [],
-        expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
+        expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
         verify_confirmation: null,
       });
     const statusGroups = deriveStatusGroups({ quality, productRelease, observations });
