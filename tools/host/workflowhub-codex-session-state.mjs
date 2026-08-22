@@ -500,7 +500,22 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   // handoff diagnostic but never send it to the strict stage publisher.
   const rejectedEvents = taskEvents.filter((entry) => entry.subject_kind === "skill" && STAGES.has(entry.subject_id));
   const declaredCandidateEvents = taskEvents.filter((entry) => !rejectedEvents.includes(entry));
-  const events = declaredCandidateEvents.filter((entry) => entry.status !== "open").map((entry) => ({
+  // A repaired subject gets a new lifecycle pair in the same session.  The
+  // prior terminal event remains in the private sidecar for diagnosis, but a
+  // single stage-outcome attempt may receive only the latest state for each
+  // declared subject; otherwise its strict recorder rejects the duplicate.
+  const currentBySubject = new Map();
+  for (const event of declaredCandidateEvents) {
+    if (event.status === "open") continue;
+    const key = `${event.stage}:${event.subject_kind}:${event.subject_id}`;
+    const previous = currentBySubject.get(key);
+    // The array sequence breaks an exact timestamp tie, so a host that
+    // serializes two finishes in the same millisecond still projects the last
+    // repair rather than a stale result.
+    if (!previous || event.ended_at_ms >= previous.ended_at_ms) currentBySubject.set(key, event);
+  }
+  const currentEvents = [...currentBySubject.values()];
+  const events = currentEvents.filter((entry) => entry.status !== "open").map((entry) => ({
     task_id: task,
     stage: entry.stage,
     subject_kind: entry.subject_kind,
@@ -522,8 +537,8 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   const specAnalyze = stage
     ? current.spec_analyze_by_task_stage?.[task]?.[stage] ?? null
     : current.spec_analyze_by_task?.[task] ?? null;
-  const complete = declaredCandidateEvents.length > 0
-    && declaredCandidateEvents.every((entry) => entry.status === "completed")
+  const complete = currentEvents.length > 0
+    && currentEvents.every((entry) => entry.status === "completed")
     && !open
     && specAnalyze !== null;
   return Object.freeze({

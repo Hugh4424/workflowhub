@@ -635,6 +635,49 @@ describe("WorkflowHub current Codex session handoff", () => {
     }
   });
 
+  it("projects only the repaired terminal lifecycle while retaining its failed predecessor", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home });
+      bind(state);
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 1000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, endedAtMs: 2000, status: "failed", reason: "首次测试失败" });
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 3000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, endedAtMs: 4000, status: "completed", resultSummary: "修复后测试通过" });
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "repaired" }, cwd: state.cwd });
+
+      const raw = readCurrentCodexSession({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId });
+      expect(raw.events).toHaveLength(2);
+      expect(raw.events.map((entry) => entry.status)).toEqual(["failed", "completed"]);
+
+      const session = buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" });
+      expect(session).toMatchObject({ status_value: "completed" });
+      expect(session.events).toEqual([expect.objectContaining({ subject_id: "run-tests", status: "completed", result_summary: "修复后测试通过" })]);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a repaired subject incomplete while its newer lifecycle is still open", () => {
+    const state = fixture();
+    try {
+      registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.rollout, cwd: state.cwd, home: state.home });
+      bind(state);
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 1000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, endedAtMs: 2000, status: "completed" });
+      recordCodexSessionSpecAnalyze({ stage: "build-code", value: { marker: "first-pass" }, cwd: state.cwd });
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "run-tests", cwd: state.cwd, startedAtMs: 3000 });
+
+      const session = buildWorkflowHubSessionInput({ cwd: state.cwd, stage: "build-code" });
+      expect(session).toMatchObject({ status_value: "incomplete" });
+      expect(session.events).toEqual([expect.objectContaining({ subject_id: "run-tests", status: "completed" })]);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("requires the bound task and keeps spec analysis separated by stage", () => {
     const state = fixture();
     try {
