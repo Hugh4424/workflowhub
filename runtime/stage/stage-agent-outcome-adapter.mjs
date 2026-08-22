@@ -161,6 +161,28 @@ function bindAnalyzerPacketIdentity(packet, identity) {
   return bound;
 }
 
+function bindAcceptanceCoverageEvidence(packet, evidence, identity) {
+  if (!Array.isArray(packet?.acceptance_coverage)) return packet;
+  const evidenceByRef = new Map(evidence.map((entry) => [entry.ref, entry]));
+  const bindEvidence = (entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+    const current = evidenceByRef.get(entry.ref);
+    if (!current) return entry;
+    return { ...entry, hash: current.hash, snapshot_tree: current.snapshot_tree };
+  };
+  return {
+    ...packet,
+    acceptance_coverage: packet.acceptance_coverage.map((row) => ({
+      ...row,
+      material_revision: identity.material_revision,
+      snapshot_tree: identity.snapshot_tree,
+      evidence_refs: Array.isArray(row.evidence_refs) ? row.evidence_refs.map(bindEvidence) : row.evidence_refs,
+      review_ref: bindEvidence(row.review_ref),
+      stage_end_ref: bindEvidence(row.stage_end_ref),
+    })),
+  };
+}
+
 function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest, skills, requirementAuthentication = null }) {
   const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
   const input = object(execution.spec_analyze, "execution.spec_analyze");
@@ -242,7 +264,7 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
     ? requirementAuthentication.messages
     : [];
   const packet = {
-    ...bindAnalyzerPacketIdentity(packetInput, identity),
+    ...bindAcceptanceCoverageEvidence(bindAnalyzerPacketIdentity(packetInput, identity), analyzerEvidence, identity),
     materials: analyzerMaterials,
     evidence: analyzerEvidence,
     ...(stage === "make-decision" ? {

@@ -166,6 +166,21 @@ describe("status is derived from current quality facts", () => {
     expect(groups.external_unavailable).toEqual(["code_review:unavailable"]);
   });
 
+  it("keeps release gaps visible without turning them into close blockers", () => {
+    const groups = deriveStatusGroups({
+      stage: "verify-code",
+      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
+      productRelease: { reasons: ["acceptance_result_not_pass:AC-001"] },
+      observations: [],
+    });
+    expect(groups).toMatchObject({
+      close_supported: true,
+      quality_gaps: ["acceptance_result_not_pass:AC-001"],
+      release_gaps: ["acceptance_result_not_pass:AC-001"],
+    });
+    expect(groups).not.toHaveProperty("close_blockers");
+  });
+
   it("derives released only from five current completions, AC results, and verify confirmation", () => {
     const hash = "a".repeat(64);
     const identity = {

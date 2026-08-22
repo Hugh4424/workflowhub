@@ -909,7 +909,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
 // Keep status as a read-only projection of the existing facts. The grouping
 // makes the next action obvious without turning quality facts into a new gate
 // or hiding unavailable/not-applicable evidence.
-export function deriveStatusGroups({ quality, productRelease, observations = [] } = {}) {
+export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [] } = {}) {
   // Status is a projection of the same authenticated/current facts used by
   // deriveStageCompletion. Never let a stale or unauthenticated attempt hide
   // a current actionable gap, and never let array order decide which attempt
@@ -960,13 +960,16 @@ export function deriveStatusGroups({ quality, productRelease, observations = [] 
       actionable_now.push(subject);
     }
   }
-  const close_blockers = [...new Set(productRelease?.reasons ?? [])];
+  const quality_gaps = [...new Set(productRelease?.reasons ?? [])];
+  const close_supported = stage === "verify-code";
   return Object.freeze({
     actionable_now: Object.freeze(actionable_now),
     external_unavailable: Object.freeze(external_unavailable),
     not_applicable: Object.freeze(not_applicable),
-    close_blockers: Object.freeze(close_blockers),
-    next_action: actionable_now[0] ?? close_blockers[0] ?? (external_unavailable[0] ?? null),
+    quality_gaps: Object.freeze(quality_gaps),
+    release_gaps: Object.freeze(quality_gaps),
+    close_supported,
+    next_action: actionable_now[0] ?? (external_unavailable[0] ?? null),
   });
 }
 
@@ -1131,7 +1134,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
         verify_confirmation: null,
       });
-    const statusGroups = deriveStatusGroups({ quality, productRelease, observations });
+    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,

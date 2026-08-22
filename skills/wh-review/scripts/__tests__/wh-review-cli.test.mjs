@@ -37,6 +37,11 @@ function git(cwd, args) { return String(execFileSync("git", args, { cwd, encodin
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
+  it("can be imported from a stdin/eval entrypoint without argv[1]", () => {
+    const script = `import(${JSON.stringify(cli.href)}).then((mod) => { if (typeof mod.runReviewRound !== "function") process.exit(1); })`;
+    expect(() => execFileSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8" })).not.toThrow();
+  });
+
   it("rejects a non-object request with a clear boundary error", async () => {
     const { runReviewRound } = await import(cli.href);
     await expect(runReviewRound(null)).rejects.toThrow("review request must be an object");

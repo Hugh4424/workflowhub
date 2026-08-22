@@ -337,6 +337,41 @@ describe("current review material and capture contracts", () => {
     }
   });
 
+  it("keeps a near-limit mini-task design packet provider-visible without dropping frozen materials", () => {
+    const { root, task } = taskFixture();
+    const fill = (size, prefix) => `${prefix}${"x".repeat(Math.max(0, size - Buffer.byteLength(prefix)))}`;
+    const rawRequirement = fill(1552, "原始需求：");
+    const decisionLog = `## 原始需求\n\n${rawRequirement}\n\n## 决定\n\n${fill(17800, "决定：")}\n`;
+    const spec = fill(154435, "# Spec\n\n");
+    const plan = fill(85123, "# Plan\n\n");
+    const tasks = fill(68489, "# Tasks\n\n");
+    const bundle = buildReviewMaterials({
+      reviewDataRoot: root,
+      attachmentRoot: root,
+      source: sourceForPlanFixture,
+      task,
+      taskId: task.identity.taskId,
+      stage: "build-code",
+      reviewKind: "mini_task.design",
+      materials: {
+        raw_requirement: rawRequirement,
+        decision_log: decisionLog,
+        spec,
+        plan,
+        tasks,
+        review_instructions: reviewInstructionsFor("build-code", null, false, null, "mini_task.design"),
+      },
+    });
+    expect(bundle.packetPlan.delivery_bytes).toBeLessThanOrEqual(330 * 1024);
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/spec.md"), "utf8")).toBe(spec);
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/plan.md"), "utf8")).toBe(plan);
+    expect(readFileSync(join(bundle.bundleRoot, "requirements/tasks.md"), "utf8")).toBe(tasks);
+    const providerProtocol = readFileSync(join(bundle.bundleRoot, "contracts/provider-protocol.md"), "utf8");
+    expect(providerProtocol).toContain('"findings": []');
+    expect(providerProtocol).toContain("只读取本次 bundle 内的文件");
+    expect(Buffer.byteLength(providerProtocol)).toBeLessThan(4 * 1024);
+  });
+
   it("fails a mini-task packet when the decision log cannot yield the bounded original requirement", () => {
     const { root, task, workspace } = taskFixture();
     const source = captureReviewSource({ workspace, reviewDataRoot: root, includeDiff: false });

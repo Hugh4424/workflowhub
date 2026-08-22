@@ -25,6 +25,14 @@ const ACCEPTANCE_ID = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z
 const ACCEPTANCE_IDS = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/g;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 
+// The full provider protocol remains the source contract for WorkflowHub's
+// broker and ordinary stage reviews. A mini-task provider only needs the
+// provider-facing material boundary and findings schema; the public-result,
+// retry, aggregation, and host attestation sections are enforced by the host
+// and add no review information. Keep this projection fixed and small so a
+// large but valid frozen four-material packet is not rejected before dispatch.
+const MINI_TASK_PROVIDER_PROTOCOL = `# Provider Protocol (mini-task)\n\n本文件是 mini-task provider 可见的最小协议。WorkflowHub host 负责传输、manifest、快照、公共结果、重试和审查事实；provider 只负责阅读材料并返回 findings。\n\n## 材料边界\n\n- 只读取本次 bundle 内的文件，先读 bundle/review-instructions.md，再读 contracts/、requirements/ 和声明的 skills/。\n- 不访问真实仓库、bundle 外路径、Git、shell、网络或宿主绝对路径，不自行补取材料。\n- 材料缺失、不可读、传输失败或 hash 不符不是 finding；只报告 bundle 中能直接复核的问题。\n- mini-task.design 的审查对象是冻结的 raw_requirement、decision_log、spec、plan、tasks；mini-task.implementation 还应阅读当前实现、测试、AC trace 和 user result。\n\n## Reviewer 输出\n\n只返回一个 JSON 对象，不要输出 verdict、summary、pass/fail、checklist、流程说明或第二个 JSON：\n\n\`\`\`json\n{\n  "findings": []\n}\n\`\`\`\n\n每条 finding 使用：\n\n{\n  "severity": "blocking|major|minor",\n  "path": "bundle 内材料相对路径",\n  "line": 1,\n  "issue": "具体问题",\n  "root_cause": "可验证根因",\n  "recommendation": "具体修复建议",\n  "evidence_kind": "direct|machine|inferred",\n  "evidence": "一到两句可复核证据"\n}\n\npath 必须是 provider 可见的相对路径；没有可靠行号时省略 line 或写 null，不得猜测。blocking/major 必须有 root_cause、evidence_kind 和 evidence；按根因合并重复问题。findings 为空只表示本次 provider 没提出具体问题，不表示任务完成或可以发布。\n`;
+
 const STREAM_CHUNK_BYTES = 64 * 1024;
 export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 330 * 1024;
 // Kept as a named compatibility export for phase-packet callers. The bound
@@ -1844,7 +1852,10 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const contractName = reviewKind === "mini_task.design" ? "mini-task-design" : reviewKind === "mini_task.implementation" ? "mini-task-implementation" : stage === "make-decision" ? "make-decision" : stage;
   const contractBytes = readRegisteredFile(resolve(here, "..", "contracts", `${contractName}.md`), `${contractName} contract`);
   write(bundleRoot, `contracts/${contractName}.md`, contractBytes);
-  write(bundleRoot, "contracts/provider-protocol.md", readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol"));
+  const providerProtocol = reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation"
+    ? Buffer.from(MINI_TASK_PROVIDER_PROTOCOL, "utf8")
+    : readRegisteredFile(resolve(here, "..", "contracts", "provider-protocol.md"), "provider protocol");
+  write(bundleRoot, "contracts/provider-protocol.md", providerProtocol);
   const selectedSkills = [...(stagePlan?.required_skills ?? []), ...(uiScope === true ? (stagePlan?.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])];
   if (["build-code", "verify-code"].includes(stage) && (stagePlan.required_skills ?? []).length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
   for (const skill of selectedSkills) {

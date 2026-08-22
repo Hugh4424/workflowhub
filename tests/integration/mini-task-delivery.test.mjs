@@ -127,6 +127,28 @@ describe("mini-task delivery RED contract", () => {
     expect(JSON.parse(state.task.readRecord(outcome.review.ref))).toMatchObject({ subject: "mini_task_design_review", status: "unavailable" });
   });
 
+  it("binds an unavailable canonical attempt instead of treating it as a result", async () => {
+    const state = deliveryFixture();
+    const snapshot = captureExecutionSnapshot(state.candidate.worktreeRoot);
+    const attemptRef = "quality/reviews/attempts/mini-task-design-unavailable/attempt.json";
+    const attempt = {
+      version: "wh-review-attempt.v1", attempt_id: "mini-task-design-unavailable", task_id: state.taskId,
+      stage: "build-code", review_track: null, review_kind: "mini_task.design", subject_kind: "phase",
+      phase_id: "mini-task-design", review_scope: "phase", base_tree: snapshot.tree, candidate_tree: snapshot.tree,
+      source: { target_commit: "1".repeat(40), base_commit: "1".repeat(40), base_tree: snapshot.tree, captured_head: snapshot.head },
+      snapshot_tree: snapshot.tree, material_id: "2".repeat(64), report_ref: "quality/reviews/reports/mini-task-design-unavailable.md", provider_attempts: [],
+      terminal_status: "unavailable", error: { code: "MATERIAL_TOO_LARGE", message: "packet too large" },
+    };
+    const raw = `${JSON.stringify(attempt, null, 2)}\n`;
+    state.kernel.publishCanonicalRecord(attemptRef, raw);
+    const outcome = await runMiniTaskDesignReview({
+      task: state.task, kernel: state.kernel, hostProvider: "codex",
+      reviewRunner: async () => ({ status: "unavailable", attempt_ref: attemptRef }),
+    });
+    expect(outcome.outcome.status).toBe("unavailable");
+    expect(JSON.parse(state.task.readRecord(outcome.review.ref))).toMatchObject({ subject: "mini_task_design_review", status: "unavailable" });
+  });
+
   it("freezes implementation tests, AC trace, user result, and review in one snapshot", async () => {
     const state = deliveryFixture();
     const workspace = openCurrentTaskWorkspace(state.task);

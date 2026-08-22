@@ -300,6 +300,10 @@ function canonicalReviewBinding(task, review, expectedKind, expectedSnapshot, la
 }
 
 function bindingInput(binding) {
+  if (binding.status === "unavailable" && MINI_REVIEW_ATTEMPT.test(binding.ref ?? "")) {
+    return { attempt_ref: binding.ref, sha256: binding.sha256 };
+  }
+  if (binding.status === "recorded") return { result_ref: binding.ref, sha256: binding.sha256 };
   return { ref: binding.ref, sha256: binding.sha256 };
 }
 

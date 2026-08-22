@@ -94,8 +94,9 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 
 发现的 finding 必须先在当前 stage 修复，再重跑受影响的 `spec-analyze` profile；不能静默
 交给下游。六项摘要和 `unavailable`/`incomplete` 事实随现有 stage outcome 交接，不新建
-store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实；Git
-commit、merge、push、cleanup 和正式 close 始终是独立授权与物理读回动作。
+store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实。
+用户明确执行 `close` 时，WorkflowHub 才按冻结计划执行 Git commit、spec archive、merge、push、
+worktree cleanup 和 branch cleanup，并对每一步做物理读回。
 
 ## `make-decision`：把需求和前置条件一次弄清楚
 
@@ -333,29 +334,27 @@ verify-code 结束时只汇报代码入口、consumer、修复、异源 findings
 指定时可以使用，但 Agent 必须说明风险。来自 A 的 mini-task 完成后，A 按普通 stage 重新调用
 继续，不把 mini-task 结果伪装成 A 已完成。
 
-## close 的两条执行路径
+## close：唯一的完整交付动作
 
-正常 close 和 `manual-close` 都必须先冻结同一份 delivery plan，再分别取得 close confirmation 和
-commit、archive、merge、push、cleanup 的独立授权。close executor 每一步都先探测、再执行、再写入
-不可变 operation fact；中途失败只重试尚未完成且安全的动作，目标漂移就重新 prepare/confirm/authorize。
+`close` 只有一个含义：把当前任务完整交付并结束。用户明确调用 `task-close.mjs close` 后，
+系统自动冻结 delivery plan，把这次调用作为该计划的人工确认，再在内部生成逐项不可逆操作授权，
+按顺序执行并读回 commit、spec archive、merge、push、worktree cleanup 和 branch cleanup。只有
+所有物理事实读回成功后，才写入不可变 `operations/close/completed.json`。
 
-- **正常 close**：要求五阶段质量、产品发布和物理交付前置都已闭合，完成后写
-  `operations/close/completed.json`（`task-close-completed.v1`）。
-- **`manual-close`**：只在用户明确接受质量/发布风险后使用。`prepare --risk-close=true` 把风险理由、延期项
-  和质量缺口绑定进 plan；`manual-close --plan-hash=... --confirmation-ref=...` 仍执行同一套真实物理动作。
-  物理动作完成后写 `quality/evidence/manual-risk-close/<hash>.json`，其中
-  `physical_actions_completed=true`；不写 normal completion，也不把 `stage_quality`、`product_release`
-  或顶层任务改成完成。
+质量或产品发布事实不足时，仍可在用户明确执行 `close` 的前提下带风险交付；完成记录会保留
+`quality_status=incomplete`、`quality_gaps` 和风险记录，绝不伪造质量通过。脏的目标仓库、
+任务/分支/worktree 身份漂移、远端基线变化、冲突或不安全清理属于结构错误，必须明确失败，不能
+靠状态记录冒充 close。
 
-`manual-close` 不是“只记一条风险记录”的快捷方式，也不是新的 stage、FSM、store 或公共 runtime 行为。
-没有独立授权时它必须在第一步前失败并保持零物理写。
+`prepare`、`confirm`、`execute`、`complete` 只作为内部恢复和测试接口，不要求用户重复确认；
+不再提供第二个用户-facing close 动作。
 
 ## 四层状态的最终读法
 
 - 需求实现：原始需求是否真的落到用户可观察结果。
 - 质量验收：测试、AC、review、运行和证据是否足够可信。
 - Git 交付：commit、merge、push、cleanup 是否实际完成并读回。
-- 正式 close：任务是否按授权完成正式关闭。
+- 任务结束：是否写入完整 `task-close-completed.v1`；记录质量和发布缺口，但不把它们改写成通过。
 
 四层独立报告。任何一层的绿色事实都不能覆盖另一层的 `unknown`、`unavailable`、`partial` 或
 `incomplete`。

@@ -9,6 +9,7 @@ import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../../r
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import {
   closePlanHash,
+  closeDelivery,
   completeDeliveryClosePlan,
   confirmClosePlan,
   createDeliveryCloseExecutorRegistry,
@@ -64,17 +65,17 @@ function usage() {
     "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout",
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
-    "  task-close.mjs status --task-path=... --project=... --task=... --plan-hash=...",
-    "  task-close.mjs manual-close --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
+    "  task-close.mjs status --task-path=... --project=... --task=... [--plan-hash=...]",
+    "  task-close.mjs close --task-path=... --project=... --task=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...] [--reason=...] [--deferred-items=a,b]",
   ].join("\n");
 }
 
 async function main() {
   const { command, values } = args(process.argv.slice(2));
-  if (!new Set(["prepare", "confirm", "execute", "complete", "status", "manual-close"]).has(command)) throw new TypeError(usage());
+  if (!new Set(["prepare", "confirm", "execute", "complete", "status", "close"]).has(command)) throw new TypeError(usage());
   // A retry after governed worktree removal must be able to reconcile the
   // remaining branch-cleanup step without reopening the deleted Workspace.
-  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "manual-close", "complete", "execute"]).has(command) });
+  const { task, workspace, kernel } = context(values, { workspaceRequired: !new Set(["status", "complete", "execute"]).has(command) });
   const boundary = command === "status" ? null : authenticateWriteBoundary({
     task,
     stage: "verify-code",
@@ -91,6 +92,27 @@ async function main() {
     });
     return result;
   };
+  if (command === "close") {
+    const result = await closeDelivery({
+      task,
+      kernel,
+      remote: values.remote ?? "origin",
+      ...(values["target-branch"] ? { targetBranch: values["target-branch"] } : {}),
+      ...(values["spec-source"] ? { specSourcePath: values["spec-source"] } : {}),
+      ...(values["spec-archive"] ? { specArchivePath: values["spec-archive"] } : {}),
+      reason: values.reason ?? "user-requested-close",
+      deferredItems: values["deferred-items"] === undefined
+        ? []
+        : values["deferred-items"].split(",").map((item) => item.trim()).filter(Boolean),
+    });
+    return finish(result, "operations/close/completed.json");
+  }
+  if (command === "status" && values["plan-hash"] === undefined) {
+    const completion = optionalCompletion(task);
+    return completion
+      ? { status: completion.status, ref: "operations/close/completed.json", value: completion }
+      : { status: "not_completed", ref: "operations/close/completed.json" };
+  }
   if (command === "prepare") {
     const riskClose = values["risk-close"] === "true" || values["risk-accepted"] === "true";
     const result = prepareDeliveryClosePlan({ task, kernel, delivery: {
@@ -117,7 +139,7 @@ async function main() {
     return finish(result, result.ref);
   }
   if (command === "execute") {
-    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan must use manual-close");
+    if (plan.delivery?.risk_close !== undefined) throw new Error("risk close plan must be consumed by the single close action");
     const result = await executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
     const sourceRef = result.status === "completed"
       ? "operations/close/completed.json"
@@ -127,17 +149,6 @@ async function main() {
   if (command === "complete") {
     const result = await completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
     return finish(result, "operations/close/completed.json");
-  }
-  if (command === "manual-close") {
-    const result = await executeClosePlan({
-      task,
-      kernel,
-      plan,
-      riskClose: true,
-      closeConfirmationRef: required(values, "confirmation-ref"),
-      executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }),
-    });
-    return finish(result, result.status === "completed_with_risk" ? result.output_ref : required(values, "confirmation-ref"));
   }
   const completion = optionalCompletion(task);
   if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {

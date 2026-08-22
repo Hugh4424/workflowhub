@@ -701,7 +701,13 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   // forbids diff delivery and the subject builder supplies bounded current
   // implementation excerpts. Phase reviews still capture their phase diff.
   const needsMiniImplementationDiff = reviewKind === "mini_task.implementation";
-  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot, includeDiff: phaseId !== null || stage !== "build-code" || needsMiniImplementationDiff, taskId, ...(phaseId === null ? {} : { phaseId }) });
+  const designMaterialsOnly = reviewKind === "mini_task.design";
+  const source = captureSource({ workspace, sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot,
+    // Design review is about the frozen four materials and plan risks. Sending
+    // the whole dirty phase diff is both out of contract and can exceed the
+    // broker packet ceiling before any provider is called.
+    includeDiff: !designMaterialsOnly && (phaseId !== null || stage !== "build-code" || needsMiniImplementationDiff),
+    taskId, ...(phaseId === null ? {} : { phaseId }) });
   const isDirectionReview = stage === "make-decision" && reviewTrack === "direction" && reviewKind === null;
   let integrationSubject; let subject; let bundle; let fixedMaterials;
   try {

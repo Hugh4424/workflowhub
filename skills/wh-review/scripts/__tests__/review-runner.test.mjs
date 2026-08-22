@@ -927,6 +927,20 @@ describe("material and workspace boundaries", () => {
     expect(captures[0].includeDiff).toBe(true);
   });
 
+  it("keeps mini-task design review focused on the frozen materials", async () => {
+    const captures = [];
+    const { attachmentRoot, task } = fixture("review-mini-design-no-diff-");
+    const result = await runReviewFixture({
+      task, attachmentRoot, taskId: "task", stage: "build-code", phaseId: "mini-task-design", reviewKind: "mini_task.design",
+      materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: groupClient([publicProvider("kimi")]),
+      captureSource: (options) => { captures.push(options); return source; },
+      buildMaterials: materialBuilder(),
+    });
+    expect(result.status).toBe("available");
+    expect(captures).toHaveLength(1);
+    expect(captures[0].includeDiff).toBe(false);
+  });
+
   it("delivers implementation code and recognizes namespaced requirements", () => {
     expect(phaseDiffDeliveryForPath("paperbuilder/application/smart_iteration.py")).toBe("included");
     expect(phaseDiffDeliveryForPath("frontend/src/smart-iteration.test.tsx")).toBe("included");

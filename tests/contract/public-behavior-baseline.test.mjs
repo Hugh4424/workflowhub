@@ -24,7 +24,7 @@ const TEN_ENTRY_MATRIX = Object.freeze([
   ["verify", "stage_quality/product_release", "AC and code result"],
   ["confirm", "work_progress/stage_quality", "human decision"],
   ["authorize", "physical_delivery", "explicit physical permission"],
-  ["close", "product_release/physical_delivery", "itemized delivery result"],
+  ["close", "physical_delivery/quality_gaps", "complete delivery action"],
 ]);
 
 describe("public behavior baseline", () => {

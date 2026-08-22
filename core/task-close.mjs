@@ -14,7 +14,7 @@ import { validateSchema } from "../runtime/review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../runtime/review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../runtime/review/stage-review-disposition.mjs";
-import { ArtifactDir } from "./artifact-dir.mjs";
+import { ArtifactDir, artifactReference } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
 import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
@@ -1060,6 +1060,119 @@ export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, o
   return Object.freeze({ ref, confirmation: Object.freeze(confirmation) });
 }
 
+function defaultDeliveryPaths(task) {
+  const sourcePath = dirname(artifactReference(task.identity.taskId, "decision-log.md")).split(sep).join("/");
+  const archivePath = sourcePath.replace(/^([^/]+)\//, "$1/archive/");
+  return Object.freeze({ sourcePath, archivePath });
+}
+
+function deriveCurrentDeliveryInput(task, kernel, {
+  remote = "origin",
+  targetBranch,
+  specSourcePath,
+  specArchivePath,
+} = {}) {
+  const workspace = openCurrentTaskWorkspace(task);
+  const worktree = resolve(workspace.worktreeRoot);
+  const root = task.manifest.target_repo_root;
+  const snapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
+  const defaults = defaultDeliveryPaths(task);
+  return Object.freeze({
+    remote,
+    task_branch: git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    target_branch: targetBranch ?? git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    task_commit: currentDeliverySnapshotCommit(worktree, snapshot),
+    spec_source_path: specSourcePath ?? defaults.sourcePath,
+    spec_archive_path: specArchivePath ?? defaults.archivePath,
+  });
+}
+
+/**
+ * Execute the one user-facing close action. The invocation itself is the
+ * independent human authorization for the concrete frozen plan; operation
+ * authorization records are generated internally for audit and retry safety.
+ * Quality gaps become risk facts, while Git identity and physical boundaries
+ * remain fail-loud.
+ */
+export async function closeDelivery({
+  task: taskHandle,
+  kernel: taskKernel,
+  delivery,
+  remote = "origin",
+  targetBranch,
+  specSourcePath,
+  specArchivePath,
+  reason = "user-requested-close",
+  deferredItems = [],
+  now = () => new Date().toISOString(),
+} = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
+  if (typeof reason !== "string" || reason.trim() === "") throw new TypeError("close reason must be non-empty");
+  if (!Array.isArray(deferredItems) || deferredItems.some((item) => typeof item !== "string" || item.trim() === "")) {
+    throw new TypeError("close deferredItems must be an array of non-empty strings");
+  }
+  if (typeof now !== "function") throw new TypeError("close now must be a function");
+  const existing = readOptional(task, "operations/close/completed.json");
+  if (existing !== undefined) {
+    const value = JSON.parse(existing);
+    if (value?.schema_version !== "task-close-completed.v1" || value.task_id !== task.identity.taskId || value.status !== "completed") {
+      throw new Error("close completion record is invalid");
+    }
+    return Object.freeze(value);
+  }
+  const requested = delivery ?? deriveCurrentDeliveryInput(task, kernel, {
+    remote,
+    targetBranch,
+    specSourcePath,
+    specArchivePath,
+  });
+  const prepared = prepareDeliveryClosePlan({
+    task,
+    kernel,
+    delivery: requested,
+    // One explicit close request accepts quality gaps as risk facts. This is
+    // not a second user-facing close path.
+    riskClose: true,
+    riskReason: reason.trim(),
+    deferredItems,
+  });
+  const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", now });
+  const operations = new Set(DELIVERY_STEPS.map(([, operation]) => DELIVERY_AUTHORIZATIONS[operation]));
+  for (const operation of operations) {
+    kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmed.confirmation.human_confirmation_ref });
+  }
+  const riskClose = prepared.plan.delivery.risk_close !== undefined;
+  const executed = await executeClosePlan({
+    task,
+    kernel,
+    plan: prepared.plan,
+    riskClose,
+    closeConfirmationRef: confirmed.ref,
+    executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan: prepared.plan }),
+    deferCompletionRecord: true,
+    now,
+  });
+  const completion = {
+    schema_version: "task-close-completed.v1",
+    task_id: task.identity.taskId,
+    plan_hash: prepared.plan_hash,
+    status: "completed",
+    close_mode: riskClose ? "risk" : "normal",
+    quality_status: prepared.plan.delivery.quality_status,
+    quality_gaps: prepared.plan.delivery.quality_gaps,
+    product_release_status: prepared.plan.delivery.product_release?.status ?? "not_assessed",
+    physical_state: structuredClone(executed.physical_state),
+    ...(riskClose ? { risk_record_ref: executed.output_ref } : {}),
+    completed_at: now(),
+  };
+  return task.withRecordLock("locks/close.execution.lock", () => {
+    createOrVerify(task, "operations/close/completed.json", completion, "close completion");
+    return Object.freeze(completion);
+  });
+}
+
 function executorFor(executors, step) {
   if (!GOVERNED_EXECUTORS.has(executors)) throw new TypeError("governed close executor registry required");
   const executor = executors.executorFor(step);
@@ -1421,7 +1534,9 @@ export function prepareDeliveryClosePlan({
       merge_strategy: "--no-ff --no-edit",
       close_mode: allowMiniTaskFocused ? "mini-task" : "ordinary",
       ...(productRelease ? { product_release: productRelease } : {}),
-      ...(riskClose ? {
+      quality_status: qualityReasons.length === 0 ? "observed" : "incomplete",
+      quality_gaps: [...new Set(qualityReasons)],
+      ...(riskClose && qualityReasons.length > 0 ? {
         risk_close: {
           accepted: true,
           reason: riskReason.trim(),
@@ -1521,7 +1636,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
-  if (delivery.risk_close !== undefined) throw new Error("risk close plan must be executed with manual-close");
+  if (delivery.risk_close !== undefined) throw new Error("risk close plan must be consumed by the single close action");
   const planHash = closePlanHash(plan);
   const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
   if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
@@ -1761,17 +1876,17 @@ export async function executeClosePlan(options = {}) {
   const riskClose = options.riskClose === true;
   const risk = plan.delivery?.risk_close;
   if (risk !== undefined) {
-    if (!riskClose) throw new Error("risk close plan must be executed with manual-close");
-    if (plan.delivery === undefined) throw new Error("manual close requires a delivery plan");
+    if (!riskClose) throw new Error("risk close plan must be consumed by the single close action");
+    if (plan.delivery === undefined) throw new Error("risk close requires a delivery plan");
   } else if (riskClose) {
-    throw new Error("manual-close requires a prepared risk close plan");
+    throw new Error("risk close requires a prepared risk close plan");
   }
   const planRaw = canonical(plan);
   const planHash = sha256(planRaw);
   const preparedRef = `operations/close/plans/${planHash}/plan.json`;
   const preparedRaw = readOptional(task, preparedRef);
   if (preparedRaw === undefined) {
-    throw new Error(`${riskClose ? "manual-close" : "close execution"} requires a prepared close plan`);
+    throw new Error(`${riskClose ? "risk close" : "close execution"} requires a prepared close plan`);
   }
   let prepared;
   try { prepared = JSON.parse(preparedRaw); } catch { throw new Error("prepared close plan record is invalid JSON"); }
@@ -1858,7 +1973,7 @@ export async function executeClosePlan(options = {}) {
     const deliveryState = plan.delivery ? inspectDeliveryCloseState({ task, kernel, plan, allowRiskClose: riskClose }) : null;
     if (deliveryState) {
       const missing = riskClose ? deliveryState.physical_missing : deliveryState.missing;
-      if (missing.length > 0) throw new Error(`${riskClose ? "manual" : "delivery"} close is incomplete: ${missing.join(", ")}`);
+      if (missing.length > 0) throw new Error(`${riskClose ? "risk" : "delivery"} close is incomplete: ${missing.join(", ")}`);
     }
     if (riskClose) {
       const sourceRef = `operations/close/plans/${planHash}/plan.json`;
@@ -1887,7 +2002,7 @@ export async function executeClosePlan(options = {}) {
       ...(deliveryState ? { physical_state: structuredClone(deliveryState.facts) } : {}),
       completed_at: now(),
     };
-    createOrVerify(task, "operations/close/completed.json", completion, "close completion");
+    if (!options.deferCompletionRecord) createOrVerify(task, "operations/close/completed.json", completion, "close completion");
     return Object.freeze(completion);
   });
 }

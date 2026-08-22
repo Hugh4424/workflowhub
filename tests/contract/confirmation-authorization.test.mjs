@@ -152,7 +152,7 @@ describe("confirmation and authorization boundary", () => {
     expect(requiresHumanConfirmation("build-code")).toBe(false);
   });
 
-  it("does not add manual-close to the authorize operation set", async () => {
+  it("does not add a second close action to the authorize operation set", async () => {
     const help = await stageRuntimeCliMain(["--help"]);
     expect(help.actions.authorize).toEqual(["commit", "push", "merge", "archive", "cleanup"]);
   });

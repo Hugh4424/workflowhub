@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  closeDelivery,
   confirmClosePlan,
   createDeliveryCloseExecutorRegistry,
   executeClosePlan,
@@ -24,7 +25,7 @@ function git(cwd, args, options = {}) {
 }
 
 function fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-manual-close-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-risk-close-")));
   roots.push(root);
   const repo = join(root, "repo");
   const bare = join(root, "origin.git");
@@ -38,7 +39,7 @@ function fixture() {
   git(repo, ["remote", "add", "origin", bare]);
   git(repo, ["push", "-q", "origin", "main"]);
 
-  const taskId = "manual-close";
+  const taskId = "risk-close";
   const task = createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0",
     project_name: "WorkflowHub",
@@ -98,6 +99,38 @@ function executeManual(state, plan, confirmationRef) {
 }
 
 describe("manual delivery close", () => {
+  it("performs the complete delivery through the single close action", async () => {
+    const state = fixture();
+    const result = await closeDelivery({
+      task: state.task,
+      kernel: state.kernel,
+      reason: "用户明确要求完整交付",
+      deferredItems: ["补齐质量事实"],
+      now: () => "2026-08-21T00:00:00.000Z",
+    });
+
+    expect(result).toMatchObject({
+      schema_version: "task-close-completed.v1",
+      status: "completed",
+      close_mode: "risk",
+      quality_status: "incomplete",
+      quality_gaps: expect.any(Array),
+      physical_state: {
+        delivery_committed: true,
+        archive: true,
+        merge: true,
+        push: true,
+        worktree_cleanup: true,
+        formal_cleanup_safe: true,
+        branch_cleanup: true,
+      },
+    });
+    expect(JSON.parse(state.task.readRecord("operations/close/completed.json"))).toEqual(result);
+    expect(existsSync(state.worktreeRoot)).toBe(false);
+    expect(git(state.repo, ["show-ref", "--verify", "--quiet", `refs/heads/${state.delivery.task_branch}`], { allowFailure: true })).toBe("");
+    expect(git(state.repo, ["rev-parse", "refs/heads/main"])).toBe(git(state.repo, ["rev-parse", "refs/remotes/origin/main"]));
+  });
+
   it("executes the physical close actions and records quality risk separately from normal completion", async () => {
     const state = fixture();
     const prepared = prepareRiskPlan(state);
@@ -168,7 +201,7 @@ describe("manual delivery close", () => {
     })).toThrow(/execute physical close actions/i);
   });
 
-  it("does not let manual-close execute a plan that was never prepared", async () => {
+  it("does not let the risk close execute a plan that was never prepared", async () => {
     const state = fixture();
     const prepared = prepareRiskPlan(state);
     const confirmation = confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed" });
