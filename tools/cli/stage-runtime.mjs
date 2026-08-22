@@ -715,9 +715,7 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
       : typeof value.kind !== "string" || !supportedKinds.has(value.kind)
         ? "UNSUPPORTED_QUALITY_FACT_KIND"
         : value.stage && context.stage && value.stage !== context.stage
-          ? ["acceptance_criterion", "confirmation"].includes(value.kind)
-            ? "UNSUPPORTED_QUALITY_FACT_KIND"
-            : "QUALITY_FACT_STAGE_MISMATCH"
+          ? "QUALITY_FACT_STAGE_MISMATCH"
           : null;
     if (bindingError) {
       records.push(unavailableQualityFact(ref, Object.assign(new Error("invalid quality fact"), { code: bindingError })));
@@ -912,16 +910,56 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
 // makes the next action obvious without turning quality facts into a new gate
 // or hiding unavailable/not-applicable evidence.
 export function deriveStatusGroups({ quality, productRelease, observations = [] } = {}) {
-  const bySubject = new Map(observations.map(({ fact }) => [fact?.value?.subject ?? fact?.subject, fact?.value ?? fact]));
+  // Status is a projection of the same authenticated/current facts used by
+  // deriveStageCompletion. Never let a stale or unauthenticated attempt hide
+  // a current actionable gap, and never let array order decide which attempt
+  // wins.
+  const current = observations.filter((observation) => observation?.authenticated === true
+    && observation?.freshness?.status === "current");
+  const byRef = new Map();
+  const bySubject = new Map();
+  for (const observation of current) {
+    const fact = observation?.fact?.value ?? observation?.fact;
+    const subject = fact?.subject;
+    if (typeof observation?.fact?.ref === "string") byRef.set(observation.fact.ref, observation);
+    if (typeof subject !== "string" || subject.trim() === "") continue;
+    const candidates = bySubject.get(subject) ?? [];
+    candidates.push(observation);
+    bySubject.set(subject, candidates);
+  }
+  const latestFor = (subject) => {
+    const candidates = bySubject.get(subject) ?? [];
+    if (candidates.length === 0) return null;
+    const ranked = candidates.map((observation) => ({
+      observation,
+      recordedAt: Date.parse((observation.fact?.value ?? observation.fact)?.recorded_at ?? ""),
+    }));
+    if (ranked.some(({ recordedAt }) => !Number.isFinite(recordedAt))) return { conflict: true };
+    const latestRecordedAt = Math.max(...ranked.map(({ recordedAt }) => recordedAt));
+    const latest = ranked.filter(({ recordedAt }) => recordedAt === latestRecordedAt);
+    return latest.length === 1 ? latest[0].observation : { conflict: true };
+  };
+  const selectedFor = (subject) => {
+    const selectedRef = quality?.predicates?.[subject]?.fact_ref;
+    return (selectedRef && byRef.get(selectedRef)) ?? latestFor(subject);
+  };
+  const actionable_now = [];
   const external_unavailable = [];
   const not_applicable = [];
-  for (const [subject, fact] of bySubject.entries()) {
-    if (!subject) continue;
-    if (["unavailable", "unknown"].includes(fact?.status)) external_unavailable.push(`${subject}:${fact.status}`);
-    if (fact?.status === "not_applicable") not_applicable.push(`${subject}:not_applicable`);
+  const missing = quality?.missing ?? [];
+  for (const subject of missing) {
+    const selected = selectedFor(subject);
+    const fact = selected?.fact?.value ?? selected?.fact;
+    if (selected?.conflict) {
+      actionable_now.push(subject);
+    } else if (["unavailable", "unknown"].includes(fact?.status)) {
+      external_unavailable.push(`${subject}:${fact.status}`);
+    } else if (fact?.status === "not_applicable") {
+      not_applicable.push(`${subject}:not_applicable`);
+    } else {
+      actionable_now.push(subject);
+    }
   }
-  const external = new Set(external_unavailable.map((entry) => entry.split(":", 1)[0]));
-  const actionable_now = (quality?.missing ?? []).filter((subject) => !external.has(subject));
   const close_blockers = [...new Set(productRelease?.reasons ?? [])];
   return Object.freeze({
     actionable_now: Object.freeze(actionable_now),

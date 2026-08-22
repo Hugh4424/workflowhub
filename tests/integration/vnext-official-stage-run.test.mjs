@@ -322,6 +322,34 @@ describe("vNext official stage completion", () => {
     expect(published.quality.quality_fact_refs.every((ref) => state.task.readRecord(ref))).toBe(true);
   });
 
+  it("keeps an unavailable host outcome incomplete while still publishing canonical facts", async () => {
+    const state = fixture("workflowhub-host-unavailable-quality-handoff");
+    const context = contextFor("make-decision", state);
+    const outcome = publishUnavailableStageAgentOutcome({
+      task: state.task,
+      kernel: state.kernel,
+      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
+      candidateWorkspace: state.candidate,
+      stage: "make-decision",
+      attemptId: "attempt-host-unavailable-quality-handoff",
+      workflowRunId: context.workflowRunId,
+      host: "codex-test",
+      agentRunId: "agent-unavailable-1",
+      reason: "host did not return a stage packet",
+    });
+    const published = await publishWorkflowHubSessionAndQuality({
+      context,
+      outcome,
+      stage: "make-decision",
+      attemptId: "attempt-host-unavailable-quality-handoff",
+    });
+    expect(published.quality).toMatchObject({ stage_outcome_status: "unavailable", quality_status: "incomplete" });
+    expect(published.quality.quality_fact_refs.length).toBeGreaterThan(0);
+    expect(published.quality.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)).status)
+      .some((status) => status !== "passed")).toBe(true);
+  });
+
   it("accepts a host-supplied Stage Agent result through the adapter and the official route", async () => {
     const state = fixture("stage-agent-adapter");
     const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);

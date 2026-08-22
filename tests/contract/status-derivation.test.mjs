@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { STAGE_PREDICATES, deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
 
 function facts(stage, overrides = {}) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({
@@ -38,6 +39,40 @@ describe("status is derived from current quality facts", () => {
 
     const stale = facts("build-plan", { fr_coverage: { freshness: "stale" } });
     expect(deriveStageCompletion("build-plan", stale).status).toBe("in_progress");
+  });
+
+  it("does not let stale or older unavailable attempts hide a current actionable gap", () => {
+    const observation = (ref, status, recorded_at, freshness = "current", authenticated = true) => ({
+      fact: { ref, value: { subject: "code_review", status, recorded_at } },
+      freshness: { status: freshness },
+      authenticated,
+    });
+    const quality = { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } };
+    const productRelease = { reasons: [] };
+    const groups = deriveStatusGroups({
+      quality,
+      productRelease,
+      observations: [
+        observation("quality/old-unavailable.json", "unavailable", "2026-08-22T00:00:00.000Z"),
+        observation("quality/stale-unavailable.json", "unavailable", "2026-08-22T02:00:00.000Z", "stale", false),
+        observation("quality/current-missing.json", "missing", "2026-08-22T01:00:00.000Z"),
+      ],
+    });
+    expect(groups.actionable_now).toEqual(["code_review"]);
+    expect(groups.external_unavailable).toEqual([]);
+  });
+
+  it("projects the newest current unavailable attempt as external, not actionable", () => {
+    const groups = deriveStatusGroups({
+      quality: { missing: ["code_review"], predicates: { code_review: { fact_ref: null } } },
+      productRelease: { reasons: [] },
+      observations: [
+        { fact: { ref: "quality/old-missing.json", value: { subject: "code_review", status: "missing", recorded_at: "2026-08-22T00:00:00.000Z" } }, authenticated: true, freshness: { status: "current" } },
+        { fact: { ref: "quality/new-unavailable.json", value: { subject: "code_review", status: "unavailable", recorded_at: "2026-08-22T01:00:00.000Z" } }, authenticated: true, freshness: { status: "current" } },
+      ],
+    });
+    expect(groups.actionable_now).toEqual([]);
+    expect(groups.external_unavailable).toEqual(["code_review:unavailable"]);
   });
 
   it("derives released only from five current completions, AC results, and verify confirmation", () => {

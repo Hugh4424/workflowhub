@@ -757,8 +757,8 @@ describe('M15 stage sidecar integration', () => {
       services: { resolveMonitoringSource: async () => null },
       now: () => new Date('2026-08-12T00:00:00.000Z'),
     });
-    const status = readTaskFacts(task.taskPath).find((fact) => fact.error === 'UNSUPPORTED_QUALITY_FACT_KIND' || fact.error === 'QUALITY_FACT_STAGE_MISMATCH');
-    expect(status).toMatchObject({ fact_type: 'source_status', status: 'unsupported', evidence_refs: [unsupported.ref] });
+    const status = readTaskFacts(task.taskPath).find((fact) => fact.error === 'QUALITY_FACT_STAGE_MISMATCH');
+    expect(status).toMatchObject({ fact_type: 'source_status', status: 'conflict', evidence_refs: [unsupported.ref] });
   });
 
   it('keeps quality observations from repeated attempts when the ref is unchanged', async () => {
