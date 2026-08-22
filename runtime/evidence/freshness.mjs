@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
+import { STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 
@@ -204,11 +204,16 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
     && workspaceRoot
     && typeof taskId === "string"
     && isMaterialOnlySnapshotDelta(workspaceRoot, fact.snapshot_tree, current.snapshot_tree, taskId);
-  const scopedMaterialCurrent = fact.material_scope_revision !== undefined
+  const scopeMatchesStage = fact.material_scope === undefined
+    || JSON.stringify(fact.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[fact.stage]);
+  const scopedMaterialCurrent = scopeMatchesStage
+    && fact.material_scope_revision !== undefined
     && current.material_scope_revisions
     && fact.material_scope_revision === current.material_scope_revisions[fact.stage];
   const materialCurrent = scopedMaterialCurrent
-    || (fact.material_scope_revision === undefined && fact.material_revision === current.material_revision);
+    || (fact.material_scope === undefined
+      && fact.material_scope_revision === undefined
+      && fact.material_revision === current.material_revision);
   const dependencies = {
     material: adviceReview || recordOnly || materialCurrent ? "current" : "stale",
     tree: adviceReview || recordOnly || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",

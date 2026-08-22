@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { assertFresh, evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
 const roots = [];
 
@@ -84,6 +85,46 @@ describe("verify selects facts by freshness", () => {
     expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
       material_revision: "revision-global-after-decision-edit",
       material_scope_revisions: { "make-decision": "revision-decision-log-changed" },
+      snapshot_tree: "tree",
+    }, { read: io.read }).status).toBe("stale");
+  });
+
+  it("rejects a forged or narrowed material scope", () => {
+    const revision = `revision-${"a".repeat(64)}`;
+    expect(() => createQualityFact({
+      taskId: "task",
+      stage: "make-decision",
+      materialRevision: revision,
+      materialScope: ["spec.md"],
+      materialScopeRevision: revision,
+      snapshotTree: "tree",
+      kind: "test",
+      status: "passed",
+      subject: "scope",
+      evidence: [{ ref: "quality/evidence/test.json", sha256: "b".repeat(64), evidence_type: "test_receipt" }],
+    })).toThrow(/fixed stage scope/i);
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "forged-scope-fact",
+      task_id: "task",
+      stage: "make-decision",
+      material_revision: revision,
+      material_scope: ["spec.md"],
+      material_scope_revision: revision,
+      snapshot_tree: "tree",
+      kind: "test",
+      subject: "scope",
+      status: "passed",
+      ref: "fact.json",
+      sha256: "",
+      evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: revision,
+      material_scope_revisions: { "make-decision": revision },
       snapshot_tree: "tree",
     }, { read: io.read }).status).toBe("stale");
   });

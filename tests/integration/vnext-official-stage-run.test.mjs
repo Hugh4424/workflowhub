@@ -648,6 +648,26 @@ describe("vNext official stage completion", () => {
     const result = await runOfficialStage("build-code", contextFor("build-code", state), { receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "build-code", stage_outcome_status: "unavailable", quality_status: "incomplete" });
   });
+  it("publishes one missing AC fact per current spec even without implementation/test receipts", async () => {
+    const state = fixture("build-code-ac-skeleton");
+    const result = await runOfficialStage("build-code", contextFor("build-code", state), {});
+    const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+    expect(facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "acceptance_criterion", subject: "AC-001", status: "missing" }),
+    ]));
+    expect(result.quality_status).toBe("incomplete");
+  });
+  it("rejects acceptance coverage IDs that do not match the current spec", async () => {
+    const state = fixture("build-code-ac-binding");
+    const snapshot = state.candidate.captureSnapshot();
+    await expect(runOfficialStage("build-code", contextFor("build-code", state), {
+      acceptance_coverage: {
+        snapshot_tree: snapshot.tree,
+        accepted_criterion_ids: ["AC-FAKE"],
+        items: [{ acceptance_criterion_id: "AC-FAKE", status: "covered", evidence_refs: [] }],
+      },
+    })).rejects.toThrow(/match the current spec acceptance criteria/i);
+  });
   it("reads the four current materials directly and rejects revision pointers/writers", () => {
     const state = fixture("vnext-direct-materials");
     expect(() => state.task.readRecord("materials/current.json")).toThrow(/ENOENT/);

@@ -541,9 +541,13 @@ export function deriveCurrentProductRelease({
     }
     const snapshotCurrent = value?.snapshot_tree === snapshotTree
       || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, value?.snapshot_tree, snapshotTree, taskId));
-    const factMaterialCurrent = value?.material_scope_revision !== undefined
-      ? value.material_scope_revision === materialScopeRevisions[value.stage]
-      : value?.material_revision === materialRevision;
+    const scopeMatchesStage = value?.material_scope === undefined
+      || JSON.stringify(value.material_scope) === JSON.stringify(STAGE_FACT_MATERIALS[value.stage]);
+    const factMaterialCurrent = !scopeMatchesStage
+      ? false
+      : value?.material_scope_revision !== undefined
+        ? value.material_scope_revision === materialScopeRevisions[value.stage]
+        : value?.material_revision === materialRevision;
     if (value?.schema_version !== "quality-fact.v1"
         || value.task_id !== taskId
         || !stageObservations.has(value.stage)
@@ -578,9 +582,10 @@ export function deriveCurrentProductRelease({
     if (freshness.authenticated === true
         && freshness.status === "current"
         && value.kind === "acceptance_criterion"
+        && (value.stage === "build-code" || value.stage === "verify-code")
         && /^AC-[A-Za-z0-9_-]+$/.test(value.subject ?? "")) {
       const candidates = acceptanceCandidates.get(value.subject) ?? [];
-      candidates.push({ value, ref, hash });
+      candidates.push({ source: "stage-fact", value, ref, hash });
       acceptanceCandidates.set(value.subject, candidates);
     }
     if (freshness.authenticated === true
@@ -654,6 +659,7 @@ export function deriveCurrentProductRelease({
         if (typeof id !== "string" || !/^AC-[A-Za-z0-9_-]+$/.test(id)) continue;
         const candidates = acceptanceCandidates.get(id) ?? [];
         candidates.push({
+          source: "verify-summary",
           value: {
             acceptance_criterion_id: id,
             result: criterion.result,
@@ -680,7 +686,25 @@ export function deriveCurrentProductRelease({
     // Missing or malformed verify summary remains represented by the missing
     // expected AC reasons below; no guessed product result is created.
   }
-  const acceptanceResults = [...acceptanceCandidates.values()].flatMap((candidates) => candidates).map(({ value, ref, hash }) => ({
+  const acceptanceResults = [...acceptanceCandidates.values()].flatMap((candidates) => {
+    const verifyCandidates = candidates.filter(({ source }) => source === "verify-summary");
+    const stageCandidates = candidates.filter(({ source }) => source === "stage-fact");
+    if (verifyCandidates.length === 0) return stageCandidates;
+    // The verify summary is the final product AC authority. A matching
+    // stage leaf is only a fallback and must not become a duplicate
+    // candidate; a disagreement remains visible as an explicit conflict.
+    const outcome = (candidate) => {
+      const value = candidate.value;
+      const result = value.result ?? (value.status === "passed" ? "pass" : value.status);
+      const status = value.status ?? (result === "pass" ? "passed" : result);
+      return `${result}:${status}`;
+    };
+    const verifyOutcome = outcome(verifyCandidates[0]);
+    const conflictingStageFact = stageCandidates.find((candidate) => outcome(candidate) !== verifyOutcome);
+    return conflictingStageFact === undefined
+      ? verifyCandidates
+      : [...verifyCandidates, conflictingStageFact];
+  }).map(({ value, ref, hash }) => ({
     acceptance_criterion_id: value.acceptance_criterion_id ?? value.subject,
     result: value.result ?? (value.status === "passed" ? "pass" : value.status),
     status: value.status,

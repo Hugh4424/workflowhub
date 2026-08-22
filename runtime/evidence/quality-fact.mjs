@@ -1,4 +1,5 @@
 import { sha256 } from "./freshness.mjs";
+import { STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const KINDS = new Set(["test", "review", "acceptance_criterion", "confirmation"]);
@@ -36,6 +37,9 @@ export function createQualityFact({ taskId, stage, materialRevision, materialSco
   if (materialScope !== undefined || materialScopeRevision !== undefined) {
     if (!Array.isArray(materialScope) || materialScope.length === 0 || materialScope.some((file) => typeof file !== "string" || file.trim() === "")) {
       throw new TypeError("quality fact material scope is invalid");
+    }
+    if (JSON.stringify(materialScope) !== JSON.stringify(STAGE_FACT_MATERIALS[stage])) {
+      throw new TypeError("quality fact material scope must match the fixed stage scope");
     }
     if (!/^revision-[a-f0-9]{64}$/.test(materialScopeRevision ?? "")) throw new TypeError("quality fact material scope revision is invalid");
   }

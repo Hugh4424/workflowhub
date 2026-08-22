@@ -18,7 +18,7 @@ import { ArtifactDir } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
 import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
-import { deriveCurrentProductRelease, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
 import { activeAcceptanceCriterionIds } from "../runtime/stage/stage-content-contracts.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -1333,6 +1333,7 @@ export function prepareDeliveryClosePlan({
   const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
   const materialRevision = currentMaterialRevision(task, worktree);
   const materialArtifacts = ArtifactDir.open(worktree, task);
+  const materialValues = Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, materialArtifacts.read(name)]));
   const qualityReasons = [];
   let acceptedVerify;
   try {
@@ -1357,6 +1358,7 @@ export function prepareDeliveryClosePlan({
         refs: task.listCanonicalQualityFactRefs(),
         snapshot_tree: currentSnapshot.tree,
         material_revision: materialRevision,
+        material_scope_revisions: stageMaterialScopeRevisions(materialValues),
         snapshot_root: worktree,
         expected_acceptance_ids: activeAcceptanceCriterionIds(materialArtifacts.read("spec.md")),
         evaluate_freshness: evaluateFactFreshness,

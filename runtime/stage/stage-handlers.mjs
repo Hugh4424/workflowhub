@@ -458,6 +458,12 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   const coverage = object(invocation.acceptance_coverage, "build-code acceptance_coverage");
   if (coverage.snapshot_tree !== snapshotTree) throw new Error("build-code acceptance_coverage must bind the tests snapshot tree");
   if (!Array.isArray(coverage.accepted_criterion_ids) || coverage.accepted_criterion_ids.length === 0) throw new Error("build-code acceptance_coverage.accepted_criterion_ids is required");
+  const currentIds = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
+  const currentSet = new Set(currentIds);
+  const suppliedSet = new Set(coverage.accepted_criterion_ids);
+  if (suppliedSet.size !== currentSet.size || [...suppliedSet].some((id) => !currentSet.has(id))) {
+    throw new Error("build-code acceptance_coverage must match the current spec acceptance criteria");
+  }
   const declared = new Set();
   for (const [index, id] of coverage.accepted_criterion_ids.entries()) {
     text(id, `build-code acceptance_coverage.accepted_criterion_ids[${index}]`);
@@ -1488,9 +1494,26 @@ HANDLERS.set("build-code", async (worker, input) => {
   if (worker.manifest?.record_model === "vnext-single-write"
       && (input.receipts.implementation === undefined || input.receipts.tests === undefined)) {
     const current = currentMaterialContent(worker, "tasks.md");
+    const capture = typeof worker.snapshotWorkspace === "function"
+      ? worker.snapshotWorkspace
+      : typeof worker.candidateWorkspace?.captureSnapshot === "function"
+        ? worker.candidateWorkspace.captureSnapshot
+        : null;
+    const snapshot = typeof capture === "function" ? capture() : null;
+    const acceptanceCoverage = input.acceptance_coverage === undefined
+      ? (() => {
+        const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
+        return {
+          snapshot_tree: snapshot?.tree ?? null,
+          accepted_criterion_ids: ids,
+          items: ids.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })),
+        };
+      })()
+      : acceptanceCoverageFacts(worker, input, snapshot?.tree);
     return addCompletion("build-code", {
       facts: {
         changed: [],
+        acceptance_coverage: acceptanceCoverage,
         completion_subjects: {
           acceptance_criteria: subjectFact("missing", [], "implementation and test quality facts are not yet recorded"),
         },
