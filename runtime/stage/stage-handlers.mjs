@@ -16,6 +16,7 @@ import {
   validateExecutablePlanTaskMinimum,
   validateInteractionLifecycleSequence,
   validatePlanTaskContract,
+  activeAcceptanceCriterionIds,
 } from "../stage/stage-content-contracts.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../review/stage-review-disposition.mjs";
 
@@ -441,6 +442,19 @@ function confirmationFacts(worker, invocation, { requireV2 = false } = {}) {
   return { facts: { decision: value.decision, confirmation_ref: ref, confirmation_hash: record.sha256, snapshot_tree: value.snapshot_tree }, evidence: { ref, sha256: record.sha256 } };
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
+  if (invocation.acceptance_coverage === undefined) {
+    const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
+    if (ids.length === 0) throw new Error("build-code acceptance_coverage has no current spec acceptance criteria");
+    // The runtime may compile the current AC ledger skeleton even when the
+    // host did not supply a test receipt yet. These rows are deliberately
+    // unknown and carry no evidence; only real per-AC evidence can promote
+    // them to covered.
+    return {
+      snapshot_tree: snapshotTree,
+      accepted_criterion_ids: ids,
+      items: ids.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })),
+    };
+  }
   const coverage = object(invocation.acceptance_coverage, "build-code acceptance_coverage");
   if (coverage.snapshot_tree !== snapshotTree) throw new Error("build-code acceptance_coverage must bind the tests snapshot tree");
   if (!Array.isArray(coverage.accepted_criterion_ids) || coverage.accepted_criterion_ids.length === 0) throw new Error("build-code acceptance_coverage.accepted_criterion_ids is required");

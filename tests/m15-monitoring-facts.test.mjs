@@ -132,6 +132,25 @@ describe("M15 monitoring facts", () => {
     expect(validate({ ...validStage, evidence_refs: ["quality/evidence/opaque-ref.json"] })).toBe(true);
   });
 
+  it("accepts typed acceptance and confirmation monitoring facts", () => {
+    const acceptance = fact({
+      fact_id: "fact:m15:acceptance",
+      fact_type: "acceptance_criterion",
+      value: { acceptance_criterion_id: "AC-UI-001", outcome: "unknown", freshness: "current", source_ref: "quality/facts/ac.json" },
+    });
+    const confirmation = fact({
+      fact_id: "fact:m15:confirmation",
+      fact_type: "confirmation",
+      value: { subject: "human_confirmation", outcome: "accepted", freshness: "current", source_ref: "quality/facts/confirmation.json" },
+    });
+    expect(validateMonitoringFact(acceptance)).toEqual(expect.objectContaining({ fact_type: "acceptance_criterion" }));
+    expect(validateMonitoringFact(confirmation)).toEqual(expect.objectContaining({ fact_type: "confirmation" }));
+    const schema = JSON.parse(readFileSync(new URL("../runtime/schemas/monitoring-fact.v1.json", import.meta.url), "utf8"));
+    const validate = new Ajv2020({ strict: false, $data: true, formats: { "date-time": true } }).compile(schema);
+    expect(validate(acceptance)).toBe(true);
+    expect(validate(confirmation)).toBe(true);
+  });
+
   it("preserves missing, unknown, and conflict without zero-filling", () => {
     for (const status of ["missing", "unknown", "conflict"]) {
       const value = fact({ fact_id: `fact:m15:${status}`, status, value: null, reason: `${status}_reason`, coverage: { observed: 0, expected: 1 } });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"]);
+const FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "acceptance_criterion", "confirmation", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"]);
 // These are event facts, not page/readiness states.  "partial" and "fatal"
 // belong to derived diagnostics and projections; keeping them out here
 // prevents an unavailable or incomplete observation from masquerading as a
@@ -83,6 +83,7 @@ export function validateMonitoringFact(value) {
     token: ["message_id", "input_tokens", "output_tokens", "total_tokens", "tokens", "retry_id", "grain", "execution_id"],
     tool_use: ["tool_use_id", "name", "retry_id", "grain"], review: ["invoked", "independent", "outcome", "freshness", "source_ref"],
     test: ["invoked", "independent", "outcome", "freshness", "source_ref"], verify: ["invoked", "fresh", "outcome", "source_ref"], artifact: ["record_kind", "ref", "hash", "name"],
+    acceptance_criterion: ["acceptance_criterion_id", "outcome", "freshness", "source_ref"], confirmation: ["subject", "outcome", "freshness", "source_ref"],
     health: ["domain", "status", "friction_type", "error_code", "configured", "used", "expected", "actual", "mismatch"],
     automation: ["origin", "action", "retry_id"], human_intervention: ["origin", "action", "reply", "approval", "override", "request"],
     source_status: ["source_id", "registration_id", "required", "scope", "capabilities"], transcript_event: ["event_id", "event_type", "timestamp"],
@@ -195,6 +196,16 @@ export function validateMonitoringFact(value) {
         for (const field of ["invoked", "independent"]) optionalBoolean(field);
         for (const field of ["outcome", "freshness"]) optionalText(field);
         if ("source_ref" in value.value && value.value.source_ref !== null) safePublicRef(value.value.source_ref, "monitoring fact review.source_ref");
+        break;
+      case "acceptance_criterion":
+        text(value.value.acceptance_criterion_id, "acceptance_criterion.acceptance_criterion_id");
+        for (const field of ["outcome", "freshness"]) optionalText(field);
+        if ("source_ref" in value.value && value.value.source_ref !== null) safePublicRef(value.value.source_ref, "acceptance_criterion.source_ref");
+        break;
+      case "confirmation":
+        text(value.value.subject, "confirmation.subject");
+        for (const field of ["outcome", "freshness"]) optionalText(field);
+        if ("source_ref" in value.value && value.value.source_ref !== null) safePublicRef(value.value.source_ref, "confirmation.source_ref");
         break;
       case "verify":
         for (const field of ["invoked", "fresh"]) optionalBoolean(field);

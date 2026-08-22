@@ -204,8 +204,13 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
     && workspaceRoot
     && typeof taskId === "string"
     && isMaterialOnlySnapshotDelta(workspaceRoot, fact.snapshot_tree, current.snapshot_tree, taskId);
+  const scopedMaterialCurrent = fact.material_scope_revision !== undefined
+    && current.material_scope_revisions
+    && fact.material_scope_revision === current.material_scope_revisions[fact.stage];
+  const materialCurrent = scopedMaterialCurrent
+    || (fact.material_scope_revision === undefined && fact.material_revision === current.material_revision);
   const dependencies = {
-    material: adviceReview || recordOnly || fact.material_revision === current.material_revision ? "current" : "stale",
+    material: adviceReview || recordOnly || materialCurrent ? "current" : "stale",
     tree: adviceReview || recordOnly || fact.snapshot_tree === current.snapshot_tree ? "current" : "stale",
     fact: "current",
   };
@@ -213,8 +218,8 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   if (factRaw !== undefined) {
     try {
       const parsed = JSON.parse(factRaw);
-      for (const field of ["schema_version", "fact_id", "task_id", "stage", "material_revision", "snapshot_tree", "kind", "subject", "status"]) {
-        if (parsed[field] !== fact[field]) dependencies.fact = "stale";
+      for (const field of ["schema_version", "fact_id", "task_id", "stage", "material_revision", "material_scope", "material_scope_revision", "snapshot_tree", "kind", "subject", "status"]) {
+        if (JSON.stringify(parsed[field]) !== JSON.stringify(fact[field])) dependencies.fact = "stale";
       }
       if (parsed.schema_version !== "quality-fact.v1") dependencies.fact = "stale";
       if (!QUALITY_STATUSES.has(parsed.status)

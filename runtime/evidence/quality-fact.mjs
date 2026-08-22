@@ -16,6 +16,8 @@ export function qualityFactIdentity(value) {
     task_id: value?.task_id,
     stage: value?.stage,
     material_revision: value?.material_revision,
+    ...(value?.material_scope === undefined ? {} : { material_scope: value.material_scope }),
+    ...(value?.material_scope_revision === undefined ? {} : { material_scope_revision: value.material_scope_revision }),
     snapshot_tree: value?.snapshot_tree,
     kind: value?.kind,
     status: value?.status,
@@ -28,9 +30,15 @@ export function qualityFactDigest(value) {
   return sha256(JSON.stringify(qualityFactIdentity(value)));
 }
 
-export function createQualityFact({ taskId, stage, materialRevision, snapshotTree, kind, status, subject, evidence = [], recordedAt = new Date().toISOString() }) {
+export function createQualityFact({ taskId, stage, materialRevision, materialScope, materialScopeRevision, snapshotTree, kind, status, subject, evidence = [], recordedAt = new Date().toISOString() }) {
   if (typeof taskId !== "string" || taskId.trim() === "" || !STAGES.has(stage)) throw new TypeError("quality fact identity is invalid");
   if (!/^revision-[a-f0-9]{64}$/.test(materialRevision ?? "") || typeof snapshotTree !== "string" || snapshotTree.trim() === "") throw new TypeError("quality fact material revision and snapshot tree are required");
+  if (materialScope !== undefined || materialScopeRevision !== undefined) {
+    if (!Array.isArray(materialScope) || materialScope.length === 0 || materialScope.some((file) => typeof file !== "string" || file.trim() === "")) {
+      throw new TypeError("quality fact material scope is invalid");
+    }
+    if (!/^revision-[a-f0-9]{64}$/.test(materialScopeRevision ?? "")) throw new TypeError("quality fact material scope revision is invalid");
+  }
   if (!KINDS.has(kind) || typeof subject !== "string" || subject.trim() === "") throw new TypeError("quality fact kind and subject are required");
   if (!STATUSES.has(status)) throw new TypeError("quality fact status is invalid");
   if (status === "recorded" && kind !== "review") throw new TypeError("recorded quality fact status is only valid for review facts");
@@ -42,6 +50,7 @@ export function createQualityFact({ taskId, stage, materialRevision, snapshotTre
   if (!Number.isFinite(Date.parse(recordedAt))) throw new TypeError("quality fact recordedAt is invalid");
   const identity = qualityFactIdentity({
     task_id: taskId, stage, material_revision: materialRevision, snapshot_tree: snapshotTree,
+    ...(materialScope === undefined ? {} : { material_scope: [...materialScope], material_scope_revision: materialScopeRevision }),
     kind, status, subject, evidence,
   });
   const digest = qualityFactDigest(identity);

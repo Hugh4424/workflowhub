@@ -56,6 +56,38 @@ describe("verify selects facts by freshness", () => {
     expect(evaluateFactFreshness(base, { material_revision: "revision", snapshot_tree: "tree" }, { read: () => { const e = new Error("missing"); e.code = "ENOENT"; throw e; } }).status).toBe("missing");
   });
 
+  it("keeps an upstream fact current when only downstream materials are added", () => {
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "scoped-make-decision-fact",
+      task_id: "task",
+      stage: "make-decision",
+      material_revision: "revision-global-before",
+      material_scope: ["decision-log.md"],
+      material_scope_revision: "revision-decision-log",
+      snapshot_tree: "tree",
+      kind: "acceptance_criterion",
+      subject: "scope",
+      status: "passed",
+      ref: "fact.json",
+      sha256: "",
+      evidence: [],
+    };
+    const raw = JSON.stringify(fact);
+    const io = store();
+    io.records.set(fact.ref, raw);
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-global-after-spec-plan",
+      material_scope_revisions: { "make-decision": "revision-decision-log" },
+      snapshot_tree: "tree",
+    }, { read: io.read })).toMatchObject({ status: "current", authenticated: true });
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(raw) }, {
+      material_revision: "revision-global-after-decision-edit",
+      material_scope_revisions: { "make-decision": "revision-decision-log-changed" },
+      snapshot_tree: "tree",
+    }, { read: io.read }).status).toBe("stale");
+  });
+
   it("rejects a v2 confirmation bound to a different material or snapshot", () => {
     const materialRevision = `revision-${"a".repeat(64)}`;
     const snapshotTree = "b".repeat(40);

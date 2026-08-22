@@ -15,7 +15,7 @@ import {
   publishStageAgentOutcome,
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
-import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
+import { publishCurrentWorkflowHubSession, publishWorkflowHubSessionAndQuality } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
@@ -292,6 +292,34 @@ describe("vNext official stage completion", () => {
       receipts: { stage_outcomes: outcome.ref },
     });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "incomplete", quality_status: "incomplete" });
+  });
+
+  it("turns a host outcome into canonical quality facts in the same handoff", async () => {
+    const state = fixture("workflowhub-host-quality-handoff");
+    const context = contextFor("make-decision", state);
+    const outcome = publishStageAgentOutcome({
+      task: state.task,
+      kernel: state.kernel,
+      artifacts: ArtifactDir.open(state.candidate.worktreeRoot, state.task),
+      candidateWorkspace: state.candidate,
+      stage: "make-decision",
+      attemptId: "attempt-host-quality-handoff",
+      workflowRunId: context.workflowRunId,
+      execution: stageAgentExecution("make-decision"),
+      requirementAuthentication: createRequirementAuthenticationFixture({
+        taskId: state.task.identity.taskId,
+        runId: context.workflowRunId,
+      }),
+    });
+    const published = await publishWorkflowHubSessionAndQuality({
+      context,
+      outcome,
+      stage: "make-decision",
+      attemptId: "attempt-host-quality-handoff",
+    });
+    expect(published.quality.quality_fact_refs.length).toBeGreaterThan(0);
+    expect(published.quality.quality_status).toBe("incomplete");
+    expect(published.quality.quality_fact_refs.every((ref) => state.task.readRecord(ref))).toBe(true);
   });
 
   it("accepts a host-supplied Stage Agent result through the adapter and the official route", async () => {

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { isMaterialOnlySnapshotDelta } from "../task/git-worktree-snapshot.mjs";
+import { isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 
@@ -19,6 +19,36 @@ export const STAGE_MATERIALS = Object.freeze({
   "build-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
   "verify-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
 });
+
+// Quality facts are produced after a stage has written its own material. Keep
+// the four current materials as the only authority, but bind each fact to the
+// smallest fixed scope that can affect that stage. This prevents a later
+// stage's new output from invalidating an already-completed upstream stage,
+// while still invalidating every downstream fact when an upstream material
+// changes. Callers cannot provide or shrink this scope.
+export const STAGE_FACT_MATERIALS = Object.freeze({
+  "make-decision": Object.freeze(["decision-log.md"]),
+  "build-spec": Object.freeze(["decision-log.md", "spec.md"]),
+  "build-plan": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
+  "build-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
+  "verify-code": Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]),
+});
+
+export function stageMaterialScopeRevision(stage, materials = {}) {
+  const files = STAGE_FACT_MATERIALS[stage];
+  if (!files) throw new TypeError(`unsupported stage: ${stage}`);
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
+    throw new TypeError("stage material scope requires a material map");
+  }
+  return materialRevisionFromValues(files.map((file) => [file, materials[file] ?? null]));
+}
+
+export function stageMaterialScopeRevisions(materials = {}) {
+  return Object.freeze(Object.fromEntries(Object.keys(STAGE_FACT_MATERIALS).map((stage) => [
+    stage,
+    stageMaterialScopeRevision(stage, materials),
+  ])));
+}
 
 export const STAGE_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({
@@ -490,6 +520,7 @@ export function deriveCurrentProductRelease({
   refs = [],
   snapshot_tree: snapshotTree,
   material_revision: materialRevision,
+  material_scope_revisions: materialScopeRevisions = {},
   snapshot_root: snapshotRoot = null,
   expected_acceptance_ids: expectedAcceptanceIds = [],
   evaluate_freshness: evaluateFreshness = null,
@@ -510,10 +541,13 @@ export function deriveCurrentProductRelease({
     }
     const snapshotCurrent = value?.snapshot_tree === snapshotTree
       || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, value?.snapshot_tree, snapshotTree, taskId));
+    const factMaterialCurrent = value?.material_scope_revision !== undefined
+      ? value.material_scope_revision === materialScopeRevisions[value.stage]
+      : value?.material_revision === materialRevision;
     if (value?.schema_version !== "quality-fact.v1"
         || value.task_id !== taskId
         || !stageObservations.has(value.stage)
-        || value.material_revision !== materialRevision
+        || !factMaterialCurrent
         || !snapshotCurrent) continue;
     const hash = sha256(raw);
     let freshness = { status: "unknown", authenticated: false };
@@ -521,6 +555,7 @@ export function deriveCurrentProductRelease({
       try {
         freshness = evaluateFreshness({ ...value, ref, sha256: hash }, {
           material_revision: materialRevision,
+          material_scope_revisions: materialScopeRevisions,
           snapshot_tree: snapshotTree,
         }, {
           read,

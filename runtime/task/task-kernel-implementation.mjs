@@ -6,7 +6,7 @@ import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
-import { deriveStageCompletion } from "../stage/completion-predicates.mjs";
+import { deriveStageCompletion, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import {
   buildRiskAcceptance,
   deriveSeriousReviewPause,
@@ -239,7 +239,31 @@ export function buildTaskKernel(taskHandle, {
         throw new Error("vNext quality facts must reference the quality namespace");
       }
       const { revision, snapshot } = currentContext();
-      const fact = createQualityFact({ taskId: task.identity.taskId, stage: name, materialRevision: revision.revision_id, snapshotTree: snapshot.tree, ...input, recordedAt: now() });
+      const materialScope = STAGE_FACT_MATERIALS[name];
+      // Read the current materials once through the authenticated ArtifactDir;
+      // the global revision remains the publication identity while the fixed
+      // stage scope prevents downstream-only material writes from invalidating
+      // upstream quality facts.
+      const dir = artifactDir();
+      const values = MATERIAL_FILES.map((file) => {
+        try { return [file, dir.read(file)]; }
+        catch (error) {
+          if (error?.code === "ENOENT") return [file, null];
+          throw error;
+        }
+      });
+      const currentValues = Object.fromEntries(values);
+      const scopeRevision = materialRevisionFromValues(materialScope.map((file) => [file, currentValues[file] ?? null]));
+      const fact = createQualityFact({
+        taskId: task.identity.taskId,
+        stage: name,
+        materialRevision: revision.revision_id,
+        materialScope,
+        materialScopeRevision: scopeRevision,
+        snapshotTree: snapshot.tree,
+        ...input,
+        recordedAt: now(),
+      });
       return publishQualityFact({ fact, read: task.readRecord, create: (recordRef, raw) => createRecord(recordRef, raw) });
     },
     publishHumanConfirmation(stage, input = {}) {
@@ -288,6 +312,11 @@ export function buildTaskKernel(taskHandle, {
           taskId: task.identity.taskId,
           stage: name,
           materialRevision: revision.revision_id,
+          materialScope: STAGE_FACT_MATERIALS[name],
+          materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
+            try { return [file, artifactDir().read(file)]; }
+            catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
+          })),
           snapshotTree: snapshot.tree,
           kind: "confirmation",
           status: qualityStatus,

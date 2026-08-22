@@ -958,6 +958,25 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials) {
     qualityFactRefs.push(fact.ref);
     if (!gating) qualityAdvisoryFactRefs.push(fact.ref);
   }
+  // Build-code coverage is a per-AC ledger, not merely one aggregate
+  // `acceptance_criteria` predicate. Publish one immutable quality fact for
+  // every current spec AC so product-release derivation can authenticate the
+  // actual leaves. Missing/unknown rows remain non-passing facts; no status is
+  // inferred from the number of rows or from aggregate test counts.
+  if (ctx.stage === "build-code" && Array.isArray(result.facts?.acceptance_coverage?.items)) {
+    for (const item of result.facts.acceptance_coverage.items) {
+      const subject = typeof item?.acceptance_criterion_id === "string" ? item.acceptance_criterion_id : null;
+      if (!subject) continue;
+      const status = item.status === "covered" ? "passed" : "missing";
+      const leaf = publishAcceptanceQualityFact(ctx, snapshot, {
+        subject,
+        status,
+        detail: item.semantic_gap ?? (status === "passed" ? "current per-AC evidence" : "current per-AC evidence is not yet complete"),
+        evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs : [],
+      });
+      qualityFactRefs.push(leaf.fact.ref);
+    }
+  }
   // The stage is source-bound at entry and rechecked once after publication
   // writes. Re-capturing a multi-gigabyte worktree for every AC does not add
   // protection because these writes are outside the source snapshot boundary.
@@ -1139,6 +1158,22 @@ export function runOfficialStage(stage, context, invocation, publication) {
     ctx,
     async (_worker, _upstream, preflight) => {
       const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
+      if (stage === "build-code"
+          && handlerInput.acceptance_coverage === undefined
+          && Array.isArray(stageOutcome.value?.spec_analyze?.packet?.acceptance_coverage)
+          && stageOutcome.value.spec_analyze.packet.acceptance_coverage.length > 0) {
+        const rows = stageOutcome.value.spec_analyze.packet.acceptance_coverage;
+        handlerInput.acceptance_coverage = {
+          snapshot_tree: preflight.snapshot.tree,
+          accepted_criterion_ids: rows.map((row) => row.acceptance_criterion_id).filter((id) => typeof id === "string"),
+          items: rows.map((row) => ({
+            ...row,
+            evidence_refs: Array.isArray(row.evidence_refs)
+              ? row.evidence_refs.map((entry) => ({ ref: entry.ref, sha256: entry.hash ?? entry.sha256 }))
+              : [],
+          })),
+        };
+      }
       if (handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)) {
         delete handlerInput.receipts.stage_outcomes;
       }

@@ -21,7 +21,7 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
@@ -709,13 +709,15 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
       records.push(unavailableQualityFact(ref, error));
       continue;
     }
-    const supportedKinds = new Set(["review", "test"]);
+    const supportedKinds = new Set(["review", "test", "acceptance_criterion", "confirmation"]);
     const bindingError = !value || value.task_id !== context.identity.taskId
       ? "QUALITY_FACT_TASK_MISMATCH"
       : typeof value.kind !== "string" || !supportedKinds.has(value.kind)
         ? "UNSUPPORTED_QUALITY_FACT_KIND"
         : value.stage && context.stage && value.stage !== context.stage
-          ? "QUALITY_FACT_STAGE_MISMATCH"
+          ? ["acceptance_criterion", "confirmation"].includes(value.kind)
+            ? "UNSUPPORTED_QUALITY_FACT_KIND"
+            : "QUALITY_FACT_STAGE_MISMATCH"
           : null;
     if (bindingError) {
       records.push(unavailableQualityFact(ref, Object.assign(new Error("invalid quality fact"), { code: bindingError })));
@@ -774,6 +776,38 @@ function qualityMonitoringFacts({ context, stageOutcome, now }) {
           source_ref: ref,
         } : null,
         reason: present ? null : `quality_test_${value.status ?? "unavailable"}`,
+        coverage: { observed: present ? 1 : 0, expected: 1 },
+      }));
+    } else if (value.kind === "acceptance_criterion") {
+      const present = ["passed", "failed"].includes(value.status);
+      records.push(createMonitoringFact({
+        ...common,
+        fact_id: `quality:acceptance:${attemptId ?? "default"}:${sha256(ref)}`,
+        fact_type: "acceptance_criterion",
+        status: qualityStatus(value.status, present),
+        value: present ? {
+          acceptance_criterion_id: value.subject,
+          outcome: value.status,
+          freshness: "current",
+          source_ref: ref,
+        } : null,
+        reason: present ? null : `quality_acceptance_${value.status ?? "unavailable"}`,
+        coverage: { observed: present ? 1 : 0, expected: 1 },
+      }));
+    } else if (value.kind === "confirmation") {
+      const present = ["passed", "failed"].includes(value.status);
+      records.push(createMonitoringFact({
+        ...common,
+        fact_id: `quality:confirmation:${attemptId ?? "default"}:${sha256(ref)}`,
+        fact_type: "confirmation",
+        status: qualityStatus(value.status, present),
+        value: present ? {
+          subject: value.subject,
+          outcome: value.status,
+          freshness: "current",
+          source_ref: ref,
+        } : null,
+        reason: present ? null : `quality_confirmation_${value.status ?? "unavailable"}`,
         coverage: { observed: present ? 1 : 0, expected: 1 },
       }));
     }
@@ -867,9 +901,34 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     refs: context.task.listCanonicalQualityFactRefs(),
     snapshot_tree: currentSnapshot?.tree,
     material_revision: materialRevision,
+    material_scope_revisions: stageMaterialScopeRevisions(materials),
     snapshot_root: context.workspace?.worktreeRoot ?? null,
     expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
     evaluate_freshness: evaluateFactFreshness,
+  });
+}
+
+// Keep status as a read-only projection of the existing facts. The grouping
+// makes the next action obvious without turning quality facts into a new gate
+// or hiding unavailable/not-applicable evidence.
+export function deriveStatusGroups({ quality, productRelease, observations = [] } = {}) {
+  const bySubject = new Map(observations.map(({ fact }) => [fact?.value?.subject ?? fact?.subject, fact?.value ?? fact]));
+  const external_unavailable = [];
+  const not_applicable = [];
+  for (const [subject, fact] of bySubject.entries()) {
+    if (!subject) continue;
+    if (["unavailable", "unknown"].includes(fact?.status)) external_unavailable.push(`${subject}:${fact.status}`);
+    if (fact?.status === "not_applicable") not_applicable.push(`${subject}:not_applicable`);
+  }
+  const external = new Set(external_unavailable.map((entry) => entry.split(":", 1)[0]));
+  const actionable_now = (quality?.missing ?? []).filter((subject) => !external.has(subject));
+  const close_blockers = [...new Set(productRelease?.reasons ?? [])];
+  return Object.freeze({
+    actionable_now: Object.freeze(actionable_now),
+    external_unavailable: Object.freeze(external_unavailable),
+    not_applicable: Object.freeze(not_applicable),
+    close_blockers: Object.freeze(close_blockers),
+    next_action: actionable_now[0] ?? close_blockers[0] ?? (external_unavailable[0] ?? null),
   });
 }
 
@@ -1013,8 +1072,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       if (value?.task_id !== context.task.identity.taskId || value?.stage !== values.stage) continue;
       const freshness = current
         ? evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, {
-          material_revision: materialRevision,
-          snapshot_tree: current.tree,
+            material_revision: materialRevision,
+            material_scope_revisions: stageMaterialScopeRevisions(materials),
+            snapshot_tree: current.tree,
         }, {
           read: context.task.readRecord,
           workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
@@ -1033,6 +1093,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         expected_acceptance_ids: activeAcceptanceCriterionIds(materials.spec ?? ""),
         verify_confirmation: null,
       });
+    const statusGroups = deriveStatusGroups({ quality, productRelease, observations });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,
@@ -1042,6 +1103,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       product_release_status: productRelease.status,
       product_release_reasons: productRelease.reasons,
       product_release_input_refs: productRelease.input_refs,
+      status_groups: statusGroups,
     });
   }
   authenticateStageWriteBoundary(context, {

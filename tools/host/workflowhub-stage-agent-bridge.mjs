@@ -19,6 +19,7 @@ import {
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
+import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 
@@ -79,7 +80,17 @@ export function publishCurrentWorkflowHubSession({ context, input, stage, attemp
   return recorder.finish({ status: session.status, spec_analyze: session.spec_analyze });
 }
 
-function main(input) {
+export async function publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId }) {
+  if (!context || typeof context !== "object") throw new TypeError("WorkflowHub session context is required");
+  if (!outcome || typeof outcome.ref !== "string") throw new TypeError("stage outcome is required");
+  const quality = await runOfficialStage(stage, context, {
+    attempt_id: attemptId,
+    receipts: { stage_outcomes: outcome.ref },
+  });
+  return Object.freeze({ outcome, quality });
+}
+
+async function main(input) {
   const projectName = requiredText(input.project_name, "project_name");
   const taskId = requiredText(input.task_id, "task_id");
   const stage = requiredText(input.stage, "stage");
@@ -131,6 +142,12 @@ function main(input) {
         workflowRunId: context.workflowRunId,
         execution: input.execution,
       });
+  // The host bridge is the normal session boundary. Publish the same outcome
+  // through the existing official writer before returning, so a successful
+  // host handoff cannot leave only a diagnostic stage outcome behind. The
+  // writer remains the sole quality-fact authority and preserves every
+  // missing/unavailable result instead of inferring a pass.
+  const { quality } = await publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId });
   return {
     schema_version: "workflowhub-stage-agent-bridge-result.v1",
     task_id: taskId,
@@ -140,14 +157,17 @@ function main(input) {
     outcome_sha256: outcome.sha256,
     outcome_status: outcome.value.status,
     producer: outcome.value.producer,
+    quality_status: quality.quality_status,
+    quality_fact_refs: quality.quality_fact_refs,
+    quality_result: quality,
   };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  try {
-    process.stdout.write(`${JSON.stringify(main(readInput()))}\n`);
-  } catch (error) {
-    process.stderr.write(`${error?.stack ?? error}\n`);
-    process.exitCode = 1;
-  }
+  main(readInput())
+    .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
+    .catch((error) => {
+      process.stderr.write(`${error?.stack ?? error}\n`);
+      process.exitCode = 1;
+    });
 }
