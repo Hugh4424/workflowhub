@@ -80,12 +80,14 @@ export function publishCurrentWorkflowHubSession({ context, input, stage, attemp
   return recorder.finish({ status: session.status, spec_analyze: session.spec_analyze });
 }
 
-export async function publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId }) {
+export async function publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId, receipts = {} }) {
   if (!context || typeof context !== "object") throw new TypeError("WorkflowHub session context is required");
   if (!outcome || typeof outcome.ref !== "string") throw new TypeError("stage outcome is required");
+  if (!receipts || typeof receipts !== "object" || Array.isArray(receipts)) throw new TypeError("host quality receipts must be an object");
+  if (Object.hasOwn(receipts, "stage_outcomes")) throw new Error("host quality receipts cannot override the bridge stage outcome");
   const quality = await runOfficialStage(stage, context, {
     attempt_id: attemptId,
-    receipts: { stage_outcomes: outcome.ref },
+    receipts: { ...receipts, stage_outcomes: outcome.ref },
   });
   return Object.freeze({ outcome, quality });
 }
@@ -147,7 +149,11 @@ async function main(input) {
   // host handoff cannot leave only a diagnostic stage outcome behind. The
   // writer remains the sole quality-fact authority and preserves every
   // missing/unavailable result instead of inferring a pass.
-  const { quality } = await publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId });
+  // A host may pass already-authenticated canonical implementation/test/review
+  // receipt refs as `receipts`. The bridge never derives a green receipt from
+  // lifecycle text; absent refs remain unavailable/incomplete.
+  const receipts = input.receipts === undefined ? {} : input.receipts;
+  const { quality } = await publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId, receipts });
   return {
     schema_version: "workflowhub-stage-agent-bridge-result.v1",
     task_id: taskId,
